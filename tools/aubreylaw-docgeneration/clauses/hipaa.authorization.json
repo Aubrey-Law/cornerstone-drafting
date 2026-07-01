@@ -1,0 +1,13 @@
+{
+  "id": "hipaa.authorization",
+  "title": "HIPAA Authorization",
+  "document_type": "hipaa_authorization",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "healthcare.agent.primary.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "I authorize covered health care providers to disclose protected health information to {{ healthcare.agent.primary.full_name | name }} for purposes related to my care and decision making."
+}

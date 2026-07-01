@@ -1,0 +1,20 @@
+{
+  "name": "spouse-testamentary-trust-will",
+  "description": "Massachusetts spouse companion will with testamentary trust package.",
+  "required_fields": [
+    "client.full_name",
+    "client.county",
+    "client.state",
+    "fiduciaries.executor.primary.full_name",
+    "fiduciaries.testamentary_trustee.primary.full_name",
+    "testamentary_trust.beneficiary_structure"
+  ],
+  "documents": [
+    {
+      "id": "spouse-testamentary-trust-will",
+      "title": "Last Will and Testament with Testamentary Trust",
+      "template": "templates/testamentary-trust-will.docx",
+      "output": "02-spouse-testamentary-trust-will.docx"
+    }
+  ]
+}

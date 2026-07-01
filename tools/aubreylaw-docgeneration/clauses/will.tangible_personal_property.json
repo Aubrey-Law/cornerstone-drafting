@@ -1,0 +1,11 @@
+{
+  "id": "will.tangible_personal_property",
+  "title": "Disposition of Tangible Personal Property",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": "has_tangible_personal_property",
+  "required_fields": [],
+  "review_status": "draft",
+  "version_date": "2026-06-06",
+  "text": "{% if will.tangible_personal_property.distribution_method == \"spouse_then_children\" and has_spouse %}I give my tangible personal property to my spouse, {{ spouse.full_name | name }}, if my spouse survives me. If my spouse does not survive me, I give such property to those of my children who survive me, in substantially equal shares.{% elif will.tangible_personal_property.distribution_method == \"named_then_children\" and will.tangible_personal_property.named_individual.full_name %}I give my tangible personal property to {{ will.tangible_personal_property.named_individual.full_name | name }}, if that person survives me. If that person does not survive me, I give such property to those of my children who survive me, in substantially equal shares.{% elif will.tangible_personal_property.distribution_method == \"memorandum\" %}I may leave a written memorandum identifying items of tangible personal property and the persons to receive them. Any such memorandum is an expression of my wishes and shall guide my Personal Representative in distributing such property.{% else %}I give my tangible personal property in substantially equal shares to those of my children who survive me. If my children cannot agree on a division, my Personal Representative may divide, sell, donate, or otherwise dispose of such property in my Personal Representative's discretion.{% endif %}"
+}

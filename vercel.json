@@ -1,0 +1,3 @@
+{
+  "buildCommand": "npm run estate-generator:setup && npm run build:next"
+}

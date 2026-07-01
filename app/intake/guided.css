@@ -1,0 +1,115 @@
+/*
+ * Scoped theme for the Guided Estate Plan Interview.
+ * Design tokens from the guided handoff; fonts inherit the app theme
+ * (DM Sans via --font-sans from app/layout.tsx).
+ */
+
+@keyframes gi-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .3 } }
+@keyframes gi-fade { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+
+.guided-interview {
+  /* Navy is used both as heading text (--gi-heading) and as a dark surface
+     (--gi-navy, e.g. the review-modal header / avatar). They diverge in dark
+     mode: headings lighten, the navy surface stays dark. */
+  --gi-navy: #1f2d5a;
+  --gi-heading: #1f2d5a;
+  --gi-teal: #1a6b72;
+  --gi-teal-deep: #155a60;
+  --gi-amber: #92400e;
+  --gi-amber-bg: #fffbeb;
+  --gi-amber-border: #fcd34d;
+  --gi-info-bg: #eff6ff;
+  --gi-info-border: #bfdbfe;
+  --gi-info-text: #1e40af;
+  --gi-page: #f3f4f6;
+  --gi-surface: #ffffff;
+  --gi-surface-alt: #fafbfc;
+  --gi-border: #e5e7eb;
+  --gi-faint-border: #d1d5db;
+  --gi-divider: #eef0f2;
+  --gi-border-open: #1a6b72;
+  --gi-ink: #0d1117;
+  --gi-strong: #374151;
+  --gi-muted: #6b7280;
+  --gi-faint: #9ca3af;
+  --gi-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+
+  font-family: var(--gi-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  color: var(--gi-ink);
+}
+
+/* Dark mode follows the app's next-themes `.dark` class. Brand teal/navy
+   accents are kept (lightened where they carry text), surfaces/text/borders
+   invert. */
+:is(.dark) .guided-interview {
+  --gi-heading: #e2e8f0;
+  --gi-teal: #2f9aa3;
+  --gi-teal-deep: #5cc2c9;
+  --gi-amber: #fbbf24;
+  --gi-amber-bg: rgba(146, 64, 14, 0.18);
+  --gi-amber-border: #7c5312;
+  --gi-info-bg: rgba(30, 64, 175, 0.18);
+  --gi-info-border: #1e3a8a;
+  --gi-info-text: #93c5fd;
+  --gi-page: #0b0f17;
+  --gi-surface: #161d2b;
+  --gi-surface-alt: #1b2433;
+  --gi-border: #2a3346;
+  --gi-faint-border: #3a4456;
+  --gi-divider: #232c3b;
+  --gi-border-open: #3aa6ad;
+  --gi-ink: #e6e9ef;
+  --gi-strong: #cbd5e1;
+  --gi-muted: #9aa6b6;
+  --gi-faint: #6b7688;
+}
+
+.guided-interview * { box-sizing: border-box; }
+
+/* Design sheet form fields inherit guided accent when nested in the shell. */
+.guided-interview input:not([type='checkbox']):not([type='radio']),
+.guided-interview textarea,
+.guided-interview [data-slot='select-trigger'],
+.guided-interview button[role='combobox'] {
+  border-color: var(--gi-border) !important;
+  font-family: var(--gi-sans);
+}
+.guided-interview input:not([type='checkbox']):not([type='radio']):focus-visible,
+.guided-interview textarea:focus-visible,
+.guided-interview [data-slot='select-trigger']:focus-visible {
+  outline-color: var(--gi-teal);
+  border-color: var(--gi-teal) !important;
+  box-shadow: 0 0 0 2px rgba(26, 107, 114, 0.15);
+}
+.guided-interview label,
+.guided-interview .text-muted-foreground {
+  color: var(--gi-muted);
+}
+.guided-interview .text-foreground {
+  color: var(--gi-ink);
+}
+.guided-interview .text-accent {
+  color: var(--gi-teal);
+}
+.guided-interview .border-accent {
+  border-color: var(--gi-teal) !important;
+}
+.guided-interview .ring-accent {
+  --tw-ring-color: var(--gi-teal);
+}
+
+/* Theme accent is navy blue; inside the guided interview use brand teal for
+   filled controls so selected pills/toggles don't show blue + green text. */
+.guided-interview .bg-accent {
+  background-color: var(--gi-teal) !important;
+}
+.guided-interview .bg-accent.text-white,
+.guided-interview button.bg-accent.text-white {
+  color: #fff !important;
+}
+.guided-interview button.hover\:bg-accent:hover {
+  color: #fff !important;
+}

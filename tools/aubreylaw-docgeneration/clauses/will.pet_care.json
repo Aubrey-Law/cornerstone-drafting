@@ -1,0 +1,11 @@
+{
+  "id": "will.pet_care",
+  "title": "Pet Care",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": "has_pet_care",
+  "required_fields": [],
+  "review_status": "draft",
+  "version_date": "2026-06-06",
+  "text": "{% if will.pet_care.option == \"direct_bequest\" %}I give any companion animals I own at my death to {{ will.pet_care.primary_caretaker.full_name | name }} if that person survives me and is willing to care for them. I also give {{ will.pet_care.cash_amount }} to that caretaker for the care of such companion animals.{% if will.pet_care.successor_caretaker.full_name %} If {{ will.pet_care.primary_caretaker.full_name | name }} is unwilling or unable to accept such animals, I give them and the related care amount to {{ will.pet_care.successor_caretaker.full_name | name }}.{% endif %}{% elif will.pet_care.option == \"pet_trust\" %}I direct my Personal Representative to set aside {{ will.pet_care.cash_amount }} as a trust for the care of any companion animals I own at my death under Massachusetts General Laws Chapter 203E, Section 408. {{ will.pet_care.pet_trustee.full_name | name }} shall serve as trustee, {{ will.pet_care.enforcer.full_name | name }} shall serve as trust enforcer, and any remaining trust property shall be distributed to {{ will.pet_care.remainder_beneficiary.full_name | name }} when the trust terminates.{% endif %}"
+}

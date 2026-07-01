@@ -1,0 +1,11 @@
+{
+  "id": "will.bond_supervision",
+  "title": "Bond and Estate Supervision",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [],
+  "review_status": "approved",
+  "version_date": "2026-06-05",
+  "text": "{% if will.bond == \"required\" %}Each Personal Representative serving hereunder shall furnish bond with surety as required by law or court order.{% else %}No bond shall be required of any Personal Representative serving hereunder, whether or not specifically named in this Last Will and Testament, or if a bond is required by law, then no surety will be required on such bond.{% endif %} {% if will.supervision == \"supervised\" %}I request supervised administration of my estate.{% else %}I request that the administration of my estate be unsupervised.{% endif %}"
+}

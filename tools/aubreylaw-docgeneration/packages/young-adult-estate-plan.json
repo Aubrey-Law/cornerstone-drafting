@@ -1,0 +1,21 @@
+{
+  "name": "young-adult-estate-plan",
+  "description": "Massachusetts young adult estate plan package for children age 17.5 through 25.",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "client.county",
+    "client.state",
+    "young_adult.parent1.full_name",
+    "fiduciaries.agent.primary.full_name",
+    "healthcare.agent.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "young-adult-estate-plan",
+      "title": "Young Adult Estate Plan",
+      "template": "templates/young-adult-estate-plan.docx",
+      "output": "09-young-adult-estate-plan.docx"
+    }
+  ]
+}

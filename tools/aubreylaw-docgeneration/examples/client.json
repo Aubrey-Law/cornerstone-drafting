@@ -1,0 +1,95 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "street_address": "123 Main Street",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk",
+    "signing_county": "Suffolk",
+    "date_of_birth": "January 1, 1970",
+    "pronoun_subject": "she",
+    "pronoun_object": "her",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "John Example",
+    "pronoun_possessive": "his"
+  },
+  "family": {
+    "blended_family": false
+  },
+  "children": [
+    {
+      "full_name": "Alex Example",
+      "minor": true
+    },
+    {
+      "full_name": "Taylor Example",
+      "minor": false
+    }
+  ],
+  "planning": {
+    "uses_revocable_trust": true
+  },
+  "fiduciaries": {
+    "executor": {
+      "primary": {
+        "full_name": "Emily Executor"
+      }
+    },
+    "trustee": {
+      "primary": {
+        "full_name": "Thomas Trustee"
+      }
+    },
+    "agent": {
+      "primary": {
+        "full_name": "Paula Agent"
+      },
+      "co_agents_action": "separate",
+      "primary_has_spouse": false
+    }
+  },
+  "guardians": {
+    "primary": {
+      "full_name": "Grace Guardian"
+    }
+  },
+  "healthcare": {
+    "agent": {
+      "primary": {
+        "full_name": "Henry Healthcare",
+        "relationship": "Friend",
+        "address": "456 Care Street, Boston, MA",
+        "phone": "555-0100"
+      },
+      "alternate": {
+        "full_name": "Alice Alternate",
+        "relationship": "Sister",
+        "address": "789 Backup Avenue, Cambridge, MA",
+        "phone": "555-0101"
+      }
+    }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 21, 2026",
+    "ordinal_doc_date": "the 21st day of May, 2026",
+    "signing_county": "Suffolk",
+    "notary_commission": "January 1, 2030"
+  },
+  "assets": {
+    "real_property": true
+  },
+  "tax": {
+    "sensitive_estate": false
+  },
+  "specific_gifts": [
+    {
+      "item": "family jewelry",
+      "recipient": "Alex Example"
+    }
+  ],
+  "charitable_gifts": []
+}

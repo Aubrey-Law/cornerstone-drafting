@@ -1,0 +1,15 @@
+{
+  "name": "personal-property-memorandum",
+  "description": "Massachusetts personal property memorandum for disposition of personal effects.",
+  "required_fields": [
+    "client.full_name"
+  ],
+  "documents": [
+    {
+      "id": "personal-property-memorandum",
+      "title": "Personal Property Memorandum",
+      "template": "templates/personal-property-memorandum.docx",
+      "output": "01-personal-property-memorandum.docx"
+    }
+  ]
+}

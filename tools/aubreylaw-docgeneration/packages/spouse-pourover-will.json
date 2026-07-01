@@ -1,0 +1,21 @@
+{
+  "name": "spouse-pourover-will",
+  "description": "Massachusetts spouse companion pour-over will package.",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "client.county",
+    "client.state",
+    "trust.name",
+    "trust.date",
+    "fiduciaries.executor.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "spouse-pourover-will",
+      "title": "Pour-Over Will",
+      "template": "templates/pourover-will.docx",
+      "output": "02-spouse-pourover-will.docx"
+    }
+  ]
+}

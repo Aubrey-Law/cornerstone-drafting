@@ -1,0 +1,18 @@
+{
+  "name": "parental-guardian-appointment",
+  "description": "Massachusetts parental appointment of guardian for minor children.",
+  "required_fields": [
+    "client.full_name",
+    "client.street_address",
+    "children[].full_name",
+    "guardians.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "parental-guardian-appointment",
+      "title": "Parental Appointment of Guardian",
+      "template": "templates/parental-guardian-appointment.docx",
+      "output": "01-parental-appointment-of-guardian.docx"
+    }
+  ]
+}

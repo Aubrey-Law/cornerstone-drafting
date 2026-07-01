@@ -1,0 +1,65 @@
+{
+  "client": {
+    "full_name": "Alex Example",
+    "city": "Needham",
+    "state": "MA",
+    "county": "Norfolk",
+    "signing_county": "Norfolk"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "Jordan Example"
+  },
+  "children": [
+    {
+      "full_name": "Morgan Example",
+      "minor": false
+    },
+    {
+      "full_name": "Riley Example",
+      "minor": false
+    },
+    {
+      "full_name": "Taylor Example",
+      "minor": true
+    }
+  ],
+  "planning": {
+    "uses_revocable_trust": true
+  },
+  "trust": {
+    "name": "Example Family Trust",
+    "date": "May 31, 2026",
+    "blended_family": {
+      "client_children": [
+        {
+          "full_name": "Morgan Example"
+        }
+      ],
+      "spouse_children": [
+        {
+          "full_name": "Riley Example"
+        }
+      ]
+    }
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": {
+        "full_name": "Casey Trustee"
+      },
+      "successor": {
+        "full_name": "Quinn Successor"
+      }
+    }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 31, 2026",
+    "ordinal_doc_date": "the 31st day of May, 2026",
+    "signing_county": "Norfolk",
+    "notary_commission": "January 1, 2030"
+  },
+  "specific_gifts": [],
+  "charitable_gifts": []
+}

@@ -1,0 +1,18 @@
+{
+  "name": "simple-will",
+  "description": "Massachusetts standalone simple will package.",
+  "required_fields": [
+    "client.full_name",
+    "client.county",
+    "client.state",
+    "fiduciaries.executor.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "simple-will",
+      "title": "Last Will and Testament",
+      "template": "templates/will.docx",
+      "output": "01-last-will-and-testament.docx"
+    }
+  ]
+}

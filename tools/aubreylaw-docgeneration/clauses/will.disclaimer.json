@@ -1,0 +1,11 @@
+{
+  "id": "will.disclaimer",
+  "title": "Disclaimer Article",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [],
+  "review_status": "approved",
+  "version_date": "2026-06-06",
+  "text": "Any beneficiary may disclaim all or any part of an interest passing under this Will. A disclaimed interest shall pass as if the disclaiming beneficiary had predeceased me, unless the instrument of disclaimer provides otherwise and applicable law permits that result."
+}

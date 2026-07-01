@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aubrey Law — Theme Preview</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #EAEBEE;
+      padding: 40px 32px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 36px;
+    }
+
+    .previews {
+      display: flex;
+      gap: 40px;
+      justify-content: center;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .preview-wrapper {
+      flex: 1;
+      min-width: 560px;
+      max-width: 700px;
+    }
+
+    .preview-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      padding-left: 2px;
+    }
+
+    .preview-sublabel {
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.65;
+      margin-left: 8px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── App Shell ── */
+    .app-shell {
+      display: flex;
+      height: 520px;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.10);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 196px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0 16px;
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 18px 20px;
+      border-bottom: 1px solid;
+    }
+
+    .sidebar-logo-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo-text {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .sidebar-logo-sub {
+      font-size: 10px;
+      font-weight: 400;
+      opacity: 0.55;
+    }
+
+    .sidebar-nav {
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .nav-item .nav-icon {
+      width: 16px;
+      height: 16px;
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer {
+      padding: 0 10px;
+    }
+
+    .sidebar-footer .nav-item {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    /* ── Main ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .topbar {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      border-bottom: 1px solid;
+      flex-shrink: 0;
+    }
+
+    .topbar-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow: auto;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .stat-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      padding: 16px 18px;
+      border-radius: 8px;
+      border: 1px solid;
+    }
+
+    .stat-card-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+
+    .stat-card-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .table-section {
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    thead th {
+      text-align: left;
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0 10px 8px;
+      border-bottom: 1px solid;
+      opacity: 0.5;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody td {
+      padding: 10px 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.01em;
+    }
+
+
+    /* ════════════════════════════════════════
+       THEME 1: HEIRLOOM
+    ════════════════════════════════════════ */
+
+    .heirloom .app-shell {
+      background: #F7F4EF;
+    }
+
+    /* sidebar */
+    .heirloom .sidebar {
+      background: #2C2A25;
+    }
+    .heirloom .sidebar-logo {
+      border-color: rgba(255,255,255,0.08);
+    }
+    .heirloom .sidebar-logo-mark {
+      background: #7C5C2A;
+      color: #FAF5EC;
+    }
+    .heirloom .sidebar-logo-text {
+      color: #EDE6DC;
+    }
+    .heirloom .nav-item {
+      color: #C8BFB0;
+    }
+    .heirloom .nav-item.active {
+      background: rgba(124, 92, 42, 0.25);
+      color: #F0E4CC;
+    }
+    .heirloom .nav-item:not(.active):hover {
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* main */
+    .heirloom .main {
+      background: #F7F4EF;
+    }
+    .heirloom .topbar {
+      background: #FFFDF8;
+      border-color: #D6C9B5;
+    }
+    .heirloom .topbar-title {
+      color: #1C1A17;
+    }
+    .heirloom .avatar {
+      background: #7C5C2A;
+      color: #FAF5EC;
+    }
+
+    .heirloom .section-title {
+      color: #6B5F50;
+    }
+
+    .heirloom .stat-card {
+      background: #FFFDF8;
+      border-color: #D6C9B5;
+    }
+    .heirloom .stat-card-label {
+      color: #6B5F50;
+    }
+    .heirloom .stat-card-value {
+      color: #1C1A17;
+    }
+
+    .heirloom thead th {
+      color: #6B5F50;
+      border-color: #D6C9B5;
+    }
+    .heirloom tbody tr {
+      border-color: #EDE4D5;
+    }
+    .heirloom tbody td {
+      color: #1C1A17;
+    }
+
+    .heirloom .badge-drafting {
+      background: #FDF3DC;
+      color: #7C5C2A;
+    }
+    .heirloom .badge-review {
+      background: #E8F1EC;
+      color: #3A6B4E;
+    }
+    .heirloom .badge-signing {
+      background: #E5EDF7;
+      color: #2B5499;
+    }
+
+    .heirloom .btn-primary {
+      background: #7C5C2A;
+      color: #FAF5EC;
+    }
+
+    .heirloom .preview-label {
+      color: #7C5C2A;
+    }
+
+
+    /* ════════════════════════════════════════
+       THEME 2: COUNSEL
+    ════════════════════════════════════════ */
+
+    .counsel .app-shell {
+      background: #F4F6F9;
+    }
+
+    /* sidebar */
+    .counsel .sidebar {
+      background: #1A1F2E;
+    }
+    .counsel .sidebar-logo {
+      border-color: rgba(255,255,255,0.07);
+    }
+    .counsel .sidebar-logo-mark {
+      background: #1E4A8C;
+      color: #FFFFFF;
+    }
+    .counsel .sidebar-logo-text {
+      color: #E8EDF5;
+    }
+    .counsel .nav-item {
+      color: #8C9AB5;
+    }
+    .counsel .nav-item.active {
+      background: rgba(30, 74, 140, 0.22);
+      color: #C5D4EE;
+    }
+    .counsel .nav-item:not(.active):hover {
+      background: rgba(255,255,255,0.04);
+    }
+
+    /* main */
+    .counsel .main {
+      background: #F4F6F9;
+    }
+    .counsel .topbar {
+      background: #FFFFFF;
+      border-color: #C8D3E8;
+    }
+    .counsel .topbar-title {
+      color: #0D1117;
+    }
+    .counsel .avatar {
+      background: #1E4A8C;
+      color: #FFFFFF;
+    }
+
+    .counsel .section-title {
+      color: #4A5568;
+    }
+
+    .counsel .stat-card {
+      background: #FFFFFF;
+      border-color: #C8D3E8;
+    }
+    .counsel .stat-card-label {
+      color: #4A5568;
+    }
+    .counsel .stat-card-value {
+      color: #0D1117;
+    }
+
+    .counsel thead th {
+      color: #4A5568;
+      border-color: #C8D3E8;
+    }
+    .counsel tbody tr {
+      border-color: #E2E8F4;
+    }
+    .counsel tbody td {
+      color: #0D1117;
+    }
+
+    .counsel .badge-drafting {
+      background: #EBF1FB;
+      color: #1E4A8C;
+    }
+    .counsel .badge-review {
+      background: #E4F3F1;
+      color: #0A5C52;
+    }
+    .counsel .badge-signing {
+      background: #FEF9EC;
+      color: #92600A;
+    }
+
+    .counsel .btn-primary {
+      background: #1E4A8C;
+      color: #FFFFFF;
+    }
+
+    .counsel .preview-label {
+      color: #1E4A8C;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Aubrey Law — Theme Alternatives</h1>
+
+  <div class="previews">
+
+    <!-- ── HEIRLOOM ── -->
+    <div class="preview-wrapper heirloom">
+      <div class="preview-label">
+        Option 1: Heirloom
+        <span class="preview-sublabel">Warm Slate + Aged Brass</span>
+      </div>
+      <div class="app-shell">
+
+        <nav class="sidebar">
+          <div class="sidebar-logo">
+            <div class="sidebar-logo-mark">A</div>
+            <div>
+              <div class="sidebar-logo-text">Aubrey Law</div>
+              <div class="sidebar-logo-sub">Estate Planning</div>
+            </div>
+          </div>
+          <div class="sidebar-nav">
+            <div class="nav-item active">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h5v5H2zm7 0h5v5H9zM2 9h5v5H2zm7 0h5v5H9z" opacity=".6"/></svg>
+              Dashboard
+            </div>
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M5 11h4"/></svg>
+              Matters
+            </div>
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5"/></svg>
+              Leads
+            </div>
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.5"/><circle cx="11" cy="5" r="2.5"/><path d="M1 14c0-2.761 2.239-4 5-4M8 14c0-2.761 2.239-4 5-4"/></svg>
+              Contacts
+            </div>
+          </div>
+          <div class="sidebar-footer">
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 2v1M8 13v1M2 8h1M13 8h1"/></svg>
+              Settings
+            </div>
+          </div>
+        </nav>
+
+        <div class="main">
+          <div class="topbar">
+            <span class="topbar-title">Dashboard</span>
+            <div class="topbar-right">
+              <div class="avatar">SA</div>
+            </div>
+          </div>
+          <div class="content">
+            <p class="section-title">Overview</p>
+            <div class="stat-cards">
+              <div class="stat-card">
+                <div class="stat-card-label">Active Matters</div>
+                <div class="stat-card-value">12</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-card-label">Pending Tasks</div>
+                <div class="stat-card-value">4</div>
+              </div>
+            </div>
+
+            <div class="table-section">
+              <p class="section-title">Recent Matters</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Matter</th>
+                    <th>Stage</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Thompson Family Trust</td>
+                    <td><span class="badge badge-drafting">Drafting</span></td>
+                    <td>In progress</td>
+                  </tr>
+                  <tr>
+                    <td>Eleanor Marsh — DPOA</td>
+                    <td><span class="badge badge-review">Review</span></td>
+                    <td>Awaiting client</td>
+                  </tr>
+                  <tr>
+                    <td>Caldwell Pour-Over Will</td>
+                    <td><span class="badge badge-signing">Signing</span></td>
+                    <td>Scheduled</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <button class="btn-primary">+ New Matter</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── COUNSEL ── -->
+    <div class="preview-wrapper counsel">
+      <div class="preview-label">
+        Option 2: Counsel
+        <span class="preview-sublabel">Deep Charcoal + Sapphire</span>
+      </div>
+      <div class="app-shell">
+
+        <nav class="sidebar">
+          <div class="sidebar-logo">
+            <div class="sidebar-logo-mark">A</div>
+            <div>
+              <div class="sidebar-logo-text">Aubrey Law</div>
+              <div class="sidebar-logo-sub">Estate Planning</div>
+            </div>
+          </div>
+          <div class="sidebar-nav">
+            <div class="nav-item active">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h5v5H2zm7 0h5v5H9zM2 9h5v5H2zm7 0h5v5H9z" opacity=".6"/></svg>
+              Dashboard
+            </div>
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M5 11h4"/></svg>
+              Matters
+            </div>
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5"/></svg>
+              Leads
+            </div>
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.5"/><circle cx="11" cy="5" r="2.5"/><path d="M1 14c0-2.761 2.239-4 5-4M8 14c0-2.761 2.239-4 5-4"/></svg>
+              Contacts
+            </div>
+          </div>
+          <div class="sidebar-footer">
+            <div class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 2v1M8 13v1M2 8h1M13 8h1"/></svg>
+              Settings
+            </div>
+          </div>
+        </nav>
+
+        <div class="main">
+          <div class="topbar">
+            <span class="topbar-title">Dashboard</span>
+            <div class="topbar-right">
+              <div class="avatar">SA</div>
+            </div>
+          </div>
+          <div class="content">
+            <p class="section-title">Overview</p>
+            <div class="stat-cards">
+              <div class="stat-card">
+                <div class="stat-card-label">Active Matters</div>
+                <div class="stat-card-value">12</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-card-label">Pending Tasks</div>
+                <div class="stat-card-value">4</div>
+              </div>
+            </div>
+
+            <div class="table-section">
+              <p class="section-title">Recent Matters</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Matter</th>
+                    <th>Stage</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Thompson Family Trust</td>
+                    <td><span class="badge badge-drafting">Drafting</span></td>
+                    <td>In progress</td>
+                  </tr>
+                  <tr>
+                    <td>Eleanor Marsh — DPOA</td>
+                    <td><span class="badge badge-review">Review</span></td>
+                    <td>Awaiting client</td>
+                  </tr>
+                  <tr>
+                    <td>Caldwell Pour-Over Will</td>
+                    <td><span class="badge badge-signing">Signing</span></td>
+                    <td>Scheduled</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <button class="btn-primary">+ New Matter</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

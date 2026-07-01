@@ -1,0 +1,66 @@
+{
+  "name": "core-estate",
+  "description": "Core estate-planning package with will, revocable trust, POA, health directive, HIPAA, and ancillary execution documents.",
+  "required_fields": [
+    "client.full_name",
+    "client.state",
+    "client.county",
+    "fiduciaries.executor.primary.full_name",
+    "fiduciaries.trustee.primary.full_name",
+    "fiduciaries.agent.primary.full_name",
+    "healthcare.agent.primary.full_name",
+    "healthcare.agent.primary.relationship",
+    "healthcare.agent.primary.address",
+    "healthcare.agent.primary.phone",
+    "healthcare.agent.alternate.full_name",
+    "client.city",
+    "client.street_address",
+    "client.date_of_birth",
+    "client.pronoun_subject",
+    "client.pronoun_possessive"
+  ],
+  "documents": [
+    {
+      "id": "will",
+      "title": "Last Will and Testament",
+      "template": "templates/will.docx",
+      "output": "01-last-will-and-testament.docx"
+    },
+    {
+      "id": "revocable-trust",
+      "title": "Revocable Living Trust",
+      "template": "templates/revocable-trust.docx",
+      "output": "02-revocable-living-trust.docx"
+    },
+    {
+      "id": "durable-poa",
+      "title": "Durable Power of Attorney",
+      "template": "templates/durable-power-of-attorney.docx",
+      "output": "03-durable-power-of-attorney.docx"
+    },
+    {
+      "id": "health-directive",
+      "title": "Health Care Proxy",
+      "template": "templates/health-care-proxy.docx",
+      "output": "04-health-care-proxy.docx"
+    },
+    {
+      "id": "living-will",
+      "title": "Living Will / Advance Directive",
+      "template": "templates/living-will.docx",
+      "output": "05-living-will.docx"
+    },
+    {
+      "id": "hipaa",
+      "title": "HIPAA Authorization",
+      "template": "templates/hipaa-authorization.docx",
+      "output": "06-hipaa-authorization.docx"
+    },
+    {
+      "id": "ancillary",
+      "title": "Ancillary Execution Documents",
+      "template": "templates/ancillary-execution.docx",
+      "output": "07-ancillary-execution-documents.docx"
+    }
+  ]
+}

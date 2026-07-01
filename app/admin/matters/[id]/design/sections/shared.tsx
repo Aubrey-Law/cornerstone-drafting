@@ -1,0 +1,555 @@
+'use client'
+
+import { createContext, forwardRef, useContext, useImperativeHandle, useRef } from 'react'
+import { CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Check, ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { formatAgeLabel } from '@/lib/dob'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { designFieldTargetId } from '@/lib/designSheetReadiness'
+import type { DesignSheet } from '@/types/database'
+import type { SlotState } from '@/types/planReview'
+
+// ── Shared props ──────────────────────────────────────────────────────────────
+
+export interface SectionProps {
+  sheet: DesignSheet
+  onChange: <K extends keyof DesignSheet>(field: K, value: DesignSheet[K]) => void
+}
+
+// ── Field-level validation ─────────────────────────────────────────────────────
+// Readiness blockers (lib/designSheetReadiness) surface in the rail/blocker list.
+// This context lets the shared inputs also flag themselves inline once the
+// attorney has touched (blurred) a field that's still a drafting blocker.
+
+interface DesignValidationContextValue {
+  blockedFields: Set<string>
+  touched: Set<string>
+  markTouched: (field: string) => void
+}
+
+const DesignValidationContext = createContext<DesignValidationContextValue>({
+  blockedFields: new Set(),
+  touched: new Set(),
+  markTouched: () => {},
+})
+
+export function DesignValidationProvider({ value, children }: {
+  value: DesignValidationContextValue
+  children: React.ReactNode
+}) {
+  return (
+    <DesignValidationContext.Provider value={value}>
+      {children}
+    </DesignValidationContext.Provider>
+  )
+}
+
+function useFieldValidation(fieldName?: keyof DesignSheet | string) {
+  const ctx = useContext(DesignValidationContext)
+  const name = fieldName != null ? String(fieldName) : undefined
+  const showError = name != null && ctx.blockedFields.has(name) && ctx.touched.has(name)
+  const onBlur = name != null ? () => ctx.markTouched(name) : undefined
+  return { showError, onBlur }
+}
+
+function RequiredForDraftingNote() {
+  return (
+    <p className="mt-1 text-[10.5px] font-medium text-destructive">Required for drafting</p>
+  )
+}
+
+// Mirrors PRONOUN_OPTIONS in the intake wizard so attorney-fill and intake
+// import share one vocabulary (values flow straight into drafting variables).
+export const PRONOUN_OPTIONS: { value: string; label: string }[] = [
+  { value: 'he/him', label: 'He/Him' },
+  { value: 'she/her', label: 'She/Her' },
+  { value: 'they/them', label: 'They/Them' },
+  { value: 'ze/zir', label: 'Ze/Zir' },
+  { value: 'other', label: 'Other' },
+]
+
+// ── Field label ───────────────────────────────────────────────────────────────
+
+export function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground">
+      {children}
+    </p>
+  )
+}
+
+export function DobAgeHint({ dob }: { dob: string | null | undefined }) {
+  const label = formatAgeLabel(dob)
+  if (!label) return null
+  return (
+    <p className="mt-1 text-[10.5px] font-medium text-muted-foreground">{label}</p>
+  )
+}
+
+// ── Slot state toggle ─────────────────────────────────────────────────────────
+
+const SLOT_STATE_OPTIONS: { value: SlotState; label: string }[] = [
+  { value: 'filled', label: 'Filled' },
+  { value: 'pending_client', label: 'Pending client' },
+  { value: 'optional', label: 'Optional' },
+]
+
+export function SlotStateToggle({ slotKey: _slotKey, state, onChange }: {
+  slotKey: string
+  state: SlotState
+  onChange: (s: SlotState) => void
+}) {
+  return (
+    <div className="mb-2 flex items-center rounded-md bg-muted p-0.5 w-fit gap-0.5">
+      {SLOT_STATE_OPTIONS.map(opt => {
+        const isActive = state === opt.value
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              'rounded px-2 py-0.5 transition-all text-[10px] leading-tight font-medium',
+              isActive && opt.value === 'filled' && 'bg-card text-foreground shadow-sm',
+              isActive && opt.value === 'pending_client' && 'bg-amber-100 text-amber-700 shadow-sm dark:bg-amber-900/40 dark:text-amber-300',
+              isActive && opt.value === 'optional' && 'bg-blue-100 text-blue-700 shadow-sm dark:bg-blue-900/40 dark:text-blue-300',
+              !isActive && 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Field inputs ──────────────────────────────────────────────────────────────
+
+function displayOriginalValue(value: string | null | undefined) {
+  const text = value?.trim()
+  return text ? text : 'Blank'
+}
+
+function OverrideIndicator({ originalValue, className = 'right-2.5' }: {
+  originalValue: string
+  className?: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn(
+          'absolute top-1/2 -translate-y-1/2 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-warning/40 text-warning cursor-help',
+          className,
+        )}>
+          <AlertCircle className="h-3 w-3" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        <p className="font-medium">Attorney override</p>
+        <p className="text-muted-foreground">Prefilled: {displayOriginalValue(originalValue)}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function PrefilledValueNote({ originalValue }: { originalValue: string }) {
+  return (
+    <p className="mt-1 text-[10.5px] font-medium text-warning">
+      Prefilled: {displayOriginalValue(originalValue)}
+    </p>
+  )
+}
+
+function fieldId(fieldName?: keyof DesignSheet | string) {
+  return fieldName ? designFieldTargetId(String(fieldName)) : undefined
+}
+
+export function PrefilledInput({ label, value, originalValue, onChange, type = 'text', fieldName }: {
+  label: string
+  value: string
+  originalValue?: string
+  onChange?: (v: string) => void
+  type?: string
+  fieldName?: keyof DesignSheet | string
+}) {
+  const isOverride = originalValue !== undefined
+  const { showError, onBlur } = useFieldValidation(fieldName)
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative">
+        <Input
+          id={fieldId(fieldName)}
+          data-design-field={fieldName ? String(fieldName) : undefined}
+          type={type}
+          value={value}
+          onChange={e => onChange?.(e.target.value)}
+          onBlur={onBlur}
+          className={cn(
+            'text-foreground',
+            isOverride ? 'bg-warning/10 border-warning/40 pr-8' : 'bg-muted border-border',
+            showError && 'border-destructive bg-destructive/5',
+          )}
+        />
+        {isOverride && <OverrideIndicator originalValue={originalValue} />}
+      </div>
+      {isOverride && <PrefilledValueNote originalValue={originalValue} />}
+      {showError && <RequiredForDraftingNote />}
+    </div>
+  )
+}
+
+export function OverriddenInput({ label, value, originalValue, onChange, fieldName }: {
+  label: string
+  value: string
+  originalValue: string
+  onChange?: (v: string) => void
+  fieldName?: keyof DesignSheet | string
+}) {
+  const { showError, onBlur } = useFieldValidation(fieldName)
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative">
+        <Input
+          id={fieldId(fieldName)}
+          data-design-field={fieldName ? String(fieldName) : undefined}
+          value={value}
+          onChange={e => onChange?.(e.target.value)}
+          onBlur={onBlur}
+          className={cn(
+            'bg-warning/10 border-warning/40 text-foreground pr-8',
+            showError && 'border-destructive bg-destructive/5',
+          )}
+        />
+        <OverrideIndicator originalValue={originalValue} />
+      </div>
+      <PrefilledValueNote originalValue={originalValue} />
+      {showError && <RequiredForDraftingNote />}
+    </div>
+  )
+}
+
+export function OverriddenSelect({ label, value, originalValue, options, onChange, fieldName }: {
+  label: string
+  value: string
+  originalValue: string
+  options: { value: string; label: string }[]
+  onChange?: (v: string) => void
+  fieldName?: keyof DesignSheet | string
+}) {
+  const { showError, onBlur } = useFieldValidation(fieldName)
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative">
+        <Select value={value} onValueChange={v => onChange?.(v)}>
+          <SelectTrigger
+            id={fieldId(fieldName)}
+            data-design-field={fieldName ? String(fieldName) : undefined}
+            onBlur={onBlur}
+            className={cn(
+              'bg-warning/10 border-warning/40 text-foreground pr-10',
+              showError && 'border-destructive bg-destructive/5',
+            )}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(o => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <OverrideIndicator originalValue={originalValue} className="right-8" />
+      </div>
+      <PrefilledValueNote originalValue={originalValue} />
+      {showError && <RequiredForDraftingNote />}
+    </div>
+  )
+}
+
+export function PrefilledSelect({ label, value, originalValue, options, onChange, fieldName }: {
+  label: string
+  value: string
+  originalValue?: string
+  options: { value: string; label: string }[]
+  onChange?: (v: string) => void
+  fieldName?: keyof DesignSheet | string
+}) {
+  const isOverride = originalValue !== undefined
+  const { showError, onBlur } = useFieldValidation(fieldName)
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative">
+        <Select value={value} onValueChange={v => onChange?.(v)}>
+          <SelectTrigger
+            id={fieldId(fieldName)}
+            data-design-field={fieldName ? String(fieldName) : undefined}
+            onBlur={onBlur}
+            className={cn(
+              'text-foreground',
+              isOverride ? 'bg-warning/10 border-warning/40 pr-10' : 'bg-muted border-border',
+              showError && 'border-destructive bg-destructive/5',
+            )}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(o => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isOverride && <OverrideIndicator originalValue={originalValue} className="right-8" />}
+      </div>
+      {isOverride && <PrefilledValueNote originalValue={originalValue} />}
+      {showError && <RequiredForDraftingNote />}
+    </div>
+  )
+}
+
+export function AttorneyInput({ label, value, placeholder, onChange, fieldName }: {
+  label: string
+  value: string
+  placeholder?: string
+  onChange?: (v: string) => void
+  fieldName?: keyof DesignSheet | string
+}) {
+  const { showError, onBlur } = useFieldValidation(fieldName)
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <Input
+        id={fieldId(fieldName)}
+        data-design-field={fieldName ? String(fieldName) : undefined}
+        value={value}
+        placeholder={placeholder}
+        onChange={e => onChange?.(e.target.value)}
+        onBlur={onBlur}
+        className={cn(
+          'bg-card border-border text-foreground',
+          showError && 'border-destructive bg-destructive/5',
+        )}
+      />
+      {showError && <RequiredForDraftingNote />}
+    </div>
+  )
+}
+
+export function AttorneySelect({ label, value, options, placeholder, onChange, fieldName }: {
+  label: string
+  value: string
+  options: { value: string; label: string }[]
+  placeholder?: string
+  onChange?: (v: string) => void
+  fieldName?: keyof DesignSheet | string
+}) {
+  const { showError, onBlur } = useFieldValidation(fieldName)
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <Select value={value} onValueChange={v => onChange?.(v)}>
+        <SelectTrigger
+          id={fieldId(fieldName)}
+          data-design-field={fieldName ? String(fieldName) : undefined}
+          onBlur={onBlur}
+          className={cn(
+            'bg-card border-border text-foreground',
+            showError && 'border-destructive bg-destructive/5',
+          )}
+        >
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(o => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {showError && <RequiredForDraftingNote />}
+    </div>
+  )
+}
+
+// ── Section chrome ────────────────────────────────────────────────────────────
+
+export function SectionBlock({ title, subtitle, children }: {
+  title: string
+  subtitle?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-6 mb-6">
+      <div className="mb-5">
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">{title}</h3>
+        {subtitle && <p className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+export function AttorneyNoteBanner({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-6 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+      <p className="text-[13px] leading-relaxed text-warning">{children}</p>
+    </div>
+  )
+}
+
+export function ClientDecisionCallout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700/50 dark:bg-amber-950/30">
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-700 dark:text-amber-300">
+        Client decision required — {children}
+      </span>
+    </div>
+  )
+}
+
+
+// ── Accordion section ────────────────────────────────────────────────────────
+
+export interface AccordionSectionHandle {
+  scrollIntoView: () => void
+}
+
+interface AccordionSectionProps {
+  id: string
+  title: string
+  icon: React.ReactNode
+  badge?: React.ReactNode
+  isOpen: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}
+
+export const AccordionSection = forwardRef<AccordionSectionHandle, AccordionSectionProps>(
+  function AccordionSection({ id, title, icon, badge, isOpen, onToggle, children }, ref) {
+    const rootRef = useRef<HTMLDivElement>(null)
+    const headerRef = useRef<HTMLButtonElement>(null)
+
+    useImperativeHandle(ref, () => ({
+      scrollIntoView() {
+        const el = headerRef.current ?? rootRef.current
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      },
+    }))
+
+    return (
+      <div
+        ref={rootRef}
+        id={id}
+        className="mb-3 scroll-mt-4 rounded-[var(--radius)] border-[0.5px] border-border bg-card"
+      >
+        {/* Header */}
+        <button
+          ref={headerRef}
+          type="button"
+          onClick={onToggle}
+          className="flex w-full items-center gap-3 px-[1.125rem] py-[0.8rem] text-left transition-colors hover:bg-muted cursor-pointer rounded-[var(--radius)]"
+        >
+          <span
+            className={cn(
+              'flex h-[1.75rem] w-[1.75rem] shrink-0 items-center justify-center rounded-[calc(var(--radius)-2px)] transition-colors',
+              isOpen ? 'bg-accent/12' : 'bg-secondary'
+            )}
+          >
+            {icon}
+          </span>
+          <span className="flex-1 font-[family-name:var(--font-display)] text-[0.875rem] font-medium text-foreground">
+            {title}
+          </span>
+          {badge}
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200',
+              isOpen && 'rotate-180'
+            )}
+          />
+        </button>
+
+        {/* Body */}
+        {isOpen && (
+          <div className="border-t-[0.5px] border-border px-[1.125rem] py-5">
+            {children}
+          </div>
+        )}
+      </div>
+    )
+  }
+)
+
+export function AccordionBadge({ variant = 'core', children }: {
+  variant?: 'core' | 'warn' | 'lp'
+  children: React.ReactNode
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-[0.4rem] py-[0.125rem] text-[0.625rem] font-medium',
+        variant === 'core' && 'bg-muted text-muted-foreground',
+        variant === 'warn' && 'bg-warning/10 text-warning',
+        variant === 'lp' && 'bg-accent/10 text-accent',
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+// ── Inheritance card ──────────────────────────────────────────────────────────
+
+export function InheritanceCard({ title, description, selected, onClick }: {
+  title: string
+  description: string
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex flex-col items-start rounded-lg border-2 p-4 text-left transition-colors',
+        selected
+          ? 'border-accent bg-accent/10'
+          : 'border-border bg-card hover:border-muted-foreground'
+      )}
+    >
+      <div className={cn(
+        'mb-2 flex h-5 w-5 items-center justify-center rounded-full border-2',
+        selected ? 'border-accent bg-accent' : 'border-border'
+      )}>
+        {selected && <Check className="h-3 w-3 text-white" />}
+      </div>
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-1 text-xs leading-relaxed text-foreground">{description}</p>
+    </button>
+  )
+}
+
+/**
+ * Placeholder body for design-sheet sections that exist in the attorney design
+ * instrument but whose fields haven't been wired into the editor yet. Keeps the
+ * 20-section structure visible while the fields land in a later phase.
+ */
+export function SectionPlaceholder({ title, note }: { title: string; note: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-muted/40 p-5 text-sm">
+      <p className="font-medium text-foreground">{title}</p>
+      <p className="mt-1 text-muted-foreground">{note}</p>
+    </div>
+  )
+}

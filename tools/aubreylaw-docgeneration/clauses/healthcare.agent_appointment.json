@@ -1,0 +1,13 @@
+{
+  "id": "healthcare.agent_appointment",
+  "title": "Health Care Agent Appointment",
+  "document_type": "health_care_directive",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "healthcare.agent.primary.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "I designate {{ healthcare.agent.primary.full_name | name }} to make health care decisions for me when authorized by applicable law."
+}

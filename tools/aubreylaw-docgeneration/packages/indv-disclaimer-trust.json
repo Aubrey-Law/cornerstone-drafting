@@ -1,0 +1,22 @@
+{
+  "name": "indv-disclaimer-trust",
+  "description": "Massachusetts individual disclaimer trust for married clients. The trust distributes outright to the surviving spouse, with disclaimer provisions creating a Marital Trust (QTIP) and Family Trust (bypass/credit shelter) when the spouse disclaims. Includes descendants' trusts with staged withdrawal rights.",
+  "required_fields": [
+    "client.full_name",
+    "client.county",
+    "client.state",
+    "trust.name",
+    "trust.date",
+    "spouse.full_name",
+    "fiduciaries.trustee.co_primary.full_name",
+    "fiduciaries.trustee.successor.full_name"
+  ],
+  "documents": [
+    {
+      "id": "indv-disclaimer-trust",
+      "title": "Individual Disclaimer Trust",
+      "template": "templates/indv-disclaimer-trust.docx",
+      "output": "02-indv-disclaimer-trust.docx"
+    }
+  ]
+}

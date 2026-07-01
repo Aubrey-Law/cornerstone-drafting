@@ -1,0 +1,108 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '../styles/theme/index.css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* --font-sans and --font-serif are injected by next/font in app/layout.tsx (DM Sans + Lora). */
+  --font-inter: var(--font-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Safelist — FieldPrimitives arbitrary color tokens.
+   Static strings in .tsx files are normally scanned, but this guarantees
+   they survive any future dynamic-class refactoring. */
+@source inline("bg-[#EEF5E8] text-[#437A22] border-[#B8DDA0] bg-[#FDF3EC] text-[#964219] border-[#F5C9A0] bg-[#F4F3EF] text-[#71706B] border-[#E5E4E0] text-[#1A1916] text-[#B0AFA9] bg-[#FAFAF8] text-[#01696F]");
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-size: 18px;
+    line-height: 1.6;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/* Type scale utilities */
+@layer utilities {
+  .text-title-1  { font-size: 30px; font-weight: 700; letter-spacing: -0.018em; line-height: 1.21; }
+  .text-title-2  { font-size: 24px; font-weight: 700; letter-spacing: -0.016em; line-height: 1.26; }
+  .text-title-3  { font-size: 21px; font-weight: 600; letter-spacing: -0.014em; line-height: 1.30; }
+  .text-headline { font-size: 18px; font-weight: 600; letter-spacing: -0.012em; line-height: 1.38; }
+  .text-body     { font-size: 18px; font-weight: 400; letter-spacing: -0.010em; line-height: 1.60; }
+  .text-callout  { font-size: 16px; font-weight: 400; letter-spacing: -0.008em; line-height: 1.55; }
+  .text-field-label { font-size: 14px; font-style: italic; font-weight: 400; letter-spacing: -0.006em; line-height: 1.50; }
+  .text-field-value { font-size: 15px; font-weight: 400; letter-spacing: -0.006em; line-height: 1.50; }
+  .text-footnote { font-size: 13px; font-weight: 400; letter-spacing: 0; line-height: 1.55; }
+  .text-category { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.60; }
+
+  .admin-surface {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .admin-page {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 64rem;
+    padding-block: 1.5rem;
+  }
+
+  .admin-page-wide {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 80rem;
+    padding-block: 1.5rem;
+  }
+
+  .admin-page-title {
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.25;
+  }
+
+  .admin-section-title {
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.35;
+  }
+
+  .admin-subtle {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+
+  .admin-stat-card {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 1rem;
+  }
+
+  .admin-stat-label {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--muted-foreground);
+  }
+
+  .admin-stat-value {
+    margin-top: 0.25rem;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+}

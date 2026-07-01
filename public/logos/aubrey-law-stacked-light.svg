@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700">
+  <text x="600" y="232" font-family="'Cormorant SC',Georgia,serif" font-size="140" font-weight="300" fill="#1F2D5A" text-anchor="middle" letter-spacing="8">AUBREY</text>
+  <text x="600" y="338" font-family="'Cormorant SC',Georgia,serif" font-size="140" font-weight="300" fill="#1A6B72" text-anchor="middle" letter-spacing="8">LAW</text>
+  <line x1="312" y1="386" x2="888" y2="386" stroke="#1A6B72" stroke-width="2"/>
+  <text x="600" y="422" font-family="'EB Garamond',Georgia,serif" font-size="28" font-style="italic" fill="#1F2D5A" text-anchor="middle" letter-spacing="2">Your Legacy. Carefully Planned.</text>
+</svg>

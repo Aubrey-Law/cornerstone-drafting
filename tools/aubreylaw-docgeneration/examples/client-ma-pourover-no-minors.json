@@ -1,0 +1,44 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "John Example"
+  },
+  "children": [
+    {
+      "full_name": "Alex Example",
+      "minor": false
+    }
+  ],
+  "planning": {
+    "uses_revocable_trust": true
+  },
+  "trust": {
+    "name": "Jane Example Revocable Trust",
+    "date": "May 21, 2026"
+  },
+  "fiduciaries": {
+    "executor": {
+      "primary": {
+        "full_name": "Emily Executor"
+      },
+      "co_primary": {
+        "full_name": "Carl Coexecutor"
+      },
+      "successor": {
+        "full_name": "Samuel Successor"
+      },
+      "co_successor": {
+        "full_name": "Casey Cosuccessor"
+      }
+    }
+  },
+  "guardians": {},
+  "specific_gifts": [],
+  "charitable_gifts": []
+}

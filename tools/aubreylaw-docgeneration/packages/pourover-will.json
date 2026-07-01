@@ -1,0 +1,21 @@
+{
+  "name": "pourover-will",
+  "description": "Massachusetts pour-over will package based on the provided firm form.",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "client.county",
+    "client.state",
+    "trust.name",
+    "trust.date",
+    "fiduciaries.executor.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "pourover-will",
+      "title": "Pour-Over Will",
+      "template": "templates/pourover-will.docx",
+      "output": "01-pourover-will.docx"
+    }
+  ]
+}

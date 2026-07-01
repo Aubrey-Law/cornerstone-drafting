@@ -1,0 +1,50 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "street_address": "123 Main Street",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk",
+    "date_of_birth": "January 1, 1970",
+    "pronoun_subject": "she",
+    "pronoun_object": "her",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "John Example",
+    "pronoun_possessive": "his"
+  },
+  "children": [],
+  "planning": {
+    "uses_revocable_trust": false
+  },
+  "execution": {
+    "signing_scheduled": false
+  },
+  "fiduciaries": {
+    "agent": {
+      "primary": {
+        "full_name": "Paula Agent"
+      },
+      "co_agents_action": "separate",
+      "primary_has_spouse": false
+    }
+  },
+  "healthcare": {
+    "agent": {
+      "primary": {
+        "full_name": "Henry Healthcare",
+        "relationship": "Friend",
+        "address": "456 Care Street, Boston, MA",
+        "phone": "555-0100"
+      },
+      "alternate": {
+        "full_name": "Alice Alternate",
+        "relationship": "Sister",
+        "address": "789 Backup Avenue, Cambridge, MA",
+        "phone": "555-0101"
+      }
+    }
+  }
+}

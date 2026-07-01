@@ -1,0 +1,13 @@
+{
+  "id": "poa.agent_appointment",
+  "title": "Agent Appointment",
+  "document_type": "durable_power_of_attorney",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "fiduciaries.agent.primary.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "I appoint {{ fiduciaries.agent.primary.full_name | name }} as my agent under this durable power of attorney."
+}

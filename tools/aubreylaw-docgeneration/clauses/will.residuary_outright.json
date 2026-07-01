@@ -1,0 +1,11 @@
+{
+  "id": "will.residuary_outright",
+  "title": "Outright Residuary Estate",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [],
+  "review_status": "approved",
+  "version_date": "2026-06-05",
+  "text": "{% if outright_will.residuary.disposition == \"named\" %}I give the residue of my estate to {{ outright_will.residuary.named.full_name | name }}, if that person survives me. If that person does not survive me, I give the residue of my estate to {{ outright_will.residuary.alternate.full_name | name }}, if that person survives me. If neither {{ outright_will.residuary.named.full_name | name }} nor {{ outright_will.residuary.alternate.full_name | name }} survives me, I give the residue of my estate to my heirs at law under the laws of the Commonwealth of Massachusetts as then in effect.{% elif outright_will.residuary.disposition == \"spouse_then_descendants\" and has_spouse %}I give the residue of my estate to my spouse, {{ spouse.full_name | name }}, if my spouse survives me. If my spouse does not survive me, I give the residue of my estate to my descendants, per stirpes. If no descendant of mine survives me, I give the residue of my estate to my heirs at law under the laws of the Commonwealth of Massachusetts as then in effect.{% else %}I give the residue of my estate to my descendants, per stirpes. If no descendant of mine survives me, I give the residue of my estate to my heirs at law under the laws of the Commonwealth of Massachusetts as then in effect.{% endif %}"
+}

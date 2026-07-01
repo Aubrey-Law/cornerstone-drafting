@@ -1,0 +1,21 @@
+{
+  "name": "joint-trust-simplified",
+  "description": "Massachusetts simplified joint revocable trust package based on the provided firm form.",
+  "required_fields": [
+    "client.full_name",
+    "client.state",
+    "client.county",
+    "spouse.full_name",
+    "trust.name",
+    "fiduciaries.trustee.primary.full_name",
+    "fiduciaries.trustee.successor.full_name"
+  ],
+  "documents": [
+    {
+      "id": "joint-trust-simplified",
+      "title": "Simplified Joint Revocable Trust",
+      "template": "templates/joint-trust-simplified.docx",
+      "output": "01-simplified-joint-revocable-trust.docx"
+    }
+  ]
+}

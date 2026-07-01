@@ -1,0 +1,13 @@
+{
+  "id": "testamentary_will.trust_protector",
+  "title": "Trust Protector",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "testamentary_trust.trust_protector.full_name"
+  ],
+  "review_status": "draft",
+  "version_date": "2026-06-05",
+  "text": "I appoint {{ testamentary_trust.trust_protector.full_name | name }} to serve as Trust Protector for any trust created under this Will. The Trust Protector may remove and replace a Trustee, resolve administrative questions, and take other actions reasonably necessary to carry out the trust purposes, subject to attorney review before final execution."
+}

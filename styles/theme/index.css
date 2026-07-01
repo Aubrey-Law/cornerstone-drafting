@@ -1,0 +1,18 @@
+/**
+ * Theme system entry point.
+ *
+ * Layer order:
+ * 1. primitives — layout tokens (theme-agnostic)
+ * 2. generated — per-theme semantic + legacy colors (from lib/theme/tokens.ts)
+ * 3. tailwind-bridge — @theme mappings for Tailwind utilities
+ *
+ * Activation (no JS required for system preference):
+ * - Light: :root, .light, [data-theme="light"]
+ * - Dark: .dark, [data-theme="dark"], or prefers-color-scheme: dark
+ *
+ * To add a theme: extend lib/theme/tokens.ts, add selectors in generate-theme-css.ts.
+ */
+
+@import './primitives.css';
+@import './generated.css';
+@import './tailwind-bridge.css';

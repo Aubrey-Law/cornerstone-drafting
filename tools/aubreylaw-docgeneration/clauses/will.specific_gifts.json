@@ -1,0 +1,13 @@
+{
+  "id": "will.specific_gifts",
+  "title": "Specific Gifts",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": "has_specific_gifts",
+  "required_fields": [
+    "specific_gifts"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "I make the following specific gifts: {% for gift in specific_gifts %}{{ gift.item }} to {{ gift.recipient | name }}{% if not loop.last %}; {% endif %}{% endfor %}."
+}

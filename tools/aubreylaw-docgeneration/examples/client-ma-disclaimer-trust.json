@@ -1,0 +1,84 @@
+{
+  "client": {
+    "full_name": "Margaret A. Sullivan",
+    "aka": "",
+    "street_address": "42 Maple Street",
+    "city": "Needham",
+    "county": "Norfolk",
+    "state": "MA",
+    "signing_county": "Norfolk",
+    "email": "margaret.sullivan@example.com",
+    "phone": "(781) 555-0142",
+    "date_of_birth": "March 15, 1962",
+    "pronoun_subject": "she",
+    "pronoun_object": "her",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "Thomas R. Sullivan",
+    "date_of_birth": "July 22, 1960",
+    "pronoun_subject": "he",
+    "pronoun_object": "him",
+    "pronoun_possessive": "his"
+  },
+  "children": [
+    {
+      "full_name": "Emily J. Sullivan",
+      "date_of_birth": "September 3, 1990",
+      "relationship": "daughter",
+      "minor": false
+    },
+    {
+      "full_name": "Michael T. Sullivan",
+      "date_of_birth": "February 14, 1993",
+      "relationship": "son",
+      "minor": false
+    }
+  ],
+  "trust": {
+    "name": "The Margaret A. Sullivan Revocable Trust",
+    "date": "June 15, 2026",
+    "display_date": "June 15, 2026",
+    "descendants_distribution": {
+      "method": "staged",
+      "stage_1_age": "25",
+      "stage_2_age": "30"
+    }
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": {
+        "full_name": "Margaret A. Sullivan"
+      },
+      "co_primary": {
+        "full_name": "Thomas R. Sullivan"
+      },
+      "successor": {
+        "full_name": "Emily J. Sullivan"
+      }
+    }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "June 15, 2026",
+    "display_doc_date": "June 15, 2026",
+    "ordinal_doc_date": "15th day of June, 2026",
+    "display_ordinal_doc_date": "the 15th day of June, 2026",
+    "signing_county": "Norfolk",
+    "display_signing_county": "Norfolk",
+    "notary_commission": "December 31, 2029",
+    "display_notary_commission": "December 31, 2029"
+  },
+  "state": {
+    "code": "MA"
+  },
+  "has_spouse": true,
+  "has_children": true,
+  "has_minor_children": false,
+  "uses_revocable_trust": true,
+  "planning": {
+    "uses_revocable_trust": true,
+    "include_trust": true
+  }
+}

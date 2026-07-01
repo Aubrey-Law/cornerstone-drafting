@@ -1,0 +1,13 @@
+{
+  "id": "trust.trustee_appointment",
+  "title": "Successor Trustee Appointment",
+  "document_type": "trust",
+  "jurisdiction": "base",
+  "condition": "uses_revocable_trust",
+  "required_fields": [
+    "fiduciaries.trustee.primary.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "Upon the settlor's inability or unwillingness to serve, {{ fiduciaries.trustee.primary.full_name | name }} shall serve as successor trustee."
+}

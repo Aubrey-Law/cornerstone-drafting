@@ -1,0 +1,11 @@
+{
+  "id": "will.utma",
+  "title": "Distributions to Minors",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [],
+  "review_status": "draft",
+  "version_date": "2026-06-06",
+  "text": "If any property becomes distributable to a person who has not attained age {{ will.utma_age }}, my Personal Representative may distribute that property to a custodian for that person under the Massachusetts Uniform Transfers to Minors Act, to be held until that person reaches age {{ will.utma_age }}."
+}

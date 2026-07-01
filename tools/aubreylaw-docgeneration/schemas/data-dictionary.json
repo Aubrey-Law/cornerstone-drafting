@@ -1,0 +1,517 @@
+{
+  "client.full_name": {
+    "type": "string",
+    "required": true,
+    "description": "Client's full legal name."
+  },
+  "client.aka": {
+    "type": "string",
+    "required": false,
+    "description": "Client alternate name or also-known-as name for Will opening and family declarations."
+  },
+  "client.state": {
+    "type": "string",
+    "required": true,
+    "description": "State code used for state-specific clauses and execution rules."
+  },
+  "client.street_address": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Client's street address for incapacity documents."
+  },
+  "client.signing_county": {
+    "type": "string",
+    "required": "conditional",
+    "description": "County used in execution and notary blocks."
+  },
+  "client.date_of_birth": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Client date of birth for HIPAA authorization."
+  },
+  "client.pronoun_subject": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Subject pronoun for execution acknowledgments, such as she, he, or they."
+  },
+  "client.pronoun_object": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Object pronoun, such as her, him, or them."
+  },
+  "client.pronoun_possessive": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Possessive pronoun, such as her, his, or their."
+  },
+  "client.county": {
+    "type": "string",
+    "required": true,
+    "description": "County of residence or execution context."
+  },
+  "spouse.exists": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the client has a spouse."
+  },
+  "spouse.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's full legal name."
+  },
+  "spouse.pronoun_subject": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse subject pronoun for spouse companion documents."
+  },
+  "spouse.pronoun_object": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse object pronoun for spouse companion documents."
+  },
+  "spouse.pronoun_possessive": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse possessive pronoun for spouse companion documents."
+  },
+  "children[].full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Child or descendant name."
+  },
+  "children[].minor": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a child is a minor."
+  },
+  "fiduciaries.executor.primary.full_name": {
+    "type": "string",
+    "required": true,
+    "description": "Primary personal representative or executor."
+  },
+  "fiduciaries.executor.co_primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Co-personal representative nominated when will.pr_structure is co_pr."
+  },
+  "fiduciaries.executor.successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "First successor personal representative or executor."
+  },
+  "fiduciaries.executor.co_successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-first-successor personal representative; serves jointly with the first successor when present."
+  },
+  "fiduciaries.executor.second_successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Second successor personal representative or executor."
+  },
+  "fiduciaries.executor.co_second_successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-second-successor personal representative; serves jointly with the second successor when present."
+  },
+  "will.pr_structure": {
+    "type": "string",
+    "required": false,
+    "description": "Personal representative appointment structure: single, spouse_first, or co_pr."
+  },
+  "will.bond": {
+    "type": "string",
+    "required": false,
+    "description": "Bond election for Will administration: no_bond or required."
+  },
+  "will.supervision": {
+    "type": "string",
+    "required": false,
+    "description": "Probate administration supervision election: unsupervised or supervised."
+  },
+  "will.simultaneous_death": {
+    "type": "string",
+    "required": false,
+    "description": "Common-disaster presumption for married wills: spouse_survives, testator_survives, or omit."
+  },
+  "will.utma_age": {
+    "type": "number",
+    "required": false,
+    "description": "Age for custodial distributions under the Massachusetts Uniform Transfers to Minors Act."
+  },
+  "will.no_contest_clause": {
+    "type": "string",
+    "required": false,
+    "description": "Whether to include the Will no-contest clause: omit or include."
+  },
+  "will.include_disclaimer_article": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether to include the Will disclaimer article."
+  },
+  "will.include_self_proving_affidavit": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether to include the state self-proving affidavit after the Will execution block."
+  },
+  "will.tangible_personal_property.distribution_method": {
+    "type": "string",
+    "required": false,
+    "description": "Tangible personal property distribution method, such as children_then_descendants, spouse_then_children, named_then_children, or memorandum."
+  },
+  "will.tangible_personal_property.named_individual.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Named recipient when tangible personal property uses the named_then_children method."
+  },
+  "will.pet_care.option": {
+    "type": "string",
+    "required": false,
+    "description": "Pet-care selection: omit, direct_bequest, or pet_trust."
+  },
+  "will.pet_care.cash_amount": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Formatted cash amount for direct pet-care bequest or pet trust funding."
+  },
+  "will.pet_care.primary_caretaker.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Primary caretaker for direct pet-care bequest."
+  },
+  "will.pet_care.successor_caretaker.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Successor caretaker for direct pet-care bequest."
+  },
+  "will.pet_care.pet_trustee.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Pet trustee when the pet-trust option is selected."
+  },
+  "will.pet_care.remainder_beneficiary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Remainder beneficiary for unused pet-trust funds."
+  },
+  "will.pet_care.enforcer.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Pet-trust enforcer required for statutory pet trusts."
+  },
+  "fiduciaries.trustee.primary.full_name": {
+    "type": "string",
+    "required": true,
+    "description": "Primary successor trustee."
+  },
+  "fiduciaries.agent.primary.full_name": {
+    "type": "string",
+    "required": true,
+    "description": "Primary agent under durable power of attorney."
+  },
+  "fiduciaries.agent.co_primary.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-agent under durable power of attorney."
+  },
+  "fiduciaries.agent.co_agents_action": {
+    "type": "string",
+    "required": false,
+    "description": "How co-agents act under the durable power of attorney: separate, joint, or majority."
+  },
+  "dpoa.include_section_l": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether to include the spousal proximity and support provision."
+  },
+  "dpoa.self_dealing_reviewer.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Reviewer whose written assent may be relied upon for self-dealing actions under the durable power of attorney."
+  },
+  "dpoa.self_dealing_reviewer_alt.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Alternate reviewer for self-dealing actions if the primary reviewer is unavailable."
+  },
+  "outright_will.residuary.disposition": {
+    "type": "string",
+    "required": false,
+    "description": "Standalone outright will residuary disposition: spouse_then_descendants, descendants_then_heirs, or named."
+  },
+  "outright_will.residuary.named.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Named residuary beneficiary when the standalone outright will disposition is named."
+  },
+  "outright_will.residuary.alternate.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Alternate residuary beneficiary when the standalone outright will disposition is named."
+  },
+  "testamentary_trust.trustee_structure": {
+    "type": "string",
+    "required": false,
+    "description": "Testamentary trustee nomination structure: single, spouse_first, co_trustees, or unset."
+  },
+  "testamentary_trust.beneficiary_structure": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Testamentary trust beneficiary structure, such as descendants_per_stirpes, spouse_hems_then_descendants, or single_beneficiary."
+  },
+  "testamentary_trust.age_distribution_schedule": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Age distribution schedule for descendants or spouse-then-descendants testamentary trust shares."
+  },
+  "testamentary_trust.single_beneficiary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Named beneficiary when the testamentary trust beneficiary structure is single_beneficiary."
+  },
+  "testamentary_trust.remainder_beneficiary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Remainder beneficiary when the testamentary trust beneficiary structure is single_beneficiary."
+  },
+  "testamentary_trust.trust_protector_requested": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the Testamentary Trust Will includes a trust protector provision."
+  },
+  "testamentary_trust.trust_protector.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Trust protector name when a trust protector provision is requested."
+  },
+  "fiduciaries.testamentary_trustee.primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Primary trustee nominated for any testamentary trust created under the Will."
+  },
+  "fiduciaries.testamentary_trustee.co_primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Co-trustee nominated when the testamentary trustee structure is co_trustees."
+  },
+  "fiduciaries.testamentary_trustee.successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Successor trustee nominated for any testamentary trust created under the Will."
+  },
+  "fiduciaries.testamentary_trustee.co_trustees_action": {
+    "type": "string",
+    "required": false,
+    "description": "How testamentary co-trustees act when serving together: majority or unanimous."
+  },
+  "guardians.primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Primary guardian nominee when minor children exist."
+  },
+  "guardians.excluded[].full_name": {
+    "type": "array",
+    "required": false,
+    "description": "Individuals excluded from serving as guardian when minor children exist."
+  },
+  "healthcare.agent.primary.full_name": {
+    "type": "string",
+    "required": true,
+    "description": "Primary health care decision maker."
+  },
+  "healthcare.agent.primary.relationship": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Relationship of primary health care agent."
+  },
+  "healthcare.agent.primary.address": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Address of primary health care agent."
+  },
+  "healthcare.agent.primary.phone": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Phone number of primary health care agent."
+  },
+  "healthcare.agent.alternate.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Alternate health care agent name."
+  },
+  "healthcare.anatomical_gift": {
+    "type": "string",
+    "required": false,
+    "description": "Health Care Proxy anatomical gift election: all, specified, none, or unset."
+  },
+  "healthcare.anatomical_specified": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Specified organs, tissues, parts, or purposes when the anatomical gift election is specified."
+  },
+  "hipaa.psychotherapy_notes": {
+    "type": "string",
+    "required": false,
+    "description": "HIPAA psychotherapy notes disclosure election: authorize, do_not_authorize, or unset."
+  },
+  "execution.doc_date": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Document date for execution blocks when signing is scheduled; otherwise a blank date line is rendered."
+  },
+  "execution.signing_scheduled": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a signing date, signing county, and notary commission expiration are known."
+  },
+  "execution.signing_county": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Signing county when signing is scheduled; falls back to client.signing_county when present."
+  },
+  "execution.ordinal_doc_date": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Ordinal execution date phrase, such as the 21st day of May, 2026."
+  },
+  "execution.notary_commission": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Notary commission expiration text."
+  },
+  "execution.display_doc_date": {
+    "type": "string",
+    "required": false,
+    "description": "Rendered execution date for signing blocks; uses execution.signing_month and execution.signing_year when known, otherwise a blank date line."
+  },
+  "execution.display_ordinal_doc_date": {
+    "type": "string",
+    "required": false,
+    "description": "Rendered ordinal execution date phrase for will execution clauses; uses execution.signing_month and execution.signing_year when known, otherwise a blank ordinal date line."
+  },
+  "execution.display_signing_county": {
+    "type": "string",
+    "required": false,
+    "description": "Rendered signing county for notary blocks; uses execution.signing_county when known, otherwise a blank county line."
+  },
+  "execution.display_notary_commission": {
+    "type": "string",
+    "required": false,
+    "description": "Rendered notary commission expiration for notary blocks; uses notary_commission_expiration when known, otherwise a blank commission line."
+  },
+  "specific_gifts[]": {
+    "type": "array",
+    "required": false,
+    "description": "Specific gifts of property or cash."
+  },
+  "charitable_gifts[]": {
+    "type": "array",
+    "required": false,
+    "description": "Charitable gifts included in the plan."
+  },
+  "trust.name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Name of the revocable trust."
+  },
+  "trust.date": {
+    "type": "string",
+    "required": false,
+    "description": "Date of the trust agreement, formatted as Month Day, Year when known."
+  },
+  "trust.display_date": {
+    "type": "string",
+    "required": false,
+    "description": "Generated display value for the trust date; renders a blank date line when trust.date is unknown."
+  },
+  "trust.disinherited[]": {
+    "type": "array",
+    "required": false,
+    "description": "Persons specifically disinherited by the trust."
+  },
+  "trust.blended_family.client_children[]": {
+    "type": "array",
+    "required": false,
+    "description": "Children of the client grantor treated as children of both grantors in a joint trust."
+  },
+  "trust.blended_family.spouse_children[]": {
+    "type": "array",
+    "required": false,
+    "description": "Children of the spouse grantor treated as children of both grantors in a joint trust."
+  },
+  "trust.contingent_beneficiary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Contingent beneficiary for the residuary trust fund if no descendant survives."
+  },
+  "trust.tangible_personal_property.distribution_method": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Tangible personal property method, such as equal_shares or priority_order."
+  },
+  "trust.tangible_personal_property.beneficiaries[]": {
+    "type": "array",
+    "required": "conditional",
+    "description": "Named beneficiaries for equal-share tangible personal property distribution."
+  },
+  "trust.tangible_personal_property.priority_beneficiaries[]": {
+    "type": "array",
+    "required": "conditional",
+    "description": "Priority-order beneficiaries for tangible personal property distribution."
+  },
+  "trust.descendants_distribution.method": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Descendant distribution method, such as outright or staged."
+  },
+  "trust.descendants_distribution.distribution_age": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Age for outright descendant distribution if retained in trust until a stated age."
+  },
+  "trust.descendants_distribution.stage_1_age": {
+    "type": "string",
+    "required": "conditional",
+    "description": "First staged withdrawal age."
+  },
+  "trust.descendants_distribution.stage_2_age": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Second staged withdrawal age."
+  },
+  "trust.descendants_distribution.stage_3_age": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Final staged withdrawal age."
+  },
+  "trust.remote_beneficiaries.individuals[]": {
+    "type": "array",
+    "required": false,
+    "description": "Named individual remote beneficiaries."
+  },
+  "trust.remote_beneficiaries.charity.name": {
+    "type": "string",
+    "required": false,
+    "description": "Named charitable remote beneficiary."
+  },
+  "fiduciaries.trustee.successor.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Second successor trustee for the individual single revocable trust."
+  },
+  "fiduciaries.trustee.second_successor.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Third successor trustee for the individual single revocable trust."
+  },
+  "fiduciaries.trustee.co_trustees_action": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Whether co-trustees at the same level act jointly or independently."
+  },
+  "execution.id_type": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Identification evidence used in the notarial acknowledgment."
+  }
+}

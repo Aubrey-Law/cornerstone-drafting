@@ -1,0 +1,7 @@
+{
+  "state": "MA",
+  "requires_self_proving_affidavit": true,
+  "witness_count": 2,
+  "notary_required_for_self_proving_affidavit": true,
+  "notes": "Starter Massachusetts rule metadata for template routing only; attorney review required."
+}

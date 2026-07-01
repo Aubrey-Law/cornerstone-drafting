@@ -1,0 +1,149 @@
+/**
+ * Maps semantic CSS variables to Tailwind v4 @theme color utilities.
+ * Add new semantic tokens here when extending lib/theme/tokens.ts.
+ */
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Semantic role tokens (set on :root in generated.css) */
+  --color-bg-canvas: var(--color-bg-canvas);
+  --color-bg-subtle: var(--color-bg-subtle);
+  --color-bg-muted: var(--color-bg-muted);
+  --color-bg-elevated: var(--color-bg-elevated);
+  --color-bg-inverse: var(--color-bg-inverse);
+  --color-text-default: var(--color-text-default);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-text-on-brand: var(--color-text-on-brand);
+  --color-border-default: var(--color-border-default);
+  --color-border-strong: var(--color-border-strong);
+  --color-border-focus: var(--color-border-focus);
+
+  /* Brand */
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-teal-hover: var(--brand-teal-hover);
+  --color-navy-06: var(--navy-06);
+  --color-navy-12: var(--navy-12);
+  --color-teal-12: var(--teal-12);
+  --color-teal-30: var(--teal-30);
+
+  /* Surfaces & text hierarchy */
+  --color-page-bg: var(--page-bg);
+  --color-page-bg-2: var(--page-bg-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-strong: var(--border-strong);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  /* Alert / pipeline palette */
+  --color-amber: var(--amber);
+  --color-amber-bg: var(--amber-bg);
+  --color-amber-border: var(--amber-border);
+  --color-amber-light: var(--amber-light);
+  --color-amber-strong: var(--amber-strong);
+  --color-amber-strong-bg: var(--amber-strong-bg);
+  --color-amber-strong-border: var(--amber-strong-border);
+  --color-amber-orange: var(--amber-orange);
+  --color-red: var(--red);
+  --color-red-bg: var(--red-bg);
+  --color-red-strong: var(--red-strong);
+  --color-red-strong-bg: var(--red-strong-bg);
+  --color-red-strong-border: var(--red-strong-border);
+  --color-green: var(--green);
+  --color-green-bg: var(--green-bg);
+  --color-blue: var(--blue);
+  --color-blue-bg: var(--blue-bg);
+  --color-blue-strong: var(--blue-strong);
+  --color-blue-strong-dark: var(--blue-strong-dark);
+  --color-blue-strong-bg: var(--blue-strong-bg);
+  --color-blue-strong-border: var(--blue-strong-border);
+  --color-gray-mid: var(--gray-mid);
+  --color-gray-soft: var(--gray-soft);
+  --color-gray-bg: var(--gray-bg);
+  --color-surface-1: var(--surface-1);
+  --color-teal-bg: var(--teal-bg);
+
+  /* Pipeline stages */
+  --color-stage-early: var(--stage-early);
+  --color-stage-early-bg: var(--stage-early-bg);
+  --color-stage-early-text: var(--stage-early-text);
+  --color-stage-active: var(--stage-active);
+  --color-stage-active-bg: var(--stage-active-bg);
+  --color-stage-active-text: var(--stage-active-text);
+  --color-stage-work: var(--stage-work);
+  --color-stage-work-bg: var(--stage-work-bg);
+  --color-stage-work-text: var(--stage-work-text);
+  --color-stage-done: var(--stage-done);
+  --color-stage-done-bg: var(--stage-done-bg);
+  --color-stage-done-text: var(--stage-done-text);
+  --color-stage-closed: var(--stage-closed);
+  --color-stage-closed-bg: var(--stage-closed-bg);
+  --color-stage-closed-text: var(--stage-closed-text);
+
+  /* Matter workflow status */
+  --color-status-intake-bg: var(--status-intake-bg);
+  --color-status-intake-text: var(--status-intake-text);
+  --color-status-drafting-bg: var(--status-drafting-bg);
+  --color-status-drafting-text: var(--status-drafting-text);
+  --color-status-review-bg: var(--status-review-bg);
+  --color-status-review-text: var(--status-review-text);
+  --color-status-signing-bg: var(--status-signing-bg);
+  --color-status-signing-text: var(--status-signing-text);
+  --color-status-final-bg: var(--status-final-bg);
+  --color-status-final-text: var(--status-final-text);
+  --color-status-overdue-bg: var(--status-overdue-bg);
+  --color-status-overdue-text: var(--status-overdue-text);
+
+  /* shadcn / component tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}

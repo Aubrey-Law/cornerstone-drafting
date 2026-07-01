@@ -1,0 +1,15 @@
+{
+  "name": "estate-plan-summary",
+  "description": "Client-facing estate plan summary for individual and married-couple draft packages.",
+  "required_fields": [
+    "client.full_name"
+  ],
+  "documents": [
+    {
+      "id": "estate-plan-summary",
+      "title": "Estate Plan Summary",
+      "template": "templates/estate-plan-summary.docx",
+      "output": "00-estate-plan-summary.docx"
+    }
+  ]
+}

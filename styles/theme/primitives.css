@@ -1,0 +1,15 @@
+/**
+ * Theme-agnostic design primitives (layout, radius, typography hooks).
+ * Color tokens live in generated.css (from lib/theme/tokens.ts).
+ */
+
+:root {
+  --font-inter: 'Geist', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --radius: 0.625rem;
+  --sidebar-width: 260px;
+  --sidebar-min: 48px;
+  --nav-width: 216px;
+  --topbar-height: 52px;
+  --radius-design: 8px;
+  --radius-design-sm: 5px;
+}

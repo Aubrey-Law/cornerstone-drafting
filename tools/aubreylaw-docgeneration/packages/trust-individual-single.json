@@ -1,0 +1,31 @@
+{
+  "name": "trust-individual-single",
+  "description": "Massachusetts individual single revocable trust package based on the provided firm form.",
+  "required_fields": [
+    "client.full_name",
+    "client.state",
+    "client.county",
+    "client.pronoun_subject",
+    "client.pronoun_possessive",
+    "trust.name",
+    "trust.contingent_beneficiary.full_name",
+    "trust.tangible_personal_property.distribution_method",
+    "trust.descendants_distribution.method",
+    "trust.remote_beneficiaries.individuals",
+    "fiduciaries.trustee.primary.full_name",
+    "fiduciaries.trustee.successor.full_name",
+    "fiduciaries.trustee.second_successor.full_name",
+    "fiduciaries.trustee.co_trustees_action",
+    "execution.signing_county",
+    "execution.notary_commission",
+    "execution.id_type"
+  ],
+  "documents": [
+    {
+      "id": "trust-individual-single",
+      "title": "Individual Single Revocable Trust",
+      "template": "templates/trust-individual-single.docx",
+      "output": "01-individual-single-revocable-trust.docx"
+    }
+  ]
+}

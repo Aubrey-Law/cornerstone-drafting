@@ -1,0 +1,13 @@
+{
+  "id": "testamentary_will.residuary_testamentary_trust",
+  "title": "Residuary Testamentary Trust",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "testamentary_trust.beneficiary_structure"
+  ],
+  "review_status": "draft",
+  "version_date": "2026-06-05",
+  "text": "I give the residue of my estate to the Trustee named in this Will, in trust, to administer as a testamentary trust. {% if testamentary_trust.beneficiary_structure == \"spouse_hems_then_descendants\" %}During my spouse's lifetime, the Trustee may distribute income and principal for my spouse's health, education, maintenance, and support. Upon my spouse's death, the remaining trust property shall be distributed to my descendants in separate shares, per stirpes.{% elif testamentary_trust.beneficiary_structure == \"descendants_per_stirpes\" %}The Trustee shall divide the remaining trust property into separate shares for my descendants, per stirpes, and administer each share under the distribution schedule below.{% elif testamentary_trust.beneficiary_structure == \"single_beneficiary\" %}The Trustee shall administer the trust for {{ testamentary_trust.single_beneficiary.full_name | name }} and may distribute income and principal for that beneficiary's health, education, maintenance, and support. Upon termination of the trust, the remaining trust property shall be distributed to {{ testamentary_trust.remainder_beneficiary.full_name | name }}.{% endif %} {% if testamentary_trust.beneficiary_structure != \"single_beneficiary\" %}{% if testamentary_trust.age_distribution_schedule == \"outright_25\" %}A beneficiary's share shall be distributed outright when the beneficiary reaches age twenty-five.{% elif testamentary_trust.age_distribution_schedule == \"outright_30\" %}A beneficiary's share shall be distributed outright when the beneficiary reaches age thirty.{% elif testamentary_trust.age_distribution_schedule == \"outright_35\" %}A beneficiary's share shall be distributed outright when the beneficiary reaches age thirty-five.{% elif testamentary_trust.age_distribution_schedule == \"staggered_25_30_35\" %}The Trustee shall distribute one-third of a beneficiary's share at age twenty-five, one-half of the remaining share at age thirty, and the balance at age thirty-five.{% endif %}{% endif %}"
+}

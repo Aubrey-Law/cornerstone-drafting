@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:#D5D3CE;padding:32px;display:flex;gap:32px;min-width:1200px}
+
+.heirloom{flex:1}
+.h-app{display:flex;height:580px;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.22)}
+.h-sidebar{width:220px;background:#2C2A25;display:flex;flex-direction:column}
+.h-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.h-logo-text{color:#D4B896;font-size:14px;font-weight:700;letter-spacing:0.04em}
+.h-logo-sub{color:rgba(212,184,150,0.5);font-size:10px;letter-spacing:0.06em;margin-top:2px}
+.h-nav{padding:12px 0;flex:1}
+.h-nav-item{display:flex;align-items:center;gap:10px;padding:9px 18px;font-size:13px;color:rgba(212,184,150,0.6);cursor:pointer}
+.h-nav-item.active{background:rgba(124,92,42,0.30);color:#D4B896;border-right:3px solid #7C5C2A}
+.h-nav-item .dot{width:14px;height:14px;border-radius:3px;background:currentColor;opacity:0.45;flex-shrink:0}
+.h-nav-item.active .dot{background:#7C5C2A;opacity:1}
+.h-main{flex:1;background:#F7F4EF;display:flex;flex-direction:column}
+.h-topbar{height:50px;background:#FFF;border-bottom:1px solid #E8E0D4;display:flex;align-items:center;padding:0 20px;gap:10px}
+.h-topbar-title{font-size:14px;font-weight:600;color:#2C2A25;flex:1}
+.h-btn-p{background:#7C5C2A;color:#FFF8F0;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600}
+.h-btn-s{background:#F0EAE1;color:#5A4A30;border:1px solid #D4C5B0;padding:7px 14px;border-radius:6px;font-size:12px}
+.h-content{padding:20px;display:flex;flex-direction:column;gap:16px;flex:1}
+.h-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.h-card{background:#FFF;border:1px solid #E8E0D4;border-radius:8px;padding:14px}
+.h-card-label{font-size:10px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#9A8570;margin-bottom:6px}
+.h-card-value{font-size:24px;font-weight:700;color:#2C2A25}
+.h-card-sub{font-size:11px;color:#9A8570;margin-top:3px}
+.h-table{background:#FFF;border:1px solid #E8E0D4;border-radius:8px;overflow:hidden}
+.h-thead{display:grid;grid-template-columns:2fr 1fr 1fr 90px;padding:10px 16px;background:#F0EAE1;border-bottom:1px solid #E8E0D4;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#9A8570}
+.h-row{display:grid;grid-template-columns:2fr 1fr 1fr 90px;padding:11px 16px;border-bottom:1px solid #F0EAE1;align-items:center}
+.h-row:last-child{border-bottom:none}
+.h-rn{font-size:13px;font-weight:600;color:#2C2A25}
+.h-rs{font-size:11px;color:#9A8570}
+.h-rc{font-size:12px;color:#5A4A30}
+.hb{display:inline-flex;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:700}
+.hb.r{background:#FEF3E2;color:#92500A}
+.hb.d{background:#EEF2FF;color:#3730A3}
+.hb.s{background:#ECFDF5;color:#065F46}
+
+.counsel{flex:1}
+.c-app{display:flex;height:580px;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.22)}
+.c-sidebar{width:220px;background:#141929;display:flex;flex-direction:column}
+.c-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.07)}
+.c-logo-text{color:#E2E8F8;font-size:14px;font-weight:700;letter-spacing:0.04em}
+.c-logo-sub{color:rgba(226,232,248,0.4);font-size:10px;letter-spacing:0.06em;margin-top:2px}
+.c-nav{padding:12px 0;flex:1}
+.c-nav-item{display:flex;align-items:center;gap:10px;padding:9px 18px;font-size:13px;color:rgba(226,232,248,0.5);cursor:pointer}
+.c-nav-item.active{background:rgba(30,74,140,0.35);color:#E2E8F8;border-right:3px solid #3B82F6}
+.c-nav-item .dot{width:14px;height:14px;border-radius:3px;background:currentColor;opacity:0.35;flex-shrink:0}
+.c-nav-item.active .dot{background:#3B82F6;opacity:1}
+.c-main{flex:1;background:#F4F6F9;display:flex;flex-direction:column}
+.c-topbar{height:50px;background:#FFF;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;padding:0 20px;gap:10px}
+.c-topbar-title{font-size:14px;font-weight:600;color:#111827;flex:1}
+.c-btn-p{background:#1E4A8C;color:#FFF;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600}
+.c-btn-s{background:#F1F5F9;color:#334155;border:1px solid #CBD5E1;padding:7px 14px;border-radius:6px;font-size:12px}
+.c-content{padding:20px;display:flex;flex-direction:column;gap:16px;flex:1}
+.c-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.c-card{background:#FFF;border:1px solid #E2E8F0;border-radius:8px;padding:14px}
+.c-card-label{font-size:10px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#6B7280;margin-bottom:6px}
+.c-card-value{font-size:24px;font-weight:700;color:#111827}
+.c-card-sub{font-size:11px;color:#6B7280;margin-top:3px}
+.c-table{background:#FFF;border:1px solid #E2E8F0;border-radius:8px;overflow:hidden}
+.c-thead{display:grid;grid-template-columns:2fr 1fr 1fr 90px;padding:10px 16px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#6B7280}
+.c-row{display:grid;grid-template-columns:2fr 1fr 1fr 90px;padding:11px 16px;border-bottom:1px solid #F1F5F9;align-items:center}
+.c-row:last-child{border-bottom:none}
+.c-rn{font-size:13px;font-weight:600;color:#111827}
+.c-rs{font-size:11px;color:#6B7280}
+.c-rc{font-size:12px;color:#374151}
+.cb{display:inline-flex;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:700}
+.cb.r{background:#FEF3C7;color:#92400E}
+.cb.d{background:#DBEAFE;color:#1E40AF}
+.cb.s{background:#DCFCE7;color:#166534}
+
+.label{font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#555;margin-bottom:10px}
+.sublabel{font-size:12px;color:#777;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<div class="heirloom">
+  <div class="label">Option 1 — Heirloom</div>
+  <div class="sublabel">Walnut sidebar · Aged brass buttons · Warm cream canvas</div>
+  <div class="h-app">
+    <div class="h-sidebar">
+      <div class="h-logo">
+        <div class="h-logo-text">Aubrey Law</div>
+        <div class="h-logo-sub">ESTATE PLANNING</div>
+      </div>
+      <div class="h-nav">
+        <div class="h-nav-item active"><div class="dot"></div>Dashboard</div>
+        <div class="h-nav-item"><div class="dot"></div>Matters</div>
+        <div class="h-nav-item"><div class="dot"></div>Leads</div>
+        <div class="h-nav-item"><div class="dot"></div>Contacts</div>
+        <div class="h-nav-item"><div class="dot"></div>Calendar</div>
+        <div class="h-nav-item"><div class="dot"></div>Documents</div>
+        <div class="h-nav-item"><div class="dot"></div>Settings</div>
+      </div>
+    </div>
+    <div class="h-main">
+      <div class="h-topbar">
+        <div class="h-topbar-title">Dashboard</div>
+        <button class="h-btn-s">Import</button>
+        <button class="h-btn-p">+ New Matter</button>
+      </div>
+      <div class="h-content">
+        <div class="h-cards">
+          <div class="h-card"><div class="h-card-label">Active Matters</div><div class="h-card-value">24</div><div class="h-card-sub">3 need attention</div></div>
+          <div class="h-card"><div class="h-card-label">Pending Signing</div><div class="h-card-value">7</div><div class="h-card-sub">2 overdue</div></div>
+          <div class="h-card"><div class="h-card-label">Closed This Month</div><div class="h-card-value">5</div><div class="h-card-sub">+2 vs last month</div></div>
+        </div>
+        <div class="h-table">
+          <div class="h-thead"><span>Client</span><span>Type</span><span>Stage</span><span>Status</span></div>
+          <div class="h-row"><div><div class="h-rn">Margaret & Thomas Chen</div><div class="h-rs">Opened Apr 12</div></div><div class="h-rc">Living Trust</div><div class="h-rc">Review</div><div><span class="hb r">Review</span></div></div>
+          <div class="h-row"><div><div class="h-rn">Patricia Abernathy</div><div class="h-rs">Opened Mar 28</div></div><div class="h-rc">Will + DPOA</div><div class="h-rc">Drafting</div><div><span class="hb d">Drafting</span></div></div>
+          <div class="h-row"><div><div class="h-rn">Robert & Susan Dalton</div><div class="h-rs">Opened May 1</div></div><div class="h-rc">Living Trust</div><div class="h-rc">Signing</div><div><span class="hb s">Signing</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="counsel">
+  <div class="label">Option 2 — Counsel</div>
+  <div class="sublabel">Charcoal-navy sidebar · Sapphire buttons · Cool slate canvas</div>
+  <div class="c-app">
+    <div class="c-sidebar">
+      <div class="c-logo">
+        <div class="c-logo-text">Aubrey Law</div>
+        <div class="c-logo-sub">ESTATE PLANNING</div>
+      </div>
+      <div class="c-nav">
+        <div class="c-nav-item active"><div class="dot"></div>Dashboard</div>
+        <div class="c-nav-item"><div class="dot"></div>Matters</div>
+        <div class="c-nav-item"><div class="dot"></div>Leads</div>
+        <div class="c-nav-item"><div class="dot"></div>Contacts</div>
+        <div class="c-nav-item"><div class="dot"></div>Calendar</div>
+        <div class="c-nav-item"><div class="dot"></div>Documents</div>
+        <div class="c-nav-item"><div class="dot"></div>Settings</div>
+      </div>
+    </div>
+    <div class="c-main">
+      <div class="c-topbar">
+        <div class="c-topbar-title">Dashboard</div>
+        <button class="c-btn-s">Import</button>
+        <button class="c-btn-p">+ New Matter</button>
+      </div>
+      <div class="c-content">
+        <div class="c-cards">
+          <div class="c-card"><div class="c-card-label">Active Matters</div><div class="c-card-value">24</div><div class="c-card-sub">3 need attention</div></div>
+          <div class="c-card"><div class="c-card-label">Pending Signing</div><div class="c-card-value">7</div><div class="c-card-sub">2 overdue</div></div>
+          <div class="c-card"><div class="c-card-label">Closed This Month</div><div class="c-card-value">5</div><div class="c-card-sub">+2 vs last month</div></div>
+        </div>
+        <div class="c-table">
+          <div class="c-thead"><span>Client</span><span>Type</span><span>Stage</span><span>Status</span></div>
+          <div class="c-row"><div><div class="c-rn">Margaret & Thomas Chen</div><div class="c-rs">Opened Apr 12</div></div><div class="c-rc">Living Trust</div><div class="c-rc">Review</div><div><span class="cb r">Review</span></div></div>
+          <div class="c-row"><div><div class="c-rn">Patricia Abernathy</div><div class="c-rs">Opened Mar 28</div></div><div class="c-rc">Will + DPOA</div><div class="c-rc">Drafting</div><div><span class="cb d">Drafting</span></div></div>
+          <div class="c-row"><div><div class="c-rn">Robert & Susan Dalton</div><div class="c-rs">Opened May 1</div></div><div class="c-rc">Living Trust</div><div class="c-rc">Signing</div><div><span class="cb s">Signing</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

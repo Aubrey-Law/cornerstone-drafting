@@ -1,0 +1,13 @@
+{
+  "id": "will.guardian_nomination",
+  "title": "Nomination of Guardian",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": "requires_guardian_clause",
+  "required_fields": [
+    "guardians.primary.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "If a guardian is needed for any minor child of mine, I nominate {{ guardians.primary.full_name | name }} to serve as guardian.{% if has_excluded_guardians %} I wish to specifically exclude as guardian of the person and the property of any minor child of mine the following individual(s): {% for person in guardians.excluded %}{{ person.full_name | name }}{% if person.reason %} for {{ person.reason }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}. I declare that the above-named individual(s) shall not be permitted to care for or raise my minor child in the event of my death or disability.{% endif %}"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "will.executor_appointment",
+  "title": "Appointment of Personal Representative",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "fiduciaries.executor.primary.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "{% if will.pr_structure == \"co_pr\" %}I nominate {{ fiduciaries.executor.primary.full_name | name }} and {{ fiduciaries.executor.co_primary.full_name | name }}, jointly, to serve as Personal Representatives of my estate.{% elif will.pr_structure == \"spouse_first\" and has_spouse %}I nominate my spouse, {{ spouse.full_name | name }}, to serve as Personal Representative of my estate. If my spouse fails to qualify or ceases to serve, I nominate {{ fiduciaries.executor.primary.full_name | name }} to serve as successor Personal Representative.{% else %}I nominate {{ fiduciaries.executor.primary.full_name | name }} to serve as Personal Representative of my estate.{% endif %} {% if will.pr_structure != \"spouse_first\" and fiduciaries.executor.successor.full_name %}In the event of a vacancy in the office of Personal Representative, I nominate the following in the order named to serve: First: {{ fiduciaries.executor.successor.full_name | name }}{% if fiduciaries.executor.second_successor.full_name %}; Second: {{ fiduciaries.executor.second_successor.full_name | name }}{% endif %}.{% elif will.pr_structure == \"spouse_first\" and fiduciaries.executor.successor.full_name %}If {{ fiduciaries.executor.primary.full_name | name }} fails to qualify or ceases to serve, I nominate {{ fiduciaries.executor.successor.full_name | name }} to serve as successor Personal Representative.{% endif %} I request that each person named herein as Personal Representative, or such person's successor or successors, upon application be appointed Special Personal Representative in the same order of succession."
+}

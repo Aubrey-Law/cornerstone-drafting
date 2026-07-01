@@ -1,0 +1,13 @@
+{
+  "id": "will.family_declaration",
+  "title": "Family Declaration",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "client.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "I, {{ client.full_name | name }}{% if client.aka %}, also known as {{ client.aka | name }}{% endif %}, make this declaration regarding my family. {% if has_spouse %}I am married to {{ spouse.full_name | name }}.{% else %}I am not married.{% endif %}{% if has_children %} My children are: {% for child in children %}{{ child.full_name | name }}{% if not loop.last %}; {% endif %}{% endfor %}.{% endif %}"
+}

@@ -1,0 +1,68 @@
+{
+  "client": {
+    "full_name": "Jordan Coupleton",
+    "aka": "Jordy",
+    "date_of_birth": "January 1, 1970",
+    "street_address": "12 Oak Street, Boston, MA 02118",
+    "county": "Suffolk",
+    "state": "MA"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "Riley Coupleton",
+    "date_of_birth": "February 2, 1972"
+  },
+  "children": [
+    { "full_name": "Sam Coupleton", "relationship": "Child", "date_of_birth": "March 3, 2010", "minor": true },
+    { "full_name": "Casey Coupleton", "relationship": "Child", "date_of_birth": "April 4, 2002", "minor": false }
+  ],
+  "planning": {
+    "include_trust": true,
+    "include_pour_over_will": true,
+    "include_dpoa": true,
+    "include_hcp": true,
+    "include_ahd": true,
+    "include_hipaa": true,
+    "include_ppm": true,
+    "spouse_docs": true
+  },
+  "trust": {
+    "name": "The Coupleton Family Trust",
+    "display_date": "June 1, 2026",
+    "descendants_distribution": { "method": "staged", "stage_1_age": 25, "stage_2_age": 30, "stage_3_age": 35 },
+    "contingent_beneficiary": { "full_name": "Pat Coupleton" },
+    "tangible_personal_property": { "distribution_method": "equally among my children" }
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "co_primary": { "full_name": "Riley Coupleton" },
+      "co_trustees_action": "majority",
+      "successor": { "full_name": "Alex Friend" },
+      "second_successor": { "full_name": "Jamie Friend" }
+    },
+    "executor": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "successor": { "full_name": "Alex Friend" },
+      "second_successor": { "full_name": "Jamie Friend" }
+    },
+    "agent": { "primary": { "full_name": "Riley Coupleton" }, "successor": { "full_name": "Alex Friend" } },
+    "spouse_agent": { "primary": { "full_name": "Jordan Coupleton" }, "successor": { "full_name": "Jamie Friend" } }
+  },
+  "healthcare": {
+    "agent": { "primary": { "full_name": "Riley Coupleton" }, "alternate": { "full_name": "Alex Friend" } },
+    "spouse_agent": { "primary": { "full_name": "Jordan Coupleton" }, "alternate": { "full_name": "Jamie Friend" } }
+  },
+  "guardians": {
+    "primary": { "full_name": "Alex Friend" },
+    "successor": { "full_name": "Jamie Friend" },
+    "second_successor": { "full_name": "Pat Coupleton" },
+    "short_term_primary": { "full_name": "Nina Neighbor" },
+    "short_term_successor": { "full_name": "Owen Neighbor" }
+  },
+  "specific_gifts": [
+    { "beneficiary_name": "Local Animal Shelter", "description": "$5,000", "trigger": "upon my death", "notes": "in memory of our family dog" }
+  ],
+  "owns_real_property": true,
+  "execution": {}
+}

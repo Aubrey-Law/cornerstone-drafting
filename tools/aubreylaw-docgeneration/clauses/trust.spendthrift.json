@@ -1,0 +1,11 @@
+{
+  "id": "trust.spendthrift",
+  "title": "Spendthrift Protection",
+  "document_type": "trust",
+  "jurisdiction": "base",
+  "condition": "uses_revocable_trust",
+  "required_fields": [],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "No beneficiary may voluntarily or involuntarily transfer, assign, pledge, or encumber any interest in the trust before distribution."
+}

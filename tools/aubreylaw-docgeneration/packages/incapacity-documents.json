@@ -1,0 +1,37 @@
+{
+  "name": "incapacity-documents",
+  "description": "Massachusetts incapacity planning package with durable power of attorney, health care proxy, living will, and HIPAA authorization.",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "client.state",
+    "fiduciaries.agent.primary.full_name",
+    "healthcare.agent.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "durable-power-of-attorney",
+      "title": "Durable Power of Attorney",
+      "template": "templates/durable-power-of-attorney.docx",
+      "output": "01-durable-power-of-attorney.docx"
+    },
+    {
+      "id": "health-care-proxy",
+      "title": "Health Care Proxy",
+      "template": "templates/health-care-proxy.docx",
+      "output": "02-health-care-proxy.docx"
+    },
+    {
+      "id": "living-will",
+      "title": "Living Will / Advance Directive",
+      "template": "templates/living-will.docx",
+      "output": "03-living-will.docx"
+    },
+    {
+      "id": "hipaa",
+      "title": "HIPAA Authorization",
+      "template": "templates/hipaa-authorization.docx",
+      "output": "04-hipaa-authorization.docx"
+    }
+  ]
+}

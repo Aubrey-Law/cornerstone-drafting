@@ -1,0 +1,11 @@
+{
+  "id": "will.simultaneous_death",
+  "title": "Simultaneous Death",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": "has_simultaneous_death",
+  "required_fields": [],
+  "review_status": "draft",
+  "version_date": "2026-06-06",
+  "text": "{% if will.simultaneous_death == \"spouse_survives\" %}If my spouse and I die under circumstances where the order of our deaths cannot be established, my spouse shall be deemed to have survived me for purposes of this Will.{% elif will.simultaneous_death == \"testator_survives\" %}If my spouse and I die under circumstances where the order of our deaths cannot be established, I shall be deemed to have survived my spouse for purposes of this Will.{% endif %}"
+}

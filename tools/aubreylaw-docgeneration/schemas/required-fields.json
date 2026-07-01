@@ -1,0 +1,7 @@
+{
+  "required_fields": [
+    "client.full_name",
+    "client.state",
+    "client.county"
+  ]
+}

@@ -1,0 +1,728 @@
+/* ─── v_matter_pipeline Supabase view ─────────────────────────────────────── */
+
+export interface PipelineMatter {
+  matter_id: string
+  matter_name: string
+  stage: MatterStage
+  status: string
+  flags: string[] | null
+  matter_created: string
+  client_name: string
+  client_email: string
+  client_phone: string
+  client_dob: string | null
+  client_address: string | null
+  spouse_name: string | null
+  spouse_email: string | null
+  spouse_phone: string | null
+  spouse_dob: string | null
+  spouse_address: string | null
+  plan_type: string | null
+  marital_status: string | null
+  has_minor_children: boolean | null
+  children_count?: number | null
+  taxable_estate: number | null
+  tax_exposure?: number | null
+  estimated_value?: number | null
+  intake_status: string | null
+  intake_sent_at?: string | null
+  design_status: string | null
+  intake_submitted_at: string | null
+  drafts_sent_at: string | null
+  signing_date: string | null
+  documents_executed_at: string | null
+  next_appointment: string | null
+  next_appointment_type: string | null
+  referral_source: string | null
+  fee_amount: number | null
+  fee_collected_pct?: number | null
+  opened_at: string | null
+  client_user_id?: string | null
+  design_review_status?: string | null
+  client_review_notes?: Array<{ id: string; section: string; text: string; created_at: string; resolved?: boolean; resolved_at?: string }> | null
+  practice_area?: string | null
+  client_status?: string | null
+}
+
+/* ─── contacts table ──────────────────────────────────────────────────────── */
+
+export interface MatterContact {
+  id: string
+  first_name: string
+  middle_name?: string | null
+  last_name: string
+  suffix?: string | null
+  preferred_name?: string | null
+  preferred_pronoun?: string | null
+  relationship?: string | null
+  phone?: string | null
+  email?: string | null
+  address?: string | null
+}
+
+export type MatterStage =
+  | 'intake'
+  | 'intake_review'
+  | 'design'
+  | 'drafting'
+  | 'client_review'
+  | 'drafts_approved'
+  | 'revision'
+  | 'signing_scheduled'
+  | 'signing_complete'
+  | 'post_execution'
+  | 'closed'
+
+export type StageGroup = 'early' | 'active' | 'work' | 'done' | 'closed'
+
+export interface StageInfo {
+  key: MatterStage
+  label: string
+  group: StageGroup
+}
+
+export const STAGES: StageInfo[] = [
+  { key: 'intake', label: 'Intake', group: 'early' },
+  { key: 'intake_review', label: 'Intake Review', group: 'early' },
+  { key: 'design', label: 'Design', group: 'active' },
+  { key: 'drafting', label: 'Drafting', group: 'active' },
+  { key: 'client_review', label: 'Client Review', group: 'work' },
+  { key: 'drafts_approved', label: 'Drafts Approved', group: 'work' },
+  { key: 'revision', label: 'Revision', group: 'work' },
+  { key: 'signing_scheduled', label: 'Signing Scheduled', group: 'done' },
+  { key: 'signing_complete', label: 'Signing Complete', group: 'done' },
+  { key: 'post_execution', label: 'Post-Execution', group: 'closed' },
+  { key: 'closed', label: 'Closed', group: 'closed' },
+]
+
+export const GROUP_COLORS: Record<StageGroup, { dot: string; bg: string; text: string }> = {
+  early:  { dot: 'var(--stage-early)',  bg: 'var(--stage-early-bg)',  text: 'var(--stage-early-text)' },
+  active: { dot: 'var(--stage-active)', bg: 'var(--stage-active-bg)', text: 'var(--stage-active-text)' },
+  work:   { dot: 'var(--stage-work)',   bg: 'var(--stage-work-bg)',   text: 'var(--stage-work-text)' },
+  done:   { dot: 'var(--stage-done)',   bg: 'var(--stage-done-bg)',   text: 'var(--stage-done-text)' },
+  closed: { dot: 'var(--stage-closed)', bg: 'var(--stage-closed-bg)', text: 'var(--stage-closed-text)' },
+}
+
+export function stageInfo(key: MatterStage): StageInfo {
+  return STAGES.find(s => s.key === key) ?? STAGES[0]
+}
+
+export function stageGroupColor(key: MatterStage) {
+  const info = stageInfo(key)
+  return GROUP_COLORS[info.group]
+}
+
+/* ─── design_sheets table ─────────────────────────────────────────────────── */
+
+export interface DesignSheet {
+  id: string
+  matter_id: string
+  version: number
+  status: 'draft' | 'ready' | 'generated' | 'signed'
+
+  // Client
+  client_name: string | null
+  client_dob: string | null
+  client_phone: string | null
+  client_email: string | null
+  client_citizenship: string | null
+  client_domicile: string | null
+
+  // Address
+  street: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  county: string | null
+
+  // Marital
+  marital_status: string | null
+
+  // Spouse
+  spouse_name: string | null
+  spouse_dob: string | null
+  spouse_phone: string | null
+  spouse_email: string | null
+  spouse_citizenship: string | null
+  marriage_date: string | null
+
+  // Children
+  children: DesignSheetChild[] | null
+
+  // Fiduciaries
+  trustee_primary: string | null
+  trustee_co: string | null
+  trustee_alt1: string | null
+  trustee_alt1_co: string | null
+  trustee_alt2: string | null
+
+  executor_primary: string | null
+  executor_co: string | null
+  executor_alt1: string | null
+  executor_alt1_co: string | null
+  executor_same_as_trustee: boolean
+  spouse_executor_same_as_trustee: boolean
+
+  poa_primary: string | null
+  poa_co: string | null
+  poa_alt1: string | null
+  poa_same_as_trustee: boolean
+  spouse_poa_same_as_trustee: boolean
+
+  hcp_primary: string | null
+  hcp_co: string | null
+  hcp_alt1: string | null
+  hcp_alt1_co: string | null
+
+  guardian_primary: string | null
+  guardian_co: string | null
+  guardian_alt1: string | null
+  guardian_alt1_co: string | null
+
+  // Plan design
+  plan_type: string | null
+  is_joint: boolean | null
+  trust_name: string | null
+  spouse_trust_name: string | null
+  restatement: boolean | null
+  trust_protector: boolean | null
+  distribution_method: string | null
+  distribution_age: number | null
+  // Trust residuary takers: 'children' | 'descendants' | 'named'
+  residual_beneficiary?: string | null
+  residual_beneficiary_individuals?: string[] | null
+  // Repeatable staggered tiers (amount + age). The first three ages mirror into
+  // stagger_age_1/2/3 below so existing drafting/export consumers keep working.
+  staggered_distributions?: StaggeredTier[] | null
+
+  // Family inclusions
+  include_afterborn_children: string | null
+  include_expectant_children: string | null
+  include_general_disinheritance: string | null
+
+  // Residuary distributions — stagger schedule
+  stagger_age_1: number | null
+  stagger_pct_1: number | null
+  stagger_age_2: number | null
+  stagger_pct_2: number | null
+  stagger_age_3: number | null
+
+  // Residuary distributions — new fields
+  tangible_property_distribution: string | null
+  tangible_property_named_individual: string | null
+  include_common_disaster: string | null
+  include_guardians_allowance: string | null
+  beneficiary_as_cotrustee: string | null
+  beneficiary_as_sole_trustee: string | null
+  // 'heirs_at_law' | 'half_heirs_spouse' (married) | 'named'
+  remote_beneficiary: string | null
+  // When remote_beneficiary === 'named': linked contacts + charities.
+  remote_beneficiary_individuals?: string[] | null
+  remote_beneficiary_charities?: RemoteCharity[] | null
+
+  // Special provisions
+  provision_lifestyle_disability: string | null
+  provision_substance_abuse: string | null
+  provision_married_beneficiary: string | null
+
+  // Universal — added to align with template options
+  client_aka: string | null
+  spouse_aka: string | null
+  client_pronouns: string | null
+  spouse_pronouns: string | null
+  former_spouse_name: string | null
+  deceased_spouse_name: string | null
+  signing_date: string | null
+  signing_month: string | null
+  signing_year: string | null
+  signing_county: string | null
+  notary_commission_expiration: string | null
+
+  // DPOA
+  dpoa_coagent_manner: 'independently' | 'jointly' | 'majority' | null
+  dpoa_include_self_dealing: boolean | null
+  dpoa_self_dealing_reviewer: string | null
+  dpoa_self_dealing_reviewer_alt: string | null
+  dpoa_include_section_l: 'yes' | 'no' | null
+
+  // HCP
+  hcp_anatomical_gift: 'all' | 'specified' | 'none' | null
+  hcp_anatomical_specified: string | null
+
+  // HIPAA
+  hipaa_psychotherapy_notes: 'authorize' | 'do_not_authorize' | null
+
+  // Will — common
+  specific_bequests: SpecificBequest[] | null
+  pet_care_option: 'omit' | 'direct_bequest' | 'pet_trust' | null
+  pet_care_details: PetCareDetails | null
+  pr_structure: 'single' | 'spouse_first' | 'co_pr' | null
+  bond: 'no_bond' | 'required' | null
+  supervision: 'unsupervised' | 'supervised' | null
+  simultaneous_death: 'spouse_survives' | 'testator_survives' | 'omit' | null
+  utma_age: 18 | 21 | null
+  no_contest_clause: 'omit' | 'include' | null
+  include_disclaimer_article: boolean | null
+  include_self_proving_affidavit: boolean | null
+  excluded_guardian_flag: boolean | null
+  excluded_guardian_name: string | null
+
+  // Pour-Over specific
+  trust_date: string | null
+  pour_over_alternate_disposition: 'spouse_then_descendants' | 'descendants_only' | 'named' | null
+  pour_over_alternate_named: string | null
+
+  // Outright specific
+  outright_residuary: 'spouse_then_descendants' | 'descendants_then_heirs' | 'named' | null
+  outright_residuary_named: string | null
+  outright_residuary_alternate: string | null
+
+  // Testamentary Trust specific
+  trustee_structure: 'single' | 'spouse_first' | 'co_trustees' | null
+  cotrustee_decision_standard: 'majority' | 'unanimous' | null
+  beneficiary_structure: 'spouse_hems_then_descendants' | 'descendants_per_stirpes' | 'single_beneficiary' | null
+  single_beneficiary_name: string | null
+  single_beneficiary_remainder: string | null
+  age_distribution_schedule: 'outright_25' | 'outright_30' | 'outright_35' | 'staggered_25_30_35' | null
+  trust_protector_name: string | null
+
+  // Disinheritances
+  disinheritances: { name: string; relationship: string; reason: string }[] | null
+
+  // Fiduciary slot states — attorney-set per-slot status for client review
+  fiduciary_slot_states: Record<string, import('./planReview').SlotState> | null
+
+  // Flexible worksheet state for fields that do not have dedicated columns
+  decisions?: Record<string, unknown> | null
+
+  // Fiduciary slot arrays (unlimited alternates)
+  trustee_slots: FiduciarySlot[]
+  executor_slots: FiduciarySlot[]
+  poa_slots: FiduciarySlot[]
+  hcp_slots: FiduciarySlot[]
+  guardian_slots: FiduciarySlot[]
+  temporary_guardian_slots: FiduciarySlot[]
+  spouse_trustee_slots: FiduciarySlot[]
+  spouse_executor_slots: FiduciarySlot[]
+  spouse_poa_slots: FiduciarySlot[]
+  spouse_hcp_slots: FiduciarySlot[]
+
+  // Overrides — tracks which fields attorney has changed from client intake
+  overrides: Record<string, { original: string; updated_by: string }> | null
+
+  // Attorney notes sections
+  goals_notes: string | null
+  concerns: string | null
+  assets: AssetItem[] | null
+
+  // Timestamps
+  created_at: string
+  updated_at: string
+}
+
+export interface AssetItem {
+  id: string
+  category: 'real_property' | 'financial' | 'retirement' | 'life_insurance' | 'business' | 'other'
+  description: string
+  institution: string
+  estimated_value: number | null
+  notes: string
+}
+
+export type FiduciaryRole = 'trustee' | 'executor' | 'poa' | 'hcp' | 'guardian' | 'temporary_guardian'
+
+export interface FiduciarySlot {
+  id: string
+  contact_id: string | null
+  is_co: boolean
+  order: number
+}
+
+export interface SpecificBequest {
+  id: string
+  kind: 'cash' | 'item' | 'charitable'
+  amount?: number | null
+  item_description?: string | null
+  beneficiary_name?: string | null
+  charity_name?: string | null
+  charity_org_type?: string | null
+  charity_state?: string | null
+  charity_address?: string | null
+  /** Which instrument carries the bequest. */
+  document?: 'will' | 'trust' | null
+  /** When the bequest is distributed. */
+  timing?: 'client_death' | 'spouse_death' | 'survivor_death' | null
+}
+
+export interface StaggeredTier {
+  id: string
+  age: number | null
+  amount: string | null
+}
+
+export interface RemoteCharity {
+  id: string
+  name: string
+  org_type?: string | null
+  state?: string | null
+  address?: string | null
+}
+
+export interface PetCareDetails {
+  cash_amount?: number | null
+  primary_caretaker?: string | null
+  successor_caretaker?: string | null
+  pet_trustee?: string | null
+  remainder_beneficiary?: string | null
+  enforcer?: string | null
+  /** Which instrument carries the pet-care provision. */
+  document?: 'will' | 'trust' | null
+}
+
+export interface DesignSheetChild {
+  name: string
+  dob: string | null
+  relationship: 'biological' | 'adopted' | 'stepchild'
+  // Whose child this is — captured for married clients (Joint / client / spouse).
+  parentage?: 'joint' | 'client' | 'spouse' | null
+  is_minor: boolean
+}
+
+/* ─── Enums ───────────────────────────────────────────────────────────────── */
+
+export type AlertSeverity = 'blocker' | 'warning' | 'info'
+export type AlertSource   = 'ai_intake' | 'system' | 'manual'
+export type FlagCategory  = 'tax' | 'family' | 'asset' | 'attorney'
+
+/* ─── matter_alerts table ────────────────────────────────────────────────── */
+
+export interface MatterAlert {
+  id: string
+  matter_id: string
+  severity: AlertSeverity
+  source: AlertSource
+  title: string
+  detail: string | null
+  is_resolved: boolean
+  resolved_at: string | null
+  resolved_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/* ─── matter_flags table ─────────────────────────────────────────────────── */
+
+export interface Flag {
+  id: string
+  matter_id: string
+  category: FlagCategory
+  label: string
+  is_auto: boolean
+  added_by: string | null
+  created_at: string
+}
+
+/* ─── matter_stage_rules table ───────────────────────────────────────────── */
+
+export interface MatterStageRule {
+  id: string
+  from_stage: string
+  to_stage: string
+  rule_key: string
+  description: string
+  is_active: boolean
+  created_at: string
+}
+
+/* ─── matter_notes table ──────────────────────────────────────────────────── */
+
+export interface MatterNote {
+  id: string
+  matter_id: string
+  note_type: 'internal' | 'client_comm' | 'system' | string
+  body: string
+  author: string
+  created_at: string
+  calcom_booking_uid?: string | null
+}
+
+export interface CalcomBooking {
+  id: string
+  booking_uid: string
+  booking_id: string | null
+  trigger_event: string
+  event_key: string | null
+  event_slug: string | null
+  event_label: string | null
+  status: 'scheduled' | 'rescheduled' | 'cancelled'
+  start_time: string | null
+  end_time: string | null
+  attendee_email: string | null
+  attendee_name: string | null
+  linked_lead_id: string | null
+  linked_matter_id: string | null
+  unresolved_reason: string | null
+  raw_payload: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+/* ─── Helpers ─────────────────────────────────────────────────────────────── */
+
+export type DesignSheetUpdate = Partial<Omit<DesignSheet, 'id' | 'created_at' | 'updated_at'>>
+
+/* ─── LI Design Sheet types ───────────────────────────────────────────────── */
+
+export type PlanCoverage = 'no_trust' | 'trust_included'
+
+export interface LiContact {
+  id: string
+  first_name: string
+  last_name: string
+  relationship?: string | null
+  phone?: string | null
+  email?: string | null
+  address?: string | null
+}
+
+export interface LiHcpSlot {
+  contact: LiContact | null
+  address: string
+}
+
+export interface LiClientFiduciaries {
+  pr_primary: LiContact | null
+  pr_successor: LiContact | null
+  pr_second_successor: LiContact | null
+  dpoa_primary: LiContact | null
+  dpoa_co_agent: LiContact | null
+  dpoa_successor: LiContact | null
+  hcp_primary: LiHcpSlot
+  hcp_successor: LiHcpSlot
+  trustee_initial: LiContact | null
+  trustee_co: LiContact | null
+  trustee_successor: LiContact | null
+  guardian_primary: LiContact | null
+  guardian_successor: LiContact | null
+}
+
+export interface LiSpouseFiduciaries {
+  pr_primary: LiContact | null
+  pr_successor: LiContact | null
+  dpoa_primary: LiContact | null
+  dpoa_successor: LiContact | null
+  hcp_primary: LiHcpSlot
+  hcp_successor: LiHcpSlot
+  trustee_successor: LiContact | null
+}
+
+export interface LiDesignSheetData {
+  plan_coverage: PlanCoverage
+  residuary: {
+    spouse_survives: string
+    no_spouse: string
+    specific_gifts: string
+    other_instructions: string
+  }
+  fiduciaries: {
+    client: LiClientFiduciaries
+    spouse: LiSpouseFiduciaries | null
+  }
+  notes: string
+  confirmations: {
+    accuracy: boolean
+    document_list: boolean
+    follow_up: boolean
+  }
+  signatures: {
+    client: { name: string; date: string }
+    spouse: { name: string; date: string } | null
+  }
+}
+
+/* ─── matter_documents table ──────────────────────────────────────────────── */
+
+export interface MatterDocument {
+  id: string
+  matter_id: string
+  r2_key: string
+  name: string
+  size: number
+  content_type: string
+  folder: 'draft' | 'final' | 'client' | 'review' | 'signed' | 'intake' | 'meeting-notes'
+  folder_id: string | null
+  uploaded_by: string | null
+  created_at: string
+  // Generation-run provenance + review state (nullable; absent on uploads and
+  // pre-migration rows). See 20260612140000_matter_documents_generation_runs.
+  generation_id?: string | null
+  generation_engine?: 'node' | 'supabase' | 'python_fallback' | null
+  marker_count?: number | null
+  missing_count?: number | null
+  superseded_at?: string | null
+  reviewed_at?: string | null
+  reviewed_by?: string | null
+}
+
+export interface DocumentAccessAudit {
+  id: string
+  document_id: string | null
+  matter_id: string
+  user_id: string | null
+  user_email: string | null
+  action: 'view' | 'download' | 'folder_change' | 'delete' | 'export' | 'review' | 'rename'
+  metadata: Record<string, unknown>
+  created_at: string
+  document_name: string | null
+}
+
+export function stageLabel(key: MatterStage): string {
+  return STAGES.find(s => s.key === key)?.label ?? key
+}
+
+export function nextStage(key: MatterStage): MatterStage | null {
+  const idx = STAGES.findIndex(s => s.key === key)
+  if (idx === -1 || idx === STAGES.length - 1) return null
+  return STAGES[idx + 1].key
+}
+
+export function prevStage(key: MatterStage): MatterStage | null {
+  const idx = STAGES.findIndex(s => s.key === key)
+  if (idx <= 0) return null
+  return STAGES[idx - 1].key
+}
+
+/* ─── va_tasks table ─────────────────────────────────────────────────────── */
+
+export type VATaskStatus = 'pending' | 'in_progress' | 'completed'
+export type VATaskPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type VATaskType = 'administrative' | 'client_related'
+
+export interface VATask {
+  id: string
+  assigned_to: string
+  matter_id: string | null
+  task_type: VATaskType
+  priority: VATaskPriority
+  status: VATaskStatus
+  title: string
+  description: string | null
+  due_date: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+  // Enriched fields (not in DB)
+  client_name?: string
+  comment_count?: number
+  document_count?: number
+}
+
+export interface VATaskComment {
+  id: string
+  task_id: string
+  user_id: string
+  comment: string
+  created_at: string
+  user_name?: string
+}
+
+export interface VATaskDocument {
+  id: string
+  task_id: string
+  file_name: string
+  file_size: number
+  content_type: string
+  r2_key: string
+  version_number: number
+  is_current: boolean
+  uploaded_by: string
+  uploaded_at: string
+}
+
+/* ─── matter_activity table ───────────────────────────────────────────────── */
+
+export type ActivityEventType =
+  | 'stage_changed' | 'note_added' | 'document_uploaded' | 'document_viewed'
+  | 'document_downloaded' | 'task_created' | 'task_completed' | 'flag_added' | 'flag_removed'
+  | 'alert_created' | 'alert_resolved' | 'intake_sent' | 'intake_completed'
+  | 'email_sent' | 'draft_generated' | 'draft_promoted_to_review' | 'matter_created' | 'matter_archived'
+  | 'status_changed'
+
+export interface MatterActivity {
+  id: string
+  matter_id: string
+  event_type: ActivityEventType
+  actor_id: string | null
+  actor_email: string | null
+  actor_name: string | null
+  title: string
+  detail: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+/* ─── intake_sync_jobs table ─────────────────────────────────────────────── */
+
+export type IntakeSyncJobType = 'lawmatics_sync' | 'design_sheet_seed'
+export type IntakeSyncJobStatus = 'pending' | 'running' | 'succeeded' | 'failed'
+
+export interface IntakeSyncJob {
+  id: string
+  client_intake_id: string
+  matter_id: string | null
+  job_type: IntakeSyncJobType
+  status: IntakeSyncJobStatus
+  attempts: number
+  next_attempt_at: string
+  last_error: string | null
+  payload: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+/* ─── tasks table ─────────────────────────────────────────────────────────── */
+
+export type MatterTaskSource = 'template' | 'manual' | 'ai'
+
+export interface Task {
+  id: string
+  client_id: string
+  parent_id: string | null
+  title: string
+  description: string | null
+  status: 'todo' | 'inprogress' | 'blocked' | 'complete'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  stage: MatterStage | null
+  source: MatterTaskSource | null
+  assigned_to: string | null
+  due_date: string | null
+  created_at: string
+  updated_at: string
+  subtasks?: Task[]
+}
+
+export interface StageTaskTemplateSubtask {
+  id: string
+  template_id: string
+  title: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface StageTaskTemplate {
+  id: string
+  practice_area: 'EP' | 'EP-LP' | 'Probate'
+  stage: MatterStage
+  title: string
+  priority: Task['priority']
+  default_status: 'todo' | 'complete'
+  due_days_offset: number | null
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  subtasks?: StageTaskTemplateSubtask[]
+}
+
+export type { AssetIntakeRow, AssetIntakeInput } from '@/types/assetIntake'

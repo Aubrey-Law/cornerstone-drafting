@@ -1,0 +1,105 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk",
+    "signing_county": "Suffolk",
+    "pronoun_subject": "she",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": false
+  },
+  "children": [
+    {
+      "full_name": "Alex Example",
+      "minor": false
+    },
+    {
+      "full_name": "Taylor Example",
+      "minor": false
+    }
+  ],
+  "planning": {
+    "uses_revocable_trust": true
+  },
+  "trust": {
+    "name": "Jane Example Revocable Trust",
+    "date": "May 21, 2026",
+    "disinherited": [
+      {
+        "full_name": "Excluded Relative"
+      }
+    ],
+    "contingent_beneficiary": {
+      "full_name": "Casey Contingent"
+    },
+    "tangible_personal_property": {
+      "distribution_method": "equal_shares",
+      "beneficiaries": [
+        {
+          "full_name": "Morgan Personalty"
+        },
+        {
+          "full_name": "Riley Personalty"
+        }
+      ],
+      "priority_beneficiaries": [
+        {
+          "full_name": "Morgan Personalty"
+        },
+        {
+          "full_name": "Riley Personalty"
+        },
+        {
+          "full_name": "Jordan Personalty"
+        }
+      ]
+    },
+    "descendants_distribution": {
+      "method": "staged",
+      "distribution_age": "21",
+      "stage_1_age": "25",
+      "stage_2_age": "30",
+      "stage_3_age": "35"
+    },
+    "remote_beneficiaries": {
+      "individuals": [
+        {
+          "full_name": "Avery Remote",
+          "share": "one-half"
+        },
+        {
+          "full_name": "Quinn Remote",
+          "share": "one-half"
+        }
+      ],
+      "charity": {
+        "name": "Example Community Foundation"
+      }
+    }
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": {
+        "full_name": "Thomas Trustee"
+      },
+      "successor": {
+        "full_name": "Samuel Successor"
+      },
+      "second_successor": {
+        "full_name": "Riley Second Successor"
+      },
+      "co_trustees_action": "independent"
+    }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 21, 2026",
+    "ordinal_doc_date": "the 21st day of May, 2026",
+    "signing_county": "Suffolk",
+    "notary_commission": "January 1, 2030",
+    "id_type": "Massachusetts driver's license"
+  }
+}

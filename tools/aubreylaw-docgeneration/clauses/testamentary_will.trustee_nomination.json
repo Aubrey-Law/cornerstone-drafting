@@ -1,0 +1,13 @@
+{
+  "id": "testamentary_will.trustee_nomination",
+  "title": "Testamentary Trustee Nomination",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "fiduciaries.testamentary_trustee.primary.full_name"
+  ],
+  "review_status": "draft",
+  "version_date": "2026-06-05",
+  "text": "I nominate {{ fiduciaries.testamentary_trustee.primary.full_name | name }}{% if fiduciaries.testamentary_trustee.co_primary.full_name %} and {{ fiduciaries.testamentary_trustee.co_primary.full_name | name }}{% endif %} to serve as Trustee of any trust created under this Will. {% if fiduciaries.testamentary_trustee.co_primary.full_name %}{% if fiduciaries.testamentary_trustee.co_trustees_action == \"unanimous\" %}If both nominated Trustees are serving, they shall act unanimously with respect to trust matters.{% else %}If more than one nominated Trustee is serving, the Trustees shall act by majority decision with respect to trust matters.{% endif %} {% endif %}{% if fiduciaries.testamentary_trustee.successor.full_name %}If no nominated Trustee is willing and able to serve, I nominate {{ fiduciaries.testamentary_trustee.successor.full_name | name }} to serve as successor Trustee.{% endif %}"
+}

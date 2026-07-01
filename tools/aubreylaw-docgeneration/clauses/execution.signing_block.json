@@ -1,0 +1,13 @@
+{
+  "id": "execution.signing_block",
+  "title": "Signing Block",
+  "document_type": "ancillary",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [
+    "client.full_name"
+  ],
+  "review_status": "approved",
+  "version_date": "2026-05-21",
+  "text": "Signed by {{ client.full_name | name }} on {{ execution.display_ordinal_doc_date }} in {{ execution.display_signing_county | name }} County, {{ state.code }}."
+}

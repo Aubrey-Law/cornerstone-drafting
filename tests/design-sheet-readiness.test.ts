@@ -1,0 +1,388 @@
+import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
+import type { DesignSheet, PipelineMatter } from '@/types/database'
+
+function makeMatter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
+  return {
+    matter_id: 'matter-1',
+    matter_name: 'Doe Estate Plan',
+    stage: 'design',
+    status: 'active',
+    flags: null,
+    matter_created: '2026-06-01T00:00:00.000Z',
+    client_name: 'Jane Doe',
+    client_email: 'jane@example.com',
+    client_phone: '(555) 555-5555',
+    client_dob: '1980-01-01',
+    client_address: '1 Main St',
+    spouse_name: null,
+    spouse_email: null,
+    spouse_phone: null,
+    spouse_dob: null,
+    spouse_address: null,
+    plan_type: 'Estate Planning',
+    marital_status: 'Single',
+    has_minor_children: false,
+    taxable_estate: null,
+    intake_status: 'submitted',
+    design_status: 'in_progress',
+    intake_submitted_at: '2026-06-01T00:00:00.000Z',
+    drafts_sent_at: null,
+    signing_date: null,
+    documents_executed_at: null,
+    next_appointment: null,
+    next_appointment_type: null,
+    referral_source: null,
+    fee_amount: null,
+    opened_at: '2026-06-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function makeSheet(overrides: Partial<DesignSheet> = {}): DesignSheet {
+  return {
+    id: 'sheet-1',
+    matter_id: 'matter-1',
+    version: 1,
+    status: 'draft',
+    client_name: 'Jane Doe',
+    client_dob: '1980-01-01',
+    client_phone: '(555) 555-5555',
+    client_email: 'jane@example.com',
+    client_citizenship: 'US Citizen',
+    client_domicile: 'Massachusetts',
+    street: '1 Main St',
+    city: 'Boston',
+    state: 'MA',
+    zip: '02108',
+    county: 'Suffolk',
+    marital_status: 'Single',
+    spouse_name: null,
+    spouse_dob: null,
+    spouse_phone: null,
+    spouse_email: null,
+    spouse_citizenship: null,
+    marriage_date: null,
+    children: [],
+    trustee_primary: null,
+    trustee_co: null,
+    trustee_alt1: null,
+    trustee_alt1_co: null,
+    trustee_alt2: null,
+    executor_primary: null,
+    executor_co: null,
+    executor_alt1: null,
+    executor_alt1_co: null,
+    executor_same_as_trustee: false,
+    spouse_executor_same_as_trustee: false,
+    poa_primary: null,
+    poa_co: null,
+    poa_alt1: null,
+    poa_same_as_trustee: false,
+    spouse_poa_same_as_trustee: false,
+    hcp_primary: null,
+    hcp_co: null,
+    hcp_alt1: null,
+    hcp_alt1_co: null,
+    guardian_primary: null,
+    guardian_co: null,
+    guardian_alt1: null,
+    guardian_alt1_co: null,
+    plan_type: 'pour_over',
+    is_joint: false,
+    trust_name: 'The Jane Doe Revocable Trust',
+    spouse_trust_name: null,
+    restatement: false,
+    trust_protector: false,
+    distribution_method: 'staggered',
+    distribution_age: null,
+    include_afterborn_children: 'yes',
+    include_expectant_children: 'yes',
+    include_general_disinheritance: 'yes',
+    stagger_age_1: null,
+    stagger_pct_1: null,
+    stagger_age_2: null,
+    stagger_pct_2: null,
+    stagger_age_3: null,
+    tangible_property_distribution: 'memorandum',
+    tangible_property_named_individual: null,
+    include_common_disaster: 'yes',
+    include_guardians_allowance: 'yes',
+    beneficiary_as_cotrustee: 'no',
+    beneficiary_as_sole_trustee: 'no',
+    remote_beneficiary: 'heirs_at_law',
+    provision_lifestyle_disability: 'no',
+    provision_substance_abuse: 'no',
+    provision_married_beneficiary: 'no',
+    client_aka: null,
+    spouse_aka: null,
+    client_pronouns: null,
+    spouse_pronouns: null,
+    former_spouse_name: null,
+    deceased_spouse_name: null,
+    signing_date: null,
+    signing_month: null,
+    signing_year: null,
+    signing_county: null,
+    notary_commission_expiration: null,
+    dpoa_coagent_manner: 'independently',
+    dpoa_include_self_dealing: true,
+    dpoa_self_dealing_reviewer: 'Alex Reviewer',
+    dpoa_self_dealing_reviewer_alt: null,
+    dpoa_include_section_l: 'no',
+    hcp_anatomical_gift: 'none',
+    hcp_anatomical_specified: null,
+    hipaa_psychotherapy_notes: 'do_not_authorize',
+    specific_bequests: [],
+    pet_care_option: 'omit',
+    pet_care_details: {},
+    pr_structure: 'single',
+    bond: 'no_bond',
+    supervision: 'unsupervised',
+    simultaneous_death: 'omit',
+    utma_age: 21,
+    no_contest_clause: 'omit',
+    include_disclaimer_article: true,
+    include_self_proving_affidavit: true,
+    excluded_guardian_flag: false,
+    excluded_guardian_name: null,
+    trust_date: '2026-06-01',
+    pour_over_alternate_disposition: 'spouse_then_descendants',
+    pour_over_alternate_named: null,
+    outright_residuary: null,
+    outright_residuary_named: null,
+    outright_residuary_alternate: null,
+    trustee_structure: null,
+    cotrustee_decision_standard: null,
+    beneficiary_structure: null,
+    single_beneficiary_name: null,
+    single_beneficiary_remainder: null,
+    age_distribution_schedule: null,
+    trust_protector_name: null,
+    disinheritances: null,
+    fiduciary_slot_states: null,
+    decisions: {
+      document_inclusions: {
+        trust: true,
+        will: true,
+        dpoa: true,
+        healthcare: true,
+        deed: false,
+        spouse_docs: false,
+      },
+    },
+    trustee_slots: [{ id: 'trustee-1', contact_id: 'contact-trustee', is_co: false, order: 0 }],
+    executor_slots: [{ id: 'executor-1', contact_id: 'contact-executor', is_co: false, order: 0 }],
+    poa_slots: [{ id: 'poa-1', contact_id: 'contact-poa', is_co: false, order: 0 }],
+    hcp_slots: [{ id: 'hcp-1', contact_id: 'contact-hcp', is_co: false, order: 0 }],
+    guardian_slots: [{ id: 'guardian-1', contact_id: null, is_co: false, order: 0 }],
+    temporary_guardian_slots: [{ id: 'temp-guardian-1', contact_id: null, is_co: false, order: 0 }],
+    spouse_trustee_slots: [{ id: 'spouse-trustee-1', contact_id: null, is_co: false, order: 0 }],
+    spouse_executor_slots: [{ id: 'spouse-executor-1', contact_id: null, is_co: false, order: 0 }],
+    spouse_poa_slots: [{ id: 'spouse-poa-1', contact_id: null, is_co: false, order: 0 }],
+    spouse_hcp_slots: [{ id: 'spouse-hcp-1', contact_id: null, is_co: false, order: 0 }],
+    overrides: {},
+    goals_notes: 'Avoid probate.',
+    concerns: 'Keep drafting simple.',
+    assets: [],
+    created_at: '2026-06-01T00:00:00.000Z',
+    updated_at: '2026-06-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+describe('computeDesignSheetReadiness', () => {
+  it('returns exact field blockers for template-driven client decisions', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        dpoa_self_dealing_reviewer: null,
+        hcp_anatomical_gift: null,
+        hipaa_psychotherapy_notes: null,
+      }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.complete).toBe(false)
+    expect(readiness.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sectionId: 'dpoa',
+          label: 'self-dealing reviewer',
+          targetField: 'dpoa_self_dealing_reviewer',
+          targetId: 'design-field-dpoa_self_dealing_reviewer',
+          category: 'client-decision',
+        }),
+        expect.objectContaining({
+          sectionId: 'healthcare',
+          label: 'anatomical gift election',
+          targetField: 'hcp_anatomical_gift',
+          targetId: 'design-field-hcp_anatomical_gift',
+          category: 'client-decision',
+        }),
+        expect.objectContaining({
+          sectionId: 'healthcare',
+          label: 'psychotherapy notes election',
+          targetField: 'hipaa_psychotherapy_notes',
+          targetId: 'design-field-hipaa_psychotherapy_notes',
+          category: 'client-decision',
+        }),
+      ]),
+    )
+  })
+
+  it('returns exact field blockers for core missing fields', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({ client_email: null, trust_name: null }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sectionId: 'personal',
+          label: 'email',
+          targetField: 'client_email',
+          targetId: 'design-field-client_email',
+        }),
+        expect.objectContaining({
+          sectionId: 'trust',
+          label: 'trust name',
+          targetField: 'trust_name',
+          targetId: 'design-field-trust_name',
+        }),
+      ]),
+    )
+  })
+
+  it('does not require guardian when no minor children are on the design sheet', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        guardian_slots: [{ id: 'guardian-1', contact_id: null, is_co: false, order: 0 }],
+      }),
+      matter: makeMatter({ has_minor_children: true }),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.blockers.some(blocker => blocker.targetField === 'guardian_slots')).toBe(false)
+    expect(readiness.blockers.some(blocker => blocker.targetField === 'children')).toBe(true)
+  })
+
+  it('requires guardian when a minor child is listed on the design sheet', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        children: [{ name: 'Alex Doe', dob: '2015-01-01', relationship: 'biological', is_minor: true }],
+        guardian_slots: [{ id: 'guardian-1', contact_id: null, is_co: false, order: 0 }],
+      }),
+      matter: makeMatter({ has_minor_children: false }),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sectionId: 'will',
+          label: 'guardian',
+          targetField: 'guardian_slots',
+        }),
+      ]),
+    )
+  })
+
+  it('allows drafting when included document requirements are complete', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet(),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.complete).toBe(true)
+    expect(readiness.blockers).toHaveLength(0)
+    expect(readiness.completedCount).toBe(readiness.total)
+  })
+
+  it('does not gate LP drafting on design-sheet approval (now a separate client design review)', () => {
+    const lpData = {
+      li_design_sheet_data: {
+        residuary_spouse_survives: 'To my spouse.',
+        residuary_no_spouse: 'To my descendants.',
+      },
+    }
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet(),
+      matter: makeMatter(),
+      isLP: true,
+      lpData,
+    })
+
+    // Approval moved to the client-facing design review; the design sheet itself
+    // no longer surfaces a confirmation/approval blocker.
+    expect(readiness.blockers.some(b => b.sectionId === 'confirmation')).toBe(false)
+    expect(readiness.complete).toBe(true)
+  })
+})
+
+describe('design sheet readiness UI wiring', () => {
+  it('uses shared readiness blockers to gate drafting and jump to exact field targets', () => {
+    const shell = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/matters/[id]/design/DesignSheetShell.tsx'),
+      'utf8',
+    )
+    const workspace = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/DraftingWorkspace.tsx'),
+      'utf8',
+    )
+    const sharedControls = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/shared.tsx'),
+      'utf8',
+    )
+    const personal = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/PersonalSection.tsx'),
+      'utf8',
+    )
+    const provisions = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/WillProvisionsSection.tsx'),
+      'utf8',
+    )
+
+    expect(workspace).toContain('computeDesignSheetReadiness')
+    expect(shell).toContain('readinessComplete')
+    expect(shell).toContain('generateDisabled={!readinessComplete}')
+    expect(sharedControls).toContain('designFieldTargetId')
+    expect(personal).toContain('fieldName="client_email"')
+    expect(personal).toContain('fieldName="marital_status"')
+    expect(provisions).toContain('fieldName="dpoa_self_dealing_reviewer"')
+    expect(provisions).toContain('fieldName="hcp_anatomical_gift"')
+    expect(provisions).toContain('fieldName="hipaa_psychotherapy_notes"')
+  })
+})
+
+describe('parseDesignFocusParam', () => {
+  it('parses section and field from drafting Fix links', () => {
+    expect(parseDesignFocusParam('personal:county')).toEqual({
+      sectionId: 'personal',
+      targetField: 'county',
+    })
+  })
+
+  it('parses section-only focus when target field is blank', () => {
+    expect(parseDesignFocusParam('trust:')).toEqual({
+      sectionId: 'trust',
+      targetField: null,
+    })
+  })
+
+  it('returns null for empty or missing values', () => {
+    expect(parseDesignFocusParam(null)).toBeNull()
+    expect(parseDesignFocusParam('')).toBeNull()
+    expect(parseDesignFocusParam('   ')).toBeNull()
+  })
+})

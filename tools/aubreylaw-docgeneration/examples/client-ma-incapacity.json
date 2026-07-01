@@ -1,0 +1,66 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "street_address": "123 Main Street",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk",
+    "signing_county": "Suffolk",
+    "date_of_birth": "January 1, 1970",
+    "pronoun_subject": "she",
+    "pronoun_object": "her",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "John Example",
+    "pronoun_possessive": "his"
+  },
+  "children": [
+    {
+      "full_name": "Alex Example",
+      "minor": true
+    }
+  ],
+  "planning": {
+    "uses_revocable_trust": true
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 21, 2026",
+    "ordinal_doc_date": "the 21st day of May, 2026",
+    "signing_county": "Suffolk",
+    "notary_commission": "January 1, 2030"
+  },
+  "fiduciaries": {
+    "agent": {
+      "primary": {
+        "full_name": "Paula Agent"
+      },
+      "co_primary": {
+        "full_name": "Carl Coagent"
+      },
+      "co_agents_action": "separate",
+      "primary_has_spouse": false,
+      "successor": {
+        "full_name": "Sam Successor"
+      }
+    }
+  },
+  "healthcare": {
+    "agent": {
+      "primary": {
+        "full_name": "Henry Healthcare",
+        "relationship": "Friend",
+        "address": "456 Care Street, Boston, MA",
+        "phone": "555-0100"
+      },
+      "alternate": {
+        "full_name": "Alice Alternate",
+        "relationship": "Sister",
+        "address": "789 Backup Avenue, Cambridge, MA",
+        "phone": "555-0101"
+      }
+    }
+  }
+}

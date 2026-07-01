@@ -1,0 +1,11 @@
+{
+  "id": "will.no_contest",
+  "title": "No-Contest Clause",
+  "document_type": "will",
+  "jurisdiction": "base",
+  "condition": null,
+  "required_fields": [],
+  "review_status": "approved",
+  "version_date": "2026-06-06",
+  "text": "To the extent permitted by law, any beneficiary who contests this Will or any provision of it, directly or indirectly, shall be treated as having predeceased me for purposes of any provision in favor of that beneficiary."
+}

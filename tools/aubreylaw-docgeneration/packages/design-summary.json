@@ -1,0 +1,21 @@
+{
+  "name": "design-summary",
+  "description": "Client-facing estate plan design summary export: the pre-meeting design worksheet and the detailed plan summary, both rendered from the design sheet.",
+  "required_fields": [
+    "client.full_name"
+  ],
+  "documents": [
+    {
+      "id": "estate-plan-design-summary",
+      "title": "Estate Plan Design Summary",
+      "template": "templates/design-summary-detailed.docx",
+      "output": "01-estate-plan-design-summary.docx"
+    },
+    {
+      "id": "estate-plan-design-worksheet",
+      "title": "Estate Plan Design Worksheet",
+      "template": "templates/design-summary-worksheet.docx",
+      "output": "02-estate-plan-design-worksheet.docx"
+    }
+  ]
+}
