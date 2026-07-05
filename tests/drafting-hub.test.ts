@@ -14,7 +14,7 @@ describe('drafting hub and workspace', () => {
     const query = fs.readFileSync(path.join(process.cwd(), 'lib/queries/drafting.ts'), 'utf8')
 
     expect(page).toContain("import { fetchDraftingHubMatters } from '@/lib/queries/drafting'")
-    expect(page).toContain('<DraftingHubClient matters={matters} />')
+    expect(page).toContain('<DraftingHubClient matters={matters} loadError={error} />')
     expect(query).toContain(".from('v_matter_pipeline')")
     expect(query).toContain(".from('design_sheets')")
     expect(query).toContain(".from('doc_selections')")
