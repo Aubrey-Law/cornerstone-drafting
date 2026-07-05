@@ -45,7 +45,8 @@ npm run build:next
 
 - Drafting hub: `/admin/drafting`
 - Drafting workspace: `/admin/drafting/[matterId]` (design → generate → review)
-- Design sheet UI: `/admin/drafting/[matterId]/design` (legacy `/admin/matters/[id]/design` redirects here)
+- Design sheet UI: `/admin/drafting/[matterId]/design` (section overview; each section has its own page at `/design/[sectionId]`)
+- Legacy `/admin/matters/[id]/design` redirects to the design overview
 - Staff login: `/auth/login`
 - Draft generation API: `/api/admin/matters/[id]/draft`
 - Design sheet API: `/api/admin/matters/[id]/design-sheet`

@@ -13,10 +13,11 @@ describe('drafting app smoke', () => {
 
   it('keeps the design sheet under the drafting workspace', () => {
     expect(fs.existsSync(path.join(root, 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'))).toBe(true)
+    expect(fs.existsSync(path.join(root, 'app/admin/drafting/[matterId]/design/[sectionId]/page.tsx'))).toBe(true)
     expect(fs.existsSync(path.join(root, 'app/admin/matters/[id]/design/page.tsx'))).toBe(true)
 
     const legacy = fs.readFileSync(path.join(root, 'app/admin/matters/[id]/design/page.tsx'), 'utf8')
-    expect(legacy).toContain('redirect(`/admin/drafting/${id}?step=design`)')
+    expect(legacy).toContain('redirect(`/admin/drafting/${id}/design`)')
   })
 
   it('wires draft payload assembly through the public barrel', () => {

@@ -1,10 +1,21 @@
-import { redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
+import DesignSheetShell from './DesignSheetShell'
+import { loadDraftingMatterContext } from '../loadDraftingMatterContext'
 
-export default async function LegacyDesignRedirect({
+export const dynamic = 'force-dynamic'
+
+export default async function DesignSheetOverviewPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ matterId: string }>
 }) {
-  const { id } = await params
-  redirect(`/admin/drafting/${id}?step=design`)
+  const { matterId } = await params
+  const ctx = await loadDraftingMatterContext(matterId)
+
+  return (
+    <DesignSheetShell
+      {...ctx}
+      activeSectionId={null}
+    />
+  )
 }
