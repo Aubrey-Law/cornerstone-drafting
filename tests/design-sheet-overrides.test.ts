@@ -29,12 +29,10 @@ describe('design sheet prefilled field overrides', () => {
 
   it('passes override originals into common prefilled fields', () => {
     const personal = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/PersonalSection.tsx'), 'utf8')
-    const family = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/FamilySection.tsx'), 'utf8')
-
     expect(personal).toContain("originalValue={original('client_name')}")
     expect(personal).toContain("originalValue={original('city')}")
     expect(personal).toContain("originalValue={original('marital_status')}")
-    expect(family).toContain("originalValue={original('spouse_name')}")
-    expect(family).toContain("originalValue={original('marriage_date')}")
+    expect(personal).toContain("originalValue={original('spouse_name')}")
+    expect(personal).toContain("originalValue={original('marriage_date')}")
   })
 })

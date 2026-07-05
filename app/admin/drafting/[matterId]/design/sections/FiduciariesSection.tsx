@@ -48,6 +48,7 @@ export default function FiduciariesSection({ isLP, ...props }: FiduciariesSectio
     <FiduciariesSectionEP
       sheet={props.sheet}
       contacts={props.contacts}
+      matter={props.matter}
       onChange={props.onChange}
       onAddContact={props.onAddContact}
       onUpdateContact={props.onUpdateContact}

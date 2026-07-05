@@ -11,7 +11,7 @@ import {
   type SectionProps,
 } from './shared'
 
-export function PersonalSection({ sheet, onChange }: SectionProps) {
+export function ClientInformationSection({ sheet, onChange }: SectionProps) {
   const marital = (sheet.marital_status ?? '').toLowerCase()
   const isMarried = marital.includes('married') && !marital.includes('never')
   const isDivorced = marital.includes('divorced')
@@ -26,7 +26,7 @@ export function PersonalSection({ sheet, onChange }: SectionProps) {
         Blank white fields are attorney-only and were not part of the intake.
       </AttorneyNoteBanner>
 
-      <SectionBlock title="Personal Information" subtitle="Primary grantor">
+      <SectionBlock title="Client" subtitle="Primary grantor">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <PrefilledInput fieldName="client_name" label="Full Legal Name" value={sheet.client_name ?? ''} originalValue={original('client_name')} onChange={v => onChange('client_name', v)} />
           <AttorneyInput
@@ -93,9 +93,55 @@ export function PersonalSection({ sheet, onChange }: SectionProps) {
         <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
           <PrefilledInput label="County" value={sheet.county ?? ''} originalValue={original('county')} onChange={v => onChange('county', v)} />
         </div>
-        {/* Suppress visual when not relevant — kept here so isMarried compiles to a no-op for unmarried */}
-        <span data-married={isMarried} className="hidden" />
       </SectionBlock>
+
+      {isMarried && (
+        <SectionBlock title="Spouse / Partner" subtitle="Co-grantor">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <PrefilledInput fieldName="spouse_name" label="Full Legal Name" value={sheet.spouse_name ?? ''} originalValue={original('spouse_name')} onChange={v => onChange('spouse_name', v)} />
+            <AttorneyInput
+              label="Also Known As (AKA)"
+              value={sheet.spouse_aka ?? ''}
+              placeholder="Other names used (used in Wills)"
+              onChange={v => onChange('spouse_aka', v || null)}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
+            <div>
+              <PrefilledInput label="Date of Birth" value={sheet.spouse_dob ?? ''} originalValue={original('spouse_dob')} onChange={v => onChange('spouse_dob', v)} />
+              <DobAgeHint dob={sheet.spouse_dob} />
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
+            <PrefilledInput label="Phone" type="tel" value={sheet.spouse_phone ?? ''} originalValue={original('spouse_phone')} onChange={v => onChange('spouse_phone', v)} />
+            <PrefilledInput label="Email" value={sheet.spouse_email ?? ''} originalValue={original('spouse_email')} onChange={v => onChange('spouse_email', v)} />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
+            <PrefilledSelect
+              fieldName="spouse_pronouns"
+              label="Pronouns"
+              value={sheet.spouse_pronouns ?? ''}
+              originalValue={original('spouse_pronouns')}
+              options={PRONOUN_OPTIONS}
+              onChange={v => onChange('spouse_pronouns', v || null)}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
+            <PrefilledSelect
+              label="Citizenship"
+              value={sheet.spouse_citizenship || 'US Citizen'}
+              originalValue={original('spouse_citizenship')}
+              options={[
+                { value: 'US Citizen', label: 'US Citizen' },
+                { value: 'Permanent Resident', label: 'Permanent Resident' },
+                { value: 'Non-Resident Alien', label: 'Non-Resident Alien' },
+              ]}
+              onChange={v => onChange('spouse_citizenship', v)}
+            />
+            <PrefilledInput label="Date of Marriage" value={sheet.marriage_date ?? ''} originalValue={original('marriage_date')} onChange={v => onChange('marriage_date', v)} />
+          </div>
+        </SectionBlock>
+      )}
 
       <SectionBlock title="Citizenship & Residency">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -116,3 +162,6 @@ export function PersonalSection({ sheet, onChange }: SectionProps) {
     </div>
   )
 }
+
+/** @deprecated Use ClientInformationSection */
+export const PersonalSection = ClientInformationSection

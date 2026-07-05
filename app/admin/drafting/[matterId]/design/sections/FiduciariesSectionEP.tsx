@@ -9,6 +9,14 @@ import type { SlotState } from '@/types/planReview'
 import { AttorneyNoteBanner, AttorneySelect, FieldLabel, SectionBlock, SlotStateToggle } from './shared'
 import { cn } from '@/lib/utils'
 import { sheetHasMinorChildren, sheetMinorChildren } from '@/lib/designSheet/minorChildren'
+import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import type { PipelineMatter } from '@/types/database'
+import {
+  cloneSlots,
+  findClientContact,
+  FiduciaryBlock,
+  isMarriedSheet,
+} from './fiduciary-blocks'
 import type { SectionProps } from './shared'
 import ContactPicker from './ContactPicker'
 import type { Contact } from './ContactPicker'
@@ -27,6 +35,7 @@ import {
 
 interface Props extends SectionProps {
   contacts: MatterContact[]
+  matter: PipelineMatter
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
 }
@@ -282,8 +291,17 @@ export function FiduciaryRoleSection({
 
 // ── FiduciariesSectionEP ───────────────────────────────────────────────────
 
-export function FiduciariesSectionEP({ sheet, contacts, onChange, onAddContact, onUpdateContact }: Props) {
+export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddContact, onUpdateContact }: Props) {
   const ALL_ROLES: FiduciaryRole[] = ['trustee', 'executor', 'poa', 'hcp', 'guardian', 'temporary_guardian']
+  const inclusions = getDocumentInclusions(sheet)
+  const married = isMarriedSheet(sheet)
+  const spouseDocs = married && inclusions.spouse_docs
+  const separateTrusts = married && sheet.is_joint === false
+  const clientContact = findClientContact(contacts, matter, sheet)
+  const clientFirst = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/)[0] || ''
+  const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
+  const spouseTrusteeSource = separateTrusts ? sheet.spouse_trustee_slots : sheet.trustee_slots
+  const blockProps = { sheet, contacts, matter, onChange, onAddContact, onUpdateContact }
 
   const minorChildren = sheetMinorChildren(sheet.children)
   const hasMinorChildren = sheetHasMinorChildren(sheet.children)
@@ -377,43 +395,151 @@ export function FiduciariesSectionEP({ sheet, contacts, onChange, onAddContact, 
       {ROLES.map(role => {
         const slots = (sheet[SLOT_FIELDS[role]] as FiduciarySlot[]) ?? []
 
-        // Determine "same as trustee" props
         const sameAsTrustee =
           role === 'executor' ? sheet.executor_same_as_trustee :
           role === 'poa' ? sheet.poa_same_as_trustee :
           undefined
 
         const onSameAsTrusteeToggle =
-          role === 'executor' ? () => onChange('executor_same_as_trustee', !sheet.executor_same_as_trustee) :
-          role === 'poa' ? () => onChange('poa_same_as_trustee', !sheet.poa_same_as_trustee) :
+          role === 'executor' ? () => {
+            const next = !sheet.executor_same_as_trustee
+            onChange('executor_same_as_trustee', next)
+            if (next) onChange('executor_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['executor_slots'])
+          } :
+          role === 'poa' ? () => {
+            const next = !sheet.poa_same_as_trustee
+            onChange('poa_same_as_trustee', next)
+            if (next) onChange('poa_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['poa_slots'])
+          } :
           undefined
 
+        if (role === 'trustee') {
+          return (
+            <FiduciaryBlock
+              key={role}
+              {...blockProps}
+              role="trustee"
+              sectionTitle={`${clientFirst || 'Client'}'s Trustees`}
+              clientShortcutContact={separateTrusts ? null : clientContact}
+              clientShortcutLabel={separateTrusts ? undefined : `${clientFirst || 'Client'} as initial trustee`}
+            />
+          )
+        }
+
+        if (role === 'executor') {
+          return (
+            <FiduciaryBlock
+              key={role}
+              {...blockProps}
+              role="executor"
+              sameAsTrustee={sameAsTrustee}
+              onSameAsTrusteeToggle={onSameAsTrusteeToggle}
+              clientShortcutContact={clientContact}
+              clientShortcutLabel="Client as primary personal representative"
+              spouseOptionLabel="Spouse as personal representative"
+            />
+          )
+        }
+
+        if (role === 'poa') {
+          return (
+            <FiduciaryBlock
+              key={role}
+              {...blockProps}
+              role="poa"
+              sameAsTrustee={sameAsTrustee}
+              onSameAsTrusteeToggle={onSameAsTrusteeToggle}
+              spouseOptionLabel="Spouse as DPOA agent"
+            />
+          )
+        }
+
+        if (role === 'hcp') {
+          return (
+            <FiduciaryBlock
+              key={role}
+              {...blockProps}
+              role="hcp"
+              spouseOptionLabel="Spouse as health care agent"
+            />
+          )
+        }
+
         return (
-          <FiduciaryRoleSection
+          <FiduciaryBlock
             key={role}
+            {...blockProps}
             role={role}
-            slots={slots}
-            contacts={contacts}
-            onSlotsChange={s => handleSlotsChange(role, s)}
-            onAddContact={handleAddContact}
-            onUpdateContact={onUpdateContact ? handleUpdateContact : undefined}
-            slotStates={sheet.fiduciary_slot_states}
-            onSlotStateChange={handleSlotStateChange}
-            sameAsTrustee={sameAsTrustee}
-            onSameAsTrusteeToggle={onSameAsTrusteeToggle}
+            spouseOptionLabel={
+              role === 'guardian'
+                ? 'Spouse as guardian'
+                : role === 'temporary_guardian'
+                  ? 'Spouse as temporary guardian'
+                  : undefined
+            }
           />
         )
       })}
 
-      {!hasMinorChildren && (
-        <div className="rounded-lg border border-dashed border-border bg-surface-1 px-5 py-4 text-center">
-          <p className="text-[12px] text-muted-foreground">
-            Guardian section hidden — no minor children on file. Add minor children in the Family section to unlock.
-          </p>
-        </div>
+      {inclusions.trust && separateTrusts && (
+        <FiduciaryBlock
+          {...blockProps}
+          role="trustee"
+          slotField="spouse_trustee_slots"
+          sectionTitle={`${spouseFirst || 'Spouse'}'s Trustees`}
+          coShortcutContact={clientContact}
+          coShortcutLabel={`${clientFirst || 'Client'} as initial co-trustee`}
+        />
       )}
 
-      {hasMinorChildren && (
+      {spouseDocs && inclusions.will && (
+        <FiduciaryBlock
+          {...blockProps}
+          role="executor"
+          slotField="spouse_executor_slots"
+          sectionTitle="Spouse / Partner Personal Representative"
+          sameAsTrustee={sheet.spouse_executor_same_as_trustee}
+          sameAsTrusteeLabel="Same as Spouse's Trustees"
+          onSameAsTrusteeToggle={() => {
+            const next = !sheet.spouse_executor_same_as_trustee
+            onChange('spouse_executor_same_as_trustee', next)
+            if (next) onChange('spouse_executor_slots', cloneSlots(spouseTrusteeSource) as DesignSheet['spouse_executor_slots'])
+          }}
+          primaryShortcutContact={clientContact}
+          primaryShortcutLabel="Client as spouse / partner personal representative"
+        />
+      )}
+
+      {spouseDocs && inclusions.dpoa && (
+        <FiduciaryBlock
+          {...blockProps}
+          role="poa"
+          slotField="spouse_poa_slots"
+          sectionTitle="Spouse / Partner Durable Power of Attorney"
+          sameAsTrustee={sheet.spouse_poa_same_as_trustee}
+          sameAsTrusteeLabel="Same as Spouse's Trustees"
+          onSameAsTrusteeToggle={() => {
+            const next = !sheet.spouse_poa_same_as_trustee
+            onChange('spouse_poa_same_as_trustee', next)
+            if (next) onChange('spouse_poa_slots', cloneSlots(spouseTrusteeSource) as DesignSheet['spouse_poa_slots'])
+          }}
+          primaryShortcutContact={clientContact}
+          primaryShortcutLabel="Client as spouse / partner DPOA agent"
+        />
+      )}
+
+      {spouseDocs && inclusions.healthcare && (
+        <FiduciaryBlock
+          {...blockProps}
+          role="hcp"
+          slotField="spouse_hcp_slots"
+          sectionTitle="Spouse / Partner Health Care Proxy"
+          primaryShortcutContact={clientContact}
+          primaryShortcutLabel="Client as spouse / partner health care agent"
+        />
+      )}
+
+      {!hasMinorChildren && (
         <div className="mb-2 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-700/40 dark:bg-blue-950/30">
           <span className="text-[11px] text-blue-700 dark:text-blue-300">
             Guardian section shown — minor children on file: {minorChildren.map((c: { name?: string }) => c.name).filter(Boolean).join(', ')}.

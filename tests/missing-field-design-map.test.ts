@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { designTargetForMissingField, isKnownDesignSection } from '@/lib/estateGenerator/missingFieldDesignMap'
+import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 
 function allRequiredFieldPaths(): string[] {
   const dir = path.join(process.cwd(), 'tools/aubreylaw-docgeneration/packages')
@@ -25,12 +26,12 @@ describe('designTargetForMissingField', () => {
 
   it('maps trustee fiduciary paths to the trust section', () => {
     expect(designTargetForMissingField('fiduciaries.trustee.successor.full_name'))
-      .toEqual({ path: 'fiduciaries.trustee.successor.full_name', label: 'Successor trustee', sectionId: 'trust', sectionLabel: 'Trust', targetField: null })
+      .toEqual({ path: 'fiduciaries.trustee.successor.full_name', label: 'Successor trustee', sectionId: DESIGN_SECTION_IDS.fiduciaries, sectionLabel: 'Fiduciaries & Additional Contacts', targetField: null })
   })
 
   it('maps scalar client fields to a focusable personal-section input', () => {
     expect(designTargetForMissingField('client.county'))
-      .toEqual({ path: 'client.county', label: 'County', sectionId: 'personal', sectionLabel: 'Personal', targetField: 'county' })
+      .toEqual({ path: 'client.county', label: 'County', sectionId: DESIGN_SECTION_IDS.clientInformation, sectionLabel: 'Client Information', targetField: 'county' })
   })
 
   it('degrades unknown paths to a section-level link without throwing', () => {

@@ -1,18 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
-import { formatPhoneDisplay } from '@/lib/phone'
 import { deriveTrustName, deriveSpouseTrustName } from '@/lib/designSheetDefaults'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
-import { designFieldTargetId } from '@/lib/designSheetReadiness'
-import type { DesignSheet, FiduciaryRole, FiduciarySlot, MatterContact, PipelineMatter, StaggeredTier } from '@/types/database'
+import type { DesignSheet, MatterContact, PipelineMatter, StaggeredTier } from '@/types/database'
 import DesignContactPicker, { type Contact as PickerContact } from './ContactPicker'
-import type { SlotState } from '@/types/planReview'
 import type { SectionProps } from './shared'
 import {
   AttorneyInput,
@@ -22,10 +18,16 @@ import {
   PrefilledInput,
   SectionBlock,
 } from './shared'
-import { FiduciaryRoleSection } from './FiduciariesSectionEP'
+import {
+  SegControl,
+  clearPrimaryContactIf,
+  findClientContact,
+  findSpouseContact,
+  isMarriedSheet as isMarried,
+  primaryContactId,
+  setPrimaryContact,
+} from './fiduciary-blocks'
 import { WillProvisionsSection } from './WillProvisionsSection'
-
-type Contact = MatterContact
 
 interface DocumentSectionProps extends SectionProps {
   contacts: MatterContact[]
@@ -33,6 +35,11 @@ interface DocumentSectionProps extends SectionProps {
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
 }
+
+const YES_NO = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'no', label: 'No' },
+]
 
 function SectionHelp({ children }: { children: ReactNode }) {
   return (
@@ -42,228 +49,8 @@ function SectionHelp({ children }: { children: ReactNode }) {
   )
 }
 
-const YES_NO = [
-  { value: 'yes', label: 'Yes' },
-  { value: 'no', label: 'No' },
-]
-
-const SLOT_FIELDS: Record<FiduciaryRole, keyof DesignSheet> = {
-  trustee: 'trustee_slots',
-  executor: 'executor_slots',
-  poa: 'poa_slots',
-  hcp: 'hcp_slots',
-  guardian: 'guardian_slots',
-  temporary_guardian: 'temporary_guardian_slots',
-}
-
-const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
-const SPOUSE_PRIMARY_CONTACT_ID = '__design_sheet_spouse__'
-
-type FiduciarySlotField =
-  | 'trustee_slots'
-  | 'executor_slots'
-  | 'poa_slots'
-  | 'hcp_slots'
-  | 'guardian_slots'
-  | 'temporary_guardian_slots'
-  | 'spouse_trustee_slots'
-  | 'spouse_executor_slots'
-  | 'spouse_poa_slots'
-  | 'spouse_hcp_slots'
-
-function SegControl({ value, options, onChange }: {
-  value: string
-  options: { value: string; label: string }[]
-  onChange: (v: string) => void
-}) {
-  return (
-    <div className="flex gap-0.5 rounded-lg bg-muted p-[2px]">
-      {options.map(o => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={cn(
-            'flex-1 rounded-md px-3 py-2 text-[12px] transition-all',
-            value === o.value
-              ? 'bg-card font-semibold text-primary shadow-sm'
-              : 'text-foreground hover:text-foreground'
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function isMarried(sheet: DesignSheet) {
-  const marital = (sheet.marital_status ?? '').toLowerCase()
-  return marital.includes('married') && !marital.includes('never')
-}
-
-function findSpouseContact(contacts: MatterContact[], matter: PipelineMatter, sheet: DesignSheet): MatterContact | null {
-  const spouseName = (sheet.spouse_name ?? matter.spouse_name ?? '').trim()
-  if (!spouseName) return null
-  const normalized = spouseName.toLowerCase()
-  const existing = contacts.find(contact => `${contact.first_name} ${contact.last_name}`.trim().toLowerCase() === normalized)
-  if (existing) return existing
-  return {
-    id: SPOUSE_PRIMARY_CONTACT_ID,
-    ...splitDisplayName(spouseName),
-    relationship: 'Spouse',
-    phone: formatPhoneDisplay(sheet.spouse_phone ?? matter.spouse_phone) || null,
-    email: sheet.spouse_email ?? matter.spouse_email ?? null,
-    address: matter.spouse_address ?? ([sheet.street, sheet.city, sheet.state, sheet.zip].filter(Boolean).join(', ') || null),
-  }
-}
-
-function splitDisplayName(name: string): { first_name: string; last_name: string } {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length <= 1) return { first_name: parts[0] ?? name, last_name: '' }
-  return {
-    first_name: parts.slice(0, -1).join(' '),
-    last_name: parts.at(-1) ?? '',
-  }
-}
-
-
-function findClientContact(contacts: MatterContact[], matter: PipelineMatter, sheet: DesignSheet): MatterContact | null {
-  const clientName = (sheet.client_name ?? matter.client_name ?? '').trim()
-  if (!clientName) return null
-  const normalized = clientName.toLowerCase()
-  const existing = contacts.find(contact => `${contact.first_name} ${contact.last_name}`.trim().toLowerCase() === normalized)
-  if (existing) return existing
-  return {
-    id: CLIENT_PRIMARY_CONTACT_ID,
-    ...splitDisplayName(clientName),
-    relationship: 'Client',
-    phone: formatPhoneDisplay(sheet.client_phone) || null,
-    email: sheet.client_email ?? null,
-    address: [sheet.street, sheet.city, sheet.state, sheet.zip].filter(Boolean).join(', ') || null,
-  }
-}
-
-function primaryContactId(slots: FiduciarySlot[] | null | undefined): string | null {
-  return slots?.find(slot => slot.order === 0 && !slot.is_co)?.contact_id ?? null
-}
-
-function setPrimaryContact(slots: FiduciarySlot[] | null | undefined, contactId: string | null): FiduciarySlot[] {
-  const existing = slots ?? []
-  const primary = existing.find(slot => slot.order === 0 && !slot.is_co)
-  if (!primary) {
-    return [
-      { id: crypto.randomUUID(), contact_id: contactId, is_co: false, order: 0 },
-      ...existing,
-    ]
-  }
-  return existing.map(slot => slot.id === primary.id ? { ...slot, contact_id: contactId } : slot)
-}
-
-function clearPrimaryContactIf(slots: FiduciarySlot[] | null | undefined, contactId: string): FiduciarySlot[] {
-  return (slots ?? []).map(slot => (
-    slot.order === 0 && !slot.is_co && slot.contact_id === contactId
-      ? { ...slot, contact_id: null }
-      : slot
-  ))
-}
-
-// Deep-copy a set of fiduciary slots with fresh ids so the destination role
-// (e.g. executor) gets an independent, editable copy of the trustee slots.
-// Used by the "Same as Trustees" shortcut — a one-time autofill, not a live mirror.
-function cloneSlots(slots: FiduciarySlot[] | null | undefined): FiduciarySlot[] {
-  return (slots ?? []).map(slot => ({ ...slot, id: crypto.randomUUID() }))
-}
-
-function FiduciaryBlock({
-  role,
-  sheet,
-  contacts,
-  matter,
-  onChange,
-  onAddContact,
-  onUpdateContact,
-  sameAsTrustee,
-  onSameAsTrusteeToggle,
-  sameAsTrusteeLabel,
-  spouseOptionLabel,
-  slotField,
-  sectionTitle,
-  primaryShortcutContact,
-  primaryShortcutLabel,
-  clientShortcutContact,
-  clientShortcutLabel,
-  coShortcutContact,
-  coShortcutLabel,
-}: DocumentSectionProps & {
-  role: FiduciaryRole
-  sameAsTrustee?: boolean
-  onSameAsTrusteeToggle?: () => void
-  sameAsTrusteeLabel?: string
-  spouseOptionLabel?: string
-  slotField?: FiduciarySlotField
-  sectionTitle?: string
-  primaryShortcutContact?: MatterContact | null
-  primaryShortcutLabel?: string
-  clientShortcutContact?: MatterContact | null
-  clientShortcutLabel?: string
-  coShortcutContact?: MatterContact | null
-  coShortcutLabel?: string
-}) {
-  const field = slotField ?? SLOT_FIELDS[role]
-  const handleSlotsChange = useCallback((slots: FiduciarySlot[]) => {
-    onChange(field, slots as DesignSheet[keyof DesignSheet])
-  }, [field, onChange])
-
-  const handleSlotStateChange = useCallback((slotId: string, state: SlotState) => {
-    onChange('fiduciary_slot_states', {
-      ...(sheet.fiduciary_slot_states ?? {}),
-      [slotId]: state,
-    })
-  }, [onChange, sheet.fiduciary_slot_states])
-
-  const spouseContact = isMarried(sheet) ? findSpouseContact(contacts, matter, sheet) : null
-  const clientContact = findClientContact(contacts, matter, sheet)
-  // Make the client/spouse pseudo-contacts ('__design_sheet_client__' /
-  // '__design_sheet_spouse__') resolvable for display, so a slot that references
-  // them (e.g. set by the separate-trust "Initial Trustees" checkbox) renders the
-  // person instead of an empty picker.
-  const contactsForDisplay = [clientContact, spouseContact]
-    .filter((c): c is MatterContact => Boolean(c))
-    .reduce<MatterContact[]>((acc, c) => (acc.some(x => x.id === c.id) ? acc : [...acc, c]), contacts)
-
-  return (
-    <div id={designFieldTargetId(String(field))} tabIndex={-1}>
-      <FiduciaryRoleSection
-        role={role}
-        slots={(sheet[field] as FiduciarySlot[]) ?? []}
-        contacts={contactsForDisplay}
-        onSlotsChange={handleSlotsChange}
-        onAddContact={data => onAddContact(data as Omit<MatterContact, 'id'>) as Promise<Contact>}
-        onUpdateContact={onUpdateContact ? ((id, data) => onUpdateContact(id, data as Omit<MatterContact, 'id'>) as Promise<Contact>) : undefined}
-        slotStates={sheet.fiduciary_slot_states}
-        onSlotStateChange={handleSlotStateChange}
-        sameAsTrustee={sameAsTrustee}
-        onSameAsTrusteeToggle={onSameAsTrusteeToggle}
-        sameAsTrusteeLabel={sameAsTrusteeLabel}
-        // Only offer "spouse as primary" when a label is supplied — the trustee
-        // block instead offers spouse as co-trustee (see coShortcutContact).
-        spouseContact={spouseOptionLabel ? spouseContact : null}
-        spouseOptionLabel={spouseOptionLabel}
-        primaryShortcutContact={primaryShortcutContact as Contact | null | undefined}
-        primaryShortcutLabel={primaryShortcutLabel}
-        clientContact={clientShortcutContact as Contact | null | undefined}
-        clientOptionLabel={clientShortcutLabel}
-        coShortcutContact={coShortcutContact as Contact | null | undefined}
-        coShortcutLabel={coShortcutLabel}
-        title={sectionTitle}
-      />
-    </div>
-  )
-}
-
-export function TrustDocumentSection(props: DocumentSectionProps) {
-  const { sheet, onChange, contacts, matter } = props
+export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'client' | 'spouse' }) {
+  const { sheet, onChange, contacts, matter, scope = 'client' } = props
   const { onAddContact, onUpdateContact } = props
   const clientContact = findClientContact(contacts, matter, sheet)
   const spouseContact = isMarried(sheet) ? findSpouseContact(contacts, matter, sheet) : null
@@ -273,7 +60,27 @@ export function TrustDocumentSection(props: DocumentSectionProps) {
   const clientFirst = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/)[0] || ''
   const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
   const separate = isMarried(sheet) && sheet.is_joint === false
-  const showSeparateTrustSelfTrustees = isMarried(sheet) && sheet.is_joint === false && clientContact && spouseContact
+
+  if (scope === 'spouse') {
+    return (
+      <div>
+        <SectionHelp>Configure the spouse&apos;s separate trust name and any spouse-specific trust settings.</SectionHelp>
+        <SectionBlock title="Trust Name">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <PrefilledInput
+              fieldName="spouse_trust_name"
+              label={`${spouseFirst || 'Spouse'}'s Trust`}
+              value={sheet.spouse_trust_name || derivedSpouseTrustName}
+              originalValue={original('spouse_trust_name')}
+              onChange={v => onChange('spouse_trust_name', v || null)}
+            />
+          </div>
+        </SectionBlock>
+      </div>
+    )
+  }
+
+  const showSeparateTrustSelfTrustees = separate && clientContact && spouseContact
   const selfTrusteesChecked = Boolean(
     showSeparateTrustSelfTrustees &&
     primaryContactId(sheet.trustee_slots) === clientContact.id &&
@@ -341,7 +148,7 @@ export function TrustDocumentSection(props: DocumentSectionProps) {
 
   return (
     <div>
-      <SectionHelp>Configure the trust structure, name, protector, trustees, and how the residuary is distributed.</SectionHelp>
+      <SectionHelp>Configure the trust structure, name, protector, and how the residuary is distributed. Nominate trustees under Fiduciaries &amp; Additional Contacts.</SectionHelp>
 
       <SectionBlock title="Trust Structure">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -361,15 +168,6 @@ export function TrustDocumentSection(props: DocumentSectionProps) {
             originalValue={original('trust_name')}
             onChange={v => onChange('trust_name', v)}
           />
-          {separate && (
-            <PrefilledInput
-              fieldName="spouse_trust_name"
-              label={`${spouseFirst || 'Spouse'}'s Trust`}
-              value={sheet.spouse_trust_name || derivedSpouseTrustName}
-              originalValue={original('spouse_trust_name')}
-              onChange={v => onChange('spouse_trust_name', v || null)}
-            />
-          )}
         </div>
       </SectionBlock>
 
@@ -417,28 +215,6 @@ export function TrustDocumentSection(props: DocumentSectionProps) {
             </span>
           </label>
         </SectionBlock>
-      )}
-
-      <FiduciaryBlock
-        {...props}
-        role="trustee"
-        sectionTitle={`${clientFirst || 'Client'}'s Trustees`}
-        // Separate trusts set initial trustees via the "Initial Trustees" checkbox
-        // above, so the per-block self-trustee shortcut is redundant there.
-        clientShortcutContact={separate ? null : clientContact}
-        clientShortcutLabel={separate ? undefined : `${clientFirst || 'Client'} as initial trustee`}
-        coShortcutContact={separate ? null : (isMarried(sheet) ? spouseContact : null)}
-        coShortcutLabel={separate ? undefined : `${spouseFirst || 'Spouse'} as initial co-trustee`}
-      />
-      {separate && (
-        <FiduciaryBlock
-          {...props}
-          role="trustee"
-          slotField="spouse_trustee_slots"
-          sectionTitle={`${spouseFirst || 'Spouse'}'s Trustees`}
-          coShortcutContact={clientContact}
-          coShortcutLabel={`${clientFirst || 'Client'} as initial co-trustee`}
-        />
       )}
 
       <SectionBlock title="Residuary Distribution">
@@ -539,6 +315,14 @@ export function TrustDocumentSection(props: DocumentSectionProps) {
   )
 }
 
+export function TrustDocumentSection(props: DocumentSectionProps) {
+  return <TrustDetailsSection {...props} scope="client" />
+}
+
+export function TrustDetailsSpouseSection(props: DocumentSectionProps) {
+  return <TrustDetailsSection {...props} scope="spouse" />
+}
+
 function ExcludedGuardians({ sheet, onChange }: SectionProps) {
   const enabled = Boolean(sheet.excluded_guardian_flag)
   return (
@@ -571,125 +355,35 @@ function ExcludedGuardians({ sheet, onChange }: SectionProps) {
 }
 
 export function WillDocumentSection(props: DocumentSectionProps) {
-  const { sheet, onChange, contacts, matter } = props
+  const { sheet, onChange } = props
   const hasMinors = sheetHasMinorChildren(sheet.children)
-  const clientContact = findClientContact(contacts, matter, sheet)
-  // Separate trusts give the spouse their own trustee slots; joint trusts share a
-  // single set of trustees. Only fall back to trustee_slots for joint trusts —
-  // for a separate trust, never substitute the client's trustees for the spouse's.
-  const spouseTrusteeSource = sheet.is_joint === false ? sheet.spouse_trustee_slots : sheet.trustee_slots
 
   return (
     <div>
-      <SectionHelp>The Pour-Over Will works with the trust. Configure executor nominations and guardian selections here.</SectionHelp>
-      <FiduciaryBlock
-        {...props}
-        role="executor"
-        sameAsTrustee={sheet.executor_same_as_trustee}
-        onSameAsTrusteeToggle={() => {
-          const next = !sheet.executor_same_as_trustee
-          onChange('executor_same_as_trustee', next)
-          if (next) onChange('executor_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['executor_slots'])
-        }}
-        clientShortcutContact={clientContact}
-        clientShortcutLabel="Client as primary personal representative"
-        spouseOptionLabel="Spouse as personal representative"
-      />
-      {isMarried(sheet) && (
-        <FiduciaryBlock
-          {...props}
-          role="executor"
-          slotField="spouse_executor_slots"
-          sectionTitle="Spouse / Partner Personal Representative"
-          sameAsTrustee={sheet.spouse_executor_same_as_trustee}
-          sameAsTrusteeLabel="Same as Spouse's Trustees"
-          onSameAsTrusteeToggle={() => {
-            const next = !sheet.spouse_executor_same_as_trustee
-            onChange('spouse_executor_same_as_trustee', next)
-            if (next) onChange('spouse_executor_slots', cloneSlots(spouseTrusteeSource) as DesignSheet['spouse_executor_slots'])
-          }}
-          primaryShortcutContact={clientContact}
-          primaryShortcutLabel="Client as spouse / partner personal representative"
-        />
-      )}
-      {hasMinors && (
-        <>
-          <FiduciaryBlock {...props} role="guardian" spouseOptionLabel="Spouse as guardian" />
-          <FiduciaryBlock {...props} role="temporary_guardian" spouseOptionLabel="Spouse as temporary guardian" />
-          <ExcludedGuardians sheet={sheet} onChange={onChange} />
-        </>
-      )}
+      <SectionHelp>The Pour-Over Will works with the trust. Configure will-specific provisions here; nominate fiduciaries under Fiduciaries &amp; Additional Contacts.</SectionHelp>
+      {hasMinors && <ExcludedGuardians sheet={sheet} onChange={onChange} />}
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="will" />
     </div>
   )
 }
 
 export function DpoaDocumentSection(props: DocumentSectionProps) {
-  const { sheet, onChange, contacts, matter } = props
-  const clientContact = findClientContact(contacts, matter, sheet)
-  // Separate trusts give the spouse their own trustee slots; joint trusts share a
-  // single set of trustees. Only fall back to trustee_slots for joint trusts —
-  // for a separate trust, never substitute the client's trustees for the spouse's.
-  const spouseTrusteeSource = sheet.is_joint === false ? sheet.spouse_trustee_slots : sheet.trustee_slots
+  const { sheet, onChange } = props
 
   return (
     <div>
-      <SectionHelp>Select the agent(s) who will manage financial affairs if the client becomes incapacitated.</SectionHelp>
-      <FiduciaryBlock
-        {...props}
-        role="poa"
-        sameAsTrustee={sheet.poa_same_as_trustee}
-        onSameAsTrusteeToggle={() => {
-          const next = !sheet.poa_same_as_trustee
-          onChange('poa_same_as_trustee', next)
-          if (next) onChange('poa_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['poa_slots'])
-        }}
-        spouseOptionLabel="Spouse as DPOA agent"
-      />
-      {isMarried(sheet) && (
-        <FiduciaryBlock
-          {...props}
-          role="poa"
-          slotField="spouse_poa_slots"
-          sectionTitle="Spouse / Partner Durable Power of Attorney"
-          sameAsTrustee={sheet.spouse_poa_same_as_trustee}
-          sameAsTrusteeLabel="Same as Spouse's Trustees"
-          onSameAsTrusteeToggle={() => {
-            const next = !sheet.spouse_poa_same_as_trustee
-            onChange('spouse_poa_same_as_trustee', next)
-            if (next) onChange('spouse_poa_slots', cloneSlots(spouseTrusteeSource) as DesignSheet['spouse_poa_slots'])
-          }}
-          primaryShortcutContact={clientContact}
-          primaryShortcutLabel="Client as spouse / partner DPOA agent"
-        />
-      )}
+      <SectionHelp>Select financial POA provisions. Agent nominations live under Fiduciaries &amp; Additional Contacts.</SectionHelp>
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="dpoa" />
     </div>
   )
 }
 
 export function HealthCareDocumentSection(props: DocumentSectionProps) {
-  const { sheet, onChange, contacts, matter } = props
-  const clientContact = findClientContact(contacts, matter, sheet)
+  const { sheet, onChange } = props
 
   return (
     <div>
-      <SectionHelp>Name the health care proxy and make end-of-life elections under MA law.</SectionHelp>
-      <FiduciaryBlock
-        {...props}
-        role="hcp"
-        spouseOptionLabel="Spouse as health care agent"
-      />
-      {isMarried(sheet) && (
-        <FiduciaryBlock
-          {...props}
-          role="hcp"
-          slotField="spouse_hcp_slots"
-          sectionTitle="Spouse / Partner Health Care Proxy"
-          primaryShortcutContact={clientContact}
-          primaryShortcutLabel="Client as spouse / partner health care agent"
-        />
-      )}
+      <SectionHelp>Make end-of-life elections under MA law. Health care agents are nominated under Fiduciaries &amp; Additional Contacts.</SectionHelp>
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="healthcare" />
       <SectionBlock title="Advance Health Directive">
         <ClientDecisionCallout>

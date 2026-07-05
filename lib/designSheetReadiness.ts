@@ -1,6 +1,7 @@
 import { getDocumentInclusions, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
+import { DESIGN_SECTION_IDS, normalizeDesignSectionId } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
 export type DesignReadinessStatus = 'none' | 'complete' | 'attention' | 'override'
@@ -44,17 +45,30 @@ export interface DesignSheetReadiness {
 }
 
 export const DESIGN_SECTION_LABELS: Record<string, string> = {
-  'intake-review': 'Intake Review',
-  'goals-notes': 'Goals & Notes',
-  'plan-design': 'Plan Design',
-  trust: 'Trust',
-  will: 'Will',
-  dpoa: 'Durable Power of Attorney',
-  healthcare: 'Health Care Documents',
-  deed: 'Deed',
-  personal: 'Personal',
-  family: 'Family',
-  assets: 'Assets',
+  [DESIGN_SECTION_IDS.intakeReview]: 'Intake Review',
+  [DESIGN_SECTION_IDS.clientInformation]: 'Client Information',
+  [DESIGN_SECTION_IDS.familyInformation]: 'Family Information',
+  [DESIGN_SECTION_IDS.fiduciaries]: 'Fiduciaries & Additional Contacts',
+  [DESIGN_SECTION_IDS.estatePlanDesign]: 'Estate Plan Design',
+  [DESIGN_SECTION_IDS.trustDetails]: 'Trust Details',
+  [DESIGN_SECTION_IDS.trustDetailsSpouse]: 'Trust Details for Spouse',
+  [DESIGN_SECTION_IDS.willDetails]: 'Will Details',
+  [DESIGN_SECTION_IDS.financialPoa]: 'Financial Power of Attorney',
+  [DESIGN_SECTION_IDS.healthcareDirectives]: 'Health Care & Directives',
+  [DESIGN_SECTION_IDS.assetSchedules]: 'Asset Schedules',
+  [DESIGN_SECTION_IDS.transfersAssignments]: 'Transfers & Assignments',
+  [DESIGN_SECTION_IDS.attorneyNotes]: 'Attorney Notes',
+  // Legacy ids (deep links / preflight)
+  'goals-notes': 'Attorney Notes',
+  'plan-design': 'Estate Plan Design',
+  trust: 'Trust Details',
+  will: 'Will Details',
+  dpoa: 'Financial Power of Attorney',
+  healthcare: 'Health Care & Directives',
+  deed: 'Transfers & Assignments',
+  personal: 'Client Information',
+  family: 'Family Information',
+  assets: 'Asset Schedules',
   'office-use': 'Office Use',
   'residuary-estate': 'Residuary Estate',
 }
@@ -67,8 +81,9 @@ export function designFieldTargetId(field: string) {
 export function parseDesignFocusParam(raw: string | null | undefined): { sectionId: string; targetField: string | null } | null {
   if (!raw?.trim()) return null
   const colon = raw.indexOf(':')
-  const sectionId = (colon === -1 ? raw : raw.slice(0, colon)).trim()
-  if (!sectionId) return null
+  const sectionIdRaw = (colon === -1 ? raw : raw.slice(0, colon)).trim()
+  if (!sectionIdRaw) return null
+  const sectionId = normalizeDesignSectionId(sectionIdRaw) ?? sectionIdRaw
   const targetField = colon === -1 ? null : (raw.slice(colon + 1).trim() || null)
   return { sectionId, targetField }
 }
@@ -101,10 +116,11 @@ function blocker(
   targetField: string | null,
   category: DesignReadinessBlockerCategory = 'required',
 ): DesignReadinessBlocker {
+  const normalizedSectionId = normalizeDesignSectionId(sectionId) ?? sectionId
   return {
-    id: `${sectionId}:${targetField ?? label}`,
-    sectionId,
-    sectionLabel: DESIGN_SECTION_LABELS[sectionId] ?? sectionId,
+    id: `${normalizedSectionId}:${targetField ?? label}`,
+    sectionId: normalizedSectionId,
+    sectionLabel: DESIGN_SECTION_LABELS[normalizedSectionId] ?? DESIGN_SECTION_LABELS[sectionId] ?? sectionId,
     label,
     targetField,
     targetId: targetField ? designFieldTargetId(targetField) : sectionTargetId(sectionId),
@@ -163,74 +179,80 @@ export function computeDesignSheetReadiness({
   const spouseHcpPrimary = primaryContactId(sheet.spouse_hcp_slots)
 
   const planBlockers = [
-    !normalizedPlanType && blocker('plan-design', 'plan type', 'plan_type'),
+    !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
     Object.entries(documentInclusions).filter(([key, value]) => key !== 'spouse_docs' && value).length === 0 &&
-      blocker('plan-design', 'at least one document', null),
+      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'at least one document', null),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
-  const personalBlockers = [
-    !hasText(sheet.client_name) && blocker('personal', 'client name', 'client_name'),
-    !hasText(sheet.client_dob) && blocker('personal', 'date of birth', 'client_dob'),
-    !hasText(sheet.client_email) && blocker('personal', 'email', 'client_email'),
-    !hasText(sheet.marital_status) && blocker('personal', 'marital status', 'marital_status'),
-    !hasText(sheet.state) && blocker('personal', 'state', 'state'),
+  const clientBlockers = [
+    !hasText(sheet.client_name) && blocker(DESIGN_SECTION_IDS.clientInformation, 'client name', 'client_name'),
+    !hasText(sheet.client_dob) && blocker(DESIGN_SECTION_IDS.clientInformation, 'date of birth', 'client_dob'),
+    !hasText(sheet.client_email) && blocker(DESIGN_SECTION_IDS.clientInformation, 'email', 'client_email'),
+    !hasText(sheet.marital_status) && blocker(DESIGN_SECTION_IDS.clientInformation, 'marital status', 'marital_status'),
+    !hasText(sheet.state) && blocker(DESIGN_SECTION_IDS.clientInformation, 'state', 'state'),
+    married && !hasText(sheet.spouse_name) && blocker(DESIGN_SECTION_IDS.clientInformation, 'spouse name', 'spouse_name'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const familyBlockers = [
-    married && !hasText(sheet.spouse_name) && blocker('family', 'spouse name', 'spouse_name'),
     (hasMinorChildren || matter.has_minor_children) && (sheet.children?.length ?? 0) === 0 &&
-      blocker('family', 'children', 'children'),
+      blocker(DESIGN_SECTION_IDS.familyInformation, 'children', 'children'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
-  const trustBlockers = [
-    documentInclusions.trust && !trusteePrimary && blocker('trust', 'trustee', 'trustee_slots'),
+  const fiduciaryBlockers = [
+    documentInclusions.trust && !trusteePrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'trustee', 'trustee_slots'),
     documentInclusions.trust && spouseFiduciariesNeeded && sheet.is_joint === false && !spouseTrusteePrimary &&
-      blocker('trust', 'spouse trustee', 'spouse_trustee_slots'),
-    documentInclusions.trust && !hasText(sheet.trust_name) && blocker('trust', 'trust name', 'trust_name'),
+      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse trustee', 'spouse_trustee_slots'),
+    documentInclusions.will && !executorPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'personal representative', 'executor_slots'),
+    documentInclusions.will && spouseFiduciariesNeeded && !spouseExecutorPrimary &&
+      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse personal representative', 'spouse_executor_slots'),
+    documentInclusions.will && hasMinorChildren && !guardianPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'guardian', 'guardian_slots'),
+    documentInclusions.dpoa && !poaPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'power of attorney agent', 'poa_slots'),
+    documentInclusions.dpoa && spouseFiduciariesNeeded && !spousePoaPrimary &&
+      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse power of attorney agent', 'spouse_poa_slots'),
+    documentInclusions.healthcare && !hcpPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'health care proxy', 'hcp_slots'),
+    documentInclusions.healthcare && spouseFiduciariesNeeded && !spouseHcpPrimary &&
+      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse health care proxy', 'spouse_hcp_slots'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
-  const willBlockers = [
-    documentInclusions.will && !executorPrimary && blocker('will', 'personal representative', 'executor_slots'),
-    documentInclusions.will && spouseFiduciariesNeeded && !spouseExecutorPrimary &&
-      blocker('will', 'spouse personal representative', 'spouse_executor_slots'),
-    documentInclusions.will && hasMinorChildren && !guardianPrimary && blocker('will', 'guardian', 'guardian_slots'),
+  const clientTrustBlockers = [
+    documentInclusions.trust && !hasText(sheet.trust_name) && blocker(DESIGN_SECTION_IDS.trustDetails, 'trust name', 'trust_name'),
   ].filter(Boolean) as DesignReadinessBlocker[]
+
+  const spouseTrustBlockers = [
+    documentInclusions.trust && married && sheet.is_joint === false && !hasText(sheet.spouse_trust_name) &&
+      blocker(DESIGN_SECTION_IDS.trustDetailsSpouse, 'spouse trust name', 'spouse_trust_name'),
+  ].filter(Boolean) as DesignReadinessBlocker[]
+
+  const willBlockers = [] as DesignReadinessBlocker[]
 
   const dpoaBlockers = [
-    documentInclusions.dpoa && !poaPrimary && blocker('dpoa', 'power of attorney agent', 'poa_slots'),
-    documentInclusions.dpoa && spouseFiduciariesNeeded && !spousePoaPrimary &&
-      blocker('dpoa', 'spouse power of attorney agent', 'spouse_poa_slots'),
     documentInclusions.dpoa && !hasText(sheet.dpoa_self_dealing_reviewer) &&
-      blocker('dpoa', 'self-dealing reviewer', 'dpoa_self_dealing_reviewer', 'client-decision'),
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'self-dealing reviewer', 'dpoa_self_dealing_reviewer', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const healthcareBlockers = [
-    documentInclusions.healthcare && !hcpPrimary && blocker('healthcare', 'health care proxy', 'hcp_slots'),
-    documentInclusions.healthcare && spouseFiduciariesNeeded && !spouseHcpPrimary &&
-      blocker('healthcare', 'spouse health care proxy', 'spouse_hcp_slots'),
     documentInclusions.healthcare && !hasText(sheet.hcp_anatomical_gift) &&
-      blocker('healthcare', 'anatomical gift election', 'hcp_anatomical_gift', 'client-decision'),
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'anatomical gift election', 'hcp_anatomical_gift', 'client-decision'),
     documentInclusions.healthcare && sheet.hcp_anatomical_gift === 'specified' && !hasText(sheet.hcp_anatomical_specified) &&
-      blocker('healthcare', 'specified anatomical gift details', 'hcp_anatomical_specified', 'client-decision'),
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'specified anatomical gift details', 'hcp_anatomical_specified', 'client-decision'),
     documentInclusions.healthcare && !hasText(sheet.hipaa_psychotherapy_notes) &&
-      blocker('healthcare', 'psychotherapy notes election', 'hipaa_psychotherapy_notes', 'client-decision'),
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'psychotherapy notes election', 'hipaa_psychotherapy_notes', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const lpSpecific = lpData?.li_design_sheet_data ?? {}
-  // Residuary now lives inside the Will section, so its blockers point at 'will'.
   const residuaryBlockers = isLP ? [
-    !hasText(lpSpecific.residuary_spouse_survives) && blocker('will', 'if spouse survives', 'residuary_spouse_survives'),
-    !hasText(lpSpecific.residuary_no_spouse) && blocker('will', 'if no spouse survives', 'residuary_no_spouse'),
+    !hasText(lpSpecific.residuary_spouse_survives) && blocker(DESIGN_SECTION_IDS.willDetails, 'if spouse survives', 'residuary_spouse_survives'),
+    !hasText(lpSpecific.residuary_no_spouse) && blocker(DESIGN_SECTION_IDS.willDetails, 'if no spouse survives', 'residuary_no_spouse'),
   ].filter(Boolean) as DesignReadinessBlocker[] : []
 
   const assetList = Array.isArray(sheet.assets) ? sheet.assets : []
   const assetsFilled = assetList.some(asset => hasText(asset.description) || asset.estimated_value != null)
   const sectionSummaries: Record<string, DesignSectionSummary> = {
-    'goals-notes': [sheet.goals_notes, sheet.concerns].some(hasText)
+    [DESIGN_SECTION_IDS.attorneyNotes]: [sheet.goals_notes, sheet.concerns].some(hasText)
       ? summaryFromBlockers([], 'ready', countOverrides(sheet, ['goals_notes', 'concerns']))
       : { status: 'none', detail: 'add notes' },
-    'plan-design': summaryFromBlockers(planBlockers, 'ready', countOverrides(sheet, ['plan_type'])),
-    personal: summaryFromBlockers(personalBlockers, 'complete', countOverrides(sheet, [
+    [DESIGN_SECTION_IDS.estatePlanDesign]: summaryFromBlockers(planBlockers, 'ready', countOverrides(sheet, ['plan_type'])),
+    [DESIGN_SECTION_IDS.clientInformation]: summaryFromBlockers(clientBlockers, 'complete', countOverrides(sheet, [
       'client_name',
       'client_dob',
       'client_phone',
@@ -243,49 +265,48 @@ export function computeDesignSheetReadiness({
       'county',
       'client_citizenship',
       'client_domicile',
-    ])),
-    family: summaryFromBlockers(familyBlockers, 'complete', countOverrides(sheet, [
       'spouse_name',
       'spouse_dob',
       'spouse_phone',
       'spouse_email',
       'spouse_citizenship',
       'marriage_date',
-      'children',
     ])),
-    trust: !documentInclusions.trust
+    [DESIGN_SECTION_IDS.familyInformation]: summaryFromBlockers(familyBlockers, 'complete', countOverrides(sheet, ['children'])),
+    [DESIGN_SECTION_IDS.fiduciaries]: summaryFromBlockers(fiduciaryBlockers, 'ready'),
+    [DESIGN_SECTION_IDS.trustDetails]: !documentInclusions.trust
       ? { status: 'none', detail: 'not included' }
-      : summaryFromBlockers(trustBlockers, 'ready', countOverrides(sheet, [
+      : summaryFromBlockers(clientTrustBlockers, 'ready', countOverrides(sheet, [
         'trust_name',
-        'spouse_trust_name',
         'restatement',
         'trust_protector',
       ])),
-    will: !documentInclusions.will
+    [DESIGN_SECTION_IDS.trustDetailsSpouse]: !documentInclusions.trust || !(married && sheet.is_joint === false)
+      ? { status: 'none', detail: 'not included' }
+      : summaryFromBlockers(spouseTrustBlockers, 'ready', countOverrides(sheet, ['spouse_trust_name'])),
+    [DESIGN_SECTION_IDS.willDetails]: !documentInclusions.will
       ? { status: 'none', detail: 'not included' }
       : summaryFromBlockers([...willBlockers, ...residuaryBlockers], 'ready'),
-    dpoa: !documentInclusions.dpoa
+    [DESIGN_SECTION_IDS.financialPoa]: !documentInclusions.dpoa
       ? { status: 'none', detail: 'not included' }
       : summaryFromBlockers(dpoaBlockers, 'ready'),
-    healthcare: !documentInclusions.healthcare
+    [DESIGN_SECTION_IDS.healthcareDirectives]: !documentInclusions.healthcare
       ? { status: 'none', detail: 'not included' }
       : summaryFromBlockers(healthcareBlockers, 'ready'),
-    deed: !documentInclusions.deed
-      ? { status: 'none', detail: 'not included' }
-      : { status: 'complete', detail: 'tracked' },
-    assets: optionalSummary(assetsFilled, `${assetList.length} asset${assetList.length === 1 ? '' : 's'}`),
-    'office-use': { status: 'complete', detail: 'reference' },
+    [DESIGN_SECTION_IDS.assetSchedules]: optionalSummary(assetsFilled, `${assetList.length} asset${assetList.length === 1 ? '' : 's'}`),
   }
 
+  const separateTrustSection = married && sheet.is_joint === false && documentInclusions.trust
   const requiredIds = [
-    'plan-design',
-    'personal',
-    'family',
-    ...(documentInclusions.trust ? ['trust'] : []),
-    ...(documentInclusions.will ? ['will'] : []),
-    ...(documentInclusions.dpoa ? ['dpoa'] : []),
-    ...(documentInclusions.healthcare ? ['healthcare'] : []),
-    ...(documentInclusions.deed ? ['deed'] : []),
+    DESIGN_SECTION_IDS.estatePlanDesign,
+    DESIGN_SECTION_IDS.clientInformation,
+    DESIGN_SECTION_IDS.familyInformation,
+    DESIGN_SECTION_IDS.fiduciaries,
+    ...(documentInclusions.trust ? [DESIGN_SECTION_IDS.trustDetails] : []),
+    ...(separateTrustSection ? [DESIGN_SECTION_IDS.trustDetailsSpouse] : []),
+    ...(documentInclusions.will ? [DESIGN_SECTION_IDS.willDetails] : []),
+    ...(documentInclusions.dpoa ? [DESIGN_SECTION_IDS.financialPoa] : []),
+    ...(documentInclusions.healthcare ? [DESIGN_SECTION_IDS.healthcareDirectives] : []),
   ]
 
   const blockers = requiredIds.flatMap(id => sectionSummaries[id]?.blockers ?? [])

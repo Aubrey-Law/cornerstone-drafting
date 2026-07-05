@@ -16,13 +16,20 @@ import {
   SectionBlock,
   type SectionProps,
 } from './shared'
-import type { DesignSheetChild } from '@/types/database'
+import type { DesignSheetChild, MatterContact } from '@/types/database'
+import { OtherBeneficiariesSection } from './OtherBeneficiariesSection'
 
 function newChild(): DesignSheetChild {
   return { name: '', dob: null, relationship: 'biological', is_minor: false }
 }
 
-export function FamilySection({ sheet, onChange }: SectionProps) {
+interface FamilySectionProps extends SectionProps {
+  contacts?: MatterContact[]
+  onAddContact?: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+}
+
+export function FamilySection({ sheet, onChange, contacts = [], onAddContact, onUpdateContact }: FamilySectionProps) {
   const children = sheet.children ?? []
   const original = (field: string) => sheet.overrides?.[field]?.original
   const marital = (sheet.marital_status ?? '').toLowerCase()
@@ -56,52 +63,6 @@ export function FamilySection({ sheet, onChange }: SectionProps) {
       <AttorneyNoteBanner>
         Family information was pre-filled from the client intake. Review and update as needed.
       </AttorneyNoteBanner>
-
-      <SectionBlock title="Spouse / Partner" subtitle="Co-Grantor">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <PrefilledInput fieldName="spouse_name" label="Full Legal Name" value={sheet.spouse_name ?? ''} originalValue={original('spouse_name')} onChange={v => onChange('spouse_name', v)} />
-          <AttorneyInput
-            label="Also Known As (AKA)"
-            value={sheet.spouse_aka ?? ''}
-            placeholder="Other names used (used in Wills)"
-            onChange={v => onChange('spouse_aka', v || null)}
-          />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-          <div>
-            <PrefilledInput label="Date of Birth" value={sheet.spouse_dob ?? ''} originalValue={original('spouse_dob')} onChange={v => onChange('spouse_dob', v)} />
-            <DobAgeHint dob={sheet.spouse_dob} />
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-          <PrefilledInput label="Phone" type="tel" value={sheet.spouse_phone ?? ''} originalValue={original('spouse_phone')} onChange={v => onChange('spouse_phone', v)} />
-          <PrefilledInput label="Email" value={sheet.spouse_email ?? ''} originalValue={original('spouse_email')} onChange={v => onChange('spouse_email', v)} />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-          <PrefilledSelect
-            fieldName="spouse_pronouns"
-            label="Pronouns"
-            value={sheet.spouse_pronouns ?? ''}
-            originalValue={original('spouse_pronouns')}
-            options={PRONOUN_OPTIONS}
-            onChange={v => onChange('spouse_pronouns', v || null)}
-          />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-          <PrefilledSelect
-            label="Citizenship"
-            value={sheet.spouse_citizenship || 'US Citizen'}
-            originalValue={original('spouse_citizenship')}
-            options={[
-              { value: 'US Citizen', label: 'US Citizen' },
-              { value: 'Permanent Resident', label: 'Permanent Resident' },
-              { value: 'Non-Resident Alien', label: 'Non-Resident Alien' },
-            ]}
-            onChange={v => onChange('spouse_citizenship', v)}
-          />
-          <PrefilledInput label="Date of Marriage" value={sheet.marriage_date ?? ''} originalValue={original('marriage_date')} onChange={v => onChange('marriage_date', v)} />
-        </div>
-      </SectionBlock>
 
       <div id="design-field-children" tabIndex={-1}>
         <SectionBlock title="Children">
@@ -203,6 +164,14 @@ export function FamilySection({ sheet, onChange }: SectionProps) {
           })}
         </SectionBlock>
       </div>
+
+      <OtherBeneficiariesSection
+        sheet={sheet}
+        onChange={onChange}
+        contacts={contacts}
+        onAddContact={onAddContact}
+        onUpdateContact={onUpdateContact}
+      />
     </div>
   )
 }

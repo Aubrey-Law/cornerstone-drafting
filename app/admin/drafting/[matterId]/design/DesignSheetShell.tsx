@@ -171,8 +171,8 @@ export default function DesignSheetShell({
   const activeIndex = activeSection ? visibleSections.findIndex(section => section.id === activeSection.id) : -1
 
   const summarySections = useMemo(
-    () => buildSummarySectionItems(summaries, documentInclusions, intakeSnapshot),
-    [documentInclusions, intakeSnapshot, summaries],
+    () => buildSummarySectionItems(summaries, documentInclusions, intakeSnapshot, sheet, matter),
+    [documentInclusions, intakeSnapshot, matter, sheet, summaries],
   )
 
   const trustName = lastName

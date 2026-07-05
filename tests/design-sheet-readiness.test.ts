@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
+import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
 function makeMatter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
@@ -210,21 +211,21 @@ describe('computeDesignSheetReadiness', () => {
     expect(readiness.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sectionId: 'dpoa',
+          sectionId: DESIGN_SECTION_IDS.financialPoa,
           label: 'self-dealing reviewer',
           targetField: 'dpoa_self_dealing_reviewer',
           targetId: 'design-field-dpoa_self_dealing_reviewer',
           category: 'client-decision',
         }),
         expect.objectContaining({
-          sectionId: 'healthcare',
+          sectionId: DESIGN_SECTION_IDS.healthcareDirectives,
           label: 'anatomical gift election',
           targetField: 'hcp_anatomical_gift',
           targetId: 'design-field-hcp_anatomical_gift',
           category: 'client-decision',
         }),
         expect.objectContaining({
-          sectionId: 'healthcare',
+          sectionId: DESIGN_SECTION_IDS.healthcareDirectives,
           label: 'psychotherapy notes election',
           targetField: 'hipaa_psychotherapy_notes',
           targetId: 'design-field-hipaa_psychotherapy_notes',
@@ -245,13 +246,13 @@ describe('computeDesignSheetReadiness', () => {
     expect(readiness.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sectionId: 'personal',
+          sectionId: DESIGN_SECTION_IDS.clientInformation,
           label: 'email',
           targetField: 'client_email',
           targetId: 'design-field-client_email',
         }),
         expect.objectContaining({
-          sectionId: 'trust',
+          sectionId: DESIGN_SECTION_IDS.trustDetails,
           label: 'trust name',
           targetField: 'trust_name',
           targetId: 'design-field-trust_name',
@@ -288,7 +289,7 @@ describe('computeDesignSheetReadiness', () => {
     expect(readiness.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sectionId: 'will',
+          sectionId: DESIGN_SECTION_IDS.fiduciaries,
           label: 'guardian',
           targetField: 'guardian_slots',
         }),
@@ -368,14 +369,14 @@ describe('design sheet readiness UI wiring', () => {
 describe('parseDesignFocusParam', () => {
   it('parses section and field from drafting Fix links', () => {
     expect(parseDesignFocusParam('personal:county')).toEqual({
-      sectionId: 'personal',
+      sectionId: DESIGN_SECTION_IDS.clientInformation,
       targetField: 'county',
     })
   })
 
   it('parses section-only focus when target field is blank', () => {
     expect(parseDesignFocusParam('trust:')).toEqual({
-      sectionId: 'trust',
+      sectionId: DESIGN_SECTION_IDS.trustDetails,
       targetField: null,
     })
   })

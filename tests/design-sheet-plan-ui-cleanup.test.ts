@@ -30,8 +30,8 @@ describe('design sheet plan-specific UI cleanup', () => {
       'utf8',
     )
     const trustSection = source.slice(
+      source.indexOf('export function TrustDetailsSection'),
       source.indexOf('export function TrustDocumentSection'),
-      source.indexOf('export function WillDocumentSection'),
     )
 
     expect(trustSection).toContain('<SectionBlock title="Residuary Distribution">')

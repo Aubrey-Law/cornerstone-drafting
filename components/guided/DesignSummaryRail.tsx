@@ -4,6 +4,7 @@ import { Check } from 'lucide-react'
 import type { DesignReadinessBlocker } from '@/lib/designSheetReadiness'
 import type { DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { DESIGN_DOCUMENT_LABELS, type DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
+import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import { FlagPill } from './FlagPill'
 import {
   guidedCardStyle,
@@ -228,7 +229,7 @@ export function DesignSummaryRail({
               <li key={row.key}>
                 <button
                   type="button"
-                  onClick={() => onSectionClick(row.key === 'trust' ? 'plan-design' : row.key)}
+                  onClick={() => onSectionClick(row.key === 'trust' ? DESIGN_SECTION_IDS.estatePlanDesign : row.key)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

@@ -1,56 +1,72 @@
 import type { DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import type { IntakeSnapshot } from '@/lib/queries'
+import {
+  DESIGN_SECTION_IDS,
+  normalizeDesignSectionId,
+  spouseTrustSectionLabel,
+} from '@/lib/designSheet/sectionIds'
 
 export interface DesignSectionNavItem {
   id: string
   label: string
 }
 
+function isMarried(maritalStatus: string | null | undefined): boolean {
+  const marital = (maritalStatus ?? '').toLowerCase()
+  return marital.includes('married') && !marital.includes('never')
+}
+
 export function getDesignSectionNavItems(args: {
   intakeSnapshot: IntakeSnapshot | null
   documentInclusions: DesignDocumentInclusions
+  maritalStatus?: string | null
+  spouseName?: string | null
+  isJointTrust?: boolean | null
 }): DesignSectionNavItem[] {
-  const { intakeSnapshot, documentInclusions } = args
+  const { intakeSnapshot, documentInclusions, maritalStatus, spouseName, isJointTrust } = args
+  const married = isMarried(maritalStatus)
+  const separateTrusts = married && isJointTrust === false
   const items: DesignSectionNavItem[] = []
 
   if (intakeSnapshot) {
-    items.push({ id: 'intake-review', label: 'Intake Review' })
+    items.push({ id: DESIGN_SECTION_IDS.intakeReview, label: 'Intake Review' })
   }
 
   items.push(
-    { id: 'plan-design', label: 'Document Selection' },
-    { id: 'personal', label: 'Family Information' },
-    { id: 'family', label: 'Children & Guardians' },
+    { id: DESIGN_SECTION_IDS.clientInformation, label: 'Client Information' },
+    { id: DESIGN_SECTION_IDS.familyInformation, label: 'Family Information' },
+    { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Fiduciaries & Additional Contacts' },
+    { id: DESIGN_SECTION_IDS.estatePlanDesign, label: 'Estate Plan Design' },
   )
 
   if (documentInclusions.trust) {
-    items.push({ id: 'trust', label: 'Living Trust Details' })
+    items.push({ id: DESIGN_SECTION_IDS.trustDetails, label: 'Trust Details' })
+    if (separateTrusts) {
+      items.push({
+        id: DESIGN_SECTION_IDS.trustDetailsSpouse,
+        label: spouseTrustSectionLabel(spouseName),
+      })
+    }
   }
 
-  items.push({ id: 'assets', label: 'Asset Schedules' })
+  if (documentInclusions.will) {
+    items.push({ id: DESIGN_SECTION_IDS.willDetails, label: 'Will Details' })
+  }
 
   if (documentInclusions.dpoa) {
-    items.push({ id: 'dpoa', label: 'Powers of Attorney' })
+    items.push({ id: DESIGN_SECTION_IDS.financialPoa, label: 'Financial Power of Attorney' })
   }
 
   if (documentInclusions.healthcare) {
-    items.push({ id: 'healthcare', label: 'Health Care & Directives' })
+    items.push({ id: DESIGN_SECTION_IDS.healthcareDirectives, label: 'Health Care & Directives' })
   }
 
-  items.push({ id: 'dementia-directive', label: 'Dementia Directive' })
-
-  if (documentInclusions.will) {
-    items.push({ id: 'will', label: 'Executors & Will' })
+  if (documentInclusions.trust) {
+    items.push({ id: DESIGN_SECTION_IDS.assetSchedules, label: 'Asset Schedules' })
+    items.push({ id: DESIGN_SECTION_IDS.transfersAssignments, label: 'Transfers & Assignments' })
   }
 
-  if (documentInclusions.deed) {
-    items.push({ id: 'deed', label: 'Deeds' })
-  }
-
-  items.push(
-    { id: 'transfers-assignments', label: 'Transfers & Assignments' },
-    { id: 'goals-notes', label: 'Attorney Notes' },
-  )
+  items.push({ id: DESIGN_SECTION_IDS.attorneyNotes, label: 'Attorney Notes' })
 
   return items
 }
@@ -59,5 +75,15 @@ export function isValidDesignSectionId(
   sectionId: string,
   items: DesignSectionNavItem[],
 ): boolean {
-  return items.some(item => item.id === sectionId)
+  const normalized = normalizeDesignSectionId(sectionId) ?? sectionId
+  return items.some(item => item.id === normalized)
+}
+
+export function resolveNavSectionId(
+  sectionId: string | null | undefined,
+  items: DesignSectionNavItem[],
+): string | null {
+  const normalized = normalizeDesignSectionId(sectionId)
+  if (!normalized || normalized === 'overview') return null
+  return items.some(item => item.id === normalized) ? normalized : items[0]?.id ?? null
 }

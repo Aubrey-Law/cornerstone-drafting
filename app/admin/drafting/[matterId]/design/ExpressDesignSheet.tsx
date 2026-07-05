@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { DollarSign, FileText, Heart, HeartPulse, Hop as Home, Landmark, Lightbulb, ScrollText, Shield, Target, User, Scale } from 'lucide-react'
+import { DollarSign, FileText, Heart, HeartPulse, Landmark, Lightbulb, ScrollText, Shield, Target, User, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import '@/app/intake/guided.css'
 import {
@@ -19,17 +19,8 @@ import { designPlanTypeLabel, designPlanTypeIncludesTrust } from '@/lib/designPl
 import type { DesignDocumentInclusions, DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
 import { useDesignSheetState, type LpData } from '@/lib/designSheet/useDesignSheetState'
 import { DesignValidationProvider, AccordionBadge } from './sections/shared'
-import { PersonalSection } from './sections/PersonalSection'
-import { FamilySection } from './sections/FamilySection'
-import { PlanDesignSection } from './sections/PlanDesignSection'
-import { AssetsSection } from './sections/AssetsSection'
-import { GoalsSection } from './sections/GoalsSection'
-import { ResiduarySection } from './sections/ResiduarySection'
-import {
-  DeedDocumentSection, DpoaDocumentSection, HealthCareDocumentSection,
-  TrustDocumentSection, WillDocumentSection,
-} from './sections/DocumentSections'
-import { IntakeSection } from './sections/IntakeSection'
+import { buildDesignSectionDefs } from './designSectionCatalog'
+import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 
@@ -86,77 +77,61 @@ export default function ExpressDesignSheet({
   } = s
 
   const [importDialogOpen, setImportDialogOpen] = useState(false)
-  const [activeSection, setActiveSection] = useState<string>('plan-design')
+  const [activeSection, setActiveSection] = useState<string>(DESIGN_SECTION_IDS.estatePlanDesign)
   const sectionEls = useRef<Record<string, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const clientDisplayName = [matter.client_name, matter.spouse_name].filter(Boolean).join(' & ') || 'Unnamed client'
 
-  // ── Section definitions (single source for rail + body) ──────────────────────
+  const selectedDocKeysCount = (Object.keys(documentInclusions) as Array<keyof DesignDocumentInclusions>)
+    .filter((k): k is DesignDocumentKey => k !== 'spouse_docs' && documentInclusions[k]).length
+
+  const sectionIcons: Record<string, React.ElementType> = {
+    [DESIGN_SECTION_IDS.intakeReview]: FileText,
+    [DESIGN_SECTION_IDS.clientInformation]: User,
+    [DESIGN_SECTION_IDS.familyInformation]: Heart,
+    [DESIGN_SECTION_IDS.fiduciaries]: Users,
+    [DESIGN_SECTION_IDS.estatePlanDesign]: Lightbulb,
+    [DESIGN_SECTION_IDS.trustDetails]: Landmark,
+    [DESIGN_SECTION_IDS.trustDetailsSpouse]: Landmark,
+    [DESIGN_SECTION_IDS.willDetails]: ScrollText,
+    [DESIGN_SECTION_IDS.financialPoa]: Shield,
+    [DESIGN_SECTION_IDS.healthcareDirectives]: HeartPulse,
+    [DESIGN_SECTION_IDS.assetSchedules]: DollarSign,
+    [DESIGN_SECTION_IDS.transfersAssignments]: FileText,
+    [DESIGN_SECTION_IDS.attorneyNotes]: Target,
+  }
+
   const sections = useMemo<SectionDef[]>(() => {
-    const list: SectionDef[] = []
-    if (intakeSnapshot) {
-      list.push({
-        id: 'intake-review', label: 'Intake Review', icon: FileText,
-        badge: <Badge className="border-0 bg-muted text-[10px] font-medium text-muted-foreground">Read-only</Badge>,
-        render: () => <IntakeSection intake={intakeSnapshot} />,
-      })
-    }
-    list.push({ id: 'plan-design', label: 'Plan Design', icon: Lightbulb,
-      badge: <AccordionBadge variant={isLP ? 'lp' : 'core'}>{isLP ? 'EP-LP' : 'EP'}</AccordionBadge>,
-      render: () => <PlanDesignSection sheet={sheet} onChange={updateField} contacts={contactsState} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact}
-        isLP={isLP} planCoverage={(lpDataState?.li_plan_coverage as 'no_trust' | 'trust_included') ?? 'no_trust'} onPlanCoverageChange={handlePlanCoverageChange} /> })
-    list.push({ id: 'goals-notes', label: 'Goals & Notes', icon: Target,
-      render: () => <GoalsSection sheet={sheet} onChange={updateField} /> })
-    list.push({ id: 'personal', label: 'Personal', icon: User,
-      render: () => <PersonalSection sheet={sheet} onChange={updateField} /> })
-    list.push({ id: 'family', label: 'Family', icon: Heart,
-      render: () => <FamilySection sheet={sheet} onChange={updateField} /> })
-    list.push({ id: 'assets', label: 'Assets', icon: DollarSign,
-      render: () => <AssetsSection sheet={sheet} onChange={updateField} /> })
-    if (documentInclusions.trust) {
-      list.push({ id: 'trust', label: 'Trust', icon: Landmark, render: () => (
-        <TrustDocumentSection sheet={sheet} onChange={updateField} contacts={contactsState}
-          matter={matter} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} />
-      ) })
-    }
-    if (documentInclusions.will) {
-      list.push({ id: 'will', label: 'Will', icon: ScrollText, render: () => (
-        <>
-          <WillDocumentSection sheet={sheet} onChange={updateField} contacts={contactsState}
-            matter={matter} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} />
-          {isLP && (
-            <div className="mt-6 border-t border-border pt-6">
-              <div className="mb-4 flex items-center gap-2">
-                <Scale className="h-4 w-4 text-muted-foreground" />
-                <span className="text-[13px] font-semibold text-foreground">Residuary Estate</span>
-                <AccordionBadge variant="lp">LP</AccordionBadge>
-              </div>
-              <ResiduarySection lpData={lpDataState?.li_design_sheet_data ?? {}} onChange={updateLpPatch} />
-            </div>
-          )}
-        </>
-      ) })
-    }
-    if (documentInclusions.dpoa) {
-      list.push({ id: 'dpoa', label: 'Durable POA', icon: Shield, render: () => (
-        <DpoaDocumentSection sheet={sheet} onChange={updateField} contacts={contactsState}
-          matter={matter} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} />
-      ) })
-    }
-    if (documentInclusions.healthcare) {
-      list.push({ id: 'healthcare', label: 'Health Care', icon: HeartPulse, render: () => (
-        <HealthCareDocumentSection sheet={sheet} onChange={updateField} contacts={contactsState}
-          matter={matter} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} />
-      ) })
-    }
-    if (documentInclusions.deed) {
-      list.push({ id: 'deed', label: 'Deed', icon: Home,
-        render: () => <DeedDocumentSection sheet={sheet} onChange={updateField} /> })
-    }
-    return list
-  }, [intakeSnapshot, isLP, documentInclusions, sheet, updateField, contactsState, matter,
-      handleAddContact, handleUpdateContact, lpDataState, updateLpPatch, handlePlanCoverageChange])
+    const defs = buildDesignSectionDefs({
+      sheet,
+      matter,
+      contacts: contactsState,
+      intakeSnapshot,
+      isLP,
+      lpDataState,
+      documentInclusions,
+      selectedDocKeysCount,
+      updateField,
+      updateLpPatch,
+      handleAddContact,
+      handleUpdateContact,
+      handlePlanCoverageChange,
+    })
+
+    return defs.map(def => ({
+      id: def.id,
+      label: def.title,
+      icon: sectionIcons[def.id] ?? FileText,
+      badge: def.id === DESIGN_SECTION_IDS.intakeReview
+        ? <Badge className="border-0 bg-muted text-[10px] font-medium text-muted-foreground">Read-only</Badge>
+        : def.id === DESIGN_SECTION_IDS.estatePlanDesign
+          ? <AccordionBadge variant={isLP ? 'lp' : 'core'}>{isLP ? 'EP-LP' : 'EP'}</AccordionBadge>
+          : undefined,
+      render: def.render,
+    }))
+  }, [contactsState, documentInclusions, handleAddContact, handlePlanCoverageChange, handleUpdateContact,
+      intakeSnapshot, isLP, lpDataState, matter, selectedDocKeysCount, sheet, updateField, updateLpPatch])
 
   // ── Scroll-spy: highlight the section nearest the top of the scroll area ─────
   // Keyed on the section id set (not the section objects, which change on every
