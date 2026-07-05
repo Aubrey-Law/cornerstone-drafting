@@ -41,6 +41,7 @@ export interface DraftingHubDocument {
 
 export interface DraftingHubMatter {
   matter: PipelineMatter
+  matterNumber: string | null
   setupBlockers: string[]
   designSheet: {
     id: string
@@ -85,7 +86,10 @@ function inclusionLabels(inclusions: DesignDocumentInclusions | null) {
   return labels
 }
 
-export async function fetchDraftingHubMatters(): Promise<DraftingHubMatter[]> {
+export async function fetchDraftingHubMatters(): Promise<{
+  matters: DraftingHubMatter[]
+  error: string | null
+}> {
   const admin = getAdminClient()
   const { data: mattersRaw, error: mattersError } = await admin
     .from('v_matter_pipeline')
@@ -95,17 +99,18 @@ export async function fetchDraftingHubMatters(): Promise<DraftingHubMatter[]> {
 
   if (mattersError) {
     console.error('fetchDraftingHubMatters matters error:', mattersError)
-    return []
+    return { matters: [], error: mattersError.message }
   }
 
   const matters = ((mattersRaw ?? []) as PipelineMatter[]).map(normalizeFlags)
   const matterIds = matters.map(matter => matter.matter_id)
-  if (matterIds.length === 0) return []
+  if (matterIds.length === 0) return { matters: [], error: null }
 
   const [
     designSheetsRes,
     detailsRes,
     draftDocsRes,
+    matterNumbersRes,
   ] = await Promise.all([
     admin
       .from('design_sheets')
@@ -122,11 +127,16 @@ export async function fetchDraftingHubMatters(): Promise<DraftingHubMatter[]> {
       .in('matter_id', matterIds)
       .eq('folder', 'draft')
       .order('created_at', { ascending: false }),
+    admin
+      .from('matters')
+      .select('id, matter_number')
+      .in('id', matterIds),
   ])
 
   if (designSheetsRes.error) console.error('fetchDraftingHubMatters design sheets error:', designSheetsRes.error)
   if (detailsRes.error) console.error('fetchDraftingHubMatters matter details error:', detailsRes.error)
   if (draftDocsRes.error) console.error('fetchDraftingHubMatters draft docs error:', draftDocsRes.error)
+  if (matterNumbersRes.error) console.error('fetchDraftingHubMatters matter numbers error:', matterNumbersRes.error)
 
   const designSheets = (designSheetsRes.data ?? []) as DesignSheetSummaryRow[]
   const latestDesignByMatter = new Map<string, DesignSheetSummaryRow>()
@@ -159,6 +169,11 @@ export async function fetchDraftingHubMatters(): Promise<DraftingHubMatter[]> {
     if (detail.client_id) detailsByMatter.set(detail.client_id, detail)
   }
 
+  const matterNumberById = new Map<string, string | null>()
+  for (const row of (matterNumbersRes.data ?? []) as Array<{ id: string; matter_number: string | null }>) {
+    matterNumberById.set(row.id, row.matter_number)
+  }
+
   const draftsByMatter = new Map<string, DraftingHubDocument[]>()
   for (const doc of (draftDocsRes.data ?? []) as Array<Pick<
     MatterDocument,
@@ -182,39 +197,43 @@ export async function fetchDraftingHubMatters(): Promise<DraftingHubMatter[]> {
     draftsByMatter.set(doc.matter_id, list)
   }
 
-  return matters.map(matter => {
-    const sheet = latestDesignByMatter.get(matter.matter_id) ?? null
-    const inclusions = sheet
-      ? getDocumentInclusions({
-          plan_type: sheet.plan_type,
-          marital_status: matter.marital_status,
-          decisions: sheet.decisions,
-        })
-      : null
-    const selectedTemplates = sheet ? selectionsBySheet.get(sheet.id) ?? [] : []
-    const drafts = draftsByMatter.get(matter.matter_id) ?? []
-    const currentDrafts = drafts.filter(draft => !draft.supersededAt)
-    const supersededDrafts = drafts.filter(draft => draft.supersededAt)
+  return {
+    matters: matters.map(matter => {
+      const sheet = latestDesignByMatter.get(matter.matter_id) ?? null
+      const inclusions = sheet
+        ? getDocumentInclusions({
+            plan_type: sheet.plan_type,
+            marital_status: matter.marital_status,
+            decisions: sheet.decisions,
+          })
+        : null
+      const selectedTemplates = sheet ? selectionsBySheet.get(sheet.id) ?? [] : []
+      const drafts = draftsByMatter.get(matter.matter_id) ?? []
+      const currentDrafts = drafts.filter(draft => !draft.supersededAt)
+      const supersededDrafts = drafts.filter(draft => draft.supersededAt)
 
-    return {
-      matter,
-      setupBlockers: getDraftSetupBlockers(detailsByMatter.get(matter.matter_id) ?? null, matter),
-      designSheet: sheet
-        ? {
-            id: sheet.id,
-            status: sheet.status,
-            version: sheet.version,
-            updatedAt: sheet.updated_at ?? sheet.created_at ?? null,
-          }
-        : null,
-      documentInclusions: inclusions,
-      includedDocumentLabels: inclusionLabels(inclusions),
-      selectedTemplateCount: selectedTemplates.length,
-      selectedTemplates,
-      draftCount: currentDrafts.length,
-      recentDrafts: currentDrafts.slice(0, 5),
-      supersededDrafts,
-      supersededDraftCount: supersededDrafts.length,
-    }
-  })
+      return {
+        matter,
+        matterNumber: matterNumberById.get(matter.matter_id) ?? null,
+        setupBlockers: getDraftSetupBlockers(detailsByMatter.get(matter.matter_id) ?? null, matter),
+        designSheet: sheet
+          ? {
+              id: sheet.id,
+              status: sheet.status,
+              version: sheet.version,
+              updatedAt: sheet.updated_at ?? sheet.created_at ?? null,
+            }
+          : null,
+        documentInclusions: inclusions,
+        includedDocumentLabels: inclusionLabels(inclusions),
+        selectedTemplateCount: selectedTemplates.length,
+        selectedTemplates,
+        draftCount: currentDrafts.length,
+        recentDrafts: currentDrafts.slice(0, 5),
+        supersededDrafts,
+        supersededDraftCount: supersededDrafts.length,
+      }
+    }),
+    error: null,
+  }
 }

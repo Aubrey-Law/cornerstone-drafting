@@ -4,6 +4,6 @@ import DraftingHubClient from './DraftingHubClient'
 export const dynamic = 'force-dynamic'
 
 export default async function DraftingPage() {
-  const matters = await fetchDraftingHubMatters()
-  return <DraftingHubClient matters={matters} />
+  const { matters, error } = await fetchDraftingHubMatters()
+  return <DraftingHubClient matters={matters} loadError={error} />
 }

@@ -10,30 +10,42 @@ import type { DraftingHubMatter } from '@/lib/queries/drafting'
 
 interface DraftingHubClientProps {
   matters: DraftingHubMatter[]
+  loadError?: string | null
 }
 
-function readinessLabel(item: DraftingHubMatter) {
-  if (!item.designSheet) return { label: 'Needs design', tone: 'warning' as const }
-  if (item.setupBlockers.length > 0) return { label: 'Setup needed', tone: 'warning' as const }
-  if (item.includedDocumentLabels.length === 0) return { label: 'No docs selected', tone: 'warning' as const }
-  return { label: 'Ready', tone: 'success' as const }
+function matterHaystack(item: DraftingHubMatter): string {
+  const m = item.matter
+  return [
+    item.matterNumber,
+    m.matter_id,
+    m.client_name,
+    m.spouse_name,
+    m.matter_name,
+    m.client_email,
+    m.plan_type,
+    m.practice_area,
+    m.stage,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
 }
 
-export default function DraftingHubClient({ matters }: DraftingHubClientProps) {
+function matchesSearch(item: DraftingHubMatter, query: string): boolean {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return true
+  const haystack = matterHaystack(item)
+  return tokens.every(token => haystack.includes(token))
+}
+
+export default function DraftingHubClient({ matters, loadError = null }: DraftingHubClientProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim()
     if (!q) return matters
-    return matters.filter(item => {
-      const m = item.matter
-      const haystack = [
-        m.client_name, m.spouse_name, m.matter_name, m.client_email,
-        m.plan_type, m.practice_area, m.stage,
-      ].filter(Boolean).join(' ').toLowerCase()
-      return haystack.includes(q)
-    })
+    return matters.filter(item => matchesSearch(item, q))
   }, [matters, search])
 
   const grouped = useMemo(() => {
@@ -47,6 +59,14 @@ export default function DraftingHubClient({ matters }: DraftingHubClientProps) {
     }
     return { ready, needsDesign, needsSetup }
   }, [filtered])
+
+  const emptyMessage = loadError
+    ? `Could not load matters: ${loadError}`
+    : matters.length === 0
+      ? 'No open matters found. Matters must exist in Supabase with a linked intake row (not archived or closed).'
+      : search.trim()
+        ? 'No matters match this search.'
+        : 'No matters to show.'
 
   const openMatter = (matterId: string) => {
     router.push(`/admin/drafting/${matterId}`)
@@ -67,7 +87,7 @@ export default function DraftingHubClient({ matters }: DraftingHubClientProps) {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search matters by client, matter, plan type…"
+            placeholder="Search by client, matter number, email, plan type…"
             className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
           />
           {search && (
@@ -81,7 +101,7 @@ export default function DraftingHubClient({ matters }: DraftingHubClientProps) {
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-5xl space-y-6">
           {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No matters match this search.</p>
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           ) : (
             <>
               <Group title="Ready to generate" matters={grouped.ready} onOpen={openMatter} emptyHint="No matters are fully ready." />
@@ -93,6 +113,13 @@ export default function DraftingHubClient({ matters }: DraftingHubClientProps) {
       </div>
     </div>
   )
+}
+
+function readinessLabel(item: DraftingHubMatter) {
+  if (!item.designSheet) return { label: 'Needs design', tone: 'warning' as const }
+  if (item.setupBlockers.length > 0) return { label: 'Setup needed', tone: 'warning' as const }
+  if (item.includedDocumentLabels.length === 0) return { label: 'No docs selected', tone: 'warning' as const }
+  return { label: 'Ready', tone: 'success' as const }
 }
 
 function Group({
@@ -129,7 +156,7 @@ function Group({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold group-hover:text-accent">{matter.client_name || 'Unnamed client'}</p>
                     <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                      {matter.matter_name || matter.plan_type || 'Matter'} · {stageLabel(matter.stage)}
+                      {[item.matterNumber, matter.matter_name || matter.plan_type || 'Matter'].filter(Boolean).join(' · ')} · {stageLabel(matter.stage)}
                     </p>
                   </div>
                   <Badge

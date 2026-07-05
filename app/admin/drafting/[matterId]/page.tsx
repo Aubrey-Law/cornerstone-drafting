@@ -23,7 +23,7 @@ export default async function DraftingWorkspacePage({
 }) {
   const { matterId } = await params
 
-  const [matter, sheet, contacts, intakeSnapshot, hubMatters] = await Promise.all([
+  const [matter, sheet, contacts, intakeSnapshot, hubResult] = await Promise.all([
     fetchMatter(matterId),
     fetchDesignSheet(matterId),
     fetchMatterContacts(matterId),
@@ -137,7 +137,7 @@ export default async function DraftingWorkspacePage({
     }
   }
 
-  const hubMatter = hubMatters.find(item => item.matter.matter_id === matterId) ?? null
+  const hubMatter = hubResult.matters.find(item => item.matter.matter_id === matterId) ?? null
 
   return (
     <DraftingWorkspace
