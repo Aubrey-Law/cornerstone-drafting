@@ -97,15 +97,15 @@ describe('drafting hub and workspace', () => {
   })
 
   it('seeds intake values through design-sheet persistence instead of writing virtual columns', () => {
-    const page = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/page.tsx'), 'utf8')
-    const seedSection = page.slice(
-      page.indexOf('const seedPayload = buildDesignSheetPersistencePayload'),
-      page.indexOf('.update({'),
+    const loader = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/loadDraftingMatterContext.ts'), 'utf8')
+    const seedSection = loader.slice(
+      loader.indexOf('const seedPayload = buildDesignSheetPersistencePayload'),
+      loader.indexOf('.update({'),
     )
 
-    expect(page).toContain("import { buildDesignSheetPersistencePayload } from '@/lib/designSheetPersistence'")
+    expect(loader).toContain("import { buildDesignSheetPersistencePayload } from '@/lib/designSheetPersistence'")
     expect(seedSection).toContain('street: intakeSnapshot.address_line1')
     expect(seedSection).toContain('city: intakeSnapshot.city')
-    expect(page).toContain('...seedPayload')
+    expect(loader).toContain('...seedPayload')
   })
 })

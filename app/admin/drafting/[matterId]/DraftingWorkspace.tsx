@@ -87,7 +87,14 @@ export default function DraftingWorkspace({
     if (!rawFocus || consumedFocusRef.current === rawFocus) return
     consumedFocusRef.current = rawFocus
     const parsed = parseDesignFocusParam(rawFocus)
-    if (parsed) setInitialFocus(parsed)
+    if (parsed) {
+      setInitialFocus(parsed)
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('section', parsed.sectionId)
+      params.delete('focus')
+      router.replace(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
+      return
+    }
     const params = new URLSearchParams(searchParams.toString())
     params.delete('focus')
     router.replace(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
@@ -102,6 +109,7 @@ export default function DraftingWorkspace({
   // Design entry mode: URL wins for shareable links; localStorage remembers the
   // attorney's default for future drafting sessions.
   const rawDesignView = searchParams.get('design')
+  const rawDesignSection = searchParams.get('section')
   const [preferredDesignView, setPreferredDesignView] = useState<DesignView>('guided')
   useEffect(() => {
     if (isDesignView(rawDesignView)) {
@@ -147,7 +155,7 @@ export default function DraftingWorkspace({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="text-[11px]">Drafting workspace</Badge>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-              <Link href={`/admin/drafting/${matterId}?step=design`}>
+              <Link href={`/admin/drafting/${matterId}/design`}>
                 <FileText className="h-3.5 w-3.5" />
                 Design sheet
               </Link>
@@ -246,6 +254,7 @@ export default function DraftingWorkspace({
                   embedded
                   onOpenDrafting={() => setStep('generate')}
                   initialFocus={initialFocus}
+                  activeSectionId={rawDesignSection}
                 />
               )}
             </div>
