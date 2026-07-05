@@ -458,7 +458,7 @@ I devise all my tangible personal property in substantially equal shares to thos
     include: (ctx) => ctx.tangible_property_distribution === 'spouse_then_children',
     text: `DISPOSITION OF TANGIBLE PERSONAL PROPERTY
 
-[TODO: SPOUSE-THEN-CHILDREN TANGIBLE PROPERTY LANGUAGE — INSERT ATTORNEY-APPROVED TEXT DEVISING TANGIBLE PROPERTY TO [SPOUSE FULL NAME] IF SURVIVING, OTHERWISE IN SUBSTANTIALLY EQUAL SHARES TO SURVIVING CHILDREN]`,
+I give all of my tangible personal property to [SPOUSE FULL NAME] if my spouse survives me. If my spouse does not survive me, I give such property to those of my children who survive me, in substantially equal shares. My Personal Representative shall make all determinations as to the substantial equality of shares, giving due regard to the requests of said persons, or to any requests I might make by letter or memorandum addressed to my Personal Representative. Such letter or written memorandum, if any, will simply be an expression of my wishes and shall not create any trust or legal obligation, nor shall it be offered for probate as part of this Last Will and Testament.`,
   },
 
   {
@@ -470,7 +470,7 @@ I devise all my tangible personal property in substantially equal shares to thos
     include: (ctx) => ctx.tangible_property_distribution === 'named_then_children',
     text: `DISPOSITION OF TANGIBLE PERSONAL PROPERTY
 
-[TODO: NAMED-INDIVIDUAL-THEN-CHILDREN TANGIBLE PROPERTY LANGUAGE — INSERT ATTORNEY-APPROVED TEXT DEVISING TANGIBLE PROPERTY TO [TANGIBLE NAMED INDIVIDUAL] IF SURVIVING, OTHERWISE IN SUBSTANTIALLY EQUAL SHARES TO SURVIVING CHILDREN]`,
+I give all of my tangible personal property to [TANGIBLE NAMED INDIVIDUAL] if that person survives me. If that person does not survive me, I give such property to those of my children who survive me, in substantially equal shares. My Personal Representative shall make all determinations as to the substantial equality of shares, giving due regard to the requests of said persons, or to any requests I might make by letter or memorandum addressed to my Personal Representative. Such letter or written memorandum, if any, will simply be an expression of my wishes and shall not create any trust or legal obligation, nor shall it be offered for probate as part of this Last Will and Testament.`,
   },
 
   {
@@ -515,7 +515,11 @@ I request that the same person named herein as Personal Representative, or such 
     include: (ctx) => ctx.pr_structure === 'spouse_first',
     text: `NOMINATION OF PERSONAL REPRESENTATIVES
 
-[TODO: SPOUSE-FIRST PR NOMINATION — INSERT ATTORNEY-APPROVED LANGUAGE NAMING SPOUSE AS SOLE PR, THEN [ALT PERSONAL REPRESENTATIVE] AND [CO ALT PERSONAL REPRESENTATIVE] AS SUCCESSORS]`,
+I nominate [SPOUSE FULL NAME] to serve as the Personal Representative of this my Last Will and Testament. In the event of a vacancy in the office of Personal Representative, I nominate the following in the order named to serve as Personal Representative hereunder when all other Personal Representatives previously appointed have failed to qualify or ceased to serve:
+
+First: [ALT PERSONAL REPRESENTATIVE] and [CO ALT PERSONAL REPRESENTATIVE]
+
+I request that the same person named herein as Personal Representative, or such person's successor or successors, upon application be appointed Special Personal Representative hereof in the same order of succession.`,
   },
 
   {
@@ -622,7 +626,7 @@ No bond shall be required of any Personal Representative serving hereunder, whet
     include: (ctx) => ctx.bond === 'required',
     text: `BOND AND ESTATE SUPERVISION
 
-[TODO: BOND-REQUIRED LANGUAGE — INSERT ATTORNEY-APPROVED TEXT FOR PERSONAL REPRESENTATIVE REQUIRED TO POST BOND]`,
+Each Personal Representative serving hereunder shall furnish bond with surety as required by law or court order. I request that the administration of my estate be unsupervised.`,
   },
 
   {
@@ -634,7 +638,7 @@ No bond shall be required of any Personal Representative serving hereunder, whet
     include: (ctx) => ctx.no_contest_clause === 'include',
     text: `NO-CONTEST CLAUSE
 
-[TODO: NO-CONTEST CLAUSE — INSERT ATTORNEY-APPROVED LANGUAGE]`,
+To the extent permitted by law, any beneficiary who contests this Will or any provision of it, directly or indirectly, shall be treated as having predeceased me for purposes of any provision in favor of that beneficiary.`,
   },
 
   {
@@ -646,7 +650,7 @@ No bond shall be required of any Personal Representative serving hereunder, whet
     include: (ctx) => ctx.simultaneous_death === 'spouse_survives',
     text: `SIMULTANEOUS DEATH
 
-[TODO: SIMULTANEOUS-DEATH PRESUMPTION (SPOUSE SURVIVES) — INSERT ATTORNEY-APPROVED LANGUAGE]`,
+If my spouse and I die under circumstances where the order of our deaths cannot be established by clear and convincing evidence, my spouse shall be deemed to have survived me for all purposes of this Last Will and Testament.`,
   },
 
   {
@@ -658,7 +662,7 @@ No bond shall be required of any Personal Representative serving hereunder, whet
     include: (ctx) => ctx.simultaneous_death === 'testator_survives',
     text: `SIMULTANEOUS DEATH
 
-[TODO: SIMULTANEOUS-DEATH PRESUMPTION (TESTATOR SURVIVES) — INSERT ATTORNEY-APPROVED LANGUAGE]`,
+If my spouse and I die under circumstances where the order of our deaths cannot be established by clear and convincing evidence, I shall be deemed to have survived my spouse for all purposes of this Last Will and Testament.`,
   },
 
   {
@@ -669,7 +673,7 @@ No bond shall be required of any Personal Representative serving hereunder, whet
     always: true,
     text: `DISTRIBUTIONS TO MINORS
 
-[TODO: UTMA / UNIFORM TRANSFERS TO MINORS LANGUAGE FOR CUSTODIAL DISTRIBUTION UNTIL AGE [UTMA AGE] — INSERT ATTORNEY-APPROVED CLAUSE]`,
+If any property becomes distributable under this Last Will and Testament to a person who has not attained age [UTMA AGE], my Personal Representative may distribute that property to a custodian for that person under the Massachusetts Uniform Transfers to Minors Act, to be held until that person reaches age [UTMA AGE].`,
   },
 
   {
@@ -681,9 +685,9 @@ No bond shall be required of any Personal Representative serving hereunder, whet
     include: (ctx) => Array.isArray(ctx.specific_bequests) && ctx.specific_bequests.length > 0,
     text: `SPECIFIC BEQUESTS
 
-[TODO: SPECIFIC BEQUESTS — INSERT ATTORNEY-APPROVED INTRODUCTORY LANGUAGE FOLLOWED BY:
+I make the following specific gifts:
 
-[SPECIFIC BEQUESTS LIST]]`,
+[SPECIFIC BEQUESTS LIST]`,
   },
 
   {
@@ -788,7 +792,7 @@ If there is more than one Attorney-in-Fact serving at any time, the Attorneys-in
     include: (ctx) => ctx.coagent_manner === 'independently',
     text: `CO-AGENT AUTHORITY
 
-[TODO: CO-AGENT INDEPENDENT-ACTION LANGUAGE (EACH CO-AGENT MAY ACT ALONE) — INSERT ATTORNEY-APPROVED CLAUSE]`,
+If more than one Attorney-in-Fact is serving at any time, each Attorney-in-Fact may act independently and alone with respect to any matter within the scope of this Power of Attorney, and the act of any one Attorney-in-Fact shall be as fully effective as if only one Attorney-in-Fact were acting.`,
   },
 
   {
@@ -800,7 +804,7 @@ If there is more than one Attorney-in-Fact serving at any time, the Attorneys-in
     include: (ctx) => ctx.coagent_manner === 'jointly',
     text: `CO-AGENT AUTHORITY
 
-[TODO: CO-AGENT JOINT-ACTION LANGUAGE (ALL CO-AGENTS MUST AGREE) — INSERT ATTORNEY-APPROVED CLAUSE]`,
+If more than one Attorney-in-Fact is serving at any time, the Attorneys-in-Fact shall act jointly with respect to all matters within the scope of this Power of Attorney. No Attorney-in-Fact shall have authority to act alone except as the other Attorneys-in-Fact may delegate in writing.`,
   },
 
   {
@@ -812,7 +816,7 @@ If there is more than one Attorney-in-Fact serving at any time, the Attorneys-in
     include: (ctx) => ctx.coagent_manner === 'majority',
     text: `CO-AGENT AUTHORITY
 
-[TODO: CO-AGENT MAJORITY-ACTION LANGUAGE — INSERT ATTORNEY-APPROVED CLAUSE]`,
+If more than one Attorney-in-Fact is serving at any time, the Attorneys-in-Fact shall act by majority decision with respect to all matters within the scope of this Power of Attorney. If two Attorneys-in-Fact are serving, they shall act unanimously.`,
   },
 
   {
@@ -941,7 +945,7 @@ I give my Health Care Agent full authority to make any and all health care decis
     include: (ctx) => ctx.anatomical_gift === 'all',
     text: `ANATOMICAL GIFT
 
-[TODO: ANATOMICAL-GIFT (ALL ORGANS AND TISSUES) LANGUAGE — INSERT ATTORNEY-APPROVED CLAUSE]`,
+Upon my death, I give any needed organs, tissues, and parts of my body for transplantation, therapy, research, or education, to the extent permitted by law.`,
   },
 
   {
@@ -953,7 +957,7 @@ I give my Health Care Agent full authority to make any and all health care decis
     include: (ctx) => ctx.anatomical_gift === 'specified',
     text: `ANATOMICAL GIFT
 
-[TODO: ANATOMICAL-GIFT (SPECIFIED) LANGUAGE — DONATING [ANATOMICAL SPECIFIED] — INSERT ATTORNEY-APPROVED CLAUSE]`,
+Upon my death, I give [ANATOMICAL SPECIFIED] for transplantation, therapy, research, or education, to the extent permitted by law.`,
   },
 
   {
@@ -965,7 +969,7 @@ I give my Health Care Agent full authority to make any and all health care decis
     include: (ctx) => ctx.anatomical_gift === 'none',
     text: `ANATOMICAL GIFT
 
-[TODO: ANATOMICAL-GIFT REFUSAL LANGUAGE — INSERT ATTORNEY-APPROVED CLAUSE]`,
+Upon my death, I do not wish to make an anatomical gift of any organs, tissues, or parts of my body.`,
   },
 
   {

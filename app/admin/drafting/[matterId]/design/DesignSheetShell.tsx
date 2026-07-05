@@ -60,7 +60,7 @@ interface DesignSheetShellProps {
   initialFocus?: { sectionId: string; targetField: string | null } | null
 }
 
-function mapSaveStatus(status: 'saved' | 'dirty' | 'saving'): GuidedSaveStatus {
+function mapSaveStatus(status: 'saved' | 'dirty' | 'saving' | 'error'): GuidedSaveStatus {
   return status
 }
 

@@ -23,6 +23,13 @@ import {
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { designTargetForMissingField } from '@/lib/estateGenerator/missingFieldDesignMap'
 import { decodeDraftDownloadMeta } from '@/lib/drafting/draftDownloadMeta'
+import {
+  blobToBase64,
+  downloadCachedZip,
+  loadDraftZipDownload,
+  storeDraftZipDownload,
+  type CachedDraftZip,
+} from '@/lib/drafting/draftDownloadCache'
 import { logMatterActivity } from '@/lib/matterActivity'
 import { cn, formatDate } from '@/lib/utils'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
@@ -46,6 +53,7 @@ type DraftResult =
       documentReports: DocumentReport[]
       hasBlockingMarkers: boolean
       downloaded?: boolean
+      generationDiff?: { newDocuments: string[]; replacedDocuments: string[] }
     }
   | { success: false; error: string; failedDocuments?: string[] }
 
@@ -85,8 +93,18 @@ function formatElapsed(totalSeconds: number): string {
 }
 
 // The generator runs as a single batch request server-side, so per-document
-// completion isn't observable. Stage the reassuring copy by elapsed time instead.
+// completion isn't observable. Estimate progress from elapsed time instead.
+const EST_SECONDS_PER_DOC = 8
 type DraftDeliveryMode = 'save' | 'download'
+
+function computeGenerationDiff(priorNames: string[], generated: string[]) {
+  const prior = new Set(priorNames)
+  const next = new Set(generated)
+  const newDocuments = generated.filter(name => !prior.has(name))
+  const replacedDocuments = generated.filter(name => prior.has(name))
+  const unchanged = priorNames.filter(name => !next.has(name))
+  return { newDocuments, replacedDocuments, unchangedPrior: unchanged }
+}
 
 function generationStatusCopy(elapsedSeconds: number, mode: DraftDeliveryMode): string {
   if (elapsedSeconds < 10) return 'Building documents from the saved design sheet…'
@@ -156,12 +174,17 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
   const [busy, setBusy] = useState<'preflight' | 'generate' | null>(null)
   const [generatingDocs, setGeneratingDocs] = useState<DraftPreflightDocument[]>([])
   const [elapsed, setElapsed] = useState(0)
+  const [cachedZip, setCachedZip] = useState<CachedDraftZip | null>(null)
   // Pending generation awaiting "Generate anyway" confirmation (missing fields).
   const [confirmGenerate, setConfirmGenerate] = useState<
     { documentsToSave: string[]; docsBeingGenerated: DraftPreflightDocument[]; mode: DraftDeliveryMode } | null
   >(null)
 
   const isGenerating = busy === 'generate'
+  useEffect(() => {
+    setCachedZip(loadDraftZipDownload(matterId))
+  }, [matterId])
+
   useEffect(() => {
     if (!isGenerating) return
     setElapsed(0)
@@ -288,6 +311,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     setGeneratingDocs(docsBeingGenerated)
     setBusy('generate')
     setResult(null)
+    const priorDraftNames = hubMatter?.recentDrafts.map(d => d.name) ?? []
     startTransition(async () => {
       try {
         const response = await fetch(`/api/admin/matters/${matterId}/draft`, {
@@ -327,12 +351,23 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           anchor.click()
           URL.revokeObjectURL(url)
 
+          const base64 = await blobToBase64(blob)
+          const cacheEntry: CachedDraftZip = {
+            matterId,
+            filename,
+            savedAt: new Date().toISOString(),
+            documentNames: meta?.documents ?? docsBeingGenerated.map(d => d.title),
+            base64,
+          }
+          if (storeDraftZipDownload(cacheEntry)) setCachedZip(cacheEntry)
+
           const documents = meta?.documents ?? docsBeingGenerated.map(d => d.title)
           const warnings = meta?.warnings ?? []
           const missing = meta?.missing ?? []
           const documentReports = meta?.documentReports ?? []
           const hasBlockingMarkers = meta?.hasBlockingMarkers === true
-          setResult({ success: true, documents, warnings, missing, documentReports, hasBlockingMarkers, downloaded: true })
+          const generationDiff = computeGenerationDiff(priorDraftNames, documents)
+          setResult({ success: true, documents, warnings, missing, documentReports, hasBlockingMarkers, downloaded: true, generationDiff })
           toast.success(
             documents.length
               ? `Downloaded ${documents.length} draft document${documents.length === 1 ? '' : 's'}`
@@ -378,7 +413,8 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           return
         }
         const documents = data.documents ?? []
-        setResult({ success: true, documents, warnings, missing, documentReports, hasBlockingMarkers, downloaded: false })
+        const generationDiff = computeGenerationDiff(priorDraftNames, documents)
+        setResult({ success: true, documents, warnings, missing, documentReports, hasBlockingMarkers, downloaded: false, generationDiff })
         void logMatterActivity(matterId, 'draft_generated', 'AI drafts generated', {
           detail: documents.length > 0
             ? `Generated ${documents.length} draft document${documents.length === 1 ? '' : 's'}: ${documents.join(', ')}`
@@ -420,6 +456,10 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
       }
     })
   }
+
+  const simulatedCompleted = isGenerating
+    ? Math.min(generatingDocs.length, Math.max(0, Math.floor((elapsed + EST_SECONDS_PER_DOC / 2) / EST_SECONDS_PER_DOC)))
+    : 0
 
   return (
     <div className="guided-interview space-y-4">
@@ -536,13 +576,25 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           </div>
         </div>
 
+        {cachedZip && !isGenerating && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+            <p className="text-muted-foreground">
+              Last ZIP download: {cachedZip.documentNames.length} document{cachedZip.documentNames.length === 1 ? '' : 's'} · {formatDate(cachedZip.savedAt)}
+            </p>
+            <Button type="button" size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => downloadCachedZip(cachedZip)}>
+              <Download className="h-3 w-3" />
+              Download again
+            </Button>
+          </div>
+        )}
+
         {isGenerating && generatingDocs.length > 0 && (
           <div className="mt-4 rounded-md border border-accent/20 bg-accent/5 p-4 text-sm" role="status" aria-live="polite">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-accent" />
                 <p className="font-semibold">
-                  Generating {generatingDocs.length} document{generatingDocs.length === 1 ? '' : 's'}…
+                  Generating document {Math.min(simulatedCompleted + 1, generatingDocs.length)} of {generatingDocs.length}…
                 </p>
               </div>
               <span className="flex items-center gap-1.5 text-xs font-medium tabular-nums text-muted-foreground">
@@ -550,20 +602,37 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                 {formatElapsed(elapsed)}
               </span>
             </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-500"
+                style={{ width: `${Math.round((simulatedCompleted / generatingDocs.length) * 100)}%` }}
+              />
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">{generationStatusCopy(elapsed, deliveryMode)}</p>
             <div className="mt-3 grid gap-1.5 md:grid-cols-2">
-              {generatingDocs.map(d => (
-                <div
-                  key={`${d.packageName}-${d.filename}`}
-                  className="flex items-center gap-2 rounded border border-border bg-background px-3 py-2"
-                >
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-accent/70" />
-                  <span className="min-w-0">
-                    <span className="block truncate text-xs font-medium">{d.title}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">{d.filename}</span>
-                  </span>
-                </div>
-              ))}
+              {generatingDocs.map((d, index) => {
+                const done = index < simulatedCompleted
+                const active = index === simulatedCompleted
+                return (
+                  <div
+                    key={`${d.packageName}-${d.filename}`}
+                    className={cn(
+                      'flex items-center gap-2 rounded border bg-background px-3 py-2',
+                      done ? 'border-success/30' : active ? 'border-accent/40' : 'border-border',
+                    )}
+                  >
+                    {done ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+                    ) : (
+                      <Loader2 className={cn('h-3.5 w-3.5 shrink-0', active ? 'animate-spin text-accent' : 'text-muted-foreground/50')} />
+                    )}
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium">{d.title}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{d.filename}</span>
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -610,7 +679,17 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                     <p className="font-medium">
                       {result.downloaded ? 'Documents downloaded successfully' : 'Documents drafted successfully'}
                     </p>
-                    {result.documents.length > 0 && (
+                    {result.generationDiff && (result.generationDiff.newDocuments.length > 0 || result.generationDiff.replacedDocuments.length > 0) && (
+                      <div className="mt-1 space-y-0.5 text-xs opacity-90">
+                        {result.generationDiff.newDocuments.length > 0 && (
+                          <p>New: {result.generationDiff.newDocuments.join(' · ')}</p>
+                        )}
+                        {result.generationDiff.replacedDocuments.length > 0 && (
+                          <p>Regenerated: {result.generationDiff.replacedDocuments.join(' · ')}</p>
+                        )}
+                      </div>
+                    )}
+                    {result.documents.length > 0 && !result.generationDiff && (
                       <p className="mt-0.5 text-xs opacity-80">{result.documents.join(' · ')}</p>
                     )}
                   </>

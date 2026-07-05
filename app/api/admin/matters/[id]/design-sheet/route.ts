@@ -28,6 +28,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const { id: matterId } = await params
   const body = await req.json().catch(() => null) as {
     sheetId?: string | null
+    expectedUpdatedAt?: string | null
     sheet?: DesignSheetUpdate
   } | null
 
@@ -82,11 +83,20 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 
     const existingSheet = inflateDesignSheetRow(existingRow)
+    const existingId = typeof existingRow?.id === 'string' ? existingRow.id : null
+    const expectedUpdatedAt = typeof body.expectedUpdatedAt === 'string' ? body.expectedUpdatedAt : null
+    const currentUpdatedAt = typeof existingRow?.updated_at === 'string' ? existingRow.updated_at : null
+    if (existingId && expectedUpdatedAt && currentUpdatedAt && expectedUpdatedAt !== currentUpdatedAt) {
+      return NextResponse.json(
+        { error: 'Design sheet was updated elsewhere.', conflict: true, updated_at: currentUpdatedAt },
+        { status: 409 },
+      )
+    }
+
     const sheetForPersistence = existingSheet
       ? ({ ...existingSheet, ...body.sheet } as DesignSheetUpdate)
       : body.sheet
     const payload = buildDesignSheetPersistencePayload(formatPhoneFieldsDeep(sheetForPersistence))
-    const existingId = typeof existingRow?.id === 'string' ? existingRow.id : null
 
     if (existingId) {
       const { error } = await admin
@@ -101,7 +111,11 @@ export async function PATCH(req: Request, { params }: Params) {
 
       if (error) throw new Error(error.message)
       if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput)
-      return NextResponse.json({ id: existingId })
+      return NextResponse.json({
+        id: existingId,
+        updated_at: now,
+        version: typeof existingRow?.version === 'number' ? existingRow.version : null,
+      })
     }
 
     const { data: inserted, error } = await admin
@@ -119,7 +133,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
     if (error) throw new Error(error.message)
     if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput)
-    return NextResponse.json({ id: inserted.id })
+    return NextResponse.json({ id: inserted.id, updated_at: now, version: 1 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to save design sheet'
     return NextResponse.json({ error: message }, { status: 500 })

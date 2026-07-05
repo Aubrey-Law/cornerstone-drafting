@@ -20,10 +20,10 @@ import {
   normalizeOverrideValue,
 } from './buildInitialSheet'
 
-export type SaveStatus = 'saved' | 'dirty' | 'saving'
+export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
 
 type ApiErrorResponse = { error?: string }
-type SaveDesignSheetResponse = ApiErrorResponse & { id?: string }
+type SaveDesignSheetResponse = ApiErrorResponse & { id?: string; updated_at?: string; version?: number; conflict?: boolean }
 type AddContactResponse = ApiErrorResponse & { contact?: MatterContact }
 
 export interface LpData {
@@ -69,9 +69,14 @@ export function useDesignSheetState({
   const [isPending, startTransition] = useTransition()
   const [contactsState, setContactsState] = useState(contactsProp)
   const [lpDataState, setLpDataState] = useState(lpDataProp)
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
-  const [exporting, setExporting] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(() => sheetProp?.updated_at ?? null)
+  const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(() => sheetProp?.updated_at ?? null)
+  const [saveRetryCount, setSaveRetryCount] = useState(0)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistInFlightRef = useRef(false)
+  const [exporting, setExporting] = useState(false)
+
+  const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
   // ── Readiness ──────────────────────────────────────────────────────────────
   const readiness = useMemo(() => computeDesignSheetReadiness({
@@ -119,13 +124,18 @@ export function useDesignSheetState({
   const draftBlockers = useMemo(() => blockerDetails.map(b => b.label), [blockerDetails])
 
   const saveStatusText = useMemo(() => {
-    if (saveStatus === 'saving') return 'Saving...'
+    if (saveStatus === 'saving') return saveRetryCount > 0 ? `Retrying save (${saveRetryCount})…` : 'Saving…'
+    if (saveStatus === 'error') return 'Save failed — will retry'
     if (saveStatus === 'dirty') return 'Unsaved changes'
     if (lastSavedAt) {
-      return `Saved ${new Date(lastSavedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+      const when = new Date(lastSavedAt)
+      const time = when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      const date = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const today = new Date().toDateString() === when.toDateString()
+      return today ? `Saved at ${time}` : `Saved ${date} ${time}`
     }
     return 'All changes saved'
-  }, [lastSavedAt, saveStatus])
+  }, [lastSavedAt, saveRetryCount, saveStatus])
 
   // ── Field updates with override tracking ─────────────────────────────────────
   const markDirty = useCallback((field: string) => {
@@ -160,45 +170,77 @@ export function useDesignSheetState({
   }, [markDirty])
 
   // ── Persistence ──────────────────────────────────────────────────────────────
-  const persistSheet = useCallback(async () => {
+  const persistSheet = useCallback(async (): Promise<boolean> => {
+    if (persistInFlightRef.current) return false
+    persistInFlightRef.current = true
     setSaveStatus('saving')
+    const maxAttempts = 3
     try {
-      const persistedSheetId = sheetProp?.id || sheet.id
-      const response = await fetch(`/api/admin/matters/${matterId}/design-sheet`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheetId: persistedSheetId || null, sheet: formatPhoneFieldsDeep(sheet) }),
-      })
-      const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse
-      if (!response.ok || !result.id) {
-        throw new Error(result.error ?? 'Unable to save design sheet')
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (attempt > 0) {
+          setSaveRetryCount(attempt)
+          await sleep(1000 * 2 ** (attempt - 1))
+        }
+        try {
+          const persistedSheetId = sheetProp?.id || sheet.id
+          const response = await fetch(`/api/admin/matters/${matterId}/design-sheet`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sheetId: persistedSheetId || null,
+              expectedUpdatedAt,
+              sheet: formatPhoneFieldsDeep(sheet),
+            }),
+          })
+          const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse
+
+          if (response.status === 409 || result.conflict) {
+            setSaveStatus('error')
+            toast.error('This design sheet was updated elsewhere. Reloading the latest version.')
+            router.refresh()
+            return false
+          }
+
+          if (!response.ok || !result.id) {
+            throw new Error(result.error ?? 'Unable to save design sheet')
+          }
+
+          if (!persistedSheetId) {
+            setSheet(prev => ({ ...prev, id: result.id as string, matter_id: matterId }))
+          }
+          const savedAt = result.updated_at ?? new Date().toISOString()
+          setExpectedUpdatedAt(savedAt)
+          setLastSavedAt(savedAt)
+          setSaveStatus('saved')
+          setSaveRetryCount(0)
+          setDirtyFields(new Set())
+          return true
+        } catch (err) {
+          if (attempt === maxAttempts - 1) throw err
+        }
       }
-      if (!persistedSheetId) {
-        setSheet(prev => ({ ...prev, id: result.id as string, matter_id: matterId }))
-      }
-      setSaveStatus('saved')
-      setDirtyFields(new Set())
-      setLastSavedAt(new Date().toISOString())
-      return true
+      return false
     } catch (err) {
       console.error(err)
-      setSaveStatus('dirty')
-      toast.error('Unable to save design sheet')
+      setSaveStatus('error')
+      toast.error('Unable to save design sheet after several attempts')
       return false
+    } finally {
+      persistInFlightRef.current = false
     }
-  }, [matterId, sheet, sheetProp?.id])
+  }, [expectedUpdatedAt, matterId, router, sheet, sheetProp?.id])
 
   const handleSave = useCallback(() => {
     startTransition(async () => { await persistSheet() })
   }, [persistSheet])
 
-  // Auto-save: debounce 3 seconds after any field change
+  // Auto-save: debounce 3 seconds after any field change; retry after transient errors.
   useEffect(() => {
-    if (saveStatus !== 'dirty') return
+    if (saveStatus !== 'dirty' && saveStatus !== 'error') return
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     autoSaveTimerRef.current = setTimeout(() => {
       startTransition(async () => { await persistSheet() })
-    }, 3000)
+    }, saveStatus === 'error' ? 5000 : 3000)
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     }
@@ -209,7 +251,7 @@ export function useDesignSheetState({
   // Warn before unload when there are unsaved changes
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (saveStatus === 'dirty' || saveStatus === 'saving') e.preventDefault()
+      if (saveStatus === 'dirty' || saveStatus === 'saving' || saveStatus === 'error') e.preventDefault()
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)

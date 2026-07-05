@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, ListChecks } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, HelpCircle, ListChecks, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -16,11 +16,14 @@ import type { IntakeSnapshot } from '@/lib/queries'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
 import GenerateStep from './GenerateStep'
 import ReviewStep from './ReviewStep'
+import {
+  DESIGN_VIEW_STORAGE_KEY,
+  resolveDesignView,
+  type DraftingDesignView,
+} from '@/lib/userPreferences'
+import { useUserPreferences } from '@/lib/userPreferencesClient'
 
 type Step = 'design' | 'generate' | 'review'
-type DesignView = 'guided' | 'express'
-
-const DESIGN_VIEW_STORAGE_KEY = 'drafting-design-view'
 
 const STEPS: { id: Step; label: string; icon: React.ElementType; description: string }[] = [
   { id: 'design',   label: 'Design',   icon: FileText,     description: 'Plan structure, fiduciaries, assets' },
@@ -32,7 +35,7 @@ function isStep(value: string | null): value is Step {
   return value === 'design' || value === 'generate' || value === 'review'
 }
 
-function isDesignView(value: string | null): value is DesignView {
+function isDesignView(value: string | null): value is DraftingDesignView {
   return value === 'guided' || value === 'express'
 }
 
@@ -63,6 +66,7 @@ export default function DraftingWorkspace({
 }: DraftingWorkspaceProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { savePreferences, loadPreferences } = useUserPreferences()
   const rawStep = searchParams.get('step')
   const isLP = normalizePracticeArea(matter.practice_area) === 'EP-LP'
   const designReadiness = useMemo(() => {
@@ -110,24 +114,53 @@ export default function DraftingWorkspace({
   // attorney's default for future drafting sessions.
   const rawDesignView = searchParams.get('design')
   const rawDesignSection = searchParams.get('section')
-  const [preferredDesignView, setPreferredDesignView] = useState<DesignView>('guided')
+  const [preferredDesignView, setPreferredDesignView] = useState<DraftingDesignView>(() => {
+    if (typeof window === 'undefined') return 'guided'
+    const stored = window.localStorage.getItem(DESIGN_VIEW_STORAGE_KEY)
+    return stored === 'express' ? 'express' : 'guided'
+  })
+  const [showDesignViewHint, setShowDesignViewHint] = useState(false)
+  const [userDesignView, setUserDesignView] = useState<DraftingDesignView | undefined>(undefined)
+
+  useEffect(() => {
+    void loadPreferences().then(prefs => {
+      const view = prefs?.drafting?.designView
+      if (view === 'guided' || view === 'express') setUserDesignView(view)
+      if (!prefs?.drafting?.designViewHintDismissed) setShowDesignViewHint(true)
+    })
+  }, [loadPreferences])
+
   useEffect(() => {
     if (isDesignView(rawDesignView)) {
       setPreferredDesignView(rawDesignView)
       window.localStorage.setItem(DESIGN_VIEW_STORAGE_KEY, rawDesignView)
+      void savePreferences({ drafting: { designView: rawDesignView } })
       return
     }
 
     const stored = window.localStorage.getItem(DESIGN_VIEW_STORAGE_KEY)
     if (isDesignView(stored)) setPreferredDesignView(stored)
-  }, [rawDesignView])
-  const designView: DesignView = isDesignView(rawDesignView) ? rawDesignView : preferredDesignView
-  const setDesignView = (next: DesignView) => {
+  }, [rawDesignView, savePreferences])
+
+  const designView: DraftingDesignView = resolveDesignView({
+    urlView: rawDesignView,
+    storedLocal: preferredDesignView,
+    userPreference: userDesignView,
+    designComplete,
+  })
+
+  const setDesignView = (next: DraftingDesignView) => {
     setPreferredDesignView(next)
     window.localStorage.setItem(DESIGN_VIEW_STORAGE_KEY, next)
+    void savePreferences({ drafting: { designView: next } })
     const params = new URLSearchParams(searchParams.toString())
     params.set('design', next)
     router.replace(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
+  }
+
+  const dismissDesignViewHint = () => {
+    setShowDesignViewHint(false)
+    void savePreferences({ drafting: { designViewHintDismissed: true } })
   }
 
   const clientDisplayName = matter.client_name || 'Unnamed client'
@@ -207,28 +240,45 @@ export default function DraftingWorkspace({
       )}>
         {step === 'design' && (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="flex shrink-0 items-center justify-end border-b border-border bg-card px-4 py-1.5 md:px-5">
-              <div className="flex items-center rounded-md bg-muted p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setDesignView('guided')}
-                  className={cn(
-                    'rounded px-2.5 py-1 font-medium transition-colors',
-                    designView === 'guided' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  Section by section
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDesignView('express')}
-                  className={cn(
-                    'rounded px-2.5 py-1 font-medium transition-colors',
-                    designView === 'express' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  Fast entry
-                </button>
+            <div className="flex shrink-0 flex-col gap-2 border-b border-border bg-card px-4 py-1.5 md:px-5">
+              {showDesignViewHint && (
+                <div className="flex items-start gap-2 rounded-md border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-foreground">
+                  <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">Choose your design entry mode</p>
+                    <p className="mt-0.5 text-muted-foreground">
+                      <strong>Section by section</strong> walks each design area with guidance — best for first-time setup.
+                      <strong> Fast entry</strong> shows all fields on one scrollable page for quick edits after the sheet is complete.
+                    </p>
+                  </div>
+                  <button type="button" onClick={dismissDesignViewHint} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-end">
+                <div className="flex items-center rounded-md bg-muted p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDesignView('guided')}
+                    className={cn(
+                      'rounded px-2.5 py-1 font-medium transition-colors',
+                      designView === 'guided' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Section by section
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDesignView('express')}
+                    className={cn(
+                      'rounded px-2.5 py-1 font-medium transition-colors',
+                      designView === 'express' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Fast entry
+                  </button>
+                </div>
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
