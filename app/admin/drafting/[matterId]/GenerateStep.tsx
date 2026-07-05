@@ -782,7 +782,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           </div>
           <div className="space-y-2 p-4">
             {hubMatter.includedDocumentLabels.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No documents selected. <Link href={`/admin/matters/${matterId}`} className="text-accent hover:underline">Open matter →</Link></p>
+              <p className="text-sm text-muted-foreground">No documents selected. <Link href={`/admin/drafting/${matterId}?step=design`} className="text-accent hover:underline">Open design sheet →</Link></p>
             ) : (
               hubMatter.includedDocumentLabels.map(label => (
                 <div key={label} className="flex items-center gap-2 text-sm">

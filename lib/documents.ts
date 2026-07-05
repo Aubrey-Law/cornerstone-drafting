@@ -188,28 +188,6 @@ export async function updateDocumentFolder(
   return document as MatterDocument
 }
 
-/** Convert an internal Word draft to PDF via Microsoft Graph and share with the client. */
-export async function convertAndShareDraftPdf(
-  matterId: string,
-  docId: string,
-  toFolder: 'review' | 'signed' | 'final' = 'review',
-): Promise<MatterDocument> {
-  const token = await getToken()
-  if (!token) throw new Error('Not authenticated')
-
-  const res = await fetch(`/api/admin/matters/${matterId}/documents/${docId}/share-pdf`, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({ toFolder }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? 'Failed to convert and share PDF')
-  }
-  const { document } = await res.json()
-  return document as MatterDocument
-}
-
 /**
  * Mark a generated draft as attorney-reviewed (or clear it). Recorded with the
  * reviewer + timestamp and required by the server before a draft can be

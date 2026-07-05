@@ -11,7 +11,7 @@ import {
   type DesignReadinessBlocker,
   type DesignSectionSummary,
 } from '@/lib/designSheetReadiness'
-import { saveLiDesignSheet, updatePlanCoverage } from '@/app/admin/matters/[id]/design/actions'
+import { saveLiDesignSheet, updatePlanCoverage } from '@/app/admin/drafting/[matterId]/design/actions'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { DesignSheetImportProposal } from '@/lib/designSheetImport/shared'
 import {

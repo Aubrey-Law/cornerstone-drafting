@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { safeClientRedirectPath } from '@/lib/auth/safeRedirect'
+import { safeAdminRedirectPath } from '@/lib/auth/safeRedirect'
 
 const ADMIN_ROLES = ['attorney', 'admin']
 
@@ -9,7 +9,6 @@ const SESSION_REQUIRED_PREFIXES = ['/admin', '/api/documents', '/api/admin', '/a
 function redirectToLogin(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone()
   url.pathname = '/auth/login'
-  url.searchParams.set('type', 'admin')
   url.searchParams.set('redirectTo', pathname)
   return NextResponse.redirect(url)
 }
@@ -113,11 +112,11 @@ export async function proxy(request: NextRequest) {
       role = userData?.role ?? null
     }
 
-    const requestedRedirect = safeClientRedirectPath(searchParams.get('redirectTo'))
+    const requestedRedirect = safeAdminRedirectPath(searchParams.get('redirectTo'))
     const destinationPath =
       role && ADMIN_ROLES.includes(role)
         ? (requestedRedirect ?? '/admin/drafting')
-        : '/auth/login?type=admin'
+        : '/auth/login'
 
     return NextResponse.redirect(new URL(destinationPath, request.url))
   }

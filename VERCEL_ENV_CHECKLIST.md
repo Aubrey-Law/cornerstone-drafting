@@ -16,7 +16,7 @@
 
 | Variable | Purpose |
 |----------|---------|
-| `ESTATE_GENERATOR_ENGINE` | `node` (default), `python`, or `supabase` fallback chain |
+| `ESTATE_GENERATOR_ENGINE` | `node` (default). `supabase` uses Storage templates. `python` is reserved for subprocess tooling; bulk runs use node → supabase → per-doc fallback. |
 
 Python fallback uses the venv created by `npm run estate-generator:setup` during build.
 

@@ -80,11 +80,11 @@ describe('design sheet import route source', () => {
       'utf8',
     )
     const picker = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/ContactPicker.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/ContactPicker.tsx'),
       'utf8',
     )
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
       'utf8',
     )
 
@@ -282,7 +282,7 @@ describe('design sheet persistence import safety', () => {
 
 describe('legacy design-sheet pronoun migration', () => {
   it('copies historical design-sheet pronouns to intake before dropping the column', () => {
-    const migrationsDir = path.join(process.cwd(), 'supabase/migrations')
+    const migrationsDir = path.join(process.cwd(), 'supabase/migrations_archive/portal')
     const migration = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql'))
       .map(file => fs.readFileSync(path.join(migrationsDir, file), 'utf8'))
@@ -298,7 +298,7 @@ describe('legacy design-sheet pronoun migration', () => {
 
 describe('legacy inheritance-structure migration', () => {
   it('preserves local legacy values before dropping the retired column', () => {
-    const migrationsDir = path.join(process.cwd(), 'supabase/migrations')
+    const migrationsDir = path.join(process.cwd(), 'supabase/migrations_archive/portal')
     const migration = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql'))
       .map(file => fs.readFileSync(path.join(migrationsDir, file), 'utf8'))
@@ -330,7 +330,7 @@ describe('design sheet import UI source', () => {
 
   it('DesignSheetShell renders the shared import dialog and updates local sheet state after accept', () => {
     const source = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
       'utf8',
     )
 
@@ -345,7 +345,7 @@ describe('design sheet import UI source', () => {
       'utf8',
     )
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
       'utf8',
     )
 
@@ -361,7 +361,7 @@ describe('design sheet import UI source', () => {
       'utf8',
     )
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
       'utf8',
     )
 

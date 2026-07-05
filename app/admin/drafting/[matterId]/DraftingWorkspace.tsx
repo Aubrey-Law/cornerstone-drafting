@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
-import DesignSheetShell from '@/app/admin/matters/[id]/design/DesignSheetShell'
-import ExpressDesignSheet from '@/app/admin/matters/[id]/design/ExpressDesignSheet'
+import DesignSheetShell from '@/app/admin/drafting/[matterId]/design/DesignSheetShell'
+import ExpressDesignSheet from '@/app/admin/drafting/[matterId]/design/ExpressDesignSheet'
 import type { DesignSheet, MatterContact, MatterDocument, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
@@ -147,9 +147,9 @@ export default function DraftingWorkspace({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="text-[11px]">Drafting workspace</Badge>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-              <Link href={`/admin/matters/${matterId}`}>
+              <Link href={`/admin/drafting/${matterId}?step=design`}>
                 <FileText className="h-3.5 w-3.5" />
-                Matter page
+                Design sheet
               </Link>
             </Button>
           </div>

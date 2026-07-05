@@ -31,7 +31,7 @@ export default function AdminLayoutClient({
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    router.push('/auth/login?type=admin')
+    router.push('/auth/login')
     router.refresh()
   }
 

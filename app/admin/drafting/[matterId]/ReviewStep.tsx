@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
-  convertAndShareDraftPdf,
   deleteDocument,
   getDocumentUrl,
   getDocumentViewerUrl,
@@ -57,7 +56,6 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [showPrevious, setShowPrevious] = useState(false)
   const autoExpandedSuperseded = useRef(false)
   const [reviewingId, setReviewingId] = useState<string | null>(null)
-  const [convertingId, setConvertingId] = useState<string | null>(null)
   const [uploadingPdf, setUploadingPdf] = useState(false)
   const pdfUploadRef = useRef<HTMLInputElement>(null)
 
@@ -130,32 +128,10 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const handleApprove = (doc: DraftingHubDocument) => {
     if (approvingId) return
     if (!isPdfDocument(doc.name)) {
-      toast.error('Word drafts must be converted to PDF before sharing with clients.')
+      toast.error('Upload a PDF exported from Word before sharing with clients.')
       return
     }
     setPendingPromotion({ doc, toFolder: 'review' })
-  }
-
-  const handleConvertAndShare = async (doc: DraftingHubDocument) => {
-    if (convertingId) return
-    if (typeof doc.markerCount === 'number' && doc.markerCount > 0) {
-      toast.error('Resolve markers and regenerate before sharing with the client.')
-      return
-    }
-    setConvertingId(doc.id)
-    try {
-      await convertAndShareDraftPdf(matterId, doc.id, 'review')
-      void logMatterActivity(matterId, 'draft_promoted_to_review', 'PDF shared with client', {
-        detail: `Converted and shared ${doc.name} as a client-visible PDF`,
-        metadata: { sourceDocumentId: doc.id, sourceDocumentName: doc.name, toFolder: 'review' },
-      })
-      toast.success('PDF shared with client')
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not convert and share PDF')
-    } finally {
-      setConvertingId(null)
-    }
   }
 
   const handleUploadSharedPdf = async (files: FileList | null) => {
@@ -204,7 +180,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
       <GuidedIntroCard
         pct={sharedDrafts.length > 0 && recentDrafts.every(d => effectiveReviewedAt(d)) ? 100 : recentDrafts.length > 0 ? 50 : 0}
         title="Review and share drafts"
-        subtitle="Mark internal Word drafts reviewed, convert or upload PDFs, then email the client review link. Clients only see shared PDFs."
+        subtitle="Mark internal Word drafts reviewed, upload PDFs exported from Word, then promote PDFs to client-visible folders."
       />
 
       <section style={{ ...guidedCardStyle, padding: 0, overflow: 'hidden' }}>
@@ -212,7 +188,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
           <div>
             <h3 className="text-base font-medium" style={{ color: 'var(--gi-heading)' }}>Internal Word drafts</h3>
             <p className="mt-1 text-[12px]" style={{ color: 'var(--gi-muted)' }}>
-              Edit in Word, then convert to PDF or upload a PDF to share with the client.
+              Edit in Word, then upload a PDF to share with the client.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -267,7 +243,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                 : gate.reason === 'not_reviewed'
                   ? 'Mark this draft reviewed before sharing'
                   : isWord
-                    ? 'Converts to PDF and shares with the client portal'
+                    ? 'Export a PDF from Word and use Upload PDF to share'
                     : undefined
               return (
                 <div key={doc.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -305,19 +281,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'download', doc.name)}>
                     <Download className="h-3.5 w-3.5" /> Download
                   </Button>
-                  {isWord ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-1.5 text-xs text-emerald-700 hover:bg-emerald-50"
-                      disabled={convertingId === doc.id || !gate.ok}
-                      title={gateTitle}
-                      onClick={() => void handleConvertAndShare(doc)}
-                    >
-                      {convertingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                      Convert &amp; share PDF
-                    </Button>
-                  ) : (
+                  {isPdf ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -329,7 +293,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                       {approvingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Share PDF
                     </Button>
-                  )}
+                  ) : null}
                   <Button
                     size="sm"
                     variant="outline"
@@ -349,7 +313,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
           <p style={{ ...guidedKickerStyle, marginBottom: 8 }}>Included when emailing client review link (PDF only)</p>
           {sharedDrafts.length === 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              No shared PDFs yet. Use Convert &amp; share PDF, or upload a PDF exported from Word.
+              No shared PDFs yet. Upload a PDF exported from Word.
             </p>
           ) : (
             <ul className="mt-2 space-y-1 text-xs text-foreground">

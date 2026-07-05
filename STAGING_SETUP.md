@@ -1,149 +1,94 @@
-# Staging Environment Setup
+# Staging — Cornerstone Drafting
 
-End-to-end procedure for a Vercel Preview/Staging environment that mirrors production without touching real client data, real client emails, or real DocuSeal envelopes.
+Staging validates the drafting app against fake matter data without touching production clients.
 
-**Time estimate:** 45-60 minutes the first time. Quarterly maintenance: 15 minutes.
-
-**Cost:** Usually $0-$5/mo for the extra Supabase/R2 staging resources, depending on usage.
+**Time estimate:** 30–45 minutes first time.
 
 ---
 
-## Architecture target
+## Architecture
 
 ```
-Production domain(s)  -> Vercel Production -> Supabase prod
-                                           -> R2 legal-documents
-                                           -> Resend prod domain
-                                           -> DocuSeal prod workspace
+Production  -> Vercel Production -> Supabase prod (shared firm DB)
+                                 -> R2 legal-documents
 
-Staging domain        -> Vercel Preview    -> Supabase staging
-                                           -> R2 legal-documents-staging
-                                           -> EMAILS_ENABLED=false
-                                           -> DocuSeal test workspace
+Staging     -> Vercel Preview    -> Supabase staging OR prod read-only*
+                                 -> R2 legal-documents-staging
 ```
 
-Two principles:
-
-1. **Staging cannot reach real clients.** `EMAILS_ENABLED=false` is the hard guard; an allowlist is the belt-and-suspenders.
-2. **Staging data is disposable.** Never restore production into staging without sanitizing PII first. Empty staging plus manual seed data is safer.
+\* Most teams point staging at a **separate Supabase project** with seeded test matters. You can also use the shared firm database with a staging-only admin account — do not reset migrations on the shared project.
 
 ---
 
-## Step 1 — Supabase staging project
+## Step 1 — Supabase
 
-1. Create a new project at [supabase.com/dashboard](https://supabase.com/dashboard). Name it `aubrey-law-staging`.
-2. Copy the project credentials for Vercel Preview environment variables:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-3. Apply migrations from a local checkout:
+**Option A — Shared firm database (simplest)**
+
+Reuse production/staging Supabase credentials. Matters must already exist from the CRM portal.
+
+**Option B — Isolated staging project**
+
+1. Create `cornerstone-drafting-staging` at [supabase.com/dashboard](https://supabase.com/dashboard).
+2. Apply only the drafting baseline:
    ```bash
-   supabase link --project-ref <staging-project-ref>
+   supabase link --project-ref <staging-ref>
    supabase db push
    ```
-4. Configure Supabase Auth:
-   - Site URL: your staging host, such as `https://staging.aubreylegal.com`
-   - Confirm email: ON
-   - Redirect URLs: include the staging auth callback URLs
-5. Seed one staging admin and a few fake clients. Use `scott+staging@aubreylegal.com` or another staging-only inbox.
+3. Seed test matters, intake rows, and design sheets manually or via SQL.
+
+Configure Auth:
+
+- Site URL: `https://<staging-host>`
+- Redirect URLs: `https://<staging-host>/auth/callback`
+
+Create one admin user (`role = attorney` in `public.users`).
 
 ---
 
 ## Step 2 — Cloudflare R2 staging bucket
 
-1. Create a bucket named `legal-documents-staging`.
-2. Turn Object Versioning ON.
-3. Set CORS to the staging host and local dev host only.
-4. Create or reuse a scoped R2 token and copy:
+1. Create bucket `legal-documents-staging` (or similar).
+2. Point Preview env vars at staging keys:
+   - `R2_ACCOUNT_ID`
    - `R2_ACCESS_KEY_ID`
    - `R2_SECRET_ACCESS_KEY`
-   - `R2_ACCOUNT_ID`
-
-Keep staging and production bucket names distinct.
+   - `R2_BUCKET` / `R2_BUCKET_NAME`
 
 ---
 
-## Step 3 — Vercel preview/staging deployment
+## Step 3 — Vercel Preview environment
 
-Use one of these patterns:
+Set Preview-scoped variables (see [VERCEL_ENV_CHECKLIST.md](VERCEL_ENV_CHECKLIST.md)):
 
-- **Preview deployments:** every branch/PR gets a Vercel preview URL. Best for ordinary QA.
-- **Dedicated staging branch:** configure a stable staging domain, such as `staging.aubreylegal.com`, against a staging branch or promoted preview deployment.
+| Variable | Notes |
+|----------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Staging or shared |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Matching project |
+| `SUPABASE_SERVICE_ROLE_KEY` | Matching project |
+| `R2_*` | Staging bucket |
+| `ANTHROPIC_API_KEY` | Optional AI import/fallback |
+| `ADMIN_EMAIL` | Staging admin inbox |
+| `ESTATE_GENERATOR_ENGINE` | `node` (default) |
 
-For a dedicated staging domain, add the domain in Vercel, then add the DNS record Vercel provides.
-
----
-
-## Step 4 — Vercel environment variables
-
-Open Vercel Project Settings -> Environment Variables. Add staging-safe values for Preview, and Production values only for Production.
-
-Minimum staging values:
+Build command (from `vercel.json`):
 
 ```bash
-NODE_ENV=production
-NEXT_PUBLIC_SENTRY_ENVIRONMENT=staging
-
-NEXT_PUBLIC_APP_HOST=staging.aubreylegal.com
-NEXT_PUBLIC_PORTAL_HOST=staging.aubreylegal.com
-NEXT_PUBLIC_APP_URL=https://staging.aubreylegal.com
-NEXT_PUBLIC_PORTAL_URL=https://staging.aubreylegal.com
-NEXT_PUBLIC_SITE_URL=https://staging.aubreylegal.com
-PORTAL_ENABLED=true
-
-NEXT_PUBLIC_SUPABASE_URL=https://<staging-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<staging anon key>
-SUPABASE_SERVICE_ROLE_KEY=<staging service role key>
-
-R2_ACCOUNT_ID=<cloudflare account id>
-R2_ACCESS_KEY_ID=<staging access key>
-R2_SECRET_ACCESS_KEY=<staging secret>
-R2_BUCKET_NAME=legal-documents-staging
-
-EMAILS_ENABLED=false
-EMAIL_ALLOWLIST=aubreylegal.com,example.com
-EMAIL_TEST_INBOX=scott+staging@aubreylegal.com
-RESEND_API_KEY=<resend key>
-RESEND_FROM=Scott Aubrey, Esq. <scott+staging@aubreylegal.com>
-
-DOCUSEAL_API_KEY=<docuseal test workspace key>
-ANTHROPIC_API_KEY=<anthropic key>
-ADMIN_EMAIL=scott+staging@aubreylegal.com
-CRON_SECRET=<staging cron secret>
-NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<stable random key>
+npm run estate-generator:setup && npm run build:next
 ```
 
-Calendar, Lawmatics, Sentry, Google Places, and other optional integrations should also use staging-specific callback URLs where possible.
+---
+
+## Step 4 — Smoke test
+
+1. Open `/auth/login` on the staging host.
+2. Sign in as staging admin → should land on `/admin/drafting`.
+3. Open a seeded matter → design → generate → review.
+4. Confirm `/api/health?check=full` returns `{ ok: true }`.
 
 ---
 
-## Step 5 — Cron behavior
+## Quarterly maintenance
 
-`vercel.json` configures `/api/cron/intake-sync`. Keep `CRON_SECRET` set in any environment where you manually test the cron route.
-
-If staging should not run sync automatically, leave staging Lawmatics credentials unset and test the route manually with fake data.
-
----
-
-## Step 6 — Verify
-
-1. Health check:
-   ```bash
-   curl https://staging.aubreylegal.com/api/health
-   ```
-2. Admin login at `/auth/login?type=admin` with the staging admin.
-3. Create a fake lead and run intake.
-4. Draft an engagement agreement.
-5. Attempt a send and confirm it is suppressed because `EMAILS_ENABLED=false`.
-6. Upload a document and confirm it lands in `legal-documents-staging`.
-7. View/download the document and confirm an audit row is written.
-8. Confirm production data does not appear anywhere in the staging UI.
-
----
-
-## Step 7 — Ongoing maintenance
-
-- Re-run this setup quarterly.
-- Rotate staging service-role keys after any contractor/vendor access changes.
-- Keep staging OAuth redirect URLs in sync with the chosen staging domain.
-- Treat any accidental `EMAILS_ENABLED=true` staging deploy as an incident until the email log proves no real recipients were contacted.
+- Rotate staging service-role key if compromised.
+- Refresh seeded test matters after schema changes.
+- Confirm Python venv still builds on Vercel if using `ESTATE_GENERATOR_ENGINE=python`.

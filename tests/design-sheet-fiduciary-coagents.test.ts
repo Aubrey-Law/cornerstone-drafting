@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addCo, removeCo, slotsByOrder } from '@/app/admin/matters/[id]/design/sections/fiduciary-helpers'
+import { addCo, removeCo, slotsByOrder } from '@/app/admin/drafting/[matterId]/design/sections/fiduciary-helpers'
 import type { FiduciarySlot } from '@/types/database'
 
 vi.stubGlobal('crypto', {

@@ -9,7 +9,6 @@ import {
   shareableDocumentKind,
   wordDocShareBlockReason,
 } from '@/lib/documentSharing'
-import { pdfFilenameFromDocx } from '@/lib/docxToPdf'
 
 describe('documentSharing helpers', () => {
   it('classifies shareable document kinds', () => {
@@ -51,13 +50,6 @@ describe('documentSharing helpers', () => {
   })
 })
 
-describe('pdfFilenameFromDocx', () => {
-  it('replaces .docx with .pdf', () => {
-    expect(pdfFilenameFromDocx('Living Trust.docx')).toBe('Living Trust.pdf')
-    expect(pdfFilenameFromDocx('Pour-Over Will.DOCX')).toBe('Pour-Over Will.pdf')
-  })
-})
-
 describe('document sharing route wiring', () => {
   const patchRoute = fs.readFileSync(
     path.join(process.cwd(), 'app/api/documents/[id]/route.ts'),
@@ -65,10 +57,6 @@ describe('document sharing route wiring', () => {
   )
   const uploadRoute = fs.readFileSync(
     path.join(process.cwd(), 'app/api/documents/upload/route.ts'),
-    'utf8',
-  )
-  const sharePdfRoute = fs.readFileSync(
-    path.join(process.cwd(), 'app/api/admin/matters/[id]/documents/[docId]/share-pdf/route.ts'),
     'utf8',
   )
 
@@ -80,10 +68,5 @@ describe('document sharing route wiring', () => {
   it('requires PDF for admin uploads to share folders', () => {
     expect(uploadRoute).toContain('pdfRequiredUploadReason')
     expect(uploadRoute).toContain("code: 'pdf_required'")
-  })
-
-  it('exposes convert-and-share PDF endpoint', () => {
-    expect(sharePdfRoute).toContain('convertDocxBufferToPdf')
-    expect(sharePdfRoute).toContain("folder: toFolder")
   })
 })

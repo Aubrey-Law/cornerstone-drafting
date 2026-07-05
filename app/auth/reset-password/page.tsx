@@ -9,7 +9,6 @@ import { supabase } from '@/lib/supabaseClient'
 function ResetPasswordForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const type = searchParams.get('type')
   const code = searchParams.get('code')
   const errorDescription = searchParams.get('error_description')
   const [password, setPassword] = useState('')
@@ -59,7 +58,7 @@ function ResetPasswordForm() {
 
     await supabase.auth.signOut()
     toast.success('Password updated. Please sign in.')
-    router.replace(`/auth/login${type === 'admin' ? '?type=admin' : ''}`)
+    router.replace('/auth/login')
   }
 
   return (
@@ -68,7 +67,7 @@ function ResetPasswordForm() {
         <p className="text-xs font-semibold uppercase tracking-widest text-accent">Account security</p>
         <h1 className="mt-2 text-xl font-semibold text-foreground">Reset your password</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Choose a new password for your Aubrey Law portal account.
+          Choose a new password for your drafting account.
         </p>
       </div>
 
@@ -116,7 +115,7 @@ function ResetPasswordForm() {
 
       <p className="text-center text-sm text-muted-foreground">
         Remembered it?{' '}
-        <Link href={`/auth/login${type === 'admin' ? '?type=admin' : ''}`} className="font-medium text-accent hover:underline">
+        <Link href="/auth/login" className="font-medium text-accent hover:underline">
           Return to sign in
         </Link>
       </p>

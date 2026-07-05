@@ -404,9 +404,9 @@ export default function DesignSheetShell({
             {!embedded && (
               <div style={{ marginBottom: 16 }}>
                 <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground" asChild>
-                  <Link href={`/admin/matters/${matterId}`}>
+                  <Link href={`/admin/drafting/${matterId}?step=design`}>
                     <ArrowLeft className="h-3.5 w-3.5" />
-                    Back to matter
+                    Back to design
                   </Link>
                 </Button>
               </div>

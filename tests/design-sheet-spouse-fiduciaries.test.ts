@@ -18,7 +18,7 @@ describe('design sheet spouse fiduciary selections', () => {
   })
 
   it('renders spouse fiduciary blocks for married matters in the applicable document sections', () => {
-    const sections = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/DocumentSections.tsx'), 'utf8')
+    const sections = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DocumentSections.tsx'), 'utf8')
 
     expect(sections).toContain('slotField="spouse_trustee_slots"')
     // Trustee blocks are now titled with first names, e.g. "Jon's Trustees".
@@ -42,7 +42,7 @@ describe('design sheet spouse fiduciary selections', () => {
 
   it('includes spouse fiduciaries in readiness and drafting payload paths', () => {
     const readiness = fs.readFileSync(path.join(process.cwd(), 'lib/designSheetReadiness.ts'), 'utf8')
-    const payload = fs.readFileSync(path.join(process.cwd(), 'lib/buildDraftPayload.ts'), 'utf8')
+    const payload = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/helpers.ts'), 'utf8')
 
     expect(readiness).toContain('spouseFiduciariesNeeded')
     expect(readiness).toContain("'spouse trustee'")

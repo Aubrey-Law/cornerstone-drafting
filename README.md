@@ -2,7 +2,7 @@
 
 A focused Next.js app for estate-planning document drafting: design sheet, document generation, and internal draft review.
 
-This repo was extracted from the Aubrey Law portal. It keeps the drafting hub and workspace only — no client portal, leads CRM, calendar, or third-party integrations.
+This repo was extracted from the Aubrey Law portal. It keeps the drafting hub and workspace only — no client portal, leads CRM, calendar, email, or third-party integrations.
 
 ## Stack
 
@@ -44,7 +44,9 @@ npm run build:next
 ## Main routes
 
 - Drafting hub: `/admin/drafting`
-- Drafting workspace: `/admin/drafting/[matterId]`
+- Drafting workspace: `/admin/drafting/[matterId]` (design → generate → review)
+- Design sheet UI: `/admin/drafting/[matterId]/design` (legacy `/admin/matters/[id]/design` redirects here)
+- Staff login: `/auth/login`
 - Draft generation API: `/api/admin/matters/[id]/draft`
 - Design sheet API: `/api/admin/matters/[id]/design-sheet`
 
@@ -60,4 +62,15 @@ npm run estate-generator:setup && npm run build:next
 
 ## Data dependencies
 
-Drafting reads existing matter data from Supabase (`v_matter_pipeline`, `design_sheets`, `matter_documents`, `contacts`, `client_intake`). Matters are expected to exist in the database; this app does not include full matter CRM UI.
+Drafting reads existing matter data from Supabase (`v_matter_pipeline`, `design_sheets`, `matter_documents`, `contacts`, `client_intake`). Matters are expected to exist in the database; this app does not include matter CRM UI.
+
+The bundled Supabase migrations were replaced with a **drafting-only baseline** (3 files in `supabase/migrations/`). The full CRM portal history is archived in `supabase/migrations_archive/portal/`.
+
+- **Greenfield / local `supabase db reset`**: applies the drafting baseline only.
+- **Existing firm database**: keep the current schema; deploy app code only — do not reset migrations.
+
+See [supabase/migrations/README.md](supabase/migrations/README.md).
+
+## Sharing PDFs with clients
+
+Export PDFs from Word locally, then use **Upload PDF to share** on the Review step. Automated DOCX→PDF conversion (Microsoft Graph) is not included in this app.

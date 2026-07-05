@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 
-export default async function LegacyDesignRedirect({
+/** Legacy bookmark from the portal matter UI. */
+export default async function LegacyMatterDesignRedirect({
   params,
 }: {
   params: Promise<{ id: string }>

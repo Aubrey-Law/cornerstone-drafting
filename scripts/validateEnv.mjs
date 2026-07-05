@@ -15,11 +15,8 @@ const REQUIRED_AT_RUNTIME = [
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME',
 
-  // AI drafting
+  // AI drafting fallback
   'ANTHROPIC_API_KEY',
-
-  // Transactional email
-  'RESEND_API_KEY',
 
   // Admin auth guard — used in multiple API routes to identify the attorney
   'ADMIN_EMAIL',

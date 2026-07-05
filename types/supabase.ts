@@ -19,7 +19,7 @@
 
 // `Row` is intentionally `any` so query results widen freely into the
 // hand-written row interfaces in `types/database.ts` (e.g. `PipelineMatter`,
-// `MatterNote`, `Flag`). `Insert`/`Update` accept arbitrary object payloads.
+// `DesignSheet`, `MatterDocument`). `Insert`/`Update` accept arbitrary payloads.
 type AnyRow = { [column: string]: any }
 
 type AnyTable = {

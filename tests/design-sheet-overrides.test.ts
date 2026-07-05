@@ -18,7 +18,7 @@ describe('design sheet prefilled field overrides', () => {
   })
 
   it('renders overridden prefilled fields with the attorney override color and visible prefilled value', () => {
-    const shared = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/shared.tsx'), 'utf8')
+    const shared = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/shared.tsx'), 'utf8')
 
     expect(shared).toContain("isOverride ? 'bg-warning/10 border-warning/40")
     expect(shared).toContain('function PrefilledValueNote')
@@ -28,8 +28,8 @@ describe('design sheet prefilled field overrides', () => {
   })
 
   it('passes override originals into common prefilled fields', () => {
-    const personal = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/PersonalSection.tsx'), 'utf8')
-    const family = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/FamilySection.tsx'), 'utf8')
+    const personal = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/PersonalSection.tsx'), 'utf8')
+    const family = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/FamilySection.tsx'), 'utf8')
 
     expect(personal).toContain("originalValue={original('client_name')}")
     expect(personal).toContain("originalValue={original('city')}")

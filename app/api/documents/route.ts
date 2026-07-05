@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
-import { mirrorMatterDocumentToOneDrive } from '@/lib/oneDriveSync'
 import {
   filterClientVisibleDocuments,
   isAdminUser,
@@ -91,14 +90,6 @@ export async function POST(req: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  mirrorMatterDocumentToOneDrive({
-    matterDocumentId: data.id,
-    matterId,
-    r2Key,
-    fileName: name,
-    folder,
-  }).catch((err) => console.error('[onedrive] mirrorMatterDocumentToOneDrive', err))
 
   return NextResponse.json({ document: data })
 }

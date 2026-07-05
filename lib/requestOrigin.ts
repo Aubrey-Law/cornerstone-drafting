@@ -14,8 +14,6 @@ import type { NextRequest } from 'next/server'
 const PUBLIC_ORIGIN_ENV_KEYS = [
   'NEXT_PUBLIC_APP_URL',
   'NEXT_PUBLIC_SITE_URL',
-  'GOOGLE_CALENDAR_REDIRECT_URI',
-  'MICROSOFT_GRAPH_REDIRECT_URI',
 ] as const
 
 function isLoopbackHost(host: string): boolean {

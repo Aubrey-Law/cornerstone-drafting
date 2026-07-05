@@ -15,7 +15,8 @@ export async function saveLiDesignSheet(matterId: string, data: Record<string, u
     .eq('id', matterId)
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/admin/matters/${matterId}/design`)
+  revalidatePath(`/admin/drafting/${matterId}`)
+  revalidatePath(`/admin/drafting/${matterId}?step=design`)
 }
 
 
@@ -28,7 +29,8 @@ export async function updatePlanCoverage(matterId: string, coverage: 'no_trust' 
     .eq('id', matterId)
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/admin/matters/${matterId}/design`)
+  revalidatePath(`/admin/drafting/${matterId}`)
+  revalidatePath(`/admin/drafting/${matterId}?step=design`)
 }
 
 export async function addContact(data: {

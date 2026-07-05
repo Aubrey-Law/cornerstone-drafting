@@ -7,9 +7,7 @@ import { getR2Client, R2_BUCKET } from '@/lib/r2'
 // and any external synthetic monitor.
 //
 // GET /api/health?check=full performs readiness probes against critical
-// dependencies (Supabase, R2). Resend and Anthropic are env-presence only —
-// we don't make billable API calls from a healthcheck. 503 if any required
-// dependency fails.
+// dependencies (Supabase, R2). 503 if any required dependency fails.
 
 type CheckStatus = 'ok' | 'fail' | 'skip'
 type Check = { status: CheckStatus; latencyMs?: number; detail?: string }
@@ -52,20 +50,6 @@ async function checkR2(): Promise<Check> {
   }
 }
 
-function checkResendEnv(): Check {
-  const key = process.env.RESEND_API_KEY
-  if (!key) return { status: 'fail', detail: 'RESEND_API_KEY missing' }
-  if (!key.startsWith('re_')) return { status: 'fail', detail: 'RESEND_API_KEY malformed' }
-  return { status: 'ok' }
-}
-
-function checkAnthropicEnv(): Check {
-  const key = process.env.ANTHROPIC_API_KEY
-  if (!key) return { status: 'fail', detail: 'ANTHROPIC_API_KEY missing' }
-  if (!key.startsWith('sk-ant-')) return { status: 'fail', detail: 'ANTHROPIC_API_KEY malformed' }
-  return { status: 'ok' }
-}
-
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   if (url.searchParams.get('check') !== 'full') {
@@ -73,10 +57,8 @@ export async function GET(req: NextRequest) {
   }
 
   const [supabase, r2] = await Promise.all([checkSupabase(), checkR2()])
-  const resend = checkResendEnv()
-  const anthropic = checkAnthropicEnv()
 
-  const checks = { supabase, r2, resend, anthropic }
+  const checks = { supabase, r2 }
   const ok = Object.values(checks).every((c) => c.status !== 'fail')
 
   return NextResponse.json(

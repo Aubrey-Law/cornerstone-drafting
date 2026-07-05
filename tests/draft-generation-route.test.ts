@@ -46,15 +46,16 @@ describe('matter draft generation route', () => {
 
   it('uses the Node estate generator as the draft engine with only temporary Python fallback', () => {
     const source = fs.readFileSync(routePath, 'utf8')
-    const predicate = source.slice(
-      source.indexOf('function estateGeneratorEngine'),
-      source.indexOf('async function generateFallbackFiles'),
-    )
+    const engineSource = fs.readFileSync(path.join(process.cwd(), 'lib/estateGenerator/engine.ts'), 'utf8')
 
-    expect(predicate).toContain("process.env.ESTATE_GENERATOR_ENGINE?.trim().toLowerCase()")
-    expect(predicate).toContain("if (engine === 'supabase' || engine === 'typescript') return 'supabase'")
-    expect(predicate).toContain("return 'node'")
-    expect(predicate).not.toContain("if (engine === 'python') return 'python'")
+    expect(source).toContain('resolveEstateGeneratorEngine')
+    expect(source).toContain('pythonFallbackEngineLabel')
+    expect(source).toContain('@/lib/estateGenerator/engine')
+    expect(source).toContain('const engine: EstateGeneratorEngine = resolveEstateGeneratorEngine()')
+    expect(engineSource).toContain("process.env.ESTATE_GENERATOR_ENGINE?.trim().toLowerCase()")
+    expect(engineSource).toContain("if (raw === 'supabase' || raw === 'typescript') return 'supabase'")
+    expect(engineSource).toContain("if (raw === 'python') return 'python'")
+    expect(engineSource).toContain("return 'node'")
     expect(source).toContain("await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload))")
     expect(source).toContain('nodeGenerateResult.status === 501')
     expect(source).toContain("await import('@/lib/estateGenerator/runEstateGenerator')")

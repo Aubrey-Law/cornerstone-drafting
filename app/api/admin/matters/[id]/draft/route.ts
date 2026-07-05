@@ -17,6 +17,11 @@ import {
   encodeDraftDownloadMeta,
 } from '@/lib/drafting/buildDraftDownloadZip'
 import { selectSupersededDraftIds } from '@/lib/drafting/supersede'
+import {
+  pythonFallbackEngineLabel,
+  resolveEstateGeneratorEngine,
+  type EstateGeneratorEngine,
+} from '@/lib/estateGenerator/engine'
 
 // Per-document marker report returned to the drafting UI. A non-zero markerCount
 // means the document still contains `[TODO:`, `[[ MISSING ]]`, or leftover
@@ -154,14 +159,6 @@ function mergeDraftWarnings(...groups: string[][]): string[] {
   return normalizeDraftWarnings(groups.flat())
 }
 
-type EstateGeneratorEngine = 'node' | 'supabase'
-
-function estateGeneratorEngine(): EstateGeneratorEngine {
-  const engine = process.env.ESTATE_GENERATOR_ENGINE?.trim().toLowerCase()
-  if (engine === 'supabase' || engine === 'typescript') return 'supabase'
-  return 'node'
-}
-
 async function generateFallbackFiles(
   req: NextRequest,
   matterRef: string,
@@ -283,14 +280,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Step 4: Generate documents via direct function call (no internal HTTP round-trip)
     let draftWarnings = draftCoverageWarnings(payload)
     let draftMissing: string[] = []
-    const engine = estateGeneratorEngine()
+    const engine: EstateGeneratorEngine = resolveEstateGeneratorEngine()
     const usingEstateGenerator = engine !== 'supabase'
     const admin = getAdminClient()
     let generateResult
     // Which generator actually produced the files, recorded per document for
     // provenance. Starts at the configured engine and is corrected when the Node
     // path defers to the Supabase generator or the per-document Python fallback.
-    let generationEngine: 'node' | 'supabase' | 'python_fallback' = engine
+    let generationEngine: EstateGeneratorEngine | 'python_fallback' = engine
     if (engine === 'node') {
       const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload))
       if (!nodeGenerateResult.ok && nodeGenerateResult.status === 501) {
@@ -341,7 +338,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             { status: 401 }
           )
         }
-        generationEngine = 'python_fallback'
+        generationEngine = pythonFallbackEngineLabel()
         generatedFiles = await generateFallbackFiles(req, canonicalMatterId, token, payload)
       } else {
         return NextResponse.json(

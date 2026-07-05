@@ -333,7 +333,7 @@ describe('computeDesignSheetReadiness', () => {
 describe('design sheet readiness UI wiring', () => {
   it('uses shared readiness blockers to gate drafting and jump to exact field targets', () => {
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
       'utf8',
     )
     const workspace = fs.readFileSync(
@@ -341,15 +341,15 @@ describe('design sheet readiness UI wiring', () => {
       'utf8',
     )
     const sharedControls = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/shared.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/shared.tsx'),
       'utf8',
     )
     const personal = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/PersonalSection.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/PersonalSection.tsx'),
       'utf8',
     )
     const provisions = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/WillProvisionsSection.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/WillProvisionsSection.tsx'),
       'utf8',
     )
 

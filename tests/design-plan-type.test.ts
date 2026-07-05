@@ -38,7 +38,7 @@ describe('design plan type normalization', () => {
 
 describe('legacy design-sheet plan type migration', () => {
   it('canonicalizes stale stored design-sheet plan type values', () => {
-    const migrationsDir = path.join(process.cwd(), 'supabase/migrations')
+    const migrationsDir = path.join(process.cwd(), 'supabase/migrations_archive/portal')
     const migration = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql'))
       .map(file => fs.readFileSync(path.join(migrationsDir, file), 'utf8'))

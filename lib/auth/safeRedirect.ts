@@ -1,14 +1,7 @@
-const CLIENT_REDIRECT_ALLOWLIST = [
-  '/dashboard',
-  '/documents',
-  '/messages',
-  '/plan-review',
-  '/design-review',
-  '/calendar',
-  '/intake',
-]
+const ADMIN_REDIRECT_PREFIXES = ['/admin']
 
-export function safeClientRedirectPath(value: string | null | undefined): string | null {
+/** Allow same-origin admin paths only (blocks open redirects). */
+export function safeAdminRedirectPath(value: string | null | undefined): string | null {
   if (!value) return null
   if (!value.startsWith('/') || value.startsWith('//')) return null
 
@@ -21,8 +14,8 @@ export function safeClientRedirectPath(value: string | null | undefined): string
   }
 
   const pathname = path.split(/[?#]/, 1)[0]
-  const allowed = CLIENT_REDIRECT_ALLOWLIST.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  const allowed = ADMIN_REDIRECT_PREFIXES.some(
+    prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),
   )
   return allowed ? path : null
 }

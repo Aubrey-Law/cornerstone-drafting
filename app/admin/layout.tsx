@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
-import { getFirmConfig } from '@/lib/emailTemplates'
+import { getFirmConfig } from '@/lib/firmConfig'
 import AdminLayoutClient from './AdminLayoutClient'
 import { AuthTokenProvider } from '@/lib/auth/AuthTokenProvider'
 
@@ -21,12 +21,12 @@ export default async function AdminLayout({
 }) {
   const auth = await getCachedClaims()
   if (!auth) {
-    redirect('/auth/login?type=admin')
+    redirect('/auth/login')
   }
 
   const role = await getCachedUserRole(auth.id)
   if (!role || !ADMIN_ROLES.includes(role)) {
-    redirect('/auth/login?type=admin')
+    redirect('/auth/login')
   }
 
   const firm = getFirmConfig()

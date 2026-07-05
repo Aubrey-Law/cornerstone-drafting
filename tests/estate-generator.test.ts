@@ -1104,20 +1104,24 @@ describe('estate generator mapping', () => {
   })
 
   it('loads county into the draft payload from intake and design-sheet decisions', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'lib/buildDraftPayload.ts'), 'utf8')
+    const assemble = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/assemble.ts'), 'utf8')
+    const intakeTypes = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/types.ts'), 'utf8')
 
-    expect(source).toContain('address_line1, city, county, state, zip')
-    expect(source).toContain("decisionString(designSheet, 'county')")
-    expect(source).toContain('intake.county')
-    expect(source).toContain('designSheet?.signing_county')
+    expect(intakeTypes).toContain('address_line1: string | null')
+    expect(intakeTypes).toContain('county: string | null')
+    expect(assemble).toContain("decisionString(designSheet, 'county')")
+    expect(assemble).toContain('intake.county')
+    expect(assemble).toContain('designSheet?.signing_county')
   })
 
   it('loads design-sheet children into the draft payload for generator output', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'lib/buildDraftPayload.ts'), 'utf8')
+    const types = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/types.ts'), 'utf8')
+    const helpers = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/helpers.ts'), 'utf8')
+    const assemble = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/assemble.ts'), 'utf8')
 
-    expect(source).toContain('children?: DesignSheetChild[] | null')
-    expect(source).toContain('function draftPayloadChildren(')
-    expect(source).toContain('designSheet?.children')
-    expect(source).toContain("children: draftPayloadChildren(designSheet)")
+    expect(types).toContain('children?: DesignSheetChild[] | null')
+    expect(helpers).toContain('export function draftPayloadChildren(')
+    expect(helpers).toContain('designSheet?.children')
+    expect(assemble).toContain('children: draftPayloadChildren(designSheet)')
   })
 })

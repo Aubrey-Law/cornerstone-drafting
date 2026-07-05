@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 describe('design sheet plan-specific UI cleanup', () => {
   it('keeps retired family-provision clutter out of the Trust document section', () => {
     const source = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/DocumentSections.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DocumentSections.tsx'),
       'utf8',
     )
 
@@ -26,7 +26,7 @@ describe('design sheet plan-specific UI cleanup', () => {
 
   it('restores trust distribution and tangible personal property controls to the Trust document section', () => {
     const source = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/DocumentSections.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DocumentSections.tsx'),
       'utf8',
     )
     const trustSection = source.slice(
@@ -44,11 +44,11 @@ describe('design sheet plan-specific UI cleanup', () => {
 
   it('centralizes tangible personal property in Plan Design, not Will or Trust', () => {
     const plan = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/PlanDesignSection.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/PlanDesignSection.tsx'),
       'utf8',
     )
     const will = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/matters/[id]/design/sections/WillProvisionsSection.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/WillProvisionsSection.tsx'),
       'utf8',
     )
 

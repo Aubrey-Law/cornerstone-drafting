@@ -15,7 +15,6 @@ import {
   safeUploadFilename,
 } from '@/lib/documentUpload'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
-import { mirrorMatterDocumentToOneDrive } from '@/lib/oneDriveSync'
 import type { MatterDocument } from '@/types/database'
 
 const VALID_FOLDERS = new Set(['draft', 'final', 'client', 'review', 'signed', 'intake', 'meeting-notes'])
@@ -130,14 +129,6 @@ export async function POST(req: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  mirrorMatterDocumentToOneDrive({
-    matterDocumentId: data.id,
-    matterId,
-    r2Key,
-    fileName: file.name,
-    folder,
-  }).catch((err) => console.error('[onedrive] mirrorMatterDocumentToOneDrive', err))
 
   return NextResponse.json({ document: data })
 }
