@@ -20,6 +20,10 @@
 
 Python fallback uses the venv created by `npm run estate-generator:setup` during build.
 
+## Shared fields package
+
+`@aubrey-law/estate-fields` is vendored at `packages/estate-fields/` for Vercel and standalone clones. Sync registry changes from `aubrey-law-app/packages/estate-fields` (see that package's `SYNC.md`).
+
 ## Optional
 
 | Variable | Purpose |
