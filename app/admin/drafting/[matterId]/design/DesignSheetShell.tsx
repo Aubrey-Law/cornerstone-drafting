@@ -24,6 +24,7 @@ import {
 } from '@/components/guided'
 import { Button } from '@/components/ui/button'
 import { DesignValidationProvider } from './sections/shared'
+import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import {
   buildDesignSectionDefs,
   buildSummarySectionItems,
@@ -236,6 +237,7 @@ export default function DesignSheetShell({
     : null
 
   return (
+    <SharedFieldsProvider>
     <DesignValidationProvider value={validationValue}>
       <div className={cn('guided-interview flex min-h-0 flex-col', embedded ? 'h-full overflow-hidden' : 'h-full')}>
         {importDialogOpen && (
@@ -368,5 +370,6 @@ export default function DesignSheetShell({
         </div>
       </div>
     </DesignValidationProvider>
+    </SharedFieldsProvider>
   )
 }

@@ -64,15 +64,8 @@ function RequiredForDraftingNote() {
   )
 }
 
-// Mirrors PRONOUN_OPTIONS in the intake wizard so attorney-fill and intake
-// import share one vocabulary (values flow straight into drafting variables).
-export const PRONOUN_OPTIONS: { value: string; label: string }[] = [
-  { value: 'he/him', label: 'He/Him' },
-  { value: 'she/her', label: 'She/Her' },
-  { value: 'they/them', label: 'They/Them' },
-  { value: 'ze/zir', label: 'Ze/Zir' },
-  { value: 'other', label: 'Other' },
-]
+// Re-export from shared field registry — single source of truth with portal intake.
+export { PRONOUN_OPTIONS } from '@/lib/sharedFields/options'
 
 // ── Field label ───────────────────────────────────────────────────────────────
 

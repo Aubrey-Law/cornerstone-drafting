@@ -28,6 +28,7 @@ const SENTRY_BUILD_PLUGIN_ENABLED =
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ['@aubrey-law/estate-fields'],
   outputFileTracingRoot: path.resolve(process.cwd()),
   // The engagement-agreement Word template and document-generation assets are
   // read at runtime via fs; keep them in the traced serverless function bundles.
