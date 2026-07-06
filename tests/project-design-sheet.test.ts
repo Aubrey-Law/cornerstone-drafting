@@ -15,7 +15,7 @@ function payload(overrides: {
     matter: {
       id: 'matter-1',
       matter_number: 'EP-1',
-      type: 'married',
+      type: 'married_joint',
       trust_type: 'revocable_living',
       practice_area: 'Estate Planning',
       minor_children: false,
@@ -44,7 +44,7 @@ function payload(overrides: {
       preferred_pronoun: 'she/her',
       dob: '1972-02-02',
     },
-    children: [{ full_name: 'Kid Client', dob: '2010-03-03' }],
+    children: [{ full_name: 'Kid Client', dob: '2010-03-03', relationship: null, minor: false }],
     trust: {
       name: 'THE CLIENT FAMILY REVOCABLE LIVING TRUST',
       date: '2026-05-31',

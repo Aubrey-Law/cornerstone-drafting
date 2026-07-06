@@ -112,7 +112,7 @@ export function buildIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayloa
   }
 }
 
-export function isDesignSheetUnseeded(sheet: Pick<DesignSheet, 'client_name'> | null | undefined): boolean {
+export function isDesignSheetUnseeded(sheet: { client_name?: string | null } | null | undefined): boolean {
   return !sheet?.client_name?.trim()
 }
 
@@ -124,33 +124,31 @@ export function buildIntakeResyncPreview(args: {
   const proposed = buildIntakeSeedPayload(args.intake)
   const overrides = (currentSheet.overrides ?? {}) as Record<string, { original: string }>
 
-  return (Object.keys(INTAKE_SEED_FIELD_META) as IntakeSeedField[])
-    .map(field => {
-      const proposedValue = proposed[field]
-      if (isEmptyValue(proposedValue)) return null
+  return (Object.keys(INTAKE_SEED_FIELD_META) as IntakeSeedField[]).flatMap(field => {
+    const proposedValue = proposed[field]
+    if (isEmptyValue(proposedValue)) return []
 
-      const meta = INTAKE_SEED_FIELD_META[field]
-      const currentValue = currentSheet[field]
-      const blocked = Boolean(overrides[field])
-      const replacement = !isEmptyValue(currentValue)
-      const differs = stableStringify(currentValue) !== stableStringify(proposedValue)
+    const meta = INTAKE_SEED_FIELD_META[field]
+    const currentValue = currentSheet[field]
+    const blocked = Boolean(overrides[field])
+    const replacement = !isEmptyValue(currentValue)
+    const differs = stableStringify(currentValue) !== stableStringify(proposedValue)
 
-      if (!differs) return null
+    if (!differs) return []
 
-      return {
-        field,
-        label: meta.label,
-        section: meta.section,
-        currentValue,
-        proposedValue,
-        currentDisplay: formatDesignSheetImportValue(currentValue),
-        proposedDisplay: formatDesignSheetImportValue(proposedValue),
-        selected: !blocked && (!replacement || differs),
-        replacement,
-        blocked,
-      }
-    })
-    .filter((row): row is IntakeResyncPreviewRow => row !== null)
+    return [{
+      field,
+      label: meta.label,
+      section: meta.section,
+      currentValue,
+      proposedValue,
+      currentDisplay: formatDesignSheetImportValue(currentValue),
+      proposedDisplay: formatDesignSheetImportValue(proposedValue),
+      selected: !blocked && (!replacement || differs),
+      replacement,
+      blocked,
+    }]
+  })
 }
 
 export function buildIntakeResyncPatch(args: {
@@ -165,7 +163,7 @@ export function buildIntakeResyncPatch(args: {
   for (const field of args.fields) {
     const value = proposed[field]
     if (value === undefined) continue
-    patch[field] = value
+    ;(patch as Record<string, unknown>)[field] = value
     delete overrides[field]
   }
 

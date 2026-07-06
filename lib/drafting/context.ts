@@ -67,22 +67,22 @@ export function buildDraftContext(designSheet: Record<string, unknown>): DraftCo
   const children = designSheetChildren(designSheet)
   const hasChildren = children.length > 0
   const hasMinorChildren = children.some(child => child.is_minor === true)
-  const isMarried = isDesignSheetMarried(designSheet as { marital_status?: string | null })
+  const isMarried = isDesignSheetMarried(designSheet)
 
-  const hcpAlt1 = designSheetString(designSheet as { hcp_alt1?: string | null }, 'hcp_alt1') ?? ''
+  const hcpAlt1 = designSheetString(designSheet, 'hcp_alt1') ?? ''
   const hcpAlt2 = ''
   const hcpAlt3 = ''
 
-  const guardianAlt = designSheetString(designSheet as { guardian_alt1?: string | null }, 'guardian_alt1') ?? ''
+  const guardianAlt = designSheetString(designSheet, 'guardian_alt1') ?? ''
   const hasAltGuardian = Boolean(guardianAlt)
 
   const successorTrustee =
-    designSheetString(designSheet as { trustee_alt1?: string | null }, 'trustee_alt1') ||
-    designSheetString(designSheet as { executor_primary?: string | null }, 'executor_primary') ||
+    designSheetString(designSheet, 'trustee_alt1') ||
+    designSheetString(designSheet, 'executor_primary') ||
     ''
 
   const normalizedPlanType = normalizeDesignPlanType(designSheet.plan_type ?? decisions.plan_type)
-  const spouseName = designSheetString(designSheet as { spouse_name?: string | null }, 'spouse_name')
+  const spouseName = designSheetString(designSheet, 'spouse_name')
   const coFields = designSheet as DesignSheetCoFields
   const poaSlots = getDesignSlots(designSheet, 'poa_slots')
   const executorSlots = getDesignSlots(designSheet, 'executor_slots')
@@ -93,8 +93,8 @@ export function buildDraftContext(designSheet: Record<string, unknown>): DraftCo
     has_children: hasChildren,
     has_minor_children: hasMinorChildren,
 
-    client_aka: designSheetString(designSheet as { client_aka?: string | null }, 'client_aka') || undefined,
-    spouse_aka: designSheetString(designSheet as { spouse_aka?: string | null }, 'spouse_aka') || undefined,
+    client_aka: designSheetString(designSheet, 'client_aka') || undefined,
+    spouse_aka: designSheetString(designSheet, 'spouse_aka') || undefined,
 
     excluded_person: decisions.excluded_person ? String(decisions.excluded_person) : undefined,
     excluded_guardian: designSheet.excluded_guardian_flag && designSheet.excluded_guardian_name

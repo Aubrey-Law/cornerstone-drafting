@@ -321,7 +321,7 @@ export function projectDesignSheetToFlatSheet(args: {
   fiduciaries?: DraftPayload['fiduciaries']
   contacts?: ContactRow[]
 }): FlatSheet {
-  const sheet = args.designSheet as DesignSheetRow
+  const sheet = args.designSheet as unknown as DesignSheetRow
   const clientFull = designSheetString(sheet, 'client_name') ?? ''
   const spouseFull = designSheetString(sheet, 'spouse_name') ?? ''
 
