@@ -82,6 +82,9 @@ describe('buildDraftPayload', () => {
           status: 'draft',
           plan_type: 'pour_over',
           is_joint: false,
+          client_name: 'Jane Example',
+          client_pronouns: 'she/her',
+          marital_status: 'single',
           trust_name: null,
           trust_date: null,
           street: '456 Design Street',
@@ -188,7 +191,7 @@ describe('buildDraftPayload', () => {
     expect(payload.documents.include_trust).toBe(false)
     expect(payload.documents.include_pour_over_will).toBe(true)
     expect(payload.trust).toMatchObject({
-      name: 'Jane Example Revocable Living Trust',
+      name: 'The JE Trust',
       distribution_ages: [25, 30, 35],
     })
     expect(payload.client.preferred_pronoun).toBe('she/her')
@@ -248,6 +251,8 @@ describe('buildDraftPayload', () => {
           status: 'draft',
           plan_type: 'pour_over',
           is_joint: false,
+          client_name: 'Jane Example',
+          marital_status: 'single',
           // Address columns intentionally empty — values live in decisions.
           street: null,
           city: null,
@@ -308,7 +313,7 @@ describe('buildDraftPayload', () => {
     })
   })
 
-  it('carries the health care agent relationship from the contact record', async () => {
+  it('carries the health care agent relationship from design-sheet slots', async () => {
     mocks.getAdminClient.mockReturnValue(adminStub({
       matters: [
         { data: { id: 'matter-3' }, error: null },
@@ -347,6 +352,11 @@ describe('buildDraftPayload', () => {
           status: 'draft',
           plan_type: 'pour_over',
           is_joint: false,
+          client_name: 'Jane Example',
+          marital_status: 'single',
+          hcp_slots: [
+            { id: 'hcp-primary', contact_id: 'contact-hcp', is_co: false, order: 0 },
+          ],
           decisions: {},
         },
         error: null,
@@ -375,15 +385,7 @@ describe('buildDraftPayload', () => {
           date_of_birth: null,
           phone: null,
           email: null,
-          contact_roles: [{
-            id: 'role-hcp',
-            contact_id: 'contact-hcp',
-            client_intake_id: 'intake-3',
-            role: 'hcp',
-            for_party: 'client',
-            priority: 1,
-            is_coagent: false,
-          }],
+          contact_roles: [],
         }],
         error: null,
       }],
@@ -395,26 +397,39 @@ describe('buildDraftPayload', () => {
     expect(payload.fiduciaries.hcp_primary_relationship).toBe('Brother')
   })
 
-  it('derives the spouse from the contacts table (not client_intake.spouse_*)', async () => {
+  it('derives the spouse from the design sheet (not contacts)', async () => {
     mocks.getAdminClient.mockReturnValue(adminStub({
       matters: [
         { data: { id: 'matter-2' }, error: null },
         { data: { id: 'matter-2', client_intake_id: 'intake-2', matter_number: 'EP-200', status: 'active', stage: 'drafting' }, error: null },
       ],
       matter_details: [{ data: { id: 'details-2', client_id: 'matter-2', practice_area: 'Estate Planning', ep_trust_type: 'revocable_living' }, error: null }],
-      design_sheets: [{ data: { id: 'sheet-2', client_intake_id: 'intake-2', status: 'draft', plan_type: 'trust', is_joint: true }, error: null }],
+      design_sheets: [{
+        data: {
+          id: 'sheet-2',
+          client_intake_id: 'intake-2',
+          status: 'draft',
+          plan_type: 'trust',
+          is_joint: true,
+          client_name: 'Alex Stone',
+          marital_status: 'married',
+          spouse_name: 'Robin Stone',
+          spouse_dob: '1979-03-03',
+          spouse_pronouns: 'she/her',
+        },
+        error: null,
+      }],
       client_intake: [{
         data: {
           id: 'intake-2', first_name: 'Alex', last_name: 'Stone', marital_status: 'married',
-          // NOTE: no spouse_* keys here on purpose.
         },
         error: null,
       }],
       contacts: [{
         data: [
-          { id: 'c-sp', relationship_type: 'spouse', first_name: 'Robin', last_name: 'Stone',
-            middle_name: null, preferred_pronoun: 'she/her', date_of_birth: '1979-03-03',
-            phone: '+15553334444', email: 'robin@x.com', contact_roles: [] },
+          { id: 'c-sp', relationship_type: 'spouse', first_name: 'Wrong', last_name: 'Person',
+            middle_name: null, preferred_pronoun: 'they/them', date_of_birth: '1900-01-01',
+            phone: null, email: null, contact_roles: [] },
         ],
         error: null,
       }],
@@ -504,5 +519,75 @@ describe('buildDraftPayload', () => {
     const payload = await buildDraftPayload('matter-4')
 
     expect(payload.trust?.name).toBe('Smith Family Trust')
+  })
+
+  it('does not read client identity from intake after design sheet is populated', async () => {
+    mocks.getAdminClient.mockReturnValue(adminStub({
+      matters: [
+        { data: { id: 'matter-5' }, error: null },
+        {
+          data: {
+            id: 'matter-5',
+            client_intake_id: 'intake-5',
+            matter_number: 'EP-500',
+            status: 'active',
+            stage: 'drafting',
+          },
+          error: null,
+        },
+      ],
+      matter_details: [{
+        data: {
+          id: 'details-5',
+          client_id: 'matter-5',
+          practice_area: 'Estate Planning',
+          ep_trust_type: 'revocable_living',
+          ep_ancillary_docs: [],
+          ep_special_provisions: null,
+          ep_ma_estate_taxable: false,
+          ep_ma_estate_tax_savings: null,
+          ep_separate_trusts: false,
+          ep_has_ilit: false,
+          ep_ilit_trustee: null,
+          internal_notes: null,
+        },
+        error: null,
+      }],
+      design_sheets: [{
+        data: {
+          id: 'sheet-5',
+          client_intake_id: 'intake-5',
+          status: 'draft',
+          plan_type: 'pour_over',
+          is_joint: false,
+          client_name: 'Design Sheet Name',
+          client_pronouns: 'they/them',
+          client_email: 'design@example.com',
+          marital_status: 'single',
+        },
+        error: null,
+      }],
+      client_intake: [{
+        data: {
+          id: 'intake-5',
+          first_name: 'Intake',
+          last_name: 'Only',
+          full_name: 'Intake Only',
+          preferred_pronoun: 'he/him',
+          email: 'intake@example.com',
+          marital_status: 'married',
+          practice_area: 'Estate Planning',
+        },
+        error: null,
+      }],
+      contacts: [{ data: [], error: null }],
+    }))
+
+    const payload = await buildDraftPayload('matter-5')
+
+    expect(payload.client.full_name).toBe('Design Sheet Name')
+    expect(payload.client.preferred_pronoun).toBe('they/them')
+    expect(payload.client.email).toBe('design@example.com')
+    expect(payload.matter.type).toBe('individual')
   })
 })

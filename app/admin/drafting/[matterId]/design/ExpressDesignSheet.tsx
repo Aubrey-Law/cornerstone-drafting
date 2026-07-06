@@ -105,6 +105,7 @@ export default function ExpressDesignSheet({
 
   const sections = useMemo<SectionDef[]>(() => {
     const defs = buildDesignSectionDefs({
+      matterId,
       sheet,
       matter,
       contacts: contactsState,

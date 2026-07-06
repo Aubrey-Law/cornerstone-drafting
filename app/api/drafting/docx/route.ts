@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
-import { buildClientVariables, buildSpouseVariables, buildFlatSheet } from '@/lib/drafting/variables'
-import { resolveMatterId } from '@/lib/buildDraftPayload'
-import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
-import { loadHouseholdChildren } from '@/lib/contacts/loadHouseholdChildren'
+import { buildClientVariables, buildSpouseVariables } from '@/lib/drafting/variables'
+import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
+import { projectDraftPayloadToFlatSheet } from '@/lib/drafting/projectDesignSheet'
 
 const SPOUSE_DOC_TYPES = new Set([
   'pour_over_wills_x2',
@@ -38,49 +37,17 @@ export async function POST(req: NextRequest) {
 
     const admin = getAdminClient()
     const resolvedMatterId = await resolveMatterId(matter_id, admin)
-    const { data: matter } = await admin
-      .from('matters')
-      .select('id, client_intake_id')
-      .eq('id', resolvedMatterId)
-      .maybeSingle()
 
-    if (!matter) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
-
-    const [{ data: intake }, { data: designSheet }] = await Promise.all([
-      admin.from('client_intake').select('*').eq('id', matter.client_intake_id).maybeSingle(),
-      admin
-        .from('design_sheets')
-        .select('*')
-        .eq('matter_id', resolvedMatterId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ])
-
-    if (!intake || !designSheet) {
-      return NextResponse.json({ error: 'Missing intake or design sheet' }, { status: 404 })
+    let payload
+    try {
+      payload = await buildDraftPayload(resolvedMatterId)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to build draft payload'
+      return NextResponse.json({ error: message }, { status: 422 })
     }
 
-    const spouse = await loadSpouseContact(admin, matter.client_intake_id)
-    const children = await loadHouseholdChildren(admin, matter.client_intake_id)
-    const intakeWithSpouse = {
-      ...(intake as Record<string, unknown>),
-      spouse_first_name: spouse?.first_name ?? null,
-      spouse_middle_name: spouse?.middle_name ?? null,
-      spouse_last_name: spouse?.last_name ?? null,
-      spouse_suffix: spouse?.suffix ?? null,
-      spouse_preferred_pronoun: spouse?.preferred_pronoun ?? null,
-      spouse_prior_names: spouse?.prior_names ?? null,
-      spouse_date_of_birth: spouse?.date_of_birth ?? null,
-      spouse_phone: spouse?.phone ?? null,
-      spouse_email: spouse?.email ?? null,
-      // Children from contacts (output-identical to the legacy mirror).
-      children,
-    }
+    const flatSheet = projectDraftPayloadToFlatSheet(payload)
 
-    const flatSheet = buildFlatSheet(intakeWithSpouse, designSheet)
-
-    // For x2 docs generate both client + spouse versions combined in one docx.
     const isX2 = SPOUSE_DOC_TYPES.has(doc_type)
 
     const clientVars = buildClientVariables(flatSheet)
@@ -97,7 +64,6 @@ export async function POST(req: NextRequest) {
     const clientFilled = fillPlaceholders(text, clientVars)
     const spouseFilled = isX2 && spouseVars ? fillPlaceholders(text, spouseVars) : null
 
-    // Build docx
     const { Document, Packer, Paragraph, TextRun, AlignmentType, PageBreak } = await import('docx')
 
     function textToChildren(filled: string): InstanceType<typeof Paragraph>[] {
@@ -111,11 +77,8 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        // ALL-CAPS heading (e.g. "TRUST NAME", "POWERS OF PERSONAL REPRESENTATIVE")
         const isDocTitle  = /^[A-Z][A-Z\s&',()./:!-]{4,99}$/.test(t) && !t.endsWith('.')
-        // Numbered article heading (e.g. "1. TRUST NAME" or "4.1 Appointment")
         const isArticle   = /^\d+(\.\d+)?\s+[A-Z]/.test(t)
-        // Indented sub-paragraph (e.g. "(a) ..." or "1. ...")
         const isIndented  = /^\([a-z0-9]\)/.test(t) || /^\d+\.\s+\w/.test(t)
 
         if (isDocTitle && !isArticle) {
@@ -144,7 +107,6 @@ export async function POST(req: NextRequest) {
 
     const clientParas = textToChildren(clientFilled)
 
-    // For x2 docs, append spouse document after a page break.
     let allChildren: InstanceType<typeof Paragraph>[]
     if (spouseFilled) {
       const pageBreakPara = new Paragraph({
@@ -167,9 +129,7 @@ export async function POST(req: NextRequest) {
     const bufferResult = await Packer.toBuffer(doc)
     const buffer = new Uint8Array(bufferResult)
 
-    const clientName = (intake.full_name as string | null) ||
-      [intake.first_name, intake.last_name].filter(Boolean).join(' ') ||
-      resolvedMatterId
+    const clientName = payload.client.full_name || resolvedMatterId
     const filename = safeHeaderFilename(`${label ?? doc_type} - ${clientName}.docx`)
 
     return new NextResponse(buffer, {

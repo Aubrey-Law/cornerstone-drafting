@@ -236,17 +236,49 @@ export interface DesignSheetRow {
   id: string
   client_intake_id?: string | null
   status: string | null
+  client_name?: string | null
+  client_dob?: string | null
+  client_phone?: string | null
+  client_email?: string | null
+  client_pronouns?: string | null
   street?: string | null
   city?: string | null
   state?: string | null
   zip?: string | null
+  marital_status?: string | null
+  spouse_name?: string | null
+  spouse_dob?: string | null
+  spouse_phone?: string | null
+  spouse_email?: string | null
+  spouse_pronouns?: string | null
   plan_type?: string | null
   is_joint?: boolean | null
   trust_name?: string | null
+  spouse_trust_name?: string | null
   trust_date?: string | null
   client_aka?: string | null
   spouse_aka?: string | null
   county?: string | null
+  trustee_primary?: string | null
+  trustee_co?: string | null
+  trustee_alt1?: string | null
+  trustee_alt1_co?: string | null
+  trustee_alt2?: string | null
+  executor_primary?: string | null
+  executor_co?: string | null
+  executor_alt1?: string | null
+  executor_alt1_co?: string | null
+  poa_primary?: string | null
+  poa_co?: string | null
+  poa_alt1?: string | null
+  hcp_primary?: string | null
+  hcp_co?: string | null
+  hcp_alt1?: string | null
+  hcp_alt1_co?: string | null
+  guardian_primary?: string | null
+  guardian_co?: string | null
+  guardian_alt1?: string | null
+  guardian_alt1_co?: string | null
   excluded_guardian_flag?: boolean | null
   excluded_guardian_name?: string | null
   children?: DesignSheetChild[] | null

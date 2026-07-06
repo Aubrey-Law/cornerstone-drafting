@@ -96,16 +96,24 @@ describe('drafting hub and workspace', () => {
     expect(review).toContain('onConfirm={confirmPromotion}')
   })
 
-  it('seeds intake values through design-sheet persistence instead of writing virtual columns', () => {
+  it('seeds intake values through the shared ensure helper', () => {
     const loader = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/loadDraftingMatterContext.ts'), 'utf8')
-    const seedSection = loader.slice(
-      loader.indexOf('const seedPayload = buildDesignSheetPersistencePayload'),
-      loader.indexOf('.update({'),
+    const seedModule = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/seedFromIntake.ts'), 'utf8')
+
+    expect(loader).toContain("import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'")
+    expect(loader).toContain('await ensureDesignSheetSeededFromIntake(matterId)')
+    expect(seedModule).toContain('street: intake.address_line1')
+    expect(seedModule).toContain('city: intake.city')
+  })
+
+  it('documents the one-way intake sync policy in Intake Review', () => {
+    const intakeSection = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/IntakeSection.tsx'),
+      'utf8',
     )
 
-    expect(loader).toContain("import { buildDesignSheetPersistencePayload } from '@/lib/designSheetPersistence'")
-    expect(seedSection).toContain('street: intakeSnapshot.address_line1')
-    expect(seedSection).toContain('city: intakeSnapshot.city')
-    expect(loader).toContain('...seedPayload')
+    expect(intakeSection).toContain('Intake updates do not overwrite your design sheet automatically')
+    expect(intakeSection).toContain('Re-sync from intake')
+    expect(intakeSection).toContain('IntakeResyncDialog')
   })
 })

@@ -78,10 +78,10 @@ function getDesignSlots(designSheet: DesignSheetRow | null, key: keyof Pick<
   return isFiduciarySlotArray(fromDecisions) ? fromDecisions : []
 }
 
-export function designSheetForDocumentInclusions(designSheet: DesignSheetRow | null, maritalStatus: string | null) {
+export function designSheetForDocumentInclusions(designSheet: DesignSheetRow | null) {
   return {
     plan_type: designSheet?.plan_type ?? null,
-    marital_status: maritalStatus,
+    marital_status: designSheet?.marital_status ?? null,
     decisions: designSheet?.decisions ?? null,
     children: designSheet?.children ?? null,
   }
@@ -325,6 +325,103 @@ export function overlayDesignSheetFiduciarySlots(
   applyName('spouse_trustee_successor', spouseTrustee, 0)
 
   return next
+}
+
+export function emptyFiduciarySlots(): DraftPayload['fiduciaries'] {
+  return {
+    pr_primary: null,
+    pr_co_primary: null,
+    pr_successor: null,
+    pr_co_successor: null,
+    pr_second_successor: null,
+    dpoa_primary: null,
+    dpoa_co_agent: null,
+    dpoa_successor: null,
+    hcp_primary: null,
+    hcp_primary_address: null,
+    hcp_primary_relationship: null,
+    hcp_successor: null,
+    hcp_successor_address: null,
+    hcp_successor_relationship: null,
+    trustee_initial: null,
+    trustee_co: null,
+    trustee_successor: null,
+    trustee_co_successor: null,
+    trustee_second_successor: null,
+    trustee_co_second_successor: null,
+    guardian_primary: null,
+    guardian_successor: null,
+    guardian_second_successor: null,
+    temp_guardian_primary: null,
+    temp_guardian_successor: null,
+    temp_guardian_second_successor: null,
+    spouse_pr_primary: null,
+    spouse_pr_successor: null,
+    spouse_dpoa_primary: null,
+    spouse_dpoa_successor: null,
+    spouse_hcp_primary: null,
+    spouse_hcp_primary_address: null,
+    spouse_hcp_primary_relationship: null,
+    spouse_hcp_successor: null,
+    spouse_hcp_successor_address: null,
+    spouse_hcp_successor_relationship: null,
+    spouse_trustee_successor: null,
+  }
+}
+
+function applyLegacyDesignSheetFiduciaries(
+  fiduciaries: DraftPayload['fiduciaries'],
+  designSheet: DesignSheetRow | null,
+): DraftPayload['fiduciaries'] {
+  if (!designSheet) return fiduciaries
+
+  const next = { ...fiduciaries }
+  const fill = <K extends keyof DraftPayload['fiduciaries']>(key: K, value: string | null | undefined) => {
+    if (!next[key] && value) next[key] = value
+  }
+
+  fill('trustee_initial', designSheet.trustee_primary)
+  fill('trustee_co', designSheet.trustee_co)
+  fill('trustee_successor', designSheet.trustee_alt1)
+  fill('trustee_co_successor', designSheet.trustee_alt1_co)
+  fill('trustee_second_successor', designSheet.trustee_alt2)
+
+  fill('pr_primary', designSheet.executor_primary)
+  fill('pr_co_primary', designSheet.executor_co)
+  fill('pr_successor', designSheet.executor_alt1)
+  fill('pr_co_successor', designSheet.executor_alt1_co)
+
+  fill('dpoa_primary', designSheet.poa_primary)
+  fill('dpoa_co_agent', designSheet.poa_co)
+  fill('dpoa_successor', designSheet.poa_alt1)
+
+  fill('hcp_primary', designSheet.hcp_primary)
+  fill('hcp_successor', designSheet.hcp_alt1)
+
+  fill('guardian_primary', designSheet.guardian_primary)
+  fill('guardian_successor', designSheet.guardian_alt1)
+
+  return next
+}
+
+/**
+ * Resolve fiduciaries from the design sheet only — slot arrays with optional
+ * contact lookup, then legacy string columns. Does not read contact_roles.
+ */
+export function buildFiduciariesFromDesignSheet(
+  designSheet: DesignSheetRow | null,
+  contacts: ContactRow[],
+  client: { full_name: string; address: string | null },
+  spouse: { full_name: string; address: string | null } | null,
+): DraftPayload['fiduciaries'] {
+  const fromSlots = overlayDesignSheetFiduciarySlots(
+    emptyFiduciarySlots(),
+    contacts,
+    designSheet,
+    client,
+    spouse,
+  )
+  return applyLegacyDesignSheetFiduciaries(fromSlots, designSheet)
 }
 
 export function deriveDocuments(

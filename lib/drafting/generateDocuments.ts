@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import PizZip from 'pizzip'
+import { buildDraftPayload } from '@/lib/buildDraftPayload'
 import { docSelectionTemplateKey } from '@/lib/drafting/docSelectionKey'
+import { projectDraftPayloadToFlatSheet } from '@/lib/drafting/projectDesignSheet'
 import { buildClientVariables, buildSpouseVariables, escapeXml } from '@/lib/drafting/variables'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 
@@ -72,6 +74,19 @@ export async function generateDocuments(
 
   if (sheetError || !sheet) return { ok: false, error: 'Sheet not found', status: 404 }
 
+  const matterId = sheet.matter_id as string | undefined
+  if (!matterId) return { ok: false, error: 'Design sheet is missing matter_id', status: 422 }
+
+  let payload: DraftPayload
+  try {
+    payload = await buildDraftPayload(matterId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to build draft payload'
+    return { ok: false, error: message, status: 422 }
+  }
+
+  const flatSheet = projectDraftPayloadToFlatSheet(payload)
+
   const { data: selections } = await sb
     .from('doc_selections')
     .select('doc_type, variant, party, selected')
@@ -86,17 +101,15 @@ export async function generateDocuments(
 
   if (!selectedTemplates.length) return { ok: false, error: 'No documents selected', status: 400 }
 
-  const s = sheet as Record<string, unknown>
   const files: GeneratedFile[] = []
   const missing: string[] = []
 
-  // Cache downloaded template buffers to avoid re-downloading for client + spouse variants
   const templateCache = new Map<string, Buffer>()
 
   for (const key of selectedTemplates) {
     const isSpouse = key.endsWith(':spouse')
-    const filename = isSpouse ? key.slice(0, -7) : key  // strip ':spouse'
-    const variables = isSpouse ? buildSpouseVariables(s) : buildClientVariables(s)
+    const filename = isSpouse ? key.slice(0, -7) : key
+    const variables = isSpouse ? buildSpouseVariables(flatSheet) : buildClientVariables(flatSheet)
 
     if (!templateCache.has(filename)) {
       const { data: blob, error } = await sb.storage.from('templates').download(filename)

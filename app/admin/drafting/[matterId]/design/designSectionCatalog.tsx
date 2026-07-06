@@ -42,6 +42,7 @@ export interface DesignSectionDef {
 }
 
 export interface BuildDesignSectionsArgs {
+  matterId: string
   sheet: DesignSheet
   matter: PipelineMatter
   contacts: MatterContact[]
@@ -67,6 +68,7 @@ function isMarried(maritalStatus: string | null | undefined): boolean {
 
 export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSectionDef[] {
   const {
+    matterId,
     sheet,
     matter,
     contacts,
@@ -101,7 +103,9 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
   const docCommon = { ...common, matter }
 
   const renderers: Record<string, () => ReactNode> = {
-    [DESIGN_SECTION_IDS.intakeReview]: () => <IntakeSection intake={intakeSnapshot!} />,
+    [DESIGN_SECTION_IDS.intakeReview]: () => (
+      <IntakeSection intake={intakeSnapshot!} matterId={matterId} />
+    ),
     [DESIGN_SECTION_IDS.clientInformation]: () => (
       <ClientInformationSection sheet={sheet} onChange={updateField} />
     ),

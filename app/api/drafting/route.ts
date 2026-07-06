@@ -7,9 +7,6 @@ import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { getClausesForDocument } from '@/lib/drafting/clauses'
 import { buildDraftContext } from '@/lib/drafting/context'
 import { callAnthropic, PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '@/lib/anthropic'
-import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
-import { loadHouseholdChildren } from '@/lib/contacts/loadHouseholdChildren'
-
 
 /**
  * Maps design-sheet document keys → clause library document keys.
@@ -72,19 +69,6 @@ export async function POST(req: NextRequest) {
   const admin = getAdminClient()
   const resolvedMatterId = await resolveMatterId(matter_id, admin)
 
-  const { data: matter } = await admin
-    .from('matters')
-    .select('id, client_intake_id')
-    .eq('id', resolvedMatterId)
-    .maybeSingle()
-
-  if (!matter) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
-
-  const { data: intake } = await admin
-    .from('client_intake')
-    .select('*')
-    .eq('id', matter.client_intake_id)
-    .maybeSingle()
   const { data: designSheet } = await admin
     .from('design_sheets')
     .select('*')
@@ -93,8 +77,8 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .maybeSingle()
 
-  if (!intake || !designSheet) {
-    return NextResponse.json({ error: 'Missing intake or design sheet data' }, { status: 404 })
+  if (!designSheet) {
+    return NextResponse.json({ error: 'Missing design sheet data' }, { status: 404 })
   }
 
   const clauseKey = DOC_KEY_TO_CLAUSE[doc_type]
@@ -102,25 +86,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Unknown doc_type: ${doc_type}` }, { status: 400 })
   }
 
-  const spouse = await loadSpouseContact(admin, matter.client_intake_id)
-  const children = await loadHouseholdChildren(admin, matter.client_intake_id)
-  const intakeWithSpouse = {
-    ...(intake as Record<string, unknown>),
-    spouse_first_name: spouse?.first_name ?? null,
-    spouse_middle_name: spouse?.middle_name ?? null,
-    spouse_last_name: spouse?.last_name ?? null,
-    spouse_suffix: spouse?.suffix ?? null,
-    spouse_preferred_pronoun: spouse?.preferred_pronoun ?? null,
-    spouse_prior_names: spouse?.prior_names ?? null,
-    spouse_date_of_birth: spouse?.date_of_birth ?? null,
-    spouse_phone: spouse?.phone ?? null,
-    spouse_email: spouse?.email ?? null,
-    // Children from contacts (the legacy client_intake.children mirror is built
-    // from the same mapper, so this is output-identical).
-    children,
-  }
-
-  const ctx     = buildDraftContext(intakeWithSpouse, designSheet)
+  const ctx = buildDraftContext(designSheet as Record<string, unknown>)
   const clauses = getClausesForDocument(clauseKey, ctx)
 
   if (!clauses.length) {
@@ -192,7 +158,6 @@ CRITICAL: Keep ALL [PLACEHOLDER] values exactly as written with square brackets 
     })
   }
 
-  // Log the draft (best-effort — table may not have matter_id column yet)
   try {
     await admin.from('draft_log')
       .insert({ matter_id: resolvedMatterId, doc_type, model: modelStatus === 'refined' ? 'claude-opus-4-5' : 'clause_library', status: 'complete' })

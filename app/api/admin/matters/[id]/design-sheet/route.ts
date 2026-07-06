@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
 import { saveHouseholdChildren } from '@/lib/contacts/saveHouseholdChildren'
+import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import type { DesignSheetUpdate } from '@/types/database'
 
 type Params = { params: Promise<{ id: string }> }
@@ -38,6 +39,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const admin = getAdminClient()
+    await ensureDesignSheetSeededFromIntake(matterId)
     const clientIntakeId = await getMatterClientIntakeId(matterId)
 
     const incomingSheet = (body.sheet ?? {}) as Record<string, unknown>

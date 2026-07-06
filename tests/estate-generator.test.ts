@@ -1103,15 +1103,14 @@ describe('estate generator mapping', () => {
     expect(data.client).toHaveProperty('date_of_birth', '')
   })
 
-  it('loads county into the draft payload from intake and design-sheet decisions', () => {
+  it('loads county into the draft payload from design-sheet columns and decisions', () => {
     const assemble = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/assemble.ts'), 'utf8')
-    const intakeTypes = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/types.ts'), 'utf8')
+    const fields = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/designSheetFields.ts'), 'utf8')
 
-    expect(intakeTypes).toContain('address_line1: string | null')
-    expect(intakeTypes).toContain('county: string | null')
-    expect(assemble).toContain("decisionString(designSheet, 'county')")
-    expect(assemble).toContain('intake.county')
-    expect(assemble).toContain('designSheet?.signing_county')
+    expect(fields).toContain('designSheetString')
+    expect(assemble).toContain("designSheetString(designSheet, 'county')")
+    expect(assemble).toContain("designSheetString(designSheet, 'signing_county')")
+    expect(assemble).not.toContain('intake.county')
   })
 
   it('loads design-sheet children into the draft payload for generator output', () => {
@@ -1122,6 +1121,6 @@ describe('estate generator mapping', () => {
     expect(types).toContain('children?: DesignSheetChild[] | null')
     expect(helpers).toContain('export function draftPayloadChildren(')
     expect(helpers).toContain('designSheet?.children')
-    expect(assemble).toContain('children: draftPayloadChildren(designSheet)')
+    expect(assemble).toContain('children: designChildren')
   })
 })

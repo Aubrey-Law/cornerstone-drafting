@@ -1,9 +1,13 @@
 'use client'
 
+import { useState } from 'react'
+import { Info, RefreshCw } from 'lucide-react'
 import { Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { formatDobWithAge } from '@/lib/dob'
+import { Button } from '@/components/ui/button'
+import { IntakeResyncDialog } from '@/components/design-sheet/IntakeResyncDialog'
 import { SectionBlock } from './shared'
 import type { IntakeSnapshot } from '@/lib/queries'
 
@@ -98,7 +102,14 @@ function FiduciaryRow({ role, primary, alternate }: { role: string; primary: unk
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function IntakeSection({ intake }: { intake: IntakeSnapshot }) {
+export function IntakeSection({
+  intake,
+  matterId,
+}: {
+  intake: IntakeSnapshot
+  matterId: string
+}) {
+  const [resyncOpen, setResyncOpen] = useState(false)
   const firstName = textValue(intake.first_name)
   const middleName = textValue(intake.middle_name)
   const lastName = textValue(intake.last_name)
@@ -138,6 +149,30 @@ export function IntakeSection({ intake }: { intake: IntakeSnapshot }) {
 
   return (
     <div className="space-y-0">
+      <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex gap-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Intake is read-only here</p>
+              <p>
+                Client intake seeds the design sheet once. After that, only the design sheet feeds
+                document templates. Intake updates do not overwrite your design sheet automatically.
+              </p>
+            </div>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setResyncOpen(true)}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Re-sync from intake
+          </Button>
+        </div>
+      </div>
+
+      <IntakeResyncDialog
+        open={resyncOpen}
+        onOpenChange={setResyncOpen}
+        matterId={matterId}
+      />
 
       {/* Personal */}
       <SectionBlock title="Personal Information">

@@ -133,6 +133,7 @@ export default function DesignSheetShell({
 
   const sectionDefs = useMemo(
     () => buildDesignSectionDefs({
+      matterId,
       sheet,
       matter,
       contacts: contactsState,

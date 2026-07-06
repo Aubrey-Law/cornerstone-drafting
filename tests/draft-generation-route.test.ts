@@ -89,19 +89,27 @@ describe('matter draft generation route', () => {
     expect(source).toContain('const preflight = buildEstateDraftPreflight(payload)')
   })
 
-  it('fallback drafting routes use canonical matter lookup and latest design sheet', () => {
+  it('clause-library text fallback reads the latest design sheet only', () => {
     const textRoute = fs.readFileSync(path.join(process.cwd(), 'app/api/drafting/route.ts'), 'utf8')
+
+    expect(textRoute).toContain("import { resolveMatterId } from '@/lib/buildDraftPayload'")
+    expect(textRoute).toContain('const resolvedMatterId = await resolveMatterId(matter_id, admin)')
+    expect(textRoute).toContain(".from('design_sheets')")
+    expect(textRoute).toContain(".order('created_at', { ascending: false })")
+    expect(textRoute).toContain('.limit(1)')
+    expect(textRoute).not.toContain(".from('client_intake')")
+    expect(textRoute).not.toContain(".from('v_matter_pipeline').select('*').eq('matter_id', matter_id).single()")
+    expect(textRoute).not.toContain(".from('design_sheets').select('*').eq('matter_id', matter_id).single()")
+  })
+
+  it('DOCX fallback uses canonical draft payload flat projection', () => {
     const docxRoute = fs.readFileSync(path.join(process.cwd(), 'app/api/drafting/docx/route.ts'), 'utf8')
 
-    for (const source of [textRoute, docxRoute]) {
-      expect(source).toContain("import { resolveMatterId } from '@/lib/buildDraftPayload'")
-      expect(source).toContain('const resolvedMatterId = await resolveMatterId(matter_id, admin)')
-      expect(source).toContain(".from('matters')")
-      expect(source).toContain(".order('created_at', { ascending: false })")
-      expect(source).toContain('.limit(1)')
-      expect(source).not.toContain(".from('v_matter_pipeline').select('*').eq('matter_id', matter_id).single()")
-      expect(source).not.toContain(".from('design_sheets').select('*').eq('matter_id', matter_id).single()")
-    }
+    expect(docxRoute).toContain("import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'")
+    expect(docxRoute).toContain('projectDraftPayloadToFlatSheet')
+    expect(docxRoute).toContain('const flatSheet = projectDraftPayloadToFlatSheet(payload)')
+    expect(docxRoute).not.toContain('buildFlatSheet')
+    expect(docxRoute).not.toContain(".from('client_intake')")
   })
 
   it('AI refinement failure falls back to assembled clause-library text', () => {
@@ -168,5 +176,17 @@ describe('matter draft generation route', () => {
     expect(source).toContain(".select('doc_type, variant, party, selected')")
     expect(source).toContain('docSelectionTemplateKey(selection)')
     expect(source).not.toContain('template_filename')
+  })
+
+  it('legacy Supabase fallback uses buildDraftPayload flat projection', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'lib/drafting/generateDocuments.ts'), 'utf8')
+
+    expect(source).toContain("import { buildDraftPayload } from '@/lib/buildDraftPayload'")
+    expect(source).toContain('projectDraftPayloadToFlatSheet')
+    expect(source).toContain('const flatSheet = projectDraftPayloadToFlatSheet(payload)')
+    expect(source).toContain('buildClientVariables(flatSheet)')
+    expect(source).toContain('buildSpouseVariables(flatSheet)')
+    expect(source).not.toContain('buildClientVariables(s)')
+    expect(source).not.toContain('buildFlatSheet')
   })
 })
