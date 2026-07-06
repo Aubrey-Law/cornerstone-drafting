@@ -9,6 +9,7 @@ import {
   AttorneyInput,
   AttorneyNoteBanner,
   AttorneySelect,
+  DesignSectionContent,
   FieldLabel,
   SectionBlock,
   type SectionProps,
@@ -18,6 +19,8 @@ interface OtherBeneficiariesSectionProps extends SectionProps {
   contacts?: MatterContact[]
   onAddContact?: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  /** When false, omit the intro banner (e.g. when embedded in Family Information). */
+  showBanner?: boolean
 }
 
 export function OtherBeneficiariesSection({
@@ -26,6 +29,7 @@ export function OtherBeneficiariesSection({
   contacts = [],
   onAddContact,
   onUpdateContact,
+  showBanner = true,
 }: OtherBeneficiariesSectionProps) {
   const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
@@ -87,13 +91,17 @@ export function OtherBeneficiariesSection({
     setRemoteCharities(remoteCharities.filter((_, idx) => idx !== i))
 
   return (
-    <div>
-      <AttorneyNoteBanner>
-        Disinheritances, remote beneficiaries, and specific bequests apply across the estate plan.
-        Review carefully before drafting.
-      </AttorneyNoteBanner>
+    <DesignSectionContent>
+      {showBanner && (
+        <AttorneyNoteBanner>
+          Disinheritances, remote beneficiaries, and specific bequests apply across the estate plan.
+          Review carefully before drafting.
+        </AttorneyNoteBanner>
+      )}
 
-      <SectionBlock title="Disinheritances" subtitle="Individuals specifically excluded from inheriting. Leave empty if none.">
+      <SectionBlock title="Other Beneficiaries" subtitle="Disinheritances, remote beneficiaries, and specific bequests">
+        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Disinheritances</p>
+        <p className="mb-4 text-[12px] text-muted-foreground">Individuals specifically excluded from inheriting. Leave empty if none.</p>
         {disinheritances.length > 0 && (
           <div className="mb-3 space-y-3">
             {disinheritances.map((d, i) => (
@@ -117,9 +125,11 @@ export function OtherBeneficiariesSection({
           <Plus className="h-3.5 w-3.5" />
           Add Disinheritance
         </Button>
-      </SectionBlock>
 
-      <SectionBlock title="Remote Beneficiaries" subtitle="Who inherits if none of the named beneficiaries survive.">
+        <div className="my-6 border-t border-border" />
+
+        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Remote Beneficiaries</p>
+        <p className="mb-4 text-[12px] text-muted-foreground">Who inherits if none of the named beneficiaries survive.</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <AttorneySelect
             fieldName="remote_beneficiary"
@@ -195,9 +205,11 @@ export function OtherBeneficiariesSection({
             </div>
           </div>
         )}
-      </SectionBlock>
 
-      <SectionBlock title="Specific Bequests" subtitle="Optional — repeatable list">
+        <div className="my-6 border-t border-border" />
+
+        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Specific Bequests</p>
+        <p className="mb-4 text-[12px] text-muted-foreground">Optional — repeatable list</p>
         {bequests.length === 0 ? (
           <p className="text-sm text-muted-foreground">No specific bequests.</p>
         ) : (
@@ -314,6 +326,6 @@ export function OtherBeneficiariesSection({
           </Button>
         </div>
       </SectionBlock>
-    </div>
+    </DesignSectionContent>
   )
 }

@@ -382,16 +382,25 @@ export function AttorneySelect({ label, value, options, placeholder, onChange, f
 
 // ── Section chrome ────────────────────────────────────────────────────────────
 
+/** Standard field grid — responsive 2-up on small screens, avoids cramped 4-col rows. */
+export const sectionFieldGrid2 = 'grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2'
+export const sectionFieldGrid3 = 'grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3'
+export const sectionFieldGrid4 = 'grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-4'
+
+export function DesignSectionContent({ children }: { children: React.ReactNode }) {
+  return <div className="design-section-content [&>.rounded-lg:last-child]:mb-0">{children}</div>
+}
+
 export function SectionBlock({ title, subtitle, children }: {
   title: string
   subtitle?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-6 mb-6">
-      <div className="mb-5">
+    <div className="mb-4 rounded-lg border border-border bg-card p-4 sm:p-5 last:mb-0">
+      <div className="mb-4">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">{title}</h3>
-        {subtitle && <p className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -400,7 +409,7 @@ export function SectionBlock({ title, subtitle, children }: {
 
 export function AttorneyNoteBanner({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-6 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
+    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
       <p className="text-[13px] leading-relaxed text-warning">{children}</p>
     </div>

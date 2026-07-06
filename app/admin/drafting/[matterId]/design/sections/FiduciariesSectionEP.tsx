@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import type { DesignSheet, MatterContact, FiduciarySlot, FiduciaryRole } from '@/types/database'
 import type { SlotState } from '@/types/planReview'
-import { AttorneyNoteBanner, AttorneySelect, FieldLabel, SectionBlock, SlotStateToggle } from './shared'
+import { AttorneyNoteBanner, AttorneySelect, DesignSectionContent, FieldLabel, SectionBlock, SlotStateToggle } from './shared'
 import { cn } from '@/lib/utils'
 import { sheetHasMinorChildren, sheetMinorChildren } from '@/lib/designSheet/minorChildren'
 import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
@@ -307,9 +307,15 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
   const hasMinorChildren = sheetHasMinorChildren(sheet.children)
 
   // Guardian and Temporary Guardian only apply when there are minor children.
-  const ROLES = hasMinorChildren
-    ? ALL_ROLES
-    : ALL_ROLES.filter(r => r !== 'guardian' && r !== 'temporary_guardian')
+  const ROLES = (hasMinorChildren ? ALL_ROLES : ALL_ROLES.filter(r => r !== 'guardian' && r !== 'temporary_guardian'))
+    .filter(role => {
+      if (role === 'trustee') return inclusions.trust
+      if (role === 'executor') return inclusions.will
+      if (role === 'poa') return inclusions.dpoa
+      if (role === 'hcp') return inclusions.healthcare
+      if (role === 'guardian' || role === 'temporary_guardian') return inclusions.will
+      return true
+    })
 
   const handleSlotsChange = useCallback((role: FiduciaryRole, slots: FiduciarySlot[]) => {
     onChange(SLOT_FIELDS[role], slots as DesignSheet[keyof DesignSheet])
@@ -334,14 +340,16 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
   }, [onUpdateContact])
 
   return (
-    <div>
+    <DesignSectionContent>
       <AttorneyNoteBanner>
         Fiduciary selections were pre-filled from the client intake. Review all roles carefully
         and update as needed. Use the slot state toggle to mark pending or optional roles.
       </AttorneyNoteBanner>
 
+      {(inclusions.will || inclusions.trust) && (
       <SectionBlock title="Fiduciary Structure" subtitle="Drives how PR and trustee slots are nominated in the Will">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+          {inclusions.will && (
           <AttorneySelect
             label="Personal Representative Structure"
             value={sheet.pr_structure ?? ''}
@@ -353,6 +361,8 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
             ]}
             onChange={v => onChange('pr_structure', (v || null) as 'single' | 'spouse_first' | 'co_pr' | null)}
           />
+          )}
+          {inclusions.trust && (
           <AttorneySelect
             label="Trustee Nomination Structure"
             value={sheet.trustee_structure ?? ''}
@@ -364,8 +374,9 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
             ]}
             onChange={v => onChange('trustee_structure', (v || null) as 'single' | 'spouse_first' | 'co_trustees' | null)}
           />
+          )}
         </div>
-        {sheet.trustee_structure === 'co_trustees' && (
+        {inclusions.trust && sheet.trustee_structure === 'co_trustees' && (
           <div className="mt-4 max-w-[320px]">
             <FieldLabel>Co-Trustee Decision Standard</FieldLabel>
             <div className={cn('flex gap-0.5 rounded-lg bg-muted p-[2px]')}>
@@ -391,6 +402,7 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
           </div>
         )}
       </SectionBlock>
+      )}
 
       {ROLES.map(role => {
         const slots = (sheet[SLOT_FIELDS[role]] as FiduciarySlot[]) ?? []
@@ -546,6 +558,6 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
           </span>
         </div>
       )}
-    </div>
+    </DesignSectionContent>
   )
 }

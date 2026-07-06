@@ -24,6 +24,7 @@ import {
   AttorneyNoteBanner,
   AttorneySelect,
   ClientDecisionCallout,
+  DesignSectionContent,
   FieldLabel,
   SectionBlock,
   type SectionProps,
@@ -80,7 +81,7 @@ export function PlanDesignSection({ sheet, onChange, contacts = [], onAddContact
   }
 
   return (
-    <div>
+    <DesignSectionContent>
       <AttorneyNoteBanner>
         Select the documents for this matter first. The checked documents control which sections appear below and which drafts are generated.
       </AttorneyNoteBanner>
@@ -280,6 +281,6 @@ export function PlanDesignSection({ sheet, onChange, contacts = [], onAddContact
           />
         </div>
       </div>
-    </div>
+    </DesignSectionContent>
   )
 }

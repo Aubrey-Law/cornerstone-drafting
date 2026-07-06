@@ -15,6 +15,7 @@ import {
   AttorneySelect,
   ClientDecisionCallout,
   FieldLabel,
+  DesignSectionContent,
   PrefilledInput,
   SectionBlock,
 } from './shared'
@@ -63,7 +64,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
 
   if (scope === 'spouse') {
     return (
-      <div>
+      <DesignSectionContent>
         <SectionHelp>Configure the spouse&apos;s separate trust name and any spouse-specific trust settings.</SectionHelp>
         <SectionBlock title="Trust Name">
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -76,7 +77,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
             />
           </div>
         </SectionBlock>
-      </div>
+      </DesignSectionContent>
     )
   }
 
@@ -147,8 +148,8 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   const removeStagger = (i: number) => setStaggers(staggers.filter((_, idx) => idx !== i))
 
   return (
-    <div>
-      <SectionHelp>Configure the trust structure, name, protector, and how the residuary is distributed. Nominate trustees under Fiduciaries &amp; Additional Contacts.</SectionHelp>
+    <DesignSectionContent>
+      <SectionHelp>Configure the trust structure, name, protector, and how the residuary is distributed. Nominate trustees under Fiduciaries & Additional Contacts.</SectionHelp>
 
       <SectionBlock title="Trust Structure">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -311,7 +312,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           </div>
         )}
       </SectionBlock>
-    </div>
+    </DesignSectionContent>
   )
 }
 
@@ -359,11 +360,11 @@ export function WillDocumentSection(props: DocumentSectionProps) {
   const hasMinors = sheetHasMinorChildren(sheet.children)
 
   return (
-    <div>
-      <SectionHelp>The Pour-Over Will works with the trust. Configure will-specific provisions here; nominate fiduciaries under Fiduciaries &amp; Additional Contacts.</SectionHelp>
+    <DesignSectionContent>
+      <SectionHelp>The Pour-Over Will works with the trust. Configure will-specific provisions here; nominate fiduciaries under Fiduciaries & Additional Contacts.</SectionHelp>
       {hasMinors && <ExcludedGuardians sheet={sheet} onChange={onChange} />}
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="will" />
-    </div>
+    </DesignSectionContent>
   )
 }
 
@@ -371,10 +372,10 @@ export function DpoaDocumentSection(props: DocumentSectionProps) {
   const { sheet, onChange } = props
 
   return (
-    <div>
-      <SectionHelp>Select financial POA provisions. Agent nominations live under Fiduciaries &amp; Additional Contacts.</SectionHelp>
+    <DesignSectionContent>
+      <SectionHelp>Select financial POA provisions. Agent nominations live under Fiduciaries & Additional Contacts.</SectionHelp>
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="dpoa" />
-    </div>
+    </DesignSectionContent>
   )
 }
 
@@ -382,8 +383,8 @@ export function HealthCareDocumentSection(props: DocumentSectionProps) {
   const { sheet, onChange } = props
 
   return (
-    <div>
-      <SectionHelp>Make end-of-life elections under MA law. Health care agents are nominated under Fiduciaries &amp; Additional Contacts.</SectionHelp>
+    <DesignSectionContent>
+      <SectionHelp>Make end-of-life elections under MA law. Health care agents are nominated under Fiduciaries & Additional Contacts.</SectionHelp>
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="healthcare" />
       <SectionBlock title="Advance Health Directive">
         <ClientDecisionCallout>
@@ -393,7 +394,7 @@ export function HealthCareDocumentSection(props: DocumentSectionProps) {
           Included with the health care document package when Health Care Documents is checked.
         </p>
       </SectionBlock>
-    </div>
+    </DesignSectionContent>
   )
 }
 
@@ -413,7 +414,7 @@ export function DeedDocumentSection({ sheet, onChange }: SectionProps) {
   }
 
   return (
-    <div>
+    <DesignSectionContent>
       <SectionHelp>Track whether real property needs to be transferred into the trust.</SectionHelp>
       <SectionBlock title="Deed Work">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -461,6 +462,6 @@ export function DeedDocumentSection({ sheet, onChange }: SectionProps) {
           </div>
         </div>
       </SectionBlock>
-    </div>
+    </DesignSectionContent>
   )
 }

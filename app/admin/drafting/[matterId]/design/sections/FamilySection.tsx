@@ -9,6 +9,7 @@ import { ageInYearsFromDob } from '@/lib/dob'
 import {
   AttorneyInput,
   AttorneyNoteBanner,
+  DesignSectionContent,
   DobAgeHint,
   PRONOUN_OPTIONS,
   PrefilledInput,
@@ -59,9 +60,9 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
   }
 
   return (
-    <div>
+    <DesignSectionContent>
       <AttorneyNoteBanner>
-        Family information was pre-filled from the client intake. Review and update as needed.
+        Family information was pre-filled from the client intake. Review children and other beneficiary designations below.
       </AttorneyNoteBanner>
 
       <div id="design-field-children" tabIndex={-1}>
@@ -171,7 +172,8 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
         contacts={contacts}
         onAddContact={onAddContact}
         onUpdateContact={onUpdateContact}
+        showBanner={false}
       />
-    </div>
+    </DesignSectionContent>
   )
 }

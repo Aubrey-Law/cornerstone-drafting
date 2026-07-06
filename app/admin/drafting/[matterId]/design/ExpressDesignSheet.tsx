@@ -337,7 +337,7 @@ export default function ExpressDesignSheet({
                     </span>
                     {item.badge}
                   </div>
-                  <div className="px-[1.125rem] py-5">
+                  <div className="px-[1.125rem] py-4">
                     {item.render()}
                   </div>
                 </section>
