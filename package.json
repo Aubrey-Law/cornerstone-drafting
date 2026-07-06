@@ -24,6 +24,7 @@
     "supabase:db:push": "supabase db push"
   },
   "dependencies": {
+    "@aubrey-law/estate-fields": "file:../aubrey-law-app/packages/estate-fields",
     "@anthropic-ai/sdk": "^0.92.0",
     "@aws-sdk/client-s3": "^3.1019.0",
     "@aws-sdk/s3-request-presigner": "^3.1019.0",

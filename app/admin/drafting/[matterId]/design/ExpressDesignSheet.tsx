@@ -19,6 +19,7 @@ import { designPlanTypeLabel, designPlanTypeIncludesTrust } from '@/lib/designPl
 import type { DesignDocumentInclusions, DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
 import { useDesignSheetState, type LpData } from '@/lib/designSheet/useDesignSheetState'
 import { DesignValidationProvider, AccordionBadge } from './sections/shared'
+import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import { buildDesignSectionDefs } from './designSectionCatalog'
 import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
@@ -206,6 +207,7 @@ export default function ExpressDesignSheet({
   )
 
   return (
+    <SharedFieldsProvider>
     <DesignValidationProvider value={validationValue}>
       <div className="guided-interview flex h-full min-h-0 flex-col overflow-hidden">
         {importDialogOpen && (
@@ -395,5 +397,6 @@ export default function ExpressDesignSheet({
         </div>
       </div>
     </DesignValidationProvider>
+    </SharedFieldsProvider>
   )
 }
