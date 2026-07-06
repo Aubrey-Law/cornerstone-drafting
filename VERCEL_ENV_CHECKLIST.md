@@ -22,7 +22,7 @@ Python fallback uses the venv created by `npm run estate-generator:setup` during
 
 ## Shared fields package
 
-`@aubrey-law/estate-fields` is linked from `../aubrey-law-app/packages/estate-fields` when that sibling repo exists locally. On Vercel, `preinstall` (`scripts/ensure-estate-fields.mjs`) sparse-clones only that package from `spaubrey/aubrey-law-app` before `npm ci` links dependencies. Set `ESTATE_FIELDS_SKIP_FETCH=1` only if you vendor the package another way.
+`@aubrey-law/estate-fields` is vendored at `packages/estate-fields/` for Vercel and standalone clones. Sync registry changes from `aubrey-law-app/packages/estate-fields` (see that package's `SYNC.md`).
 
 ## Optional
 

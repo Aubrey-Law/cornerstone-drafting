@@ -1,0 +1,29 @@
+{
+  "name": "@aubrey-law/estate-fields",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared estate-planning field registry for Aubrey Law portal and Cornerstone drafting",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./portal": "./src/portal/index.ts",
+    "./react": "./src/react/index.ts",
+    "./normalize": "./src/core/normalize.ts",
+    "./options": "./src/core/options.ts",
+    "./registry": "./src/core/registry.ts",
+    "./assets": "./src/core/assets.ts",
+    "./goals": "./src/core/goals.ts",
+    "./fiduciaries": "./src/core/fiduciaries.ts",
+    "./reviewDisplay": "./src/core/reviewDisplay.ts",
+    "./sync": "./src/core/sync.ts",
+    "./validate": "./src/core/validate.ts"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.0.0"
+  }
+}
