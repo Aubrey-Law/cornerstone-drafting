@@ -15,6 +15,7 @@
     "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.typecheck.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "preinstall": "node scripts/ensure-estate-fields.mjs",
     "theme:generate": "tsx scripts/generate-theme-css.ts",
     "estate-generator:setup": "python3 -m venv tools/aubreylaw-docgeneration/.venv && tools/aubreylaw-docgeneration/.venv/bin/pip install -r tools/aubreylaw-docgeneration/requirements.txt",
     "prebuild:next": "npm run theme:generate",
