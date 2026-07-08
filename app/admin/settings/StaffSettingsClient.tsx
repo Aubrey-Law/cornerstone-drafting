@@ -290,9 +290,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
           <div>
             <Label htmlFor="default-provider">Default AI provider</Label>
             <p className="mt-1 text-xs text-muted-foreground">
-              Choose which vendor powers the matter assistant, AI redline, design-sheet import, and
-              tabular review. <strong>Anthropic is still used for all features</strong> until the
-              shared LLM layer ships — saving preferences here prepares your account for that switch.
+              Choose which vendor powers the matter assistant, AI redline, design-sheet import,
+              tabular review, and draft refinement. Each provider uses its model selection and API key below.
             </p>
             <select
               id="default-provider"
