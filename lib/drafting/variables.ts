@@ -102,6 +102,7 @@ export function buildClientVariables(sheet: Record<string, unknown>): Record<str
     '[CO ALT GUARDIAN]': upper(sheet.co_alt_guardian),
 
     '[EXCLUDED PERSON]':   upper(sheet.excluded_person),
+    '[ADDITIONAL DISINHERITANCE LANGUAGE]': str(sheet.additional_disinheritance_language),
     '[EXCLUDED GUARDIAN]': upper(sheet.excluded_guardian),
     '[REMOTE BENEFICIARY]':upper(sheet.remote_beneficiary),
 
@@ -205,6 +206,7 @@ export function buildSpouseVariables(sheet: Record<string, unknown>): Record<str
     '[CO ALT GUARDIAN]': upper(sheet.co_alt_guardian),
 
     '[EXCLUDED PERSON]':   upper(sheet.excluded_person),
+    '[ADDITIONAL DISINHERITANCE LANGUAGE]': str(sheet.additional_disinheritance_language),
     '[EXCLUDED GUARDIAN]': upper(sheet.excluded_guardian),
     '[REMOTE BENEFICIARY]':upper(sheet.remote_beneficiary),
 

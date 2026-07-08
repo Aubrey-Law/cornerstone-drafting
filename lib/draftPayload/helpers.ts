@@ -109,6 +109,9 @@ export function draftPayloadChildren(designSheet: Pick<DesignSheetRow, 'children
       full_name: childFullName((child ?? {}) as unknown as Record<string, unknown>),
       dob: child?.dob ?? null,
       relationship: child?.relationship ?? null,
+      parentage: child?.parentage ?? null,
+      gender: child?.gender ?? null,
+      deceased: child?.deceased === true,
       minor: child?.is_minor === true,
     }))
     .filter(child => child.full_name.length > 0)

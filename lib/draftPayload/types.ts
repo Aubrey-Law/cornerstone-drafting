@@ -1,5 +1,6 @@
 import type { DesignSheetChild } from '@/types/database'
 import type { TrustPlanningType } from '@/lib/designSheetDocumentInclusions'
+import type { DraftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 
 // ── Exported interface ────────────────────────────────────────────────────────
 
@@ -40,8 +41,12 @@ export interface DraftPayload {
     full_name: string
     dob: string | null
     relationship: DesignSheetChild['relationship'] | null
+    parentage?: DesignSheetChild['parentage'] | null
+    gender?: DesignSheetChild['gender'] | null
+    deceased?: boolean
     minor: boolean
   }>
+  family_provisions?: DraftPayloadFamilyProvisions
   trust: {
     name: string
     date: string
@@ -282,6 +287,15 @@ export interface DesignSheetRow {
   excluded_guardian_flag?: boolean | null
   excluded_guardian_name?: string | null
   children?: DesignSheetChild[] | null
+  include_child_gender_markers?: string | null
+  include_afterborn_children?: string | null
+  include_expectant_children?: string | null
+  omissions_intentional?: string | null
+  include_general_disinheritance?: string | null
+  disinherited_children?: string[] | null
+  disinherit_issue?: string | null
+  additional_disinheritance_language?: string | null
+  disinheritances?: { name: string; relationship: string; reason: string }[] | null
   // Will-common selections
   pr_structure?: string | null
   bond?: string | null

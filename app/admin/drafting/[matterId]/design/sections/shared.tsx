@@ -1,9 +1,10 @@
 'use client'
 
 import { createContext, forwardRef, useContext, useImperativeHandle, useRef } from 'react'
-import { CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Check, ChevronDown } from 'lucide-react'
+import { CircleAlert as AlertCircle, CircleHelp as HelpCircle, TriangleAlert as AlertTriangle, Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatAgeLabel } from '@/lib/dob'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -75,6 +76,60 @@ export function FieldLabel({ children }: { children: React.ReactNode }) {
       {children}
     </p>
   )
+}
+
+export function FieldHelpLabel({ children, help }: { children: React.ReactNode; help: string }) {
+  return (
+    <div className="mb-1.5 flex items-center gap-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground">{children}</p>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="rounded text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Help"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+          {help}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
+export function DesignSheetCheckboxOption({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description?: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
+      <Checkbox checked={checked} onCheckedChange={value => onChange(value === true)} className="mt-0.5" />
+      <span>
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        {description && (
+          <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{description}</span>
+        )}
+      </span>
+    </label>
+  )
+}
+
+export function yesNoField(value: string | null | undefined): boolean {
+  return (value ?? '').toLowerCase() === 'yes'
+}
+
+export function toYesNo(checked: boolean): 'yes' | 'no' {
+  return checked ? 'yes' : 'no'
 }
 
 export function DobAgeHint({ dob }: { dob: string | null | undefined }) {

@@ -1,6 +1,7 @@
 import { DraftContext } from './clauses'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { designSheetString, isDesignSheetMarried } from '@/lib/draftPayload/designSheetFields'
+import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import type { FiduciarySlotRow } from '@/lib/draftPayload/types'
 
 type DesignSheetChildRow = {
@@ -87,6 +88,12 @@ export function buildDraftContext(designSheet: Record<string, unknown>): DraftCo
   const poaSlots = getDesignSlots(designSheet, 'poa_slots')
   const executorSlots = getDesignSlots(designSheet, 'executor_slots')
   const guardianSlots = getDesignSlots(designSheet, 'guardian_slots')
+  const familyProvisions = draftPayloadFamilyProvisions(designSheet)
+  const excludedPerson = familyProvisions.disinherited.length > 0
+    ? familyProvisions.disinherited.map(person => person.full_name).join(', ')
+    : decisions.excluded_person
+      ? String(decisions.excluded_person)
+      : undefined
 
   return {
     is_married: isMarried,
@@ -96,7 +103,15 @@ export function buildDraftContext(designSheet: Record<string, unknown>): DraftCo
     client_aka: designSheetString(designSheet, 'client_aka') || undefined,
     spouse_aka: designSheetString(designSheet, 'spouse_aka') || undefined,
 
-    excluded_person: decisions.excluded_person ? String(decisions.excluded_person) : undefined,
+    excluded_person: excludedPerson,
+    excluded_persons: familyProvisions.disinherited.map(person => person.full_name),
+    disinherit_issue: familyProvisions.disinherit_issue,
+    additional_disinheritance_language: familyProvisions.additional_disinheritance_language ?? undefined,
+    include_child_gender_markers: familyProvisions.include_child_gender_markers,
+    include_afterborn_children: familyProvisions.include_afterborn_children,
+    include_expectant_children: familyProvisions.include_expectant_children,
+    omissions_intentional: familyProvisions.omissions_intentional,
+    include_general_disinheritance: familyProvisions.include_general_disinheritance,
     excluded_guardian: designSheet.excluded_guardian_flag && designSheet.excluded_guardian_name
       ? String(designSheet.excluded_guardian_name)
       : decisions.excluded_guardian

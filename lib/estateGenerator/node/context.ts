@@ -63,6 +63,18 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   petCare.enforcer = recordValue(petCare.enforcer)
   will.pet_care = petCare
   const family = recordValue(data.family)
+  const familyRecord = {
+    ...family,
+    include_child_gender_markers: Boolean(family.include_child_gender_markers),
+    include_afterborn_children: family.include_afterborn_children !== false,
+    include_expectant_children: family.include_expectant_children !== false,
+    omissions_intentional: Boolean(family.omissions_intentional),
+    include_general_disinheritance: family.include_general_disinheritance !== false,
+    disinherit_issue: Boolean(family.disinherit_issue),
+    additional_disinheritance_language: typeof family.additional_disinheritance_language === 'string'
+      ? family.additional_disinheritance_language
+      : '',
+  }
   const assets = recordValue(data.assets)
   const tax = recordValue(data.tax)
   const guardians = recordValue(data.guardians)
@@ -70,6 +82,7 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   const agent = recordValue(fiduciaries.agent)
   const trust = { ...recordValue(data.trust) }
   trust.display_date = trust.date || '________________, 20___'
+  const disinherited = arrayValue(trust.disinherited)
   const pourOver = { ...recordValue(data.pour_over) }
   pourOver.alternate_disposition ??= 'spouse_then_descendants'
   pourOver.alternate_disposition_text ??= DEFAULT_POUR_OVER_ALTERNATE_DISPOSITION_TEXT
@@ -155,6 +168,14 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     has_pet_care: petCareOption === 'direct_bequest' || petCareOption === 'pet_trust',
     has_simultaneous_death: hasSpouse && (simultaneousDeath === 'spouse_survives' || simultaneousDeath === 'testator_survives'),
     has_excluded_guardians: arrayValue(guardians.excluded).length > 0,
+    has_disinherited: disinherited.length > 0,
+    include_child_gender_markers: familyRecord.include_child_gender_markers,
+    include_afterborn_children: familyRecord.include_afterborn_children,
+    include_expectant_children: familyRecord.include_expectant_children,
+    omissions_intentional: familyRecord.omissions_intentional,
+    include_general_disinheritance: familyRecord.include_general_disinheritance,
+    disinherit_issue: familyRecord.disinherit_issue,
+    family: familyRecord,
     owns_real_property: Boolean(assets.real_property),
     tax_sensitive_estate: Boolean(tax.sensitive_estate),
     state_requires_self_proving_affidavit: Boolean(stateRules.requires_self_proving_affidavit),

@@ -16,6 +16,8 @@ export interface HouseholdChildInput {
   parentage?: DesignSheetChild['parentage']
   /** Effective minor flag from the caller; writer decides override vs derived. */
   is_minor?: boolean
+  gender?: DesignSheetChild['gender']
+  deceased?: boolean
   email?: string | null
   phone?: string | null
   same_address?: boolean
@@ -71,6 +73,8 @@ export function contactRowToDesignSheetChild(row: Record<string, unknown>): Desi
   return {
     name: joinName(row.first_name as string | null, row.last_name as string | null) ?? '',
     dob,
+    gender: (row.gender as DesignSheetChild['gender']) ?? null,
+    deceased: Boolean(row.deceased),
     relationship: rel && VALID_REL.has(rel) ? rel : 'biological',
     parentage: (row.parentage as DesignSheetChild['parentage']) ?? null,
     is_minor: typeof override === 'boolean' ? override : isMinorFromDob(dob),

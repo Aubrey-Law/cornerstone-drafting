@@ -26,6 +26,14 @@ export interface DraftContext {
   client_aka?: string
   spouse_aka?: string
   excluded_person?: string
+  excluded_persons?: string[]
+  disinherit_issue?: boolean
+  additional_disinheritance_language?: string
+  include_child_gender_markers?: boolean
+  include_afterborn_children?: boolean
+  include_expectant_children?: boolean
+  omissions_intentional?: boolean
+  include_general_disinheritance?: boolean
   excluded_guardian?: string
   excluded_guardian_2?: string
   provisions: string[]
@@ -101,7 +109,17 @@ This Trust Agreement and the trusts hereunder shall be known as the [TRUSTEE] an
     include: (ctx) => !ctx.has_children,
     text: `2. FAMILY INFORMATION
 
-The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have no children born before the date of this Trust Agreement. All references in this document to the Grantors' children are references to any children subsequently born to Grantors or adopted by Grantors by legal proceeding. References to Grantor's descendants are to the Grantors' children and their descendants, including any deceased child's descendants.`,
+The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have no children born before the date of this Trust Agreement. All references in this document to the Grantors' children are references to the Grantors' children. References to Grantor's descendants are to the Grantors' children and their descendants, including any deceased child's descendants.`,
+  },
+
+  {
+    id: 'jt_afterborn_no_children',
+    document: ['joint_revocable_trust'],
+    section: 'Family Information',
+    order: 29,
+    always: false,
+    include: (ctx) => !ctx.has_children && ctx.include_afterborn_children !== false,
+    text: `Any children subsequently born to the Grantors or adopted by the Grantors by legal proceeding shall be treated as if they were listed explicitly in this Trust Agreement.`,
   },
 
   {
@@ -113,7 +131,37 @@ The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have no ch
     include: (ctx) => ctx.has_children,
     text: `2. FAMILY INFORMATION
 
-The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have the following children born before the date of this Trust Agreement: [CHILD FULL NAME]. All references in this document to the Grantors' children are references to these children, and any children subsequently born to Grantors or adopted by Grantors by legal proceeding. References to Grantor's descendants are to the Grantors' children and their descendants, including any deceased child's descendants.`,
+The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have the following children born before the date of this Trust Agreement: [CHILD FULL NAME]. All references in this document to the Grantors' children are references to these children. References to Grantor's descendants are to the Grantors' children and their descendants, including any deceased child's descendants.`,
+  },
+
+  {
+    id: 'jt_afterborn_children',
+    document: ['joint_revocable_trust'],
+    section: 'Family Information',
+    order: 31,
+    always: false,
+    include: (ctx) => ctx.include_afterborn_children !== false,
+    text: `Any children subsequently born to the Grantors or adopted by the Grantors by legal proceeding shall be treated as if they were listed explicitly in this Trust Agreement.`,
+  },
+
+  {
+    id: 'jt_posthumous_children',
+    document: ['joint_revocable_trust'],
+    section: 'Family Information',
+    order: 32,
+    always: false,
+    include: (ctx) => ctx.include_expectant_children !== false,
+    text: `Any posthumous children (in gestation at the time of the first Grantor's death) shall be treated as if they were explicitly named in this Trust Agreement.`,
+  },
+
+  {
+    id: 'jt_omissions_intentional',
+    document: ['joint_revocable_trust'],
+    section: 'Family Information',
+    order: 33,
+    always: false,
+    include: (ctx) => Boolean(ctx.omissions_intentional),
+    text: `Any omitted children were intentionally left out of this Trust Agreement, except for afterborn children if afterborn-child language is included herein.`,
   },
 
   {
@@ -122,8 +170,28 @@ The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have the f
     section: 'Family Information',
     order: 35,
     always: false,
-    include: (ctx) => !!ctx.excluded_person,
+    include: (ctx) => !!ctx.excluded_person && Boolean(ctx.disinherit_issue),
     text: `The Grantors wish to leave no assets passing pursuant to this Trust Instrument to [EXCLUDED PERSON] and [EXCLUDED PERSON]'s descendants for reasons known to them. As such, for all purposes under this Trust Instrument, [EXCLUDED PERSON] shall be deemed to have predeceased both of the Grantors without any surviving descendants. The Trustees shall strongly defend the Grantors' wishes as stated herein.`,
+  },
+
+  {
+    id: 'jt_excluded_person_no_issue',
+    document: ['joint_revocable_trust'],
+    section: 'Family Information',
+    order: 36,
+    always: false,
+    include: (ctx) => !!ctx.excluded_person && !ctx.disinherit_issue,
+    text: `The Grantors wish to leave no assets passing pursuant to this Trust Instrument to [EXCLUDED PERSON] for reasons known to them. As such, for all purposes under this Trust Instrument, [EXCLUDED PERSON] shall be deemed to have predeceased both of the Grantors. The Trustees shall strongly defend the Grantors' wishes as stated herein.`,
+  },
+
+  {
+    id: 'jt_additional_disinheritance',
+    document: ['joint_revocable_trust'],
+    section: 'Family Information',
+    order: 37,
+    always: false,
+    include: (ctx) => Boolean(ctx.additional_disinheritance_language),
+    text: `[ADDITIONAL DISINHERITANCE LANGUAGE]`,
   },
 
   {
@@ -430,9 +498,37 @@ I am unmarried.`,
     order: 25,
     always: false,
     include: (ctx) => ctx.has_children,
-    text: `References to my children and descendants in this Last Will and Testament shall refer only to [CHILD FULL NAME], the descendants of my aforesaid children, any child of mine born or adopted after the date of this Last Will and Testament, and the descendants of any such after-born or after-adopted child. A person legally adopted prior to attaining eighteen (18) years of age shall not be differentiated from blood descendants for any purpose, but a person who is adopted after attaining eighteen (18) years of age shall not be deemed a child or descendant for all purposes hereunder.
+    text: `References to my children and descendants in this Last Will and Testament shall refer only to [CHILD FULL NAME] and the descendants of my aforesaid child or children. A person legally adopted prior to attaining eighteen (18) years of age shall not be differentiated from blood descendants for any purpose, but a person who is adopted after attaining eighteen (18) years of age shall not be deemed a child or descendant for all purposes hereunder.`,
+  },
 
-Except as provided in this Article, I have intentionally, and not as a result of any mistake or inadvertence, omitted in this Last Will and Testament to provide for any other children and/or descendants of mine, if any, however defined by law.`,
+  {
+    id: 'pow_afterborn_children',
+    document: ['pour_over_will'],
+    section: 'Family Information',
+    order: 26,
+    always: false,
+    include: (ctx) => ctx.has_children && ctx.include_afterborn_children !== false,
+    text: `Any child of mine born or adopted after the date of this Last Will and Testament, and the descendants of any such after-born or after-adopted child, shall be treated as if listed explicitly herein.`,
+  },
+
+  {
+    id: 'pow_posthumous_children',
+    document: ['pour_over_will'],
+    section: 'Family Information',
+    order: 27,
+    always: false,
+    include: (ctx) => ctx.has_children && ctx.include_expectant_children !== false,
+    text: `Any posthumous child of mine (in gestation at the time of my death) shall be treated as if explicitly named in this Last Will and Testament.`,
+  },
+
+  {
+    id: 'pow_omissions_intentional',
+    document: ['pour_over_will'],
+    section: 'Family Information',
+    order: 28,
+    always: false,
+    include: (ctx) => ctx.has_children && Boolean(ctx.omissions_intentional),
+    text: `Except as provided in this Article, I have intentionally, and not as a result of any mistake or inadvertence, omitted in this Last Will and Testament to provide for any other children and/or descendants of mine, if any, however defined by law.`,
   },
 
   {

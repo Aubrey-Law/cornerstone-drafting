@@ -2,6 +2,7 @@ import type { DraftPayload } from '@/lib/draftPayload/types'
 import type { DesignSheetRow } from '@/lib/draftPayload/types'
 import { designSheetString, isDesignSheetMarried } from '@/lib/draftPayload/designSheetFields'
 import { buildFiduciariesFromDesignSheet } from '@/lib/draftPayload/helpers'
+import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import type { ContactRow } from '@/lib/draftPayload/types'
 
 type DesignSheetChildRow = {
@@ -257,7 +258,10 @@ function baseFlatFieldsFromDesignSheet(sheet: DesignSheetRow): FlatSheet {
   const childDob = (children[0] as DesignSheetChildRow | undefined)?.dob ?? ''
 
   const decisions = (typeof sheet.decisions === 'object' && sheet.decisions ? sheet.decisions : {}) as Record<string, unknown>
-  const excludedPerson = upper(decisions.excluded_person ?? '')
+  const familyProvisions = draftPayloadFamilyProvisions(sheet)
+  const excludedPerson = familyProvisions.disinherited.length > 0
+    ? upper(familyProvisions.disinherited.map(person => person.full_name).join(', '))
+    : upper(decisions.excluded_person ?? '')
   const excludedGuardian = sheet.excluded_guardian_flag && sheet.excluded_guardian_name
     ? upper(sheet.excluded_guardian_name)
     : upper(decisions.excluded_guardian ?? '')
@@ -286,6 +290,7 @@ function baseFlatFieldsFromDesignSheet(sheet: DesignSheetRow): FlatSheet {
     children_names: childNames,
     child_dob: childDob,
     excluded_person: excludedPerson,
+    additional_disinheritance_language: familyProvisions.additional_disinheritance_language ?? '',
     excluded_guardian: excludedGuardian,
     remote_beneficiary: '',
     address: fullAddress,
@@ -362,6 +367,10 @@ export function projectDraftPayloadToFlatSheet(payload: DraftPayload): FlatSheet
 
   const childNames = payload.children.map(child => child.full_name).filter(Boolean).join(', ')
   const childDob = payload.children[0]?.dob ?? ''
+  const familyProvisions = payload.family_provisions ?? draftPayloadFamilyProvisions(null)
+  const excludedPerson = familyProvisions.disinherited.length > 0
+    ? upper(familyProvisions.disinherited.map(person => person.full_name).join(', '))
+    : ''
 
   const clientLast = client.last_name || clientFull.split(/\s+/).pop() || ''
   const spouseLast = spouse?.last_name || spouseFull.split(/\s+/).pop() || ''
@@ -383,7 +392,8 @@ export function projectDraftPayloadToFlatSheet(payload: DraftPayload): FlatSheet
     spouse_aka: spouse?.aka ?? '',
     children_names: childNames,
     child_dob: childDob,
-    excluded_person: '',
+    excluded_person: excludedPerson,
+    additional_disinheritance_language: familyProvisions.additional_disinheritance_language ?? '',
     excluded_guardian: upper(client.excluded_guardian),
     remote_beneficiary: '',
     address: fullAddress,

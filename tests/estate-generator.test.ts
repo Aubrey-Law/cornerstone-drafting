@@ -55,6 +55,16 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
     },
     spouse: null,
     children: [],
+    family_provisions: {
+      include_child_gender_markers: false,
+      include_afterborn_children: true,
+      include_expectant_children: true,
+      omissions_intentional: false,
+      include_general_disinheritance: true,
+      disinherit_issue: false,
+      additional_disinheritance_language: null,
+      disinherited: [],
+    },
     trust: {
       name: 'Jane Example Revocable Living Trust',
       date: '2026-05-31',
@@ -421,6 +431,71 @@ describe('estate generator mapping', () => {
     })
     expect(data.guardians).toMatchObject({
       excluded: [{ full_name: 'Jordan Unsafe Guardian' }],
+    })
+  })
+
+  it('maps family disinheritance selections to trust.disinherited and family flags', () => {
+    const data = toEstateGeneratorData(payload({
+      children: [
+        {
+          full_name: 'Alex Example',
+          dob: '2010-01-01',
+          relationship: 'biological',
+          parentage: 'client',
+          gender: 'male',
+          deceased: false,
+          minor: true,
+        },
+      ],
+      spouse: {
+        first_name: 'Sam',
+        last_name: 'Example',
+        full_name: 'Sam Example',
+        aka: null,
+        preferred_pronoun: null,
+        dob: null,
+      },
+      family_provisions: {
+        include_child_gender_markers: true,
+        include_afterborn_children: false,
+        include_expectant_children: true,
+        omissions_intentional: true,
+        include_general_disinheritance: false,
+        disinherit_issue: true,
+        additional_disinheritance_language: 'No provision is made for estranged relatives.',
+        disinherited: [
+          { full_name: 'Alex Example', relationship: 'child' },
+          { full_name: 'Jordan Rival', relationship: 'Sibling' },
+        ],
+      },
+    }))
+
+    expect(data.trust).toMatchObject({
+      disinherited: [
+        { full_name: 'Alex Example', relationship: 'child' },
+        { full_name: 'Jordan Rival', relationship: 'Sibling' },
+      ],
+      disinherit_issue: true,
+      blended_family: {
+        client_children: [{ full_name: 'Alex Example' }],
+        spouse_children: [],
+      },
+    })
+    expect(data.family).toMatchObject({
+      blended_family: true,
+      include_child_gender_markers: true,
+      include_afterborn_children: false,
+      include_expectant_children: true,
+      omissions_intentional: true,
+      include_general_disinheritance: false,
+      additional_disinheritance_language: 'No provision is made for estranged relatives.',
+    })
+    expect(data.children[0]).toMatchObject({
+      full_name: 'Alex Example',
+      gender_display: 'male',
+    })
+    expect(data.trust).not.toMatchObject({
+      disinherited: [{ full_name: 'Jordan Unsafe Guardian' }],
     })
   })
 
@@ -1011,6 +1086,10 @@ describe('estate generator mapping', () => {
         date_of_birth: 'January 1, 2012',
         dob: '2012-01-01',
         relationship: 'biological',
+        parentage: '',
+        gender: '',
+        gender_display: '',
+        deceased: false,
         minor: true,
         young_adult_estate_plan: false,
       },
@@ -1019,6 +1098,10 @@ describe('estate generator mapping', () => {
         date_of_birth: '',
         dob: '',
         relationship: 'adopted',
+        parentage: '',
+        gender: '',
+        gender_display: '',
+        deceased: false,
         minor: false,
         young_adult_estate_plan: false,
       },
