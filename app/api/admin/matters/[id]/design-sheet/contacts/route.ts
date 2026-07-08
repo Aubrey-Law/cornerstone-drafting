@@ -18,6 +18,7 @@ type ContactBody = {
   phone?: string
   email?: string
   address?: string
+  date_of_birth?: string
 }
 
 function mapContact(contact: {
@@ -33,6 +34,7 @@ function mapContact(contact: {
   phone: string | null
   email: string | null
   address_line1: string | null
+  date_of_birth?: string | null
 }) {
   return {
     id: contact.id,
@@ -46,6 +48,7 @@ function mapContact(contact: {
     phone: formatPhoneDisplay(contact.phone),
     email: contact.email,
     address: contact.address_line1,
+    date_of_birth: contact.date_of_birth ?? null,
   }
 }
 
@@ -92,8 +95,9 @@ export async function POST(req: Request, { params }: Params) {
         phone: formatPhoneForStorage(body?.phone),
         email: body?.email?.trim() || null,
         address_line1: body?.address?.trim() || null,
+        date_of_birth: body?.date_of_birth?.trim() || null,
       })
-      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, relationship_type, relationship_label, phone, email, address_line1')
+      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, relationship_type, relationship_label, phone, email, address_line1, date_of_birth')
       .single()
 
     if (error) throw new Error(error.message)
@@ -154,10 +158,11 @@ export async function PATCH(req: Request, { params }: Params) {
         phone: formatPhoneForStorage(body?.phone),
         email: body?.email?.trim() || null,
         address_line1: body?.address?.trim() || null,
+        date_of_birth: body?.date_of_birth?.trim() || null,
       })
       .eq('id', contactId)
       .eq('client_intake_id', matter.client_intake_id)
-      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, relationship_type, relationship_label, phone, email, address_line1')
+      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, relationship_type, relationship_label, phone, email, address_line1, date_of_birth')
       .maybeSingle()
 
     if (error) throw new Error(error.message)

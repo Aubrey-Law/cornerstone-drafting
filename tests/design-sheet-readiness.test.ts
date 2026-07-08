@@ -294,7 +294,7 @@ describe('computeDesignSheetReadiness', () => {
     expect(readiness.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sectionId: DESIGN_SECTION_IDS.fiduciaries,
+          sectionId: DESIGN_SECTION_IDS.willDetails,
           label: 'guardian',
           targetField: 'guardian_slots',
         }),

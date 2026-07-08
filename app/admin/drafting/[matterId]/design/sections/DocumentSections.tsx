@@ -29,6 +29,12 @@ import {
   setPrimaryContact,
 } from './fiduciary-blocks'
 import { WillProvisionsSection } from './WillProvisionsSection'
+import {
+  DpoaFiduciarySections,
+  HealthCareFiduciarySections,
+  TrustFiduciarySections,
+  WillFiduciarySections,
+} from './documentFiduciarySections'
 
 interface DocumentSectionProps extends SectionProps {
   contacts: MatterContact[]
@@ -65,7 +71,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   if (scope === 'spouse') {
     return (
       <DesignSectionContent>
-        <SectionHelp>Configure the spouse&apos;s separate trust name and any spouse-specific trust settings.</SectionHelp>
+        <SectionHelp>Configure the spouse&apos;s separate trust name and trustee nominations.</SectionHelp>
         <SectionBlock title="Trust Name">
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             <PrefilledInput
@@ -77,6 +83,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
             />
           </div>
         </SectionBlock>
+        <TrustFiduciarySections {...props} scope="spouse" />
       </DesignSectionContent>
     )
   }
@@ -157,7 +164,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
 
   return (
     <DesignSectionContent>
-      <SectionHelp>Configure the trust structure, name, protector, and how the residuary is distributed. Nominate trustees under Fiduciaries & Additional Contacts.</SectionHelp>
+      <SectionHelp>Configure the trust structure, name, protector, trustees, and how the residuary is distributed.</SectionHelp>
 
       <SectionBlock title="Trust Structure">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -225,6 +232,8 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           </label>
         </SectionBlock>
       )}
+
+      <TrustFiduciarySections {...props} scope="client" />
 
       <SectionBlock title="Residuary Distribution">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -458,8 +467,9 @@ export function WillDocumentSection(props: DocumentSectionProps) {
 
   return (
     <DesignSectionContent>
-      <SectionHelp>The Pour-Over Will works with the trust. Configure will-specific provisions here; nominate fiduciaries under Fiduciaries & Additional Contacts.</SectionHelp>
+      <SectionHelp>Configure will-specific provisions and nominate personal representatives and guardians here.</SectionHelp>
       {hasMinors && <ExcludedGuardians sheet={sheet} onChange={onChange} />}
+      <WillFiduciarySections {...props} />
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="will" />
     </DesignSectionContent>
   )
@@ -470,7 +480,8 @@ export function DpoaDocumentSection(props: DocumentSectionProps) {
 
   return (
     <DesignSectionContent>
-      <SectionHelp>Select financial POA provisions. Agent nominations live under Fiduciaries & Additional Contacts.</SectionHelp>
+      <SectionHelp>Select financial POA provisions and nominate agents here.</SectionHelp>
+      <DpoaFiduciarySections {...props} />
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="dpoa" />
     </DesignSectionContent>
   )
@@ -481,7 +492,8 @@ export function HealthCareDocumentSection(props: DocumentSectionProps) {
 
   return (
     <DesignSectionContent>
-      <SectionHelp>Make end-of-life elections under MA law. Health care agents are nominated under Fiduciaries & Additional Contacts.</SectionHelp>
+      <SectionHelp>Make end-of-life elections under MA law and nominate health care agents here.</SectionHelp>
+      <HealthCareFiduciarySections {...props} />
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="healthcare" />
       <SectionBlock title="Advance Health Directive">
         <ClientDecisionCallout>

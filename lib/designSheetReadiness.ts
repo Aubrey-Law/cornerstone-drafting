@@ -198,39 +198,39 @@ export function computeDesignSheetReadiness({
       blocker(DESIGN_SECTION_IDS.familyInformation, 'children', 'children'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
-  const fiduciaryBlockers = [
-    documentInclusions.trust && !trusteePrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'trustee', 'trustee_slots'),
-    documentInclusions.trust && spouseFiduciariesNeeded && sheet.is_joint === false && !spouseTrusteePrimary &&
-      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse trustee', 'spouse_trustee_slots'),
-    documentInclusions.will && !executorPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'personal representative', 'executor_slots'),
-    documentInclusions.will && spouseFiduciariesNeeded && !spouseExecutorPrimary &&
-      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse personal representative', 'spouse_executor_slots'),
-    documentInclusions.will && hasMinorChildren && !guardianPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'guardian', 'guardian_slots'),
-    documentInclusions.dpoa && !poaPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'power of attorney agent', 'poa_slots'),
-    documentInclusions.dpoa && spouseFiduciariesNeeded && !spousePoaPrimary &&
-      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse power of attorney agent', 'spouse_poa_slots'),
-    documentInclusions.healthcare && !hcpPrimary && blocker(DESIGN_SECTION_IDS.fiduciaries, 'health care proxy', 'hcp_slots'),
-    documentInclusions.healthcare && spouseFiduciariesNeeded && !spouseHcpPrimary &&
-      blocker(DESIGN_SECTION_IDS.fiduciaries, 'spouse health care proxy', 'spouse_hcp_slots'),
-  ].filter(Boolean) as DesignReadinessBlocker[]
+  const fiduciaryBlockers = [] as DesignReadinessBlocker[]
 
   const clientTrustBlockers = [
+    documentInclusions.trust && !trusteePrimary && blocker(DESIGN_SECTION_IDS.trustDetails, 'trustee', 'trustee_slots'),
     documentInclusions.trust && !hasText(sheet.trust_name) && blocker(DESIGN_SECTION_IDS.trustDetails, 'trust name', 'trust_name'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const spouseTrustBlockers = [
+    documentInclusions.trust && spouseFiduciariesNeeded && sheet.is_joint === false && !spouseTrusteePrimary &&
+      blocker(DESIGN_SECTION_IDS.trustDetailsSpouse, 'spouse trustee', 'spouse_trustee_slots'),
     documentInclusions.trust && married && sheet.is_joint === false && !hasText(sheet.spouse_trust_name) &&
       blocker(DESIGN_SECTION_IDS.trustDetailsSpouse, 'spouse trust name', 'spouse_trust_name'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
-  const willBlockers = [] as DesignReadinessBlocker[]
+  const willBlockers = [
+    documentInclusions.will && !executorPrimary && blocker(DESIGN_SECTION_IDS.willDetails, 'personal representative', 'executor_slots'),
+    documentInclusions.will && spouseFiduciariesNeeded && !spouseExecutorPrimary &&
+      blocker(DESIGN_SECTION_IDS.willDetails, 'spouse personal representative', 'spouse_executor_slots'),
+    documentInclusions.will && hasMinorChildren && !guardianPrimary && blocker(DESIGN_SECTION_IDS.willDetails, 'guardian', 'guardian_slots'),
+  ].filter(Boolean) as DesignReadinessBlocker[]
 
   const dpoaBlockers = [
+    documentInclusions.dpoa && !poaPrimary && blocker(DESIGN_SECTION_IDS.financialPoa, 'power of attorney agent', 'poa_slots'),
+    documentInclusions.dpoa && spouseFiduciariesNeeded && !spousePoaPrimary &&
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'spouse power of attorney agent', 'spouse_poa_slots'),
     documentInclusions.dpoa && !hasText(sheet.dpoa_self_dealing_reviewer) &&
       blocker(DESIGN_SECTION_IDS.financialPoa, 'self-dealing reviewer', 'dpoa_self_dealing_reviewer', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const healthcareBlockers = [
+    documentInclusions.healthcare && !hcpPrimary && blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'health care proxy', 'hcp_slots'),
+    documentInclusions.healthcare && spouseFiduciariesNeeded && !spouseHcpPrimary &&
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse health care proxy', 'spouse_hcp_slots'),
     documentInclusions.healthcare && !hasText(sheet.hcp_anatomical_gift) &&
       blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'anatomical gift election', 'hcp_anatomical_gift', 'client-decision'),
     documentInclusions.healthcare && sheet.hcp_anatomical_gift === 'specified' && !hasText(sheet.hcp_anatomical_specified) &&
@@ -280,6 +280,8 @@ export function computeDesignSheetReadiness({
         'trust_name',
         'restatement',
         'trust_protector',
+        'trustee_structure',
+        'cotrustee_decision_standard',
       ])),
     [DESIGN_SECTION_IDS.trustDetailsSpouse]: !documentInclusions.trust || !(married && sheet.is_joint === false)
       ? { status: 'none', detail: 'not included' }

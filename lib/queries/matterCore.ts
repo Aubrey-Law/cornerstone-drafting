@@ -75,7 +75,7 @@ export async function fetchMatterContacts(matterId: string): Promise<MatterConta
 
   const { data, error } = await admin
     .from('contacts')
-    .select('id, first_name, middle_name, last_name, relationship_type, relationship_label, phone, email, address_line1')
+    .select('id, first_name, middle_name, last_name, relationship_type, relationship_label, phone, email, address_line1, date_of_birth')
     .eq('client_intake_id', matter.client_intake_id)
     .order('last_name', { ascending: true })
     .limit(200)
@@ -94,6 +94,7 @@ export async function fetchMatterContacts(matterId: string): Promise<MatterConta
     phone: formatPhoneDisplay(c.phone),
     email: c.email,
     address: c.address_line1,
+    date_of_birth: c.date_of_birth ?? null,
   }))
 }
 
