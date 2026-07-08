@@ -1,0 +1,27 @@
+# Environment variables
+.env*.local
+.env.test
+.env
+
+# Dependencies and build output
+node_modules
+.next/
+.DS_Store
+.vercel
+
+# Build artifacts
+next-env.d.ts
+tsconfig.tsbuildinfo
+tsconfig.typecheck.tsbuildinfo
+.cache/
+output/
+
+# Python estate generator
+tools/aubreylaw-docgeneration/output/
+tools/aubreylaw-docgeneration/.venv/
+
+# Supabase local
+supabase/.temp/
+
+# Sentry
+.env.sentry-build-plugin
