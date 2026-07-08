@@ -112,7 +112,7 @@ export async function PATCH(req: Request, { params }: Params) {
         .eq('matter_id', matterId)
 
       if (error) throw new Error(error.message)
-      if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput)
+      if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput, { updatedAt: now })
       return NextResponse.json({
         id: existingId,
         updated_at: now,
@@ -134,7 +134,7 @@ export async function PATCH(req: Request, { params }: Params) {
       .single()
 
     if (error) throw new Error(error.message)
-    if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput)
+    if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput, { updatedAt: now })
     return NextResponse.json({ id: inserted.id, updated_at: now, version: 1 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to save design sheet'

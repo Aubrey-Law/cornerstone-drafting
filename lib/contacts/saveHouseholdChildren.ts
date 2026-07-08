@@ -22,6 +22,7 @@ export async function saveHouseholdChildren(
   admin: AdminClient,
   intakeId: string,
   children: HouseholdChildInput[],
+  options?: { updatedAt?: string },
 ): Promise<{ ids: string[] }> {
   const submitted = (children ?? []).filter((c) => {
     const name = c.name ?? `${c.first_name ?? ''} ${c.last_name ?? ''}`
@@ -87,9 +88,10 @@ export async function saveHouseholdChildren(
       ? { ...(sheetRow.decisions as Record<string, unknown>) }
       : {}
     decisions.children = json
+    const updatedAt = options?.updatedAt ?? new Date().toISOString()
     const { error: dsErr } = await admin
       .from('design_sheets')
-      .update({ children: json, decisions, updated_at: new Date().toISOString() })
+      .update({ children: json, decisions, updated_at: updatedAt })
       .eq('id', sheetRow.id)
     if (dsErr) throw new Error(`${dsErr.code ?? 'error'}: ${dsErr.message}`)
   }
