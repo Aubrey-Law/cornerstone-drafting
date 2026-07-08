@@ -7,7 +7,6 @@ import type { DesignSheet, MatterContact, RemoteCharity, SpecificBequest } from 
 import ContactPicker, { type Contact } from './ContactPicker'
 import {
   AttorneyInput,
-  AttorneyNoteBanner,
   AttorneySelect,
   DesignSectionContent,
   FieldLabel,
@@ -15,22 +14,19 @@ import {
   type SectionProps,
 } from './shared'
 
-interface OtherBeneficiariesSectionProps extends SectionProps {
+interface TrustBeneficiariesSectionProps extends SectionProps {
   contacts?: MatterContact[]
   onAddContact?: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
-  /** When false, omit the intro banner (e.g. when embedded in Family Information). */
-  showBanner?: boolean
 }
 
-export function OtherBeneficiariesSection({
+export function TrustBeneficiariesSection({
   sheet,
   onChange,
   contacts = [],
   onAddContact,
   onUpdateContact,
-  showBanner = true,
-}: OtherBeneficiariesSectionProps) {
+}: TrustBeneficiariesSectionProps) {
   const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
   const spouseFirst = (sheet.spouse_name ?? '').trim().split(/\s+/)[0] || ''
@@ -82,15 +78,7 @@ export function OtherBeneficiariesSection({
 
   return (
     <DesignSectionContent>
-      {showBanner && (
-        <AttorneyNoteBanner>
-          Remote beneficiaries and specific bequests apply across the estate plan. Review carefully before drafting.
-        </AttorneyNoteBanner>
-      )}
-
-      <SectionBlock title="Other Beneficiaries" subtitle="Remote beneficiaries and specific bequests">
-        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Remote Beneficiaries</p>
-        <p className="mb-4 text-[12px] text-muted-foreground">Who inherits if none of the named beneficiaries survive.</p>
+      <SectionBlock title="Remote Beneficiaries" subtitle="Who inherits if none of the named beneficiaries survive.">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <AttorneySelect
             fieldName="remote_beneficiary"
@@ -166,11 +154,9 @@ export function OtherBeneficiariesSection({
             </div>
           </div>
         )}
+      </SectionBlock>
 
-        <div className="my-6 border-t border-border" />
-
-        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Specific Bequests</p>
-        <p className="mb-4 text-[12px] text-muted-foreground">Optional — repeatable list</p>
+      <SectionBlock title="Specific Bequests" subtitle="Optional — repeatable list of cash legacies, specific items, and charitable bequests.">
         {bequests.length === 0 ? (
           <p className="text-sm text-muted-foreground">No specific bequests.</p>
         ) : (

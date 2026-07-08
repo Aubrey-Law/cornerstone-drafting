@@ -205,6 +205,8 @@ export interface DesignSheet {
   disinherited_children: string[] | null
   disinherit_issue: string | null
   additional_disinheritance_language: string | null
+  include_additional_beneficiaries: string | null
+  additional_beneficiaries: AdditionalBeneficiary[] | null
 
   // Residuary distributions — stagger schedule
   stagger_age_1: number | null
@@ -372,6 +374,13 @@ export interface RemoteCharity {
   org_type?: string | null
   state?: string | null
   address?: string | null
+}
+
+export interface AdditionalBeneficiary {
+  id: string
+  name: string
+  relationship: string | null
+  kind: 'individual' | 'group' | 'charity'
 }
 
 export interface PetCareDetails {

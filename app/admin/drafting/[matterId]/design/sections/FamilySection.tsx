@@ -12,6 +12,7 @@ import { ageInYearsFromDob } from '@/lib/dob'
 import {
   AttorneyInput,
   AttorneyNoteBanner,
+  AttorneySelect,
   DesignSectionContent,
   DesignSheetCheckboxOption,
   DobAgeHint,
@@ -24,8 +25,7 @@ import {
   yesNoField,
   type SectionProps,
 } from './shared'
-import type { DesignSheet, DesignSheetChild, MatterContact } from '@/types/database'
-import { OtherBeneficiariesSection } from './OtherBeneficiariesSection'
+import type { DesignSheet, DesignSheetChild, MatterContact, AdditionalBeneficiary } from '@/types/database'
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'Male' },
@@ -59,6 +59,7 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
   const children = sheet.children ?? []
   const disinheritances = sheet.disinheritances ?? []
   const disinheritedChildren = sheet.disinherited_children ?? []
+  const additionalBeneficiaries = sheet.additional_beneficiaries ?? []
   const [additionalLanguage, setAdditionalLanguage] = useState(sheet.additional_disinheritance_language ?? '')
 
   const marital = (sheet.marital_status ?? '').toLowerCase()
@@ -126,6 +127,24 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
 
   function removeDisinheritance(i: number) {
     onChange('disinheritances', disinheritances.filter((_, idx) => idx !== i))
+  }
+
+  function addAdditionalBeneficiary() {
+    onChange('additional_beneficiaries', [
+      ...additionalBeneficiaries,
+      { id: crypto.randomUUID(), name: '', relationship: null, kind: 'individual' },
+    ])
+  }
+
+  function editAdditionalBeneficiary(i: number, patch: Partial<AdditionalBeneficiary>) {
+    onChange(
+      'additional_beneficiaries',
+      additionalBeneficiaries.map((entry, idx) => (idx === i ? { ...entry, ...patch } : entry)),
+    )
+  }
+
+  function removeAdditionalBeneficiary(i: number) {
+    onChange('additional_beneficiaries', additionalBeneficiaries.filter((_, idx) => idx !== i))
   }
 
   return (
@@ -420,14 +439,66 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
         </SectionBlock>
       </div>
 
-      <OtherBeneficiariesSection
-        sheet={sheet}
-        onChange={onChange}
-        contacts={contacts}
-        onAddContact={onAddContact}
-        onUpdateContact={onUpdateContact}
-        showBanner={false}
-      />
+      <div id="design-field-additional-beneficiaries" tabIndex={-1}>
+        <SectionBlock title="Additional Beneficiaries">
+          <DesignSheetCheckboxOption
+            label="Additional Beneficiaries"
+            description="Please list all of your client's beneficiaries below, including anyone who will receive a gift or be a beneficiary of a residual distribution. This includes individuals, groups of individuals, and charities."
+            checked={yesNoField(sheet.include_additional_beneficiaries)}
+            onChange={checked => onChange('include_additional_beneficiaries', toYesNo(checked))}
+          />
+
+          {yesNoField(sheet.include_additional_beneficiaries) && (
+            <div className="mt-4 space-y-3">
+              {additionalBeneficiaries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No additional beneficiaries listed.</p>
+              ) : (
+                additionalBeneficiaries.map((entry, i) => (
+                  <div key={entry.id ?? i} className="rounded-lg border border-border bg-muted/40 p-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <AttorneyInput
+                        label="Name"
+                        value={entry.name}
+                        onChange={v => editAdditionalBeneficiary(i, { name: v })}
+                      />
+                      <AttorneySelect
+                        label="Type"
+                        value={entry.kind}
+                        options={[
+                          { value: 'individual', label: 'Individual' },
+                          { value: 'group', label: 'Group of individuals' },
+                          { value: 'charity', label: 'Charity' },
+                        ]}
+                        onChange={v => editAdditionalBeneficiary(i, { kind: v as AdditionalBeneficiary['kind'] })}
+                      />
+                      <AttorneyInput
+                        label="Relationship / Role"
+                        value={entry.relationship ?? ''}
+                        onChange={v => editAdditionalBeneficiary(i, { relationship: v || null })}
+                      />
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs text-destructive hover:text-destructive"
+                        onClick={() => removeAdditionalBeneficiary(i)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={addAdditionalBeneficiary}>
+                <Plus className="h-3.5 w-3.5" />
+                Add Beneficiary
+              </Button>
+            </div>
+          )}
+        </SectionBlock>
+      </div>
     </DesignSectionContent>
   )
 }

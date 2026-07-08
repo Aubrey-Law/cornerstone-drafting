@@ -29,6 +29,7 @@ import {
   setPrimaryContact,
 } from './fiduciary-blocks'
 import { WillProvisionsSection } from './WillProvisionsSection'
+import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
 
 interface DocumentSectionProps extends SectionProps {
   contacts: MatterContact[]
@@ -312,6 +313,14 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           </div>
         )}
       </SectionBlock>
+
+      <TrustBeneficiariesSection
+        sheet={sheet}
+        onChange={onChange}
+        contacts={contacts}
+        onAddContact={onAddContact}
+        onUpdateContact={onUpdateContact}
+      />
     </DesignSectionContent>
   )
 }
