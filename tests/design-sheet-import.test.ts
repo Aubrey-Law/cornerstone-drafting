@@ -62,15 +62,15 @@ describe('design sheet import route source', () => {
     expect(source).not.toContain(".from('design_sheets').update")
   })
 
-  it('server helper uses lazy Anthropic initialization', () => {
+  it('server helper resolves LLM config and completes import via shared layer', () => {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'lib/designSheetImport/server.ts'),
       'utf8',
     )
 
-    expect(source).toContain('function getAnthropicClient()')
-    expect(source).toContain("model: 'claude-sonnet-4-6'")
-    expect(source).not.toContain('const anthropic = new Anthropic()')
+    expect(source).toContain('resolveLlmConfig')
+    expect(source).toContain('completeLlmText')
+    expect(source).not.toContain('getAnthropicClient')
     expect(source).not.toContain('claude-sonnet-4-20250514')
   })
 

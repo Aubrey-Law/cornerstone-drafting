@@ -1,5 +1,5 @@
-import type Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { LlmToolDefinition } from '@/lib/llm/types'
 import {
   callMcpTool,
   establishMcpSession,
@@ -14,8 +14,8 @@ const MAX_TOOLS = 24
 const TOOL_NAME_PREFIX = 'mcp_'
 
 export interface RegisteredMcpTool {
-  /** Anthropic-safe tool name */
-  anthropicName: string
+  /** Provider-safe tool name */
+  llmName: string
   connectorId: string
   connectorName: string
   mcpToolName: string
@@ -23,23 +23,20 @@ export interface RegisteredMcpTool {
   definition: McpToolDefinition
 }
 
-function anthropicToolName(connectorId: string, mcpToolName: string): string {
+function llmToolName(connectorId: string, mcpToolName: string): string {
   const safe = `${connectorId.slice(0, 8)}_${mcpToolName}`.replace(/[^a-zA-Z0-9_-]/g, '_')
   return `${TOOL_NAME_PREFIX}${safe}`.slice(0, 128)
 }
 
-function parseAnthropicToolName(
-  name: string,
-  registry: RegisteredMcpTool[],
-): RegisteredMcpTool | null {
+function parseLlmToolName(name: string, registry: RegisteredMcpTool[]): RegisteredMcpTool | null {
   if (!name.startsWith(TOOL_NAME_PREFIX)) return null
-  return registry.find(t => t.anthropicName === name) ?? null
+  return registry.find(t => t.llmName === name) ?? null
 }
 
 export async function loadMcpToolsForUser(
   admin: SupabaseClient,
   userId: string,
-): Promise<{ tools: Anthropic.Tool[]; registry: RegisteredMcpTool[] }> {
+): Promise<{ tools: LlmToolDefinition[]; registry: RegisteredMcpTool[] }> {
   const connectors = (await listMcpConnectors(admin, userId))
     .filter(c => c.enabled)
     .slice(0, MAX_CONNECTORS)
@@ -57,9 +54,9 @@ export async function loadMcpToolsForUser(
     const mcpTools = await listMcpTools(established.session)
     for (const def of mcpTools) {
       if (registry.length >= MAX_TOOLS) break
-      const anthropicName = anthropicToolName(connector.id, def.name)
+      const name = llmToolName(connector.id, def.name)
       registry.push({
-        anthropicName,
+        llmName: name,
         connectorId: connector.id,
         connectorName: connector.name,
         mcpToolName: def.name,
@@ -69,13 +66,13 @@ export async function loadMcpToolsForUser(
     }
   }
 
-  const tools: Anthropic.Tool[] = registry.map(entry => ({
-    name: entry.anthropicName,
+  const tools: LlmToolDefinition[] = registry.map(entry => ({
+    name: entry.llmName,
     description: `[${entry.connectorName}] ${entry.definition.description ?? entry.mcpToolName}`,
-    input_schema: (entry.definition.inputSchema ?? {
+    inputSchema: (entry.definition.inputSchema ?? {
       type: 'object',
       properties: {},
-    }) as Anthropic.Tool.InputSchema,
+    }) as Record<string, unknown>,
   }))
 
   return { tools, registry }
@@ -86,7 +83,7 @@ export async function executeMcpToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
 ): Promise<{ ok: true; text: string; connectorName: string; mcpToolName: string } | { ok: false; error: string }> {
-  const entry = parseAnthropicToolName(toolName, registry)
+  const entry = parseLlmToolName(toolName, registry)
   if (!entry) return { ok: false, error: `Unknown tool: ${toolName}` }
 
   const result = await callMcpTool(entry.session, entry.mcpToolName, toolInput)

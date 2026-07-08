@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { auditDocumentAccess, isAdminUser } from '@/lib/documentSecurity'
 import {
   DOCX_CONTENT_TYPE,
@@ -19,12 +18,7 @@ import {
 } from '@/lib/documentVersions'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { resolveApiKey } from '@/lib/userApiKeys'
-import {
-  DEFAULT_ANTHROPIC_MODEL,
-  parseUserPreferences,
-  resolveAnthropicModel,
-} from '@/lib/userPreferences'
+import { completeLlmText, resolveLlmConfig } from '@/lib/llm'
 import { scanDocxBufferForMarkers } from '@/lib/drafting/markerScan'
 
 interface RedlineBody {
@@ -200,25 +194,16 @@ async function proposeEditsWithAi(args: {
   instruction: string
   docBytes: Buffer
 }): Promise<EditInput[]> {
-  const resolved = await resolveApiKey(args.admin, args.userId, 'anthropic')
-  if (!resolved.key) {
-    throw new Error('No Anthropic API key configured (BYOK or ANTHROPIC_API_KEY)')
+  const llmResolved = await resolveLlmConfig(args.admin, args.userId)
+  if (!llmResolved.ok) {
+    throw new Error(llmResolved.error)
   }
-
-  const { data: profile } = await args.admin
-    .from('users')
-    .select('preferences')
-    .eq('id', args.userId)
-    .maybeSingle()
-  const model = resolveAnthropicModel(parseUserPreferences(profile?.preferences)) || DEFAULT_ANTHROPIC_MODEL
 
   const bodyText = await extractDocxBodyText(args.docBytes)
   const truncated = bodyText.slice(0, 80_000)
 
-  const client = new Anthropic({ apiKey: resolved.key })
-  const response = await client.messages.create({
-    model,
-    max_tokens: 4096,
+  const response = await completeLlmText(llmResolved.config, {
+    maxTokens: 4096,
     messages: [
       {
         role: 'user',
@@ -244,10 +229,7 @@ Rules:
     ],
   })
 
-  const text = response.content
-    .filter(b => b.type === 'text')
-    .map(b => b.text)
-    .join('\n')
+  const text = response.text
   const jsonMatch = text.match(/\[[\s\S]*\]/)
   if (!jsonMatch) return []
   const parsed = JSON.parse(jsonMatch[0]) as EditInput[]
