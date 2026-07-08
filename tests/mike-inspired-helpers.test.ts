@@ -38,12 +38,13 @@ describe('estate tabular presets', () => {
 })
 
 describe('user preferences models', () => {
-  it('parses anthropic model preference', () => {
+  it('parses anthropic model preference and remaps retired ids', () => {
     const prefs = parseUserPreferences({
       models: { anthropicModel: 'claude-opus-4-20250514' },
     })
-    expect(resolveAnthropicModel(prefs)).toBe('claude-opus-4-20250514')
+    expect(resolveAnthropicModel(prefs)).toBe('claude-opus-4-5')
     expect(resolveAnthropicModel({})).toBe(DEFAULT_ANTHROPIC_MODEL)
+    expect(DEFAULT_ANTHROPIC_MODEL).toBe('claude-sonnet-4-6')
   })
 })
 

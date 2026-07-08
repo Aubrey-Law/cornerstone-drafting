@@ -39,6 +39,7 @@ import { formatDateTime } from '@/lib/utils'
 import { type MatterDocument } from '@/types/database'
 import type { DraftingHubDocument, DraftingHubMatter } from '@/lib/queries/drafting'
 import { TabularReviewSection } from '@/components/drafting/TabularReviewSection'
+import { MatterAssistantPanel } from '@/components/drafting/MatterAssistantPanel'
 
 const PromoteDocumentDialog = dynamic(
   () => import('@/components/documents/PromoteDocumentDialog').then(m => ({ default: m.PromoteDocumentDialog })),
@@ -79,7 +80,18 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [uploadingPdf, setUploadingPdf] = useState(false)
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string } | null>(null)
+  const [assistantOpen, setAssistantOpen] = useState(true)
   const pdfUploadRef = useRef<HTMLInputElement>(null)
+
+  const openInApp = (doc: { id: string; name: string }) => {
+    const alreadyOpen = viewerDoc?.id === doc.id
+    if (alreadyOpen) {
+      setViewerDoc(null)
+      return
+    }
+    setViewerDoc(doc)
+    setAssistantOpen(true)
+  }
 
   // Optimistic review-state overrides keyed by document id (ISO string when
   // reviewed, null when cleared) so the checkbox + gate update before refresh.
@@ -331,7 +343,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                       size="sm"
                       variant={isOpen ? 'secondary' : 'outline'}
                       className="h-8 gap-1.5 text-xs"
-                      onClick={() => setViewerDoc(isOpen ? null : { id: doc.id, name: doc.name })}
+                      onClick={() => openInApp(doc)}
                     >
                       <Sparkles className="h-3.5 w-3.5" /> {isOpen ? 'Hide viewer' : 'Open in app'}
                     </Button>
@@ -431,16 +443,48 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         )}
       </section>
 
-      {/* In-app document review — below drafts list, full width for readability */}
+      {/* In-app document review — viewer + assistant side-by-side below drafts list */}
       {viewerDoc ? (
         <section className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="h-[min(78vh,920px)] min-h-[520px]">
-            <DocxViewerPanel
-              documentId={viewerDoc.id}
-              documentName={viewerDoc.name}
-              onClose={() => setViewerDoc(null)}
-              onMutated={() => router.refresh()}
-            />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Reviewing <span className="font-medium text-foreground">{viewerDoc.name}</span>
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant={assistantOpen ? 'secondary' : 'outline'}
+              className="h-7 gap-1.5 text-[11px]"
+              onClick={() => setAssistantOpen(open => !open)}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {assistantOpen ? 'Hide assistant' : 'Show assistant'}
+            </Button>
+          </div>
+          <div
+            className={
+              assistantOpen
+                ? 'grid h-[min(78vh,920px)] min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px]'
+                : 'h-[min(78vh,920px)] min-h-[520px]'
+            }
+          >
+            <div className="min-h-0 min-w-0 border-r border-border">
+              <DocxViewerPanel
+                documentId={viewerDoc.id}
+                documentName={viewerDoc.name}
+                onClose={() => setViewerDoc(null)}
+                onMutated={() => router.refresh()}
+              />
+            </div>
+            {assistantOpen ? (
+              <aside className="min-h-[280px] border-t border-border lg:min-h-0 lg:border-t-0">
+                <MatterAssistantPanel
+                  matterId={matterId}
+                  documentIds={[viewerDoc.id, ...recentDrafts.map(d => d.id).filter(id => id !== viewerDoc.id)]}
+                  onClose={() => setAssistantOpen(false)}
+                />
+              </aside>
+            ) : null}
           </div>
         </section>
       ) : null}
