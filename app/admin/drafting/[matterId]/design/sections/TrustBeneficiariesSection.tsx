@@ -8,7 +8,6 @@ import ContactPicker, { type Contact } from './ContactPicker'
 import {
   AttorneyInput,
   AttorneySelect,
-  DesignSectionContent,
   FieldLabel,
   SectionBlock,
   type SectionProps,
@@ -18,6 +17,10 @@ interface TrustBeneficiariesSectionProps extends SectionProps {
   contacts?: MatterContact[]
   onAddContact?: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  /** When true, only render specific bequests (no remote beneficiaries wrapper). */
+  specificBequestsOnly?: boolean
+  /** When true, only render remote beneficiaries (no specific bequests wrapper). */
+  remoteBeneficiariesOnly?: boolean
 }
 
 export function TrustBeneficiariesSection({
@@ -26,6 +29,8 @@ export function TrustBeneficiariesSection({
   contacts = [],
   onAddContact,
   onUpdateContact,
+  specificBequestsOnly = false,
+  remoteBeneficiariesOnly = false,
 }: TrustBeneficiariesSectionProps) {
   const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
@@ -76,8 +81,12 @@ export function TrustBeneficiariesSection({
   const removeRemoteCharity = (i: number) =>
     setRemoteCharities(remoteCharities.filter((_, idx) => idx !== i))
 
+  const showRemote = !specificBequestsOnly
+  const showBequests = !remoteBeneficiariesOnly
+
   return (
-    <DesignSectionContent>
+    <>
+      {showRemote && (
       <SectionBlock title="Remote Beneficiaries" subtitle="Who inherits if none of the named beneficiaries survive.">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <AttorneySelect
@@ -155,7 +164,9 @@ export function TrustBeneficiariesSection({
           </div>
         )}
       </SectionBlock>
+      )}
 
+      {showBequests && (
       <SectionBlock title="Specific Bequests" subtitle="Optional — repeatable list of cash legacies, specific items, and charitable bequests.">
         {bequests.length === 0 ? (
           <p className="text-sm text-muted-foreground">No specific bequests.</p>
@@ -273,6 +284,7 @@ export function TrustBeneficiariesSection({
           </Button>
         </div>
       </SectionBlock>
-    </DesignSectionContent>
+      )}
+    </>
   )
 }

@@ -1,41 +1,33 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import type { ReactNode } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { deriveTrustName, deriveSpouseTrustName } from '@/lib/designSheetDefaults'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
-import type { DesignSheet, MatterContact, PetCareDetails, PipelineMatter, StaggeredTier } from '@/types/database'
-import DesignContactPicker, { type Contact as PickerContact } from './ContactPicker'
+import type { MatterContact, PipelineMatter } from '@/types/database'
 import type { SectionProps } from './shared'
 import {
   AttorneyInput,
   AttorneySelect,
   ClientDecisionCallout,
-  FieldLabel,
   DesignSectionContent,
-  PrefilledInput,
+  FieldLabel,
   SectionBlock,
 } from './shared'
-import {
-  SegControl,
-  clearPrimaryContactIf,
-  findClientContact,
-  findSpouseContact,
-  isMarriedSheet as isMarried,
-  primaryContactId,
-  setPrimaryContact,
-} from './fiduciary-blocks'
+import { SegControl } from './fiduciary-blocks'
 import { WillProvisionsSection } from './WillProvisionsSection'
-import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
 import {
   DpoaFiduciarySections,
   HealthCareFiduciarySections,
-  TrustFiduciarySections,
   WillFiduciarySections,
 } from './documentFiduciarySections'
+import {
+  TrustDetailsSection,
+  TrustDetailsSpouseSection,
+  TrustDocumentSection,
+} from './TrustDetailsSection'
+
+export { TrustDetailsSection, TrustDetailsSpouseSection, TrustDocumentSection }
 
 interface DocumentSectionProps extends SectionProps {
   contacts: MatterContact[]
@@ -51,392 +43,10 @@ const YES_NO = [
 
 function SectionHelp({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-4 rounded-md bg-blue-50 border border-blue-200 px-3 py-2 dark:bg-blue-950/20 dark:border-blue-800/40">
+    <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800/40 dark:bg-blue-950/20">
       <p className="text-[11px] text-blue-700 dark:text-blue-300">{children}</p>
     </div>
   )
-}
-
-export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'client' | 'spouse' }) {
-  const { sheet, onChange, contacts, matter, scope = 'client' } = props
-  const { onAddContact, onUpdateContact } = props
-  const clientContact = findClientContact(contacts, matter, sheet)
-  const spouseContact = isMarried(sheet) ? findSpouseContact(contacts, matter, sheet) : null
-  const original = (field: string) => sheet.overrides?.[field]?.original
-  const derivedTrustName = deriveTrustName(sheet, matter)
-  const derivedSpouseTrustName = deriveSpouseTrustName(sheet, matter)
-  const clientFirst = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/)[0] || ''
-  const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
-  const separate = isMarried(sheet) && sheet.is_joint === false
-
-  if (scope === 'spouse') {
-    return (
-      <DesignSectionContent>
-        <SectionHelp>Configure the spouse&apos;s separate trust name and trustee nominations.</SectionHelp>
-        <SectionBlock title="Trust Name">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <PrefilledInput
-              fieldName="spouse_trust_name"
-              label={`${spouseFirst || 'Spouse'}'s Trust`}
-              value={sheet.spouse_trust_name || derivedSpouseTrustName}
-              originalValue={original('spouse_trust_name')}
-              onChange={v => onChange('spouse_trust_name', v || null)}
-            />
-          </div>
-        </SectionBlock>
-        <TrustFiduciarySections {...props} scope="spouse" />
-      </DesignSectionContent>
-    )
-  }
-
-  const showSeparateTrustSelfTrustees = separate && clientContact && spouseContact
-  const selfTrusteesChecked = Boolean(
-    showSeparateTrustSelfTrustees &&
-    primaryContactId(sheet.trustee_slots) === clientContact.id &&
-    primaryContactId(sheet.spouse_trustee_slots) === spouseContact.id,
-  )
-
-  // Grantor is always an initial trustee: pre-fill the primary trustee slot with
-  // the client when it's empty (the firm's standard for revocable trusts).
-  useEffect(() => {
-    if (!clientContact) return
-    if (primaryContactId(sheet.trustee_slots) == null) {
-      onChange('trustee_slots', setPrimaryContact(sheet.trustee_slots, clientContact.id) as DesignSheet['trustee_slots'])
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientContact?.id])
-
-  const handleSeparateTrustSelfTrusteesToggle = (checked: boolean) => {
-    if (!clientContact || !spouseContact) return
-    onChange(
-      'trustee_slots',
-      (checked
-        ? setPrimaryContact(sheet.trustee_slots, clientContact.id)
-        : clearPrimaryContactIf(sheet.trustee_slots, clientContact.id)) as DesignSheet['trustee_slots'],
-    )
-    onChange(
-      'spouse_trustee_slots',
-      (checked
-        ? setPrimaryContact(sheet.spouse_trustee_slots, spouseContact.id)
-        : clearPrimaryContactIf(sheet.spouse_trustee_slots, spouseContact.id)) as DesignSheet['spouse_trustee_slots'],
-    )
-  }
-
-  // Residuary "named individuals" — contact picker (reuses the matter contacts).
-  const pickerContacts = contacts as unknown as PickerContact[]
-  const adaptAdd = (data: Omit<PickerContact, 'id'>) =>
-    onAddContact(data as unknown as Omit<MatterContact, 'id'>) as unknown as Promise<PickerContact>
-  const adaptUpdate = onUpdateContact
-    ? (id: string, data: Omit<PickerContact, 'id'>) =>
-        onUpdateContact(id, data as unknown as Omit<MatterContact, 'id'>) as unknown as Promise<PickerContact>
-    : undefined
-  const residualContactById = (id: string): PickerContact | null =>
-    (contacts.find(c => c.id === id) ?? null) as unknown as PickerContact | null
-  const residualIndividuals = sheet.residual_beneficiary_individuals ?? []
-  const setResidualIndividuals = (next: string[]) => onChange('residual_beneficiary_individuals', next)
-
-  // Repeatable staggered tiers; mirror the first three ages + numeric amounts
-  // into the legacy stagger_* columns so drafting/export/generator keep working.
-  const staggers = sheet.staggered_distributions ?? []
-  const parseAmt = (a: string | null | undefined): number | null => {
-    const m = (a ?? '').trim().match(/^(\d+(?:\.\d+)?)\s*%?$/)
-    return m ? parseFloat(m[1]) : null
-  }
-  const setStaggers = (next: StaggeredTier[]) => {
-    onChange('staggered_distributions', next)
-    onChange('stagger_age_1', next[0]?.age ?? null)
-    onChange('stagger_age_2', next[1]?.age ?? null)
-    onChange('stagger_age_3', next[2]?.age ?? null)
-    onChange('stagger_pct_1', parseAmt(next[0]?.amount))
-    onChange('stagger_pct_2', parseAmt(next[1]?.amount))
-  }
-  const addStagger = () => setStaggers([...staggers, { id: crypto.randomUUID(), age: null, amount: null }])
-  const editStagger = (i: number, patch: Partial<StaggeredTier>) =>
-    setStaggers(staggers.map((t, idx) => (idx === i ? { ...t, ...patch } : t)))
-  const removeStagger = (i: number) => setStaggers(staggers.filter((_, idx) => idx !== i))
-
-  const documentOptions = [
-    { value: 'will', label: 'Will' },
-    { value: 'trust', label: 'Trust' },
-  ]
-  const pet: PetCareDetails = sheet.pet_care_details ?? {}
-  const updatePet = (patch: Partial<PetCareDetails>) =>
-    onChange('pet_care_details', { ...pet, ...patch })
-
-  return (
-    <DesignSectionContent>
-      <SectionHelp>Configure the trust structure, name, protector, trustees, and how the residuary is distributed.</SectionHelp>
-
-      <SectionBlock title="Trust Structure">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <div>
-            <FieldLabel>Joint Trust?</FieldLabel>
-            <SegControl value={sheet.is_joint ? 'yes' : 'no'} options={YES_NO} onChange={v => onChange('is_joint', v === 'yes')} />
-          </div>
-        </div>
-      </SectionBlock>
-
-      <SectionBlock title="Trust Name">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <PrefilledInput
-            fieldName="trust_name"
-            label={separate ? `${clientFirst || 'Client'}'s Trust` : 'Trust Name'}
-            value={sheet.trust_name || derivedTrustName}
-            originalValue={original('trust_name')}
-            onChange={v => onChange('trust_name', v)}
-          />
-        </div>
-      </SectionBlock>
-
-      <SectionBlock title="Restatement">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Restatement"
-            value={sheet.restatement ? 'yes' : 'no'}
-            options={[
-              { value: 'yes', label: 'Yes - Restating existing trust' },
-              { value: 'no', label: 'No - New trust' },
-            ]}
-            onChange={v => onChange('restatement', v === 'yes')}
-          />
-        </div>
-      </SectionBlock>
-
-      <SectionBlock title="Trust Protector">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Include Trust Protector"
-            value={sheet.trust_protector ? 'yes' : 'no'}
-            options={YES_NO}
-            onChange={v => onChange('trust_protector', v === 'yes')}
-          />
-          {sheet.trust_protector && (
-            <AttorneyInput
-              label="Trust Protector Full Name"
-              value={sheet.trust_protector_name ?? ''}
-              onChange={v => onChange('trust_protector_name', v || null)}
-            />
-          )}
-        </div>
-      </SectionBlock>
-
-      {showSeparateTrustSelfTrustees && (
-        <SectionBlock title="Initial Trustees">
-          <label className="flex items-start gap-2">
-            <Checkbox
-              checked={selfTrusteesChecked}
-              onCheckedChange={checked => handleSeparateTrustSelfTrusteesToggle(checked === true)}
-            />
-            <span className="text-xs leading-5 text-foreground">
-              Name {clientFirst || 'the client'} as initial trustee of {clientFirst ? `${clientFirst}'s` : 'their'} trust and {spouseFirst || 'the spouse'} as initial trustee of {spouseFirst ? `${spouseFirst}'s` : 'their'} trust
-            </span>
-          </label>
-        </SectionBlock>
-      )}
-
-      <TrustFiduciarySections {...props} scope="client" />
-
-      <SectionBlock title="Residuary Distribution">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Residual Beneficiary"
-            value={sheet.residual_beneficiary ?? ''}
-            placeholder="Select..."
-            options={[
-              { value: 'children', label: 'Children' },
-              { value: 'descendants', label: 'Descendants' },
-              { value: 'named', label: 'Named individuals' },
-            ]}
-            onChange={v => onChange('residual_beneficiary', v || null)}
-          />
-          <AttorneySelect
-            fieldName="distribution_method"
-            label="Distribution Method"
-            value={sheet.distribution_method ?? ''}
-            placeholder="Select..."
-            options={[
-              { value: 'staggered', label: 'Staggered (e.g. 1/3 at 25, 30, 35)' },
-              { value: 'outright', label: 'Outright at specified age' },
-              { value: 'trust-for-life', label: 'Held in trust for lifetime' },
-              { value: 'custom', label: 'Custom distribution schedule' },
-            ]}
-            onChange={v => onChange('distribution_method', v || null)}
-          />
-        </div>
-
-        {sheet.residual_beneficiary === 'named' && (
-          <div className="mt-4">
-            <FieldLabel>Named Individuals</FieldLabel>
-            <div className="space-y-2">
-              {residualIndividuals.map((id, i) => (
-                <DesignContactPicker
-                  key={`${id}-${i}`}
-                  role="Named Individual"
-                  value={residualContactById(id)}
-                  contacts={pickerContacts}
-                  onAddContact={adaptAdd}
-                  onUpdateContact={adaptUpdate}
-                  onChange={c =>
-                    c
-                      ? setResidualIndividuals(residualIndividuals.map((x, idx) => (idx === i ? c.id : x)))
-                      : setResidualIndividuals(residualIndividuals.filter((_, idx) => idx !== i))
-                  }
-                />
-              ))}
-              <DesignContactPicker
-                role="Add a named individual"
-                value={null}
-                contacts={pickerContacts}
-                onAddContact={adaptAdd}
-                onUpdateContact={adaptUpdate}
-                onChange={c => { if (c) setResidualIndividuals([...residualIndividuals, c.id]) }}
-              />
-            </div>
-          </div>
-        )}
-
-        {sheet.distribution_method === 'outright' && (
-          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-            <AttorneyInput
-              fieldName="distribution_age"
-              label="Final Distribution Age"
-              value={sheet.distribution_age?.toString() ?? ''}
-              placeholder="e.g. 30"
-              onChange={v => onChange('distribution_age', parseInt(v) || null)}
-            />
-          </div>
-        )}
-
-        {sheet.distribution_method === 'staggered' && (
-          <div className="mt-4">
-            <FieldLabel>Staggered Distributions</FieldLabel>
-            {staggers.length > 0 && (
-              <div className="space-y-2">
-                {staggers.map((t, i) => (
-                  <div key={t.id ?? i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-3">
-                    <AttorneyInput label="Amount" value={t.amount ?? ''} placeholder="e.g. 1/3" onChange={v => editStagger(i, { amount: v || null })} />
-                    <AttorneyInput label="Age" value={t.age?.toString() ?? ''} placeholder="e.g. 25" onChange={v => editStagger(i, { age: parseInt(v) || null })} />
-                    <Button variant="ghost" size="sm" className="mb-0.5 h-9 px-2 text-destructive hover:text-destructive" onClick={() => removeStagger(i)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={addStagger}>
-              <Plus className="h-3.5 w-3.5" />
-              Add Distribution
-            </Button>
-          </div>
-        )}
-      </SectionBlock>
-
-      <TrustBeneficiariesSection
-        sheet={sheet}
-        onChange={onChange}
-        contacts={contacts}
-        onAddContact={onAddContact}
-        onUpdateContact={onUpdateContact}
-      />
-
-      <SectionBlock title="Tangible Personal Property">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            fieldName="tangible_property_distribution"
-            label="Distribution of Tangible Property"
-            value={sheet.tangible_property_distribution ?? ''}
-            placeholder="Select..."
-            options={[
-              { value: 'spouse_then_children', label: 'Spouse, then children' },
-              { value: 'children_then_descendants', label: 'Children, then descendants' },
-              { value: 'named_then_children', label: 'Named individual, then children' },
-              { value: 'memorandum', label: 'Personal property memorandum' },
-            ]}
-            onChange={v => onChange('tangible_property_distribution', v || null)}
-          />
-          {sheet.tangible_property_distribution === 'named_then_children' && (
-            <AttorneyInput
-              fieldName="tangible_property_named_individual"
-              label="Named Individual"
-              value={sheet.tangible_property_named_individual ?? ''}
-              onChange={v => onChange('tangible_property_named_individual', v || null)}
-            />
-          )}
-        </div>
-      </SectionBlock>
-
-      <SectionBlock title="Pet Care">
-        <AttorneySelect
-          label="Pet Care Provision"
-          value={sheet.pet_care_option ?? 'omit'}
-          options={[
-            { value: 'omit', label: 'Omit (no pets)' },
-            { value: 'direct_bequest', label: 'Direct bequest of pet + cash gift to caretaker' },
-            { value: 'pet_trust', label: 'Statutory pet trust under M.G.L. c. 203E §408' },
-          ]}
-          onChange={v => onChange('pet_care_option', v as 'omit' | 'direct_bequest' | 'pet_trust')}
-        />
-
-        {sheet.pet_care_option && sheet.pet_care_option !== 'omit' && (
-          <div className="mt-4 grid grid-cols-2 gap-x-6">
-            <AttorneySelect
-              label="In document"
-              value={pet.document ?? ''}
-              placeholder="Select..."
-              options={documentOptions}
-              onChange={v => updatePet({ document: (v || null) as PetCareDetails['document'] })}
-            />
-          </div>
-        )}
-
-        {sheet.pet_care_option === 'direct_bequest' && (
-          <div className="mt-4 grid grid-cols-3 gap-x-6 gap-y-4">
-            <div>
-              <FieldLabel>Cash Amount</FieldLabel>
-              <Input
-                type="number"
-                value={pet.cash_amount ?? ''}
-                onChange={e => updatePet({ cash_amount: e.target.value === '' ? null : parseFloat(e.target.value) })}
-                className="h-9 text-sm"
-              />
-            </div>
-            <AttorneyInput label="Primary Caretaker" value={pet.primary_caretaker ?? ''} onChange={v => updatePet({ primary_caretaker: v || null })} />
-            <AttorneyInput label="Successor Caretaker" value={pet.successor_caretaker ?? ''} onChange={v => updatePet({ successor_caretaker: v || null })} />
-          </div>
-        )}
-
-        {sheet.pet_care_option === 'pet_trust' && (
-          <div className="mt-3">
-            <ClientDecisionCallout>Pet trust enforcer is required and easy to forget.</ClientDecisionCallout>
-          </div>
-        )}
-        {sheet.pet_care_option === 'pet_trust' && (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <div>
-              <FieldLabel>Cash Amount</FieldLabel>
-              <Input
-                type="number"
-                value={pet.cash_amount ?? ''}
-                onChange={e => updatePet({ cash_amount: e.target.value === '' ? null : parseFloat(e.target.value) })}
-                className="h-9 text-sm"
-              />
-            </div>
-            <AttorneyInput label="Pet Trustee" value={pet.pet_trustee ?? ''} onChange={v => updatePet({ pet_trustee: v || null })} />
-            <AttorneyInput label="Remainder Beneficiary" value={pet.remainder_beneficiary ?? ''} onChange={v => updatePet({ remainder_beneficiary: v || null })} />
-            <AttorneyInput label="Pet Trust Enforcer" value={pet.enforcer ?? ''} onChange={v => updatePet({ enforcer: v || null })} />
-          </div>
-        )}
-      </SectionBlock>
-    </DesignSectionContent>
-  )
-}
-
-export function TrustDocumentSection(props: DocumentSectionProps) {
-  return <TrustDetailsSection {...props} scope="client" />
-}
-
-export function TrustDetailsSpouseSection(props: DocumentSectionProps) {
-  return <TrustDetailsSection {...props} scope="spouse" />
 }
 
 function ExcludedGuardians({ sheet, onChange }: SectionProps) {

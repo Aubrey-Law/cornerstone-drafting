@@ -45,17 +45,17 @@ describe('design sheet document inclusions', () => {
     }).young_adult_estate_plan).toBe(false)
   })
 
-  it('defaults the trust planning type to standard and toggles it via the decisions JSONB', () => {
-    expect(getTrustPlanningType({ decisions: null })).toBe('standard')
-    expect(getTrustPlanningType({ decisions: {} })).toBe('standard')
+  it('defaults the trust planning type to outright_to_spouse and toggles it via the decisions JSONB', () => {
+    expect(getTrustPlanningType({ decisions: null })).toBe('outright_to_spouse')
+    expect(getTrustPlanningType({ decisions: {} })).toBe('outright_to_spouse')
     expect(getTrustPlanningType({ decisions: { trust_planning_type: 'disclaimer' } })).toBe('disclaimer')
+    expect(getTrustPlanningType({ decisions: { trust_planning_type: 'standard' } })).toBe('outright_to_spouse')
 
     const updated = setTrustPlanningType({ decisions: { document_inclusions: { trust: true } } }, 'disclaimer')
     expect(updated).toEqual({
       document_inclusions: { trust: true },
       trust_planning_type: 'disclaimer',
     })
-    // Round-trips back to standard without disturbing other decisions.
-    expect(getTrustPlanningType({ decisions: setTrustPlanningType({ decisions: updated }, 'standard') })).toBe('standard')
+    expect(getTrustPlanningType({ decisions: setTrustPlanningType({ decisions: updated }, 'outright_to_spouse') })).toBe('outright_to_spouse')
   })
 })

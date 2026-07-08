@@ -26,23 +26,18 @@ describe('design sheet plan-specific UI cleanup', () => {
 
   it('restores trust distribution and tangible personal property controls to the Trust document section', () => {
     const source = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DocumentSections.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx'),
       'utf8',
     )
-    const trustSection = source.slice(
-      source.indexOf('export function TrustDetailsSection'),
-      source.indexOf('export function TrustDocumentSection'),
-    )
 
-    expect(trustSection).toContain('<SectionBlock title="Residuary Distribution">')
-    expect(trustSection).toContain("onChange('distribution_method'")
-    expect(trustSection).toContain("onChange('residual_beneficiary'")
-    expect(trustSection).toContain("onChange('staggered_distributions'")
-    // Tangible personal property is centralized in Plan Design now, not Trust.
-    expect(trustSection).not.toContain('Tangible Personal Property')
+    expect(source).toContain('<SectionBlock title="Residuary Distribution">')
+    expect(source).toContain('Residual Beneficiary Method')
+    expect(source).toContain("onChange('residual_beneficiary'")
+    expect(source).toContain("onChange('staggered_distributions'")
+    expect(source).toContain('<SectionBlock title="Tangible Personal Property">')
   })
 
-  it('centralizes tangible personal property in Plan Design, not Will or Trust', () => {
+  it('does not centralize tangible personal property in Plan Design', () => {
     const plan = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/PlanDesignSection.tsx'),
       'utf8',
@@ -52,11 +47,7 @@ describe('design sheet plan-specific UI cleanup', () => {
       'utf8',
     )
 
-    expect(plan).toContain('<SectionBlock title="Tangible Personal Property">')
-    expect(plan).toContain("onChange('tangible_property_distribution'")
-    expect(plan).toContain("onChange('tangible_property_named_individual'")
-    expect(plan).toContain("value: 'spouse_then_children'")
-    expect(plan).toContain("value: 'memorandum'")
+    expect(plan).not.toContain("onChange('tangible_property_distribution'")
     expect(will).not.toContain('Tangible Personal Property')
   })
 })

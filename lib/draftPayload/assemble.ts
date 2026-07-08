@@ -24,6 +24,10 @@ import {
   pick,
 } from '@/lib/draftPayload/helpers'
 import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
+import {
+  draftPayloadTrustProvisions,
+  formatTrustDisplayName,
+} from '@/lib/draftPayload/trustProvisions'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
@@ -192,7 +196,17 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     trustName = `${clientFullName} Revocable Living Trust`
   }
 
-  function deriveDistributionAges(schedule: string | null | undefined): number[] {
+  function deriveDistributionAges(schedule: string | null | undefined, sheet: DesignSheetRow): number[] {
+    const staggered = Array.isArray(sheet.staggered_distributions) ? sheet.staggered_distributions : []
+    const staggerAges = staggered
+      .map(tier => tier.age)
+      .filter((age): age is number => typeof age === 'number' && Number.isFinite(age))
+    if (staggerAges.length > 0) return staggerAges
+
+    if (typeof sheet.distribution_age === 'number' && Number.isFinite(sheet.distribution_age)) {
+      return [sheet.distribution_age]
+    }
+
     switch (schedule) {
       case 'outright_25': return [25]
       case 'outright_30': return [30]
@@ -202,11 +216,32 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     }
   }
 
+  const trustProvisions = draftPayloadTrustProvisions(designSheet)
+  const remoteIndividualIds = Array.isArray(designSheet.remote_beneficiary_individuals)
+    ? designSheet.remote_beneficiary_individuals
+    : []
+  trustProvisions.remote_beneficiary_individual_names = remoteIndividualIds
+    .map(id => {
+      const contact = contacts.find(entry => entry.id === id)
+      if (!contact) return null
+      const parts = [contact.first_name, contact.middle_name, contact.last_name].filter(Boolean)
+      return parts.join(' ').trim() || null
+    })
+    .filter((name): name is string => Boolean(name))
+
+  const trustDate = designSheet.trust_date || new Date().toISOString().split('T')[0]
+  const spouseTrustName = designSheet.spouse_trust_name ?? null
+
   const trust: DraftPayload['trust'] = usesRevocableTrust
     ? {
         name: trustName,
-        date: designSheet.trust_date || new Date().toISOString().split('T')[0],
-        distribution_ages: deriveDistributionAges(designSheet.age_distribution_schedule),
+        spouse_name: spouseTrustName,
+        display_name: formatTrustDisplayName(trustName, trustDate, trustProvisions.client_name_format),
+        spouse_display_name: spouseTrustName
+          ? formatTrustDisplayName(spouseTrustName, trustDate, trustProvisions.spouse_name_format)
+          : null,
+        date: trustDate,
+        distribution_ages: deriveDistributionAges(designSheet.age_distribution_schedule, designSheet),
         ma_estate_taxable: details?.ep_ma_estate_taxable ?? false,
         ma_estate_tax_savings: details?.ep_ma_estate_tax_savings != null
           ? String(details.ep_ma_estate_tax_savings)
@@ -332,6 +367,7 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     children: designChildren,
     family_provisions: draftPayloadFamilyProvisions(designSheet),
     trust,
+    trust_provisions: trustProvisions,
     fiduciaries,
     documents,
     will_provisions,
