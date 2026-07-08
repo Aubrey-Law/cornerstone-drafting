@@ -103,6 +103,8 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   disinherited_children: { section: 'Family', label: 'Disinherited children', kind: 'json' },
   disinherit_issue: { section: 'Family', label: 'Disinherit issue', kind: 'string' },
   additional_disinheritance_language: { section: 'Family', label: 'Additional disinheritance language', kind: 'string' },
+  include_additional_beneficiaries: { section: 'Family', label: 'Additional beneficiaries', kind: 'string' },
+  additional_beneficiaries: { section: 'Family', label: 'Additional beneficiaries list', kind: 'json' },
   tangible_property_distribution: { section: 'Trust', label: 'Tangible property distribution', kind: 'string' },
   tangible_property_named_individual: { section: 'Trust', label: 'Tangible property named individual', kind: 'string' },
   include_common_disaster: { section: 'Trust', label: 'Common disaster clause', kind: 'string' },

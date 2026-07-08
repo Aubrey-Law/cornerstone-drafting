@@ -104,6 +104,8 @@ export function buildInitialSheet(sheet: DesignSheet | null): DesignSheet {
     disinherited_children: [],
     disinherit_issue: 'no',
     additional_disinheritance_language: null,
+    include_additional_beneficiaries: 'no',
+    additional_beneficiaries: [],
     stagger_age_1: null,
     stagger_pct_1: null,
     stagger_age_2: null,
