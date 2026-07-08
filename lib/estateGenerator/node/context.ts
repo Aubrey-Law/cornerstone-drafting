@@ -147,7 +147,7 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     has_spouse: hasSpouse,
     has_children: children.length > 0,
     has_minor_children: hasMinorChildren,
-    has_blended_family: Boolean(familyRecord.blended_family),
+    has_blended_family: Boolean(family.blended_family),
     has_co_poa: hasCoPoa,
     has_solo_poa: !hasCoPoa,
     co_poa_joint: hasCoPoa && poaAction === 'joint',

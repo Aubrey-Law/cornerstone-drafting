@@ -88,7 +88,7 @@ export function buildDraftContext(designSheet: Record<string, unknown>): DraftCo
   const poaSlots = getDesignSlots(designSheet, 'poa_slots')
   const executorSlots = getDesignSlots(designSheet, 'executor_slots')
   const guardianSlots = getDesignSlots(designSheet, 'guardian_slots')
-  const familyProvisions = draftPayloadFamilyProvisions(designSheet as Parameters<typeof draftPayloadFamilyProvisions>[0])
+  const familyProvisions = draftPayloadFamilyProvisions(designSheet)
   const excludedPerson = familyProvisions.disinherited.length > 0
     ? familyProvisions.disinherited.map(person => person.full_name).join(', ')
     : decisions.excluded_person

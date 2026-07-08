@@ -1,7 +1,17 @@
-import type { DesignSheet, DesignSheetChild } from '@/types/database'
-import type { DesignSheetRow } from '@/lib/draftPayload/types'
+import type { DesignSheetChild } from '@/types/database'
 
-type FamilySheet = DesignSheetRow | DesignSheet | null | undefined
+export type FamilyProvisionsInput = {
+  disinherited_children?: string[] | null
+  disinheritances?: { name: string; relationship: string; reason?: string }[] | null
+  include_child_gender_markers?: string | null
+  include_afterborn_children?: string | null
+  include_expectant_children?: string | null
+  omissions_intentional?: string | null
+  include_general_disinheritance?: string | null
+  disinherit_issue?: string | null
+  additional_disinheritance_language?: string | null
+  children?: DesignSheetChild[] | null
+} | null | undefined
 
 export interface DraftPayloadFamilyProvisions {
   include_child_gender_markers: boolean
@@ -26,7 +36,7 @@ export function childGenderDisplay(gender: DesignSheetChild['gender']): string {
   return ''
 }
 
-export function draftPayloadFamilyProvisions(sheet: FamilySheet): DraftPayloadFamilyProvisions {
+export function draftPayloadFamilyProvisions(sheet: FamilyProvisionsInput): DraftPayloadFamilyProvisions {
   const disinheritedChildren = Array.isArray(sheet?.disinherited_children) ? sheet!.disinherited_children! : []
   const disinheritances = Array.isArray(sheet?.disinheritances) ? sheet!.disinheritances! : []
 
