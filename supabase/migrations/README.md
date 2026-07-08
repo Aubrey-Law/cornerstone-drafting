@@ -8,6 +8,8 @@ This app ships a **minimal Supabase schema** for estate-planning document drafti
 | `20260705000001_drafting_baseline_documents.sql` | Documents, folders, audit log, matter details |
 | `20260705000002_drafting_baseline_pipeline.sql` | Pipeline view, activity, AI usage, RLS, auth hook |
 | `20260705000003_user_preferences.sql` | `users.preferences` jsonb for per-staff UI settings |
+| `20260708000000_document_versions_edits_tabular.sql` | `document_versions`, `document_edits`, tabular review tables, audit action extensions |
+| `20260708000001_user_api_keys_mcp_connectors.sql` | Staff BYOK API keys + MCP connector storage (service-role only) |
 
 The full CRM portal history (167 files) lives in [`../migrations_archive/portal/`](../migrations_archive/portal/README.md).
 
@@ -24,28 +26,21 @@ Production and staging typically already have the portal schema. **Do not** arch
 
 **Do not run `supabase db push`** against the shared firm project. The remote database records ~167 portal migrations that are archived locally; the CLI will refuse to push and suggest `migration repair`, which you should not run unless you fully understand the consequences.
 
-To apply a new incremental migration (e.g. `20260705000003_user_preferences.sql`):
+To apply new incremental migrations (e.g. versions + settings):
 
 1. Open **Supabase Dashboard → SQL Editor** for the firm project.
-2. Run the migration file contents (safe to re-run — uses `IF NOT EXISTS`):
-
-```sql
-ALTER TABLE public.users
-  ADD COLUMN IF NOT EXISTS preferences jsonb NOT NULL DEFAULT '{}'::jsonb;
-
-COMMENT ON COLUMN public.users.preferences IS
-  'Staff UI preferences keyed by app area, e.g. {"drafting":{"designView":"guided"}}';
-```
-
-3. Optionally record it in the migration history table so local tooling stays aware:
+2. Run each file in order (safe to re-run — uses `IF NOT EXISTS`):
+   - `20260708000000_document_versions_edits_tabular.sql`
+   - `20260708000001_user_api_keys_mcp_connectors.sql`
+3. Optionally record them in the migration history table:
 
 ```sql
 INSERT INTO supabase_migrations.schema_migrations (version)
-VALUES ('20260705000003')
+VALUES ('20260708000000'), ('20260708000001')
 ON CONFLICT DO NOTHING;
 ```
 
-The app works without this column — design view preference falls back to `localStorage` until the SQL is applied.
+Also set `USER_API_KEYS_ENCRYPTION_SECRET` (and optionally `DOCX_PDF_CONVERT_URL` / `DOCX_PDF_CONVERT_SECRET`) in Vercel before using Settings → API Keys or Convert PDF.
 
 ## Storage
 

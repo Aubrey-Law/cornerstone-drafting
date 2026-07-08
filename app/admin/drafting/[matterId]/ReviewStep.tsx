@@ -3,13 +3,26 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CheckCircle2, Download, Eye, FileText, Loader2, Send, Trash2, Upload } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  Eye,
+  FileText,
+  FileType2,
+  Loader2,
+  Send,
+  Sparkles,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import '@/app/intake/guided.css'
 import { GuidedIntroCard, guidedCardStyle, guidedKickerStyle } from '@/components/guided'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   deleteDocument,
   getDocumentUrl,
@@ -25,9 +38,15 @@ import { logMatterActivity } from '@/lib/matterActivity'
 import { formatDateTime } from '@/lib/utils'
 import { type MatterDocument } from '@/types/database'
 import type { DraftingHubDocument, DraftingHubMatter } from '@/lib/queries/drafting'
+import { TabularReviewSection } from '@/components/drafting/TabularReviewSection'
 
 const PromoteDocumentDialog = dynamic(
   () => import('@/components/documents/PromoteDocumentDialog').then(m => ({ default: m.PromoteDocumentDialog })),
+  { ssr: false },
+)
+
+const DocxViewerPanel = dynamic(
+  () => import('@/components/documents/DocxViewerPanel').then(m => ({ default: m.DocxViewerPanel })),
   { ssr: false },
 )
 
@@ -45,6 +64,7 @@ interface ReviewStepProps {
 
 export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: ReviewStepProps) {
   const router = useRouter()
+  const accessToken = useAccessToken()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set())
   const [approvingId, setApprovingId] = useState<string | null>(null)
@@ -57,6 +77,8 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const autoExpandedSuperseded = useRef(false)
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [uploadingPdf, setUploadingPdf] = useState(false)
+  const [convertingId, setConvertingId] = useState<string | null>(null)
+  const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string } | null>(null)
   const pdfUploadRef = useRef<HTMLInputElement>(null)
 
   // Optimistic review-state overrides keyed by document id (ISO string when
@@ -175,12 +197,38 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     }
   }
 
+  const handleConvertPdf = async (doc: DraftingHubDocument) => {
+    if (!accessToken || convertingId) return
+    setConvertingId(doc.id)
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/convert-pdf`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (res.status === 501) {
+        toast.message('Convert not configured', {
+          description: 'Set DOCX_PDF_CONVERT_URL or use Upload PDF to share.',
+        })
+        return
+      }
+      if (!res.ok) throw new Error(body.error ?? 'Conversion failed')
+      toast.success('PDF created in Review folder')
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not convert to PDF')
+    } finally {
+      setConvertingId(null)
+    }
+  }
+
   return (
-    <div className="guided-interview space-y-4">
+    <div className={viewerDoc ? 'guided-interview grid gap-4 lg:grid-cols-[1fr_minmax(360px,46%)]' : 'guided-interview space-y-4'}>
+      <div className="space-y-4">
       <GuidedIntroCard
         pct={sharedDrafts.length > 0 && recentDrafts.every(d => effectiveReviewedAt(d)) ? 100 : recentDrafts.length > 0 ? 50 : 0}
         title="Review and share drafts"
-        subtitle="Mark internal Word drafts reviewed, upload PDFs exported from Word, then promote PDFs to client-visible folders."
+        subtitle="Mark Word drafts reviewed, convert or upload PDFs, run AI redline in-app, then share PDFs with the client."
       />
 
       <section style={{ ...guidedCardStyle, padding: 0, overflow: 'hidden' }}>
@@ -188,7 +236,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
           <div>
             <h3 className="text-base font-medium" style={{ color: 'var(--gi-heading)' }}>Internal Word drafts</h3>
             <p className="mt-1 text-[12px]" style={{ color: 'var(--gi-muted)' }}>
-              Edit in Word, then upload a PDF to share with the client.
+              Open in-app to redline, convert to PDF via the LibreOffice worker, or upload a PDF.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -275,12 +323,36 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                     />
                     Reviewed
                   </label>
-                  <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'view', doc.name)}>
-                    <Eye className="h-3.5 w-3.5" /> View
-                  </Button>
+                  {isWord ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={() => setViewerDoc({ id: doc.id, name: doc.name })}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" /> Open in app
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'view', doc.name)}>
+                      <Eye className="h-3.5 w-3.5" /> View
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'download', doc.name)}>
                     <Download className="h-3.5 w-3.5" /> Download
                   </Button>
+                  {isWord ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-xs"
+                      disabled={convertingId === doc.id}
+                      title="Convert DOCX→PDF via convert worker (or configure DOCX_PDF_CONVERT_URL)"
+                      onClick={() => void handleConvertPdf(doc)}
+                    >
+                      {convertingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileType2 className="h-3.5 w-3.5" />}
+                      Convert PDF
+                    </Button>
+                  ) : null}
                   {isPdf ? (
                     <Button
                       size="sm"
@@ -355,11 +427,29 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
           </div>
         )}
       </section>
+
+      <TabularReviewSection
+        matterId={matterId}
+        documentIds={recentDrafts.map(d => d.id)}
+      />
+
       <PromoteDocumentDialog
         pending={pendingPromotion}
         onCancel={() => setPendingPromotion(null)}
         onConfirm={confirmPromotion}
       />
+      </div>
+
+      {viewerDoc ? (
+        <div className="min-h-[560px] overflow-hidden rounded-lg border border-border lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)]">
+          <DocxViewerPanel
+            documentId={viewerDoc.id}
+            documentName={viewerDoc.name}
+            onClose={() => setViewerDoc(null)}
+            onMutated={() => router.refresh()}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

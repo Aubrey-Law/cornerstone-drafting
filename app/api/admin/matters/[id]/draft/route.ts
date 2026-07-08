@@ -474,7 +474,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
 
       // 5c: Register in matter_documents
-      const { error: insertErr } = await admin.from('matter_documents').insert({
+      const { data: insertedDoc, error: insertErr } = await admin.from('matter_documents').insert({
         matter_id: canonicalMatterId,
         r2_key: r2Key,
         name: documentName,
@@ -487,11 +487,30 @@ export async function POST(req: NextRequest, { params }: Params) {
         generation_engine: generationEngine,
         marker_count: scan.markerCount,
         missing_count: scan.missingFields.length,
-      })
+      }).select('id').single()
 
       if (insertErr) {
         console.error('[draft route] matter_documents insert error', canonicalMatterId, insertErr)
         throw new Error(`Failed to register document "${documentName}": ${insertErr.message}`)
+      }
+
+      if (insertedDoc?.id) {
+        try {
+          const { ensureInitialVersion } = await import('@/lib/documentVersions')
+          await ensureInitialVersion({
+            admin,
+            documentId: insertedDoc.id,
+            r2Key,
+            filename: documentName,
+            contentType: DOCX_CONTENT_TYPE,
+            sizeBytes: file.buffer.length,
+            source: 'generated',
+            createdBy: user.id,
+          })
+        } catch (versionErr) {
+          // Versions table may not exist yet on firm DB — non-fatal.
+          console.warn('[draft route] ensureInitialVersion skipped', versionErr)
+        }
       }
 
       uploadedFilenames.push(documentName)

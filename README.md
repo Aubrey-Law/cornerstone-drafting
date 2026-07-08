@@ -74,4 +74,6 @@ See [supabase/migrations/README.md](supabase/migrations/README.md).
 
 ## Sharing PDFs with clients
 
-Export PDFs from Word locally, then use **Upload PDF to share** on the Review step. Automated DOCX→PDF conversion (Microsoft Graph) is not included in this app.
+Prefer **Convert PDF** on the Review step when `DOCX_PDF_CONVERT_URL` (+ secret) points at the LibreOffice worker under `tools/docx-pdf-worker/` (Fly.io scale-to-zero). Otherwise use **Upload PDF to share**. Word documents still cannot be promoted directly to client folders.
+
+Staff **Settings** (`/admin/settings`): model preferences, BYOK API keys, and MCP connector storage.

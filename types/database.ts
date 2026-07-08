@@ -483,6 +483,41 @@ export interface MatterDocument {
   superseded_at?: string | null
   reviewed_at?: string | null
   reviewed_by?: string | null
+  /** Active row in document_versions (nullable until versions migration applied). */
+  current_version_id?: string | null
+}
+
+export interface DocumentVersionRow {
+  id: string
+  document_id: string
+  r2_key: string
+  pdf_r2_key: string | null
+  source: string
+  version_number: number
+  filename: string | null
+  file_type: string | null
+  size_bytes: number
+  created_by: string | null
+  created_at: string
+  deleted_at: string | null
+}
+
+export interface DocumentEditRow {
+  id: string
+  document_id: string
+  version_id: string
+  change_id: string
+  del_w_id: string | null
+  ins_w_id: string | null
+  deleted_text: string | null
+  inserted_text: string | null
+  context_before: string | null
+  context_after: string | null
+  reason: string | null
+  status: 'pending' | 'accepted' | 'rejected'
+  created_at: string
+  resolved_at: string | null
+  resolved_by: string | null
 }
 
 export interface DocumentAccessAudit {
@@ -491,7 +526,17 @@ export interface DocumentAccessAudit {
   matter_id: string
   user_id: string | null
   user_email: string | null
-  action: 'view' | 'download' | 'folder_change' | 'delete' | 'export' | 'review' | 'rename'
+  action:
+    | 'view'
+    | 'download'
+    | 'folder_change'
+    | 'delete'
+    | 'export'
+    | 'review'
+    | 'rename'
+    | 'edit'
+    | 'convert'
+    | 'version'
   metadata: Record<string, unknown>
   created_at: string
   document_name: string | null

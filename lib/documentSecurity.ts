@@ -122,7 +122,17 @@ export async function filterClientVisibleDocuments<T extends { folder: MatterDoc
   return visibleByLegacyFolder.filter((doc) => !doc.folder_id || !hiddenFolderIds.has(doc.folder_id))
 }
 
-type AuditAction = 'download' | 'view' | 'folder_change' | 'delete' | 'export' | 'review' | 'rename'
+type AuditAction =
+  | 'download'
+  | 'view'
+  | 'folder_change'
+  | 'delete'
+  | 'export'
+  | 'review'
+  | 'rename'
+  | 'edit'
+  | 'convert'
+  | 'version'
 
 export async function auditDocumentAccess(
   admin: SupabaseClient,
