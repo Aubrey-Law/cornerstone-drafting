@@ -40,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${lora.variable}`}>
+    <html lang="en" className={`${dmSans.variable} ${lora.variable}`} suppressHydrationWarning>
       <head>
         {/* Optional: restores saved light/dark on admin; system mode uses CSS prefers-color-scheme */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />

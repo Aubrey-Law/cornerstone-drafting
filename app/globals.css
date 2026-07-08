@@ -105,4 +105,23 @@
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
+
+  /* In-app DOCX preview — inherit app theme instead of forcing white paper */
+  .docx-host .docx-wrapper,
+  .docx-host .docx-wrapper > section.docx {
+    background: var(--card) !important;
+    color: var(--foreground);
+  }
+
+  .docx-host .docx-wrapper table,
+  .docx-host .docx-wrapper td,
+  .docx-host .docx-wrapper th {
+    color: inherit;
+  }
+
+  .dark .docx-host span.docx-text-highlight,
+  .docx-host span.docx-text-highlight {
+    background-color: rgba(250, 204, 21, 0.35) !important;
+    outline: 1px solid rgba(250, 204, 21, 0.55);
+  }
 }

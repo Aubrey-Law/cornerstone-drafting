@@ -105,12 +105,12 @@ export function PromoteDocumentDialog({ pending, onCancel, onConfirm }: Props) {
             {(doc.marker_count != null || doc.reviewed_at != null) && (
               <p className="mt-1 text-xs text-muted-foreground">
                 {doc.marker_count === 0
-                  ? <span className="font-medium text-emerald-700">✓ Marker-clean</span>
+                  ? <span className="font-medium text-green">✓ Marker-clean</span>
                   : typeof doc.marker_count === 'number' && doc.marker_count > 0
-                    ? <span className="font-medium text-amber-700">⚠ {doc.marker_count} unresolved marker{doc.marker_count === 1 ? '' : 's'}</span>
+                    ? <span className="font-medium text-amber">⚠ {doc.marker_count} unresolved marker{doc.marker_count === 1 ? '' : 's'}</span>
                     : null}
                 {doc.reviewed_at
-                  ? <span className="font-medium text-emerald-700">{doc.marker_count != null ? ' · ' : ''}✓ Reviewed</span>
+                  ? <span className="font-medium text-green">{doc.marker_count != null ? ' · ' : ''}✓ Reviewed</span>
                   : doc.marker_count != null
                     ? <span> · Not yet marked reviewed</span>
                     : null}
@@ -118,16 +118,16 @@ export function PromoteDocumentDialog({ pending, onCancel, onConfirm }: Props) {
             )}
           </div>
 
-          <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <label className="flex items-start gap-3 rounded-md border border-amber-border bg-amber-bg p-3 text-sm text-amber">
             <input
               type="checkbox"
-              className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-700 focus:ring-amber-500"
+              className="mt-0.5 h-4 w-4 rounded border-amber-border text-amber focus:ring-ring"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
             />
             <span>
               I have reviewed this document for legal accuracy and confirm it is appropriate to share with the client.
-              <span className="block mt-1 text-xs text-amber-800/80">
+              <span className="block mt-1 text-xs text-muted-foreground">
                 This step is required by Mass. R.P.C. 1.1 (competence) and 5.3 (supervision of nonlawyer assistance).
                 The promotion will be recorded in the document audit log with your name and timestamp.
               </span>

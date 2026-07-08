@@ -290,14 +290,14 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1 border-amber-300 bg-amber-50 text-[11px] text-amber-900 hover:bg-amber-100"
+                className="h-7 gap-1 border-amber-border bg-amber-bg text-[11px] text-amber hover:bg-amber-light"
                 onClick={() => setShowPrevious(prev => !prev)}
               >
                 {showPrevious ? 'Hide' : 'Show'} previous versions ({supersededDrafts.length})
               </Button>
             )}
             {supersededDrafts.length > 0 && (
-              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[11px] text-amber-900">
+              <Badge variant="outline" className="border-amber-border bg-amber-bg text-[11px] text-amber">
                 {supersededDrafts.length} superseded
               </Badge>
             )}
@@ -390,7 +390,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 gap-1.5 text-xs text-emerald-700 hover:bg-emerald-50"
+                      className="h-8 gap-1.5 text-xs text-green hover:bg-green-bg"
                       disabled={approvingId === doc.id || !gate.ok}
                       title={gateTitle}
                       onClick={() => handleApprove(doc)}

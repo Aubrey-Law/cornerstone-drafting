@@ -1,10 +1,13 @@
 'use client'
 
-import { Sun, Moon, Monitor } from 'lucide-react'
+import type { ComponentType } from 'react'
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useTheme } from '@/lib/theme/useTheme'
 import { isAdminRoute } from '@/lib/theme/routes'
 import type { Theme } from '@/lib/theme/ThemeProvider'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 const CYCLE: Theme[] = ['light', 'dark', 'system']
 
@@ -14,7 +17,7 @@ const LABELS: Record<Theme, string> = {
   system: 'System',
 }
 
-const ICONS: Record<Theme, React.ComponentType<{ size: number; strokeWidth: number }>> = {
+const ICONS: Record<Theme, ComponentType<{ className?: string }>> = {
   light: Sun,
   dark: Moon,
   system: Monitor,
@@ -28,12 +31,11 @@ const NEXT_LABEL: Record<Theme, string> = {
 
 interface ThemeToggleProps {
   collapsed?: boolean
-  /** 'sidebar' uses sidebar-foreground/sidebar-accent tokens (for the dark nav).
-   *  'default' uses foreground/muted tokens (for the header bar). */
+  /** 'sidebar' for nav rail; 'default' for the top header bar. */
   variant?: 'sidebar' | 'default'
 }
 
-export function ThemeToggle({ collapsed = false, variant = 'sidebar' }: ThemeToggleProps) {
+export function ThemeToggle({ collapsed = false, variant = 'default' }: ThemeToggleProps) {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
 
@@ -41,43 +43,38 @@ export function ThemeToggle({ collapsed = false, variant = 'sidebar' }: ThemeTog
 
   const next = CYCLE[(CYCLE.indexOf(theme) + 1) % CYCLE.length]
   const Icon = ICONS[theme]
-
   const isSidebar = variant === 'sidebar'
-  const color = isSidebar ? 'var(--sidebar-foreground)' : 'var(--foreground)'
-  const hoverBg = isSidebar ? 'var(--sidebar-accent)' : 'var(--muted)'
+
+  if (isSidebar) {
+    return (
+      <button
+        type="button"
+        onClick={() => setTheme(next)}
+        aria-label={`Theme: ${LABELS[theme]}. Switch to ${NEXT_LABEL[theme]}`}
+        className={cn(
+          'flex items-center rounded-md border-0 bg-transparent text-sm transition-colors',
+          collapsed ? 'justify-center px-2 py-2' : 'w-full gap-3 px-3 py-2',
+          'text-muted-foreground hover:bg-muted hover:text-foreground',
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed ? <span>{LABELS[theme]}</span> : null}
+      </button>
+    )
+  }
 
   return (
-    <button
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-8 gap-1.5 px-2 text-xs"
       onClick={() => setTheme(next)}
       aria-label={`Theme: ${LABELS[theme]}. Switch to ${NEXT_LABEL[theme]}`}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: collapsed ? 0 : '12px',
-        width: collapsed ? 'auto' : '100%',
-        padding: collapsed ? '6px 8px' : '8px 12px',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        borderRadius: '4px',
-        border: 'none',
-        backgroundColor: 'transparent',
-        cursor: 'pointer',
-        color,
-        fontSize: '14px',
-        lineHeight: '20px',
-        transition: 'background-color 0.15s, opacity 0.15s',
-        opacity: 0.75,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = hoverBg
-        e.currentTarget.style.opacity = '1'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'transparent'
-        e.currentTarget.style.opacity = '0.75'
-      }}
+      title={`Theme: ${LABELS[theme]}`}
     >
-      <Icon size={16} strokeWidth={1.75} />
-      {!collapsed && <span>{LABELS[theme]}</span>}
-    </button>
+      <Icon className="h-3.5 w-3.5" />
+      <span className="hidden sm:inline">{LABELS[theme]}</span>
+    </Button>
   )
 }
