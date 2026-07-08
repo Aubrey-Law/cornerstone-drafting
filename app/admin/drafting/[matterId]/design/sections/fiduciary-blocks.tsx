@@ -7,7 +7,7 @@ import { designFieldTargetId } from '@/lib/designSheetReadiness'
 import type { DesignSheet, FiduciaryRole, FiduciarySlot, MatterContact, PipelineMatter } from '@/types/database'
 import type { SlotState } from '@/types/planReview'
 import type { SectionProps } from './shared'
-import { FiduciaryRoleSection } from './FiduciariesSectionEP'
+import { FiduciaryRoleSection } from './FiduciaryRoleSection'
 
 export const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
 export const SPOUSE_PRIMARY_CONTACT_ID = '__design_sheet_spouse__'

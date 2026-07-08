@@ -50,34 +50,34 @@ const EXACT: Record<string, Entry> = {
   'trust.contingent_beneficiary.full_name': { label: 'Contingent beneficiary', sectionId: S.familyInformation, targetField: null },
   'trust.remote_beneficiaries.individuals': { label: 'Remote beneficiaries', sectionId: S.familyInformation, targetField: 'remote_beneficiary' },
 
-  'fiduciaries.trustee.primary.full_name': { label: 'Trustee', sectionId: S.fiduciaries, targetField: null },
-  'fiduciaries.trustee.co_primary.full_name': { label: 'Co-trustee', sectionId: S.fiduciaries, targetField: null },
-  'fiduciaries.trustee.successor.full_name': { label: 'Successor trustee', sectionId: S.fiduciaries, targetField: null },
-  'fiduciaries.trustee.second_successor.full_name': { label: 'Second successor trustee', sectionId: S.fiduciaries, targetField: null },
-  'fiduciaries.trustee.co_trustees_action': { label: 'Co-trustee decision standard', sectionId: S.fiduciaries, targetField: 'cotrustee_decision_standard' },
+  'fiduciaries.trustee.primary.full_name': { label: 'Trustee', sectionId: S.trustDetails, targetField: null },
+  'fiduciaries.trustee.co_primary.full_name': { label: 'Co-trustee', sectionId: S.trustDetails, targetField: null },
+  'fiduciaries.trustee.successor.full_name': { label: 'Successor trustee', sectionId: S.trustDetails, targetField: null },
+  'fiduciaries.trustee.second_successor.full_name': { label: 'Second successor trustee', sectionId: S.trustDetails, targetField: null },
+  'fiduciaries.trustee.co_trustees_action': { label: 'Co-trustee decision standard', sectionId: S.trustDetails, targetField: 'cotrustee_decision_standard' },
 
-  'fiduciaries.executor.primary.full_name': { label: 'Executor / Personal Representative', sectionId: S.fiduciaries, targetField: null },
-  'fiduciaries.testamentary_trustee.primary.full_name': { label: 'Testamentary trustee', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.executor.primary.full_name': { label: 'Executor / Personal Representative', sectionId: S.willDetails, targetField: null },
+  'fiduciaries.testamentary_trustee.primary.full_name': { label: 'Testamentary trustee', sectionId: S.willDetails, targetField: null },
   'testamentary_trust.beneficiary_structure': { label: 'Testamentary trust beneficiary structure', sectionId: S.willDetails, targetField: 'beneficiary_structure' },
-  'guardians.primary.full_name': { label: 'Guardian for minor children', sectionId: S.fiduciaries, targetField: null },
+  'guardians.primary.full_name': { label: 'Guardian for minor children', sectionId: S.willDetails, targetField: null },
 
-  'fiduciaries.agent.primary.full_name': { label: 'Financial agent (POA)', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.agent.primary.full_name': { label: 'Financial agent (POA)', sectionId: S.financialPoa, targetField: null },
 
-  'healthcare.agent.primary.full_name': { label: 'Health care agent', sectionId: S.fiduciaries, targetField: null },
-  'healthcare.agent.primary.address': { label: 'Health care agent address', sectionId: S.fiduciaries, targetField: null },
-  'healthcare.agent.primary.phone': { label: 'Health care agent phone', sectionId: S.fiduciaries, targetField: null },
-  'healthcare.agent.primary.relationship': { label: 'Health care agent relationship', sectionId: S.fiduciaries, targetField: null },
-  'healthcare.agent.alternate.full_name': { label: 'Alternate health care agent', sectionId: S.fiduciaries, targetField: null },
+  'healthcare.agent.primary.full_name': { label: 'Health care agent', sectionId: S.healthcareDirectives, targetField: null },
+  'healthcare.agent.primary.address': { label: 'Health care agent address', sectionId: S.healthcareDirectives, targetField: null },
+  'healthcare.agent.primary.phone': { label: 'Health care agent phone', sectionId: S.healthcareDirectives, targetField: null },
+  'healthcare.agent.primary.relationship': { label: 'Health care agent relationship', sectionId: S.healthcareDirectives, targetField: null },
+  'healthcare.agent.alternate.full_name': { label: 'Alternate health care agent', sectionId: S.healthcareDirectives, targetField: null },
 }
 
 // Prefix → section for paths not in EXACT (new/renamed generator fields degrade
 // to a section-level link rather than breaking the checklist).
 const PREFIXES: Array<[string, string]> = [
-  ['fiduciaries.trustee.', S.fiduciaries],
-  ['fiduciaries.testamentary_trustee.', S.fiduciaries],
-  ['fiduciaries.executor.', S.fiduciaries],
-  ['fiduciaries.agent.', S.fiduciaries],
-  ['guardians.', S.fiduciaries],
+  ['fiduciaries.trustee.', S.trustDetails],
+  ['fiduciaries.testamentary_trustee.', S.willDetails],
+  ['fiduciaries.executor.', S.willDetails],
+  ['fiduciaries.agent.', S.financialPoa],
+  ['guardians.', S.willDetails],
   ['healthcare.', S.healthcareDirectives],
   ['testamentary_trust.', S.willDetails],
   ['trust.', S.trustDetails],

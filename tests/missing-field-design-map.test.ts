@@ -26,7 +26,7 @@ describe('designTargetForMissingField', () => {
 
   it('maps trustee fiduciary paths to the trust section', () => {
     expect(designTargetForMissingField('fiduciaries.trustee.successor.full_name'))
-      .toEqual({ path: 'fiduciaries.trustee.successor.full_name', label: 'Successor trustee', sectionId: DESIGN_SECTION_IDS.fiduciaries, sectionLabel: 'Fiduciaries & Additional Contacts', targetField: null })
+      .toEqual({ path: 'fiduciaries.trustee.successor.full_name', label: 'Successor trustee', sectionId: DESIGN_SECTION_IDS.trustDetails, sectionLabel: 'Trust Details', targetField: null })
   })
 
   it('maps scalar client fields to a focusable personal-section input', () => {
