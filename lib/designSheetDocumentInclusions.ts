@@ -121,11 +121,16 @@ export function getDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'ma
  * Stored in `decisions` JSONB alongside `document_inclusions` — no dedicated
  * column.
  */
-export type TrustPlanningType = 'standard' | 'disclaimer'
+export type TrustPlanningType = 'outright_to_spouse' | 'disclaimer' | 'clayton_election'
 
 export function getTrustPlanningType(sheet: Pick<DesignSheet, 'decisions'>): TrustPlanningType {
   const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
-  return decisions.trust_planning_type === 'disclaimer' ? 'disclaimer' : 'standard'
+  const value = decisions.trust_planning_type
+  if (value === 'disclaimer') return 'disclaimer'
+  if (value === 'clayton_election') return 'clayton_election'
+  // Legacy persisted value before spousal funding options expanded.
+  if (value === 'standard') return 'outright_to_spouse'
+  return 'outright_to_spouse'
 }
 
 export function setTrustPlanningType(

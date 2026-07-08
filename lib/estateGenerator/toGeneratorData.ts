@@ -1,3 +1,4 @@
+import type { DesignSheetChild } from '@/types/database'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
@@ -9,7 +10,11 @@ import {
   hasBlendedFamily,
   type DraftPayloadFamilyProvisions,
 } from '@/lib/draftPayload/familyProvisions'
-import type { DesignSheetChild } from '@/types/database'
+import {
+  defaultDraftPayloadTrustProvisions,
+  descendantsDistributionMethod,
+  trustCoTrusteesAction,
+} from '@/lib/draftPayload/trustProvisions'
 
 export type EstateGeneratorPackage =
   | 'core-estate'
@@ -369,10 +374,22 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   const trustDate = formatLongDate(payload.trust?.date) ?? payload.trust?.date ?? undefined
   const clientDateOfBirth = formatLongDate(payload.client.dob) ?? payload.client.dob ?? ''
   const hasMinorChildren = payload.matter.minor_children
+  const trustProvisions = payload.trust_provisions ?? defaultDraftPayloadTrustProvisions()
   const distributionAges = payload.trust?.distribution_ages ?? []
-  const descendantsDistributionMethod = payload.will_provisions.age_distribution_schedule?.includes('stagger')
-    ? 'staged'
-    : payload.will_provisions.age_distribution_schedule ?? 'staged'
+  const descendantsMethod = descendantsDistributionMethod(
+    trustProvisions.residual_beneficiary_method,
+    trustProvisions.distribution_method,
+  )
+  const distributionAge = trustProvisions.distribution_age ?? distributionAges[0] ?? null
+  const staggerAges = trustProvisions.staggered_distributions
+    .map(tier => tier.age)
+    .filter((age): age is number => typeof age === 'number' && Number.isFinite(age))
+  const remoteIndividuals = trustProvisions.remote_beneficiary_individual_names.length > 0
+    ? trustProvisions.remote_beneficiary_individual_names.map(name => person(name))
+    : trustProvisions.remote_beneficiary === 'named'
+      ? []
+      : ['heirs at law']
+  const remoteCharityName = trustProvisions.remote_beneficiary_charity_names[0] ?? ''
   const children = payload.children
     .map(child => ({
       full_name: firstText(child.full_name) ?? '',
@@ -456,7 +473,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       supervision: payload.will_provisions.supervision,
       simultaneous_death: payload.will_provisions.simultaneous_death ?? 'omit',
       utma_age: payload.will_provisions.utma_age ?? 21,
-      no_contest_clause: payload.will_provisions.no_contest_clause,
+      no_contest_clause: trustProvisions.include_no_contest_clause ? 'include' : payload.will_provisions.no_contest_clause,
       include_disclaimer_article: payload.will_provisions.include_disclaimer_article,
       include_self_proving_affidavit: payload.will_provisions.include_self_proving_affidavit,
       tangible_personal_property: {
@@ -467,24 +484,67 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     },
     trust: compactObject({
       name: payload.trust?.name,
+      spouse_name: payload.trust?.spouse_name,
+      display_name: payload.trust?.display_name,
+      spouse_display_name: payload.trust?.spouse_display_name,
       date: trustDate,
+      restatement: trustProvisions.restatement,
+      spousal_funding: trustProvisions.spousal_funding,
+      initial_trustee_nomination: trustProvisions.initial_trustee_nomination,
+      trustee_compensation: trustProvisions.trustee_compensation,
+      successor_trustee_vacancy: trustProvisions.successor_trustee_vacancy,
+      residual_beneficiary: trustProvisions.residual_beneficiary,
+      residuary_after_death: trustProvisions.residuary_after_death,
+      include_common_trust_for_children: trustProvisions.include_common_trust_for_children,
+      special_distributions_age: trustProvisions.special_distributions_age,
+      representation_type: trustProvisions.representation_type,
+      survivorship_requirement_days: trustProvisions.survivorship_requirement_days,
+      trust_protector_requested: trustProvisions.trust_protector,
+      trust_protector: person(trustProvisions.trust_protector_name),
+      name_format: trustProvisions.client_name_format,
+      spouse_name_format: trustProvisions.spouse_name_format,
+      provisions: compactObject({
+        protect_us_trust_status: trustProvisions.protect_us_trust_status || undefined,
+        allow_special_trustee: trustProvisions.allow_special_trustee || undefined,
+        special_trustee_instructions: trustProvisions.special_trustee_instructions ?? undefined,
+        power_529_plans: trustProvisions.power_529_plans || undefined,
+        power_farms_ranches: trustProvisions.power_farms_ranches || undefined,
+        power_closely_held_businesses: trustProvisions.power_closely_held_businesses || undefined,
+        power_professional_corporations: trustProvisions.power_professional_corporations || undefined,
+        subchapter_s_provisions: trustProvisions.subchapter_s_provisions || undefined,
+        allow_trustee_change_situs: trustProvisions.allow_trustee_change_situs || undefined,
+        hold_distributions_for_young_beneficiaries: trustProvisions.hold_distributions_for_young_beneficiaries || undefined,
+        include_substance_abuse: trustProvisions.include_substance_abuse || undefined,
+        include_creditor_divorce_provisions: trustProvisions.include_creditor_divorce_provisions || undefined,
+        include_contingent_snt: trustProvisions.include_contingent_snt || undefined,
+        allow_distributions_to_dependents_if_incapacitated: trustProvisions.allow_distributions_to_dependents_if_incapacitated || undefined,
+        include_no_contest_clause: trustProvisions.include_no_contest_clause || undefined,
+        name_people_in_no_contest_clause: trustProvisions.name_people_in_no_contest_clause || undefined,
+        require_mandatory_arbitration: trustProvisions.require_mandatory_arbitration || undefined,
+        prorate_estate_taxes: trustProvisions.prorate_estate_taxes || undefined,
+        include_discretionary_distribution_definition: trustProvisions.include_discretionary_distribution_definition || undefined,
+        include_education_expenses_definition: trustProvisions.include_education_expenses_definition || undefined,
+        include_arts_education: trustProvisions.include_arts_education || undefined,
+        include_vocational_training: trustProvisions.include_vocational_training || undefined,
+        include_homeschooling: trustProvisions.include_homeschooling || undefined,
+        include_disappearance_definition: trustProvisions.include_disappearance_definition || undefined,
+      }),
       contingent_beneficiary: person(payload.will_provisions.single_beneficiary_remainder),
       tangible_personal_property: {
         distribution_method: payload.will_provisions.tangible_property_distribution ?? 'memorandum',
       },
       descendants_distribution: {
-        method: descendantsDistributionMethod,
-        distribution_age: distributionAges[0]?.toString(),
-        stage_1_age: distributionAges[0]?.toString(),
-        stage_2_age: distributionAges[1]?.toString(),
-        stage_3_age: distributionAges[2]?.toString(),
+        method: descendantsMethod,
+        distribution_age: distributionAge?.toString(),
+        stage_1_age: (staggerAges[0] ?? distributionAges[0])?.toString(),
+        stage_2_age: (staggerAges[1] ?? distributionAges[1])?.toString(),
+        stage_3_age: (staggerAges[2] ?? distributionAges[2])?.toString(),
       },
       remote_beneficiaries: {
-        individuals: firstText(payload.will_provisions.single_beneficiary_name) ? [
-          person(payload.will_provisions.single_beneficiary_name),
-        ] : ['heirs at law'],
+        method: trustProvisions.remote_beneficiary ?? 'heirs_at_law',
+        individuals: remoteIndividuals,
         charity: {
-          name: '',
+          name: remoteCharityName,
         },
       },
       disinherited,
@@ -540,7 +600,9 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         co_successor: person(payload.fiduciaries.trustee_co_successor),
         second_successor: person(payload.fiduciaries.trustee_second_successor),
         co_second_successor: person(payload.fiduciaries.trustee_co_second_successor),
-        co_trustees_action: payload.will_provisions.cotrustee_decision_standard ?? 'majority',
+        co_trustees_action: trustCoTrusteesAction(trustProvisions.co_trustee_decision)
+          || payload.will_provisions.cotrustee_decision_standard
+          || 'joint',
       },
       testamentary_trustee: {
         primary: person(payload.fiduciaries.trustee_initial),

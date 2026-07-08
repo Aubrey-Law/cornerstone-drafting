@@ -12,7 +12,7 @@ describe('family information design section', () => {
     'utf8',
   )
   const trustDetailsSource = fs.readFileSync(
-    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DocumentSections.tsx'),
+    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx'),
     'utf8',
   )
 

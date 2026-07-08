@@ -590,4 +590,80 @@ describe('buildDraftPayload', () => {
     expect(payload.client.email).toBe('design@example.com')
     expect(payload.matter.type).toBe('individual')
   })
+
+  it('projects trust details decisions into trust_provisions and deed display names', async () => {
+    mocks.getAdminClient.mockReturnValue(adminStub({
+      matters: [
+        { data: { id: 'matter-trust' }, error: null },
+        {
+          data: {
+            id: 'matter-trust',
+            client_intake_id: 'intake-trust',
+            matter_number: 'EP-TRUST',
+            status: 'active',
+            stage: 'drafting',
+          },
+          error: null,
+        },
+      ],
+      matter_details: [{
+        data: {
+          id: 'details-trust',
+          client_id: 'matter-trust',
+          practice_area: 'Estate Planning',
+          ep_trust_type: 'revocable_living',
+          ep_ancillary_docs: [],
+          ep_special_provisions: null,
+          ep_ma_estate_taxable: false,
+          ep_ma_estate_tax_savings: null,
+          ep_separate_trusts: true,
+          ep_has_ilit: false,
+          ep_ilit_trustee: null,
+          internal_notes: null,
+        },
+        error: null,
+      }],
+      design_sheets: [{
+        data: {
+          id: 'sheet-trust',
+          client_intake_id: 'intake-trust',
+          status: 'draft',
+          plan_type: 'pour_over',
+          is_joint: false,
+          client_name: 'Jane Smith',
+          spouse_name: 'John Smith',
+          marital_status: 'married',
+          trust_name: 'The Jane Smith Trust',
+          spouse_trust_name: 'The John Smith Trust',
+          trust_date: '2025-01-15',
+          distribution_method: 'outright',
+          distribution_age: 30,
+          decisions: {
+            trust_planning_type: 'disclaimer',
+            trust_details: {
+              co_trustee_decision: 'independent',
+              residual_beneficiary_method: 'outright',
+              trust_name_format: {
+                client: { date_style: 'ua_dated', append_amendments: true },
+                spouse: { date_style: 'dated_only', append_amendments: false },
+              },
+            },
+          },
+        },
+        error: null,
+      }],
+      client_intake: [{ data: { id: 'intake-trust', matter_id: 'matter-trust' }, error: null }],
+      contacts: [{ data: [], error: null }],
+    }))
+
+    const payload = await buildDraftPayload('matter-trust')
+
+    expect(payload.documents.trust_planning_type).toBe('disclaimer')
+    expect(payload.trust_provisions.co_trustee_decision).toBe('independent')
+    expect(payload.trust_provisions.residual_beneficiary_method).toBe('outright')
+    expect(payload.trust?.display_name).toBe(
+      'THE JANE SMITH TRUST, U/A dated January 15, 2025, and any amendments thereto',
+    )
+    expect(payload.trust?.spouse_display_name).toBe('THE JOHN SMITH TRUST dated January 15, 2025')
+  })
 })

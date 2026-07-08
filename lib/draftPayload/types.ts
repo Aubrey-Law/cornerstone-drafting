@@ -1,6 +1,7 @@
-import type { DesignSheetChild } from '@/types/database'
+import type { DesignSheetChild, RemoteCharity, StaggeredTier } from '@/types/database'
 import type { TrustPlanningType } from '@/lib/designSheetDocumentInclusions'
 import type { DraftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
+import type { DraftPayloadTrustProvisions } from '@/lib/draftPayload/trustProvisions'
 
 // ── Exported interface ────────────────────────────────────────────────────────
 
@@ -49,6 +50,9 @@ export interface DraftPayload {
   family_provisions?: DraftPayloadFamilyProvisions
   trust: {
     name: string
+    spouse_name: string | null
+    display_name: string
+    spouse_display_name: string | null
     date: string
     distribution_ages: number[]
     ma_estate_taxable: boolean
@@ -57,6 +61,7 @@ export interface DraftPayload {
     has_ilit: boolean
     ilit_trustee: string | null
   } | null
+  trust_provisions: DraftPayloadTrustProvisions
   fiduciaries: {
     pr_primary: string | null
     pr_co_primary: string | null
@@ -261,6 +266,16 @@ export interface DesignSheetRow {
   trust_name?: string | null
   spouse_trust_name?: string | null
   trust_date?: string | null
+  restatement?: boolean | null
+  residual_beneficiary?: string | null
+  distribution_method?: string | null
+  distribution_age?: number | null
+  staggered_distributions?: StaggeredTier[] | null
+  remote_beneficiary?: string | null
+  remote_beneficiary_individuals?: string[] | null
+  remote_beneficiary_charities?: RemoteCharity[] | null
+  provision_substance_abuse?: string | null
+  provision_married_beneficiary?: string | null
   client_aka?: string | null
   spouse_aka?: string | null
   county?: string | null

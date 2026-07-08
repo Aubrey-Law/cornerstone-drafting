@@ -3,6 +3,10 @@ import type { DesignSheetRow } from '@/lib/draftPayload/types'
 import { designSheetString, isDesignSheetMarried } from '@/lib/draftPayload/designSheetFields'
 import { buildFiduciariesFromDesignSheet } from '@/lib/draftPayload/helpers'
 import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
+import {
+  draftPayloadTrustProvisions,
+  formatTrustDisplayName,
+} from '@/lib/draftPayload/trustProvisions'
 import type { ContactRow } from '@/lib/draftPayload/types'
 
 type DesignSheetChildRow = {
@@ -276,6 +280,12 @@ function baseFlatFieldsFromDesignSheet(sheet: DesignSheetRow): FlatSheet {
     : spouseLast !== clientLast
       ? `THE ${upper(spouseLast)} FAMILY REVOCABLE LIVING TRUST`
       : trustName
+  const trustProvisions = draftPayloadTrustProvisions(sheet)
+  const trustDate = str(sheet.trust_date)
+  const trustDisplayName = formatTrustDisplayName(trustName, trustDate, trustProvisions.client_name_format)
+  const spouseTrustDisplayName = spouseTrustName
+    ? formatTrustDisplayName(spouseTrustName, trustDate, trustProvisions.spouse_name_format)
+    : trustDisplayName
 
   const today = new Date()
   const isMarried = isDesignSheetMarried(sheet)
@@ -309,8 +319,8 @@ function baseFlatFieldsFromDesignSheet(sheet: DesignSheetRow): FlatSheet {
     specific_bequests_list: formatSpecificBequests(sheet.specific_bequests),
     client_dob: str(sheet.client_dob),
     spouse_dob: str(sheet.spouse_dob),
-    trust_name: trustName,
-    client2_trust_name: spouseTrustName,
+    trust_name: trustDisplayName || trustName,
+    client2_trust_name: spouseTrustDisplayName || spouseTrustName,
     marital_status_clause: isMarried && spouseFull
       ? `I am married to ${spouseFull}.`
       : 'I am not married.',
@@ -374,11 +384,14 @@ export function projectDraftPayloadToFlatSheet(payload: DraftPayload): FlatSheet
 
   const clientLast = client.last_name || clientFull.split(/\s+/).pop() || ''
   const spouseLast = spouse?.last_name || spouseFull.split(/\s+/).pop() || ''
-  const trustName = payload.trust?.name
+  const trustName = payload.trust?.display_name
+    ?? payload.trust?.name
     ?? (spouseFull ? `THE ${clientLast.toUpperCase()} FAMILY REVOCABLE LIVING TRUST` : `${clientFull} Revocable Living Trust`)
-  const spouseTrustName = payload.trust?.name && spouseFull && spouseLast !== clientLast
-    ? `THE ${spouseLast.toUpperCase()} FAMILY REVOCABLE LIVING TRUST`
-    : trustName
+  const spouseTrustName = payload.trust?.spouse_display_name
+    ?? payload.trust?.spouse_name
+    ?? (payload.trust?.name && spouseFull && spouseLast !== clientLast
+      ? `THE ${spouseLast.toUpperCase()} FAMILY REVOCABLE LIVING TRUST`
+      : trustName)
 
   const today = new Date()
   const isMarried = payload.matter.type !== 'individual'

@@ -49,8 +49,8 @@ function useFiduciaryContext(props: DocumentFiduciaryProps) {
   }
 }
 
-export function TrustFiduciarySections(props: DocumentFiduciaryProps & { scope?: 'client' | 'spouse' }) {
-  const { sheet, onChange, scope = 'client' } = props
+export function TrustFiduciarySections(props: DocumentFiduciaryProps & { scope?: 'client' | 'spouse'; trusteesOnly?: boolean }) {
+  const { sheet, onChange, scope = 'client', trusteesOnly = false } = props
   const {
     inclusions,
     separateTrusts,
@@ -79,6 +79,7 @@ export function TrustFiduciarySections(props: DocumentFiduciaryProps & { scope?:
 
   return (
     <>
+      {!trusteesOnly && (
       <SectionBlock title="Trustee Nomination Structure" subtitle="Drives how trustee slots are nominated in the trust">
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
           <AttorneySelect
@@ -119,11 +120,12 @@ export function TrustFiduciarySections(props: DocumentFiduciaryProps & { scope?:
           </div>
         )}
       </SectionBlock>
+      )}
 
       <FiduciaryBlock
         {...blockProps}
         role="trustee"
-        sectionTitle={`${clientFirst || 'Client'}'s Trustees`}
+        sectionTitle={`${clientFirst || 'Client'}'s Successor Trustees`}
         clientShortcutContact={separateTrusts ? null : clientContact}
         clientShortcutLabel={separateTrusts ? undefined : `${clientFirst || 'Client'} as initial trustee`}
       />

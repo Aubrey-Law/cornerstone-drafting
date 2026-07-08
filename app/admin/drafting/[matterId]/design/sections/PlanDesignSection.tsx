@@ -7,11 +7,9 @@ import type { MatterContact } from '@/types/database'
 import {
   getDocumentInclusions,
   getEstatePlanDesignSetup,
-  getTrustPlanningType,
   setEstatePlanDesignSetup,
   type EstatePlanAncillaryDocumentKey,
   setDocumentInclusion,
-  setTrustPlanningType,
 } from '@/lib/designSheetDocumentInclusions'
 import {
   DESIGN_PLAN_TYPE_OPTIONS,
@@ -90,11 +88,6 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
   const estatePlanSetup = getEstatePlanDesignSetup(sheet)
   const needsDistributionMethod = !sheet.distribution_method
   const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
-  // The disclaimer trust is an individual (non-joint) structure for a married
-  // client, so only offer it when a spouse exists, the trust is included, and
-  // the plan is not a joint trust.
-  const showDisclaimerToggle = isMarried && inclusions.trust && !sheet.is_joint
-  const isDisclaimerTrust = getTrustPlanningType(sheet) === 'disclaimer'
   const fundingDocKeys: FundingDocumentKey[] = [
     'certificate_of_trust',
     'assignment_of_personal_property',
@@ -309,25 +302,6 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
             </div>
           </div>
         </div>
-        {showDisclaimerToggle && (
-          <div className="mt-4 rounded-lg border border-border bg-muted/50 p-4">
-            <label className="flex cursor-pointer items-center gap-3">
-              <Checkbox
-                checked={isDisclaimerTrust}
-                onCheckedChange={value =>
-                  onChange('decisions', setTrustPlanningType(sheet, value === true ? 'disclaimer' : 'standard'))
-                }
-              />
-              <span>
-                <span className="block text-sm font-semibold text-foreground">Use disclaimer trust structure</span>
-                <span className="block text-xs text-muted-foreground">
-                  Distributes outright to the surviving spouse, with a Marital (QTIP) / Family (bypass) split created if the
-                  spouse disclaims. Replaces the standard individual revocable trust.
-                </span>
-              </span>
-            </label>
-          </div>
-        )}
       </SectionBlock>
 
       {/* Execution Mechanics — deferred, not required before drafting */}
