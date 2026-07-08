@@ -49,7 +49,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card">
+    <div className="flex h-full min-h-0 flex-col bg-card">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5 text-sm font-medium">
           <Sparkles className="h-4 w-4" />

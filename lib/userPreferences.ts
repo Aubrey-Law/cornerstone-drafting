@@ -2,18 +2,30 @@ export type DraftingDesignView = 'guided' | 'express'
 
 /** Preferred Anthropic model id for assistant / redline / import. */
 export type PreferredAnthropicModel =
-  | 'claude-sonnet-4-20250514'
-  | 'claude-opus-4-20250514'
-  | 'claude-haiku-4-5-20251001'
+  | 'claude-sonnet-4-6'
+  | 'claude-opus-4-5'
+  | 'claude-haiku-4-5'
   | string
 
 export const ANTHROPIC_MODEL_OPTIONS: Array<{ id: string; label: string }> = [
-  { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (default)' },
-  { id: 'claude-opus-4-20250514', label: 'Claude Opus 4' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (default)' },
+  { id: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
 ]
 
-export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514'
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6'
+
+/** Retired model ids still stored in user preferences → current API ids. */
+const DEPRECATED_ANTHROPIC_MODELS: Record<string, string> = {
+  'claude-sonnet-4-20250514': 'claude-sonnet-4-6',
+  'claude-opus-4-20250514': 'claude-opus-4-5',
+  'claude-haiku-4-5-20251001': 'claude-haiku-4-5',
+}
+
+export function normalizeAnthropicModel(modelId: string): string {
+  const trimmed = modelId.trim()
+  return DEPRECATED_ANTHROPIC_MODELS[trimmed] ?? trimmed
+}
 
 export interface DraftingUserPreferences {
   designView?: DraftingDesignView
@@ -71,7 +83,7 @@ export function mergeUserPreferences(
 
 export function resolveAnthropicModel(prefs?: UserPreferences | null): string {
   const id = prefs?.models?.anthropicModel?.trim()
-  return id || DEFAULT_ANTHROPIC_MODEL
+  return normalizeAnthropicModel(id || DEFAULT_ANTHROPIC_MODEL)
 }
 
 export const DESIGN_VIEW_STORAGE_KEY = 'drafting-design-view'
