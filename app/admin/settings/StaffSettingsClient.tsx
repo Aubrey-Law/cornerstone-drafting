@@ -5,8 +5,16 @@ import { Loader2, Trash2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
-  ANTHROPIC_MODEL_OPTIONS,
   DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_LLM_PROVIDER,
+  DEFAULT_OPENAI_MODEL,
+  LLM_PROVIDER_LABELS,
+  LLM_PROVIDERS,
+  type LlmProvider,
+  type ModelsUserPreferences,
+  modelOptionsForProvider,
+  resolveActiveLlmPreference,
   type UserPreferences,
 } from '@/lib/userPreferences'
 import { Button } from '@/components/ui/button'
@@ -70,7 +78,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
     })()
   }, [token])
 
-  const saveModel = async (modelId: string) => {
+  const saveModelsPatch = async (patch: Partial<ModelsUserPreferences>) => {
     if (!token) return
     setSaving(true)
     try {
@@ -80,7 +88,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ preferences: { models: { anthropicModel: modelId } } }),
+        body: JSON.stringify({ preferences: { models: patch } }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Save failed')
@@ -217,7 +225,33 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
     }
   }
 
-  const selectedModel = prefs.models?.anthropicModel || DEFAULT_ANTHROPIC_MODEL
+  const activeLlm = resolveActiveLlmPreference(prefs)
+  const defaultProvider = prefs.models?.defaultProvider ?? DEFAULT_LLM_PROVIDER
+
+  const keyForProvider = (provider: LlmProvider) =>
+    keys.find(k => k.provider === provider)
+
+  const modelFieldForProvider = (provider: LlmProvider): keyof ModelsUserPreferences => {
+    switch (provider) {
+      case 'anthropic':
+        return 'anthropicModel'
+      case 'openai':
+        return 'openaiModel'
+      case 'gemini':
+        return 'geminiModel'
+    }
+  }
+
+  const selectedModelForProvider = (provider: LlmProvider): string => {
+    switch (provider) {
+      case 'anthropic':
+        return prefs.models?.anthropicModel || DEFAULT_ANTHROPIC_MODEL
+      case 'openai':
+        return prefs.models?.openaiModel || DEFAULT_OPENAI_MODEL
+      case 'gemini':
+        return prefs.models?.geminiModel || DEFAULT_GEMINI_MODEL
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -252,28 +286,104 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       </div>
 
       {tab === 'models' && (
-        <section className="space-y-4 rounded-lg border border-border p-4">
+        <section className="space-y-5 rounded-lg border border-border p-4">
           <div>
-            <Label htmlFor="anthropic-model">Preferred Anthropic model</Label>
+            <Label htmlFor="default-provider">Default AI provider</Label>
             <p className="mt-1 text-xs text-muted-foreground">
-              Used by the matter assistant, AI redline, design-sheet import, and tabular review.
+              Choose which vendor powers the matter assistant, AI redline, design-sheet import, and
+              tabular review. <strong>Anthropic is still used for all features</strong> until the
+              shared LLM layer ships — saving preferences here prepares your account for that switch.
             </p>
             <select
-              id="anthropic-model"
+              id="default-provider"
               className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={selectedModel}
+              value={defaultProvider}
               disabled={saving}
-              onChange={e => void saveModel(e.target.value)}
+              onChange={e => void saveModelsPatch({ defaultProvider: e.target.value as LlmProvider })}
             >
-              {ANTHROPIC_MODEL_OPTIONS.map(opt => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
+              {LLM_PROVIDERS.map(provider => (
+                <option key={provider} value={provider}>
+                  {LLM_PROVIDER_LABELS[provider]}
                 </option>
               ))}
-              {!ANTHROPIC_MODEL_OPTIONS.some(o => o.id === selectedModel) ? (
-                <option value={selectedModel}>{selectedModel}</option>
-              ) : null}
             </select>
+            {(() => {
+              const key = keyForProvider(activeLlm.provider)
+              const configured = key?.configured
+              return (
+                <p className="mt-2 text-xs">
+                  {configured ? (
+                    <span className="text-green">
+                      API key configured for {LLM_PROVIDER_LABELS[activeLlm.provider]} (
+                      {key?.source}
+                      {key?.hint ? ` · ${key.hint}` : ''})
+                    </span>
+                  ) : (
+                    <span className="text-amber">
+                      No API key for {LLM_PROVIDER_LABELS[activeLlm.provider]}.{' '}
+                      <button
+                        type="button"
+                        className="underline hover:no-underline"
+                        onClick={() => setTab('api-keys')}
+                      >
+                        Add one in API Keys
+                      </button>
+                    </span>
+                  )}
+                </p>
+              )
+            })()}
+          </div>
+
+          <div className="space-y-4 border-t border-border pt-4">
+            <p className="text-xs font-medium text-muted-foreground">Model per provider</p>
+            {LLM_PROVIDERS.map(provider => {
+              const options = modelOptionsForProvider(provider)
+              const selected = selectedModelForProvider(provider)
+              const field = modelFieldForProvider(provider)
+              const isDefault = provider === defaultProvider
+              const key = keyForProvider(provider)
+              return (
+                <div
+                  key={provider}
+                  className={`rounded-md border p-3 ${
+                    isDefault ? 'border-primary/40 bg-primary/5' : 'border-border'
+                  }`}
+                >
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <Label htmlFor={`model-${provider}`} className="text-sm">
+                      {LLM_PROVIDER_LABELS[provider]}
+                      {isDefault ? (
+                        <span className="ml-2 text-[10px] font-normal uppercase text-primary">
+                          default
+                        </span>
+                      ) : null}
+                    </Label>
+                    <span className="text-[11px] text-muted-foreground">
+                      {key?.configured ? 'Key configured' : 'Key missing'}
+                    </span>
+                  </div>
+                  <select
+                    id={`model-${provider}`}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={selected}
+                    disabled={saving}
+                    onChange={e =>
+                      void saveModelsPatch({ [field]: e.target.value } as Partial<ModelsUserPreferences>)
+                    }
+                  >
+                    {options.map(opt => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                    {!options.some(o => o.id === selected) ? (
+                      <option value={selected}>{selected}</option>
+                    ) : null}
+                  </select>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}
