@@ -120,6 +120,7 @@ The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have no ch
     always: false,
     include: (ctx) => !ctx.has_children && ctx.include_afterborn_children !== false,
     text: `Any children subsequently born to the Grantors or adopted by the Grantors by legal proceeding shall be treated as if they were listed explicitly in this Trust Agreement.`,
+  },
 
   {
     id: 'jt_family_with_children',
@@ -161,6 +162,7 @@ The Grantors are married. [CLIENT FIRST NAME] and [SPOUSE FIRST NAME] have the f
     always: false,
     include: (ctx) => Boolean(ctx.omissions_intentional),
     text: `Any omitted children were intentionally left out of this Trust Agreement, except for afterborn children if afterborn-child language is included herein.`,
+  },
 
   {
     id: 'jt_excluded_person',
