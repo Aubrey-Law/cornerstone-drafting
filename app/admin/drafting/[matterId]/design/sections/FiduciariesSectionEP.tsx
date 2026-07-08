@@ -10,10 +10,12 @@ import { AttorneyNoteBanner, AttorneySelect, DesignSectionContent, FieldLabel, S
 import { cn } from '@/lib/utils'
 import { sheetHasMinorChildren, sheetMinorChildren } from '@/lib/designSheet/minorChildren'
 import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import { getFiduciaryDisplayOptions, setFiduciaryDisplayOptions } from '@/lib/designSheetDocumentInclusions'
 import type { PipelineMatter } from '@/types/database'
 import {
   cloneSlots,
   findClientContact,
+  findSpouseContact,
   FiduciaryBlock,
   isMarriedSheet,
 } from './fiduciary-blocks'
@@ -48,13 +50,45 @@ function contactById(contacts: MatterContact[], id: string | null, extraContacts
   return c ? (c as Contact) : null
 }
 
-const SLOT_FIELDS: Record<FiduciaryRole, keyof DesignSheet> = {
-  trustee: 'trustee_slots',
-  executor: 'executor_slots',
-  poa: 'poa_slots',
-  hcp: 'hcp_slots',
-  guardian: 'guardian_slots',
-  temporary_guardian: 'temporary_guardian_slots',
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function uniqueIds(ids: Array<string | null | undefined>) {
+  return [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+}
+
+function getFiduciaryPoolContactIds(sheet: DesignSheet): string[] {
+  const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
+  const raw = decisions.fiduciary_pool_contact_ids
+  return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string' && id.trim().length > 0) : []
+}
+
+function setFiduciaryPoolContactIds(sheet: DesignSheet, ids: string[]) {
+  const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
+  return {
+    ...decisions,
+    fiduciary_pool_contact_ids: uniqueIds(ids),
+  }
+}
+
+function assignedContactIds(sheet: DesignSheet) {
+  const slotGroups: Array<FiduciarySlot[] | null | undefined> = [
+    sheet.trustee_slots,
+    sheet.executor_slots,
+    sheet.poa_slots,
+    sheet.hcp_slots,
+    sheet.guardian_slots,
+    sheet.temporary_guardian_slots,
+    sheet.spouse_trustee_slots,
+    sheet.spouse_executor_slots,
+    sheet.spouse_poa_slots,
+    sheet.spouse_hcp_slots,
+  ]
+
+  return uniqueIds(
+    slotGroups.flatMap(slots => (slots ?? []).map(slot => slot.contact_id)),
+  )
 }
 
 // ── FiduciaryRoleSection ─────────────────────────────────────────────────────
@@ -298,10 +332,28 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
   const spouseDocs = married && inclusions.spouse_docs
   const separateTrusts = married && sheet.is_joint === false
   const clientContact = findClientContact(contacts, matter, sheet)
+  const spouseContact = married ? findSpouseContact(contacts, matter, sheet) : null
   const clientFirst = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/)[0] || ''
   const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
   const spouseTrusteeSource = separateTrusts ? sheet.spouse_trustee_slots : sheet.trustee_slots
-  const blockProps = { sheet, contacts, matter, onChange, onAddContact, onUpdateContact }
+  const fiduciaryDisplayOptions = getFiduciaryDisplayOptions(sheet)
+  const fiduciaryPoolContactIds = getFiduciaryPoolContactIds(sheet)
+  const autoPoolContactIds = uniqueIds([clientContact?.id, spouseContact?.id])
+  const roleContactIds = uniqueIds([
+    ...fiduciaryPoolContactIds,
+    ...autoPoolContactIds,
+    ...assignedContactIds(sheet),
+  ])
+  const roleContacts = [
+    ...contacts.filter(contact => roleContactIds.includes(contact.id)),
+    ...[clientContact, spouseContact].filter(
+      (contact): contact is MatterContact => {
+        if (!contact) return false
+        return roleContactIds.includes(contact.id) && !contacts.some(existing => existing.id === contact.id)
+      },
+    ),
+  ]
+  const blockProps = { sheet, contacts: roleContacts, matter, onChange, onAddContact, onUpdateContact }
 
   const minorChildren = sheetMinorChildren(sheet.children)
   const hasMinorChildren = sheetHasMinorChildren(sheet.children)
@@ -317,17 +369,6 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
       return true
     })
 
-  const handleSlotsChange = useCallback((role: FiduciaryRole, slots: FiduciarySlot[]) => {
-    onChange(SLOT_FIELDS[role], slots as DesignSheet[keyof DesignSheet])
-  }, [onChange])
-
-  const handleSlotStateChange = useCallback((slotId: string, state: SlotState) => {
-    onChange('fiduciary_slot_states', {
-      ...(sheet.fiduciary_slot_states ?? {}),
-      [slotId]: state,
-    })
-  }, [onChange, sheet.fiduciary_slot_states])
-
   const handleAddContact = useCallback(async (data: Omit<Contact, 'id'>): Promise<Contact> => {
     const contact = await onAddContact(data as Omit<MatterContact, 'id'>)
     return contact as Contact
@@ -339,12 +380,116 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
     return contact as Contact
   }, [onUpdateContact])
 
+  const updateDisplayOption = (key: keyof typeof fiduciaryDisplayOptions, checked: boolean) => {
+    onChange('decisions', setFiduciaryDisplayOptions(sheet, { [key]: checked }))
+  }
+
+  const updatePoolContact = (index: number, contactId: string | null) => {
+    const next = [...fiduciaryPoolContactIds]
+    if (!contactId) {
+      next.splice(index, 1)
+    } else {
+      next[index] = contactId
+    }
+    onChange('decisions', setFiduciaryPoolContactIds(sheet, next))
+  }
+
+  const addPoolContact = (contactId: string) => {
+    onChange('decisions', setFiduciaryPoolContactIds(sheet, [...fiduciaryPoolContactIds, contactId]))
+  }
+
   return (
     <DesignSectionContent>
       <AttorneyNoteBanner>
         Fiduciary selections were pre-filled from the client intake. Review all roles carefully
         and update as needed. Use the slot state toggle to mark pending or optional roles.
       </AttorneyNoteBanner>
+
+      <SectionBlock
+        title="All Fiduciaries and Decisionmakers"
+        subtitle="Add all potential decisionmakers and fiduciaries below. These contacts appear as options for the role assignments that follow. Adult children and spouses are added automatically when already available on the matter."
+      >
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+            <Checkbox
+              checked={fiduciaryDisplayOptions.show_phone_numbers}
+              onCheckedChange={value => updateDisplayOption('show_phone_numbers', value === true)}
+            />
+            <span className="text-sm text-foreground">Show fiduciary phone numbers in documents</span>
+          </label>
+          <label className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+            <Checkbox
+              checked={fiduciaryDisplayOptions.show_addresses}
+              onCheckedChange={value => updateDisplayOption('show_addresses', value === true)}
+            />
+            <span className="text-sm text-foreground">Show fiduciary addresses in documents</span>
+          </label>
+          <label className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+            <Checkbox
+              checked={fiduciaryDisplayOptions.show_email_addresses}
+              onCheckedChange={value => updateDisplayOption('show_email_addresses', value === true)}
+            />
+            <span className="text-sm text-foreground">Show fiduciary email addresses in documents</span>
+          </label>
+          <label className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+            <Checkbox
+              checked={fiduciaryDisplayOptions.show_dates_of_birth}
+              onCheckedChange={value => updateDisplayOption('show_dates_of_birth', value === true)}
+            />
+            <span className="text-sm text-foreground">Show fiduciary dates of birth when available</span>
+          </label>
+          <label className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5 sm:col-span-2">
+            <Checkbox
+              checked={fiduciaryDisplayOptions.show_relationships}
+              onCheckedChange={value => updateDisplayOption('show_relationships', value === true)}
+            />
+            <span className="text-sm text-foreground">Show fiduciary relationships in documents</span>
+          </label>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <FieldLabel>Fiduciaries</FieldLabel>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Please list all trustees, guardians, POA agents, executors, health care agents, and disposition agents here first.
+            </p>
+          </div>
+
+          {fiduciaryPoolContactIds.map((contactId, index) => (
+            <div key={`${contactId}-${index}`} className="flex items-start gap-2">
+              <div className="flex-1">
+                <ContactPicker
+                  role={`Fiduciary ${index + 1}`}
+                  value={contactById(roleContacts, contactId)}
+                  onChange={contact => updatePoolContact(index, contact?.id ?? null)}
+                  contacts={roleContacts as Contact[]}
+                  onAddContact={handleAddContact}
+                  onUpdateContact={handleUpdateContact}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => updatePoolContact(index, null)}
+                className="mt-6 rounded p-1.5 text-muted-foreground hover:bg-red-50 hover:text-destructive transition-colors"
+                title="Remove fiduciary"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+
+          <ContactPicker
+            role="+ Add Fiduciary"
+            value={null}
+            onChange={contact => {
+              if (contact?.id) addPoolContact(contact.id)
+            }}
+            contacts={roleContacts as Contact[]}
+            onAddContact={handleAddContact}
+            onUpdateContact={handleUpdateContact}
+          />
+        </div>
+      </SectionBlock>
 
       {(inclusions.will || inclusions.trust) && (
       <SectionBlock title="Fiduciary Structure" subtitle="Drives how PR and trustee slots are nominated in the Will">
@@ -405,8 +550,6 @@ export function FiduciariesSectionEP({ sheet, contacts, matter, onChange, onAddC
       )}
 
       {ROLES.map(role => {
-        const slots = (sheet[SLOT_FIELDS[role]] as FiduciarySlot[]) ?? []
-
         const sameAsTrustee =
           role === 'executor' ? sheet.executor_same_as_trustee :
           role === 'poa' ? sheet.poa_same_as_trustee :

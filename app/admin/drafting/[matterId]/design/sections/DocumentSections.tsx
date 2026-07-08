@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { deriveTrustName, deriveSpouseTrustName } from '@/lib/designSheetDefaults'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
-import type { DesignSheet, MatterContact, PipelineMatter, StaggeredTier } from '@/types/database'
+import type { DesignSheet, MatterContact, PetCareDetails, PipelineMatter, StaggeredTier } from '@/types/database'
 import DesignContactPicker, { type Contact as PickerContact } from './ContactPicker'
 import type { SectionProps } from './shared'
 import {
@@ -147,6 +147,14 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   const editStagger = (i: number, patch: Partial<StaggeredTier>) =>
     setStaggers(staggers.map((t, idx) => (idx === i ? { ...t, ...patch } : t)))
   const removeStagger = (i: number) => setStaggers(staggers.filter((_, idx) => idx !== i))
+
+  const documentOptions = [
+    { value: 'will', label: 'Will' },
+    { value: 'trust', label: 'Trust' },
+  ]
+  const pet: PetCareDetails = sheet.pet_care_details ?? {}
+  const updatePet = (patch: Partial<PetCareDetails>) =>
+    onChange('pet_care_details', { ...pet, ...patch })
 
   return (
     <DesignSectionContent>
@@ -321,6 +329,95 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
         onAddContact={onAddContact}
         onUpdateContact={onUpdateContact}
       />
+
+      <SectionBlock title="Tangible Personal Property">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <AttorneySelect
+            fieldName="tangible_property_distribution"
+            label="Distribution of Tangible Property"
+            value={sheet.tangible_property_distribution ?? ''}
+            placeholder="Select..."
+            options={[
+              { value: 'spouse_then_children', label: 'Spouse, then children' },
+              { value: 'children_then_descendants', label: 'Children, then descendants' },
+              { value: 'named_then_children', label: 'Named individual, then children' },
+              { value: 'memorandum', label: 'Personal property memorandum' },
+            ]}
+            onChange={v => onChange('tangible_property_distribution', v || null)}
+          />
+          {sheet.tangible_property_distribution === 'named_then_children' && (
+            <AttorneyInput
+              fieldName="tangible_property_named_individual"
+              label="Named Individual"
+              value={sheet.tangible_property_named_individual ?? ''}
+              onChange={v => onChange('tangible_property_named_individual', v || null)}
+            />
+          )}
+        </div>
+      </SectionBlock>
+
+      <SectionBlock title="Pet Care">
+        <AttorneySelect
+          label="Pet Care Provision"
+          value={sheet.pet_care_option ?? 'omit'}
+          options={[
+            { value: 'omit', label: 'Omit (no pets)' },
+            { value: 'direct_bequest', label: 'Direct bequest of pet + cash gift to caretaker' },
+            { value: 'pet_trust', label: 'Statutory pet trust under M.G.L. c. 203E §408' },
+          ]}
+          onChange={v => onChange('pet_care_option', v as 'omit' | 'direct_bequest' | 'pet_trust')}
+        />
+
+        {sheet.pet_care_option && sheet.pet_care_option !== 'omit' && (
+          <div className="mt-4 grid grid-cols-2 gap-x-6">
+            <AttorneySelect
+              label="In document"
+              value={pet.document ?? ''}
+              placeholder="Select..."
+              options={documentOptions}
+              onChange={v => updatePet({ document: (v || null) as PetCareDetails['document'] })}
+            />
+          </div>
+        )}
+
+        {sheet.pet_care_option === 'direct_bequest' && (
+          <div className="mt-4 grid grid-cols-3 gap-x-6 gap-y-4">
+            <div>
+              <FieldLabel>Cash Amount</FieldLabel>
+              <Input
+                type="number"
+                value={pet.cash_amount ?? ''}
+                onChange={e => updatePet({ cash_amount: e.target.value === '' ? null : parseFloat(e.target.value) })}
+                className="h-9 text-sm"
+              />
+            </div>
+            <AttorneyInput label="Primary Caretaker" value={pet.primary_caretaker ?? ''} onChange={v => updatePet({ primary_caretaker: v || null })} />
+            <AttorneyInput label="Successor Caretaker" value={pet.successor_caretaker ?? ''} onChange={v => updatePet({ successor_caretaker: v || null })} />
+          </div>
+        )}
+
+        {sheet.pet_care_option === 'pet_trust' && (
+          <div className="mt-3">
+            <ClientDecisionCallout>Pet trust enforcer is required and easy to forget.</ClientDecisionCallout>
+          </div>
+        )}
+        {sheet.pet_care_option === 'pet_trust' && (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <div>
+              <FieldLabel>Cash Amount</FieldLabel>
+              <Input
+                type="number"
+                value={pet.cash_amount ?? ''}
+                onChange={e => updatePet({ cash_amount: e.target.value === '' ? null : parseFloat(e.target.value) })}
+                className="h-9 text-sm"
+              />
+            </div>
+            <AttorneyInput label="Pet Trustee" value={pet.pet_trustee ?? ''} onChange={v => updatePet({ pet_trustee: v || null })} />
+            <AttorneyInput label="Remainder Beneficiary" value={pet.remainder_beneficiary ?? ''} onChange={v => updatePet({ remainder_beneficiary: v || null })} />
+            <AttorneyInput label="Pet Trust Enforcer" value={pet.enforcer ?? ''} onChange={v => updatePet({ enforcer: v || null })} />
+          </div>
+        )}
+      </SectionBlock>
     </DesignSectionContent>
   )
 }
