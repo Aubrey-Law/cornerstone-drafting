@@ -1,12 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { resolveApiKey } from '@/lib/userApiKeys'
-import {
-  DEFAULT_ANTHROPIC_MODEL,
-  parseUserPreferences,
-  resolveAnthropicModel,
-} from '@/lib/userPreferences'
+import { runLlmChat, resolveLlmConfig } from '@/lib/llm'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import {
   appendMatterAssistantTurns,
@@ -102,9 +96,6 @@ export async function DELETE(
 /**
  * POST /api/admin/matters/[id]/assistant
  * Body: { message: string, documentIds?: string[], stream?: boolean }
- *
- * Default `stream: true` → SSE (`text/event-stream`) with delta/tool/done events.
- * `stream: false` → JSON `{ reply, model, keySource, toolsUsed }`.
  */
 export async function POST(
   req: Request,
@@ -129,18 +120,13 @@ export async function POST(
   const context = await buildMatterContext(admin, matterId, attachedDocIds)
   if (!context) return Response.json({ error: 'Matter not found' }, { status: 404 })
 
-  const resolved = await resolveApiKey(admin, user.id, 'anthropic')
-  if (!resolved.key) {
-    return Response.json(
-      { error: 'No Anthropic API key configured. Add one in Settings → API Keys or set ANTHROPIC_API_KEY.' },
-      { status: 501 },
-    )
+  const llmResolved = await resolveLlmConfig(admin, user.id)
+  if (!llmResolved.ok) {
+    return Response.json({ error: llmResolved.error }, { status: 501 })
   }
+  const llm = llmResolved.config
 
-  const { data: profile } = await admin.from('users').select('preferences').eq('id', user.id).maybeSingle()
-  const model = resolveAnthropicModel(parseUserPreferences(profile?.preferences)) || DEFAULT_ANTHROPIC_MODEL
-
-  let mcpTools: Anthropic.Tool[] = []
+  let mcpTools: Awaited<ReturnType<typeof loadMcpToolsForUser>>['tools'] = []
   let mcpRegistry: Awaited<ReturnType<typeof loadMcpToolsForUser>>['registry'] = []
   try {
     const loaded = await loadMcpToolsForUser(admin, user.id)
@@ -166,110 +152,63 @@ Active drafts:
 ${context.docSummary || '(none)'}`
 
   const history = await listMatterAssistantHistory(admin, matterId, user.id)
-  const messages: Anthropic.MessageParam[] = [
+  const messages = [
     ...history.map(turn => ({ role: turn.role, content: turn.content })),
-    { role: 'user', content: message },
+    { role: 'user' as const, content: message },
   ]
 
-  const client = new Anthropic({ apiKey: resolved.key })
+  const run = async (hooks?: {
+    onDelta?: (text: string) => void
+    onTool?: (event: { phase: 'start' | 'result'; name: string; connector?: string; ok?: boolean }) => void
+  }) => {
+    const result = await runLlmChat(llm, {
+      system,
+      messages,
+      maxTokens: 2048,
+      tools: mcpTools,
+      maxToolRounds: MAX_TOOL_ROUNDS,
+      executeTool: async (name, input) => {
+        const executed = await executeMcpToolCall(mcpRegistry, name, input)
+        if (executed.ok) return { ok: true as const, text: executed.text }
+        return { ok: false as const, error: executed.error }
+      },
+      hooks: {
+        onDelta: hooks?.onDelta,
+        onTool: event => {
+          if (event.phase === 'start') hooks?.onTool?.({ phase: 'start', name: event.name })
+          if (event.phase === 'result') {
+            const entry = mcpRegistry.find(r => r.llmName === event.name)
+            hooks?.onTool?.({
+              phase: 'result',
+              name: event.name,
+              connector: entry?.connectorName,
+              ok: event.ok,
+            })
+          }
+        },
+      },
+    })
 
-  const run = async (
-    hooks?: {
-      onDelta?: (text: string) => void
-      onTool?: (event: { phase: 'start' | 'result'; name: string; connector?: string; ok?: boolean }) => void
-    },
-  ) => {
-    const toolsUsed: Array<{ connector: string; tool: string; ok: boolean }> = []
-    let replyText = ''
-    let workingMessages = [...messages]
-
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const stream = client.messages.stream({
-        model,
-        max_tokens: 2048,
-        system,
-        messages: workingMessages,
-        ...(mcpTools.length > 0 ? { tools: mcpTools } : {}),
-      })
-
-      for await (const event of stream) {
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta' &&
-          event.delta.text
-        ) {
-          replyText += event.delta.text
-          hooks?.onDelta?.(event.delta.text)
-        }
+    const toolsUsed = result.toolsUsed.map(t => {
+      const entry = mcpRegistry.find(r => r.llmName === t.tool)
+      return {
+        connector: entry?.connectorName ?? 'unknown',
+        tool: entry?.mcpToolName ?? t.tool,
+        ok: t.ok,
       }
+    })
 
-      const final = await stream.finalMessage()
-      const toolUses = final.content.filter(
-        (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
-      )
-
-      if (final.stop_reason !== 'tool_use' || toolUses.length === 0) {
-        const textFromBlocks = final.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-          .map(b => b.text)
-          .join('\n')
-        if (textFromBlocks && !replyText) replyText = textFromBlocks
-        return { reply: replyText || textFromBlocks, toolsUsed }
-      }
-
-      workingMessages.push({ role: 'assistant', content: final.content })
-
-      const toolResults: Anthropic.ToolResultBlockParam[] = []
-      for (const toolUse of toolUses) {
-        const input =
-          typeof toolUse.input === 'object' && toolUse.input && !Array.isArray(toolUse.input)
-            ? (toolUse.input as Record<string, unknown>)
-            : {}
-
-        hooks?.onTool?.({ phase: 'start', name: toolUse.name })
-        const executed = await executeMcpToolCall(mcpRegistry, toolUse.name, input)
-        hooks?.onTool?.({
-          phase: 'result',
-          name: toolUse.name,
-          connector: executed.ok ? executed.connectorName : undefined,
-          ok: executed.ok,
-        })
-        toolsUsed.push({
-          connector: executed.ok ? executed.connectorName : 'unknown',
-          tool: executed.ok ? executed.mcpToolName : toolUse.name,
-          ok: executed.ok,
-        })
-
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: executed.ok
-            ? executed.text.slice(0, 12_000)
-            : `Error: ${executed.error}`,
-          is_error: !executed.ok,
-        })
-      }
-
-      workingMessages.push({ role: 'user', content: toolResults })
-      replyText = ''
-    }
-
-    return { reply: replyText || 'Tool loop limit reached.', toolsUsed }
+    return { reply: result.reply, toolsUsed, model: result.model, keySource: result.keySource, provider: result.provider }
   }
 
   if (!useStream) {
     try {
-      const { reply, toolsUsed } = await run()
+      const { reply, toolsUsed, model, keySource, provider } = await run()
       await appendMatterAssistantTurns(admin, matterId, user.id, [
         { role: 'user', content: message },
         { role: 'assistant', content: reply },
       ])
-      return Response.json({
-        reply,
-        model,
-        keySource: resolved.source,
-        toolsUsed,
-      })
+      return Response.json({ reply, model, provider, keySource, toolsUsed })
     } catch (e) {
       console.error('[matter-assistant]', e)
       return Response.json(
@@ -283,7 +222,7 @@ ${context.docSummary || '(none)'}`
   const readable = new ReadableStream({
     async start(controller) {
       try {
-        const { reply, toolsUsed } = await run({
+        const { reply, toolsUsed, model, keySource, provider } = await run({
           onDelta: text => {
             controller.enqueue(encoder.encode(sseLine('delta', { text })))
           },
@@ -302,7 +241,8 @@ ${context.docSummary || '(none)'}`
             sseLine('done', {
               reply,
               model,
-              keySource: resolved.source,
+              provider,
+              keySource,
               toolsUsed,
             }),
           ),

@@ -19,8 +19,9 @@ function errorStatus(message: string): number {
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const { err } = await requireAdmin(req)
+  const { err, userId } = await requireAdmin(req)
   if (err) return err
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: matterId } = await params
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (textError) return NextResponse.json({ error: textError }, { status: 400 })
 
   try {
-    const result = await parseDesignSheetImportText({ matterId, text: trimmed })
+    const result = await parseDesignSheetImportText({ matterId, text: trimmed, userId })
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
     console.error('design-sheet import-docx error:', error)

@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import mammoth from 'mammoth'
 import { requireAdmin } from '@/lib/apiAuth'
 import { loadR2Bytes } from '@/lib/documentApiHelpers'
+import { completeLlmText, resolveLlmConfig } from '@/lib/llm'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { resolveApiKey } from '@/lib/userApiKeys'
-import {
-  DEFAULT_ANTHROPIC_MODEL,
-  parseUserPreferences,
-  resolveAnthropicModel,
-} from '@/lib/userPreferences'
 
 /**
  * GET /api/admin/matters/[id]/tabular-reviews/[reviewId]
@@ -82,13 +76,11 @@ export async function POST(
     return NextResponse.json({ error: 'No documents in this review' }, { status: 400 })
   }
 
-  const resolved = await resolveApiKey(admin, user.id, 'anthropic')
-  if (!resolved.key) {
-    return NextResponse.json({ error: 'No Anthropic API key configured' }, { status: 501 })
+  const llmResolved = await resolveLlmConfig(admin, user.id)
+  if (!llmResolved.ok) {
+    return NextResponse.json({ error: llmResolved.error }, { status: 501 })
   }
-  const { data: profile } = await admin.from('users').select('preferences').eq('id', user.id).maybeSingle()
-  const model = resolveAnthropicModel(parseUserPreferences(profile?.preferences)) || DEFAULT_ANTHROPIC_MODEL
-  const client = new Anthropic({ apiKey: resolved.key })
+  const llm = llmResolved.config
 
   const { data: docs } = await admin
     .from('matter_documents')
@@ -133,13 +125,7 @@ export async function POST(
       .join('\n')
 
     try {
-      const response = await client.messages.create({
-        model,
-        max_tokens: 3000,
-        messages: [
-          {
-            role: 'user',
-            content: `You are reviewing an estate planning document for consistency.
+      const prompt = `You are reviewing an estate planning document for consistency.
 
 Document: ${doc.name}
 ---
@@ -150,14 +136,13 @@ Answer EACH column. Return ONLY a JSON array:
 [{"index":0,"content":"...","citations":[{"quote":"..."}]}]
 
 Columns:
-${columnBlock}`,
-          },
-        ],
+${columnBlock}`
+
+      const response = await completeLlmText(llm, {
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 3000,
       })
-      const raw = response.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('\n')
+      const raw = response.text
       const match = raw.match(/\[[\s\S]*\]/)
       const answers = match ? (JSON.parse(match[0]) as Array<{ index: number; content: string; citations?: unknown }>) : []
 
