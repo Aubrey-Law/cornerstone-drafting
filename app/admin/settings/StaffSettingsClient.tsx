@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Trash2 } from 'lucide-react'
+import { Loader2, Trash2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
@@ -45,6 +45,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
     serverUrl: '',
     authSecret: '',
   })
+  const [testingConnectorId, setTestingConnectorId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -166,7 +167,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       if (!res.ok) throw new Error(body.error ?? 'Create failed')
       setConnectors(prev => [...prev, body.connector])
       setNewConnector({ name: '', serverUrl: '', authSecret: '' })
-      toast.success('Connector saved (runtime wiring phased)')
+      toast.success('Connector saved')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not add connector')
     } finally {
@@ -185,6 +186,35 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       return
     }
     setConnectors(prev => prev.filter(c => c.id !== id))
+  }
+
+  const testConnector = async (id: string) => {
+    if (!token || testingConnectorId) return
+    setTestingConnectorId(id)
+    try {
+      const res = await fetch(`/api/admin/me/connectors/${id}/test`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Test failed')
+      if (body.ok) {
+        const toolList = Array.isArray(body.tools) && body.tools.length > 0
+          ? body.tools.slice(0, 8).join(', ')
+          : 'no tools listed'
+        toast.success(
+          body.serverName
+            ? `Connected to ${body.serverName} · tools: ${toolList}`
+            : `Connected · tools: ${toolList}`,
+        )
+      } else {
+        toast.error(body.error ?? 'Connection failed')
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Connection test failed')
+    } finally {
+      setTestingConnectorId(null)
+    }
   }
 
   const selectedModel = prefs.models?.anthropicModel || DEFAULT_ANTHROPIC_MODEL
@@ -307,8 +337,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       {tab === 'connectors' && (
         <section className="space-y-4 rounded-lg border border-border p-4">
           <p className="text-xs text-muted-foreground">
-            Store MCP server URLs and bearer tokens for future assistant tools. OAuth token exchange
-            and live tool invocation are phased; schema + secure CRUD ship now.
+            Store MCP server URLs and bearer tokens. Use <strong>Test</strong> to verify initialize +
+            tools/list. Enabled connectors expose tools to the drafting assistant automatically.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             <div>
@@ -355,14 +385,30 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
                       {c.hasAuthConfig ? ' · auth stored' : ''}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
-                    onClick={() => void removeConnector(c.id)}
-                  >
-                    Delete
-                  </Button>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 text-xs"
+                      disabled={testingConnectorId === c.id}
+                      onClick={() => void testConnector(c.id)}
+                    >
+                      {testingConnectorId === c.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Zap className="h-3.5 w-3.5" />
+                      )}
+                      Test
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => void removeConnector(c.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </li>
               ))
             )}

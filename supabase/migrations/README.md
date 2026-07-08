@@ -10,6 +10,7 @@ This app ships a **minimal Supabase schema** for estate-planning document drafti
 | `20260705000003_user_preferences.sql` | `users.preferences` jsonb for per-staff UI settings |
 | `20260708000000_document_versions_edits_tabular.sql` | `document_versions`, `document_edits`, tabular review tables, audit action extensions |
 | `20260708000001_user_api_keys_mcp_connectors.sql` | Staff BYOK API keys + MCP connector storage (service-role only) |
+| `20260708120000_matter_assistant_messages.sql` | Persisted matter-scoped drafting assistant chat history |
 
 The full CRM portal history (167 files) lives in [`../migrations_archive/portal/`](../migrations_archive/portal/README.md).
 
@@ -32,11 +33,12 @@ To apply new incremental migrations (e.g. versions + settings):
 2. Run each file in order (safe to re-run — uses `IF NOT EXISTS`):
    - `20260708000000_document_versions_edits_tabular.sql`
    - `20260708000001_user_api_keys_mcp_connectors.sql`
+   - `20260708120000_matter_assistant_messages.sql`
 3. Optionally record them in the migration history table:
 
 ```sql
 INSERT INTO supabase_migrations.schema_migrations (version)
-VALUES ('20260708000000'), ('20260708000001')
+VALUES ('20260708000000'), ('20260708000001'), ('20260708120000')
 ON CONFLICT DO NOTHING;
 ```
 

@@ -36,6 +36,7 @@ export function DocxViewerPanel({
   const token = useAccessToken()
   const hostRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
+  const [docReady, setDocReady] = useState(false)
   const [edits, setEdits] = useState<PendingEdit[]>([])
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [instruction, setInstruction] = useState('')
@@ -44,6 +45,7 @@ export function DocxViewerPanel({
   const loadDocx = useCallback(async () => {
     if (!token || !hostRef.current) return
     setLoading(true)
+    setDocReady(false)
     try {
       const res = await fetch(`/api/documents/${documentId}/docx`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -73,16 +75,19 @@ export function DocxViewerPanel({
         })
       }
 
-      if (quote) {
-        const el = highlightDocxQuote(hostRef.current, quote)
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
+      setDocReady(true)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not render document')
     } finally {
       setLoading(false)
     }
-  }, [token, documentId, quote])
+  }, [token, documentId])
+
+  useEffect(() => {
+    if (!hostRef.current || !docReady || !quote?.trim()) return
+    const el = highlightDocxQuote(hostRef.current, quote)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [quote, docReady])
 
   const loadEdits = useCallback(async () => {
     if (!token) return

@@ -79,19 +79,37 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [uploadingPdf, setUploadingPdf] = useState(false)
   const [convertingId, setConvertingId] = useState<string | null>(null)
-  const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string } | null>(null)
+  const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string; quote?: string | null } | null>(null)
   const [assistantOpen, setAssistantOpen] = useState(true)
+  const [scrollToViewer, setScrollToViewer] = useState(false)
+  const viewerSectionRef = useRef<HTMLDivElement>(null)
   const pdfUploadRef = useRef<HTMLInputElement>(null)
 
-  const openInApp = (doc: { id: string; name: string }) => {
-    const alreadyOpen = viewerDoc?.id === doc.id
+  const openInApp = (doc: { id: string; name: string }, quote?: string | null) => {
+    const alreadyOpen = viewerDoc?.id === doc.id && !quote
     if (alreadyOpen) {
       setViewerDoc(null)
       return
     }
-    setViewerDoc(doc)
+    setViewerDoc({ id: doc.id, name: doc.name, quote: quote ?? null })
     setAssistantOpen(true)
   }
+
+  const openCitationInViewer = (payload: { documentId: string; documentName: string; quote: string }) => {
+    setViewerDoc({
+      id: payload.documentId,
+      name: payload.documentName,
+      quote: payload.quote,
+    })
+    setAssistantOpen(true)
+    setScrollToViewer(true)
+  }
+
+  useEffect(() => {
+    if (!scrollToViewer || !viewerDoc) return
+    viewerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setScrollToViewer(false)
+  }, [scrollToViewer, viewerDoc])
 
   // Optimistic review-state overrides keyed by document id (ISO string when
   // reviewed, null when cleared) so the checkbox + gate update before refresh.
@@ -445,10 +463,13 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
 
       {/* In-app document review — viewer + assistant side-by-side below drafts list */}
       {viewerDoc ? (
-        <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <section ref={viewerSectionRef} className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
             <p className="text-xs text-muted-foreground">
               Reviewing <span className="font-medium text-foreground">{viewerDoc.name}</span>
+              {viewerDoc.quote ? (
+                <span className="text-muted-foreground"> · citation highlight active</span>
+              ) : null}
             </p>
             <Button
               type="button"
@@ -472,6 +493,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               <DocxViewerPanel
                 documentId={viewerDoc.id}
                 documentName={viewerDoc.name}
+                quote={viewerDoc.quote}
                 onClose={() => setViewerDoc(null)}
                 onMutated={() => router.refresh()}
               />
@@ -492,6 +514,8 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
       <TabularReviewSection
         matterId={matterId}
         documentIds={recentDrafts.map(d => d.id)}
+        documents={recentDrafts.map(d => ({ id: d.id, name: d.name }))}
+        onOpenCitation={openCitationInViewer}
       />
 
       <PromoteDocumentDialog
