@@ -2,7 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { maskSecretHint, sealSecret, openSecret, isSecretBoxConfigured } from '@/lib/secretBox'
 import { lettersOnly, splitQuoteSegments } from '@/lib/highlightDocxQuote'
 import { columnsFromPreset, defaultEstateColumns } from '@/lib/estateTabularPresets'
-import { parseUserPreferences, resolveAnthropicModel, DEFAULT_ANTHROPIC_MODEL } from '@/lib/userPreferences'
+import {
+  parseUserPreferences,
+  resolveActiveLlmPreference,
+  resolveAnthropicModel,
+  resolveGeminiModel,
+  resolveLlmProvider,
+  resolveModelForProvider,
+  resolveOpenAiModel,
+  DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_LLM_PROVIDER,
+  DEFAULT_OPENAI_MODEL,
+} from '@/lib/userPreferences'
 import { normalizeApiKeyProvider } from '@/lib/userApiKeys'
 
 describe('secretBox', () => {
@@ -45,6 +57,32 @@ describe('user preferences models', () => {
     expect(resolveAnthropicModel(prefs)).toBe('claude-opus-4-5')
     expect(resolveAnthropicModel({})).toBe(DEFAULT_ANTHROPIC_MODEL)
     expect(DEFAULT_ANTHROPIC_MODEL).toBe('claude-sonnet-4-6')
+  })
+
+  it('parses multi-provider model preferences', () => {
+    const prefs = parseUserPreferences({
+      models: {
+        defaultProvider: 'openai',
+        anthropicModel: 'claude-haiku-4-5',
+        openaiModel: 'gpt-4o',
+        geminiModel: 'gemini-2.5-pro',
+      },
+    })
+    expect(resolveLlmProvider(prefs)).toBe('openai')
+    expect(resolveOpenAiModel(prefs)).toBe('gpt-4o')
+    expect(resolveGeminiModel(prefs)).toBe('gemini-2.5-pro')
+    expect(resolveActiveLlmPreference(prefs)).toEqual({ provider: 'openai', model: 'gpt-4o' })
+    expect(resolveModelForProvider('anthropic', prefs)).toBe('claude-haiku-4-5')
+  })
+
+  it('defaults provider and models when unset', () => {
+    expect(resolveLlmProvider({})).toBe(DEFAULT_LLM_PROVIDER)
+    expect(resolveOpenAiModel({})).toBe(DEFAULT_OPENAI_MODEL)
+    expect(resolveGeminiModel({})).toBe(DEFAULT_GEMINI_MODEL)
+    expect(resolveActiveLlmPreference({})).toEqual({
+      provider: 'anthropic',
+      model: DEFAULT_ANTHROPIC_MODEL,
+    })
   })
 })
 
