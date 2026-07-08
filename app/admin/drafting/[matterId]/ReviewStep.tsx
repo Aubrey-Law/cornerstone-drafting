@@ -223,12 +223,11 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   }
 
   return (
-    <div className={viewerDoc ? 'guided-interview grid gap-4 lg:grid-cols-[1fr_minmax(360px,46%)]' : 'guided-interview space-y-4'}>
-      <div className="space-y-4">
+    <div className="guided-interview space-y-4">
       <GuidedIntroCard
         pct={sharedDrafts.length > 0 && recentDrafts.every(d => effectiveReviewedAt(d)) ? 100 : recentDrafts.length > 0 ? 50 : 0}
         title="Review and share drafts"
-        subtitle="Mark Word drafts reviewed, convert or upload PDFs, run AI redline in-app, then share PDFs with the client."
+        subtitle="Mark Word drafts reviewed, convert or upload PDFs, open a draft in-app to redline, then share PDFs with the client."
       />
 
       <section style={{ ...guidedCardStyle, padding: 0, overflow: 'hidden' }}>
@@ -283,6 +282,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               const reviewedAt = effectiveReviewedAt(doc)
               const isWord = isWordDocument(doc.name)
               const isPdf = isPdfDocument(doc.name)
+              const isOpen = viewerDoc?.id === doc.id
               const gate = isPdf
                 ? canPromoteDraft({ markerCount: doc.markerCount, reviewedAt })
                 : { ok: typeof doc.markerCount !== 'number' || doc.markerCount === 0, reason: doc.markerCount && doc.markerCount > 0 ? 'markers' as const : undefined }
@@ -294,7 +294,10 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                     ? 'Export a PDF from Word and use Upload PDF to share'
                     : undefined
               return (
-                <div key={doc.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div
+                  key={doc.id}
+                  className={`flex flex-wrap items-center gap-3 px-4 py-3 ${isOpen ? 'bg-accent/5' : ''}`}
+                >
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{doc.name}</p>
@@ -326,11 +329,11 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                   {isWord ? (
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant={isOpen ? 'secondary' : 'outline'}
                       className="h-8 gap-1.5 text-xs"
-                      onClick={() => setViewerDoc({ id: doc.id, name: doc.name })}
+                      onClick={() => setViewerDoc(isOpen ? null : { id: doc.id, name: doc.name })}
                     >
-                      <Sparkles className="h-3.5 w-3.5" /> Open in app
+                      <Sparkles className="h-3.5 w-3.5" /> {isOpen ? 'Hide viewer' : 'Open in app'}
                     </Button>
                   ) : (
                     <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'view', doc.name)}>
@@ -428,6 +431,20 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         )}
       </section>
 
+      {/* In-app document review — below drafts list, full width for readability */}
+      {viewerDoc ? (
+        <section className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="h-[min(78vh,920px)] min-h-[520px]">
+            <DocxViewerPanel
+              documentId={viewerDoc.id}
+              documentName={viewerDoc.name}
+              onClose={() => setViewerDoc(null)}
+              onMutated={() => router.refresh()}
+            />
+          </div>
+        </section>
+      ) : null}
+
       <TabularReviewSection
         matterId={matterId}
         documentIds={recentDrafts.map(d => d.id)}
@@ -438,18 +455,6 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         onCancel={() => setPendingPromotion(null)}
         onConfirm={confirmPromotion}
       />
-      </div>
-
-      {viewerDoc ? (
-        <div className="min-h-[560px] overflow-hidden rounded-lg border border-border lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)]">
-          <DocxViewerPanel
-            documentId={viewerDoc.id}
-            documentName={viewerDoc.name}
-            onClose={() => setViewerDoc(null)}
-            onMutated={() => router.refresh()}
-          />
-        </div>
-      ) : null}
     </div>
   )
 }
