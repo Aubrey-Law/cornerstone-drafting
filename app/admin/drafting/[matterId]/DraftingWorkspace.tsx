@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, HelpCircle, ListChecks, X } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, HelpCircle, ListChecks, PanelRightClose, Sparkles, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -122,6 +122,7 @@ export default function DraftingWorkspace({
   })
   const [showDesignViewHint, setShowDesignViewHint] = useState(false)
   const [userDesignView, setUserDesignView] = useState<DraftingDesignView | undefined>(undefined)
+  const [assistantOpen, setAssistantOpen] = useState(false)
 
   useEffect(() => {
     void loadPreferences().then(prefs => {
@@ -327,18 +328,32 @@ export default function DraftingWorkspace({
           </div>
         )}
         {step === 'review' && (
-          <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 md:flex-row md:p-6">
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-[1180px]">
-                <ReviewStep matterId={matterId} hubMatter={hubMatter} sharedDrafts={sharedDrafts} />
-              </div>
+          <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 p-4 md:p-6">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={assistantOpen ? 'secondary' : 'outline'}
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => setAssistantOpen(open => !open)}
+              >
+                {assistantOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {assistantOpen ? 'Hide assistant' : 'Draft assistant'}
+              </Button>
             </div>
-            <aside className="h-[320px] w-full shrink-0 md:h-auto md:w-[340px]">
-              <MatterAssistantPanel
-                matterId={matterId}
-                documentIds={(hubMatter?.recentDrafts ?? []).map(d => d.id)}
-              />
-            </aside>
+
+            {/* Drafts / share first — full width above viewer & assistant */}
+            <ReviewStep matterId={matterId} hubMatter={hubMatter} sharedDrafts={sharedDrafts} />
+
+            {assistantOpen ? (
+              <aside className="h-[min(420px,50vh)] w-full overflow-hidden rounded-lg border border-border">
+                <MatterAssistantPanel
+                  matterId={matterId}
+                  documentIds={(hubMatter?.recentDrafts ?? []).map(d => d.id)}
+                  onClose={() => setAssistantOpen(false)}
+                />
+              </aside>
+            ) : null}
           </div>
         )}
       </div>

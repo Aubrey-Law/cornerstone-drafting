@@ -3,14 +3,16 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { FilePenLine, LogOut, Menu, Settings } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { FilePenLine, LogOut, Menu, PanelLeftClose, PanelLeft, Settings } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
+
+const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 
 const navItems = [
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
@@ -31,6 +33,24 @@ export default function AdminLayoutClient({
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const setSidebarCollapsed = (next: boolean) => {
+    setCollapsed(next)
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -38,8 +58,8 @@ export default function AdminLayoutClient({
     router.refresh()
   }
 
-  const nav = (
-    <nav className="flex flex-col gap-1 p-3">
+  const nav = (compact: boolean) => (
+    <nav className="flex flex-col gap-1 p-2">
       {navItems.map(item => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
         const Icon = item.icon
@@ -48,15 +68,17 @@ export default function AdminLayoutClient({
             key={item.href}
             href={item.href}
             onClick={() => setMobileOpen(false)}
+            title={compact ? item.label : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              'flex items-center rounded-md text-sm font-medium transition-colors',
+              compact ? 'justify-center px-2 py-2.5' : 'gap-2 px-3 py-2',
               active
                 ? 'bg-accent text-accent-foreground'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
-            <Icon className="h-4 w-4" />
-            {item.label}
+            <Icon className="h-4 w-4 shrink-0" />
+            {!compact ? item.label : <span className="sr-only">{item.label}</span>}
           </Link>
         )
       })}
@@ -65,14 +87,41 @@ export default function AdminLayoutClient({
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-56 shrink-0 border-r border-border bg-card md:flex md:flex-col">
-        <div className="flex h-14 items-center border-b border-border px-4">
-          <Link href="/admin/drafting" className="flex items-center gap-2">
-            <Image src="/favicon.svg" alt="" width={28} height={28} />
-            <span className="text-sm font-semibold">Drafting</span>
-          </Link>
+      <aside
+        className={cn(
+          'hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 md:flex md:flex-col',
+          collapsed ? 'w-14' : 'w-56',
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-14 items-center border-b border-border',
+            collapsed ? 'justify-center px-1' : 'justify-between gap-1 px-3',
+          )}
+        >
+          {!collapsed ? (
+            <Link href="/admin/drafting" className="flex min-w-0 items-center gap-2">
+              <Image src="/favicon.svg" alt="" width={28} height={28} />
+              <span className="truncate text-sm font-semibold">Drafting</span>
+            </Link>
+          ) : (
+            <Link href="/admin/drafting" className="flex items-center justify-center" title="Drafting">
+              <Image src="/favicon.svg" alt="" width={24} height={24} />
+            </Link>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => setSidebarCollapsed(!collapsed)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </Button>
         </div>
-        {nav}
+        {nav(collapsed)}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -105,7 +154,7 @@ export default function AdminLayoutClient({
           <div className="flex h-14 items-center border-b border-border px-4">
             <span className="text-sm font-semibold">Drafting</span>
           </div>
-          {nav}
+          {nav(false)}
         </SheetContent>
       </Sheet>
     </div>

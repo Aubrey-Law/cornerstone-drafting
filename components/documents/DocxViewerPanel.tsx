@@ -148,7 +148,7 @@ export function DocxViewerPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-card">
+    <div className="flex h-full min-h-0 flex-col bg-card">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{documentName}</p>
@@ -159,21 +159,21 @@ export function DocxViewerPanel({
         </Button>
       </div>
 
-      <div className="border-b border-border p-3 space-y-2">
+      <div className="grid gap-3 border-b border-border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
         <textarea
           className="min-h-[64px] w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
           placeholder="AI redline instruction (e.g. rename successor trustee Jane Doe to John Smith)"
           value={instruction}
           onChange={e => setInstruction(e.target.value)}
         />
-        <Button size="sm" className="h-7 text-xs" disabled={redlining || !instruction.trim()} onClick={() => void runRedline()}>
+        <Button size="sm" className="h-8 self-start text-xs md:mt-0.5" disabled={redlining || !instruction.trim()} onClick={() => void runRedline()}>
           {redlining ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
           AI redline
         </Button>
       </div>
 
       {edits.length > 0 && (
-        <div className="max-h-40 space-y-2 overflow-y-auto border-b border-border p-3">
+        <div className="max-h-36 space-y-2 overflow-y-auto border-b border-border p-3">
           {edits.map(edit => (
             <div key={edit.id} className="rounded border border-border bg-muted/40 p-2 text-xs">
               {edit.reason ? <p className="mb-1 text-muted-foreground">{edit.reason}</p> : null}
@@ -212,13 +212,13 @@ export function DocxViewerPanel({
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1 overflow-auto bg-background p-3">
+      <div className="relative min-h-0 flex-1 overflow-auto bg-muted/20 p-4 md:p-6">
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         )}
-        <div ref={hostRef} className="docx-host text-sm" />
+        <div ref={hostRef} className="docx-host mx-auto max-w-[820px] rounded-md bg-background p-4 text-sm shadow-sm md:p-8" />
       </div>
     </div>
   )
