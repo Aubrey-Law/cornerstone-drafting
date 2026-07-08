@@ -7,7 +7,8 @@ import {
   type TrustDetailsProvisions,
   type TrustNameFormat,
 } from '@/lib/designSheetTrustDetails'
-import type { DesignSheet, StaggeredTier } from '@/types/database'
+import type { StaggeredTier } from '@/types/database'
+import type { DesignSheetRow } from '@/lib/draftPayload/types'
 
 export type DraftPayloadTrustNameFormat = TrustNameFormat
 
@@ -28,7 +29,7 @@ export interface DraftPayloadTrustProvisions extends TrustDetailsProvisions {
 }
 
 type TrustProvisionsInput = Pick<
-  DesignSheet,
+  DesignSheetRow,
   | 'decisions'
   | 'restatement'
   | 'trust_protector'
@@ -99,7 +100,7 @@ export function descendantsDistributionMethod(
   const method = residualMethod ?? (distributionMethod as ResidualBeneficiaryMethod | null)
   if (method === 'outright') return 'outright'
   if (method === 'staggered') return 'staged'
-  if (method === 'trust-for-life' || method === 'trust_for_life') return 'trust_for_life'
+  if (method === 'trust_for_life' || distributionMethod === 'trust-for-life') return 'trust_for_life'
   if (method === 'custom') return 'custom'
   return 'staged'
 }

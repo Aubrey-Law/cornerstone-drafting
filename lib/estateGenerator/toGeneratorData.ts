@@ -1,3 +1,4 @@
+import type { DesignSheetChild } from '@/types/database'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
