@@ -1,5 +1,6 @@
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { formatPhoneDisplay } from '@/lib/phone'
+import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
 import { isYoungAdultEstatePlanAge } from '@/lib/youngAdultEstatePlan'
 
 export type EstateGeneratorPackage =
@@ -383,7 +384,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         aka: payload.client.aka,
         street_address: payload.client.address,
         city: payload.client.city,
-        state: payload.client.state ?? 'MA',
+        state: normalizeJurisdictionStateCode(payload.client.state),
         county: payload.client.county ?? payload.execution.signing_county,
         signing_county: payload.execution.signing_county,
         email: payload.client.email,

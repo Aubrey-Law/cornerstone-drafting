@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
+import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
 import {
   formatEstateGeneratorExecError,
   resolveEstateGeneratorPythonCommand,
@@ -109,7 +110,7 @@ export async function generateEstatePlanDocuments(payload: DraftPayload): Promis
           '--package',
           currentPackage,
           '--state',
-          payload.client.state ?? 'MA',
+          normalizeJurisdictionStateCode(payload.client.state),
           '--out',
           outDir,
           '--allow-draft',

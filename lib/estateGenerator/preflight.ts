@@ -11,6 +11,7 @@ import {
 } from '@/lib/estateGenerator/toGeneratorData'
 import { loadNodeEstatePackage, resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
 import { buildNodeEstateContext } from '@/lib/estateGenerator/node/context'
+import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
 import { dataForNodeEstatePackage, youngAdultEstatePlanData } from '@/lib/estateGenerator/node/packageData'
 import { conditionalMissingFieldsForPackage } from '@/lib/estateGenerator/node/packageValidation'
 import { isNodeEstatePackageSupported } from '@/lib/estateGenerator/node/support'
@@ -64,7 +65,7 @@ export function buildEstateDraftPreflight(
 ): EstateDraftPreflight {
   const packageNames = deriveEstateGeneratorPackages(payload)
   const data = toEstateGeneratorData(payload) as unknown as NodeEstateData
-  const state = payload.client.state ?? 'MA'
+  const state = normalizeJurisdictionStateCode(payload.client.state)
   const unsupportedDocumentLabels = unsupportedEstateGeneratorDocumentLabels(payload)
   const nodePackageNames = packageNames.filter(isNodeEstatePackageSupported)
   const fallbackPackageNames = packageNames.filter(packageName => !isNodeEstatePackageSupported(packageName))

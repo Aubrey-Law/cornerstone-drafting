@@ -220,6 +220,17 @@ describe('estate draft preflight', () => {
     )
   })
 
+  it('accepts Massachusetts as the client state when preflighting', () => {
+    const base = payload()
+    const preflight = buildEstateDraftPreflight({
+      ...base,
+      client: { ...base.client, state: 'Massachusetts' },
+    })
+
+    expect(preflight.canGenerate).toBe(true)
+    expect(preflight.error).toBeUndefined()
+  })
+
   it('flags missing required generator fields but still allows generation (rendered as markers)', () => {
     const preflight = buildEstateDraftPreflight(payload({ trust: null }))
 

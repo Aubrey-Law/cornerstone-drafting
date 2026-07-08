@@ -1,5 +1,6 @@
 import path from 'node:path'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
+import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
 import {
   clientSlugFromPayload,
   deriveEstateGeneratorPackages,
@@ -193,7 +194,7 @@ export async function generateEstatePlanDocumentsNode(payload: DraftPayload): Pr
   }
 
   const data = toEstateGeneratorData(payload) as unknown as NodeEstateData
-  const state = payload.client.state ?? 'MA'
+  const state = normalizeJurisdictionStateCode(payload.client.state)
   const files: NodeEstateGeneratedFile[] = []
   const missing: string[] = []
   const warnings: string[] = [...coverageWarnings]

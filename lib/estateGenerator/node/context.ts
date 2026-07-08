@@ -1,5 +1,6 @@
 import { loadNodeEstateStateRules } from '@/lib/estateGenerator/node/config'
 import type { NodeEstateContext, NodeEstateData } from '@/lib/estateGenerator/node/types'
+import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
 import { getPath, isPresent } from '@/lib/estateGenerator/node/validation'
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -28,9 +29,10 @@ export interface BuildNodeEstateContextArgs {
 }
 
 export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateContextArgs): NodeEstateContext {
-  const stateRules = loadNodeEstateStateRules(state, root)
+  const stateCode = normalizeJurisdictionStateCode(state)
+  const stateRules = loadNodeEstateStateRules(stateCode, root)
   const client = { ...recordValue(data.client) }
-  client.state ??= state
+  client.state ??= stateCode
 
   const spouse = recordValue(data.spouse)
   const hasSpouse = Boolean(spouse.exists) || isPresent(spouse.full_name)
@@ -128,7 +130,7 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     healthcare,
     hipaa,
     execution,
-    state: { code: state, ...stateRules },
+    state: { code: stateCode, ...stateRules },
     has_spouse: hasSpouse,
     has_children: children.length > 0,
     has_minor_children: hasMinorChildren,

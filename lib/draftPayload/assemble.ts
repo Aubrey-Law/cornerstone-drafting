@@ -7,6 +7,7 @@ import {
 import { computeDesignSheetDefaults } from '@/lib/designSheetDefaults'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
+import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
 import type { DesignSheet } from '@/types/database'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import type { ContactRow, DesignSheetRow, MatterDetailsRow, MatterRow } from '@/lib/draftPayload/types'
@@ -160,7 +161,7 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     designSheetString(designSheet, 'county'),
     designSheetString(designSheet, 'signing_county'),
   )
-  const clientState = designSheetString(designSheet, 'state')
+  const clientState = normalizeJurisdictionStateCode(designSheetString(designSheet, 'state'))
   const clientZip = designSheetString(designSheet, 'zip')
 
   // ── Spouse (design sheet is source of truth) ───────────────────────────────
