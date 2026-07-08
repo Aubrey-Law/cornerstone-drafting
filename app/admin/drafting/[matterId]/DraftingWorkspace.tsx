@@ -16,6 +16,7 @@ import type { IntakeSnapshot } from '@/lib/queries'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
 import GenerateStep from './GenerateStep'
 import ReviewStep from './ReviewStep'
+import { MatterAssistantPanel } from '@/components/drafting/MatterAssistantPanel'
 import {
   DESIGN_VIEW_STORAGE_KEY,
   resolveDesignView,
@@ -326,10 +327,18 @@ export default function DraftingWorkspace({
           </div>
         )}
         {step === 'review' && (
-          <div className="h-full overflow-y-auto p-4 md:p-6">
-            <div className="mx-auto max-w-[1180px]">
-              <ReviewStep matterId={matterId} hubMatter={hubMatter} sharedDrafts={sharedDrafts} />
+          <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 md:flex-row md:p-6">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-[1180px]">
+                <ReviewStep matterId={matterId} hubMatter={hubMatter} sharedDrafts={sharedDrafts} />
+              </div>
             </div>
+            <aside className="h-[320px] w-full shrink-0 md:h-auto md:w-[340px]">
+              <MatterAssistantPanel
+                matterId={matterId}
+                documentIds={(hubMatter?.recentDrafts ?? []).map(d => d.id)}
+              />
+            </aside>
           </div>
         )}
       </div>

@@ -1,0 +1,17 @@
+# Railway / Nixpacks: install LibreOffice writer for headless DOCX → PDF
+[phases.setup]
+aptPkgs = [
+  "libreoffice-writer",
+  "libreoffice-java-common",
+  "default-jre-headless",
+  "fonts-liberation",
+  "fonts-dejavu-core",
+]
+
+[variables]
+NODE_ENV = "production"
+PORT = "8080"
+SOFFICE_BINARY_PATH = "/usr/bin/soffice"
+
+[start]
+cmd = "node server.mjs"

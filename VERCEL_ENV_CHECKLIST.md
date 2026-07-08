@@ -29,6 +29,9 @@ Python fallback uses the venv created by `npm run estate-generator:setup` during
 | Variable | Purpose |
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Design-sheet DOCX import and AI drafting fallback |
+| `USER_API_KEYS_ENCRYPTION_SECRET` | Encrypts staff BYOK API keys + MCP auth blobs at rest (required for Settings → API Keys / Connectors) |
+| `DOCX_PDF_CONVERT_URL` | Base URL of the LibreOffice convert worker (e.g. `https://cornerstone-docx-pdf.fly.dev`) |
+| `DOCX_PDF_CONVERT_SECRET` | Shared bearer secret sent to the convert worker (`CONVERT_WORKER_SECRET` on the worker) |
 | `NEXT_PUBLIC_SENTRY_DSN` | Client error reporting |
 | `SENTRY_AUTH_TOKEN` | Source map upload on production builds |
 | `ADMIN_EMAIL` | Default admin contact email in server helpers |

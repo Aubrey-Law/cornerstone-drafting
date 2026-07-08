@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { FilePenLine, LogOut, Menu } from 'lucide-react'
+import { FilePenLine, LogOut, Menu, Settings } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,10 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 
-const navItems = [{ href: '/admin/drafting', label: 'Drafting', icon: FilePenLine }]
+const navItems = [
+  { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
+  { href: '/admin/settings', label: 'Settings', icon: Settings },
+]
 
 interface AdminLayoutClientProps {
   children: React.ReactNode
