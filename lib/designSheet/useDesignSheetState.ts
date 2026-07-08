@@ -71,12 +71,39 @@ export function useDesignSheetState({
   const [lpDataState, setLpDataState] = useState(lpDataProp)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(() => sheetProp?.updated_at ?? null)
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(() => sheetProp?.updated_at ?? null)
+  const expectedUpdatedAtRef = useRef<string | null>(sheetProp?.updated_at ?? null)
+  const serverSheetStampRef = useRef<string | null>(sheetProp?.updated_at ?? null)
   const [saveRetryCount, setSaveRetryCount] = useState(0)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistInFlightRef = useRef(false)
   const [exporting, setExporting] = useState(false)
 
   const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
+  const rebuildSheetFromServer = useCallback(() => {
+    const base = formatPhoneFieldsDeep(buildInitialSheet(sheetProp))
+    if (!applyDefaults) return base
+    return { ...base, ...computeDesignSheetDefaults(base, matter) }
+  }, [applyDefaults, matter, sheetProp])
+
+  useEffect(() => {
+    expectedUpdatedAtRef.current = expectedUpdatedAt
+  }, [expectedUpdatedAt])
+
+  // Keep local concurrency token and sheet aligned when the server refreshes props.
+  useEffect(() => {
+    const stamp = sheetProp?.updated_at ?? null
+    if (!stamp || stamp === serverSheetStampRef.current) return
+    if (saveStatus === 'dirty' || saveStatus === 'saving') return
+
+    serverSheetStampRef.current = stamp
+    setSheet(rebuildSheetFromServer())
+    expectedUpdatedAtRef.current = stamp
+    setExpectedUpdatedAt(stamp)
+    setLastSavedAt(stamp)
+    setSaveStatus('saved')
+    setDirtyFields(new Set())
+  }, [rebuildSheetFromServer, saveStatus, sheetProp?.updated_at])
 
   // ── Readiness ──────────────────────────────────────────────────────────────
   const readiness = useMemo(() => computeDesignSheetReadiness({
@@ -188,14 +215,22 @@ export function useDesignSheetState({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               sheetId: persistedSheetId || null,
-              expectedUpdatedAt,
+              expectedUpdatedAt: expectedUpdatedAtRef.current,
               sheet: formatPhoneFieldsDeep(sheet),
             }),
           })
           const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse
 
           if (response.status === 409 || result.conflict) {
-            setSaveStatus('error')
+            const serverUpdatedAt = typeof result.updated_at === 'string' ? result.updated_at : null
+            if (serverUpdatedAt) {
+              expectedUpdatedAtRef.current = serverUpdatedAt
+              setExpectedUpdatedAt(serverUpdatedAt)
+              setLastSavedAt(serverUpdatedAt)
+            }
+            serverSheetStampRef.current = null
+            setSaveStatus('saved')
+            setDirtyFields(new Set())
             toast.error('This design sheet was updated elsewhere. Reloading the latest version.')
             router.refresh()
             return false
@@ -209,8 +244,10 @@ export function useDesignSheetState({
             setSheet(prev => ({ ...prev, id: result.id as string, matter_id: matterId }))
           }
           const savedAt = result.updated_at ?? new Date().toISOString()
+          expectedUpdatedAtRef.current = savedAt
           setExpectedUpdatedAt(savedAt)
           setLastSavedAt(savedAt)
+          serverSheetStampRef.current = savedAt
           setSaveStatus('saved')
           setSaveRetryCount(0)
           setDirtyFields(new Set())
@@ -228,7 +265,7 @@ export function useDesignSheetState({
     } finally {
       persistInFlightRef.current = false
     }
-  }, [expectedUpdatedAt, matterId, router, sheet, sheetProp?.id])
+  }, [matterId, router, sheet, sheetProp?.id])
 
   const handleSave = useCallback(() => {
     startTransition(async () => { await persistSheet() })

@@ -5,9 +5,13 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
 import { saveHouseholdChildren } from '@/lib/contacts/saveHouseholdChildren'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
+import { updatedAtMatches } from '@/lib/designSheet/updatedAt'
 import type { DesignSheetUpdate } from '@/types/database'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/supabase'
 
 type Params = { params: Promise<{ id: string }> }
+type AdminClient = SupabaseClient<Database>
 
 async function getMatterClientIntakeId(matterId: string) {
   const admin = getAdminClient()
@@ -20,6 +24,56 @@ async function getMatterClientIntakeId(matterId: string) {
   if (error) throw new Error(error.message)
   if (!data?.client_intake_id) throw new Error('This matter is missing a client intake record.')
   return data.client_intake_id as string
+}
+
+async function fetchDesignSheetRow(
+  admin: AdminClient,
+  matterId: string,
+  sheetId?: string | null,
+): Promise<Record<string, unknown> | null> {
+  if (sheetId) {
+    const { data, error } = await admin
+      .from('design_sheets')
+      .select('*')
+      .eq('id', sheetId)
+      .eq('matter_id', matterId)
+      .maybeSingle()
+
+    if (error) throw new Error(error.message)
+    if (data) return data as Record<string, unknown>
+  }
+
+  const { data, error } = await admin
+    .from('design_sheets')
+    .select('*')
+    .eq('matter_id', matterId)
+    .order('version', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data as Record<string, unknown> | null
+}
+
+async function readSavedUpdatedAt(admin: AdminClient, sheetId: string): Promise<string> {
+  const { data, error } = await admin
+    .from('design_sheets')
+    .select('updated_at')
+    .eq('id', sheetId)
+    .single()
+
+  if (error) throw new Error(error.message)
+  return typeof data?.updated_at === 'string' ? data.updated_at : new Date().toISOString()
+}
+
+function shouldSyncChildren(
+  childrenInput: Array<Record<string, unknown>> | null,
+  existingChildren: unknown,
+): boolean {
+  if (!childrenInput) return false
+  if (childrenInput.length > 0) return true
+  return Array.isArray(existingChildren) && existingChildren.length > 0
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -39,7 +93,6 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const admin = getAdminClient()
-    await ensureDesignSheetSeededFromIntake(matterId)
     const clientIntakeId = await getMatterClientIntakeId(matterId)
 
     const incomingSheet = (body.sheet ?? {}) as Record<string, unknown>
@@ -56,51 +109,32 @@ export async function PATCH(req: Request, { params }: Params) {
 
     const now = new Date().toISOString()
     const sheetId = body.sheetId || (body.sheet as Record<string, unknown>).id as string | undefined
-    let existingRow: Record<string, unknown> | null = null
+    let existingRow = await fetchDesignSheetRow(admin, matterId, sheetId)
 
-    if (sheetId) {
-      const { data, error } = await admin
-        .from('design_sheets')
-        .select('*')
-        .eq('id', sheetId)
-        .eq('matter_id', matterId)
-        .maybeSingle()
-
-      if (error) throw new Error(error.message)
-      existingRow = data as Record<string, unknown> | null
-    }
-
-    if (!existingRow) {
-      const { data, error } = await admin
-        .from('design_sheets')
-        .select('*')
-        .eq('matter_id', matterId)
-        .order('version', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (error) throw new Error(error.message)
-      existingRow = data as Record<string, unknown> | null
-    }
-
-    const existingSheet = inflateDesignSheetRow(existingRow)
     const existingId = typeof existingRow?.id === 'string' ? existingRow.id : null
     const expectedUpdatedAt = typeof body.expectedUpdatedAt === 'string' ? body.expectedUpdatedAt : null
     const currentUpdatedAt = typeof existingRow?.updated_at === 'string' ? existingRow.updated_at : null
-    if (existingId && expectedUpdatedAt && currentUpdatedAt && expectedUpdatedAt !== currentUpdatedAt) {
+    if (existingId && expectedUpdatedAt && currentUpdatedAt && !updatedAtMatches(expectedUpdatedAt, currentUpdatedAt)) {
       return NextResponse.json(
         { error: 'Design sheet was updated elsewhere.', conflict: true, updated_at: currentUpdatedAt },
         { status: 409 },
       )
     }
 
+    if (!existingRow) {
+      await ensureDesignSheetSeededFromIntake(matterId)
+      existingRow = await fetchDesignSheetRow(admin, matterId, sheetId)
+    }
+
+    const existingSheet = inflateDesignSheetRow(existingRow)
+    const resolvedExistingId = typeof existingRow?.id === 'string' ? existingRow.id : null
     const sheetForPersistence = existingSheet
       ? ({ ...existingSheet, ...body.sheet } as DesignSheetUpdate)
       : body.sheet
     const payload = buildDesignSheetPersistencePayload(formatPhoneFieldsDeep(sheetForPersistence))
+    const syncChildren = shouldSyncChildren(childrenInput, existingSheet?.children)
 
-    if (existingId) {
+    if (resolvedExistingId) {
       const { error } = await admin
         .from('design_sheets')
         .update({
@@ -108,14 +142,17 @@ export async function PATCH(req: Request, { params }: Params) {
           client_intake_id: clientIntakeId,
           updated_at: now,
         })
-        .eq('id', existingId)
+        .eq('id', resolvedExistingId)
         .eq('matter_id', matterId)
 
       if (error) throw new Error(error.message)
-      if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput, { updatedAt: now })
+      if (syncChildren && childrenInput) {
+        await saveHouseholdChildren(admin, clientIntakeId, childrenInput, { updatedAt: now })
+      }
+      const savedAt = await readSavedUpdatedAt(admin, resolvedExistingId)
       return NextResponse.json({
-        id: existingId,
-        updated_at: now,
+        id: resolvedExistingId,
+        updated_at: savedAt,
         version: typeof existingRow?.version === 'number' ? existingRow.version : null,
       })
     }
@@ -134,8 +171,11 @@ export async function PATCH(req: Request, { params }: Params) {
       .single()
 
     if (error) throw new Error(error.message)
-    if (childrenInput) await saveHouseholdChildren(admin, clientIntakeId, childrenInput, { updatedAt: now })
-    return NextResponse.json({ id: inserted.id, updated_at: now, version: 1 })
+    if (syncChildren && childrenInput) {
+      await saveHouseholdChildren(admin, clientIntakeId, childrenInput, { updatedAt: now })
+    }
+    const savedAt = await readSavedUpdatedAt(admin, inserted.id)
+    return NextResponse.json({ id: inserted.id, updated_at: savedAt, version: 1 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to save design sheet'
     return NextResponse.json({ error: message }, { status: 500 })
