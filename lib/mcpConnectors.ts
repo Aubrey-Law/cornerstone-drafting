@@ -1,6 +1,5 @@
 /**
- * Staff MCP connector CRUD helpers (storage + encryption).
- * Full MCP runtime (tool listing / calling) is phased — this lands schema + secure storage.
+ * Staff MCP connector CRUD helpers (storage + encryption) and runtime loading.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isSecretBoxConfigured, openSecret, sealSecret } from '@/lib/secretBox'

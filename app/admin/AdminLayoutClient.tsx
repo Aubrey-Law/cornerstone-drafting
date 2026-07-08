@@ -122,6 +122,9 @@ export default function AdminLayoutClient({
           </Button>
         </div>
         {nav(collapsed)}
+        <div className={cn('mt-auto border-t border-border p-2', collapsed && 'flex justify-center')}>
+          <ThemeToggle collapsed={collapsed} variant="sidebar" />
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -134,7 +137,7 @@ export default function AdminLayoutClient({
           </div>
           <div className="hidden md:block" />
           <div className="flex items-center gap-2">
-            <ThemeToggle />
+            <ThemeToggle variant="default" />
             <div className="hidden text-right sm:block">
               <p className="text-xs font-medium">{userName}</p>
             </div>
@@ -150,11 +153,14 @@ export default function AdminLayoutClient({
       </div>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-56 p-0">
+        <SheetContent side="left" className="flex w-56 flex-col p-0">
           <div className="flex h-14 items-center border-b border-border px-4">
             <span className="text-sm font-semibold">Drafting</span>
           </div>
           {nav(false)}
+          <div className="mt-auto border-t border-border p-2">
+            <ThemeToggle variant="sidebar" />
+          </div>
         </SheetContent>
       </Sheet>
     </div>

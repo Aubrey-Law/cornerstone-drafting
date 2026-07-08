@@ -36,6 +36,7 @@ export function DocxViewerPanel({
   const token = useAccessToken()
   const hostRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
+  const [docReady, setDocReady] = useState(false)
   const [edits, setEdits] = useState<PendingEdit[]>([])
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [instruction, setInstruction] = useState('')
@@ -44,6 +45,7 @@ export function DocxViewerPanel({
   const loadDocx = useCallback(async () => {
     if (!token || !hostRef.current) return
     setLoading(true)
+    setDocReady(false)
     try {
       const res = await fetch(`/api/documents/${documentId}/docx`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -73,16 +75,19 @@ export function DocxViewerPanel({
         })
       }
 
-      if (quote) {
-        const el = highlightDocxQuote(hostRef.current, quote)
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
+      setDocReady(true)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not render document')
     } finally {
       setLoading(false)
     }
-  }, [token, documentId, quote])
+  }, [token, documentId])
+
+  useEffect(() => {
+    if (!hostRef.current || !docReady || !quote?.trim()) return
+    const el = highlightDocxQuote(hostRef.current, quote)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [quote, docReady])
 
   const loadEdits = useCallback(async () => {
     if (!token) return
@@ -184,7 +189,7 @@ export function DocxViewerPanel({
               ) : null}
               {edit.inserted_text ? (
                 <p>
-                  <span className="text-emerald-700 underline">{edit.inserted_text}</span>
+                  <span className="text-green underline">{edit.inserted_text}</span>
                 </p>
               ) : null}
               <div className="mt-1.5 flex gap-1">
@@ -218,7 +223,7 @@ export function DocxViewerPanel({
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         )}
-        <div ref={hostRef} className="docx-host mx-auto max-w-[820px] rounded-md bg-background p-4 text-sm shadow-sm md:p-8" />
+        <div ref={hostRef} className="docx-host mx-auto max-w-[820px] rounded-md border border-border bg-card p-4 text-sm text-foreground shadow-sm md:p-8" />
       </div>
     </div>
   )
