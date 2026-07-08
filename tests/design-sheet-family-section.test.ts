@@ -7,8 +7,12 @@ describe('family information design section', () => {
     path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/FamilySection.tsx'),
     'utf8',
   )
-  const otherBeneficiariesSource = fs.readFileSync(
-    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/OtherBeneficiariesSection.tsx'),
+  const trustBeneficiariesSource = fs.readFileSync(
+    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustBeneficiariesSection.tsx'),
+    'utf8',
+  )
+  const trustDetailsSource = fs.readFileSync(
+    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DocumentSections.tsx'),
     'utf8',
   )
 
@@ -37,6 +41,20 @@ describe('family information design section', () => {
     expect(familySource).toContain('Additional Disinheritance Language')
     expect(familySource).toContain('Clause Library')
     expect(familySource).toContain('Draft with AI')
-    expect(otherBeneficiariesSource).not.toContain('Add Disinheritance')
+  })
+
+  it('lists additional beneficiaries in Family Information', () => {
+    expect(familySource).toContain('title="Additional Beneficiaries"')
+    expect(familySource).toContain("onChange('include_additional_beneficiaries'")
+    expect(familySource).toContain("onChange('additional_beneficiaries'")
+    expect(familySource).toContain('residual distribution')
+    expect(familySource).not.toContain('Remote Beneficiaries')
+    expect(familySource).not.toContain('Specific Bequests')
+  })
+
+  it('places remote beneficiaries and specific bequests under Trust Details', () => {
+    expect(trustBeneficiariesSource).toContain('title="Remote Beneficiaries"')
+    expect(trustBeneficiariesSource).toContain('title="Specific Bequests"')
+    expect(trustDetailsSource).toContain('<TrustBeneficiariesSection')
   })
 })

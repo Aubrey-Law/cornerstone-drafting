@@ -29,6 +29,7 @@ import {
   setPrimaryContact,
 } from './fiduciary-blocks'
 import { WillProvisionsSection } from './WillProvisionsSection'
+import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
 import {
   DpoaFiduciarySections,
   HealthCareFiduciarySections,
@@ -329,6 +330,14 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           </div>
         )}
       </SectionBlock>
+
+      <TrustBeneficiariesSection
+        sheet={sheet}
+        onChange={onChange}
+        contacts={contacts}
+        onAddContact={onAddContact}
+        onUpdateContact={onUpdateContact}
+      />
 
       <SectionBlock title="Tangible Personal Property">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
