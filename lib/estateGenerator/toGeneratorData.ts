@@ -2,6 +2,14 @@ import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
 import { isYoungAdultEstatePlanAge } from '@/lib/youngAdultEstatePlan'
+import {
+  childGenderDisplay,
+  draftPayloadBlendedFamily,
+  draftPayloadFamilyProvisions,
+  hasBlendedFamily,
+  type DraftPayloadFamilyProvisions,
+} from '@/lib/draftPayload/familyProvisions'
+import type { DesignSheetChild } from '@/types/database'
 
 export type EstateGeneratorPackage =
   | 'core-estate'
@@ -371,10 +379,30 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       date_of_birth: formatLongDate(child.dob) ?? child.dob ?? '',
       dob: child.dob ?? '',
       relationship: child.relationship ?? '',
+      parentage: child.parentage ?? '',
+      gender: child.gender ?? '',
+      gender_display: childGenderDisplay(child.gender ?? null),
+      deceased: child.deceased === true,
       minor: child.minor,
       young_adult_estate_plan: isYoungAdultEstatePlanAge(child.dob),
     }))
     .filter(child => child.full_name)
+  const familyProvisions: DraftPayloadFamilyProvisions = payload.family_provisions ?? draftPayloadFamilyProvisions(null)
+  const isMarried = Boolean(payload.spouse)
+  const sheetChildren = payload.children.map(child => ({
+    name: child.full_name,
+    dob: child.dob,
+    gender: child.gender ?? null,
+    deceased: child.deceased === true,
+    relationship: (child.relationship ?? 'biological') as DesignSheetChild['relationship'],
+    parentage: child.parentage ?? null,
+    is_minor: child.minor,
+  }))
+  const blendedFamily = draftPayloadBlendedFamily(sheetChildren, isMarried)
+  const blended = hasBlendedFamily(sheetChildren, isMarried)
+  const disinherited = familyProvisions.disinherited.map(entry => person(entry.full_name, {
+    relationship: entry.relationship,
+  }))
   const { specificGifts, charitableGifts } = normalizeSpecificBequests(payload.will_provisions.specific_bequests)
 
   return {
@@ -459,7 +487,9 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
           name: '',
         },
       },
-      disinherited: payload.client.excluded_guardian ? [person(payload.client.excluded_guardian)] : [],
+      disinherited,
+      blended_family: blended ? blendedFamily : undefined,
+      disinherit_issue: familyProvisions.disinherit_issue,
     }),
     pour_over: {
       alternate_disposition: payload.will_provisions.pour_over_alternate_disposition ?? 'spouse_then_descendants',
@@ -590,7 +620,15 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       excluded: payload.client.excluded_guardian ? [person(payload.client.excluded_guardian)] : [],
     },
     family: {
-      blended_family: false,
+      blended_family: blended,
+      include_child_gender_markers: familyProvisions.include_child_gender_markers,
+      include_afterborn_children: familyProvisions.include_afterborn_children,
+      include_expectant_children: familyProvisions.include_expectant_children,
+      omissions_intentional: familyProvisions.omissions_intentional,
+      include_general_disinheritance: familyProvisions.include_general_disinheritance,
+      disinherit_issue: familyProvisions.disinherit_issue,
+      additional_disinheritance_language: familyProvisions.additional_disinheritance_language,
+      disinherited,
     },
     assets: {
       real_property: false,

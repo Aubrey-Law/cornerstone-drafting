@@ -196,9 +196,15 @@ export interface DesignSheet {
   staggered_distributions?: StaggeredTier[] | null
 
   // Family inclusions
+  include_child_gender_markers: string | null
   include_afterborn_children: string | null
   include_expectant_children: string | null
+  omissions_intentional: string | null
   include_general_disinheritance: string | null
+  // Child names selected for disinheritance (must match entries in children[]).
+  disinherited_children: string[] | null
+  disinherit_issue: string | null
+  additional_disinheritance_language: string | null
 
   // Residuary distributions — stagger schedule
   stagger_age_1: number | null
@@ -382,6 +388,8 @@ export interface PetCareDetails {
 export interface DesignSheetChild {
   name: string
   dob: string | null
+  gender?: 'male' | 'female' | 'other' | null
+  deceased?: boolean
   relationship: 'biological' | 'adopted' | 'stepchild'
   // Whose child this is — captured for married clients (Joint / client / spouse).
   parentage?: 'joint' | 'client' | 'spouse' | null

@@ -48,16 +48,6 @@ export function OtherBeneficiariesSection({
       : []),
   ]
 
-  const disinheritances = sheet.disinheritances ?? []
-  const updateDisinheritances = (next: NonNullable<DesignSheet['disinheritances']>) =>
-    onChange('disinheritances', next)
-  const addDisinheritance = () =>
-    updateDisinheritances([...disinheritances, { name: '', relationship: '', reason: '' }])
-  const editDisinheritance = (i: number, field: 'name' | 'relationship' | 'reason', value: string) =>
-    updateDisinheritances(disinheritances.map((d, idx) => (idx === i ? { ...d, [field]: value } : d)))
-  const removeDisinheritance = (i: number) =>
-    updateDisinheritances(disinheritances.filter((_, idx) => idx !== i))
-
   const bequests: SpecificBequest[] = sheet.specific_bequests ?? []
   const updateBequest = (idx: number, patch: Partial<SpecificBequest>) => {
     const next = bequests.slice()
@@ -94,40 +84,11 @@ export function OtherBeneficiariesSection({
     <DesignSectionContent>
       {showBanner && (
         <AttorneyNoteBanner>
-          Disinheritances, remote beneficiaries, and specific bequests apply across the estate plan.
-          Review carefully before drafting.
+          Remote beneficiaries and specific bequests apply across the estate plan. Review carefully before drafting.
         </AttorneyNoteBanner>
       )}
 
-      <SectionBlock title="Other Beneficiaries" subtitle="Disinheritances, remote beneficiaries, and specific bequests">
-        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Disinheritances</p>
-        <p className="mb-4 text-[12px] text-muted-foreground">Individuals specifically excluded from inheriting. Leave empty if none.</p>
-        {disinheritances.length > 0 && (
-          <div className="mb-3 space-y-3">
-            {disinheritances.map((d, i) => (
-              <div key={i} className="rounded-lg border border-border bg-muted/40 p-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <AttorneyInput label="Name" value={d.name} onChange={v => editDisinheritance(i, 'name', v)} />
-                  <AttorneyInput label="Relationship" value={d.relationship} onChange={v => editDisinheritance(i, 'relationship', v)} />
-                  <AttorneyInput label="Reason" value={d.reason} onChange={v => editDisinheritance(i, 'reason', v)} />
-                </div>
-                <div className="mt-2 flex justify-end">
-                  <Button variant="ghost" size="sm" className="gap-1 text-xs text-destructive hover:text-destructive" onClick={() => removeDisinheritance(i)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={addDisinheritance}>
-          <Plus className="h-3.5 w-3.5" />
-          Add Disinheritance
-        </Button>
-
-        <div className="my-6 border-t border-border" />
-
+      <SectionBlock title="Other Beneficiaries" subtitle="Remote beneficiaries and specific bequests">
         <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Remote Beneficiaries</p>
         <p className="mb-4 text-[12px] text-muted-foreground">Who inherits if none of the named beneficiaries survive.</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">

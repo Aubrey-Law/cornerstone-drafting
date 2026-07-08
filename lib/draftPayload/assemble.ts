@@ -23,6 +23,7 @@ import {
   draftPayloadChildren,
   pick,
 } from '@/lib/draftPayload/helpers'
+import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
@@ -329,6 +330,7 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     },
     spouse,
     children: designChildren,
+    family_provisions: draftPayloadFamilyProvisions(designSheet),
     trust,
     fiduciaries,
     documents,

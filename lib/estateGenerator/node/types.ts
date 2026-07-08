@@ -100,6 +100,13 @@ export type NodeEstateContext = NodeEstateData & {
   has_pet_care: boolean
   has_simultaneous_death: boolean
   has_excluded_guardians: boolean
+  has_disinherited: boolean
+  include_child_gender_markers: boolean
+  include_afterborn_children: boolean
+  include_expectant_children: boolean
+  omissions_intentional: boolean
+  include_general_disinheritance: boolean
+  disinherit_issue: boolean
   owns_real_property: boolean
   tax_sensitive_estate: boolean
   state_requires_self_proving_affidavit: boolean
