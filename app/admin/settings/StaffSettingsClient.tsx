@@ -20,9 +20,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AiUsagePanel } from './AiUsagePanel'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 
-type Tab = 'models' | 'api-keys' | 'connectors' | 'outlook' | 'sla'
+type Tab = 'models' | 'api-keys' | 'connectors' | 'outlook' | 'sla' | 'ai-usage'
 
 interface ApiKeyStatus {
   provider: string
@@ -66,7 +67,14 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
     if (typeof window === 'undefined') return
     const sp = new URLSearchParams(window.location.search)
     const t = sp.get('tab')
-    if (t === 'outlook' || t === 'models' || t === 'api-keys' || t === 'connectors' || t === 'sla') {
+    if (
+      t === 'outlook' ||
+      t === 'models' ||
+      t === 'api-keys' ||
+      t === 'connectors' ||
+      t === 'sla' ||
+      t === 'ai-usage'
+    ) {
       setTab(t)
     }
     if (sp.get('mscal_connected') === '1') {
@@ -289,7 +297,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Model preferences, API keys, MCP connectors, Outlook, and matter stage SLA.
+          Model preferences, API keys, MCP connectors, Outlook, AI usage, and matter stage SLA.
         </p>
       </div>
 
@@ -300,6 +308,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
             ['api-keys', 'API Keys'],
             ['connectors', 'Connectors'],
             ['outlook', 'Outlook'],
+            ['ai-usage', 'AI Usage'],
             ['sla', 'Stage SLA'],
           ] as const
         ).map(([id, label]) => (
@@ -617,6 +626,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
           )}
         </section>
       )}
+
+      {tab === 'ai-usage' && <AiUsagePanel />}
 
       {tab === 'sla' && <PipelineSlaSettings />}
     </div>
