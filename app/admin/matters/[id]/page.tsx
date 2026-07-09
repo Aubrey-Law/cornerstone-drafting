@@ -6,7 +6,6 @@ import { isTwilioSmsConfigured } from '@/lib/twilio/config'
 import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
-import type { MatterDetailsRow } from '@/types/matter-details'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import MatterDetailClient from './MatterDetailClient'
@@ -67,8 +66,7 @@ export default async function MatterDetailPage({ params }: Params) {
     clientIntakeRow = data
   }
 
-  const matterDetails = (detailsRow ?? null) as MatterDetailsRow | null
-  const matterNumber = (matterRow?.matter_number ?? matterDetails?.matter_number ?? null) as string | null
+  const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
   const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
   const reviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
   const resyncPreviewCount = intakeSnapshot && designSheet
@@ -86,7 +84,6 @@ export default async function MatterDetailPage({ params }: Params) {
       agingHealth={agingHealth}
       intakeId={intakeId}
       clientIntakeRow={clientIntakeRow}
-      matterDetails={matterDetails}
       matterNumber={matterNumber}
       initialNotes={(notes ?? []) as MatterNoteRow[]}
       designSheetSeeded={designSheetSeeded}

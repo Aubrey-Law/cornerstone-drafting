@@ -56,16 +56,13 @@ import {
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 import { resolveMatterIntake, unlockIntake } from '@/app/actions/adminIntake'
-import { updateMatterStatus } from '@/app/actions/matterNotes'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
-import type { MatterDetailsRow } from '@/types/matter-details'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterOverviewHero } from './MatterOverviewHero'
 import { MatterActivityTab } from './MatterActivityTab'
-import { MatterContactsCard } from './MatterContactsCard'
+import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterOverviewAssets } from './MatterOverviewAssets'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
-import { MatterDetailsEditor } from './MatterDetailsEditor'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
@@ -95,7 +92,6 @@ interface MatterDetailClientProps {
     unlock_requested_at?: string | null
     unlock_request_note?: string | null
   } | null
-  matterDetails?: MatterDetailsRow | null
   matterNumber?: string | null
   initialNotes?: MatterNoteRow[]
   designSheetSeeded?: boolean
@@ -140,7 +136,6 @@ export default function MatterDetailClient({
   agingHealth = null,
   intakeId: initialIntakeId = null,
   clientIntakeRow = null,
-  matterDetails: initialMatterDetails = null,
   matterNumber: initialMatterNumber = null,
   initialNotes = [],
   designSheetSeeded = false,
@@ -166,7 +161,6 @@ export default function MatterDetailClient({
   const [docsLoading, setDocsLoading] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [liveDetails, setLiveDetails] = useState<MatterDetailsRow | null>(initialMatterDetails)
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
   const [generatingNumber, setGeneratingNumber] = useState(false)
   const [unlocking, setUnlocking] = useState(false)
@@ -198,10 +192,6 @@ export default function MatterDetailClient({
   useEffect(() => {
     setContacts(initialContacts)
   }, [initialContacts])
-
-  useEffect(() => {
-    setLiveDetails(initialMatterDetails)
-  }, [initialMatterDetails])
 
   useEffect(() => {
     setMatterNum(initialMatterNumber)
@@ -244,23 +234,6 @@ export default function MatterDetailClient({
     setLiveIntakeId(initialIntakeId)
   }, [initialIntakeId])
 
-  const handleFieldSaved = useCallback((field: string, value: unknown, row?: MatterDetailsRow | null) => {
-    if (field === 'matter_number' && typeof value === 'string') {
-      setMatterNum(value || null)
-    }
-    if (row) {
-      setLiveDetails(row)
-    } else if (liveDetails) {
-      setLiveDetails({ ...liveDetails, [field]: value })
-    }
-  }, [liveDetails])
-
-  const handleUpdateClientStatus = useCallback(async (value: string) => {
-    await updateMatterStatus(matterId, value)
-    setMatter(m => ({ ...m, status: value }))
-    setLiveDetails(prev => (prev ? { ...prev, client_status: value } : prev))
-  }, [matterId])
-
   const handleUnlockIntake = useCallback(async () => {
     if (!liveIntakeId || unlocking) return
     if (!window.confirm('Re-open the submitted intake for client editing?')) return
@@ -292,7 +265,6 @@ export default function MatterDetailClient({
       const patchBody = await patchRes.json().catch(() => ({}))
       if (!patchRes.ok) throw new Error(patchBody.error ?? 'Failed to save matter number')
       setMatterNum(num)
-      if (patchBody.row) setLiveDetails(patchBody.row)
       toast.success('Matter number updated')
       router.refresh()
     } catch (e) {
@@ -792,15 +764,7 @@ export default function MatterDetailClient({
               </p>
             )}
 
-            <MatterContactsCard matterId={matterId} />
-            <MatterDetailsEditor
-              liveDetails={liveDetails}
-              matter={matter}
-              matterId={matterId}
-              matterNumber={matterNum}
-              onUpdateClientStatus={handleUpdateClientStatus}
-              onFieldSaved={handleFieldSaved}
-            />
+            <MatterOverviewContacts matterId={matterId} matter={matter} />
             <IntakeSyncStatusCard
               matterId={matterId}
               intakeCompleted={intakeCompleted}
