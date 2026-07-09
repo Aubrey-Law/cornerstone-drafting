@@ -429,6 +429,12 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           <TrustFiduciarySections {...props} scope="client" trusteesOnly />
         </div>
 
+        {separate && (
+          <div className="mt-4">
+            <TrustFiduciarySections {...props} scope="spouse" />
+          </div>
+        )}
+
         <div className="mt-6 space-y-3">
           <FieldLabel>If the trust ever has co-trustees, how should they make decisions?</FieldLabel>
           {([

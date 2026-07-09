@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
@@ -173,6 +174,60 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ contact: mapContact(contact) })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to update contact'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const { err } = await requireAdmin(req)
+  if (err) return err
+
+  const { id: matterId } = await params
+  const contactId = new URL(req.url).searchParams.get('contactId')
+  if (!contactId) {
+    return NextResponse.json({ error: 'contactId is required' }, { status: 400 })
+  }
+
+  try {
+    const admin = getAdminClient()
+    const { data: matter, error: matterError } = await admin
+      .from('matters')
+      .select('client_intake_id')
+      .eq('id', matterId)
+      .maybeSingle()
+
+    if (matterError) throw new Error(matterError.message)
+    if (!matter?.client_intake_id) throw new Error('This matter is missing a client intake record.')
+
+    const intakeId = matter.client_intake_id as string
+
+    const { data: contact, error: loadError } = await admin
+      .from('contacts')
+      .select('id, relationship_type')
+      .eq('id', contactId)
+      .eq('client_intake_id', intakeId)
+      .maybeSingle()
+
+    if (loadError) throw new Error(loadError.message)
+    if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    if (contact.relationship_type === 'spouse') {
+      return NextResponse.json(
+        { error: 'The spouse is managed from the intake — edit the spouse fields to change or remove it.' },
+        { status: 409 },
+      )
+    }
+
+    const { data: deletedCount, error } = await admin.rpc('delete_intake_contact', {
+      p_contact_id: contactId,
+      p_client_intake_id: intakeId,
+    })
+
+    if (error) throw new Error(error.message)
+    if (!deletedCount) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to remove contact'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

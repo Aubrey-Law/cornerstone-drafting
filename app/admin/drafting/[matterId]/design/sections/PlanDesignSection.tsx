@@ -2,7 +2,6 @@
 
 import { PlanStructurePicker } from '@/components/guided/PlanStructurePicker'
 import { Checkbox } from '@/components/ui/checkbox'
-import { cn } from '@/lib/utils'
 import type { MatterContact } from '@/types/database'
 import {
   getDocumentInclusions,
@@ -33,10 +32,6 @@ interface PlanDesignSectionProps extends SectionProps {
   contacts?: MatterContact[]
   onAddContact?: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
-  /** LP only — current plan coverage and a setter. Omitted for EP matters. */
-  isLP?: boolean
-  planCoverage?: 'no_trust' | 'trust_included'
-  onPlanCoverageChange?: (coverage: 'no_trust' | 'trust_included') => void
 }
 
 const SIGNING_COUNTY_OPTIONS = [
@@ -82,7 +77,7 @@ const ANCILLARY_DOCUMENT_LABELS: Record<
 type FundingDocumentKey = keyof typeof FUNDING_DOCUMENT_LABELS
 type StandaloneAncillaryDocumentKey = keyof typeof ANCILLARY_DOCUMENT_LABELS
 
-export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], onAddContact: _onAddContact, onUpdateContact: _onUpdateContact, isLP = false, planCoverage = 'no_trust', onPlanCoverageChange }: PlanDesignSectionProps) {
+export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], onAddContact: _onAddContact, onUpdateContact: _onUpdateContact }: PlanDesignSectionProps) {
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
   const inclusions = getDocumentInclusions(sheet)
   const estatePlanSetup = getEstatePlanDesignSetup(sheet)
@@ -191,28 +186,6 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
           heading="Plan structure"
         />
       </SectionBlock>
-
-      {isLP && onPlanCoverageChange && (
-        <SectionBlock title="Plan coverage" subtitle="Which documents this plan covers — drives the client design review's document list.">
-          <div className="flex gap-0.5 rounded-lg bg-muted p-[2px]">
-            {(['no_trust', 'trust_included'] as const).map(c => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => onPlanCoverageChange(c)}
-                className={cn(
-                  'flex-1 rounded-md px-3 py-2 text-[12px] transition-all',
-                  planCoverage === c
-                    ? 'bg-card font-semibold text-primary shadow-sm'
-                    : 'text-foreground hover:text-foreground'
-                )}
-              >
-                {c === 'no_trust' ? 'No trust' : 'Trust included'}
-              </button>
-            ))}
-          </div>
-        </SectionBlock>
-      )}
 
       <SectionBlock title="Documents Included">
         {needsDistributionMethod && (

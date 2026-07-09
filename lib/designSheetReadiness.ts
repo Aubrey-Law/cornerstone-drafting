@@ -48,10 +48,10 @@ export const DESIGN_SECTION_LABELS: Record<string, string> = {
   [DESIGN_SECTION_IDS.intakeReview]: 'Intake Review',
   [DESIGN_SECTION_IDS.clientInformation]: 'Client Information',
   [DESIGN_SECTION_IDS.familyInformation]: 'Family Information',
-  [DESIGN_SECTION_IDS.fiduciaries]: 'Fiduciaries & Additional Contacts',
+  [DESIGN_SECTION_IDS.contactsFiduciaries]: 'Contacts & Fiduciaries',
+  [DESIGN_SECTION_IDS.fiduciaries]: 'Fiduciary Role Assignment',
   [DESIGN_SECTION_IDS.estatePlanDesign]: 'Estate Plan Design',
   [DESIGN_SECTION_IDS.trustDetails]: 'Trust Details',
-  [DESIGN_SECTION_IDS.trustDetailsSpouse]: 'Trust Details for Spouse',
   [DESIGN_SECTION_IDS.willDetails]: 'Will Details',
   [DESIGN_SECTION_IDS.financialPoa]: 'Financial Power of Attorney',
   [DESIGN_SECTION_IDS.healthcareDirectives]: 'Health Care & Directives',
@@ -203,14 +203,13 @@ export function computeDesignSheetReadiness({
   const clientTrustBlockers = [
     documentInclusions.trust && !trusteePrimary && blocker(DESIGN_SECTION_IDS.trustDetails, 'trustee', 'trustee_slots'),
     documentInclusions.trust && !hasText(sheet.trust_name) && blocker(DESIGN_SECTION_IDS.trustDetails, 'trust name', 'trust_name'),
+    documentInclusions.trust && spouseFiduciariesNeeded && sheet.is_joint === false && !spouseTrusteePrimary &&
+      blocker(DESIGN_SECTION_IDS.trustDetails, 'spouse trustee', 'spouse_trustee_slots'),
+    documentInclusions.trust && married && sheet.is_joint === false && !hasText(sheet.spouse_trust_name) &&
+      blocker(DESIGN_SECTION_IDS.trustDetails, 'spouse trust name', 'spouse_trust_name'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
-  const spouseTrustBlockers = [
-    documentInclusions.trust && spouseFiduciariesNeeded && sheet.is_joint === false && !spouseTrusteePrimary &&
-      blocker(DESIGN_SECTION_IDS.trustDetailsSpouse, 'spouse trustee', 'spouse_trustee_slots'),
-    documentInclusions.trust && married && sheet.is_joint === false && !hasText(sheet.spouse_trust_name) &&
-      blocker(DESIGN_SECTION_IDS.trustDetailsSpouse, 'spouse trust name', 'spouse_trust_name'),
-  ].filter(Boolean) as DesignReadinessBlocker[]
+  const spouseTrustBlockers = [] as DesignReadinessBlocker[]
 
   const willBlockers = [
     documentInclusions.will && !executorPrimary && blocker(DESIGN_SECTION_IDS.willDetails, 'personal representative', 'executor_slots'),
@@ -274,18 +273,17 @@ export function computeDesignSheetReadiness({
     ])),
     [DESIGN_SECTION_IDS.familyInformation]: summaryFromBlockers(familyBlockers, 'complete', countOverrides(sheet, ['children'])),
     [DESIGN_SECTION_IDS.fiduciaries]: summaryFromBlockers(fiduciaryBlockers, 'ready'),
+    [DESIGN_SECTION_IDS.contactsFiduciaries]: summaryFromBlockers([], 'ready'),
     [DESIGN_SECTION_IDS.trustDetails]: !documentInclusions.trust
       ? { status: 'none', detail: 'not included' }
-      : summaryFromBlockers(clientTrustBlockers, 'ready', countOverrides(sheet, [
+      : summaryFromBlockers([...clientTrustBlockers, ...spouseTrustBlockers], 'ready', countOverrides(sheet, [
         'trust_name',
         'restatement',
         'trust_protector',
         'trustee_structure',
         'cotrustee_decision_standard',
+        'spouse_trust_name',
       ])),
-    [DESIGN_SECTION_IDS.trustDetailsSpouse]: !documentInclusions.trust || !(married && sheet.is_joint === false)
-      ? { status: 'none', detail: 'not included' }
-      : summaryFromBlockers(spouseTrustBlockers, 'ready', countOverrides(sheet, ['spouse_trust_name'])),
     [DESIGN_SECTION_IDS.willDetails]: !documentInclusions.will
       ? { status: 'none', detail: 'not included' }
       : summaryFromBlockers([...willBlockers, ...residuaryBlockers], 'ready'),
@@ -298,14 +296,13 @@ export function computeDesignSheetReadiness({
     [DESIGN_SECTION_IDS.assetSchedules]: optionalSummary(assetsFilled, `${assetList.length} asset${assetList.length === 1 ? '' : 's'}`),
   }
 
-  const separateTrustSection = married && sheet.is_joint === false && documentInclusions.trust
   const requiredIds = [
     DESIGN_SECTION_IDS.estatePlanDesign,
     DESIGN_SECTION_IDS.clientInformation,
     DESIGN_SECTION_IDS.familyInformation,
+    DESIGN_SECTION_IDS.contactsFiduciaries,
     DESIGN_SECTION_IDS.fiduciaries,
     ...(documentInclusions.trust ? [DESIGN_SECTION_IDS.trustDetails] : []),
-    ...(separateTrustSection ? [DESIGN_SECTION_IDS.trustDetailsSpouse] : []),
     ...(documentInclusions.will ? [DESIGN_SECTION_IDS.willDetails] : []),
     ...(documentInclusions.dpoa ? [DESIGN_SECTION_IDS.financialPoa] : []),
     ...(documentInclusions.healthcare ? [DESIGN_SECTION_IDS.healthcareDirectives] : []),

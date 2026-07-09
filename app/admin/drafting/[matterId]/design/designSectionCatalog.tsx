@@ -8,7 +8,6 @@ import type { DesignSectionSummary } from '@/lib/designSheetReadiness'
 import {
   DESIGN_SECTION_IDS,
   normalizeDesignSectionId,
-  spouseTrustSectionLabel,
 } from '@/lib/designSheet/sectionIds'
 import {
   getDesignSectionNavItems,
@@ -28,10 +27,10 @@ import {
   DpoaDocumentSection,
   HealthCareDocumentSection,
   TrustDetailsSection,
-  TrustDetailsSpouseSection,
   WillDocumentSection,
 } from './sections/DocumentSections'
 import { IntakeSection } from './sections/IntakeSection'
+import { ContactsFiduciariesSection } from './sections/ContactsFiduciariesSection'
 
 export interface DesignSectionDef {
   id: string
@@ -58,12 +57,7 @@ export interface BuildDesignSectionsArgs {
   updateLpPatch: (patch: Record<string, unknown>) => void
   handleAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   handleUpdateContact: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
-  handlePlanCoverageChange: (value: 'no_trust' | 'trust_included') => void
-}
-
-function isMarried(maritalStatus: string | null | undefined): boolean {
-  const marital = (maritalStatus ?? '').toLowerCase()
-  return marital.includes('married') && !marital.includes('never')
+  handleRemoveContact: (id: string) => void
 }
 
 export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSectionDef[] {
@@ -81,7 +75,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     updateLpPatch,
     handleAddContact,
     handleUpdateContact,
-    handlePlanCoverageChange,
+    handleRemoveContact,
   } = args
 
   const navItems = getDesignSectionNavItems({
@@ -118,6 +112,17 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         onUpdateContact={handleUpdateContact}
       />
     ),
+    [DESIGN_SECTION_IDS.contactsFiduciaries]: () => (
+      <ContactsFiduciariesSection
+        sheet={sheet}
+        onChange={updateField}
+        contacts={contacts}
+        matterId={matterId}
+        onAddContact={handleAddContact}
+        onUpdateContact={handleUpdateContact}
+        onRemoveContact={handleRemoveContact}
+      />
+    ),
     [DESIGN_SECTION_IDS.fiduciaries]: () => (
       <FiduciariesSection
         isLP={isLP}
@@ -132,15 +137,9 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
       />
     ),
     [DESIGN_SECTION_IDS.estatePlanDesign]: () => (
-      <PlanDesignSection
-        {...common}
-        isLP={isLP}
-        planCoverage={(lpDataState?.li_plan_coverage as 'no_trust' | 'trust_included') ?? 'no_trust'}
-        onPlanCoverageChange={handlePlanCoverageChange}
-      />
+      <PlanDesignSection {...common} />
     ),
     [DESIGN_SECTION_IDS.trustDetails]: () => <TrustDetailsSection {...docCommon} scope="client" />,
-    [DESIGN_SECTION_IDS.trustDetailsSpouse]: () => <TrustDetailsSpouseSection {...docCommon} />,
     [DESIGN_SECTION_IDS.willDetails]: () => (
       <>
         <WillDocumentSection {...docCommon} />
@@ -177,9 +176,13 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     [DESIGN_SECTION_IDS.transfersAssignments]: 'Planned',
   }
 
+  const titles: Partial<Record<string, string>> = {
+    [DESIGN_SECTION_IDS.contactsFiduciaries]: 'Fiduciaries & Additional Contacts',
+  }
+
   return navItems.map(item => ({
     id: item.id,
-    title: item.label,
+    title: titles[item.id] ?? item.label,
     subtitle: subtitles[item.id],
     render: renderers[item.id] ?? (() => null),
   }))
@@ -238,4 +241,3 @@ export function designOverviewHref(matterId: string, embedded: boolean): string 
   return `/admin/drafting/${matterId}/design`
 }
 
-export { spouseTrustSectionLabel }
