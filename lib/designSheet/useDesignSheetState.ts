@@ -76,9 +76,17 @@ export function useDesignSheetState({
   const [saveRetryCount, setSaveRetryCount] = useState(0)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistInFlightRef = useRef(false)
+  const pendingSaveRef = useRef(false)
+  const sheetRef = useRef(sheet)
+  const changeGenerationRef = useRef(0)
+  const savedGenerationRef = useRef(0)
   const [exporting, setExporting] = useState(false)
 
   const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
+  useEffect(() => {
+    sheetRef.current = sheet
+  }, [sheet])
 
   const rebuildSheetFromServer = useCallback(() => {
     const base = formatPhoneFieldsDeep(buildInitialSheet(sheetProp))
@@ -166,8 +174,22 @@ export function useDesignSheetState({
 
   // ── Field updates with override tracking ─────────────────────────────────────
   const markDirty = useCallback((field: string) => {
+    changeGenerationRef.current += 1
     setDirtyFields(prev => new Set(prev).add(field))
     setSaveStatus('dirty')
+  }, [])
+
+  const finishPersist = useCallback((generationAtSaveStart: number) => {
+    const hasUnsavedChanges = changeGenerationRef.current !== generationAtSaveStart
+    if (hasUnsavedChanges || pendingSaveRef.current) {
+      pendingSaveRef.current = false
+      setSaveStatus('dirty')
+      return
+    }
+    savedGenerationRef.current = generationAtSaveStart
+    setSaveStatus('saved')
+    setSaveRetryCount(0)
+    setDirtyFields(new Set())
   }, [])
 
   const updateField = useCallback(<K extends keyof DesignSheet>(field: K, value: DesignSheet[K]) => {
@@ -198,9 +220,13 @@ export function useDesignSheetState({
 
   // ── Persistence ──────────────────────────────────────────────────────────────
   const persistSheet = useCallback(async (): Promise<boolean> => {
-    if (persistInFlightRef.current) return false
+    if (persistInFlightRef.current) {
+      pendingSaveRef.current = true
+      return false
+    }
     persistInFlightRef.current = true
     setSaveStatus('saving')
+    const generationAtSaveStart = changeGenerationRef.current
     const maxAttempts = 3
     try {
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -209,14 +235,14 @@ export function useDesignSheetState({
           await sleep(1000 * 2 ** (attempt - 1))
         }
         try {
-          const persistedSheetId = sheetProp?.id || sheet.id
+          const persistedSheetId = sheetProp?.id || sheetRef.current.id
           const response = await fetch(`/api/admin/matters/${matterId}/design-sheet`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               sheetId: persistedSheetId || null,
               expectedUpdatedAt: expectedUpdatedAtRef.current,
-              sheet: formatPhoneFieldsDeep(sheet),
+              sheet: formatPhoneFieldsDeep(sheetRef.current),
             }),
           })
           const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse
@@ -228,9 +254,9 @@ export function useDesignSheetState({
               setExpectedUpdatedAt(serverUpdatedAt)
               setLastSavedAt(serverUpdatedAt)
             }
-            serverSheetStampRef.current = null
-            setSaveStatus('saved')
-            setDirtyFields(new Set())
+            // Another save likely landed first — retry with the server token before surfacing an error.
+            if (serverUpdatedAt && attempt < maxAttempts - 1) continue
+            finishPersist(generationAtSaveStart)
             toast.error('This design sheet was updated elsewhere. Reloading the latest version.')
             router.refresh()
             return false
@@ -248,9 +274,7 @@ export function useDesignSheetState({
           setExpectedUpdatedAt(savedAt)
           setLastSavedAt(savedAt)
           serverSheetStampRef.current = savedAt
-          setSaveStatus('saved')
-          setSaveRetryCount(0)
-          setDirtyFields(new Set())
+          finishPersist(generationAtSaveStart)
           return true
         } catch (err) {
           if (attempt === maxAttempts - 1) throw err
@@ -264,8 +288,12 @@ export function useDesignSheetState({
       return false
     } finally {
       persistInFlightRef.current = false
+      if (pendingSaveRef.current && changeGenerationRef.current !== savedGenerationRef.current) {
+        pendingSaveRef.current = false
+        setSaveStatus('dirty')
+      }
     }
-  }, [matterId, router, sheet, sheetProp?.id])
+  }, [finishPersist, matterId, router, sheetProp?.id])
 
   const handleSave = useCallback(() => {
     startTransition(async () => { await persistSheet() })
