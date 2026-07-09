@@ -121,6 +121,28 @@ WHERE table_schema = 'public' AND table_name = 'matter_details'
 
 You should see all four rows.
 
+## Common error: `intake_token_expires_at` on Send Intake
+
+Client invite links need migration **#13**:
+
+`20260714000000_lite_intake_invite_tokens.sql`
+
+Quick fix — paste [`../scripts/fix_intake_invite_tokens.sql`](../scripts/fix_intake_invite_tokens.sql) in the SQL Editor, or:
+
+```bash
+git pull
+npx supabase db push
+```
+
+Verify:
+
+```sql
+SELECT column_name
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'client_intake'
+  AND column_name IN ('intake_token_hash', 'intake_token_expires_at');
+```
+
 ## Shared firm database (do not use for Lite)
 
 Production and staging for the **full** Aubrey Law portal already have the archived portal schema. **Do not** reset or `db push` against that project from this repo — the CLI will conflict with ~167 archived remote migrations.
