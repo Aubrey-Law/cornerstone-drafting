@@ -24,6 +24,9 @@ ${FIELD_LIST}
 
 Never invent facts. If a value is unknown, omitted, unclear, or only implied, omit that field entirely.
 Use ISO dates (YYYY-MM-DD) where possible.
+Extract grantor from the deed as recorded.
+Extract prior_deed_book, prior_deed_page, prior_deed_date, certificate_number, and registry_district from recording references when present.
+registry_district is the Registry of Deeds district or Land Court reference.
 For grantee on a trust transfer, include the trustee name(s) and trust name when present.
 property_state should be the two-letter state abbreviation when known.`
 
