@@ -79,7 +79,7 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
     const defaultsPatch = computeDesignSheetDefaults(sheet, matterWithPracticeArea)
     // Skip write-on-read when nothing meaningful is missing beyond already-persisted values.
     const meaningfulKeys = Object.keys(defaultsPatch).filter(key => {
-      const current = (sheet as Record<string, unknown>)[key]
+      const current = (sheet as unknown as Record<string, unknown>)[key]
       return current == null || current === ''
     })
     if (meaningfulKeys.length > 0) {
