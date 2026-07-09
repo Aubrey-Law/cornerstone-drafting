@@ -52,6 +52,31 @@ supabase db reset   # applies all migrations + supabase/seed.sql
 
 After reset, `seed.sql` grants table privileges and adds a few columns the app expects locally.
 
+## First login (greenfield)
+
+Auth users live in `auth.users`; the app also needs a row in `public.users` with a `role`.
+
+**OAuth (Google / Microsoft):** The callback auto-creates `public.users` on first sign-in.
+
+**Email / password:** Create the user in **Supabase Dashboard → Authentication → Users → Add user**, then either:
+
+- Sign in once (the app auto-creates `public.users` on password login), or
+- Insert manually:
+
+```sql
+INSERT INTO public.users (id, email, role, display_name)
+VALUES (
+  '<auth-user-uuid>',
+  'you@aubreylegal.com',
+  'attorney',
+  'Your Name'
+);
+```
+
+Staff admin routes require `role` in (`attorney`, `admin`). OAuth staff sign-in also requires an `@aubreylegal.com` email.
+
+**Optional — JWT role claim:** Enable **Authentication → Hooks → Custom Access Token Hook** → `public.custom_access_token_hook` so `proxy.ts` can read `user_role` from the token without a DB query on every request.
+
 ## Common error: `relation "public.client_intake" does not exist`
 
 This means the **drafting baseline** (migrations 1–7) has not been applied yet. `20260710000000_lite_intake_portal.sql` begins with:
