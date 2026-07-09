@@ -6,15 +6,26 @@ import {
   isDesignSheetUnseeded,
 } from '@/lib/designSheet/seedFromIntake'
 
+import type { DesignSheet } from '@/types/database'
+import type { IntakeSnapshot } from '@/lib/queries'
+
+export interface EnsureDesignSheetSeedContext {
+  sheet?: DesignSheet | null
+  intake?: IntakeSnapshot | null
+}
+
 /**
  * One-time seed: copy client intake into an empty design sheet.
  * Returns true when a seed write occurred.
  */
-export async function ensureDesignSheetSeededFromIntake(matterId: string): Promise<boolean> {
+export async function ensureDesignSheetSeededFromIntake(
+  matterId: string,
+  context: EnsureDesignSheetSeedContext = {},
+): Promise<boolean> {
   const admin = getAdminClient()
   const [sheet, intake] = await Promise.all([
-    fetchDesignSheet(matterId),
-    fetchIntakeForMatter(matterId),
+    context.sheet !== undefined ? Promise.resolve(context.sheet) : fetchDesignSheet(matterId),
+    context.intake !== undefined ? Promise.resolve(context.intake) : fetchIntakeForMatter(matterId),
   ])
 
   if (!intake?.first_name) return false
