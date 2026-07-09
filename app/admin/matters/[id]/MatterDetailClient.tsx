@@ -45,6 +45,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SetupBanner } from '@/components/SetupBanner'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
+import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 import { MatterOverviewHero } from './MatterOverviewHero'
 
 interface MatterDetailClientProps {
@@ -187,6 +188,15 @@ export default function MatterDetailClient({
     void loadPortalMessages()
     void loadSmsMessages()
   }, [loadPortalMessages, loadSmsMessages])
+
+  const handlePortalMessageInsert = useCallback((message: PortalMessage) => {
+    setPortalMessages(current => {
+      if (current.some(row => row.id === message.id)) return current
+      return [...current, message]
+    })
+  }, [])
+
+  useMessagesRealtime(matter.matter_id, handlePortalMessageInsert)
 
   const sendPortalMessage = async () => {
     if (!token || !portalDraft.trim()) return
