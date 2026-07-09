@@ -1,9 +1,9 @@
 -- Per-matter draft rollups for the drafting hub list (counts + recent current drafts).
 -- Avoids loading every draft row firm-wide when rendering /admin/drafting.
 
-CREATE OR REPLACE FUNCTION public.drafting_hub_draft_rollups(p_matter_ids uuid[])
+CREATE OR REPLACE FUNCTION public.drafting_hub_draft_rollups(p_matter_ids text[])
 RETURNS TABLE (
-  matter_id uuid,
+  matter_id text,
   current_draft_count integer,
   superseded_draft_count integer,
   recent_drafts jsonb
@@ -84,4 +84,4 @@ AS $$
   LEFT JOIN recent ON recent.matter_id = counts.matter_id;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.drafting_hub_draft_rollups(uuid[]) TO service_role;
+GRANT EXECUTE ON FUNCTION public.drafting_hub_draft_rollups(text[]) TO service_role;
