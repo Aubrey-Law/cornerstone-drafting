@@ -27,6 +27,7 @@ export function MatterOverviewAssets({ matterId, matter, intakeId }: Props) {
         </p>
       </div>
       <MatterAssetsTab
+        matterId={matterId}
         intakeId={intakeId}
         clientName={matter.client_name}
         spouseName={matter.spouse_name}

@@ -9,15 +9,16 @@ import {
   ChevronDown,
   ClipboardList,
   FilePenLine,
+  Loader as Loader2,
   Send,
   Trash2,
   Upload,
+  Clock as UnlockIcon,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { listDocuments } from '@/lib/documents'
-import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
-import { CallList } from '@/components/calls/CallList'
 import {
   STAGES,
   stageLabel,
@@ -38,8 +39,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -54,15 +53,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { SetupBanner } from '@/components/SetupBanner'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
-import { resolveMatterIntake } from '@/app/actions/adminIntake'
+import { resolveMatterIntake, unlockIntake } from '@/app/actions/adminIntake'
+import { updateMatterStatus } from '@/app/actions/matterNotes'
+import type { MatterNoteRow } from '@/app/actions/matterNotes'
+import type { MatterDetailsRow } from '@/types/matter-details'
+import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterOverviewHero } from './MatterOverviewHero'
 import { MatterActivityTab } from './MatterActivityTab'
-import { MatterOverviewContacts } from './MatterOverviewContacts'
+import { MatterContactsCard } from './MatterContactsCard'
 import { MatterOverviewAssets } from './MatterOverviewAssets'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
+import { MatterDetailsEditor } from './MatterDetailsEditor'
+import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
+import { useMatterNotes } from './useMatterNotes'
+import { useMatterEngineStageTask } from './useMatterEngineStageTask'
+import { MatterNotesTab } from './tabs/notes'
+import { MatterTasksTab } from './tabs/tasks'
+import { MatterMessagesTab } from './tabs/messages'
+import { MatterCallsTab } from './tabs/calls'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
@@ -85,6 +95,12 @@ interface MatterDetailClientProps {
     unlock_requested_at?: string | null
     unlock_request_note?: string | null
   } | null
+  matterDetails?: MatterDetailsRow | null
+  matterNumber?: string | null
+  initialNotes?: MatterNoteRow[]
+  designSheetSeeded?: boolean
+  reviewFlags?: IntakeReadinessFlag[]
+  resyncPreviewCount?: number
   twilioSmsEnabled?: boolean
   emailSendEnabled?: boolean
 }
@@ -124,6 +140,12 @@ export default function MatterDetailClient({
   agingHealth = null,
   intakeId: initialIntakeId = null,
   clientIntakeRow = null,
+  matterDetails: initialMatterDetails = null,
+  matterNumber: initialMatterNumber = null,
+  initialNotes = [],
+  designSheetSeeded = false,
+  reviewFlags = [],
+  resyncPreviewCount = 0,
   twilioSmsEnabled = false,
   emailSendEnabled = false,
 }: MatterDetailClientProps) {
@@ -144,6 +166,10 @@ export default function MatterDetailClient({
   const [docsLoading, setDocsLoading] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [liveDetails, setLiveDetails] = useState<MatterDetailsRow | null>(initialMatterDetails)
+  const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
+  const [generatingNumber, setGeneratingNumber] = useState(false)
+  const [unlocking, setUnlocking] = useState(false)
 
   const [portalMessages, setPortalMessages] = useState<PortalMessage[]>([])
   const [portalLoading, setPortalLoading] = useState(false)
@@ -174,8 +200,107 @@ export default function MatterDetailClient({
   }, [initialContacts])
 
   useEffect(() => {
+    setLiveDetails(initialMatterDetails)
+  }, [initialMatterDetails])
+
+  useEffect(() => {
+    setMatterNum(initialMatterNumber)
+  }, [initialMatterNumber])
+
+  const prependActivity = useCallback((row: MatterActivity) => {
+    setActivity(current => {
+      if (current.some(item => item.id === row.id)) return current
+      return [row, ...current]
+    })
+  }, [])
+
+  const {
+    editingNoteId,
+    editingNoteText,
+    editingNoteType,
+    noteMutatingId,
+    noteSaving,
+    noteText,
+    noteType,
+    notes,
+    setEditingNoteText,
+    setEditingNoteType,
+    setNoteText,
+    setNoteType,
+    cancelEditingNote,
+    handleAddNote,
+    handleDeleteNote,
+    handleUpdateNote,
+    startEditingNote,
+  } = useMatterNotes({ initialNotes, matterId, onActivityLogged: prependActivity })
+
+  const {
+    currentEngineStageTask,
+    engineStageTaskLoading,
+    handleEngineStageTaskUpdated,
+  } = useMatterEngineStageTask(matterId, matter.stage)
+
+  useEffect(() => {
     setLiveIntakeId(initialIntakeId)
   }, [initialIntakeId])
+
+  const handleFieldSaved = useCallback((field: string, value: unknown, row?: MatterDetailsRow | null) => {
+    if (field === 'matter_number' && typeof value === 'string') {
+      setMatterNum(value || null)
+    }
+    if (row) {
+      setLiveDetails(row)
+    } else if (liveDetails) {
+      setLiveDetails({ ...liveDetails, [field]: value })
+    }
+  }, [liveDetails])
+
+  const handleUpdateClientStatus = useCallback(async (value: string) => {
+    await updateMatterStatus(matterId, value)
+    setMatter(m => ({ ...m, status: value }))
+    setLiveDetails(prev => (prev ? { ...prev, client_status: value } : prev))
+  }, [matterId])
+
+  const handleUnlockIntake = useCallback(async () => {
+    if (!liveIntakeId || unlocking) return
+    if (!window.confirm('Re-open the submitted intake for client editing?')) return
+    setUnlocking(true)
+    try {
+      await unlockIntake({ intakeId: liveIntakeId, matterId, leadId: null })
+      setIntakeCompleted(false)
+      toast.success('Intake unlocked for client editing')
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not unlock intake')
+    } finally {
+      setUnlocking(false)
+    }
+  }, [liveIntakeId, matterId, router, unlocking])
+
+  const handleGenerateMatterNumber = useCallback(async () => {
+    setGeneratingNumber(true)
+    try {
+      const res = await fetch(`/api/admin/matters/${matterId}/matter-number`, { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Failed to generate matter number')
+      const num = body.matterNumber as string
+      const patchRes = await fetch('/api/admin/matter-details', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matterId, field: 'matter_number', value: num }),
+      })
+      const patchBody = await patchRes.json().catch(() => ({}))
+      if (!patchRes.ok) throw new Error(patchBody.error ?? 'Failed to save matter number')
+      setMatterNum(num)
+      if (patchBody.row) setLiveDetails(patchBody.row)
+      toast.success('Matter number updated')
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not generate matter number')
+    } finally {
+      setGeneratingNumber(false)
+    }
+  }, [matterId, router])
 
   const openIntakeSheet = useCallback(async () => {
     if (liveIntakeId) {
@@ -456,6 +581,8 @@ export default function MatterDetailClient({
     }
   }
 
+  const unlockRequestedAt = clientIntakeRow?.unlock_requested_at ?? null
+  const showUnlockBanner = Boolean(intakeCompleted && unlockRequestedAt)
   const matterLabel = matter.client_name || matter.matter_name || 'this matter'
   const nextAction = useMemo(() => computeMatterNextAction(matter), [matter])
   const daysOpen = useMemo(() => matterDaysOpen(matter.matter_created), [matter.matter_created])
@@ -486,6 +613,26 @@ export default function MatterDetailClient({
               {matter.practice_area || 'Estate Planning'}
               {matter.matter_name ? ` · ${matter.matter_name}` : ''}
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 font-mono text-[11px] tabular-nums">
+                {matterNum || 'No matter #'}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1 px-2 text-[11px]"
+                disabled={generatingNumber}
+                onClick={() => void handleGenerateMatterNumber()}
+              >
+                {generatingNumber ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Zap className="h-3 w-3" />
+                )}
+                {matterNum ? 'Regenerate' : 'Generate'}
+              </Button>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
@@ -505,6 +652,16 @@ export default function MatterDetailClient({
                   <Upload className="mr-2 h-3.5 w-3.5" />
                   Import intake — paste text or upload Word
                 </DropdownMenuItem>
+                {intakeCompleted && liveIntakeId && (
+                  <DropdownMenuItem onClick={() => void handleUnlockIntake()} disabled={unlocking}>
+                    {unlocking ? (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    ) : (
+                      <UnlockIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                    Unlock intake for client editing
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <Button type="button" size="sm" variant="outline" asChild>
@@ -527,13 +684,33 @@ export default function MatterDetailClient({
         </div>
       </div>
 
+      {showUnlockBanner && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 md:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">Client requested intake changes</p>
+              <p className="text-xs text-amber-900/80">
+                {clientIntakeRow?.unlock_request_note?.trim()
+                  || 'The client asked to update their submitted intake. Unlock to allow edits.'}
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="outline" disabled={unlocking} onClick={() => void handleUnlockIntake()}>
+              {unlocking ? 'Unlocking…' : 'Unlock intake'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
         <Tabs defaultValue="overview" className="gap-4">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="contacts">Additional Contacts</TabsTrigger>
-            <TabsTrigger value="communications">Communications</TabsTrigger>
+            <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="notes">Notes</TabsTrigger>
+            <TabsTrigger value="messages">Messages</TabsTrigger>
+            <TabsTrigger value="calls">Calls</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
@@ -615,7 +792,22 @@ export default function MatterDetailClient({
               </p>
             )}
 
-            <MatterOverviewContacts matterId={matterId} matter={matter} />
+            <MatterContactsCard matterId={matterId} />
+            <MatterDetailsEditor
+              liveDetails={liveDetails}
+              matter={matter}
+              matterId={matterId}
+              matterNumber={matterNum}
+              onUpdateClientStatus={handleUpdateClientStatus}
+              onFieldSaved={handleFieldSaved}
+            />
+            <IntakeSyncStatusCard
+              matterId={matterId}
+              intakeCompleted={intakeCompleted}
+              designSheetSeeded={designSheetSeeded}
+              reviewFlags={reviewFlags}
+              resyncPreviewCount={resyncPreviewCount}
+            />
             <MatterOverviewAssets matterId={matterId} matter={matter} intakeId={liveIntakeId} />
           </TabsContent>
 
@@ -661,206 +853,61 @@ export default function MatterDetailClient({
             />
           </TabsContent>
 
-          <TabsContent value="communications" className="space-y-8">
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold">Portal messages</h3>
-                <p className="text-xs text-muted-foreground">
-                  In-app thread with the client portal.
-                </p>
-              </div>
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3">
-                {portalLoading ? (
-                  <p className="text-xs text-muted-foreground">Loading…</p>
-                ) : portalMessages.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No portal messages yet.</p>
-                ) : (
-                  portalMessages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`rounded-md px-2.5 py-2 text-xs ${
-                        m.sender_role === 'client'
-                          ? 'bg-muted/50'
-                          : 'bg-primary/10'
-                      }`}
-                    >
-                      <div className="mb-0.5 flex justify-between gap-2 text-[10px] text-muted-foreground">
-                        <span className="capitalize">{m.sender_role}</span>
-                        <span>{new Date(m.created_at).toLocaleString()}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap">{m.body}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Textarea
-                  value={portalDraft}
-                  onChange={(e) => setPortalDraft(e.target.value)}
-                  placeholder="Write a portal message…"
-                  rows={2}
-                  className="min-h-[60px]"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  className="shrink-0 self-end"
-                  disabled={portalSending || !portalDraft.trim()}
-                  onClick={() => void sendPortalMessage()}
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  Send
-                </Button>
-              </div>
-            </section>
+          <MatterTasksTab
+            matterStage={matter.stage}
+            engineStageTask={currentEngineStageTask}
+            engineStageTaskLoading={engineStageTaskLoading}
+            onEngineStageTaskUpdated={handleEngineStageTaskUpdated}
+          />
 
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold">SMS</h3>
-                <p className="text-xs text-muted-foreground">
-                  Text thread with the client or spouse.
-                </p>
-              </div>
-              {!twilioSmsEnabled ? (
-                <SetupBanner
-                  feature="SMS"
-                  detail="Add Twilio credentials in environment variables to text clients from this tab."
-                />
-              ) : (
-                <>
-                  <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3">
-                    {smsLoading ? (
-                      <p className="text-xs text-muted-foreground">Loading…</p>
-                    ) : smsMessages.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No texts yet.</p>
-                    ) : (
-                      smsMessages.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`rounded-md px-2.5 py-2 text-xs ${
-                            m.direction === 'inbound' ? 'bg-muted/50' : 'bg-primary/10'
-                          }`}
-                        >
-                          <div className="mb-0.5 flex justify-between gap-2 text-[10px] text-muted-foreground">
-                            <span>
-                              {m.direction === 'inbound' ? 'Inbound' : 'Outbound'}
-                              {m.recipient_name ? ` · ${m.recipient_name}` : ''}
-                              {m.status ? ` · ${m.status}` : ''}
-                            </span>
-                            <span>{new Date(m.created_at).toLocaleString()}</span>
-                          </div>
-                          <p className="whitespace-pre-wrap">{m.body}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="w-36">
-                      <Label className="text-[11px]">To</Label>
-                      <Select
-                        value={smsRecipient}
-                        onValueChange={(v) => setSmsRecipient(v as 'client' | 'spouse')}
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="client">Client</SelectItem>
-                          <SelectItem value="spouse">Spouse</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Textarea
-                      value={smsDraft}
-                      onChange={(e) => setSmsDraft(e.target.value.slice(0, MAX_SMS_BODY_LENGTH))}
-                      placeholder="Text message…"
-                      rows={2}
-                      className="min-h-[60px] flex-1"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="shrink-0"
-                      disabled={smsSending || !smsDraft.trim()}
-                      onClick={() => void sendSms()}
-                    >
-                      Send SMS
-                    </Button>
-                  </div>
-                </>
-              )}
-            </section>
+          <MatterNotesTab
+            editingNoteId={editingNoteId}
+            editingNoteText={editingNoteText}
+            editingNoteType={editingNoteType}
+            noteMutatingId={noteMutatingId}
+            noteSaving={noteSaving}
+            noteText={noteText}
+            noteType={noteType}
+            notes={notes}
+            setEditingNoteText={setEditingNoteText}
+            setEditingNoteType={setEditingNoteType}
+            setNoteText={setNoteText}
+            setNoteType={setNoteType}
+            cancelEditingNote={cancelEditingNote}
+            handleAddNote={handleAddNote}
+            handleDeleteNote={handleDeleteNote}
+            handleUpdateNote={handleUpdateNote}
+            startEditingNote={startEditingNote}
+          />
 
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold">Email</h3>
-                <p className="text-xs text-muted-foreground">
-                  Sends via Outlook when connected; otherwise Resend.
-                </p>
-              </div>
-              {!emailSendEnabled ? (
-                <SetupBanner
-                  feature="Email"
-                  detail="Connect Outlook in Settings or configure Resend to send from this tab."
-                />
-              ) : (
-                <div className="space-y-2 rounded-md border border-border p-3">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="grid gap-1">
-                      <Label htmlFor="email-to" className="text-[11px]">
-                        To
-                      </Label>
-                      <Input
-                        id="email-to"
-                        type="email"
-                        value={emailTo}
-                        onChange={(e) => setEmailTo(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="email-subject" className="text-[11px]">
-                        Subject
-                      </Label>
-                      <Input
-                        id="email-subject"
-                        value={emailSubject}
-                        onChange={(e) => setEmailSubject(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <Textarea
-                    value={emailBody}
-                    onChange={(e) => setEmailBody(e.target.value)}
-                    placeholder="Plain-text email body…"
-                    rows={5}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={
-                      emailSending ||
-                      !emailTo.trim() ||
-                      !emailSubject.trim() ||
-                      !emailBody.trim()
-                    }
-                    onClick={() => void sendEmail()}
-                  >
-                    {emailSending ? 'Sending…' : 'Send email'}
-                  </Button>
-                </div>
-              )}
-            </section>
+          <MatterMessagesTab
+            portalMessages={portalMessages}
+            portalLoading={portalLoading}
+            portalDraft={portalDraft}
+            portalSending={portalSending}
+            smsMessages={smsMessages}
+            smsLoading={smsLoading}
+            smsDraft={smsDraft}
+            smsRecipient={smsRecipient}
+            smsSending={smsSending}
+            emailTo={emailTo}
+            emailSubject={emailSubject}
+            emailBody={emailBody}
+            emailSending={emailSending}
+            twilioSmsEnabled={twilioSmsEnabled}
+            emailSendEnabled={emailSendEnabled}
+            setPortalDraft={setPortalDraft}
+            setSmsDraft={setSmsDraft}
+            setSmsRecipient={setSmsRecipient}
+            setEmailTo={setEmailTo}
+            setEmailSubject={setEmailSubject}
+            setEmailBody={setEmailBody}
+            onSendPortal={() => void sendPortalMessage()}
+            onSendSms={() => void sendSms()}
+            onSendEmail={() => void sendEmail()}
+          />
 
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold">Calls</h3>
-                <p className="text-xs text-muted-foreground">
-                  Logged Twilio and Retell calls for this matter.
-                </p>
-              </div>
-              <CallList matterId={matter.matter_id} />
-            </section>
-          </TabsContent>
+          <MatterCallsTab matterId={matter.matter_id} />
 
           <TabsContent value="activity">
             <MatterActivityTab activity={activity} loading={activityLoading} />

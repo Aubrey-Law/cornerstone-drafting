@@ -1,9 +1,14 @@
 import { notFound } from 'next/navigation'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { fetchMatterAgingHealth } from '@/lib/queries/matterOverview'
+import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
 import { isTwilioSmsConfigured } from '@/lib/twilio/config'
 import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
+import type { MatterDetailsRow } from '@/types/matter-details'
+import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
+import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import MatterDetailClient from './MatterDetailClient'
 
 export const dynamic = 'force-dynamic'
@@ -21,11 +26,23 @@ export default async function MatterDetailPage({ params }: Params) {
   if (!matter) notFound()
 
   const admin = getAdminClient()
-  const { data: matterRow } = await admin
-    .from('matters')
-    .select('client_intake_id')
-    .eq('id', id)
-    .maybeSingle()
+  const [
+    { data: matterRow },
+    { data: detailsRow },
+    { data: notes },
+    designSheet,
+    intakeSnapshot,
+  ] = await Promise.all([
+    admin.from('matters').select('client_intake_id, matter_number').eq('id', id).maybeSingle(),
+    admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
+    admin
+      .from('matter_notes')
+      .select('id, matter_id, note_type, body, author, created_at')
+      .eq('matter_id', id)
+      .order('created_at', { ascending: false }),
+    fetchDesignSheet(id),
+    fetchIntakeForMatter(id),
+  ])
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
   let clientIntakeRow: {
@@ -50,6 +67,17 @@ export default async function MatterDetailPage({ params }: Params) {
     clientIntakeRow = data
   }
 
+  const matterDetails = (detailsRow ?? null) as MatterDetailsRow | null
+  const matterNumber = (matterRow?.matter_number ?? matterDetails?.matter_number ?? null) as string | null
+  const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
+  const reviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
+  const resyncPreviewCount = intakeSnapshot && designSheet
+    ? buildIntakeResyncPreview({
+        currentSheet: designSheet as unknown as Record<string, unknown>,
+        intake: intakeSnapshot,
+      }).filter(row => row.selected && row.currentDisplay !== row.proposedDisplay).length
+    : 0
+
   return (
     <MatterDetailClient
       matter={matter}
@@ -58,6 +86,12 @@ export default async function MatterDetailPage({ params }: Params) {
       agingHealth={agingHealth}
       intakeId={intakeId}
       clientIntakeRow={clientIntakeRow}
+      matterDetails={matterDetails}
+      matterNumber={matterNumber}
+      initialNotes={(notes ?? []) as MatterNoteRow[]}
+      designSheetSeeded={designSheetSeeded}
+      reviewFlags={reviewFlags}
+      resyncPreviewCount={resyncPreviewCount}
       twilioSmsEnabled={isTwilioSmsConfigured()}
       emailSendEnabled={isMicrosoftConfigured() || Boolean(process.env.RESEND_API_KEY)}
     />
