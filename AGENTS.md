@@ -1,8 +1,12 @@
 # AGENTS.md
 
+## Drafting no-touch policy
+
+Cornerstone **drafting** (design sheet, generate, review, draft payload, estate generator) is the product center. Do **not** port or merge drafting code from `aubrey-law-app` unless the user explicitly approves an exception. New lite features (matters, intake, portal, aging, communications) may **link into** drafting (`/admin/drafting/[matterId]`, `ensureDesignSheetSeededFromIntake`, stage PATCH) but must not rewrite drafting internals.
+
 ## Cursor Cloud specific instructions
 
-This is **Cornerstone Drafting** — a Next.js (App Router) estate-planning drafting app.
+This is **Cornerstone Lite** — a Next.js (App Router) estate-planning app (intake, matters, portal, aging, communications, and drafting).
 Standard scripts and env-var lists live in `README.md`, `OPERATIONS_RUNBOOK.md`, and
 `VERCEL_ENV_CHECKLIST.md`; this section only captures the non-obvious pieces needed to
 run and test it inside a Cursor Cloud VM.
@@ -75,8 +79,12 @@ that a fresh VM needs and must be done manually (kept out of the update script o
   on every load and bumps `updated_at`; on a brand-new sheet this can trigger a one-time
   "design sheet was updated elsewhere" save conflict that auto-reloads. Once those defaults
   are persisted, saves are clean.
-- Auth login requires attorney/admin role. OAuth (Google/Microsoft) enforces an
-  `@aubreylegal.com` domain gate and needs external providers — use email/password locally.
+- Auth supports **attorney/admin** and **client** roles. Staff OAuth still enforces an
+  `@aubreylegal.com` domain gate. Clients use email/password (or OAuth without firm domain).
+  Post-login: staff → `/admin/drafting` (or safe admin redirect); clients → `/dashboard`
+  (or safe portal redirect: `/intake`, `/documents`, `/messages`).
+- Greenfield lite migrations (`20260710*`–`20260712*`) add intake columns, messages, aging,
+  SMS/calls/calendar_connections. Run `supabase db reset` locally after pulling.
 
 ### Pre-existing check failures (not environment issues)
 

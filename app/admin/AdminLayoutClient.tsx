@@ -4,18 +4,37 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { FilePenLine, LogOut, Menu, PanelLeftClose, PanelLeft, Settings } from 'lucide-react'
+import {
+  Briefcase,
+  Clock,
+  FilePenLine,
+  LogOut,
+  Menu,
+  PanelLeftClose,
+  PanelLeft,
+  Phone,
+  Settings,
+} from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
+import dynamic from 'next/dynamic'
+
+const StaffSoftphone = dynamic(
+  () => import('./components/StaffSoftphone').then((m) => m.StaffSoftphone),
+  { ssr: false },
+)
 
 const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 
 const navItems = [
+  { href: '/admin/matters', label: 'Matters', icon: Briefcase },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
+  { href: '/admin/pipeline/aging', label: 'Aging', icon: Clock },
+  { href: '/admin/calls', label: 'Calls', icon: Phone },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -23,12 +42,14 @@ interface AdminLayoutClientProps {
   children: React.ReactNode
   userName: string
   userInitials: string
+  twilioVoiceEnabled?: boolean
 }
 
 export default function AdminLayoutClient({
   children,
   userName,
   userInitials,
+  twilioVoiceEnabled = false,
 }: AdminLayoutClientProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -100,12 +121,12 @@ export default function AdminLayoutClient({
           )}
         >
           {!collapsed ? (
-            <Link href="/admin/drafting" className="flex min-w-0 items-center gap-2">
+            <Link href="/admin/matters" className="flex min-w-0 items-center gap-2">
               <Image src="/favicon.svg" alt="" width={28} height={28} />
-              <span className="truncate text-sm font-semibold">Drafting</span>
+              <span className="truncate text-sm font-semibold">Cornerstone</span>
             </Link>
           ) : (
-            <Link href="/admin/drafting" className="flex items-center justify-center" title="Drafting">
+            <Link href="/admin/matters" className="flex items-center justify-center" title="Cornerstone">
               <Image src="/favicon.svg" alt="" width={24} height={24} />
             </Link>
           )}
@@ -133,7 +154,7 @@ export default function AdminLayoutClient({
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="text-sm font-semibold">Drafting</span>
+            <span className="text-sm font-semibold">Cornerstone</span>
           </div>
           <div className="hidden md:block" />
           <div className="flex items-center gap-2">
@@ -155,7 +176,7 @@ export default function AdminLayoutClient({
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="flex w-56 flex-col p-0">
           <div className="flex h-14 items-center border-b border-border px-4">
-            <span className="text-sm font-semibold">Drafting</span>
+            <span className="text-sm font-semibold">Cornerstone</span>
           </div>
           {nav(false)}
           <div className="mt-auto border-t border-border p-2">
@@ -163,6 +184,8 @@ export default function AdminLayoutClient({
           </div>
         </SheetContent>
       </Sheet>
+
+      {twilioVoiceEnabled ? <StaffSoftphone /> : null}
     </div>
   )
 }

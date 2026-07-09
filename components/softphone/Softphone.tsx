@@ -1,0 +1,432 @@
+'use client'
+
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Device, Call } from '@twilio/voice-sdk'
+
+/**
+ * Browser-based dialer for Cornerstone staff. Authenticates via /api/token,
+ * places outbound calls through the TwiML App's Voice URL (/api/voice),
+ * and accepts inbound calls routed to <Client>identity</Client>.
+ *
+ * Inbound ringing is active when the business-line Voice URL points at
+ * /api/voice/inbound and TWILIO_INBOUND_CLIENT_IDENTITIES includes this user.
+ */
+
+const STATUS = {
+  CONNECTING: 'connecting',
+  IDLE: 'idle',
+  INCOMING: 'incoming',
+  DIALING: 'dialing',
+  ON_CALL: 'on_call',
+  OFFLINE: 'offline',
+} as const
+
+type SoftphoneStatus = (typeof STATUS)[keyof typeof STATUS]
+
+function formatDuration(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0')
+  const s = (totalSeconds % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
+
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 11)
+  const d = digits.startsWith('1') ? digits.slice(1) : digits
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6, 10)}`
+}
+
+function toE164(display: string): string {
+  const digits = display.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  if (digits.length === 10) return `+1${digits}`
+  return `+${digits}`
+}
+
+const KEYPAD: [string, string][] = [
+  ['1', ''], ['2', 'ABC'], ['3', 'DEF'],
+  ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'],
+  ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'],
+  ['*', ''], ['0', '+'], ['#', ''],
+]
+
+export default function Softphone() {
+  const [status, setStatus] = useState<SoftphoneStatus>(STATUS.CONNECTING)
+  const [number, setNumber] = useState('')
+  const [muted, setMuted] = useState(false)
+  const [seconds, setSeconds] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [incomingFrom, setIncomingFrom] = useState('')
+
+  const deviceRef = useRef<Device | null>(null)
+  const callRef = useRef<Call | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
+  }, [])
+
+  const startTimer = useCallback(() => {
+    stopTimer()
+    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
+  }, [stopTimer])
+
+  const cleanupCall = useCallback(() => {
+    stopTimer()
+    setSeconds(0)
+    setMuted(false)
+    setIncomingFrom('')
+    callRef.current = null
+    setStatus(deviceRef.current ? STATUS.IDLE : STATUS.OFFLINE)
+  }, [stopTimer])
+
+  const wireCall = useCallback(
+    (call: Call) => {
+      call.on('accept', () => {
+        setStatus(STATUS.ON_CALL)
+        setMuted(false)
+        startTimer()
+      })
+      call.on('disconnect', cleanupCall)
+      call.on('cancel', cleanupCall)
+      call.on('reject', cleanupCall)
+      call.on('error', (e: Error) => {
+        setError(e?.message || 'Call error')
+        cleanupCall()
+      })
+    },
+    [cleanupCall, startTimer],
+  )
+
+  const fetchToken = useCallback(async (): Promise<string> => {
+    const res = await fetch('/api/token')
+    if (!res.ok) throw new Error('Token request failed')
+    const data = (await res.json()) as { token: string }
+    return data.token
+  }, [])
+
+  useEffect(() => {
+    let device: Device | undefined
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const token = await fetchToken()
+        if (cancelled) return
+
+        device = new Device(token, {
+          codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+          allowIncomingWhileBusy: false,
+        })
+
+        device.on('registered', () => setStatus(STATUS.IDLE))
+        device.on('unregistered', () => setStatus(STATUS.OFFLINE))
+        device.on('error', (e: Error) => {
+          setError(e?.message || 'Device error')
+          setStatus(STATUS.OFFLINE)
+        })
+
+        device.on('incoming', (call: Call) => {
+          callRef.current = call
+          setIncomingFrom(call.parameters?.From || 'Unknown caller')
+          setStatus(STATUS.INCOMING)
+          wireCall(call)
+        })
+
+        device.on('tokenWillExpire', async () => {
+          try {
+            const fresh = await fetchToken()
+            device?.updateToken(fresh)
+          } catch {
+            /* surfaces as device error if refresh actually fails */
+          }
+        })
+
+        await device.register()
+        deviceRef.current = device
+      } catch (e) {
+        if (!cancelled) {
+          const message = e instanceof Error ? e.message : 'Could not start softphone'
+          setError(message)
+          setStatus(STATUS.OFFLINE)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      stopTimer()
+      device?.destroy()
+    }
+  }, [fetchToken, stopTimer, wireCall])
+
+  const placeCall = useCallback(async () => {
+    const device = deviceRef.current
+    if (!device || !number.trim()) return
+    try {
+      setStatus(STATUS.DIALING)
+      const call = await device.connect({ params: { To: toE164(number) } })
+      callRef.current = call
+      wireCall(call)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not place call'
+      setError(message)
+      cleanupCall()
+    }
+  }, [number, wireCall, cleanupCall])
+
+  const acceptCall = useCallback(() => {
+    callRef.current?.accept()
+  }, [])
+
+  const rejectCall = useCallback(() => {
+    callRef.current?.reject()
+  }, [])
+
+  const hangUp = useCallback(() => {
+    callRef.current?.disconnect()
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    const call = callRef.current
+    if (!call) return
+    const next = !muted
+    call.mute(next)
+    setMuted(next)
+  }, [muted])
+
+  const pressKey = useCallback(
+    (digit: string) => {
+      if (status === STATUS.ON_CALL) {
+        callRef.current?.sendDigits(digit)
+        return
+      }
+      setNumber((prev) => formatPhone(prev.replace(/\D/g, '') + digit))
+    },
+    [status],
+  )
+
+  const backspace = useCallback(() => {
+    setNumber((prev) => formatPhone(prev.replace(/\D/g, '').slice(0, -1)))
+  }, [])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (status !== STATUS.IDLE && status !== STATUS.DIALING) return
+      if (/^[0-9*#]$/.test(e.key)) pressKey(e.key)
+      else if (e.key === 'Backspace') backspace()
+      else if (e.key === 'Enter') void placeCall()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [status, pressKey, backspace, placeCall])
+
+  const inCall = status === STATUS.ON_CALL || status === STATUS.DIALING
+  const statusLabel: Record<SoftphoneStatus, string> = {
+    [STATUS.CONNECTING]: 'Connecting…',
+    [STATUS.IDLE]: 'Ready',
+    [STATUS.INCOMING]: 'Incoming call',
+    [STATUS.DIALING]: 'Calling…',
+    [STATUS.ON_CALL]: formatDuration(seconds),
+    [STATUS.OFFLINE]: 'Offline',
+  }
+
+  return (
+    <div className="sp">
+      <style>{styles}</style>
+
+      <header className="sp__bar">
+        <span className={`sp__dot sp__dot--${status}`} aria-hidden />
+        <span className="sp__status">{statusLabel[status]}</span>
+        <span className="sp__brand">Cornerstone</span>
+      </header>
+
+      {status === STATUS.INCOMING && (
+        <div className="sp__incoming" role="dialog" aria-label="Incoming call">
+          <p className="sp__incoming-label">Incoming</p>
+          <p className="sp__incoming-from">{formatPhone(incomingFrom) || incomingFrom}</p>
+          <div className="sp__incoming-actions">
+            <button type="button" className="sp__btn sp__btn--decline" onClick={rejectCall}>
+              Decline
+            </button>
+            <button type="button" className="sp__btn sp__btn--accept" onClick={acceptCall}>
+              Answer
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="sp__readout" aria-live="polite">
+        {inCall ? (
+          <span className="sp__readout-num">{formatPhone(number) || 'Call in progress'}</span>
+        ) : (
+          <input
+            className="sp__readout-input"
+            value={number}
+            onChange={(e) => setNumber(formatPhone(e.target.value))}
+            placeholder="Enter a number"
+            inputMode="tel"
+            aria-label="Phone number"
+            disabled={status === STATUS.INCOMING}
+          />
+        )}
+        {!inCall && number && (
+          <button type="button" className="sp__back" onClick={backspace} aria-label="Delete last digit">
+            ⌫
+          </button>
+        )}
+      </div>
+
+      <div className="sp__pad" role="group" aria-label="Dial pad">
+        {KEYPAD.map(([digit, letters]) => (
+          <button
+            key={digit}
+            type="button"
+            className="sp__key"
+            onClick={() => pressKey(digit)}
+            disabled={status === STATUS.INCOMING}
+          >
+            <span className="sp__key-digit">{digit}</span>
+            <span className="sp__key-letters">{letters}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="sp__actions">
+        {inCall ? (
+          <>
+            <button
+              type="button"
+              className={`sp__round ${muted ? 'sp__round--on' : ''}`}
+              onClick={toggleMute}
+              disabled={status !== STATUS.ON_CALL}
+              aria-pressed={muted}
+            >
+              {muted ? 'Unmute' : 'Mute'}
+            </button>
+            <button type="button" className="sp__round sp__round--end" onClick={hangUp}>
+              End
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="sp__round sp__round--call"
+            onClick={() => void placeCall()}
+            disabled={status !== STATUS.IDLE || !number.trim()}
+          >
+            Call
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <p className="sp__error" role="alert" onClick={() => setError(null)}>
+          {error} — tap to dismiss
+        </p>
+      )}
+    </div>
+  )
+}
+
+const styles = `
+.sp {
+  --navy: #1B3A6B;
+  --teal: #0F6E56;
+  --ink: #14223b;
+  --line: #e4e8f0;
+  --bg: #fbfcfe;
+  --muted: #7d8aa3;
+  width: 320px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  box-shadow: 0 12px 32px -16px rgba(27,58,107,.35);
+  position: relative;
+  user-select: none;
+}
+.sp__bar {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; margin-bottom: 14px;
+}
+.sp__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.sp__dot--idle { background: var(--teal); }
+.sp__dot--on_call { background: var(--teal); animation: pulse 1.6s infinite; }
+.sp__dot--dialing, .sp__dot--incoming { background: #d98a00; animation: pulse 1s infinite; }
+.sp__dot--offline { background: #c0392b; }
+.sp__dot--connecting { background: var(--muted); animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+.sp__status { font-variant-numeric: tabular-nums; font-weight: 600; }
+.sp__brand { margin-left: auto; color: var(--navy); font-weight: 700; letter-spacing: .2px; }
+
+.sp__readout {
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 2px 12px; margin-bottom: 14px; min-height: 40px;
+}
+.sp__readout-input {
+  flex: 1; border: 0; background: transparent; outline: none;
+  font-size: 24px; letter-spacing: .5px; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.sp__readout-input::placeholder { color: var(--muted); font-size: 17px; letter-spacing: 0; }
+.sp__readout-num { flex: 1; font-size: 22px; color: var(--navy); font-weight: 600; }
+.sp__back { border: 0; background: transparent; font-size: 18px; color: var(--muted); cursor: pointer; padding: 4px 8px; }
+.sp__back:hover { color: var(--navy); }
+
+.sp__pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sp__key {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 56px; border: 1px solid var(--line); border-radius: 12px;
+  background: #fff; cursor: pointer; transition: transform .06s, background .12s, border-color .12s;
+}
+.sp__key:hover { background: #f3f6fb; border-color: #cdd6e6; }
+.sp__key:active { transform: scale(.96); background: #eef2f9; }
+.sp__key:disabled { opacity: .4; cursor: not-allowed; }
+.sp__key-digit { font-size: 22px; font-weight: 600; color: var(--ink); line-height: 1; }
+.sp__key-letters { font-size: 9px; letter-spacing: 1.5px; color: var(--muted); margin-top: 3px; min-height: 11px; }
+
+.sp__actions { display: flex; justify-content: center; gap: 14px; margin-top: 16px; }
+.sp__round {
+  min-width: 110px; height: 48px; border: 0; border-radius: 24px;
+  font-size: 15px; font-weight: 600; color: #fff; cursor: pointer;
+  transition: filter .12s, transform .06s;
+}
+.sp__round:active { transform: scale(.97); }
+.sp__round:disabled { opacity: .45; cursor: not-allowed; }
+.sp__round--call { background: var(--teal); }
+.sp__round--end { background: #c0392b; }
+.sp__round--on { background: var(--navy); }
+.sp__round:not(.sp__round--call):not(.sp__round--end):not(.sp__round--on) { background: var(--muted); }
+.sp__round:hover:not(:disabled) { filter: brightness(1.06); }
+
+.sp__incoming {
+  position: absolute; inset: 0; z-index: 5;
+  background: rgba(251,252,254,.97); border-radius: 18px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  animation: rise .18s ease-out;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+.sp__incoming-label { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.sp__incoming-from { font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 18px; }
+.sp__incoming-actions { display: flex; gap: 14px; }
+.sp__btn { min-width: 104px; height: 46px; border: 0; border-radius: 23px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; }
+.sp__btn--accept { background: var(--teal); }
+.sp__btn--decline { background: #c0392b; }
+.sp__btn:active { transform: scale(.97); }
+
+.sp__error {
+  margin: 12px 0 0; padding: 8px 10px; font-size: 12px;
+  background: #fdecea; color: #a13226; border-radius: 8px; cursor: pointer; text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp__dot, .sp__incoming { animation: none; }
+  .sp__round:active, .sp__key:active, .sp__btn:active { transform: none; }
+}
+`

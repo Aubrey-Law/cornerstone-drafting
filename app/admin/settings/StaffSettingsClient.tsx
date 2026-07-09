@@ -20,8 +20,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PipelineSlaSettings } from './PipelineSlaSettings'
 
-type Tab = 'models' | 'api-keys' | 'connectors'
+type Tab = 'models' | 'api-keys' | 'connectors' | 'outlook' | 'sla'
 
 interface ApiKeyStatus {
   provider: string
@@ -54,14 +55,35 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
     authSecret: '',
   })
   const [testingConnectorId, setTestingConnectorId] = useState<string | null>(null)
+  const [outlook, setOutlook] = useState<{
+    envConfigured: boolean
+    configIssue: string | null
+    connected: boolean
+    email: string | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const t = sp.get('tab')
+    if (t === 'outlook' || t === 'models' || t === 'api-keys' || t === 'connectors' || t === 'sla') {
+      setTab(t)
+    }
+    if (sp.get('mscal_connected') === '1') {
+      toast.success('Outlook connected')
+    }
+    const err = sp.get('mscal_error')
+    if (err) toast.error(err)
+  }, [])
 
   useEffect(() => {
     if (!token) return
     void (async () => {
-      const [pRes, kRes, cRes] = await Promise.all([
+      const [pRes, kRes, cRes, oRes] = await Promise.all([
         fetch('/api/admin/me/preferences', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/me/api-keys', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/me/connectors', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/admin/microsoft/status', { headers: { Authorization: `Bearer ${token}` } }),
       ])
       if (pRes.ok) {
         const body = await pRes.json()
@@ -74,6 +96,15 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       if (cRes.ok) {
         const body = await cRes.json()
         setConnectors(body.connectors ?? [])
+      }
+      if (oRes.ok) {
+        const body = await oRes.json()
+        setOutlook({
+          envConfigured: Boolean(body.envConfigured),
+          configIssue: body.configIssue ?? null,
+          connected: Boolean(body.connected),
+          email: body.email ?? null,
+        })
       }
     })()
   }, [token])
@@ -258,16 +289,18 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Model preferences, bring-your-own API keys, and MCP connectors for drafting tools.
+          Model preferences, API keys, MCP connectors, Outlook, and matter stage SLA.
         </p>
       </div>
 
-      <div className="flex gap-1 border-b border-border">
+      <div className="flex flex-wrap gap-1 border-b border-border">
         {(
           [
             ['models', 'Models'],
             ['api-keys', 'API Keys'],
             ['connectors', 'Connectors'],
+            ['outlook', 'Outlook'],
+            ['sla', 'Stage SLA'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -524,6 +557,68 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
           </ul>
         </section>
       )}
+
+      {tab === 'outlook' && (
+        <section className="space-y-4 rounded-lg border border-border p-4">
+          <div>
+            <h2 className="text-sm font-semibold">Microsoft 365 / Outlook</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Connect your Outlook mailbox to send matter emails via Microsoft Graph. If not
+              connected, manual emails fall back to Resend.
+            </p>
+          </div>
+          {!outlook ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : !outlook.envConfigured ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+              Microsoft Graph is not configured.
+              {outlook.configIssue ? ` ${outlook.configIssue}` : ''} Set
+              MICROSOFT_GRAPH_CLIENT_ID, MICROSOFT_GRAPH_CLIENT_SECRET, and
+              MICROSOFT_GRAPH_REDIRECT_URI (pointing at /api/admin/microsoft/callback).
+            </p>
+          ) : outlook.connected ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm">
+                Connected as <span className="font-medium">{outlook.email || 'Outlook'}</span>
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                onClick={() => {
+                  if (!token) return
+                  void (async () => {
+                    setSaving(true)
+                    try {
+                      const res = await fetch('/api/admin/microsoft/status', {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                      })
+                      if (!res.ok) throw new Error('Disconnect failed')
+                      setOutlook((o) =>
+                        o ? { ...o, connected: false, email: null } : o,
+                      )
+                      toast.success('Outlook disconnected')
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : 'Disconnect failed')
+                    } finally {
+                      setSaving(false)
+                    }
+                  })()
+                }}
+              >
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" asChild>
+              <a href="/api/admin/microsoft/connect">Connect Outlook</a>
+            </Button>
+          )}
+        </section>
+      )}
+
+      {tab === 'sla' && <PipelineSlaSettings />}
     </div>
   )
 }

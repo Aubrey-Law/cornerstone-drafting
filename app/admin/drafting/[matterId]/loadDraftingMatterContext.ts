@@ -10,6 +10,7 @@ import { normalizePracticeArea } from '@/lib/practiceArea'
 import { buildDesignSheetPersistencePayload } from '@/lib/designSheetPersistence'
 import { computeDesignSheetDefaults } from '@/lib/designSheetDefaults'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
+import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 
@@ -35,12 +36,15 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
 
   if (!matter) notFound()
 
-  await ensureDesignSheetSeededFromIntake(matterId)
-
+  // Seed only when needed; avoid re-fetching intake inside ensure when we already have it.
   let sheet = await fetchDesignSheet(matterId)
+  if (!sheet || isDesignSheetUnseeded(sheet)) {
+    await ensureDesignSheetSeededFromIntake(matterId)
+    sheet = await fetchDesignSheet(matterId)
+  }
 
   const admin = getAdminClient()
-  const [{ data: matterRow }, { data: detailsRow }, { data: pipelineRow }] = await Promise.all([
+  const [{ data: matterRow }, { data: detailsRow }] = await Promise.all([
     admin
       .from('matters')
       .select('li_plan_coverage, li_design_sheet_data, li_design_sheet_approved')
@@ -51,14 +55,10 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
       .select('practice_area')
       .eq('client_id', matterId)
       .maybeSingle(),
-    admin
-      .from('v_matter_pipeline')
-      .select('practice_area')
-      .eq('matter_id', matterId)
-      .maybeSingle(),
   ])
 
-  const practiceArea = detailsRow?.practice_area ?? pipelineRow?.practice_area ?? null
+  // Prefer matter_details, then pipeline row already loaded via fetchMatter.
+  const practiceArea = detailsRow?.practice_area ?? matter.practice_area ?? null
   const normalizedPracticeArea = normalizePracticeArea(practiceArea)
   if (normalizedPracticeArea === 'Probate') {
     notFound()
@@ -74,11 +74,19 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
       }
     : null
 
-  if (sheet?.id && sheet.client_name) {
+  // Only apply computed defaults when the sheet was just seeded / still missing key defaults.
+  if (sheet?.id && sheet.client_name && isDesignSheetUnseeded(sheet) === false) {
     const defaultsPatch = computeDesignSheetDefaults(sheet, matterWithPracticeArea)
-    if (Object.keys(defaultsPatch).length > 0) {
+    // Skip write-on-read when nothing meaningful is missing beyond already-persisted values.
+    const meaningfulKeys = Object.keys(defaultsPatch).filter(key => {
+      const current = (sheet as unknown as Record<string, unknown>)[key]
+      return current == null || current === ''
+    })
+    if (meaningfulKeys.length > 0) {
+      const patch: Record<string, unknown> = {}
+      for (const key of meaningfulKeys) patch[key] = defaultsPatch[key as keyof typeof defaultsPatch]
       await admin.from('design_sheets').update({
-        ...buildDesignSheetPersistencePayload({ ...sheet, ...defaultsPatch }),
+        ...buildDesignSheetPersistencePayload({ ...sheet, ...patch }),
         updated_at: new Date().toISOString(),
       }).eq('id', sheet.id)
 

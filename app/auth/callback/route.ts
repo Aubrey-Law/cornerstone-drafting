@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabaseServer'
-import { safeAdminRedirectPath } from '@/lib/auth/safeRedirect'
+import { safeAdminRedirectPath, safeClientRedirectPath } from '@/lib/auth/safeRedirect'
 
 const ADMIN_ROLES = ['attorney', 'admin'] as const
 const FIRM_EMAIL_DOMAIN = 'aubreylegal.com'
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const origin = getPublicOrigin(request)
   const code = searchParams.get('code')
-  const redirectTo = safeAdminRedirectPath(searchParams.get('redirectTo'))
+  const rawRedirect = searchParams.get('redirectTo')
 
   if (!code) {
     return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`)
@@ -47,28 +47,34 @@ export async function GET(request: Request) {
     .eq('id', data.user.id)
     .single()
 
-  let role = existingUser?.role
+  let role = existingUser?.role as string | undefined
 
   if (!existingUser) {
+    // OAuth without an existing row: firm emails become staff; others become clients.
+    const nextRole = isFirmEmail(data.user.email) ? 'attorney' : 'client'
     await supabase.from('users').insert({
       id: data.user.id,
       email: data.user.email,
       display_name: data.user.user_metadata?.full_name ?? null,
-      role: 'client',
+      role: nextRole,
     })
-    role = 'client'
+    role = nextRole
   }
 
-  if (!role || !ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) {
-    await supabase.auth.signOut()
-    return NextResponse.redirect(`${origin}/auth/login?error=staff_only`)
+  if (role && ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) {
+    if (!isFirmEmail(data.user.email)) {
+      await supabase.auth.signOut()
+      return NextResponse.redirect(`${origin}/auth/login?error=firm_domain_required`)
+    }
+    const destination = safeAdminRedirectPath(rawRedirect) ?? '/admin/drafting'
+    return NextResponse.redirect(new URL(destination, origin))
   }
 
-  if (!isFirmEmail(data.user.email)) {
-    await supabase.auth.signOut()
-    return NextResponse.redirect(`${origin}/auth/login?error=firm_domain_required`)
+  if (role === 'client') {
+    const destination = safeClientRedirectPath(rawRedirect) ?? '/dashboard'
+    return NextResponse.redirect(new URL(destination, origin))
   }
 
-  const destination = redirectTo ?? '/admin/drafting'
-  return NextResponse.redirect(new URL(destination, origin))
+  await supabase.auth.signOut()
+  return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`)
 }

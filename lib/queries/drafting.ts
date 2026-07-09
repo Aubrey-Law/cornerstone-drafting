@@ -198,41 +198,164 @@ export async function fetchDraftingHubMatters(): Promise<{
   }
 
   return {
-    matters: matters.map(matter => {
-      const sheet = latestDesignByMatter.get(matter.matter_id) ?? null
-      const inclusions = sheet
-        ? getDocumentInclusions({
-            plan_type: sheet.plan_type,
-            marital_status: matter.marital_status,
-            decisions: sheet.decisions,
-          })
-        : null
-      const selectedTemplates = sheet ? selectionsBySheet.get(sheet.id) ?? [] : []
-      const drafts = draftsByMatter.get(matter.matter_id) ?? []
-      const currentDrafts = drafts.filter(draft => !draft.supersededAt)
-      const supersededDrafts = drafts.filter(draft => draft.supersededAt)
-
-      return {
+    matters: matters.map(matter =>
+      assembleDraftingHubMatter({
         matter,
+        sheet: latestDesignByMatter.get(matter.matter_id) ?? null,
+        details: detailsByMatter.get(matter.matter_id) ?? null,
         matterNumber: matterNumberById.get(matter.matter_id) ?? null,
-        setupBlockers: getDraftSetupBlockers(detailsByMatter.get(matter.matter_id) ?? null, matter),
-        designSheet: sheet
-          ? {
-              id: sheet.id,
-              status: sheet.status,
-              version: sheet.version,
-              updatedAt: sheet.updated_at ?? sheet.created_at ?? null,
-            }
-          : null,
-        documentInclusions: inclusions,
-        includedDocumentLabels: inclusionLabels(inclusions),
-        selectedTemplateCount: selectedTemplates.length,
-        selectedTemplates,
-        draftCount: currentDrafts.length,
-        recentDrafts: currentDrafts.slice(0, 5),
-        supersededDrafts,
-        supersededDraftCount: supersededDrafts.length,
-      }
+        selectedTemplates: (() => {
+          const sheet = latestDesignByMatter.get(matter.matter_id)
+          return sheet ? selectionsBySheet.get(sheet.id) ?? [] : []
+        })(),
+        drafts: draftsByMatter.get(matter.matter_id) ?? [],
+      }),
+    ),
+    error: null,
+  }
+}
+
+function assembleDraftingHubMatter(args: {
+  matter: PipelineMatter
+  sheet: DesignSheetSummaryRow | null
+  details: MatterDetailsRow | null
+  matterNumber: string | null
+  selectedTemplates: string[]
+  drafts: DraftingHubDocument[]
+}): DraftingHubMatter {
+  const { matter, sheet, details, matterNumber, selectedTemplates, drafts } = args
+  const inclusions = sheet
+    ? getDocumentInclusions({
+        plan_type: sheet.plan_type,
+        marital_status: matter.marital_status,
+        decisions: sheet.decisions,
+      })
+    : null
+  const currentDrafts = drafts.filter(draft => !draft.supersededAt)
+  const supersededDrafts = drafts.filter(draft => draft.supersededAt)
+
+  return {
+    matter,
+    matterNumber,
+    setupBlockers: getDraftSetupBlockers(details, matter),
+    designSheet: sheet
+      ? {
+          id: sheet.id,
+          status: sheet.status,
+          version: sheet.version,
+          updatedAt: sheet.updated_at ?? sheet.created_at ?? null,
+        }
+      : null,
+    documentInclusions: inclusions,
+    includedDocumentLabels: inclusionLabels(inclusions),
+    selectedTemplateCount: selectedTemplates.length,
+    selectedTemplates,
+    draftCount: currentDrafts.length,
+    recentDrafts: currentDrafts.slice(0, 5),
+    supersededDrafts,
+    supersededDraftCount: supersededDrafts.length,
+  }
+}
+
+/** Scoped hub row for a single matter — avoids firm-wide fetch on workspace open. */
+export async function fetchDraftingHubMatter(matterId: string): Promise<{
+  matter: DraftingHubMatter | null
+  error: string | null
+}> {
+  const admin = getAdminClient()
+  const { data: matterRaw, error: mattersError } = await admin
+    .from('v_matter_pipeline')
+    .select('*')
+    .eq('matter_id', matterId)
+    .maybeSingle()
+
+  if (mattersError) {
+    console.error('fetchDraftingHubMatter matters error:', mattersError)
+    return { matter: null, error: mattersError.message }
+  }
+  if (!matterRaw) return { matter: null, error: null }
+
+  const matter = normalizeFlags(matterRaw as PipelineMatter)
+
+  const [designSheetsRes, detailsRes, draftDocsRes, matterNumbersRes] = await Promise.all([
+    admin
+      .from('design_sheets')
+      .select('id, matter_id, status, version, plan_type, decisions, created_at, updated_at')
+      .eq('matter_id', matterId)
+      .order('created_at', { ascending: false })
+      .limit(1),
+    admin.from('matter_details').select('*').eq('client_id', matterId).maybeSingle(),
+    admin
+      .from('matter_documents')
+      .select(
+        'id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by',
+      )
+      .eq('matter_id', matterId)
+      .eq('folder', 'draft')
+      .order('created_at', { ascending: false }),
+    admin.from('matters').select('id, matter_number').eq('id', matterId).maybeSingle(),
+  ])
+
+  if (designSheetsRes.error) console.error('fetchDraftingHubMatter design sheets error:', designSheetsRes.error)
+  if (detailsRes.error) console.error('fetchDraftingHubMatter matter details error:', detailsRes.error)
+  if (draftDocsRes.error) console.error('fetchDraftingHubMatter draft docs error:', draftDocsRes.error)
+  if (matterNumbersRes.error) console.error('fetchDraftingHubMatter matter numbers error:', matterNumbersRes.error)
+
+  const sheet = ((designSheetsRes.data ?? []) as DesignSheetSummaryRow[])[0] ?? null
+  let selectedTemplates: string[] = []
+  if (sheet?.id) {
+    const selectionsRes = await admin
+      .from('doc_selections')
+      .select('design_sheet_id, doc_type, variant, party, selected')
+      .eq('design_sheet_id', sheet.id)
+      .eq('selected', true)
+    if (selectionsRes.error) console.error('fetchDraftingHubMatter doc selections error:', selectionsRes.error)
+    selectedTemplates = ((selectionsRes.data ?? []) as DocSelectionRow[])
+      .map(docSelectionTemplateKey)
+      .filter((key): key is string => Boolean(key))
+  }
+
+  const drafts: DraftingHubDocument[] = (
+    (draftDocsRes.data ?? []) as Array<
+      Pick<
+        MatterDocument,
+        | 'id'
+        | 'matter_id'
+        | 'name'
+        | 'size'
+        | 'created_at'
+        | 'generation_id'
+        | 'generation_engine'
+        | 'marker_count'
+        | 'missing_count'
+        | 'superseded_at'
+        | 'reviewed_at'
+        | 'reviewed_by'
+      >
+    >
+  ).map(doc => ({
+    id: doc.id,
+    name: doc.name,
+    size: doc.size,
+    created_at: doc.created_at,
+    folder: 'draft' as const,
+    generationId: doc.generation_id ?? null,
+    generationEngine: doc.generation_engine ?? null,
+    markerCount: doc.marker_count ?? null,
+    missingCount: doc.missing_count ?? null,
+    supersededAt: doc.superseded_at ?? null,
+    reviewedAt: doc.reviewed_at ?? null,
+    reviewedBy: doc.reviewed_by ?? null,
+  }))
+
+  return {
+    matter: assembleDraftingHubMatter({
+      matter,
+      sheet,
+      details: (detailsRes.data as MatterDetailsRow | null) ?? null,
+      matterNumber: (matterNumbersRes.data as { matter_number: string | null } | null)?.matter_number ?? null,
+      selectedTemplates,
+      drafts,
     }),
     error: null,
   }

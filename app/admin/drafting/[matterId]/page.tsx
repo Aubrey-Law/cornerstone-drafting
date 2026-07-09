@@ -1,7 +1,4 @@
-import { notFound } from 'next/navigation'
-import {
-  fetchDraftingHubMatters,
-} from '@/lib/queries/drafting'
+import { fetchDraftingHubMatter } from '@/lib/queries/drafting'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import DraftingWorkspace from './DraftingWorkspace'
@@ -18,7 +15,7 @@ export default async function DraftingWorkspacePage({
 
   const [ctx, hubResult] = await Promise.all([
     loadDraftingMatterContext(matterId),
-    fetchDraftingHubMatters(),
+    fetchDraftingHubMatter(matterId),
   ])
 
   const admin = getAdminClient()
@@ -29,8 +26,6 @@ export default async function DraftingWorkspacePage({
     .eq('folder', 'review')
     .order('created_at', { ascending: false })
 
-  const hubMatter = hubResult.matters.find(item => item.matter.matter_id === matterId) ?? null
-
   return (
     <DraftingWorkspace
       matterId={ctx.matterId}
@@ -39,7 +34,7 @@ export default async function DraftingWorkspacePage({
       sheet={ctx.sheet}
       lpData={ctx.lpData}
       intakeSnapshot={ctx.intakeSnapshot}
-      hubMatter={hubMatter}
+      hubMatter={hubResult.matter}
       sharedDrafts={(sharedDraftRows ?? []) as import('@/types/database').MatterDocument[]}
     />
   )
