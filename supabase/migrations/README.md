@@ -36,13 +36,13 @@ Use a **new** Supabase project for Cornerstone Lite — not the live Aubrey Law 
 # Link your greenfield project (one-time)
 npx supabase link --project-ref <your-project-ref>
 
-# Apply all 11 migrations in order
+# Apply all 12 migrations in order
 npx supabase db push
 ```
 
 ### Option B — SQL Editor
 
-If you paste migrations manually in the dashboard, run **every file above in order** (1 → 11). Do not start with `20260710000000_lite_intake_portal.sql`.
+If you paste migrations manually in the dashboard, run **every file above in order** (1 → 12). Do not start with `20260710000000_lite_intake_portal.sql`.
 
 ### Option C — Local dev
 
