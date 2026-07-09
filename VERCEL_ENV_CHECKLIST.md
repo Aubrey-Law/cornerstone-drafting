@@ -24,6 +24,24 @@ Python fallback uses the venv created by `npm run estate-generator:setup` during
 
 `@aubrey-law/estate-fields` is vendored at `packages/estate-fields/` for Vercel and standalone clones. Sync registry changes from `aubrey-law-app/packages/estate-fields` (see that package's `SYNC.md`).
 
+## Auth / OAuth (recommended)
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_APP_URL` | Canonical public origin (e.g. `https://cornerstone.aubreylegal.com`). Used when resolving post-login redirects behind proxies. |
+
+Supabase Dashboard → Authentication → URL Configuration must include every deployed host:
+
+- `https://cornerstone.aubreylegal.com/auth/callback`
+- `https://cornerstone-drafting.vercel.app/auth/callback`
+- `http://localhost:3002/auth/callback` (local dev)
+
+Google Cloud and Azure Entra redirect URIs must point at Supabase, not this app:
+
+- `https://<project-ref>.supabase.co/auth/v1/callback`
+
+Run `node scripts/validateOAuth.mjs` after changing provider settings.
+
 ## Optional
 
 | Variable | Purpose |

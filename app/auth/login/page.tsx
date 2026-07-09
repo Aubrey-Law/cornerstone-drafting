@@ -76,7 +76,11 @@ function LoginForm() {
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: callbackUrl.toString() },
+      options: {
+        redirectTo: callbackUrl.toString(),
+        // Email scope is required so the callback can enforce @aubreylegal.com.
+        scopes: provider === 'azure' ? 'email openid profile' : 'email',
+      },
     })
     if (oauthError) {
       toast.error(oauthError.message)
