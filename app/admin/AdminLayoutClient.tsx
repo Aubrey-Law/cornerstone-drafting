@@ -21,6 +21,12 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
+import dynamic from 'next/dynamic'
+
+const StaffSoftphone = dynamic(
+  () => import('./components/StaffSoftphone').then((m) => m.StaffSoftphone),
+  { ssr: false },
+)
 
 const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 
@@ -36,12 +42,14 @@ interface AdminLayoutClientProps {
   children: React.ReactNode
   userName: string
   userInitials: string
+  twilioVoiceEnabled?: boolean
 }
 
 export default function AdminLayoutClient({
   children,
   userName,
   userInitials,
+  twilioVoiceEnabled = false,
 }: AdminLayoutClientProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -176,6 +184,8 @@ export default function AdminLayoutClient({
           </div>
         </SheetContent>
       </Sheet>
+
+      {twilioVoiceEnabled ? <StaffSoftphone /> : null}
     </div>
   )
 }
