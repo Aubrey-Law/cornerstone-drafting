@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { sendEmail } from '@/lib/email/send'
-import { GraphSendError, sendViaGraph } from '@/lib/email/graphSend'
-import { getMicrosoftConnectionForUser } from '@/lib/microsoftCalendar'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -63,49 +61,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
   }
 
-  let provider: 'graph' | 'resend' = 'resend'
-  let status = 'sent'
-
-  const conn = await getMicrosoftConnectionForUser(userId)
-  if (conn) {
-    try {
-      await sendViaGraph({ to, subject, text, replyTo, userId })
-      provider = 'graph'
-    } catch (e) {
-      if (!(e instanceof GraphSendError) || e.kind !== 'no_connection') {
-        return NextResponse.json(
-          { error: e instanceof Error ? e.message : 'Graph send failed' },
-          { status: 502 },
-        )
-      }
-      // no_connection → fall through to Resend
-    }
-  }
-
-  if (provider !== 'graph') {
-    const result = await sendEmail({
-      category: 'manual',
-      to,
-      subject,
-      html,
-      replyTo,
-    })
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 502 })
-    }
-    status = result.status
-    provider = 'resend'
-  }
-
-  await admin.from('email_log').insert({
+  const result = await sendEmail({
     category: 'manual',
-    status,
-    intended_to: to,
-    actual_to: to,
+    to,
     subject,
-    matter_id: matterId,
-    actor_id: userId,
+    html,
+    text,
+    replyTo,
+    useStoredTemplate: false,
+    userId,
   })
+
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 502 })
+  }
+
+  const provider =
+    result.status === 'sent' || result.status === 'redirected'
+      ? 'resend'
+      : result.status
 
   const actorName =
     (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? null
@@ -119,8 +93,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       actor_email: user?.email ?? null,
       actor_name: actorName,
       title: `Email sent: ${subject}`,
-      detail: `To ${to} via ${provider}`,
-      metadata: { to, subject, status, provider },
+      detail: `To ${to} · ${result.status}`,
+      metadata: { to, subject, status: result.status, logId: result.logId },
     })
     .select()
     .single()
@@ -131,8 +105,9 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   return NextResponse.json({
     success: true,
-    status,
+    status: result.status,
     provider,
+    logId: result.logId,
     activity: activity ?? null,
   })
 }
