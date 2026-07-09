@@ -23,6 +23,7 @@ Cornerstone Lite uses a **greenfield Supabase project** with two migration layer
 | 10 | `20260711000000_lite_matter_aging.sql` | Matter aging view + SLA settings |
 | 11 | `20260712000000_lite_communications.sql` | SMS, email, calls, softphone, Retell |
 | 12 | `20260713000000_lite_matter_details_columns.sql` | `matter_details` columns for matter create + setup |
+| 13 | `20260714000000_lite_intake_invite_tokens.sql` | Hashed intake invite tokens for client signup |
 
 The archived CRM portal history (167 files) lives in [`../migrations_archive/portal/`](../migrations_archive/portal/README.md).
 
@@ -89,7 +90,36 @@ ALTER TABLE public.client_intake ...
 `client_intake` is created in `20260705000000_drafting_baseline_core.sql`. Fix:
 
 1. Run migrations 1–7 first (or use `supabase db push` / `supabase db reset` on a greenfield project).
-2. Then run lite migrations 8–11.
+2. Then run lite migrations 8–12.
+
+## Common error: `jurisdiction_state` / `plan_type` on `matter_details`
+
+Matter create writes extra columns on `matter_details` that the minimal drafting baseline does not include. You need migration **#12**:
+
+`20260713000000_lite_matter_details_columns.sql`
+
+**Do not run the backfill `INSERT` until after the `ALTER TABLE` adds the columns.**
+
+Quick fix (Supabase SQL Editor) — paste the full script:
+
+[`../scripts/fix_matter_details_columns.sql`](../scripts/fix_matter_details_columns.sql)
+
+Or CLI after `git pull`:
+
+```bash
+npx supabase db push
+```
+
+Verify columns exist:
+
+```sql
+SELECT column_name
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'matter_details'
+  AND column_name IN ('jurisdiction_state', 'plan_type', 'matter_status', 'matter_number');
+```
+
+You should see all four rows.
 
 ## Shared firm database (do not use for Lite)
 

@@ -7,6 +7,8 @@ const CLIENT_ROLE = 'client'
 
 const ADMIN_PREFIXES = ['/admin', '/api/admin', '/api/drafting']
 const PORTAL_PATHS = ['/dashboard', '/documents', '/messages', '/intake']
+/** Public client onboarding — must not require an existing session. */
+const PUBLIC_AUTH_PATHS = ['/intake/auth', '/api/intake/signup']
 const SESSION_REQUIRED_PREFIXES = [
   ...ADMIN_PREFIXES,
   '/api/documents',
@@ -15,11 +17,16 @@ const SESSION_REQUIRED_PREFIXES = [
   ...PORTAL_PATHS,
 ]
 
+function isPublicAuthPath(pathname: string) {
+  return PUBLIC_AUTH_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`))
+}
+
 function isAdminPath(pathname: string) {
   return ADMIN_PREFIXES.some(p => pathname === p || pathname.startsWith(`${p}/`))
 }
 
 function isPortalPath(pathname: string) {
+  if (pathname === '/intake/auth' || pathname.startsWith('/intake/auth/')) return false
   return PORTAL_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`))
 }
 
@@ -87,6 +94,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith('/api/health') || pathname.startsWith('/api/webhooks')) {
+    return NextResponse.next()
+  }
+
+  if (isPublicAuthPath(pathname)) {
     return NextResponse.next()
   }
 
