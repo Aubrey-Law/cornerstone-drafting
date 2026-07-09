@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { PauseCircle, RefreshCw, Search } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
 import { engineStageLabel } from '@/lib/stage-engine/labels'
 import type { MatterAgingRow, MatterAgingTiles } from '@/lib/queries/pipelineAging'
 import { Badge } from '@/components/ui/badge'
@@ -176,6 +177,7 @@ function SnoozeDialog({
         return
       }
       toast.success(`Snoozed until ${formatDate(until.toISOString())}`)
+      invalidateSidebarCountsClient()
       onOpenChange(false)
       onSaved()
     })
@@ -288,6 +290,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
       return
     }
     toast.success('Snooze cleared')
+    invalidateSidebarCountsClient()
     await refresh()
   }
 

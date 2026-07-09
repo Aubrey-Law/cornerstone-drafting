@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { AssignCallDialog } from './AssignCallDialog'
+import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
 
 export interface AdminCallRow extends CallRowData {
   matter_id: string | null
@@ -51,6 +52,7 @@ export function CallsPageClient({ initialCalls, filter }: Props) {
       return
     }
     toast.success('Call deleted')
+    invalidateSidebarCountsClient()
     router.refresh()
   }
 

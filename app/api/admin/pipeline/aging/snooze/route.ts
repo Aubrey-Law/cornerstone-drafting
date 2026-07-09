@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  revalidateSidebarCounts()
   return NextResponse.json({ ok: true, snooze: data })
 }
 
@@ -68,5 +70,6 @@ export async function DELETE(req: Request) {
   const { error } = await admin.from('pipeline_aging_snooze').delete().eq('id', snoozeId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  revalidateSidebarCounts()
   return NextResponse.json({ ok: true })
 }

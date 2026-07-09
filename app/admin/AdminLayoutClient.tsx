@@ -22,6 +22,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 import dynamic from 'next/dynamic'
+import {
+  EMPTY_SIDEBAR_COUNTS,
+  getNavBadge,
+  mergeSidebarCounts,
+  type SidebarCounts,
+} from '@/lib/sidebarBadges'
+import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsClient'
 
 const StaffSoftphone = dynamic(
   () => import('./components/StaffSoftphone').then((m) => m.StaffSoftphone),
@@ -55,6 +62,43 @@ export default function AdminLayoutClient({
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [badgeCounts, setBadgeCounts] = useState<SidebarCounts>(EMPTY_SIDEBAR_COUNTS)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadBadgeCounts(opts?: { fresh?: boolean }) {
+      try {
+        const response = await fetch(
+          '/api/admin/sidebar-counts',
+          opts?.fresh ? { cache: 'no-store' } : undefined,
+        )
+        if (!response.ok) return
+        const counts = await response.json() as Partial<SidebarCounts>
+        if (cancelled) return
+        setBadgeCounts(prev => mergeSidebarCounts(prev, counts))
+      } catch {
+        // Sidebar badges are helpful, not critical to rendering the shell.
+      }
+    }
+
+    let invalidateTimer: number | null = null
+    function handleInvalidate() {
+      if (invalidateTimer !== null) window.clearTimeout(invalidateTimer)
+      invalidateTimer = window.setTimeout(() => {
+        invalidateTimer = null
+        void loadBadgeCounts({ fresh: true })
+      }, 3000)
+    }
+
+    void loadBadgeCounts()
+    window.addEventListener(SIDEBAR_COUNTS_INVALIDATE_EVENT, handleInvalidate)
+    return () => {
+      cancelled = true
+      if (invalidateTimer !== null) window.clearTimeout(invalidateTimer)
+      window.removeEventListener(SIDEBAR_COUNTS_INVALIDATE_EVENT, handleInvalidate)
+    }
+  }, [])
 
   useEffect(() => {
     try {
@@ -84,6 +128,7 @@ export default function AdminLayoutClient({
       {navItems.map(item => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
         const Icon = item.icon
+        const badge = getNavBadge(item.href, badgeCounts)
         return (
           <Link
             key={item.href}
@@ -98,8 +143,37 @@ export default function AdminLayoutClient({
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
-            <Icon className="h-4 w-4 shrink-0" />
-            {!compact ? item.label : <span className="sr-only">{item.label}</span>}
+            <span className="relative shrink-0">
+              <Icon className="h-4 w-4 shrink-0" />
+              {compact && badge && (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'absolute -right-1 -top-1 h-2 w-2 rounded-full',
+                    badge.tone === 'destructive' ? 'bg-destructive' : 'bg-accent',
+                  )}
+                />
+              )}
+            </span>
+            {!compact ? (
+              <>
+                <span className="flex-1">{item.label}</span>
+                {badge && (
+                  <span
+                    className={cn(
+                      'ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
+                      badge.tone === 'destructive'
+                        ? 'bg-destructive/15 text-destructive'
+                        : 'bg-accent/15 text-accent',
+                    )}
+                  >
+                    {badge.value}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="sr-only">{item.label}</span>
+            )}
           </Link>
         )
       })}

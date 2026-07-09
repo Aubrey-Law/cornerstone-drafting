@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
+import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 
 const Body = z.object({
   matterId: z.string().min(1),
@@ -43,5 +44,6 @@ export async function POST(
     .eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  revalidateSidebarCounts()
   return NextResponse.json({ ok: true })
 }
