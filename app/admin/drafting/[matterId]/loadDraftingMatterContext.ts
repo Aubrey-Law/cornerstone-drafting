@@ -36,10 +36,10 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
 
   if (!matter) notFound()
 
-  // Seed only when needed; avoid re-fetching intake inside ensure when we already have it.
   let sheet = await fetchDesignSheet(matterId)
-  if (!sheet || isDesignSheetUnseeded(sheet)) {
-    await ensureDesignSheetSeededFromIntake(matterId)
+  const needsSeed = !sheet || isDesignSheetUnseeded(sheet)
+  if (needsSeed) {
+    await ensureDesignSheetSeededFromIntake(matterId, { sheet, intake: intakeSnapshot })
     sheet = await fetchDesignSheet(matterId)
   }
 
@@ -74,8 +74,8 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
       }
     : null
 
-  // Only apply computed defaults when the sheet was just seeded / still missing key defaults.
-  if (sheet?.id && sheet.client_name && isDesignSheetUnseeded(sheet) === false) {
+  // Apply computed defaults once immediately after seeding — not on every workspace load.
+  if (needsSeed && sheet?.id && sheet.client_name && isDesignSheetUnseeded(sheet) === false) {
     const defaultsPatch = computeDesignSheetDefaults(sheet, matterWithPracticeArea)
     // Skip write-on-read when nothing meaningful is missing beyond already-persisted values.
     const meaningfulKeys = Object.keys(defaultsPatch).filter(key => {

@@ -112,7 +112,7 @@ describe('drafting hub and workspace', () => {
     const seedModule = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/seedFromIntake.ts'), 'utf8')
 
     expect(loader).toContain("import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'")
-    expect(loader).toContain('await ensureDesignSheetSeededFromIntake(matterId)')
+    expect(loader).toContain('ensureDesignSheetSeededFromIntake(matterId, { sheet, intake: intakeSnapshot })')
     expect(seedModule).toContain('street: intake.address_line1')
     expect(seedModule).toContain('city: intake.city')
   })
