@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Briefcase, Plus, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -36,7 +37,29 @@ const CREATE_PRACTICE_OPTIONS = PRACTICE_AREA_OPTIONS.filter(
   o => o.value === 'EP' || o.value === 'EP-LP',
 )
 
-export default function MattersClient({ matters, loadError = null }: MattersClientProps) {
+export default function MattersClient(props: MattersClientProps) {
+  return (
+    <Suspense fallback={<MattersClientShell {...props} />}>
+      <MattersClientInner {...props} />
+    </Suspense>
+  )
+}
+
+function MattersClientShell({ matters, loadError = null }: MattersClientProps) {
+  return (
+    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background md:-mx-6 md:-mb-6">
+      <div className="border-b border-border bg-card px-4 py-4 md:px-6">
+        <h1 className="text-xl font-semibold tracking-tight">Matters</h1>
+      </div>
+      <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
+        <p className="text-sm text-muted-foreground">{loadError ?? 'Loading…'}</p>
+      </div>
+    </div>
+  )
+}
+
+function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
+  const searchParams = useSearchParams()
   const token = useAccessToken()
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -48,6 +71,13 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
   const [planType, setPlanType] = useState<'EP' | 'EP-LP'>('EP')
   const [deleteTarget, setDeleteTarget] = useState<PipelineMatter | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
+  const [createdMatterId, setCreatedMatterId] = useState<string | null>(null)
+  const [createdIntakeUrl, setCreatedIntakeUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (searchParams.get('create') === '1') setCreateOpen(true)
+  }, [searchParams])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -74,6 +104,9 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
     setClientEmail('')
     setClientPhone('')
     setPlanType('EP')
+    setSendIntakeOnCreate(true)
+    setCreatedMatterId(null)
+    setCreatedIntakeUrl(null)
   }
 
   const handleCreate = async () => {
@@ -105,10 +138,24 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Could not create matter')
-      toast.success('Matter created')
-      setCreateOpen(false)
-      resetCreateForm()
-      router.push(`/admin/matters/${body.matterId}`)
+      const matterId = body.matterId as string
+      let intakeUrl: string | null = null
+      if (sendIntakeOnCreate) {
+        const sendRes = await fetch('/api/admin/intake/send', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ matterId }),
+        })
+        const sendBody = await sendRes.json().catch(() => ({}))
+        if (!sendRes.ok) throw new Error(sendBody.error ?? 'Matter created but intake invite failed')
+        if (typeof sendBody.url === 'string') intakeUrl = sendBody.url
+      }
+      setCreatedMatterId(matterId)
+      setCreatedIntakeUrl(intakeUrl)
+      toast.success(sendIntakeOnCreate ? 'Matter created and intake invite sent' : 'Matter created')
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create matter')
@@ -248,11 +295,35 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Matter</DialogTitle>
+            <DialogTitle>{createdMatterId ? 'Matter ready' : 'Create Matter'}</DialogTitle>
             <DialogDescription>
-              Start a new estate planning matter with client contact details.
+              {createdMatterId
+                ? 'The matter is created. Copy the intake link or open the matter detail page.'
+                : 'Start a new estate planning matter with client contact details.'}
             </DialogDescription>
           </DialogHeader>
+          {createdMatterId ? (
+            <div className="grid gap-3 py-1">
+              {createdIntakeUrl && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="created-intake-url">Intake link</Label>
+                  <div className="flex gap-2">
+                    <Input id="created-intake-url" readOnly value={createdIntakeUrl} />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(createdIntakeUrl)
+                        toast.success('Intake link copied')
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="grid gap-3 py-1">
             <div className="grid gap-1.5">
               <Label htmlFor="create-client-name">Client name</Label>
@@ -299,14 +370,35 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
                 </SelectContent>
               </Select>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={sendIntakeOnCreate}
+                onCheckedChange={checked => setSendIntakeOnCreate(checked === true)}
+              />
+              Send intake invite email
+            </label>
           </div>
+          )}
           <DialogFooter>
+            {createdMatterId ? (
+              <>
+                <Button type="button" variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm() }}>
+                  Close
+                </Button>
+                <Button type="button" asChild>
+                  <Link href={`/admin/matters/${createdMatterId}`}>Open matter</Link>
+                </Button>
+              </>
+            ) : (
+              <>
             <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
               Cancel
             </Button>
             <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
-              {creating ? 'Creating…' : 'Create'}
+              {creating ? 'Creating…' : sendIntakeOnCreate ? 'Create & send intake' : 'Create'}
             </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
