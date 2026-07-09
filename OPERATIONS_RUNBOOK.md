@@ -54,6 +54,19 @@ Re-verify quarterly.
 
 **Do not** create a second admin UUID — it orphans audit rows keyed by `user_id`.
 
+#### OAuth (Google / Microsoft) shows 404 or bounces back to login
+
+1. Run `node scripts/validateOAuth.mjs https://cornerstone.aubreylegal.com` (or your host).
+2. **Microsoft 404** — Supabase is generating a broken authorize URL like  
+   `https://<ref>.supabase.co/auth/v1/callback/oauth2/v2.0/authorize`.  
+   Fix: Supabase Dashboard → Authentication → Providers → **Azure** → set **Azure Tenant URL** to  
+   `https://login.microsoftonline.com/common` (or your org tenant).  
+   Do **not** put the Supabase `/auth/v1/callback` URL in the tenant field.
+3. **Google returns to login with `auth_failed`** — confirm Google Cloud OAuth client lists  
+   `https://<ref>.supabase.co/auth/v1/callback` as an authorized redirect URI.
+4. Confirm Supabase **Redirect URLs** include `https://<your-host>/auth/callback` for every deployment host.
+5. Account must be `role IN ('attorney','admin')` in `public.users` with an `@aubreylegal.com` email.
+
 ---
 
 ### Scenario B — Draft generation fails for all matters
