@@ -22,7 +22,7 @@ function normalizeFlags(m: PipelineMatter): PipelineMatter {
   return { ...m, flags: [] }
 }
 
-const PIPELINE_MATTER_COLUMNS =
+export const PIPELINE_MATTER_COLUMNS =
   'matter_id, matter_name, stage, status, flags, matter_created, client_name, client_email, client_phone, client_dob, client_address, spouse_name, spouse_email, spouse_phone, spouse_dob, spouse_address, plan_type, marital_status, has_minor_children, taxable_estate, intake_status, intake_sent_at, design_status, intake_submitted_at, drafts_sent_at, signing_date, documents_executed_at, next_appointment, next_appointment_type, practice_area, referral_source, fee_amount, opened_at, client_status' as const
 
 export async function fetchMatter(id: string): Promise<PipelineMatter | null> {
