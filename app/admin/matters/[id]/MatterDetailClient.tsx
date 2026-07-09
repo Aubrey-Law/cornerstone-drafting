@@ -8,6 +8,7 @@ import {
   FilePenLine,
   Plus,
   Send,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -117,6 +118,8 @@ export default function MatterDetailClient({
   const [contactDialogOpen, setContactDialogOpen] = useState(false)
   const [contactSaving, setContactSaving] = useState(false)
   const [contactForm, setContactForm] = useState<ContactForm>(EMPTY_CONTACT)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const [portalMessages, setPortalMessages] = useState<PortalMessage[]>([])
   const [portalLoading, setPortalLoading] = useState(false)
@@ -424,6 +427,32 @@ export default function MatterDetailClient({
     }
   }
 
+  const handleDeleteMatter = async () => {
+    if (!token) {
+      toast.error('Not signed in')
+      return
+    }
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/matters/${matter.matter_id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not delete matter')
+      toast.success('Matter deleted')
+      setDeleteOpen(false)
+      router.push('/admin/matters')
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete matter')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const matterLabel = matter.client_name || matter.matter_name || 'this matter'
+
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-4 md:px-6">
@@ -446,12 +475,24 @@ export default function MatterDetailClient({
               {matter.matter_name ? ` · ${matter.matter_name}` : ''}
             </p>
           </div>
-          <Button type="button" size="sm" variant="outline" asChild>
-            <Link href={`/admin/drafting/${matter.matter_id}`}>
-              <FilePenLine className="h-3.5 w-3.5" />
-              Open drafting
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" asChild>
+              <Link href={`/admin/drafting/${matter.matter_id}`}>
+                <FilePenLine className="h-3.5 w-3.5" />
+                Open drafting
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -892,6 +933,31 @@ export default function MatterDetailClient({
             </Button>
             <Button type="button" onClick={() => void handleSaveContact()} disabled={contactSaving}>
               {contactSaving ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete matter?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes <span className="font-medium text-foreground">{matterLabel}</span>,
+              including intake, documents, design sheet, messages, and activity. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleDeleteMatter()}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting…' : 'Delete matter'}
             </Button>
           </DialogFooter>
         </DialogContent>

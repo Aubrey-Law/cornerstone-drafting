@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Briefcase, Plus, Search } from 'lucide-react'
+import { Briefcase, Plus, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
@@ -46,6 +46,8 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
   const [clientEmail, setClientEmail] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [planType, setPlanType] = useState<'EP' | 'EP-LP'>('EP')
+  const [deleteTarget, setDeleteTarget] = useState<PipelineMatter | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -115,6 +117,26 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
     }
   }
 
+  const handleDelete = async () => {
+    if (!token || !deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/matters/${deleteTarget.matter_id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not delete matter')
+      toast.success(`Deleted matter for ${deleteTarget.client_name || 'client'}`)
+      setDeleteTarget(null)
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete matter')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const emptyMessage = loadError
     ? `Could not load matters: ${loadError}`
     : matters.length === 0
@@ -175,6 +197,7 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
                   <th className="hidden px-3 py-2 font-medium md:table-cell">Practice</th>
                   <th className="px-3 py-2 font-medium">Stage</th>
                   <th className="hidden px-3 py-2 font-medium lg:table-cell">Intake</th>
+                  <th className="w-10 px-3 py-2" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -197,6 +220,16 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
                     <td className="px-3 py-2.5">{stageLabel(m.stage)}</td>
                     <td className="hidden px-3 py-2.5 capitalize text-muted-foreground lg:table-cell">
                       {m.intake_status?.replace(/_/g, ' ') || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <button
+                        type="button"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        aria-label={`Delete matter for ${m.client_name || 'client'}`}
+                        onClick={() => setDeleteTarget(m)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -273,6 +306,29 @@ export default function MattersClient({ matters, loadError = null }: MattersClie
             </Button>
             <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
               {creating ? 'Creating…' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={open => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete matter?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes{' '}
+              <span className="font-medium text-foreground">
+                {deleteTarget?.client_name || deleteTarget?.matter_name || 'this matter'}
+              </span>
+              , including intake, documents, design sheet, and messages. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void handleDelete()} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete matter'}
             </Button>
           </DialogFooter>
         </DialogContent>
