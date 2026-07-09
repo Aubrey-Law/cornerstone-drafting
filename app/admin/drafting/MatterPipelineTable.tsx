@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -14,7 +15,7 @@ import { cn, formatDate } from '@/lib/utils'
 import { hubLastActivityAt, hubReadinessLabel } from '@/lib/drafting/hubUtils'
 import { updateMatterStage } from '@/lib/drafting/updateMatterStage'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
-import { STAGES, type MatterStage } from '@/types/database'
+import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 
 interface MatterPipelineTableProps {
   matters: DraftingHubMatter[]
@@ -46,7 +47,9 @@ export default function MatterPipelineTable({
     if (!result.ok) {
       setError(result.error)
       onStageChange(matterId, item.matter.stage)
+      return
     }
+    toast.success(`Moved to ${stageLabel(nextStage)}`)
   }, [onStageChange])
 
   return (

@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { Clock } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatDate } from '@/lib/utils'
 import { hubLastActivityAt, hubReadinessLabel } from '@/lib/drafting/hubUtils'
@@ -47,7 +48,9 @@ export default function MatterPipelineKanban({ matters, onOpen, onStageChange }:
     if (!result.ok) {
       setError(result.error)
       onStageChange(matterId, item.matter.stage)
+      return
     }
+    toast.success(`Moved to ${stageLabel(targetStage)}`)
   }, [matters, onStageChange])
 
   return (
