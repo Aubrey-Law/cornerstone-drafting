@@ -13,6 +13,26 @@ import type { Database } from '@/types/supabase'
 type Params = { params: Promise<{ id: string }> }
 type AdminClient = SupabaseClient<Database>
 
+export async function GET(req: Request, { params }: Params) {
+  const { err } = await requireAdmin(req)
+  if (err) return err
+
+  const { id: matterId } = await params
+  const admin = getAdminClient()
+
+  try {
+    const row = await fetchDesignSheetRow(admin, matterId)
+    if (!row) {
+      return NextResponse.json({ sheet: null })
+    }
+    const sheet = inflateDesignSheetRow(row)
+    return NextResponse.json({ sheet })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to load design sheet'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
 async function getMatterClientIntakeId(matterId: string) {
   const admin = getAdminClient()
   const { data, error } = await admin
