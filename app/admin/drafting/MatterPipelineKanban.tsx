@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatDate } from '@/lib/utils'
 import { hubLastActivityAt, hubReadinessLabel } from '@/lib/drafting/hubUtils'
+import { useDebouncedPrefetch } from '@/lib/useDebouncedPrefetch'
 import { updateMatterStage } from '@/lib/drafting/updateMatterStage'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
 import { STAGES, stageGroupColor, stageInfo, stageLabel, type MatterStage } from '@/types/database'
@@ -143,11 +144,17 @@ function KanbanCard({
   const readiness = hubReadinessLabel(item)
   const lastActivity = hubLastActivityAt(item)
   const stage = stageInfo(matter.stage)
+  const draftingHref = `/admin/drafting/${matter.matter_id}`
+  const { schedulePrefetch, cancelPrefetch } = useDebouncedPrefetch(draftingHref)
 
   return (
     <li>
       <article
         draggable
+        onMouseEnter={schedulePrefetch}
+        onMouseLeave={cancelPrefetch}
+        onFocus={schedulePrefetch}
+        onBlur={cancelPrefetch}
         onDragStart={e => {
           e.dataTransfer.setData('text/matter-id', matter.matter_id)
           e.dataTransfer.effectAllowed = 'move'
