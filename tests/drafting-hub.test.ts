@@ -96,6 +96,17 @@ describe('drafting hub and workspace', () => {
     expect(review).toContain('onConfirm={confirmPromotion}')
   })
 
+  it('shows hub empty-state CTA and stage success toasts', () => {
+    const hub = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/DraftingHubClient.tsx'), 'utf8')
+    const kanban = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineKanban.tsx'), 'utf8')
+    const table = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'), 'utf8')
+
+    expect(hub).toContain('/admin/matters?create=1')
+    expect(hub).toContain('router.refresh()')
+    expect(kanban).toContain("toast.success(`Moved to ${stageLabel(targetStage)}`)")
+    expect(table).toContain("toast.success(`Moved to ${stageLabel(nextStage)}`)")
+  })
+
   it('seeds intake values through the shared ensure helper', () => {
     const loader = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/loadDraftingMatterContext.ts'), 'utf8')
     const seedModule = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/seedFromIntake.ts'), 'utf8')

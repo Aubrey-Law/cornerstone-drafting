@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDownAZ, Columns3, Search, Table2, X } from 'lucide-react'
+import { ArrowDownAZ, Columns3, RefreshCw, Search, Table2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import MatterPipelineKanban from '@/app/admin/drafting/MatterPipelineKanban'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
 import { cn } from '@/lib/utils'
@@ -117,10 +118,14 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
   const emptyMessage = loadError
     ? `Could not load matters: ${loadError}`
     : matters.length === 0
-      ? 'No open matters found. Matters must exist in Supabase with a linked intake row (not archived or closed).'
+      ? 'No open matters yet. Create a matter to start drafting.'
       : search.trim() || readinessFilter !== 'all' || practiceFilter !== 'all'
         ? 'No matters match the current filters.'
         : 'No matters to show.'
+
+  const hasActiveFilters = Boolean(search.trim() || readinessFilter !== 'all' || practiceFilter !== 'all')
+  const showCreateCta = !loadError && matters.length === 0 && !hasActiveFilters
+  const showRetry = Boolean(loadError)
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
@@ -229,7 +234,22 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className={cn(view === 'kanban' ? 'max-w-none' : 'mx-auto max-w-6xl')}>
           {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+            <div className="rounded-lg border border-dashed border-border bg-card px-6 py-10 text-center">
+              <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {showRetry && (
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => router.refresh()}>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                )}
+                {showCreateCta && (
+                  <Button type="button" size="sm" asChild>
+                    <Link href="/admin/matters?create=1">Create matter</Link>
+                  </Button>
+                )}
+              </div>
+            </div>
           ) : view === 'kanban' ? (
             <MatterPipelineKanban
               matters={filtered}
