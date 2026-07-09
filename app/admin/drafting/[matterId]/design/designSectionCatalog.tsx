@@ -118,6 +118,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         sheet={sheet}
         onChange={updateField}
         contacts={contacts}
+        matter={matter}
         matterId={matterId}
         onAddContact={handleAddContact}
         onUpdateContact={handleUpdateContact}
@@ -234,7 +235,7 @@ export function designSectionHref(matterId: string, sectionId: string, embedded:
   if (embedded) {
     return `/admin/drafting/${matterId}?step=design&section=${normalized}`
   }
-  return `/admin/drafting/${matterId}/design/${normalized}`
+  return `/admin/drafting/${matterId}/design?section=${normalized}`
 }
 
 export function designOverviewHref(matterId: string, embedded: boolean): string {

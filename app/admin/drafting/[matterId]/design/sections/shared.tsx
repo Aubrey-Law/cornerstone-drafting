@@ -457,9 +457,9 @@ export function SectionBlock({ title, subtitle, children }: {
 
 export function AttorneyNoteBanner({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-      <p className="text-[13px] leading-relaxed text-warning">{children}</p>
+    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 dark:border-amber-700/50 dark:bg-amber-950/30">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-amber-400" />
+      <p className="text-[13px] leading-relaxed text-warning dark:text-amber-200">{children}</p>
     </div>
   )
 }

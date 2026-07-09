@@ -13,6 +13,7 @@ import {
   FiduciaryBlock,
   isMarriedSheet,
 } from './fiduciary-blocks'
+import { ExcludedGuardians } from './ExcludedGuardiansSection'
 
 export interface DocumentFiduciaryProps extends SectionProps {
   contacts: MatterContact[]
@@ -70,9 +71,8 @@ export function TrustFiduciarySections(props: DocumentFiduciaryProps & { scope?:
         {...blockProps}
         role="trustee"
         slotField="spouse_trustee_slots"
-        sectionTitle={`${spouseFirst || 'Spouse'}'s Trustees`}
-        coShortcutContact={clientContact}
-        coShortcutLabel={`${clientFirst || 'Client'} as initial co-trustee`}
+        sectionTitle={`${spouseFirst || 'Spouse'}'s Successor Trustees`}
+        coShortcutContact={null}
       />
     )
   }
@@ -125,9 +125,14 @@ export function TrustFiduciarySections(props: DocumentFiduciaryProps & { scope?:
       <FiduciaryBlock
         {...blockProps}
         role="trustee"
-        sectionTitle={`${clientFirst || 'Client'}'s Successor Trustees`}
-        clientShortcutContact={separateTrusts ? null : clientContact}
-        clientShortcutLabel={separateTrusts ? undefined : `${clientFirst || 'Client'} as initial trustee`}
+        sectionTitle={
+          sheet.is_joint
+            ? 'Successor Trustees'
+            : separateTrusts
+              ? `${clientFirst || 'Client'}'s Successor Trustees`
+              : `${clientFirst || 'Client'}'s Successor Trustees`
+        }
+        clientShortcutContact={null}
       />
     </>
   )
@@ -141,6 +146,7 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
     clientContact,
     spouseContact,
     clientFirst,
+    spouseFirst,
     spouseTrusteeSource,
     hasMinorChildren,
     blockProps,
@@ -169,38 +175,23 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
       <FiduciaryBlock
         {...blockProps}
         role="executor"
+        sectionTitle={`${clientFirst || 'Client'}'s Personal Representative`}
         sameAsTrustee={sheet.executor_same_as_trustee}
         onSameAsTrusteeToggle={() => {
           const next = !sheet.executor_same_as_trustee
           onChange('executor_same_as_trustee', next)
           if (next) onChange('executor_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['executor_slots'])
         }}
-        clientShortcutContact={clientContact}
-        clientShortcutLabel="Client as primary personal representative"
-        spouseOptionLabel={spouseContact ? 'Spouse as personal representative' : undefined}
+        primaryShortcutContact={spouseContact}
+        primaryShortcutLabel={spouseContact ? `${spouseFirst || 'Spouse'} as primary personal representative` : undefined}
       />
-
-      {hasMinorChildren && (
-        <>
-          <FiduciaryBlock
-            {...blockProps}
-            role="guardian"
-            spouseOptionLabel={spouseContact ? 'Spouse as guardian' : undefined}
-          />
-          <FiduciaryBlock
-            {...blockProps}
-            role="temporary_guardian"
-            spouseOptionLabel={spouseContact ? 'Spouse as temporary guardian' : undefined}
-          />
-        </>
-      )}
 
       {spouseDocs && (
         <FiduciaryBlock
           {...blockProps}
           role="executor"
           slotField="spouse_executor_slots"
-          sectionTitle="Spouse / Partner Personal Representative"
+          sectionTitle={`${spouseFirst || 'Spouse'}'s Personal Representative`}
           sameAsTrustee={sheet.spouse_executor_same_as_trustee}
           sameAsTrusteeLabel="Same as Spouse's Trustees"
           onSameAsTrusteeToggle={() => {
@@ -211,8 +202,24 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
             }
           }}
           primaryShortcutContact={clientContact}
-          primaryShortcutLabel="Client as spouse / partner personal representative"
+          primaryShortcutLabel={clientContact ? `${clientFirst || 'Client'} as primary personal representative` : undefined}
         />
+      )}
+
+      {hasMinorChildren && (
+        <>
+          <FiduciaryBlock
+            {...blockProps}
+            role="guardian"
+            spouseOptionLabel={spouseContact ? 'Spouse as guardian' : undefined}
+          />
+          <ExcludedGuardians {...props} />
+          <FiduciaryBlock
+            {...blockProps}
+            role="temporary_guardian"
+            spouseOptionLabel={spouseContact ? 'Spouse as temporary guardian' : undefined}
+          />
+        </>
       )}
     </>
   )

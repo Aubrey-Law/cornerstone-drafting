@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { ChevronLeft, ChevronRight, LayoutGrid } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,6 +16,7 @@ interface DesignSectionPageViewProps {
   overviewHref: string
   previousHref: string | null
   nextHref: string | null
+  onNavigate?: (href: string) => void
 }
 
 function statusLabel(summary: DesignSectionSummary | undefined) {
@@ -35,12 +35,21 @@ export function DesignSectionPageView({
   overviewHref,
   previousHref,
   nextHref,
+  onNavigate,
 }: DesignSectionPageViewProps) {
   const status = statusLabel(summary)
   const subtitle = section.subtitle
     ?? (summary?.status === 'attention' && summary.missing?.length
       ? `${summary.missing.length} item${summary.missing.length === 1 ? '' : 's'} needed`
       : summary?.detail ?? undefined)
+
+  const handleNavigate = (href: string) => {
+    if (onNavigate) {
+      onNavigate(href)
+      return
+    }
+    window.location.assign(href)
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -58,11 +67,14 @@ export function DesignSectionPageView({
           <Badge className={cn('border-0 text-[10px]', status.className)}>{status.text}</Badge>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-            <Link href={overviewHref}>
-              <LayoutGrid className="h-3.5 w-3.5" />
-              All sections
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => handleNavigate(overviewHref)}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            All sections
           </Button>
         </div>
       </div>
@@ -76,21 +88,26 @@ export function DesignSectionPageView({
 
       <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border pt-3">
         {previousHref ? (
-          <Button variant="outline" size="sm" className="gap-1 text-xs" asChild>
-            <Link href={previousHref}>
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Previous
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 text-xs"
+            onClick={() => handleNavigate(previousHref)}
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Previous
           </Button>
         ) : (
           <span />
         )}
         {nextHref ? (
-          <Button size="sm" className="gap-1 text-xs" asChild>
-            <Link href={nextHref}>
-              Next section
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
+          <Button
+            size="sm"
+            className="gap-1 text-xs"
+            onClick={() => handleNavigate(nextHref)}
+          >
+            Next section
+            <ChevronRight className="h-3.5 w-3.5" />
           </Button>
         ) : (
           <span />

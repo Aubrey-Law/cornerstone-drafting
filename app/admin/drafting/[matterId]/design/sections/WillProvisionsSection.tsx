@@ -262,32 +262,6 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
             />
           </div>
         </div>
-
-        {/* Excluded guardian (only meaningful when minors) */}
-        {hasMinors && (
-          <div className="mt-4">
-            <ClientDecisionCallout>Excluded guardian is sensitive — confirm with client before including.</ClientDecisionCallout>
-          </div>
-        )}
-        {hasMinors && (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <div>
-              <FieldLabel>Excluded Guardian?</FieldLabel>
-              <SegControl
-                value={sheet.excluded_guardian_flag ? 'yes' : 'no'}
-                options={YES_NO}
-                onChange={v => onChange('excluded_guardian_flag', v === 'yes')}
-              />
-            </div>
-            {sheet.excluded_guardian_flag && (
-              <AttorneyInput
-                label="Excluded Guardian Name"
-                value={sheet.excluded_guardian_name ?? ''}
-                onChange={v => onChange('excluded_guardian_name', v || null)}
-              />
-            )}
-          </div>
-        )}
       </SectionBlock>
       )}
 

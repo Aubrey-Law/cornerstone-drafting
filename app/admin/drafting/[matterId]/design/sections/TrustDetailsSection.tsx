@@ -26,6 +26,7 @@ import {
   type TrustCoTrusteeDecision,
   type TrusteeCompensation,
 } from '@/lib/designSheetTrustDetails'
+import { applyTrusteeNominationsFromSheet, nominationOptionsForContext } from '@/lib/designSheet/initialTrusteeNomination'
 import type { DesignSheet, MatterContact, PetCareDetails, PipelineMatter, StaggeredTier } from '@/types/database'
 import DesignContactPicker, { type Contact as PickerContact } from './ContactPicker'
 import type { SectionProps } from './shared'
@@ -44,12 +45,9 @@ import {
 } from './shared'
 import {
   SegControl,
-  clearPrimaryContactIf,
   findClientContact,
   findSpouseContact,
   isMarriedSheet as isMarried,
-  primaryContactId,
-  setPrimaryContact,
 } from './fiduciary-blocks'
 import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
 import { TrustFiduciarySections } from './documentFiduciarySections'
@@ -181,6 +179,32 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
     onChange('decisions', setTrustDetails(sheet, patch))
 
   if (scope === 'spouse') {
+    const spouseNominationOptions = nominationOptionsForContext({
+      married,
+      jointTrust: Boolean(sheet.is_joint),
+      scope: 'spouse',
+      clientFirst,
+      spouseFirst,
+    })
+
+    const handleSpouseNominationChange = (value: string) => {
+      const nomination = (value || null) as InitialTrusteeNomination | null
+      const nextTrustDetails = {
+        ...trustDetails,
+        spouse_initial_trustee_nomination: nomination,
+      }
+      onChange('decisions', setTrustDetails(sheet, { spouse_initial_trustee_nomination: nomination }))
+      const slotPatch = applyTrusteeNominationsFromSheet(
+        sheet,
+        nextTrustDetails,
+        clientContact,
+        spouseContact,
+      )
+      if (slotPatch.spouse_trustee_slots) {
+        onChange('spouse_trustee_slots', slotPatch.spouse_trustee_slots)
+      }
+    }
+
     return (
       <DesignSectionContent>
         <SectionHelp>Configure the spouse&apos;s separate trust name and trustee nominations.</SectionHelp>
@@ -205,47 +229,59 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
             <TrustNameFormatFields sheet={sheet} onChange={onChange} scope="spouse" />
           </div>
         </SectionBlock>
-        <TrustFiduciarySections {...props} scope="spouse" />
+
+        {separate && (
+          <SectionBlock title="Trustee Provisions">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+              <AttorneySelect
+                label={`${spouseFirst || 'Spouse'}'s Initial Trustee Nomination Structure`}
+                value={trustDetails.spouse_initial_trustee_nomination ?? ''}
+                placeholder="Select…"
+                options={spouseNominationOptions}
+                onChange={handleSpouseNominationChange}
+              />
+            </div>
+            <div className="mt-4">
+              <TrustFiduciarySections {...props} scope="spouse" trusteesOnly />
+            </div>
+          </SectionBlock>
+        )}
+
+        {!separate && <TrustFiduciarySections {...props} scope="spouse" />}
       </DesignSectionContent>
     )
   }
 
-  const showSeparateTrustSelfTrustees = separate && clientContact && spouseContact
-  const selfTrusteesChecked = Boolean(
-    showSeparateTrustSelfTrustees &&
-    primaryContactId(sheet.trustee_slots) === clientContact.id &&
-    primaryContactId(sheet.spouse_trustee_slots) === spouseContact.id,
-  )
+  const nominationLabel = married
+    ? sheet.is_joint
+      ? 'Initial Trustee Nomination Structure'
+      : `${clientFirst || 'Client'}'s Initial Trustee Nomination Structure`
+    : `${clientFirst || 'Client'} Initial Trustee Nomination Structure`
 
-  useEffect(() => {
-    if (!clientContact) return
-    if (primaryContactId(sheet.trustee_slots) == null) {
-      onChange('trustee_slots', setPrimaryContact(sheet.trustee_slots, clientContact.id) as DesignSheet['trustee_slots'])
+  const nominationOptions = nominationOptionsForContext({
+    married,
+    jointTrust: Boolean(sheet.is_joint),
+    scope: married ? 'client' : 'single',
+    clientFirst,
+    spouseFirst,
+  })
+
+  const handleClientNominationChange = (value: string) => {
+    const nomination = (value || null) as InitialTrusteeNomination | null
+    const nextTrustDetails = {
+      ...trustDetails,
+      initial_trustee_nomination: nomination,
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientContact?.id])
-
-  useEffect(() => {
-    if (trustDetails.protect_us_trust_status && !trustDetails.allow_special_trustee) {
-      updateTrustDetails({ allow_special_trustee: true })
+    onChange('decisions', setTrustDetails(sheet, { initial_trustee_nomination: nomination }))
+    const slotPatch = applyTrusteeNominationsFromSheet(
+      sheet,
+      nextTrustDetails,
+      clientContact,
+      spouseContact,
+    )
+    if (slotPatch.trustee_slots) {
+      onChange('trustee_slots', slotPatch.trustee_slots)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trustDetails.protect_us_trust_status])
-
-  const handleSeparateTrustSelfTrusteesToggle = (checked: boolean) => {
-    if (!clientContact || !spouseContact) return
-    onChange(
-      'trustee_slots',
-      (checked
-        ? setPrimaryContact(sheet.trustee_slots, clientContact.id)
-        : clearPrimaryContactIf(sheet.trustee_slots, clientContact.id)) as DesignSheet['trustee_slots'],
-    )
-    onChange(
-      'spouse_trustee_slots',
-      (checked
-        ? setPrimaryContact(sheet.spouse_trustee_slots, spouseContact.id)
-        : clearPrimaryContactIf(sheet.spouse_trustee_slots, spouseContact.id)) as DesignSheet['spouse_trustee_slots'],
-    )
   }
 
   const pickerContacts = contacts as unknown as PickerContact[]
@@ -259,6 +295,13 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
     (contacts.find(c => c.id === id) ?? null) as unknown as PickerContact | null
   const residualIndividuals = sheet.residual_beneficiary_individuals ?? []
   const setResidualIndividuals = (next: string[]) => onChange('residual_beneficiary_individuals', next)
+
+  useEffect(() => {
+    if (trustDetails.protect_us_trust_status && !trustDetails.allow_special_trustee) {
+      updateTrustDetails({ allow_special_trustee: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trustDetails.protect_us_trust_status])
 
   const staggers = sheet.staggered_distributions ?? []
   const parseAmt = (a: string | null | undefined): number | null => {
@@ -291,12 +334,6 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   const deathLabel = married
     ? `Following the death of ${clientFirst || 'Client'} and ${spouseFirst || 'Spouse'}, the remaining trust property shall be:`
     : `Following the death of ${clientFirst || 'Client'}, the remaining trust property shall be:`
-
-  const nominationOptions: { value: InitialTrusteeNomination; label: string }[] = [
-    { value: 'grantor', label: 'Grantor' },
-    ...(sheet.is_joint ? [{ value: 'grantor_and_spouse' as const, label: 'Grantor and Spouse' }] : []),
-    { value: 'single_initial_trustee', label: 'Single Initial Trustee' },
-  ]
 
   return (
     <DesignSectionContent>
@@ -403,35 +440,52 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       <SectionBlock title="Trustee Provisions" subtitle="Drives how trustee slots are nominated in the trust">
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
           <AttorneySelect
-            label={`${clientFirst || 'Client'} Initial Trustee Nomination Structure`}
+            label={nominationLabel}
             value={trustDetails.initial_trustee_nomination ?? ''}
             placeholder="Select…"
             options={nominationOptions}
-            onChange={v => updateTrustDetails({ initial_trustee_nomination: (v || null) as InitialTrusteeNomination | null })}
+            onChange={handleClientNominationChange}
           />
         </div>
-
-        {showSeparateTrustSelfTrustees && (
-          <div className="mt-4">
-            <label className="flex items-start gap-2">
-              <Checkbox
-                checked={selfTrusteesChecked}
-                onCheckedChange={checked => handleSeparateTrustSelfTrusteesToggle(checked === true)}
-              />
-              <span className="text-xs leading-5 text-foreground">
-                Name {clientFirst || 'the client'} as initial trustee of {clientFirst ? `${clientFirst}'s` : 'their'} trust and {spouseFirst || 'the spouse'} as initial trustee of {spouseFirst ? `${spouseFirst}'s` : 'their'} trust
-              </span>
-            </label>
-          </div>
-        )}
 
         <div className="mt-4">
           <TrustFiduciarySections {...props} scope="client" trusteesOnly />
         </div>
 
         {separate && (
-          <div className="mt-4">
-            <TrustFiduciarySections {...props} scope="spouse" />
+          <div className="mt-4 space-y-4">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+              <AttorneySelect
+                label={`${spouseFirst || 'Spouse'}'s Initial Trustee Nomination Structure`}
+                value={trustDetails.spouse_initial_trustee_nomination ?? ''}
+                placeholder="Select…"
+                options={nominationOptionsForContext({
+                  married,
+                  jointTrust: false,
+                  scope: 'spouse',
+                  clientFirst,
+                  spouseFirst,
+                })}
+                onChange={value => {
+                  const nomination = (value || null) as InitialTrusteeNomination | null
+                  const nextTrustDetails = {
+                    ...trustDetails,
+                    spouse_initial_trustee_nomination: nomination,
+                  }
+                  onChange('decisions', setTrustDetails(sheet, { spouse_initial_trustee_nomination: nomination }))
+                  const slotPatch = applyTrusteeNominationsFromSheet(
+                    sheet,
+                    nextTrustDetails,
+                    clientContact,
+                    spouseContact,
+                  )
+                  if (slotPatch.spouse_trustee_slots) {
+                    onChange('spouse_trustee_slots', slotPatch.spouse_trustee_slots)
+                  }
+                }}
+              />
+            </div>
+            <TrustFiduciarySections {...props} scope="spouse" trusteesOnly />
           </div>
         )}
 

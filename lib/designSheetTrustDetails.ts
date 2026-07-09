@@ -6,7 +6,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export type TrustNameDateStyle = 'ua_dated' | 'dated_only'
 
-export type InitialTrusteeNomination = 'grantor' | 'grantor_and_spouse' | 'single_initial_trustee'
+export type InitialTrusteeNomination =
+  | 'grantor'
+  | 'grantor_and_spouse'
+  | 'single_initial_trustee'
+  | 'client'
+  | 'spouse'
+  | 'client_and_spouse'
 
 export type TrustCoTrusteeDecision =
   | 'joint_majority'
@@ -45,6 +51,7 @@ export interface TrustNameFormat {
 
 export interface TrustDetailsProvisions {
   initial_trustee_nomination: InitialTrusteeNomination | null
+  spouse_initial_trustee_nomination: InitialTrusteeNomination | null
   co_trustee_decision: TrustCoTrusteeDecision | null
   trustee_compensation: TrusteeCompensation | null
   protect_us_trust_status: boolean
@@ -87,6 +94,7 @@ const DEFAULT_TRUST_NAME_FORMAT: TrustNameFormat = {
 
 const DEFAULT_TRUST_DETAILS: TrustDetailsProvisions = {
   initial_trustee_nomination: 'grantor',
+  spouse_initial_trustee_nomination: 'spouse',
   co_trustee_decision: 'joint_majority',
   trustee_compensation: 'reasonable',
   protect_us_trust_status: false,
@@ -187,6 +195,11 @@ export function getTrustDetails(sheet: Pick<DesignSheet, 'decisions'>): TrustDet
   const raw = trustDetailsRaw(sheet)
   return {
     initial_trustee_nomination: readString(raw, 'initial_trustee_nomination', DEFAULT_TRUST_DETAILS.initial_trustee_nomination),
+    spouse_initial_trustee_nomination: readString(
+      raw,
+      'spouse_initial_trustee_nomination',
+      DEFAULT_TRUST_DETAILS.spouse_initial_trustee_nomination,
+    ),
     co_trustee_decision: readString(raw, 'co_trustee_decision', DEFAULT_TRUST_DETAILS.co_trustee_decision),
     trustee_compensation: readString(raw, 'trustee_compensation', DEFAULT_TRUST_DETAILS.trustee_compensation),
     protect_us_trust_status: readBoolean(raw, 'protect_us_trust_status', DEFAULT_TRUST_DETAILS.protect_us_trust_status),

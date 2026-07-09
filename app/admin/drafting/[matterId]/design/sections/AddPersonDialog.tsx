@@ -110,14 +110,14 @@ function relationshipOptions(clientName: string, spouseName: string) {
   const clientFirst = clientName.split(/\s+/)[0] || 'Client'
   const spouseFirst = spouseName.split(/\s+/)[0] || 'Spouse'
   const options: Array<{ value: 'client' | 'spouse' | 'joint' | 'other'; label: string }> = [
-    { value: 'client', label: clientName ? `Relationship to ${clientName}` : `Relationship to ${clientFirst}` },
+    { value: 'client', label: clientName || clientFirst },
   ]
   if (spouseName) {
-    options.push({ value: 'spouse', label: `Relationship to ${spouseName}` })
+    options.push({ value: 'spouse', label: spouseName || spouseFirst })
     if (clientName) {
       options.push({
         value: 'joint',
-        label: `Relationship to ${clientName} and ${spouseName}`,
+        label: `${clientName} and ${spouseName}`,
       })
     }
   }
@@ -321,7 +321,7 @@ export function AddPersonDialog({
           </div>
 
           {showIndividualFields && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
                   <Label>Relationship to Client</Label>
@@ -340,7 +340,7 @@ export function AddPersonDialog({
                   }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Relationship To" />
+                    <SelectValue placeholder="Relationship to" />
                   </SelectTrigger>
                   <SelectContent>
                     {relOptions.map(opt => (

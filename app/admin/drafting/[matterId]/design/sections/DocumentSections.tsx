@@ -1,9 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import type { SectionProps } from './shared'
 import {
@@ -27,7 +25,6 @@ import {
   TrustDetailsSpouseSection,
   TrustDocumentSection,
 } from './TrustDetailsSection'
-
 export { TrustDetailsSection, TrustDetailsSpouseSection, TrustDocumentSection }
 
 interface DocumentSectionProps extends SectionProps {
@@ -50,45 +47,12 @@ function SectionHelp({ children }: { children: ReactNode }) {
   )
 }
 
-function ExcludedGuardians({ sheet, onChange }: SectionProps) {
-  const enabled = Boolean(sheet.excluded_guardian_flag)
-  return (
-    <SectionBlock title="Excluded Guardian(s)">
-      <label className="flex items-start gap-2">
-        <Checkbox
-          checked={enabled}
-          onCheckedChange={checked => {
-            const next = checked === true
-            onChange('excluded_guardian_flag', next)
-            if (!next) onChange('excluded_guardian_name', null)
-          }}
-        />
-        <span className="text-xs leading-5 text-foreground">
-          Exclude one or more individuals from serving as guardian
-        </span>
-      </label>
-      {enabled && (
-        <div className="mt-4">
-          <AttorneyInput
-            label="Excluded individual(s) + reason"
-            value={sheet.excluded_guardian_name ?? ''}
-            placeholder="e.g. Jane Doe — estranged"
-            onChange={v => onChange('excluded_guardian_name', v || null)}
-          />
-        </div>
-      )}
-    </SectionBlock>
-  )
-}
-
 export function WillDocumentSection(props: DocumentSectionProps) {
   const { sheet, onChange } = props
-  const hasMinors = sheetHasMinorChildren(sheet.children)
 
   return (
     <DesignSectionContent>
       <SectionHelp>Configure will-specific provisions and nominate personal representatives and guardians here.</SectionHelp>
-      {hasMinors && <ExcludedGuardians sheet={sheet} onChange={onChange} />}
       <WillFiduciarySections {...props} />
       <WillPersonalRepresentativePowersSection sheet={sheet} onChange={onChange} />
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="will" />

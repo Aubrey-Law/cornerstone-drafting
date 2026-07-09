@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
@@ -78,6 +78,7 @@ export default function DesignSheetShell({
   initialFocus = null,
 }: DesignSheetShellProps) {
   const router = useRouter()
+  const [, startNavigation] = useTransition()
   const s = useDesignSheetState({ matterId, matter, contacts, sheet: sheetProp, lpData })
   const {
     isLP,
@@ -197,17 +198,27 @@ export default function DesignSheetShell({
   const overviewHref = designOverviewHref(matterId, embedded)
 
   const navigateToSection = useCallback((sectionId: string, focus?: { sectionId: string; targetField: string | null }) => {
-    if (embedded) {
-      const params = new URLSearchParams(window.location.search)
-      params.set('step', 'design')
+    startNavigation(() => {
+      if (embedded) {
+        const params = new URLSearchParams(window.location.search)
+        params.set('step', 'design')
+        params.set('section', sectionId)
+        if (focus?.targetField) params.set('focus', `${focus.sectionId}:${focus.targetField}`)
+        else params.delete('focus')
+        router.push(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
+        return
+      }
+      const params = new URLSearchParams()
       params.set('section', sectionId)
-      if (focus?.targetField) params.set('focus', `${focus.sectionId}:${focus.targetField}`)
-      else params.delete('focus')
-      router.push(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
-      return
-    }
-    router.push(designSectionHref(matterId, sectionId, false))
-  }, [embedded, matterId, router])
+      router.push(`/admin/drafting/${matterId}/design?${params.toString()}`, { scroll: false })
+    })
+  }, [embedded, matterId, router, startNavigation])
+
+  const navigateByHref = useCallback((href: string) => {
+    startNavigation(() => {
+      router.push(href, { scroll: false })
+    })
+  }, [router, startNavigation])
 
   const initialFocusHandled = useRef(false)
   useEffect(() => {
@@ -303,6 +314,7 @@ export default function DesignSheetShell({
                     overviewHref={overviewHref}
                     previousHref={previousHref}
                     nextHref={nextHref}
+                    onNavigate={navigateByHref}
                   />
                 ) : (
                   <DesignSectionOverview

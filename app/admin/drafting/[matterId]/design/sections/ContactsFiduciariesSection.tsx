@@ -26,9 +26,10 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { formatPhoneDisplay } from '@/lib/phone'
-import type { DesignSheet, MatterContact } from '@/types/database'
+import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import { DesignSectionContent, SectionBlock, type SectionProps } from './shared'
 import { contactFullName } from './ContactPicker'
+import { findClientContact, findSpouseContact, isMarriedSheet } from './fiduciary-blocks'
 import { AddPersonDialog, type PersonFormValues } from './AddPersonDialog'
 import {
   BENEFICIARY_TYPE_LABELS,
@@ -46,6 +47,7 @@ import {
 
 interface Props extends SectionProps {
   contacts: MatterContact[]
+  matter: PipelineMatter
   matterId: string
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
@@ -179,6 +181,7 @@ export function ContactsFiduciariesSection({
   sheet,
   onChange,
   contacts,
+  matter,
   matterId,
   onAddContact,
   onUpdateContact,
@@ -197,13 +200,30 @@ export function ContactsFiduciariesSection({
   const profiles = getContactProfiles(sheet)
 
   const fiduciaryContacts = useMemo(() => {
-    return contacts.filter(c => {
+    const listed = contacts.filter(c => {
       const profile = profiles[c.id]
       if (profile?.is_beneficiary && !profile?.is_fiduciary) return false
       if (profile?.is_fiduciary) return true
       return profile?.is_fiduciary !== false
     })
-  }, [contacts, profiles])
+
+    const autoContacts: MatterContact[] = []
+    const listedIds = new Set(listed.map(c => c.id))
+    const clientContact = findClientContact(contacts, matter, sheet)
+    const spouseContact = isMarriedSheet(sheet)
+      ? findSpouseContact(contacts, matter, sheet)
+      : null
+
+    if (clientContact && !listedIds.has(clientContact.id)) {
+      autoContacts.push(clientContact)
+      listedIds.add(clientContact.id)
+    }
+    if (spouseContact && !listedIds.has(spouseContact.id)) {
+      autoContacts.push(spouseContact)
+    }
+
+    return [...autoContacts, ...listed]
+  }, [contacts, matter, profiles, sheet])
 
   const beneficiaryContacts = useMemo(() => {
     return contacts.filter(c => profiles[c.id]?.is_beneficiary)
