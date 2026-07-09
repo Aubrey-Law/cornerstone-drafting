@@ -43,10 +43,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
+import { MatterOverviewHero } from './MatterOverviewHero'
 
 interface MatterDetailClientProps {
   matter: PipelineMatter
   contacts: MatterContact[]
+  agingHealth?: 'red' | 'amber' | 'green' | null
   twilioSmsEnabled?: boolean
   emailSendEnabled?: boolean
 }
@@ -103,6 +106,7 @@ function formatBytes(size: number) {
 export default function MatterDetailClient({
   matter: initialMatter,
   contacts: initialContacts,
+  agingHealth = null,
   twilioSmsEnabled = false,
   emailSendEnabled = false,
 }: MatterDetailClientProps) {
@@ -452,6 +456,13 @@ export default function MatterDetailClient({
   }
 
   const matterLabel = matter.client_name || matter.matter_name || 'this matter'
+  const nextAction = useMemo(() => computeMatterNextAction(matter), [matter])
+  const daysOpen = useMemo(() => matterDaysOpen(matter.matter_created), [matter.matter_created])
+  const unreadPortalCount = useMemo(
+    () => portalMessages.filter(m => m.sender_role === 'client' && !m.read_at).length,
+    [portalMessages],
+  )
+  const lastPortalMessage = portalMessages.length > 0 ? portalMessages[portalMessages.length - 1] : null
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
@@ -506,6 +517,16 @@ export default function MatterDetailClient({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
+            <MatterOverviewHero
+              stage={matter.stage}
+              daysOpen={daysOpen}
+              agingHealth={agingHealth}
+              nextAction={nextAction}
+              unreadPortalCount={unreadPortalCount}
+              lastPortalMessage={lastPortalMessage}
+              onSendIntake={() => void handleSendIntake()}
+              sendIntakePending={sendingIntake}
+            />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
