@@ -1,6 +1,6 @@
 'use client'
 
-import { Activity, CheckCircle2, FileText, Info, Send, Smartphone } from 'lucide-react'
+import { Activity, CheckCircle2, FileText, Info, Send } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import type { ActivityEventType, MatterActivity } from '@/types/database'
 
@@ -9,8 +9,6 @@ const EVENT_META: Partial<Record<ActivityEventType, { icon: React.ReactNode; col
   intake_sent: { icon: <Send className="h-3.5 w-3.5" />, color: 'text-accent bg-accent/10' },
   intake_completed: { icon: <CheckCircle2 className="h-3.5 w-3.5" />, color: 'text-success bg-success/10' },
   email_sent: { icon: <Send className="h-3.5 w-3.5" />, color: 'text-muted-foreground bg-muted' },
-  sms_sent: { icon: <Smartphone className="h-3.5 w-3.5" />, color: 'text-accent bg-accent/10' },
-  sms_received: { icon: <Smartphone className="h-3.5 w-3.5" />, color: 'text-muted-foreground bg-muted' },
   draft_generated: { icon: <FileText className="h-3.5 w-3.5" />, color: 'text-accent bg-accent/10' },
   draft_promoted_to_review: { icon: <CheckCircle2 className="h-3.5 w-3.5" />, color: 'text-success bg-success/10' },
   matter_created: { icon: <Info className="h-3.5 w-3.5" />, color: 'text-muted-foreground bg-muted' },
