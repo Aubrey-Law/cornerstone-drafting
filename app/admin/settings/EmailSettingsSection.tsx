@@ -1,0 +1,504 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { cn } from '@/lib/utils'
+import type { EmailMode, EmailProvider, EmailCategoryMeta } from '@/lib/email/categories'
+import { EmailTemplatesSection } from './EmailTemplatesSection'
+
+interface CategoryRow extends EmailCategoryMeta {
+  mode: EmailMode
+  provider: EmailProvider
+  updatedAt: string | null
+  updatedBy: string | null
+  lastSentAt: string | null
+  lastSendStatus: string | null
+}
+
+interface SettingsResponse {
+  categories: CategoryRow[]
+  envHardKilled: boolean
+  testInbox: string
+  allowlist: string[]
+  emailLogoHeader: boolean
+  graph: {
+    available: boolean
+    accountEmail: string | null
+    missingScope: boolean
+  }
+}
+
+const MODE_LABELS: Record<EmailMode, string> = {
+  on: 'On',
+  off: 'Off',
+  redirect: 'Redirect to test inbox',
+}
+
+const PROVIDER_LABELS: Record<EmailProvider, string> = {
+  resend: 'Resend',
+  graph: 'Microsoft 365',
+}
+
+function formatTime(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+type ConfirmOnTarget =
+  | { type: 'single'; category: string; label: string }
+  | { type: 'bulk'; count: number }
+  | null
+
+export function EmailSettingsSection() {
+  const [data, setData] = useState<SettingsResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [pendingCats, setPendingCats] = useState<ReadonlySet<string>>(new Set())
+  const [confirmOn, setConfirmOn] = useState<ConfirmOnTarget>(null)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  // Bumped by every load() and every optimistic mutation so a stale in-flight
+  // GET can never overwrite newer local state.
+  const loadSeqRef = useRef(0)
+
+  function setCatPending(category: string, pending: boolean) {
+    setPendingCats(prev => {
+      const next = new Set(prev)
+      if (pending) next.add(category)
+      else next.delete(category)
+      return next
+    })
+  }
+
+  async function load(initial = false) {
+    const seq = ++loadSeqRef.current
+    if (initial) setLoading(true)
+    try {
+      const res = await fetch('/api/admin/settings/email', { cache: 'no-store' })
+      if (!res.ok) throw new Error(`Failed to load: ${res.status}`)
+      const json = (await res.json()) as SettingsResponse
+      if (seq === loadSeqRef.current) setData(json)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load')
+    } finally {
+      if (initial) setLoading(false)
+    }
+  }
+
+  useEffect(() => { load(true) }, [])
+
+  /** Optimistically apply a mode to local state; returns the previous mode for rollback. */
+  function applyModeLocally(category: string, mode: EmailMode): EmailMode | null {
+    let previous: EmailMode | null = null
+    setData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        categories: prev.categories.map(c => {
+          if (c.category !== category) return c
+          previous = c.mode
+          return { ...c, mode }
+        }),
+      }
+    })
+    return previous
+  }
+
+  async function setMode(category: string, mode: EmailMode) {
+    const previous = data?.categories.find(c => c.category === category)?.mode ?? null
+    applyModeLocally(category, mode)
+    loadSeqRef.current++ // invalidate any in-flight GET so it can't clobber this toggle
+    setCatPending(category, true)
+    try {
+      const res = await fetch('/api/admin/settings/email', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, mode }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `Save failed: ${res.status}`)
+      }
+      toast.success(`Saved: ${category} → ${MODE_LABELS[mode]}`)
+      // Background refresh keeps updatedAt/lastSent in sync without blanking the UI.
+      void load()
+    } catch (err) {
+      if (previous) {
+        applyModeLocally(category, previous)
+        loadSeqRef.current++
+      }
+      toast.error(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setCatPending(category, false)
+    }
+  }
+
+  /** Gate switching a category to live "on" behind an explicit confirmation. */
+  function requestMode(category: CategoryRow, mode: EmailMode) {
+    if (mode === 'on' && category.mode !== 'on') {
+      setConfirmOn({ type: 'single', category: category.category, label: category.label })
+      return
+    }
+    void setMode(category.category, mode)
+  }
+
+  async function setProvider(category: string, provider: EmailProvider) {
+    setCatPending(category, true)
+    try {
+      const res = await fetch('/api/admin/settings/email', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, provider }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `Save failed: ${res.status}`)
+      }
+      toast.success(`Saved: ${category} → ${PROVIDER_LABELS[provider]}`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setCatPending(category, false)
+    }
+  }
+
+  const [logoPending, setLogoPending] = useState(false)
+
+  async function setLogoHeader(enabled: boolean) {
+    const previous = data?.emailLogoHeader ?? true
+    setData(prev => (prev ? { ...prev, emailLogoHeader: enabled } : prev))
+    loadSeqRef.current++
+    setLogoPending(true)
+    try {
+      const res = await fetch('/api/admin/settings/email', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailLogoHeader: enabled }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `Save failed: ${res.status}`)
+      }
+      toast.success(`Logo header ${enabled ? 'enabled' : 'disabled'} for emails`)
+    } catch (err) {
+      setData(prev => (prev ? { ...prev, emailLogoHeader: previous } : prev))
+      loadSeqRef.current++
+      toast.error(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setLogoPending(false)
+    }
+  }
+
+  async function bulkSet(mode: EmailMode) {
+    if (!data) return
+    const targets = data.categories.filter(c => c.mode !== mode)
+    if (targets.length === 0) {
+      toast.success(`All categories are already ${MODE_LABELS[mode]}`)
+      return
+    }
+    setBulkProgress({ done: 0, total: targets.length })
+    let failed = 0
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const c = targets[i]
+        const res = await fetch('/api/admin/settings/email', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: c.category, mode }),
+        })
+        if (res.ok) {
+          applyModeLocally(c.category, mode)
+        } else {
+          failed++
+        }
+        setBulkProgress({ done: i + 1, total: targets.length })
+      }
+    } finally {
+      setBulkProgress(null)
+    }
+    if (failed > 0) {
+      toast.error(`${failed} of ${targets.length} categories failed to update`)
+    } else {
+      toast.success(`All categories set to ${MODE_LABELS[mode]}`)
+    }
+    await load()
+  }
+
+  /** Bulk "on" needs an explicit confirmation; off/redirect are safe to apply directly. */
+  function requestBulkSet(mode: EmailMode) {
+    if (!data) return
+    if (mode === 'on') {
+      const count = data.categories.filter(c => c.mode !== 'on').length
+      if (count === 0) {
+        toast.success('All categories are already on')
+        return
+      }
+      setConfirmOn({ type: 'bulk', count })
+      return
+    }
+    void bulkSet(mode)
+  }
+
+  function handleConfirmOn() {
+    if (!confirmOn) return
+    if (confirmOn.type === 'single') {
+      void setMode(confirmOn.category, 'on')
+    } else {
+      void bulkSet('on')
+    }
+    setConfirmOn(null)
+  }
+
+  if (loading || !data) {
+    return <div className="p-6 text-[13px] text-muted-foreground">Loading email settings…</div>
+  }
+
+  const offCount = data.categories.filter(c => c.mode === 'off').length
+  const redirectCount = data.categories.filter(c => c.mode === 'redirect').length
+
+  return (
+    <div className="p-6">
+      <div className="mb-5 pb-3 border-b border-border">
+        <div>
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-foreground">Email Sending</h2>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Per-category control over outbound email. Sets to <strong>Off</strong> by default — turn each category on after you&apos;ve verified the flow.
+          </p>
+        </div>
+      </div>
+
+      {data.envHardKilled && (
+        <div className="mb-4 rounded-md border border-red-strong-border bg-red-bg px-3 py-2 text-[12px] text-red">
+          <strong>EMAILS_ENABLED=false</strong> is set in the environment. All outbound email is suppressed regardless of the toggles below. Clear the env var to re-enable.
+        </div>
+      )}
+
+      {data.allowlist.length > 0 && (
+        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-[12px] text-amber">
+          Allowlist active (<code className="font-sans">EMAIL_ALLOWLIST</code>): only sends to <strong>{data.allowlist.join(', ')}</strong> will be delivered. Other recipients are suppressed even when a category is on.
+        </div>
+      )}
+
+      <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2 text-[12px] text-blue">
+        <strong>Redirect mode</strong> sends the email to the test inbox <code className="font-sans">{data.testInbox}</code> instead of the real recipient (override with <code className="font-sans">EMAIL_TEST_INBOX</code>). Subject is prefixed and a banner is added so you can&apos;t mistake a test for a real send.
+      </div>
+
+      <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-border bg-card px-3 py-2.5">
+        <div>
+          <p className="text-[12px] font-medium text-foreground">AUBREY LAW logo header</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+            Wraps Settings-template emails with the branded wordmark header &amp; footer. When off, those emails send as a plain body.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={data.emailLogoHeader}
+          aria-label="Toggle logo header on emails"
+          disabled={logoPending}
+          onClick={() => setLogoHeader(!data.emailLogoHeader)}
+          className={cn(
+            'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
+            data.emailLogoHeader ? 'bg-emerald-600' : 'bg-muted-foreground/30',
+          )}
+        >
+          <span
+            className={cn(
+              'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+              data.emailLogoHeader ? 'translate-x-4' : 'translate-x-0.5',
+            )}
+          />
+        </button>
+      </div>
+
+      {data.graph.missingScope && (
+        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-[12px] text-amber">
+          <strong>Microsoft mailbox missing Mail.Send scope.</strong>{' '}
+          Reconnect from <Link href="/admin/settings?tab=outlook" className="underline">Settings → Outlook</Link> to grant the missing permission.
+        </div>
+      )}
+      {data.graph.available && data.graph.accountEmail && (
+        <div className="mb-4 rounded-md border border-green/40 bg-green-bg px-3 py-2 text-[12px] text-green">
+          <strong>Microsoft 365 mailbox connected:</strong> categories set to <em>Microsoft 365</em> will send from <code className="font-sans">{data.graph.accountEmail}</code> and land in that Sent Items folder.
+        </div>
+      )}
+
+      <div className="mb-4 flex items-center gap-2">
+        <button
+          onClick={() => requestBulkSet('off')}
+          disabled={bulkProgress !== null}
+          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-[12px] font-medium hover:bg-muted disabled:opacity-50"
+        >
+          All off
+        </button>
+        <button
+          onClick={() => requestBulkSet('redirect')}
+          disabled={bulkProgress !== null}
+          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-[12px] font-medium hover:bg-muted disabled:opacity-50"
+        >
+          All redirect
+        </button>
+        <button
+          onClick={() => requestBulkSet('on')}
+          disabled={bulkProgress !== null}
+          className="rounded-[5px] border border-border bg-card px-3 py-1.5 text-[12px] font-medium hover:bg-muted disabled:opacity-50"
+        >
+          All on
+        </button>
+        {bulkProgress && (
+          <span className="text-[12px] text-muted-foreground" role="status" aria-live="polite">
+            Updating {bulkProgress.done} of {bulkProgress.total}…
+          </span>
+        )}
+        <span className="ml-auto text-[12px] text-muted-foreground">
+          {data.categories.length - offCount - redirectCount} on · {redirectCount} redirect · {offCount} off
+        </span>
+      </div>
+
+      <div className="overflow-hidden rounded-md border border-border">
+        <table className="w-full text-[13px]">
+          <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">Category</th>
+              <th className="px-3 py-2 text-left font-medium">Recipient</th>
+              <th className="px-3 py-2 text-left font-medium">Last activity</th>
+              <th className="px-3 py-2 text-left font-medium">Provider</th>
+              <th className="px-3 py-2 text-left font-medium">Mode</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.categories.map((c, i) => (
+              <tr key={c.category} className={cn(i > 0 && 'border-t border-border')}>
+                <td className="px-3 py-3 align-top">
+                  <div className="font-medium text-foreground">{c.label}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{c.description}</div>
+                </td>
+                <td className="px-3 py-3 align-top">
+                  <span className={cn(
+                    'inline-block rounded px-1.5 py-0.5 text-[11px]',
+                    c.recipient === 'client' && 'bg-green-bg text-green',
+                    c.recipient === 'internal' && 'bg-muted text-muted-foreground',
+                  )}>
+                    {c.recipient}
+                  </span>
+                </td>
+                <td className="px-3 py-3 align-top text-[12px] text-muted-foreground">
+                  {c.lastSentAt
+                    ? <>{formatTime(c.lastSentAt)} <span className="text-muted-foreground/70">({c.lastSendStatus})</span></>
+                    : <span className="text-muted-foreground/60">never</span>}
+                </td>
+                <td className="px-3 py-3 align-top">
+                  <div className="flex gap-1" role="radiogroup" aria-label={`Provider for ${c.label}`}>
+                    {(['resend','graph'] as EmailProvider[]).map(p => {
+                      const disabledByGraph = p === 'graph' && !data.graph.available
+                      const disabled = pendingCats.has(c.category) || disabledByGraph
+                      const tooltip = disabledByGraph
+                        ? data.graph.missingScope
+                          ? 'Reconnect Microsoft with Mail.Send scope to enable.'
+                          : 'Connect a Microsoft 365 mailbox in Settings → Outlook to enable.'
+                        : undefined
+                      return (
+                        <button
+                          key={p}
+                          role="radio"
+                          aria-checked={c.provider === p}
+                          disabled={disabled}
+                          onClick={() => setProvider(c.category, p)}
+                          title={tooltip}
+                          className={cn(
+                            'rounded-[5px] border px-2 py-1 text-[11px] font-medium transition-colors',
+                            c.provider === p
+                              ? p === 'graph' ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                              :                 'border-violet-300 bg-violet-50 text-violet-900'
+                              : 'border-border bg-card text-muted-foreground hover:bg-muted',
+                            disabled && 'opacity-50',
+                          )}
+                        >
+                          {PROVIDER_LABELS[p]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </td>
+                <td className="px-3 py-3 align-top">
+                  <div className="flex gap-1" role="group" aria-label={`Mode for ${c.label}`}>
+                    {(['off','redirect','on'] as EmailMode[]).map(m => {
+                      const disabled = pendingCats.has(c.category) || bulkProgress !== null
+                      const tooltip = m === 'redirect' ? `Redirect to ${data.testInbox}` : undefined
+                      return (
+                        <button
+                          key={m}
+                          aria-label={`Set ${c.label} to ${MODE_LABELS[m]}`}
+                          aria-pressed={c.mode === m}
+                          disabled={disabled}
+                          onClick={() => requestMode(c, m)}
+                          title={tooltip}
+                          className={cn(
+                            'rounded-[5px] border px-2 py-1 text-[11px] font-medium transition-colors',
+                            c.mode === m
+                              ? m === 'on'       ? 'border-green/40 bg-green-bg text-green'
+                              : m === 'redirect' ? 'border-blue-strong-border bg-blue-bg text-blue'
+                              :                    'border-border bg-muted text-muted-foreground'
+                              : 'border-border bg-card text-muted-foreground hover:bg-muted',
+                            disabled && 'opacity-50',
+                          )}
+                        >
+                          {MODE_LABELS[m]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {c.mode === 'redirect' && (
+                    <div className="mt-1 text-[10px] text-blue-800 dark:text-blue-300">
+                      Redirects to <code className="font-sans">{data.testInbox}</code>
+                    </div>
+                  )}
+                  {c.updatedAt && (
+                    <div className="mt-1 text-[10px] text-muted-foreground/70">
+                      Updated {formatTime(c.updatedAt)}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <EmailTemplatesSection />
+
+      <AlertDialog open={confirmOn !== null} onOpenChange={open => { if (!open) setConfirmOn(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmOn?.type === 'bulk'
+                ? `Enable live email for ${confirmOn.count} ${confirmOn.count === 1 ? 'category' : 'categories'}?`
+                : `Enable live email for ${confirmOn?.label ?? 'this category'}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmOn?.type === 'bulk'
+                ? `This will turn on live sending for ${confirmOn.count} ${confirmOn.count === 1 ? 'category' : 'categories'} that ${confirmOn.count === 1 ? 'is' : 'are'} currently off or redirected. Real email will go to actual clients and staff. Make sure you have verified each template first — consider Redirect mode for a dry run.`
+                : 'This will send real email to clients for this category. Make sure you have verified the template first — consider Redirect mode for a dry run.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmOn}>
+              {confirmOn?.type === 'bulk' ? 'Turn all on' : 'Turn on'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
