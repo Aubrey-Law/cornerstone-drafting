@@ -73,18 +73,26 @@ Allowed integration points only:
 
 ## Database (greenfield)
 
-Lite migrations build on the drafting baseline:
+Use a **dedicated greenfield Supabase project** (not the live Aubrey Law firm DB).
 
-1. `20260710000000_lite_intake_portal.sql`
-2. `20260710500000_lite_portal_messages.sql`
-3. `20260711000000_lite_matter_aging.sql`
-4. `20260712000000_lite_communications.sql`
+**Drafting baseline first** (creates `client_intake`, `matters`, etc.), then lite extensions:
+
+1. `20260705000000` … `20260708120000` — drafting baseline (7 files)
+2. `20260710000000_lite_intake_portal.sql`
+3. `20260710500000_lite_portal_messages.sql`
+4. `20260711000000_lite_matter_aging.sql`
+5. `20260712000000_lite_communications.sql`
 
 ```bash
+# Remote greenfield project
+npx supabase link --project-ref <ref>
+npx supabase db push
+
+# Local
 sg docker -c "./node_modules/.bin/supabase db reset"
 ```
 
-This app targets a **dedicated greenfield Supabase project**, not the live Aubrey Law firm database.
+If you see `relation "public.client_intake" does not exist`, the baseline migrations were skipped — see [supabase/migrations/README.md](supabase/migrations/README.md).
 
 ## Verification
 
