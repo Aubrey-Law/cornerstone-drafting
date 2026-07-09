@@ -111,14 +111,17 @@ interface PartyPickerProps {
 }
 
 function PartyPicker({ label, selections, form, onChange, allowRealtyTrust = false }: PartyPickerProps) {
-  const addSelection = (source: PartySource) => {
+  const addSelection = (source: PartySource, trustName?: string) => {
     if (source === 'trust' && form.trustNames.length === 0) {
       toast.error('Add at least one trust name first.')
       return
     }
-    if (source === 'trust' && form.trustNames.length === 1) {
-      onChange([...selections, newPartySelection('trust', form.trustNames[0])])
-      return
+    if (source === 'trust') {
+      const resolvedTrustName = trustName ?? (form.trustNames.length === 1 ? form.trustNames[0] : undefined)
+      if (resolvedTrustName) {
+        onChange([...selections, newPartySelection('trust', resolvedTrustName)])
+        return
+      }
     }
     onChange([...selections, newPartySelection(source)])
   }
