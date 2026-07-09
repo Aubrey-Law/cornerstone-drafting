@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { getFirmConfig } from '@/lib/firmConfig'
+import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 import { Send } from 'lucide-react'
 
 const firm = getFirmConfig()
@@ -40,6 +41,13 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
+
+  useMessagesRealtime(matterId, message => {
+    setMessages(prev => {
+      if (prev.some(row => row.id === message.id)) return prev
+      return [...prev, message as Message]
+    })
+  })
 
   function handleSend() {
     const trimmed = draft.trim()
