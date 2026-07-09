@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { AssignCallDialog } from './AssignCallDialog'
-import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsInvalidation'
+import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
 
 export interface AdminCallRow extends CallRowData {
   matter_id: string | null

@@ -25,10 +25,10 @@ import dynamic from 'next/dynamic'
 import {
   EMPTY_SIDEBAR_COUNTS,
   getNavBadge,
+  mergeSidebarCounts,
   type SidebarCounts,
 } from '@/lib/sidebarBadges'
-import { mergeSidebarCounts } from '@/lib/queries/sidebarCounts'
-import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsInvalidation'
+import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsClient'
 
 const StaffSoftphone = dynamic(
   () => import('./components/StaffSoftphone').then((m) => m.StaffSoftphone),

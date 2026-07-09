@@ -1,6 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchMatterAgingTiles } from '@/lib/queries/pipelineAging'
-import { EMPTY_SIDEBAR_COUNTS, type SidebarCounts } from '@/lib/sidebarBadges'
+import { type SidebarCounts } from '@/lib/sidebarBadges'
 
 interface CountResult {
   count: number | null
@@ -74,19 +74,3 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     unassignedCallsCount,
   }
 }
-
-export function mergeSidebarCounts(
-  prev: SidebarCounts,
-  next: Partial<SidebarCounts> | null | undefined,
-): SidebarCounts {
-  if (!next) return prev
-  return {
-    intakeReviewCount: next.intakeReviewCount ?? prev.intakeReviewCount,
-    draftingNeedsDesignCount: next.draftingNeedsDesignCount ?? prev.draftingNeedsDesignCount,
-    agingRedCount: next.agingRedCount ?? prev.agingRedCount,
-    agingAmberCount: next.agingAmberCount ?? prev.agingAmberCount,
-    unassignedCallsCount: next.unassignedCallsCount ?? prev.unassignedCallsCount,
-  }
-}
-
-export { EMPTY_SIDEBAR_COUNTS }

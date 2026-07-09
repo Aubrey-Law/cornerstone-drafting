@@ -45,6 +45,7 @@ describe('sidebar badges', () => {
     expect(counts).toContain('fetchMatterAgingTiles')
     expect(layout).toContain('/api/admin/sidebar-counts')
     expect(layout).toContain('getNavBadge(item.href, badgeCounts)')
-    expect(layout).toContain('SIDEBAR_COUNTS_INVALIDATE_EVENT')
+    expect(layout).toContain('@/lib/sidebarCountsClient')
+    expect(layout).not.toContain('@/lib/sidebarCountsInvalidation')
   })
 })

@@ -37,3 +37,17 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
   }
   return null
 }
+
+export function mergeSidebarCounts(
+  prev: SidebarCounts,
+  next: Partial<SidebarCounts> | null | undefined,
+): SidebarCounts {
+  if (!next) return prev
+  return {
+    intakeReviewCount: next.intakeReviewCount ?? prev.intakeReviewCount,
+    draftingNeedsDesignCount: next.draftingNeedsDesignCount ?? prev.draftingNeedsDesignCount,
+    agingRedCount: next.agingRedCount ?? prev.agingRedCount,
+    agingAmberCount: next.agingAmberCount ?? prev.agingAmberCount,
+    unassignedCallsCount: next.unassignedCallsCount ?? prev.unassignedCallsCount,
+  }
+}
