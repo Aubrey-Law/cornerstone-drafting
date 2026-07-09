@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/apiAuth'
+import { syncAssetIntakeToDesignSheetForIntake } from '@/lib/assets/syncAssetIntakeToDesignSheet'
+import { getAdminClient } from '@/lib/supabaseAdmin'
 
 function makeClient(token: string) {
   return createClient(
@@ -53,6 +55,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  void syncAssetIntakeToDesignSheetForIntake(getAdminClient(), id)
   return NextResponse.json(data)
 }
 
@@ -69,6 +73,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .eq('client_intake_id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  void syncAssetIntakeToDesignSheetForIntake(getAdminClient(), id)
   return NextResponse.json({ ok: true })
 }
 
@@ -87,5 +93,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     .eq('client_intake_id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  void syncAssetIntakeToDesignSheetForIntake(getAdminClient(), id)
   return NextResponse.json({ ok: true })
 }

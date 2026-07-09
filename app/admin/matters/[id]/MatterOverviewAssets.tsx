@@ -23,7 +23,7 @@ export function MatterOverviewAssets({ matterId, matter, intakeId }: Props) {
       <div>
         <h3 className="text-sm font-semibold">Assets</h3>
         <p className="text-xs text-muted-foreground">
-          Household asset inventory. Add assets manually or import from a spreadsheet or document.
+          Household asset inventory. Changes sync automatically to the design sheet when a matter is linked.
         </p>
       </div>
       <MatterAssetsTab
