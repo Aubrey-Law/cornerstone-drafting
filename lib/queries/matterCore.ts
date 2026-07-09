@@ -1,4 +1,3 @@
-import { createServerSupabase } from '@/lib/supabaseServer'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { inflateDesignSheetRow } from '@/lib/designSheetPersistence'
 import { formatPhoneDisplay } from '@/lib/phone'
@@ -47,7 +46,7 @@ export async function fetchMatter(id: string): Promise<PipelineMatter | null> {
 }
 
 export async function fetchDesignSheet(matterId: string): Promise<DesignSheet | null> {
-  const supabase = await createServerSupabase()
+  const supabase = getAdminClient()
   const { data, error } = await supabase
     .from('design_sheets')
     .select('*')

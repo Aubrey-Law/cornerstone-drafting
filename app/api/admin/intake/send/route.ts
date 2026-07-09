@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
+import { sendEmail } from '@/lib/email/send'
+import { getFirmConfig } from '@/lib/firmConfig'
+import { createIntakeInviteToken } from '@/lib/intakeInviteTokens'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 function resolveOrigin(req: Request): string {
@@ -36,10 +39,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Matter not found or missing intake' }, { status: 404 })
   }
 
+  const { data: intakeRow, error: intakeFetchError } = await admin
+    .from('client_intake')
+    .select('id, email, first_name, last_name')
+    .eq('id', matter.client_intake_id)
+    .maybeSingle()
+
+  if (intakeFetchError) {
+    return NextResponse.json({ error: intakeFetchError.message }, { status: 500 })
+  }
+  if (!intakeRow?.email) {
+    return NextResponse.json({ error: 'Client has no email address on file' }, { status: 400 })
+  }
+
+  const invite = createIntakeInviteToken()
   const now = new Date().toISOString()
+
   const { error: intakeError } = await admin
     .from('client_intake')
-    .update({ intake_sent_at: now })
+    .update({
+      intake_sent_at: now,
+      intake_token_hash: invite.tokenHash,
+      intake_token_expires_at: invite.expiresAt,
+    })
     .eq('id', matter.client_intake_id)
 
   if (intakeError) {
@@ -47,13 +69,29 @@ export async function POST(req: Request) {
   }
 
   const origin = resolveOrigin(req)
-  const url = `${origin}/auth/login?redirectTo=/intake`
+  const url = `${origin}/intake/auth?invite=${encodeURIComponent(invite.token)}`
+
+  const firm = getFirmConfig()
+  const firstName = (intakeRow.first_name as string | null) ?? 'there'
+  const clientEmail = intakeRow.email as string
+
+  const emailResult = await sendEmail({
+    to: clientEmail,
+    category: 'intake_invite',
+    subject: `${firm.firmName} — complete your estate planning intake`,
+    html: `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.6;color:#1f2937;">
+<p>Hi ${firstName},</p>
+<p>Please use the secure link below to create your portal password and complete your intake questionnaire.</p>
+<p><a href="${url}" style="color:#2a7d70;font-weight:600;">Start intake</a></p>
+<p style="font-size:13px;color:#6b7280;">This link expires in 14 days. If it stops working, ask us to resend from your matter.</p>
+<p>— ${firm.attorneyShortName}<br/>${firm.firmName}</p>
+</body></html>`,
+    replyTo: firm.email,
+  })
 
   try {
     const actorName =
-      (user?.user_metadata?.full_name as string | undefined)
-      ?? user?.email
-      ?? null
+      (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? null
     await admin.from('matter_activity').insert({
       matter_id: matterId,
       event_type: 'intake_sent',
@@ -67,5 +105,9 @@ export async function POST(req: Request) {
     console.warn('matter_activity intake_sent skipped:', e)
   }
 
-  return NextResponse.json({ url, intake_sent_at: now })
+  return NextResponse.json({
+    url,
+    intake_sent_at: now,
+    email: emailResult.ok ? emailResult.status : 'error',
+  })
 }
