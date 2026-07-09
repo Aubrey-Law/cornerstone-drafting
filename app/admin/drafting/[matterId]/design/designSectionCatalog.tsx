@@ -15,7 +15,7 @@ import {
 } from '@/lib/designSheet/designSectionNav'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
-import { AccordionBadge, SectionPlaceholder } from './sections/shared'
+import { AccordionBadge } from './sections/shared'
 import { ClientInformationSection } from './sections/PersonalSection'
 import { FamilySection } from './sections/FamilySection'
 import { PlanDesignSection } from './sections/PlanDesignSection'
@@ -31,6 +31,7 @@ import {
 } from './sections/DocumentSections'
 import { IntakeSection } from './sections/IntakeSection'
 import { ContactsFiduciariesSection } from './sections/ContactsFiduciariesSection'
+import { TransfersAssignmentsSection } from './sections/TransfersAssignmentsSection'
 
 export interface DesignSectionDef {
   id: string
@@ -162,9 +163,11 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     [DESIGN_SECTION_IDS.healthcareDirectives]: () => <HealthCareDocumentSection {...docCommon} />,
     [DESIGN_SECTION_IDS.assetSchedules]: () => <AssetsSection sheet={sheet} onChange={updateField} />,
     [DESIGN_SECTION_IDS.transfersAssignments]: () => (
-      <SectionPlaceholder
-        title="Transfers & Assignments"
-        note="Asset transfers to trust, beneficiary-designation changes, and assignment of personal property will be captured here in a later phase."
+      <TransfersAssignmentsSection
+        sheet={sheet}
+        onChange={updateField}
+        matter={matter}
+        contacts={contacts}
       />
     ),
     [DESIGN_SECTION_IDS.attorneyNotes]: () => <GoalsSection sheet={sheet} onChange={updateField} />,
@@ -173,7 +176,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
   const subtitles: Partial<Record<string, string>> = {
     [DESIGN_SECTION_IDS.intakeReview]: 'Client answers (read-only)',
     [DESIGN_SECTION_IDS.estatePlanDesign]: `${selectedDocKeysCount} document${selectedDocKeysCount === 1 ? '' : 's'} selected`,
-    [DESIGN_SECTION_IDS.transfersAssignments]: 'Planned',
+    [DESIGN_SECTION_IDS.transfersAssignments]: 'Deed & realty trust',
   }
 
   const titles: Partial<Record<string, string>> = {

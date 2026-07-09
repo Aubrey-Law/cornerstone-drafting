@@ -45,6 +45,23 @@ describe('design sheet document inclusions', () => {
     }).young_adult_estate_plan).toBe(false)
   })
 
+  it('defaults trust inclusion only for revocable living trust plans', () => {
+    expect(defaultDocumentInclusions({
+      plan_type: 'pour_over',
+      marital_status: 'single',
+    }).trust).toBe(true)
+
+    expect(defaultDocumentInclusions({
+      plan_type: 'testamentary_trust',
+      marital_status: 'single',
+    }).trust).toBe(false)
+
+    expect(defaultDocumentInclusions({
+      plan_type: 'outright_will',
+      marital_status: 'single',
+    }).trust).toBe(false)
+  })
+
   it('defaults the trust planning type to outright_to_spouse and toggles it via the decisions JSONB', () => {
     expect(getTrustPlanningType({ decisions: null })).toBe('outright_to_spouse')
     expect(getTrustPlanningType({ decisions: {} })).toBe('outright_to_spouse')

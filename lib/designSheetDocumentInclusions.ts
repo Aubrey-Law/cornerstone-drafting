@@ -1,4 +1,4 @@
-import { designPlanTypeIncludesTrust, normalizeDesignPlanType } from '@/lib/designPlanType'
+import { designPlanTypeIncludesRevocableTrust, normalizeDesignPlanType } from '@/lib/designPlanType'
 import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
 import type { DesignSheet } from '@/types/database'
 
@@ -86,7 +86,7 @@ export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' |
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(sheet.children)
 
   return {
-    trust: hasPlanType ? designPlanTypeIncludesTrust(normalizedPlanType) : true,
+    trust: hasPlanType ? designPlanTypeIncludesRevocableTrust(normalizedPlanType) : true,
     will: true,
     dpoa: true,
     healthcare: true,

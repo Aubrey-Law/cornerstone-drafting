@@ -2,6 +2,7 @@
 
 import { PlanStructurePicker } from '@/components/guided/PlanStructurePicker'
 import { Checkbox } from '@/components/ui/checkbox'
+import { cn } from '@/lib/utils'
 import type { MatterContact } from '@/types/database'
 import {
   getDocumentInclusions,
@@ -12,7 +13,10 @@ import {
 } from '@/lib/designSheetDocumentInclusions'
 import {
   DESIGN_PLAN_TYPE_OPTIONS,
+  designPlanTypeIncludesRevocableTrust,
   normalizeDesignPlanType,
+  planTypeDisallowsRevocableTrustDocument,
+  type DesignPlanType,
 } from '@/lib/designPlanType'
 import { Input } from '@/components/ui/input'
 import {
@@ -107,11 +111,30 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
     onChange('decisions', setEstatePlanDesignSetup(sheet, patch))
   }
 
+  const handlePlanTypeSelect = (value: string) => {
+    const nextPlanType = value as DesignPlanType
+    onChange('plan_type', value)
+
+    if (planTypeDisallowsRevocableTrustDocument(nextPlanType)) {
+      if (inclusions.trust) {
+        updateDocument('trust', false)
+        updateEstatePlanSetup({ trust: false, will_title: 'last_will' })
+      }
+      return
+    }
+
+    if (designPlanTypeIncludesRevocableTrust(nextPlanType) && !inclusions.trust) {
+      updateDocument('trust', true)
+      updateEstatePlanSetup({ trust: true, will_title: 'pour_over_will' })
+    }
+  }
+
   const updateCoreDocument = (
     key: 'trust' | 'will' | 'power_of_attorney' | 'health_care_proxy' | 'hipaa_authorization' | 'living_will',
     checked: boolean,
   ) => {
     if (key === 'trust') {
+      if (planTypeDisallowsRevocableTrustDocument(normalizedPlanType)) return
       updateDocument('trust', checked)
       updateEstatePlanSetup({
         trust: checked,
@@ -153,6 +176,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
   }
 
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
+  const trustCheckboxDisabled = planTypeDisallowsRevocableTrustDocument(normalizedPlanType)
 
   // Signing Date is the single source of truth; derive the month-name / year text
   // the drafting templates still consume so document output is unchanged.
@@ -182,7 +206,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
             title: opt.label,
           }))}
           selected={normalizedPlanType}
-          onSelect={(v) => onChange('plan_type', v)}
+          onSelect={handlePlanTypeSelect}
           heading="Plan structure"
         />
       </SectionBlock>
@@ -202,15 +226,36 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
                 { key: 'health_care_proxy', label: 'Health Care Proxy' },
                 { key: 'hipaa_authorization', label: 'HIPAA Authorization' },
                 { key: 'living_will', label: 'Living Will' },
-              ].map(item => (
-                <label key={item.key} className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+              ].map(item => {
+                const isTrust = item.key === 'trust'
+                const disabled = isTrust && trustCheckboxDisabled
+                return (
+                <label
+                  key={item.key}
+                  className={cn(
+                    'flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5',
+                    disabled && 'cursor-not-allowed opacity-60',
+                  )}
+                >
                   <Checkbox
-                    checked={estatePlanSetup[item.key as keyof typeof estatePlanSetup] === true}
-                    onCheckedChange={value => updateCoreDocument(item.key as Parameters<typeof updateCoreDocument>[0], value === true)}
+                    checked={!disabled && estatePlanSetup[item.key as keyof typeof estatePlanSetup] === true}
+                    disabled={disabled}
+                    onCheckedChange={value => {
+                      if (disabled) return
+                      updateCoreDocument(item.key as Parameters<typeof updateCoreDocument>[0], value === true)
+                    }}
                   />
-                  <span className="text-sm text-foreground">{item.label}</span>
+                  <span className="text-sm text-foreground">
+                    {item.label}
+                    {disabled && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        Not available with Will — Testamentary Trust. The testamentary trust is created under the will, not as a separate revocable trust document.
+                      </span>
+                    )}
+                  </span>
                 </label>
-              ))}
+                )
+              })}
             </div>
           </div>
 

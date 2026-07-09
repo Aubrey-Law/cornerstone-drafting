@@ -220,7 +220,7 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
 
 export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
   const { sheet, onChange } = props
-  const { inclusions, spouseDocs, clientContact, spouseContact, blockProps } = useFiduciaryContext(props)
+  const { inclusions, spouseDocs, clientContact, spouseContact, clientFirst, spouseFirst, blockProps } = useFiduciaryContext(props)
 
   if (!inclusions.dpoa) return null
 
@@ -229,6 +229,10 @@ export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
       <FiduciaryBlock
         {...blockProps}
         role="poa"
+        slotScope="primary"
+        sectionTitle={`${clientFirst || 'Client'}'s First Attorney-in-Fact(s)`}
+        primaryLabel="First Attorney-in-Fact"
+        coLabel="Co-Agent"
         sameAsTrustee={sheet.poa_same_as_trustee}
         onSameAsTrusteeToggle={() => {
           const next = !sheet.poa_same_as_trustee
@@ -237,25 +241,47 @@ export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
         }}
         spouseOptionLabel={spouseContact ? 'Spouse as DPOA agent' : undefined}
       />
+      <FiduciaryBlock
+        {...blockProps}
+        role="poa"
+        slotScope="backup"
+        sectionTitle="Backup Attorney-in-fact(s)"
+        primaryLabel="Backup Attorney-in-Fact"
+        altLabel="Backup Attorney-in-Fact"
+      />
 
       {spouseDocs && (
-        <FiduciaryBlock
-          {...blockProps}
-          role="poa"
-          slotField="spouse_poa_slots"
-          sectionTitle="Spouse / Partner Durable Power of Attorney"
-          sameAsTrustee={sheet.spouse_poa_same_as_trustee}
-          sameAsTrusteeLabel="Same as Spouse's Trustees"
-          onSameAsTrusteeToggle={() => {
-            const next = !sheet.spouse_poa_same_as_trustee
-            onChange('spouse_poa_same_as_trustee', next)
-            if (next) {
-              onChange('spouse_poa_slots', cloneSlots(props.sheet.spouse_trustee_slots) as DesignSheet['spouse_poa_slots'])
-            }
-          }}
-          primaryShortcutContact={clientContact}
-          primaryShortcutLabel="Client as spouse / partner DPOA agent"
-        />
+        <>
+          <FiduciaryBlock
+            {...blockProps}
+            role="poa"
+            slotField="spouse_poa_slots"
+            slotScope="primary"
+            sectionTitle={`${spouseFirst || 'Spouse'}'s First Attorney-in-Fact(s)`}
+            primaryLabel="First Attorney-in-Fact"
+            coLabel="Co-Agent"
+            sameAsTrustee={sheet.spouse_poa_same_as_trustee}
+            sameAsTrusteeLabel="Same as Spouse's Trustees"
+            onSameAsTrusteeToggle={() => {
+              const next = !sheet.spouse_poa_same_as_trustee
+              onChange('spouse_poa_same_as_trustee', next)
+              if (next) {
+                onChange('spouse_poa_slots', cloneSlots(props.sheet.spouse_trustee_slots) as DesignSheet['spouse_poa_slots'])
+              }
+            }}
+            primaryShortcutContact={clientContact}
+            primaryShortcutLabel="Client as spouse / partner DPOA agent"
+          />
+          <FiduciaryBlock
+            {...blockProps}
+            role="poa"
+            slotField="spouse_poa_slots"
+            slotScope="backup"
+            sectionTitle="Backup Attorney-in-fact(s)"
+            primaryLabel="Backup Attorney-in-Fact"
+            altLabel="Backup Attorney-in-Fact"
+          />
+        </>
       )}
     </>
   )

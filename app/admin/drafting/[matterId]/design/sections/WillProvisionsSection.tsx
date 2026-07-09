@@ -67,18 +67,8 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
 
       {/* ── DPOA ────────────────────────────────────────────────────────────── */}
       {(scope === 'all' || scope === 'dpoa') && (
-      <SectionBlock title="Durable Power of Attorney">
+      <SectionBlock title="Durable Power of Attorney — Additional Provisions">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Co-Agent Manner of Acting"
-            value={sheet.dpoa_coagent_manner ?? 'independently'}
-            options={[
-              { value: 'independently', label: 'Independently (default)' },
-              { value: 'jointly', label: 'Jointly' },
-              { value: 'majority', label: 'By majority' },
-            ]}
-            onChange={v => onChange('dpoa_coagent_manner', v as 'independently' | 'jointly' | 'majority')}
-          />
           {isMarried && (
             <div>
               <FieldLabel>Include Section L (Spousal Proximity / Support)</FieldLabel>

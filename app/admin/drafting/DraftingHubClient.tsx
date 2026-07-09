@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDownAZ, Columns3, FileText, Search, Table2, X } from 'lucide-react'
+import { ArrowDownAZ, Columns3, Search, Table2, X } from 'lucide-react'
 import MatterPipelineKanban from '@/app/admin/drafting/MatterPipelineKanban'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
 import { cn } from '@/lib/utils'
@@ -132,13 +132,6 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               Pick a matter to open its drafting workspace — drag cards between stages or use the table to update pipeline status.
             </p>
           </div>
-          <Link
-            href="/admin/drafting/real-estate-transfer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-          >
-            <FileText className="h-3.5 w-3.5" aria-hidden />
-            Real Estate Transfer
-          </Link>
         </div>
       </div>
 

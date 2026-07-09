@@ -1,4 +1,6 @@
 import { getDocumentInclusions, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
+import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { DESIGN_SECTION_IDS, normalizeDesignSectionId } from '@/lib/designSheet/sectionIds'
@@ -177,6 +179,10 @@ export function computeDesignSheetReadiness({
   const spouseExecutorPrimary = primaryContactId(sheet.spouse_executor_slots)
   const spousePoaPrimary = primaryContactId(sheet.spouse_poa_slots)
   const spouseHcpPrimary = primaryContactId(sheet.spouse_hcp_slots)
+  const dpoaProvisions = getDesignSheetDpoaProvisions(sheet)
+  const healthcareProvisions = getDesignSheetHealthcareProvisions(sheet)
+  const hasDpoaBasicPowers = dpoaProvisions.all_basic_powers
+    || Object.values(dpoaProvisions.basic_powers).some(Boolean)
 
   const planBlockers = [
     !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
@@ -219,23 +225,29 @@ export function computeDesignSheetReadiness({
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const dpoaBlockers = [
-    documentInclusions.dpoa && !poaPrimary && blocker(DESIGN_SECTION_IDS.financialPoa, 'power of attorney agent', 'poa_slots'),
+    documentInclusions.dpoa && !poaPrimary && blocker(DESIGN_SECTION_IDS.financialPoa, 'first attorney-in-fact', 'poa_slots'),
     documentInclusions.dpoa && spouseFiduciariesNeeded && !spousePoaPrimary &&
-      blocker(DESIGN_SECTION_IDS.financialPoa, 'spouse power of attorney agent', 'spouse_poa_slots'),
-    documentInclusions.dpoa && !hasText(sheet.dpoa_self_dealing_reviewer) &&
-      blocker(DESIGN_SECTION_IDS.financialPoa, 'self-dealing reviewer', 'dpoa_self_dealing_reviewer', 'client-decision'),
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'spouse first attorney-in-fact', 'spouse_poa_slots'),
+    documentInclusions.dpoa && !dpoaProvisions.agent_compensation &&
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'agent compensation', 'dpoa_provisions.agent_compensation', 'client-decision'),
+    documentInclusions.dpoa && !dpoaProvisions.coagent_serving &&
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'co-agent decision-making', 'dpoa_provisions.coagent_serving', 'client-decision'),
+    documentInclusions.dpoa && !hasDpoaBasicPowers &&
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'basic attorney-in-fact powers', 'dpoa_provisions.basic_powers', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const healthcareBlockers = [
-    documentInclusions.healthcare && !hcpPrimary && blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'health care proxy', 'hcp_slots'),
+    documentInclusions.healthcare && !hcpPrimary && blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'first health care agent', 'hcp_slots'),
     documentInclusions.healthcare && spouseFiduciariesNeeded && !spouseHcpPrimary &&
-      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse health care proxy', 'spouse_hcp_slots'),
-    documentInclusions.healthcare && !hasText(sheet.hcp_anatomical_gift) &&
-      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'anatomical gift election', 'hcp_anatomical_gift', 'client-decision'),
-    documentInclusions.healthcare && sheet.hcp_anatomical_gift === 'specified' && !hasText(sheet.hcp_anatomical_specified) &&
-      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'specified anatomical gift details', 'hcp_anatomical_specified', 'client-decision'),
-    documentInclusions.healthcare && !hasText(sheet.hipaa_psychotherapy_notes) &&
-      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'psychotherapy notes election', 'hipaa_psychotherapy_notes', 'client-decision'),
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse first health care agent', 'spouse_hcp_slots'),
+    documentInclusions.healthcare && !healthcareProvisions.client_anatomical_gift &&
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'anatomical gift election', 'healthcare_provisions.client_anatomical_gift', 'client-decision'),
+    documentInclusions.healthcare && spouseFiduciariesNeeded && !healthcareProvisions.spouse_anatomical_gift &&
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse anatomical gift election', 'healthcare_provisions.spouse_anatomical_gift', 'client-decision'),
+    documentInclusions.healthcare && !healthcareProvisions.client_advance_directive &&
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'advance health directive', 'healthcare_provisions.client_advance_directive', 'client-decision'),
+    documentInclusions.healthcare && spouseFiduciariesNeeded && !healthcareProvisions.spouse_advance_directive &&
+      blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse advance health directive', 'healthcare_provisions.spouse_advance_directive', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const lpSpecific = lpData?.li_design_sheet_data ?? {}

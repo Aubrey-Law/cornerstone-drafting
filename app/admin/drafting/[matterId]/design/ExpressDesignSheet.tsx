@@ -15,7 +15,7 @@ import {
 } from '@/components/guided'
 import { Badge } from '@/components/ui/badge'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
-import { designPlanTypeLabel, designPlanTypeIncludesTrust } from '@/lib/designPlanType'
+import { designPlanTypeLabel } from '@/lib/designPlanType'
 import type { DesignDocumentInclusions, DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
 import { useDesignSheetState, type LpData } from '@/lib/designSheet/useDesignSheetState'
 import { DesignValidationProvider, AccordionBadge } from './sections/shared'
@@ -191,7 +191,7 @@ export default function ExpressDesignSheet({
 
   const pct = readinessTotal > 0 ? Math.round((readinessCompletedCount / readinessTotal) * 100) : 0
   const lastName = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/).pop() ?? ''
-  const includesTrust = designPlanTypeIncludesTrust(sheet.plan_type) || documentInclusions.trust
+  const includesTrust = documentInclusions.trust
   const trustName = lastName
     ? includesTrust ? `The ${lastName} Family Trust` : `The ${lastName} Family Plan`
     : matter.matter_name || 'Estate plan design'

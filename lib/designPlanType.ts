@@ -27,7 +27,17 @@ export function designPlanTypeLabel(value: unknown): string {
   return DESIGN_PLAN_TYPE_OPTIONS.find(option => option.value === normalized)?.label ?? normalized
 }
 
+/** True when the plan includes any trust structure (revocable or testamentary). */
 export function designPlanTypeIncludesTrust(value: unknown): boolean {
   const normalized = normalizeDesignPlanType(value)
   return normalized === 'pour_over' || normalized === 'testamentary_trust'
+}
+
+/** True only when the plan includes a revocable living trust document. */
+export function designPlanTypeIncludesRevocableTrust(value: unknown): boolean {
+  return normalizeDesignPlanType(value) === 'pour_over'
+}
+
+export function planTypeDisallowsRevocableTrustDocument(value: unknown): boolean {
+  return normalizeDesignPlanType(value) === 'testamentary_trust'
 }
