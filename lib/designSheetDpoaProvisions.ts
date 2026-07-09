@@ -127,7 +127,7 @@ function readBasicPowers(raw: Record<string, unknown>): Record<DpoaBasicPowerKey
 }
 
 function coagentServingFromLegacyManner(
-  manner: DesignSheet['dpoa_coagent_manner'],
+  manner: string | null | undefined,
 ): DpoaCoagentServing {
   if (manner === 'jointly') return 'jointly'
   if (manner === 'independently') return 'separately'
@@ -140,8 +140,12 @@ export function coagentMannerFromServing(serving: DpoaCoagentServing | null): De
   return null
 }
 
+type DpoaProvisionsSheet = Pick<DesignSheet, 'decisions'> & {
+  dpoa_coagent_manner?: string | null
+}
+
 export function getDesignSheetDpoaProvisions(
-  sheet: Pick<DesignSheet, 'decisions' | 'dpoa_coagent_manner'>,
+  sheet: DpoaProvisionsSheet,
 ): DesignSheetDpoaProvisions {
   const raw = dpoaProvisionsRaw(sheet)
   const basicPowers = readBasicPowers(raw)
@@ -174,7 +178,7 @@ export function getDesignSheetDpoaProvisions(
 }
 
 export function setDesignSheetDpoaProvisions(
-  sheet: Pick<DesignSheet, 'decisions' | 'dpoa_coagent_manner'>,
+  sheet: DpoaProvisionsSheet,
   patch: Partial<DesignSheetDpoaProvisions>,
 ) {
   const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
