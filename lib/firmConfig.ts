@@ -19,3 +19,15 @@ export function getFirmConfig(): FirmConfig {
     phone: formatPhoneDisplay(process.env.NEXT_PUBLIC_FIRM_PHONE ?? '(781) 474-3450'),
   }
 }
+
+export function buildFirmSignatureHtml(
+  firm: { attorneyName: string; firmName: string; city: string; email: string; phone: string },
+  { includeCity = true, includePhone = true }: { includeCity?: boolean; includePhone?: boolean } = {},
+): string {
+  const line1 = [firm.attorneyName, firm.firmName, includeCity ? firm.city : null].filter(Boolean).join(' · ')
+  const line2 = [
+    `<a href="mailto:${firm.email}" style="color:#1A6B72">${firm.email}</a>`,
+    includePhone ? firm.phone : null,
+  ].filter(Boolean).join(' · ')
+  return `<p style="font-size:12px;color:#6B6860">${line1}<br/>${line2}</p>`
+}

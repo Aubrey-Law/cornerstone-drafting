@@ -80,13 +80,20 @@ export async function POST(req: Request) {
     category: 'intake_invite',
     subject: `${firm.firmName} — complete your estate planning intake`,
     html: `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.6;color:#1f2937;">
-<p>Hi ${firstName},</p>
+<p>Hi {{firstName}},</p>
 <p>Please use the secure link below to create your portal password and complete your intake questionnaire.</p>
-<p><a href="${url}" style="color:#2a7d70;font-weight:600;">Start intake</a></p>
+<p><a href="{{intakeUrl}}" style="color:#2a7d70;font-weight:600;">Start intake</a></p>
 <p style="font-size:13px;color:#6b7280;">This link expires in 14 days. If it stops working, ask us to resend from your matter.</p>
-<p>— ${firm.attorneyShortName}<br/>${firm.firmName}</p>
+<p>— {{attorneyShortName}}<br/>{{firmName}}</p>
 </body></html>`,
     replyTo: firm.email,
+    useStoredTemplate: true,
+    templateVariables: {
+      firstName,
+      intakeUrl: url,
+      firmName: firm.firmName,
+      attorneyShortName: firm.attorneyShortName,
+    },
   })
 
   try {
