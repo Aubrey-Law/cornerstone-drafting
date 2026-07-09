@@ -329,12 +329,6 @@ export default function MatterDetailClient({
         body: JSON.stringify({ matterId: matter.matter_id }),
       })
       const body = await res.json().catch(() => ({}))
-      if (res.status === 404) {
-        toast.message('Intake send is not available yet', {
-          description: 'This endpoint will be fully wired in a later phase.',
-        })
-        return
-      }
       if (!res.ok) throw new Error(body.error ?? 'Could not send intake')
       if (typeof body.url === 'string') setIntakeUrl(body.url)
       setMatter(m => ({
