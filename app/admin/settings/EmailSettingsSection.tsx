@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +38,7 @@ interface SettingsResponse {
     accountEmail: string | null
     missingScope: boolean
   }
+  migrationRequired?: boolean
 }
 
 const MODE_LABELS: Record<EmailMode, string> = {
@@ -62,6 +64,7 @@ type ConfirmOnTarget =
   | null
 
 export function EmailSettingsSection() {
+  const token = useAccessToken()
   const [data, setData] = useState<SettingsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [pendingCats, setPendingCats] = useState<ReadonlySet<string>>(new Set())
@@ -80,22 +83,33 @@ export function EmailSettingsSection() {
     })
   }
 
-  async function load(initial = false) {
+  const authHeaders = useCallback((): HeadersInit | undefined => {
+    if (!token) return undefined
+    return { Authorization: `Bearer ${token}` }
+  }, [token])
+
+  const load = useCallback(async (initial = false) => {
+    if (!token) return
     const seq = ++loadSeqRef.current
     if (initial) setLoading(true)
     try {
-      const res = await fetch('/api/admin/settings/email', { cache: 'no-store' })
-      if (!res.ok) throw new Error(`Failed to load: ${res.status}`)
-      const json = (await res.json()) as SettingsResponse
-      if (seq === loadSeqRef.current) setData(json)
+      const res = await fetch('/api/admin/settings/email', {
+        cache: 'no-store',
+        headers: authHeaders(),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error((json as { error?: string }).error ?? `Failed to load: ${res.status}`)
+      }
+      if (seq === loadSeqRef.current) setData(json as SettingsResponse)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load')
     } finally {
       if (initial) setLoading(false)
     }
-  }
+  }, [token, authHeaders])
 
-  useEffect(() => { load(true) }, [])
+  useEffect(() => { void load(true) }, [load])
 
   /** Optimistically apply a mode to local state; returns the previous mode for rollback. */
   function applyModeLocally(category: string, mode: EmailMode): EmailMode | null {
@@ -122,7 +136,7 @@ export function EmailSettingsSection() {
     try {
       const res = await fetch('/api/admin/settings/email', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ category, mode }),
       })
       if (!res.ok) {
@@ -157,7 +171,7 @@ export function EmailSettingsSection() {
     try {
       const res = await fetch('/api/admin/settings/email', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ category, provider }),
       })
       if (!res.ok) {
@@ -183,7 +197,7 @@ export function EmailSettingsSection() {
     try {
       const res = await fetch('/api/admin/settings/email', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ emailLogoHeader: enabled }),
       })
       if (!res.ok) {
@@ -214,7 +228,7 @@ export function EmailSettingsSection() {
         const c = targets[i]
         const res = await fetch('/api/admin/settings/email', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ category: c.category, mode }),
         })
         if (res.ok) {
@@ -260,8 +274,12 @@ export function EmailSettingsSection() {
     setConfirmOn(null)
   }
 
-  if (loading || !data) {
-    return <div className="p-6 text-[13px] text-muted-foreground">Loading email settings…</div>
+  if (!token || loading || !data) {
+    return (
+      <div className="rounded-lg border border-border p-6 text-sm text-muted-foreground">
+        {!token ? 'Signing in…' : 'Loading email settings…'}
+      </div>
+    )
   }
 
   const offCount = data.categories.filter(c => c.mode === 'off').length
@@ -277,6 +295,15 @@ export function EmailSettingsSection() {
           </p>
         </div>
       </div>
+
+      {data.migrationRequired && (
+        <div className="mb-4 rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-[12px] text-amber">
+          Email settings migration not applied yet. Run{' '}
+          <code className="font-sans">npx supabase db push</code> and confirm{' '}
+          <code className="font-sans">20260719000000_lite_email_settings.sql</code> to enable
+          provider selection, templates, and the logo header toggle.
+        </div>
+      )}
 
       {data.envHardKilled && (
         <div className="mb-4 rounded-md border border-red-strong-border bg-red-bg px-3 py-2 text-[12px] text-red">
@@ -475,7 +502,7 @@ export function EmailSettingsSection() {
           </tbody>
         </table>
       </div>
-      <EmailTemplatesSection />
+      <EmailTemplatesSection authHeaders={authHeaders()} />
 
       <AlertDialog open={confirmOn !== null} onOpenChange={open => { if (!open) setConfirmOn(null) }}>
         <AlertDialogContent>

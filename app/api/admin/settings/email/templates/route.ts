@@ -94,7 +94,16 @@ export async function GET(req: NextRequest) {
   if (activeOnly) query = query.eq('is_active', true)
 
   const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('email_templates') || message.includes('does not exist') || message.includes('schema cache')) {
+      return NextResponse.json({
+        templates: [],
+        migrationRequired: true,
+      })
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   return NextResponse.json({ templates: (data ?? []).map(row => toTemplate(row as Record<string, unknown>)) })
 }

@@ -89,7 +89,7 @@ function formatTemplateDate(iso: string | null): string {
   })
 }
 
-export function EmailTemplatesSection() {
+export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersInit }) {
   const [templates, setTemplates] = useState<EmailTemplateRow[]>([])
   const [form, setForm] = useState<TemplateFormState>(EMPTY_FORM)
   const [loading, setLoading] = useState(true)
@@ -110,7 +110,10 @@ export function EmailTemplatesSection() {
   async function loadTemplates() {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/settings/email/templates', { cache: 'no-store' })
+      const res = await fetch('/api/admin/settings/email/templates', {
+        cache: 'no-store',
+        headers: authHeaders,
+      })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error ?? 'Could not load templates')
       setTemplates((json.templates ?? []) as EmailTemplateRow[])
@@ -151,7 +154,7 @@ export function EmailTemplatesSection() {
           : '/api/admin/settings/email/templates',
         {
           method: form.id ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(authHeaders ?? {}) },
           body: JSON.stringify({
             name: form.name,
             category: form.category,
@@ -178,6 +181,7 @@ export function EmailTemplatesSection() {
     try {
       const res = await fetch(`/api/admin/settings/email/templates/${template.id}`, {
         method: 'DELETE',
+        headers: authHeaders,
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error ?? 'Could not delete template')
