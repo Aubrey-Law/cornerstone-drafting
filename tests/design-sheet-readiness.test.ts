@@ -180,6 +180,12 @@ function makeSheet(overrides: Partial<DesignSheet> = {}): DesignSheet {
         deed: false,
         spouse_docs: false,
       },
+      dpoa_provisions: {
+        all_basic_powers: true,
+      },
+      healthcare_provisions: {
+        client_advance_directive: 'prolong_life',
+      },
     },
     trustee_slots: [{ id: 'trustee-1', contact_id: 'contact-trustee', is_co: false, order: 0 }],
     executor_slots: [{ id: 'executor-1', contact_id: 'contact-executor', is_co: false, order: 0 }],
@@ -205,9 +211,20 @@ describe('computeDesignSheetReadiness', () => {
   it('returns exact field blockers for template-driven client decisions', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet({
-        dpoa_self_dealing_reviewer: null,
+        dpoa_coagent_manner: null,
+        decisions: {
+          dpoa_provisions: {
+            agent_compensation: null,
+            coagent_serving: null,
+            all_basic_powers: false,
+            basic_powers: {},
+          },
+          healthcare_provisions: {
+            client_anatomical_gift: null,
+            client_advance_directive: null,
+          },
+        },
         hcp_anatomical_gift: null,
-        hipaa_psychotherapy_notes: null,
       }),
       matter: makeMatter(),
       isLP: false,
@@ -219,23 +236,20 @@ describe('computeDesignSheetReadiness', () => {
       expect.arrayContaining([
         expect.objectContaining({
           sectionId: DESIGN_SECTION_IDS.financialPoa,
-          label: 'self-dealing reviewer',
-          targetField: 'dpoa_self_dealing_reviewer',
-          targetId: 'design-field-dpoa_self_dealing_reviewer',
+          label: 'basic attorney-in-fact powers',
+          targetField: 'dpoa_provisions.basic_powers',
           category: 'client-decision',
         }),
         expect.objectContaining({
           sectionId: DESIGN_SECTION_IDS.healthcareDirectives,
           label: 'anatomical gift election',
-          targetField: 'hcp_anatomical_gift',
-          targetId: 'design-field-hcp_anatomical_gift',
+          targetField: 'healthcare_provisions.client_anatomical_gift',
           category: 'client-decision',
         }),
         expect.objectContaining({
           sectionId: DESIGN_SECTION_IDS.healthcareDirectives,
-          label: 'psychotherapy notes election',
-          targetField: 'hipaa_psychotherapy_notes',
-          targetId: 'design-field-hipaa_psychotherapy_notes',
+          label: 'advance health directive',
+          targetField: 'healthcare_provisions.client_advance_directive',
           category: 'client-decision',
         }),
       ]),
@@ -356,8 +370,12 @@ describe('design sheet readiness UI wiring', () => {
       path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/PersonalSection.tsx'),
       'utf8',
     )
-    const provisions = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/WillProvisionsSection.tsx'),
+    const dpoaProvisions = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DpoaProvisionsSection.tsx'),
+      'utf8',
+    )
+    const healthcare = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/HealthCareDesignSection.tsx'),
       'utf8',
     )
 
@@ -365,11 +383,12 @@ describe('design sheet readiness UI wiring', () => {
     expect(shell).toContain('readinessComplete')
     expect(shell).toContain('generateDisabled={!readinessComplete}')
     expect(sharedControls).toContain('designFieldTargetId')
-    expect(personal).toContain('fieldName="client_email"')
-    expect(personal).toContain('fieldName="marital_status"')
-    expect(provisions).toContain('fieldName="dpoa_self_dealing_reviewer"')
-    expect(provisions).toContain('fieldName="hcp_anatomical_gift"')
-    expect(provisions).toContain('fieldName="hipaa_psychotherapy_notes"')
+    expect(personal).toContain('fieldId="client_email"')
+    expect(personal).toContain('fieldId="marital_status"')
+    expect(dpoaProvisions).toContain('Compensation for Agents')
+    expect(dpoaProvisions).toContain('Trust Powers')
+    expect(healthcare).toContain('HIPAA Authorization')
+    expect(healthcare).toContain('Advance Health Directive')
   })
 })
 

@@ -51,6 +51,10 @@ export interface FiduciaryBlockProps extends SectionProps {
   clientShortcutLabel?: string
   coShortcutContact?: MatterContact | null
   coShortcutLabel?: string
+  primaryLabel?: string
+  altLabel?: string
+  coLabel?: string
+  slotScope?: 'all' | 'primary' | 'backup'
 }
 
 export function isMarriedSheet(sheet: DesignSheet) {
@@ -147,6 +151,10 @@ export function FiduciaryBlock({
   clientShortcutLabel,
   coShortcutContact,
   coShortcutLabel,
+  primaryLabel,
+  altLabel,
+  coLabel,
+  slotScope,
 }: FiduciaryBlockProps) {
   const field = slotField ?? SLOT_FIELDS[role]
   const handleSlotsChange = useCallback((slots: FiduciarySlot[]) => {
@@ -188,6 +196,10 @@ export function FiduciaryBlock({
         clientOptionLabel={clientShortcutLabel}
         coShortcutContact={coShortcutContact ?? undefined}
         coShortcutLabel={coShortcutLabel}
+        primaryLabel={primaryLabel}
+        altLabel={altLabel}
+        coLabel={coLabel}
+        slotScope={slotScope}
         title={sectionTitle}
       />
     </div>

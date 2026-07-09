@@ -9,16 +9,17 @@ import type { SectionProps } from './shared'
 import {
   AttorneyInput,
   AttorneySelect,
-  ClientDecisionCallout,
   DesignSectionContent,
   FieldLabel,
   SectionBlock,
 } from './shared'
 import { SegControl } from './fiduciary-blocks'
+import { DpoaProvisionsSection } from './DpoaProvisionsSection'
+import { HealthCareDesignSection } from './HealthCareDesignSection'
+import { WillPersonalRepresentativePowersSection } from './WillPersonalRepresentativePowersSection'
 import { WillProvisionsSection } from './WillProvisionsSection'
 import {
   DpoaFiduciarySections,
-  HealthCareFiduciarySections,
   WillFiduciarySections,
 } from './documentFiduciarySections'
 import {
@@ -89,6 +90,7 @@ export function WillDocumentSection(props: DocumentSectionProps) {
       <SectionHelp>Configure will-specific provisions and nominate personal representatives and guardians here.</SectionHelp>
       {hasMinors && <ExcludedGuardians sheet={sheet} onChange={onChange} />}
       <WillFiduciarySections {...props} />
+      <WillPersonalRepresentativePowersSection sheet={sheet} onChange={onChange} />
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="will" />
     </DesignSectionContent>
   )
@@ -99,29 +101,22 @@ export function DpoaDocumentSection(props: DocumentSectionProps) {
 
   return (
     <DesignSectionContent>
-      <SectionHelp>Select financial POA provisions and nominate agents here.</SectionHelp>
+      <SectionHelp>
+        The options in this section apply to all power of attorney documents created as part of this package.
+      </SectionHelp>
       <DpoaFiduciarySections {...props} />
-      <WillProvisionsSection sheet={sheet} onChange={onChange} scope="dpoa" />
+      <DpoaProvisionsSection sheet={sheet} onChange={onChange} />
     </DesignSectionContent>
   )
 }
 
 export function HealthCareDocumentSection(props: DocumentSectionProps) {
-  const { sheet, onChange } = props
-
   return (
     <DesignSectionContent>
-      <SectionHelp>Make end-of-life elections under MA law and nominate health care agents here.</SectionHelp>
-      <HealthCareFiduciarySections {...props} />
-      <WillProvisionsSection sheet={sheet} onChange={onChange} scope="healthcare" />
-      <SectionBlock title="Advance Health Directive">
-        <ClientDecisionCallout>
-          Confirm any matter-specific limitations before drafting the living will / advance directive.
-        </ClientDecisionCallout>
-        <p className="text-sm text-muted-foreground">
-          Included with the health care document package when Health Care Documents is checked.
-        </p>
-      </SectionBlock>
+      <SectionHelp>
+        Nominate health care agents, make anatomical gift elections, and configure HIPAA and advance directive choices here.
+      </SectionHelp>
+      <HealthCareDesignSection {...props} />
     </DesignSectionContent>
   )
 }
