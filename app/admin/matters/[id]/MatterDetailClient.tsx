@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SetupBanner } from '@/components/SetupBanner'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
 import { MatterOverviewHero } from './MatterOverviewHero'
 
@@ -741,10 +742,10 @@ export default function MatterDetailClient({
                 </p>
               </div>
               {!twilioSmsEnabled ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-                  SMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and
-                  TWILIO_SMS_FROM (or TWILIO_MESSAGING_SERVICE_SID).
-                </p>
+                <SetupBanner
+                  feature="SMS"
+                  detail="Add Twilio credentials in environment variables to text clients from this tab."
+                />
               ) : (
                 <>
                   <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3">
@@ -818,9 +819,10 @@ export default function MatterDetailClient({
                 </p>
               </div>
               {!emailSendEnabled ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-                  Email send is not configured. Connect Outlook in Settings or set RESEND_API_KEY.
-                </p>
+                <SetupBanner
+                  feature="Email"
+                  detail="Connect Outlook in Settings or configure Resend to send from this tab."
+                />
               ) : (
                 <div className="space-y-2 rounded-md border border-border p-3">
                   <div className="grid gap-2 sm:grid-cols-2">
