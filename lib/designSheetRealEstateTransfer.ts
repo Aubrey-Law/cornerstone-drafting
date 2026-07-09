@@ -244,8 +244,8 @@ export function commitRealEstateTransferToSheet(
   sheet: Pick<DesignSheet, 'decisions' | 'trust_name' | 'spouse_trust_name'>,
   form: RealEstateTransferFormState,
   meta?: Partial<Pick<PersistedRealEstateTransferState, 'selectedDocs' | 'uploadName' | 'hasExtracted'>>,
-) {
-  let decisions = setPersistedRealEstateTransfer(sheet, {
+): Record<string, unknown> {
+  let decisions: Record<string, unknown> = setPersistedRealEstateTransfer(sheet, {
     ...extractPersistedState(form, sheet),
     ...meta,
   })
