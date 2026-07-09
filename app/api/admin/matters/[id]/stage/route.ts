@@ -4,6 +4,8 @@ import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 
+import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
+
 type Params = { params: Promise<{ id: string }> }
 
 const VALID_STAGES = new Set<MatterStage>(STAGES.map(s => s.key))
@@ -62,6 +64,12 @@ export async function PATCH(req: Request, { params }: Params) {
       actor_email: user?.email ?? null,
       actor_name: actorName,
     })
+
+    try {
+      await fireEngineStageTask(admin, { matterId, matterStage: stage })
+    } catch (fireErr) {
+      console.error('[stage] fireEngineStageTask failed:', fireErr)
+    }
 
     return NextResponse.json({ matterId, stage, previousStage })
   } catch (e) {

@@ -1,7 +1,8 @@
 'use client'
 
 import { memo, useEffect, useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AssetPortfolioSummary } from '@/components/assets/AssetPortfolioSummary'
@@ -17,6 +18,7 @@ import type { AssetIntakeInput, AssetIntakeRow } from '@/types/assetIntake'
 import { useMatterAssets } from '../useMatterAssets'
 
 interface MatterAssetsTabProps {
+  matterId?: string
   intakeId: string | null
   clientName?: string | null
   spouseName?: string | null
@@ -26,6 +28,7 @@ interface MatterAssetsTabProps {
 }
 
 function MatterAssetsTabImpl({
+  matterId,
   intakeId,
   clientName,
   spouseName,
@@ -37,6 +40,7 @@ function MatterAssetsTabImpl({
   const [formOpen, setFormOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<AssetIntakeRow | null>(null)
+  const [syncingDesignSheet, setSyncingDesignSheet] = useState(false)
 
   const {
     assets,
@@ -133,6 +137,21 @@ function MatterAssetsTabImpl({
     await deleteAsset(asset.id)
   }
 
+  async function handleSyncDesignSheet() {
+    if (!matterId) return
+    setSyncingDesignSheet(true)
+    try {
+      const res = await fetch(`/api/admin/matters/${matterId}/assets/sync-design-sheet`, { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Sync failed')
+      toast.success(`Synced ${body.synced ?? 0} asset${body.synced === 1 ? '' : 's'} to design sheet`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not sync assets to design sheet')
+    } finally {
+      setSyncingDesignSheet(false)
+    }
+  }
+
   if (!intakeId) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
@@ -154,6 +173,19 @@ function MatterAssetsTabImpl({
         <Button type="button" variant="link" className="h-auto px-0 text-sm" onClick={() => setImportOpen(true)}>
           Import assets from spreadsheet or document
         </Button>
+        {matterId && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={syncingDesignSheet || assets.length === 0}
+            onClick={() => void handleSyncDesignSheet()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${syncingDesignSheet ? 'animate-spin' : ''}`} />
+            Sync to design sheet
+          </Button>
+        )}
       </div>
 
       {loading ? (

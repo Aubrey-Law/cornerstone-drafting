@@ -1,0 +1,157 @@
+{
+  "$schema": "aubreylaw.stage-task-templates.v1",
+  "description": "Task templates that fire when a matter enters an attorney-owned stage. Turns each SLA into a concrete to-do (or checklist) in the app's task system. Client-owned stages are handled by the nudge engine, not tasks. Each task carries a soft internal due date (buffer) and the hard SLA deadline.",
+
+  "scope": {
+    "owners_covered": ["attorney"],
+    "client_stages": "Not tasked — driven by the nudge engine (see nudge_schedule / config/nudge-templates.json).",
+    "date_bounded_stages": "Discovery/PMPS/Signing are client-scheduled; no attorney work task. Signing prep is folded into the Closeout-adjacent stages where attorney action is real."
+  },
+
+  "due_date_model": {
+    "description": "Two dates per task. The soft date is the internal target that creates urgency before the SLA bites; the hard date is the SLA itself, which drives the dashboard red flag.",
+    "fields": {
+      "soft_due_at": "stage_entered_at + soft_lead_days (business days). Internal target.",
+      "hard_due_at": "stage_entered_at + sla_days (business days). The SLA; matches stage_sla.",
+      "computed_in": "business days, America/New_York, excluding firm_holidays (reuse business_days_elapsed inverse)."
+    },
+    "display_rule": "Surface soft_due_at as the task's working due date; show hard_due_at as the SLA badge. Task goes amber at soft_due_at, red at hard_due_at."
+  },
+
+  "granularity_rationale": {
+    "proposal_ea_out": "Single headline task — it's one fast generate-and-send action; a checklist would be overkill.",
+    "drafting": "Checklist — this is the multi-step block (generate, QA, format, PDF, send) and the place sub-steps get dropped.",
+    "revisions": "Short checklist — pull structured changes, edit, cross-check, resend; cross-check is the step that protects against inconsistency.",
+    "closeout": "Checklist — funding package, summary, portal stage update, deliver; several discrete deliverables."
+  },
+
+  "templates": [
+    {
+      "stage_key": "proposal_ea_out",
+      "fires_on": "stage_entry",
+      "track": "ALL",
+      "task": {
+        "title": "Send proposal + engagement agreement — {client_name}",
+        "type": "single",
+        "owner": "attorney",
+        "soft_lead_days": 0,
+        "sla_days": 1,
+        "priority": "high",
+        "description": "Auto-generate the proposal and EA from PMPS data and route to SignWell. Should go out before the next task begins.",
+        "checklist": [],
+        "links": ["matter", "signwell_request"],
+        "on_complete_hint": "Completing this typically coincides with the matter advancing to EA Pending Signature."
+      }
+    },
+    {
+      "stage_key": "drafting",
+      "fires_on": "stage_entry",
+      "track": "ALL",
+      "task": {
+        "title": "Draft documents — {client_name}",
+        "type": "checklist",
+        "owner": "attorney",
+        "soft_lead_days": 3,
+        "sla_days": 5,
+        "priority": "high",
+        "description": "Generate, review, and send the draft package. Batch with other matters at this stage.",
+        "checklist": [
+          "Run document generator from design payload",
+          "Review output against design sheet / questionnaire (catch placeholder + field errors)",
+          "Cross-check named parties consistent across all documents",
+          "Format and convert to PDF",
+          "Send drafts to client with review summary + revision-intake form link"
+        ],
+        "links": ["matter", "design_payload", "portal_drafts"],
+        "batch_tag": "drafting_qa"
+      }
+    },
+    {
+      "stage_key": "revisions",
+      "fires_on": "stage_entry",
+      "track": "ALL",
+      "task": {
+        "title": "Incorporate revisions — {client_name} (round {review_round})",
+        "type": "checklist",
+        "owner": "attorney",
+        "soft_lead_days": 2,
+        "sla_days": 3,
+        "priority": "high",
+        "description": "Process the structured revision request. Handle in the Tue/Thu revision batch.",
+        "checklist": [
+          "Open structured revision request; sort by triage (fast / substantive / question)",
+          "Make fast (mechanical) edits across documents",
+          "Make substantive edits; cross-check ripple across related documents",
+          "Resolve or reply to any 'question' items",
+          "Re-send revised drafts to client for review"
+        ],
+        "links": ["matter", "revision_request", "portal_drafts"],
+        "batch_tag": "revisions",
+        "round_cap_check": { "LP": 1, "NONLP": 2, "over_cap": "Flag for fee conversation before processing." }
+      }
+    },
+    {
+      "stage_key": "closeout",
+      "fires_on": "stage_entry",
+      "track": "ALL",
+      "task": {
+        "title": "Closeout — {client_name}",
+        "type": "checklist",
+        "owner": "attorney",
+        "soft_lead_days": 2,
+        "sla_days": 3,
+        "priority": "normal",
+        "description": "Produce and deliver the post-signing package; close the matter.",
+        "checklist": [
+          "Generate funding / closeout package",
+          "Generate and send estate plan summary",
+          "Confirm executed documents stored to OneDrive matter folder",
+          "Update matter stage to closed in the app",
+          "Deliver package to client (portal + email)"
+        ],
+        "links": ["matter", "onedrive_folder", "portal_closeout"],
+        "batch_tag": "closeout"
+      }
+    }
+  ],
+
+  "fire_logic": {
+    "on_stage_entry": [
+      "When a matter enters an attorney-owned stage, look up the matching template by stage_key.",
+      "Compute soft_due_at = stage_entered_at + soft_lead_days (business days); hard_due_at = stage_entered_at + sla_days.",
+      "Interpolate title/description tokens: {client_name}, {review_round}, {matter_id}.",
+      "Create the task (or checklist with sub-items) in the app's task system, assigned to the attorney, with batch_tag for grouping.",
+      "Idempotency: one task per (matter_id, stage_key, stage_entered_at) — same pin as the nudge log, so a re-entry into the stage (e.g. revisions round 2) creates a fresh task."
+    ],
+    "on_stage_exit": "Optionally auto-complete or archive the open task for the stage being left, so stale tasks don't linger when the exit trigger fires.",
+    "matters_table_assumption": "Reuses stage_entered_at, track, current_stage already required by the stage engine. No new matter fields."
+  },
+
+  "task_table_suggestion": {
+    "description": "If tasks are persisted (vs. created directly in the app's native task store), this is the minimal shape.",
+    "stage_tasks": {
+      "id": "bigint pk",
+      "matter_id": "text",
+      "stage_key": "text",
+      "stage_entered_at": "timestamptz  (idempotency pin)",
+      "title": "text",
+      "type": "single | checklist",
+      "soft_due_at": "timestamptz",
+      "hard_due_at": "timestamptz",
+      "status": "open | done | archived",
+      "batch_tag": "text null",
+      "checklist": "jsonb (array of { text, done })",
+      "created_at": "timestamptz default now()",
+      "unique": "(matter_id, stage_key, stage_entered_at)"
+    }
+  },
+
+  "dashboard_integration": {
+    "description": "These tasks ARE the 'My Queue' from the aged dashboard, now actionable.",
+    "rules": [
+      "My Queue task list = stage_tasks where status='open', ordered by hard_due_at, then soft_due_at.",
+      "Amber when now >= soft_due_at; red when now >= hard_due_at (mirrors v_matter_aging health).",
+      "batch_tag lets the attorney filter to a work block: all 'drafting_qa' together, all 'revisions' on Tue/Thu."
+    ]
+  }
+}
