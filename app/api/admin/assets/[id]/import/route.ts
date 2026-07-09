@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/apiAuth'
 import { callAnthropic, PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '@/lib/anthropic'
 import { resolveFirmModel } from '@/lib/firmModels'
+import { syncAssetIntakeToDesignSheetForIntake } from '@/lib/assets/syncAssetIntakeToDesignSheet'
 import { insertImportedAssetRows } from '@/lib/import/assetImportRows'
 import { extractDocumentText } from '@/lib/import/extractDocumentText'
 import { isAssetSpreadsheetFile, parseAssetSpreadsheet } from '@/lib/import/parseAssetSpreadsheet'
+import { getAdminClient } from '@/lib/supabaseAdmin'
 
 function makeClient(token: string) {
   return createClient(
@@ -54,6 +56,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
       const assets = await parseAssetSpreadsheet(file)
       const result = await insertImportedAssetRows(sb, clientIntakeId, assets)
+      if (result.inserted > 0) {
+        void syncAssetIntakeToDesignSheetForIntake(getAdminClient(), clientIntakeId)
+      }
       return NextResponse.json({ ...result, source: 'spreadsheet' })
     } catch (e) {
       return NextResponse.json({ error: (e as Error).message }, { status: 400 })
@@ -99,6 +104,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const result = await insertImportedAssetRows(sb, clientIntakeId, assetList)
+    if (result.inserted > 0) {
+      void syncAssetIntakeToDesignSheetForIntake(getAdminClient(), clientIntakeId)
+    }
     return NextResponse.json({ ...result, source: 'document' })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

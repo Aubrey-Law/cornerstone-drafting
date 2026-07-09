@@ -336,6 +336,8 @@ export interface AssetItem {
   institution: string
   estimated_value: number | null
   notes: string
+  /** Set when synced from asset_intake; replaced on each intake sync. */
+  from_intake?: boolean
 }
 
 export type FiduciaryRole = 'trustee' | 'executor' | 'poa' | 'hcp' | 'guardian' | 'temporary_guardian'

@@ -52,6 +52,7 @@ function assetIntakeToDesignItem(row: AssetIntakeRow): AssetItem {
     institution,
     estimated_value: row.value > 0 ? row.value : null,
     notes: notesParts.join(' · '),
+    from_intake: true,
   }
 }
 
@@ -74,9 +75,8 @@ export async function syncAssetIntakeToDesignSheet(
   if (!sheet?.id) throw new Error('No design sheet found for this matter')
 
   const intakeItems = (intakeRows ?? []).map(row => assetIntakeToDesignItem(row as AssetIntakeRow))
-  const intakeIds = new Set(intakeItems.map(item => item.id))
   const existing = Array.isArray(sheet.assets) ? (sheet.assets as AssetItem[]) : []
-  const preserved = existing.filter(item => !intakeIds.has(item.id))
+  const preserved = existing.filter(item => !item.from_intake)
   const merged = [...preserved, ...intakeItems]
   const payload = buildDesignSheetPersistencePayload({ assets: merged })
 
@@ -88,4 +88,30 @@ export async function syncAssetIntakeToDesignSheet(
   if (updateErr) throw new Error(updateErr.message)
 
   return { synced: intakeItems.length, assets: merged }
+}
+
+/** Resolve matter from intake id and sync; logs and swallows errors so asset saves still succeed. */
+export async function syncAssetIntakeToDesignSheetForIntake(
+  admin: SupabaseClient,
+  clientIntakeId: string,
+): Promise<{ synced: number } | null> {
+  const { data: matter, error: matterErr } = await admin
+    .from('matters')
+    .select('id')
+    .eq('client_intake_id', clientIntakeId)
+    .maybeSingle()
+
+  if (matterErr) {
+    console.error('[asset sync] matter lookup failed:', matterErr.message)
+    return null
+  }
+  if (!matter?.id) return null
+
+  try {
+    const result = await syncAssetIntakeToDesignSheet(admin, matter.id, clientIntakeId)
+    return { synced: result.synced }
+  } catch (error) {
+    console.error('[asset sync] design sheet sync failed:', error)
+    return null
+  }
 }
