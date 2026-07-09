@@ -203,7 +203,6 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
   const hasDesignSheet = !!hubMatter.designSheet
   const canGenerate =
     hasDesignSheet &&
-    hubMatter.setupBlockers.length === 0 &&
     hubMatter.includedDocumentLabels.length > 0
   const preflightReady = preflight?.matterId === matterId
   const selectedCount = preflight
@@ -816,7 +815,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           <div className="border-b border-border px-4 py-3">
             <h3 className="text-sm font-semibold">Readiness</h3>
           </div>
-          <div className="grid gap-3 p-4 md:grid-cols-3">
+          <div className="grid gap-3 p-4 md:grid-cols-2">
             <ReadinessCard
               label="Design Sheet"
               value={hubMatter.designSheet ? (hubMatter.designSheet.status ?? 'Draft') : 'Missing'}
@@ -829,14 +828,8 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
               hint={`${hubMatter.selectedTemplateCount} selected template${hubMatter.selectedTemplateCount === 1 ? '' : 's'}`}
               warn={hubMatter.includedDocumentLabels.length === 0}
             />
-            <ReadinessCard
-              label="Setup"
-              value={hubMatter.setupBlockers.length === 0 ? 'Complete' : `${hubMatter.setupBlockers.length} item${hubMatter.setupBlockers.length === 1 ? '' : 's'}`}
-              hint={hubMatter.setupBlockers.length === 0 ? 'Ready for generation' : hubMatter.setupBlockers.slice(0, 2).join(', ')}
-              warn={hubMatter.setupBlockers.length > 0}
-            />
           </div>
-          {(hubMatter.setupBlockers.length > 0 || !hasDesignSheet || hubMatter.includedDocumentLabels.length === 0) && (
+          {(!hasDesignSheet || hubMatter.includedDocumentLabels.length === 0) && (
             <div className="border-t border-border px-4 py-3">
               <div className="flex gap-2 rounded-md border border-warning/20 bg-warning/10 p-3 text-xs text-warning">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -846,7 +839,6 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                     {[
                       !hasDesignSheet && 'Design sheet',
                       hubMatter.includedDocumentLabels.length === 0 && 'Document selections',
-                      ...hubMatter.setupBlockers,
                     ].filter(Boolean).join(', ')}
                   </p>
                 </div>

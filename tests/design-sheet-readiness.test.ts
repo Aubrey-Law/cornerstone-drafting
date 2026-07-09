@@ -208,9 +208,11 @@ function makeSheet(overrides: Partial<DesignSheet> = {}): DesignSheet {
 }
 
 describe('computeDesignSheetReadiness', () => {
-  it('returns exact field blockers for template-driven client decisions', () => {
+  it('does not block drafting on missing client decisions or fields', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet({
+        client_email: null,
+        trust_name: null,
         dpoa_coagent_manner: null,
         decisions: {
           dpoa_provisions: {
@@ -231,60 +233,14 @@ describe('computeDesignSheetReadiness', () => {
       lpData: null,
     })
 
-    expect(readiness.complete).toBe(false)
-    expect(readiness.blockers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          sectionId: DESIGN_SECTION_IDS.financialPoa,
-          label: 'basic attorney-in-fact powers',
-          targetField: 'dpoa_provisions.basic_powers',
-          category: 'client-decision',
-        }),
-        expect.objectContaining({
-          sectionId: DESIGN_SECTION_IDS.healthcareDirectives,
-          label: 'anatomical gift election',
-          targetField: 'healthcare_provisions.client_anatomical_gift',
-          category: 'client-decision',
-        }),
-        expect.objectContaining({
-          sectionId: DESIGN_SECTION_IDS.healthcareDirectives,
-          label: 'advance health directive',
-          targetField: 'healthcare_provisions.client_advance_directive',
-          category: 'client-decision',
-        }),
-      ]),
-    )
+    expect(readiness.complete).toBe(true)
+    expect(readiness.blockers).toEqual([])
   })
 
-  it('returns exact field blockers for core missing fields', () => {
-    const readiness = computeDesignSheetReadiness({
-      sheet: makeSheet({ client_email: null, trust_name: null }),
-      matter: makeMatter(),
-      isLP: false,
-      lpData: null,
-    })
-
-    expect(readiness.blockers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          sectionId: DESIGN_SECTION_IDS.clientInformation,
-          label: 'email',
-          targetField: 'client_email',
-          targetId: 'design-field-client_email',
-        }),
-        expect.objectContaining({
-          sectionId: DESIGN_SECTION_IDS.trustDetails,
-          label: 'trust name',
-          targetField: 'trust_name',
-          targetId: 'design-field-trust_name',
-        }),
-      ]),
-    )
-  })
-
-  it('does not require guardian when no minor children are on the design sheet', () => {
+  it('does not block drafting when guardian or children are incomplete', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet({
+        children: [{ name: 'Alex Doe', dob: '2015-01-01', relationship: 'biological', is_minor: true }],
         guardian_slots: [{ id: 'guardian-1', contact_id: null, is_co: false, order: 0 }],
       }),
       matter: makeMatter({ has_minor_children: true }),
@@ -292,30 +248,8 @@ describe('computeDesignSheetReadiness', () => {
       lpData: null,
     })
 
-    expect(readiness.blockers.some(blocker => blocker.targetField === 'guardian_slots')).toBe(false)
-    expect(readiness.blockers.some(blocker => blocker.targetField === 'children')).toBe(true)
-  })
-
-  it('requires guardian when a minor child is listed on the design sheet', () => {
-    const readiness = computeDesignSheetReadiness({
-      sheet: makeSheet({
-        children: [{ name: 'Alex Doe', dob: '2015-01-01', relationship: 'biological', is_minor: true }],
-        guardian_slots: [{ id: 'guardian-1', contact_id: null, is_co: false, order: 0 }],
-      }),
-      matter: makeMatter({ has_minor_children: false }),
-      isLP: false,
-      lpData: null,
-    })
-
-    expect(readiness.blockers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          sectionId: DESIGN_SECTION_IDS.willDetails,
-          label: 'guardian',
-          targetField: 'guardian_slots',
-        }),
-      ]),
-    )
+    expect(readiness.complete).toBe(true)
+    expect(readiness.blockers).toEqual([])
   })
 
   it('allows drafting when included document requirements are complete', () => {
@@ -345,9 +279,8 @@ describe('computeDesignSheetReadiness', () => {
       lpData,
     })
 
-    // Approval moved to the client-facing design review; the design sheet itself
-    // no longer surfaces a confirmation/approval blocker.
-    expect(readiness.blockers.some(b => b.sectionId === 'confirmation')).toBe(false)
+    // Approval moved to the client-facing design review; lite never blocks on readiness.
+    expect(readiness.blockers).toEqual([])
     expect(readiness.complete).toBe(true)
   })
 })

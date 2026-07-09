@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { getDraftSetupBlockers } from '@/lib/matterSetup'
+import { getDraftSetupBlockers, getStageSetupBlockers } from '@/lib/matterSetup'
 import type { PipelineMatter } from '@/types/database'
-import type { MatterDetailsRow } from '@/types/matter-details'
 
 function matter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
   return {
@@ -14,16 +13,16 @@ function matter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
     client_name: 'Avery Smith',
     marital_status: 'Single',
     spouse_name: null,
-    fee_amount: 4_000,
+    fee_amount: null,
     estimated_value: 1_000_000,
     tax_exposure: 0,
-    plan_type: 'Revocable Trust',
+    plan_type: null,
     client_user_id: null,
     matter_name: 'Avery Smith Estate Planning',
     next_appointment: null,
     next_appointment_type: null,
     opened_at: '2026-06-01T12:00:00.000Z',
-    practice_area: 'EP-LP',
+    practice_area: null,
     referral_source: null,
     spouse_email: null,
     ...overrides,
@@ -31,19 +30,11 @@ function matter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
 }
 
 describe('matter setup requirements', () => {
-  it('does not require Legal Plan ID for EP-LP setup blockers', () => {
-    const details = {
-      practice_area: 'EP-LP',
-      plan_type: 'Revocable Trust',
-      client_status: 'active',
-      matter_status: 'active',
-      flat_fee_amount: 4_000,
-      responsible_attorney: 'Scott Aubrey',
-      jurisdiction_state: 'MA',
-      legal_plan: 'MetLife',
-      legal_plan_id: null,
-    } as MatterDetailsRow
+  it('returns no draft setup blockers in lite', () => {
+    expect(getDraftSetupBlockers(null, matter())).toEqual([])
+  })
 
-    expect(getDraftSetupBlockers(details, matter())).not.toContain('Legal Plan ID')
+  it('returns no stage setup blockers in lite', () => {
+    expect(getStageSetupBlockers('signing_scheduled', null, matter())).toEqual([])
   })
 })

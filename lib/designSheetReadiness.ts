@@ -320,15 +320,15 @@ export function computeDesignSheetReadiness({
     ...(documentInclusions.healthcare ? [DESIGN_SECTION_IDS.healthcareDirectives] : []),
   ]
 
-  const blockers = requiredIds.flatMap(id => sectionSummaries[id]?.blockers ?? [])
   const completedCount = requiredIds.filter(key => {
     const status = sectionSummaries[key]?.status
     return status === 'complete' || status === 'override'
   }).length
 
   return {
-    complete: blockers.length === 0,
-    blockers,
+    // Cornerstone Lite: readiness summaries remain for progress UI, but nothing blocks drafting.
+    complete: true,
+    blockers: [],
     completedCount,
     total: requiredIds.length,
     documentInclusions,
