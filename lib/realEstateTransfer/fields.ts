@@ -7,6 +7,7 @@ export const REAL_ESTATE_TRANSFER_FIELD_KEYS = [
   'settlor',
   'trust_name',
   'trust_date',
+  'beneficial_owners',
   'property_address',
   'property_city',
   'property_state',
@@ -14,8 +15,10 @@ export const REAL_ESTATE_TRANSFER_FIELD_KEYS = [
   'legal_description',
   'prior_deed_book',
   'prior_deed_page',
+  'prior_deed_date',
   'registry_district',
   'parcel_id',
+  'certificate_number',
   'consideration',
   'execution_date',
   'certificate_execution_county',
@@ -23,35 +26,43 @@ export const REAL_ESTATE_TRANSFER_FIELD_KEYS = [
 
 export type RealEstateTransferFieldKey = (typeof REAL_ESTATE_TRANSFER_FIELD_KEYS)[number]
 
-export type FieldSection = 'shared' | 'deed' | 'certificate' | 'trust'
+export type FieldSection = 'trust' | 'deed' | 'certificate'
 
 export interface RealEstateTransferFieldMeta {
   key: RealEstateTransferFieldKey
   label: string
   section: FieldSection
   multiline?: boolean
+  fromDeed?: boolean
 }
 
 export const REAL_ESTATE_TRANSFER_FIELDS: RealEstateTransferFieldMeta[] = [
-  { key: 'grantor', label: 'Grantor(s)', section: 'shared' },
-  { key: 'grantee', label: 'Grantee(s)', section: 'shared' },
-  { key: 'trustees', label: 'Trustee(s)', section: 'shared' },
-  { key: 'settlor', label: 'Settlor', section: 'shared' },
-  { key: 'trust_name', label: 'Trust name', section: 'shared' },
-  { key: 'trust_date', label: 'Trust date', section: 'shared' },
-  { key: 'property_address', label: 'Property street address', section: 'shared' },
-  { key: 'property_city', label: 'City / town', section: 'shared' },
-  { key: 'property_state', label: 'State', section: 'shared' },
-  { key: 'property_county', label: 'County', section: 'shared' },
-  { key: 'legal_description', label: 'Legal description', section: 'shared', multiline: true },
-  { key: 'prior_deed_book', label: 'Prior deed book', section: 'shared' },
-  { key: 'prior_deed_page', label: 'Prior deed page', section: 'shared' },
-  { key: 'registry_district', label: 'Registry of deeds district', section: 'shared' },
-  { key: 'parcel_id', label: 'Parcel / map-lot ID', section: 'shared' },
+  { key: 'grantor', label: 'Grantor(s)', section: 'deed', fromDeed: true },
+  { key: 'grantee', label: 'Grantee(s)', section: 'deed' },
+  { key: 'property_address', label: 'Property street address', section: 'deed' },
+  { key: 'property_city', label: 'City / town', section: 'deed' },
+  { key: 'property_state', label: 'State', section: 'deed' },
+  { key: 'property_county', label: 'County', section: 'deed' },
+  { key: 'legal_description', label: 'Legal description', section: 'deed', multiline: true, fromDeed: true },
+  { key: 'prior_deed_book', label: 'Prior deed book', section: 'deed', fromDeed: true },
+  { key: 'prior_deed_page', label: 'Prior deed page', section: 'deed', fromDeed: true },
+  { key: 'prior_deed_date', label: 'Prior deed date', section: 'deed', fromDeed: true },
+  { key: 'parcel_id', label: 'Parcel / map-lot ID', section: 'deed' },
+  { key: 'certificate_number', label: 'Certificate number', section: 'deed', fromDeed: true },
+  { key: 'registry_district', label: 'Registry of deeds / land court', section: 'deed', fromDeed: true },
   { key: 'consideration', label: 'Consideration', section: 'deed' },
-  { key: 'execution_date', label: 'Execution date', section: 'shared' },
+  { key: 'execution_date', label: 'Execution date', section: 'deed' },
+  { key: 'trust_name', label: 'Realty trust name', section: 'trust' },
+  { key: 'trust_date', label: 'Realty trust date', section: 'trust' },
+  { key: 'trustees', label: 'Trustee(s)', section: 'trust' },
+  { key: 'settlor', label: 'Settlor', section: 'trust' },
+  { key: 'beneficial_owners', label: 'Beneficial owners', section: 'trust', multiline: true },
   { key: 'certificate_execution_county', label: 'Certificate execution county', section: 'certificate' },
 ]
+
+export const DEED_EXTRACTED_FIELD_KEYS = REAL_ESTATE_TRANSFER_FIELDS
+  .filter(field => field.fromDeed)
+  .map(field => field.key)
 
 const fieldShape = Object.fromEntries(
   REAL_ESTATE_TRANSFER_FIELD_KEYS.map(key => [key, z.string().optional()]),
@@ -131,8 +142,7 @@ export function fieldsToTemplateData(fields: RealEstateTransferFields): Record<s
 }
 
 export const FIELD_SECTION_LABELS: Record<FieldSection, string> = {
-  shared: 'Property & parties',
+  trust: 'Realty trust',
   deed: 'Deed',
   certificate: "Trustee's certificate",
-  trust: 'Real estate trust',
 }
