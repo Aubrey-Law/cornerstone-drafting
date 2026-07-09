@@ -18,11 +18,13 @@ import { CallList } from '@/components/calls/CallList'
 import {
   STAGES,
   stageLabel,
+  type MatterActivity,
   type MatterContact,
   type MatterDocument,
   type MatterStage,
   type PipelineMatter,
 } from '@/types/database'
+import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -47,6 +49,7 @@ import { SetupBanner } from '@/components/SetupBanner'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 import { MatterOverviewHero } from './MatterOverviewHero'
+import { MatterActivityTab } from './MatterActivityTab'
 
 interface MatterDetailClientProps {
   matter: PipelineMatter
@@ -143,6 +146,9 @@ export default function MatterDetailClient({
   const [emailBody, setEmailBody] = useState('')
   const [emailSending, setEmailSending] = useState(false)
 
+  const [activity, setActivity] = useState<MatterActivity[]>([])
+  const [activityLoading, setActivityLoading] = useState(false)
+
   useEffect(() => {
     setMatter(initialMatter)
     setEmailTo(initialMatter.client_email || '')
@@ -197,6 +203,25 @@ export default function MatterDetailClient({
   }, [])
 
   useMessagesRealtime(matter.matter_id, handlePortalMessageInsert)
+
+  const loadActivity = useCallback(async () => {
+    setActivityLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('matter_activity')
+        .select('*')
+        .eq('matter_id', matter.matter_id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (!error) setActivity((data ?? []) as MatterActivity[])
+    } finally {
+      setActivityLoading(false)
+    }
+  }, [matter.matter_id])
+
+  useEffect(() => {
+    void loadActivity()
+  }, [loadActivity])
 
   const sendPortalMessage = async () => {
     if (!token || !portalDraft.trim()) return
@@ -519,6 +544,7 @@ export default function MatterDetailClient({
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="contacts">Contacts</TabsTrigger>
             <TabsTrigger value="communications">Communications</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -890,6 +916,10 @@ export default function MatterDetailClient({
               </div>
               <CallList matterId={matter.matter_id} />
             </section>
+          </TabsContent>
+
+          <TabsContent value="activity">
+            <MatterActivityTab activity={activity} loading={activityLoading} />
           </TabsContent>
         </Tabs>
       </div>
