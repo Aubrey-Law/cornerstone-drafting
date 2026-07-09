@@ -6,25 +6,18 @@ function hasText(value: unknown) {
   return typeof value === 'string' ? value.trim().length > 0 : value !== null && value !== undefined
 }
 
-function hasPositiveAmount(value: unknown) {
-  return typeof value === 'number' && value > 0
-}
-
 function hasJurisdiction(details: MatterDetailsRow | null) {
   return hasText(details?.jurisdiction_state)
 }
 
 export function getDraftSetupBlockers(details: MatterDetailsRow | null, matter: PipelineMatter) {
   const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
-  const feeAmount = details?.flat_fee_amount != null ? Number(details.flat_fee_amount) : matter.fee_amount
   const blockers: string[] = []
 
   if (!practiceArea) blockers.push('Practice Area')
   if (!hasText(details?.plan_type ?? matter.plan_type)) blockers.push('Plan Type')
   if (!hasText(details?.client_status ?? matter.status)) blockers.push('Client Relationship')
   if (!hasText(details?.matter_status)) blockers.push('Matter Status')
-  if (!hasPositiveAmount(feeAmount)) blockers.push('Fee')
-  if (!hasText(details?.responsible_attorney)) blockers.push('Responsible Attorney')
   if (!hasJurisdiction(details)) blockers.push('Jurisdiction')
 
   if (practiceArea === 'EP-LP') {

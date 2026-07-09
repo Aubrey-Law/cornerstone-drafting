@@ -46,4 +46,19 @@ describe('matter setup requirements', () => {
 
     expect(getDraftSetupBlockers(details, matter())).not.toContain('Legal Plan ID')
   })
+
+  it('does not require fee or responsible attorney for drafting setup', () => {
+    const details = {
+      practice_area: 'EP-LP',
+      plan_type: 'Revocable Trust',
+      client_status: 'active',
+      matter_status: 'active',
+      jurisdiction_state: 'MA',
+      legal_plan: 'MetLife',
+    } as MatterDetailsRow
+
+    const blockers = getDraftSetupBlockers(details, matter({ fee_amount: null }))
+    expect(blockers).not.toContain('Fee')
+    expect(blockers).not.toContain('Responsible Attorney')
+  })
 })
