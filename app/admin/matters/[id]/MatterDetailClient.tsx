@@ -1,14 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
+  ChevronDown,
+  ClipboardList,
   FilePenLine,
-  Plus,
   Send,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -45,16 +48,43 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { SetupBanner } from '@/components/SetupBanner'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
+import { resolveMatterIntake } from '@/app/actions/adminIntake'
 import { MatterOverviewHero } from './MatterOverviewHero'
 import { MatterActivityTab } from './MatterActivityTab'
+import { MatterOverviewContacts } from './MatterOverviewContacts'
+import { MatterOverviewAssets } from './MatterOverviewAssets'
+import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
+
+const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
+const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
 
 interface MatterDetailClientProps {
   matter: PipelineMatter
+  matterId: string
   contacts: MatterContact[]
   agingHealth?: 'red' | 'amber' | 'green' | null
+  intakeId?: string | null
+  clientIntakeRow?: {
+    id: string
+    intake_sent_at: string | null
+    intake_completed_at: string | null
+    email: string | null
+    first_name: string | null
+    status?: string | null
+    user_id?: string | null
+    client_user_id?: string | null
+    unlock_requested_at?: string | null
+    unlock_request_note?: string | null
+  } | null
   twilioSmsEnabled?: boolean
   emailSendEnabled?: boolean
 }
@@ -80,27 +110,6 @@ type SmsMessage = {
   actor_name: string | null
 }
 
-type ContactForm = {
-  id?: string
-  first_name: string
-  last_name: string
-  relationship: string
-  email: string
-  phone: string
-}
-
-const EMPTY_CONTACT: ContactForm = {
-  first_name: '',
-  last_name: '',
-  relationship: '',
-  email: '',
-  phone: '',
-}
-
-function contactDisplayName(c: MatterContact) {
-  return [c.first_name, c.last_name].filter(Boolean).join(' ') || '—'
-}
-
 function formatBytes(size: number) {
   if (!Number.isFinite(size) || size <= 0) return '—'
   if (size < 1024) return `${size} B`
@@ -110,8 +119,11 @@ function formatBytes(size: number) {
 
 export default function MatterDetailClient({
   matter: initialMatter,
+  matterId,
   contacts: initialContacts,
   agingHealth = null,
+  intakeId: initialIntakeId = null,
+  clientIntakeRow = null,
   twilioSmsEnabled = false,
   emailSendEnabled = false,
 }: MatterDetailClientProps) {
@@ -119,14 +131,17 @@ export default function MatterDetailClient({
   const router = useRouter()
   const [matter, setMatter] = useState(initialMatter)
   const [contacts, setContacts] = useState(initialContacts)
+  const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialIntakeId)
+  const [intakeCompleted, setIntakeCompleted] = useState(
+    Boolean(clientIntakeRow?.intake_completed_at || matter.intake_status === 'completed'),
+  )
+  const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
+  const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [stageSaving, setStageSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [documents, setDocuments] = useState<MatterDocument[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
-  const [contactDialogOpen, setContactDialogOpen] = useState(false)
-  const [contactSaving, setContactSaving] = useState(false)
-  const [contactForm, setContactForm] = useState<ContactForm>(EMPTY_CONTACT)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -157,6 +172,28 @@ export default function MatterDetailClient({
   useEffect(() => {
     setContacts(initialContacts)
   }, [initialContacts])
+
+  useEffect(() => {
+    setLiveIntakeId(initialIntakeId)
+  }, [initialIntakeId])
+
+  const openIntakeSheet = useCallback(async () => {
+    if (liveIntakeId) {
+      setIntakeSheetOpen(true)
+      return
+    }
+    try {
+      const resolved = await resolveMatterIntake(matterId)
+      if (resolved) {
+        setLiveIntakeId(resolved)
+        setIntakeSheetOpen(true)
+      } else {
+        setIntakeSheetOpen(true)
+      }
+    } catch {
+      setIntakeSheetOpen(true)
+    }
+  }, [liveIntakeId, matterId])
 
   const loadPortalMessages = useCallback(async () => {
     if (!token) return
@@ -385,72 +422,6 @@ export default function MatterDetailClient({
     }
   }
 
-  const openAddContact = () => {
-    setContactForm(EMPTY_CONTACT)
-    setContactDialogOpen(true)
-  }
-
-  const openEditContact = (c: MatterContact) => {
-    setContactForm({
-      id: c.id,
-      first_name: c.first_name ?? '',
-      last_name: c.last_name ?? '',
-      relationship: c.relationship ?? '',
-      email: c.email ?? '',
-      phone: c.phone ?? '',
-    })
-    setContactDialogOpen(true)
-  }
-
-  const handleSaveContact = async () => {
-    if (!token) {
-      toast.error('Not signed in')
-      return
-    }
-    const first = contactForm.first_name.trim()
-    const last = contactForm.last_name.trim()
-    if (!first || !last) {
-      toast.error('First and last name are required')
-      return
-    }
-
-    setContactSaving(true)
-    try {
-      const isEdit = Boolean(contactForm.id)
-      const res = await fetch(`/api/admin/matters/${matter.matter_id}/design-sheet/contacts`, {
-        method: isEdit ? 'PATCH' : 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: contactForm.id,
-          first_name: first,
-          last_name: last,
-          relationship: contactForm.relationship.trim() || null,
-          email: contactForm.email.trim() || null,
-          phone: contactForm.phone.trim() || null,
-        }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not save contact')
-      const saved = body.contact as MatterContact
-      setContacts(current => {
-        if (isEdit) return current.map(c => (c.id === saved.id ? saved : c))
-        return [...current, saved].sort((a, b) =>
-          (a.last_name ?? '').localeCompare(b.last_name ?? ''),
-        )
-      })
-      setContactDialogOpen(false)
-      toast.success(isEdit ? 'Contact updated' : 'Contact added')
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save contact')
-    } finally {
-      setContactSaving(false)
-    }
-  }
-
   const copyIntakeUrl = async () => {
     if (!intakeUrl) return
     try {
@@ -517,6 +488,25 @@ export default function MatterDetailClient({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline" className="gap-1.5">
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  Intake
+                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => void openIntakeSheet()}>
+                  <ClipboardList className="mr-2 h-3.5 w-3.5" />
+                  {intakeCompleted ? 'Edit intake' : liveIntakeId ? 'Update intake' : 'Create intake'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setImportIntakeOpen(true)}>
+                  <Upload className="mr-2 h-3.5 w-3.5" />
+                  Import intake — paste text or upload Word
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button type="button" size="sm" variant="outline" asChild>
               <Link href={`/admin/drafting/${matter.matter_id}`}>
                 <FilePenLine className="h-3.5 w-3.5" />
@@ -542,7 +532,7 @@ export default function MatterDetailClient({
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="contacts">Contacts</TabsTrigger>
+            <TabsTrigger value="contacts">Additional Contacts</TabsTrigger>
             <TabsTrigger value="communications">Communications</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
@@ -624,6 +614,9 @@ export default function MatterDetailClient({
                 {intakeUrl}
               </p>
             )}
+
+            <MatterOverviewContacts matterId={matterId} matter={matter} />
+            <MatterOverviewAssets matterId={matterId} matter={matter} intakeId={liveIntakeId} />
           </TabsContent>
 
           <TabsContent value="documents" className="space-y-4">
@@ -660,61 +653,12 @@ export default function MatterDetailClient({
             )}
           </TabsContent>
 
-          <TabsContent value="contacts" className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                Household and related contacts for this matter.
-              </p>
-              <Button type="button" size="sm" onClick={openAddContact}>
-                <Plus className="h-3.5 w-3.5" />
-                Add contact
-              </Button>
-            </div>
-            {contacts.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border px-6 py-12 text-center text-xs text-muted-foreground">
-                No contacts yet. Add a contact to get started.
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-md border border-border">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Name</th>
-                      <th className="px-3 py-2 font-medium">Relationship</th>
-                      <th className="hidden px-3 py-2 font-medium sm:table-cell">Email</th>
-                      <th className="hidden px-3 py-2 font-medium md:table-cell">Phone</th>
-                      <th className="px-3 py-2 font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contacts.map(c => (
-                      <tr key={c.id} className="border-b border-border last:border-0">
-                        <td className="px-3 py-2.5 font-medium">{contactDisplayName(c)}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground">
-                          {c.relationship || '—'}
-                        </td>
-                        <td className="hidden px-3 py-2.5 text-muted-foreground sm:table-cell">
-                          {c.email || '—'}
-                        </td>
-                        <td className="hidden px-3 py-2.5 text-muted-foreground md:table-cell">
-                          {c.phone || '—'}
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openEditContact(c)}
-                          >
-                            Edit
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <TabsContent value="contacts">
+            <MatterAdditionalContactsTab
+              matterId={matterId}
+              matter={matter}
+              initialContacts={contacts}
+            />
           </TabsContent>
 
           <TabsContent value="communications" className="space-y-8">
@@ -924,76 +868,39 @@ export default function MatterDetailClient({
         </Tabs>
       </div>
 
-      <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{contactForm.id ? 'Edit contact' : 'Add contact'}</DialogTitle>
-            <DialogDescription>
-              Contacts are stored on the matter intake household record.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 py-1">
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="contact-first">First name</Label>
-                <Input
-                  id="contact-first"
-                  value={contactForm.first_name}
-                  onChange={e => setContactForm(f => ({ ...f, first_name: e.target.value }))}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="contact-last">Last name</Label>
-                <Input
-                  id="contact-last"
-                  value={contactForm.last_name}
-                  onChange={e => setContactForm(f => ({ ...f, last_name: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="contact-rel">Relationship</Label>
-              <Input
-                id="contact-rel"
-                value={contactForm.relationship}
-                onChange={e => setContactForm(f => ({ ...f, relationship: e.target.value }))}
-                placeholder="Spouse, child, sibling…"
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="contact-email">Email</Label>
-              <Input
-                id="contact-email"
-                type="email"
-                value={contactForm.email}
-                onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="contact-phone">Phone</Label>
-              <Input
-                id="contact-phone"
-                type="tel"
-                value={contactForm.phone}
-                onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setContactDialogOpen(false)}
-              disabled={contactSaving}
-            >
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void handleSaveContact()} disabled={contactSaving}>
-              {contactSaving ? 'Saving…' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ImportIntakeDialog
+        open={importIntakeOpen}
+        onOpenChange={setImportIntakeOpen}
+        accessToken={token}
+        parseTextUrl={`/api/admin/matters/${matterId}/parse-intake`}
+        parseDocxUrl={`/api/admin/matters/${matterId}/parse-intake-docx`}
+        onParsed={(parsedIntakeId) => {
+          setLiveIntakeId(parsedIntakeId)
+          setIntakeCompleted(false)
+          setImportIntakeOpen(false)
+          setIntakeSheetOpen(true)
+          router.refresh()
+        }}
+      />
+
+      {intakeSheetOpen && (
+        <AdminIntakeSheet
+          leadId={null}
+          matterId={matterId}
+          clientIntakeId={liveIntakeId}
+          clientUserId={clientIntakeRow?.client_user_id ?? clientIntakeRow?.user_id ?? null}
+          practiceArea={matter.practice_area ?? 'Estate Planning'}
+          clientName={matter.client_name || matter.matter_name || 'Client'}
+          open={intakeSheetOpen}
+          onClose={() => setIntakeSheetOpen(false)}
+          onIntakeIdChange={setLiveIntakeId}
+          onSubmitted={() => {
+            setIntakeCompleted(true)
+            setIntakeSheetOpen(false)
+            router.refresh()
+          }}
+        />
+      )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
