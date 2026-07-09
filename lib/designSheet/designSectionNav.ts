@@ -3,17 +3,11 @@ import type { IntakeSnapshot } from '@/lib/queries'
 import {
   DESIGN_SECTION_IDS,
   normalizeDesignSectionId,
-  spouseTrustSectionLabel,
 } from '@/lib/designSheet/sectionIds'
 
 export interface DesignSectionNavItem {
   id: string
   label: string
-}
-
-function isMarried(maritalStatus: string | null | undefined): boolean {
-  const marital = (maritalStatus ?? '').toLowerCase()
-  return marital.includes('married') && !marital.includes('never')
 }
 
 export function getDesignSectionNavItems(args: {
@@ -23,9 +17,7 @@ export function getDesignSectionNavItems(args: {
   spouseName?: string | null
   isJointTrust?: boolean | null
 }): DesignSectionNavItem[] {
-  const { intakeSnapshot, documentInclusions, maritalStatus, spouseName, isJointTrust } = args
-  const married = isMarried(maritalStatus)
-  const separateTrusts = married && isJointTrust === false
+  const { intakeSnapshot, documentInclusions } = args
   const items: DesignSectionNavItem[] = []
 
   if (intakeSnapshot) {
@@ -35,18 +27,13 @@ export function getDesignSectionNavItems(args: {
   items.push(
     { id: DESIGN_SECTION_IDS.clientInformation, label: 'Client Information' },
     { id: DESIGN_SECTION_IDS.familyInformation, label: 'Family Information' },
-    { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Fiduciaries & Additional Contacts' },
+    { id: DESIGN_SECTION_IDS.contactsFiduciaries, label: 'Contacts & Fiduciaries' },
+    { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Fiduciary Role Assignment' },
     { id: DESIGN_SECTION_IDS.estatePlanDesign, label: 'Estate Plan Design' },
   )
 
   if (documentInclusions.trust) {
     items.push({ id: DESIGN_SECTION_IDS.trustDetails, label: 'Trust Details' })
-    if (separateTrusts) {
-      items.push({
-        id: DESIGN_SECTION_IDS.trustDetailsSpouse,
-        label: spouseTrustSectionLabel(spouseName),
-      })
-    }
   }
 
   if (documentInclusions.will) {

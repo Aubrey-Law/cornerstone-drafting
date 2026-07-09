@@ -71,8 +71,8 @@ export default function ExpressDesignSheet({
   const s = useDesignSheetState({ matterId, matter, contacts, sheet: sheetProp, lpData, applyDefaults: true })
   const {
     isLP, sheet, updateField, validationValue, saveStatus, saveStatusText,
-    contactsState, handleAddContact, handleUpdateContact,
-    lpDataState, updateLpPatch, handlePlanCoverageChange, handleExportDesignSheet, handleImportedDesignSheetFields,
+    contactsState, handleAddContact, handleUpdateContact, handleRemoveContact,
+    lpDataState, updateLpPatch, handleExportDesignSheet, handleImportedDesignSheetFields,
     handleSave, isPending, exporting, documentInclusions, sectionSummaries,
     blockerDetails, draftBlockers, readinessComplete, readinessCompletedCount, readinessTotal,
   } = s
@@ -91,10 +91,10 @@ export default function ExpressDesignSheet({
     [DESIGN_SECTION_IDS.intakeReview]: FileText,
     [DESIGN_SECTION_IDS.clientInformation]: User,
     [DESIGN_SECTION_IDS.familyInformation]: Heart,
-    [DESIGN_SECTION_IDS.fiduciaries]: Users,
+    [DESIGN_SECTION_IDS.contactsFiduciaries]: Users,
+    [DESIGN_SECTION_IDS.fiduciaries]: Shield,
     [DESIGN_SECTION_IDS.estatePlanDesign]: Lightbulb,
     [DESIGN_SECTION_IDS.trustDetails]: Landmark,
-    [DESIGN_SECTION_IDS.trustDetailsSpouse]: Landmark,
     [DESIGN_SECTION_IDS.willDetails]: ScrollText,
     [DESIGN_SECTION_IDS.financialPoa]: Shield,
     [DESIGN_SECTION_IDS.healthcareDirectives]: HeartPulse,
@@ -118,7 +118,7 @@ export default function ExpressDesignSheet({
       updateLpPatch,
       handleAddContact,
       handleUpdateContact,
-      handlePlanCoverageChange,
+      handleRemoveContact,
     })
 
     return defs.map(def => ({
@@ -132,7 +132,7 @@ export default function ExpressDesignSheet({
           : undefined,
       render: def.render,
     }))
-  }, [contactsState, documentInclusions, handleAddContact, handlePlanCoverageChange, handleUpdateContact,
+  }, [contactsState, documentInclusions, handleAddContact, handleRemoveContact, handleUpdateContact,
       intakeSnapshot, isLP, lpDataState, matter, selectedDocKeysCount, sheet, updateField, updateLpPatch])
 
   // ── Scroll-spy: highlight the section nearest the top of the scroll area ─────

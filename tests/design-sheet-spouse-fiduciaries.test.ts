@@ -18,13 +18,13 @@ describe('design sheet spouse fiduciary selections', () => {
   })
 
   it('renders spouse fiduciary blocks in document sections for married matters', () => {
-    const fiduciaries = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/FiduciariesSectionEP.tsx'), 'utf8')
+    const contactsSection = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/ContactsFiduciariesSection.tsx'), 'utf8')
     const documentFiduciaries = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/documentFiduciarySections.tsx'), 'utf8')
-    const trustDetails = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DocumentSections.tsx'), 'utf8')
+    const trustDetails = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx'), 'utf8')
     const blocks = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/fiduciary-blocks.tsx'), 'utf8')
 
-    expect(fiduciaries).toContain('FiduciaryCardGrid')
-    expect(fiduciaries).toContain('All Fiduciaries and Decisionmakers')
+    expect(contactsSection).toContain('Add Fiduciary')
+    expect(contactsSection).toContain('All Fiduciaries and Decisionmakers')
     expect(documentFiduciaries).toContain('slotField="spouse_trustee_slots"')
     expect(documentFiduciaries).toContain("'s Trustees")
     expect(documentFiduciaries).toContain('separateTrusts')

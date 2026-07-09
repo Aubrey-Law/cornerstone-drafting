@@ -325,6 +325,10 @@ export function useDesignSheetState({
     return contact
   }, [matterId])
 
+  const handleRemoveContact = useCallback((id: string) => {
+    setContactsState(prev => prev.filter(contact => contact.id !== id))
+  }, [])
+
   // ── LP-specific data ──────────────────────────────────────────────────────────
   const updateLpPatch = useCallback((patch: Record<string, unknown>) => {
     const nextData = formatPhoneFieldsDeep({ ...(lpDataState?.li_design_sheet_data ?? {}), ...patch })
@@ -413,6 +417,7 @@ export function useDesignSheetState({
     contactsState,
     handleAddContact,
     handleUpdateContact,
+    handleRemoveContact,
     // lp
     lpDataState,
     setLpDataState,

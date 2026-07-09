@@ -3,10 +3,10 @@ export const DESIGN_SECTION_IDS = {
   intakeReview: 'intake-review',
   clientInformation: 'client-information',
   familyInformation: 'family-information',
+  contactsFiduciaries: 'contacts-fiduciaries',
   fiduciaries: 'fiduciaries',
   estatePlanDesign: 'estate-plan-design',
   trustDetails: 'trust-details',
-  trustDetailsSpouse: 'trust-details-spouse',
   willDetails: 'will-details',
   financialPoa: 'financial-poa',
   healthcareDirectives: 'healthcare-directives',
@@ -30,6 +30,7 @@ export const LEGACY_DESIGN_SECTION_ALIASES: Record<string, DesignSectionId> = {
   'goals-notes': DESIGN_SECTION_IDS.attorneyNotes,
   'dementia-directive': DESIGN_SECTION_IDS.healthcareDirectives,
   deed: DESIGN_SECTION_IDS.transfersAssignments,
+  'trust-details-spouse': DESIGN_SECTION_IDS.trustDetails,
 }
 
 export function normalizeDesignSectionId(sectionId: string | null | undefined): string | null {
