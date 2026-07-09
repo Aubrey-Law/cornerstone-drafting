@@ -36,11 +36,64 @@ Supabase Dashboard → Authentication → URL Configuration must include every d
 - `https://cornerstone-drafting.vercel.app/auth/callback`
 - `http://localhost:3002/auth/callback` (local dev)
 
-Google Cloud and Azure Entra redirect URIs must point at Supabase, not this app:
+Google Cloud and Azure Entra redirect URIs must point at **Supabase**, not this app:
 
 - `https://<project-ref>.supabase.co/auth/v1/callback`
 
 Run `node scripts/validateOAuth.mjs` after changing provider settings.
+
+### Microsoft login (sign-in — separate from Outlook Graph below)
+
+The login page uses Supabase provider `azure` (“Continue with Microsoft”). No extra Vercel env vars are required beyond `NEXT_PUBLIC_APP_URL` and the Supabase keys.
+
+**1. Azure Entra app registration** (portal.azure.com → Microsoft Entra ID → App registrations → New registration)
+
+| Field | Value |
+|-------|-------|
+| Name | e.g. `Cornerstone Lite` |
+| Supported account types | **Single tenant** (Aubrey org only) recommended for staff |
+| Redirect URI (Web) | `https://<project-ref>.supabase.co/auth/v1/callback` |
+
+After create:
+
+1. **Certificates & secrets** → New client secret → copy the **Value** (not the Secret ID).
+2. Note **Application (client) ID** and **Directory (tenant) ID**.
+
+Optional Entra settings if sign-in fails with “Error getting user email”:
+
+- Ensure each user has a **mail** / **user principal name** with an email.
+- API permissions: `openid`, `profile`, `email` (Microsoft Graph delegated) — usually granted by default for sign-in.
+
+**2. Supabase** → Authentication → Providers → **Azure**
+
+| Field | Value |
+|-------|-------|
+| Enable Azure | On |
+| Client ID | Entra Application (client) ID |
+| Client Secret | Entra secret **Value** |
+| Azure Tenant URL | `https://login.microsoftonline.com/<tenant-id>` for org-only, or `https://login.microsoftonline.com/common` for multi-tenant |
+
+Common misconfiguration: putting the Supabase `/auth/v1/callback` URL in **Azure Tenant URL** — that field must be `https://login.microsoftonline.com/...`.
+
+**3. Supabase** → Authentication → URL Configuration → **Redirect URLs**
+
+Add every app host (see list above). Site URL should match your primary deployment.
+
+**4. Staff access rules (this app)**
+
+- OAuth auto-creates `public.users` on first sign-in.
+- Staff admin routes require `role` in (`attorney`, `admin`) **and** an `@aubreylegal.com` email (enforced in `/auth/callback`).
+- Non-firm Microsoft accounts become `client` and land on `/dashboard`.
+
+**5. Verify**
+
+```bash
+node scripts/validateOAuth.mjs https://<your-host>
+```
+
+Expect `✓ azure: redirects to provider login`. Then click **Continue with Microsoft** on `/auth/login`.
+
+> **Note:** Microsoft **Graph** (Outlook send from Settings) uses a *different* Entra app and redirect (`/api/admin/microsoft/callback`) — see below. You can reuse one app with both redirect URIs, or register two apps.
 
 ## Optional — drafting / ops
 

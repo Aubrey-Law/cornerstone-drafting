@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { safeAdminRedirectPath, safeClientRedirectPath } from '@/lib/auth/safeRedirect'
+import { ensureUserProfile, isFirmEmail } from '@/lib/auth/ensureUserProfile'
 
 const ADMIN_ROLES = ['attorney', 'admin'] as const
-const FIRM_EMAIL_DOMAIN = 'aubreylegal.com'
-
-function isFirmEmail(email: string | null | undefined): boolean {
-  return !!email && email.toLowerCase().endsWith(`@${FIRM_EMAIL_DOMAIN}`)
-}
 
 function getPublicOrigin(request: Request): string {
   const forwardedHost = request.headers.get('x-forwarded-host')
@@ -41,25 +37,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`)
   }
 
-  const { data: existingUser } = await supabase
-    .from('users')
-    .select('id, role')
-    .eq('id', data.user.id)
-    .single()
-
-  let role = existingUser?.role as string | undefined
-
-  if (!existingUser) {
-    // OAuth without an existing row: firm emails become staff; others become clients.
-    const nextRole = isFirmEmail(data.user.email) ? 'attorney' : 'client'
-    await supabase.from('users').insert({
-      id: data.user.id,
-      email: data.user.email,
-      display_name: data.user.user_metadata?.full_name ?? null,
-      role: nextRole,
-    })
-    role = nextRole
-  }
+  const role = await ensureUserProfile(supabase, data.user)
 
   if (role && ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) {
     if (!isFirmEmail(data.user.email)) {
