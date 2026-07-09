@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, HelpCircle, ListChecks, X } from 'lucide-react'
@@ -14,8 +15,8 @@ import ExpressDesignSheet from '@/app/admin/drafting/[matterId]/design/ExpressDe
 import type { DesignSheet, MatterContact, MatterDocument, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
-import GenerateStep from './GenerateStep'
-import ReviewStep from './ReviewStep'
+const GenerateStep = dynamic(() => import('./GenerateStep'), { ssr: false })
+const ReviewStep = dynamic(() => import('./ReviewStep'), { ssr: false })
 import {
   DESIGN_VIEW_STORAGE_KEY,
   resolveDesignView,

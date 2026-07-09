@@ -86,6 +86,128 @@ function inclusionLabels(inclusions: DesignDocumentInclusions | null) {
   return labels
 }
 
+function mapHubDraftRow(doc: {
+  id: string
+  name: string
+  size: number
+  created_at: string
+  generationId?: string | null
+  generationEngine?: string | null
+  markerCount?: number | null
+  missingCount?: number | null
+  supersededAt?: string | null
+  reviewedAt?: string | null
+  reviewedBy?: string | null
+}): DraftingHubDocument {
+  return {
+    id: doc.id,
+    name: doc.name,
+    size: doc.size,
+    created_at: doc.created_at,
+    folder: 'draft',
+    generationId: doc.generationId ?? null,
+    generationEngine: doc.generationEngine ?? null,
+    markerCount: doc.markerCount ?? null,
+    missingCount: doc.missingCount ?? null,
+    supersededAt: doc.supersededAt ?? null,
+    reviewedAt: doc.reviewedAt ?? null,
+    reviewedBy: doc.reviewedBy ?? null,
+  }
+}
+
+interface DraftHubRollupRow {
+  matter_id: string
+  current_draft_count: number
+  superseded_draft_count: number
+  recent_drafts: Array<{
+    id: string
+    name: string
+    size: number
+    created_at: string
+    generationId?: string | null
+    generationEngine?: string | null
+    markerCount?: number | null
+    missingCount?: number | null
+    supersededAt?: string | null
+    reviewedAt?: string | null
+    reviewedBy?: string | null
+  }>
+}
+
+async function fetchHubDraftRollups(
+  admin: ReturnType<typeof getAdminClient>,
+  matterIds: string[],
+): Promise<Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>> {
+  const rollups = new Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>()
+  if (matterIds.length === 0) return rollups
+
+  const { data, error } = await admin.rpc('drafting_hub_draft_rollups', { p_matter_ids: matterIds })
+  if (error) {
+    console.error('fetchDraftingHubMatters draft rollups error:', error)
+    return fetchHubDraftRollupsLegacy(admin, matterIds)
+  }
+
+  for (const row of (data ?? []) as DraftHubRollupRow[]) {
+    rollups.set(row.matter_id, {
+      currentDraftCount: row.current_draft_count ?? 0,
+      supersededDraftCount: row.superseded_draft_count ?? 0,
+      recentDrafts: (row.recent_drafts ?? []).map(mapHubDraftRow),
+    })
+  }
+  return rollups
+}
+
+/** Fallback when the rollup RPC is not deployed yet. */
+async function fetchHubDraftRollupsLegacy(
+  admin: ReturnType<typeof getAdminClient>,
+  matterIds: string[],
+): Promise<Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>> {
+  const { data, error } = await admin
+    .from('matter_documents')
+    .select('id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by')
+    .in('matter_id', matterIds)
+    .eq('folder', 'draft')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('fetchDraftingHubMatters legacy draft docs error:', error)
+    return new Map()
+  }
+
+  const draftsByMatter = new Map<string, DraftingHubDocument[]>()
+  for (const doc of (data ?? []) as Array<Pick<
+    MatterDocument,
+    'id' | 'matter_id' | 'name' | 'size' | 'created_at' | 'generation_id' | 'generation_engine' | 'marker_count' | 'missing_count' | 'superseded_at' | 'reviewed_at' | 'reviewed_by'
+  >>) {
+    const list = draftsByMatter.get(doc.matter_id) ?? []
+    list.push(mapHubDraftRow({
+      id: doc.id,
+      name: doc.name,
+      size: doc.size,
+      created_at: doc.created_at,
+      generationId: doc.generation_id ?? null,
+      generationEngine: doc.generation_engine ?? null,
+      markerCount: doc.marker_count ?? null,
+      missingCount: doc.missing_count ?? null,
+      supersededAt: doc.superseded_at ?? null,
+      reviewedAt: doc.reviewed_at ?? null,
+      reviewedBy: doc.reviewed_by ?? null,
+    }))
+    draftsByMatter.set(doc.matter_id, list)
+  }
+
+  const rollups = new Map<string, { currentDraftCount: number; supersededDraftCount: number; recentDrafts: DraftingHubDocument[] }>()
+  for (const [matterId, drafts] of draftsByMatter) {
+    const currentDrafts = drafts.filter(draft => !draft.supersededAt)
+    rollups.set(matterId, {
+      currentDraftCount: currentDrafts.length,
+      supersededDraftCount: drafts.length - currentDrafts.length,
+      recentDrafts: currentDrafts.slice(0, 5),
+    })
+  }
+  return rollups
+}
+
 export async function fetchDraftingHubMatters(): Promise<{
   matters: DraftingHubMatter[]
   error: string | null
@@ -109,7 +231,7 @@ export async function fetchDraftingHubMatters(): Promise<{
   const [
     designSheetsRes,
     detailsRes,
-    draftDocsRes,
+    draftRollups,
     matterNumbersRes,
   ] = await Promise.all([
     admin
@@ -121,12 +243,7 @@ export async function fetchDraftingHubMatters(): Promise<{
       .from('matter_details')
       .select('*')
       .in('client_id', matterIds),
-    admin
-      .from('matter_documents')
-      .select('id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by')
-      .in('matter_id', matterIds)
-      .eq('folder', 'draft')
-      .order('created_at', { ascending: false }),
+    fetchHubDraftRollups(admin, matterIds),
     admin
       .from('matters')
       .select('id, matter_number')
@@ -135,7 +252,6 @@ export async function fetchDraftingHubMatters(): Promise<{
 
   if (designSheetsRes.error) console.error('fetchDraftingHubMatters design sheets error:', designSheetsRes.error)
   if (detailsRes.error) console.error('fetchDraftingHubMatters matter details error:', detailsRes.error)
-  if (draftDocsRes.error) console.error('fetchDraftingHubMatters draft docs error:', draftDocsRes.error)
   if (matterNumbersRes.error) console.error('fetchDraftingHubMatters matter numbers error:', matterNumbersRes.error)
 
   const designSheets = (designSheetsRes.data ?? []) as DesignSheetSummaryRow[]
@@ -174,32 +290,12 @@ export async function fetchDraftingHubMatters(): Promise<{
     matterNumberById.set(row.id, row.matter_number)
   }
 
-  const draftsByMatter = new Map<string, DraftingHubDocument[]>()
-  for (const doc of (draftDocsRes.data ?? []) as Array<Pick<
-    MatterDocument,
-    'id' | 'matter_id' | 'name' | 'size' | 'created_at' | 'generation_id' | 'generation_engine' | 'marker_count' | 'missing_count' | 'superseded_at' | 'reviewed_at' | 'reviewed_by'
-  >>) {
-    const list = draftsByMatter.get(doc.matter_id) ?? []
-    list.push({
-      id: doc.id,
-      name: doc.name,
-      size: doc.size,
-      created_at: doc.created_at,
-      folder: 'draft',
-      generationId: doc.generation_id ?? null,
-      generationEngine: doc.generation_engine ?? null,
-      markerCount: doc.marker_count ?? null,
-      missingCount: doc.missing_count ?? null,
-      supersededAt: doc.superseded_at ?? null,
-      reviewedAt: doc.reviewed_at ?? null,
-      reviewedBy: doc.reviewed_by ?? null,
-    })
-    draftsByMatter.set(doc.matter_id, list)
-  }
+  const draftsByMatter = draftRollups
 
   return {
-    matters: matters.map(matter =>
-      assembleDraftingHubMatter({
+    matters: matters.map(matter => {
+      const rollup = draftsByMatter.get(matter.matter_id)
+      return assembleDraftingHubMatter({
         matter,
         sheet: latestDesignByMatter.get(matter.matter_id) ?? null,
         details: detailsByMatter.get(matter.matter_id) ?? null,
@@ -208,9 +304,12 @@ export async function fetchDraftingHubMatters(): Promise<{
           const sheet = latestDesignByMatter.get(matter.matter_id)
           return sheet ? selectionsBySheet.get(sheet.id) ?? [] : []
         })(),
-        drafts: draftsByMatter.get(matter.matter_id) ?? [],
-      }),
-    ),
+        currentDraftCount: rollup?.currentDraftCount ?? 0,
+        recentDrafts: rollup?.recentDrafts ?? [],
+        supersededDrafts: [],
+        supersededDraftCount: rollup?.supersededDraftCount ?? 0,
+      })
+    }),
     error: null,
   }
 }
@@ -221,9 +320,22 @@ function assembleDraftingHubMatter(args: {
   details: MatterDetailsRow | null
   matterNumber: string | null
   selectedTemplates: string[]
-  drafts: DraftingHubDocument[]
+  currentDraftCount: number
+  recentDrafts: DraftingHubDocument[]
+  supersededDrafts: DraftingHubDocument[]
+  supersededDraftCount: number
 }): DraftingHubMatter {
-  const { matter, sheet, details, matterNumber, selectedTemplates, drafts } = args
+  const {
+    matter,
+    sheet,
+    details,
+    matterNumber,
+    selectedTemplates,
+    currentDraftCount,
+    recentDrafts,
+    supersededDrafts,
+    supersededDraftCount,
+  } = args
   const inclusions = sheet
     ? getDocumentInclusions({
         plan_type: sheet.plan_type,
@@ -231,8 +343,6 @@ function assembleDraftingHubMatter(args: {
         decisions: sheet.decisions,
       })
     : null
-  const currentDrafts = drafts.filter(draft => !draft.supersededAt)
-  const supersededDrafts = drafts.filter(draft => draft.supersededAt)
 
   return {
     matter,
@@ -250,10 +360,10 @@ function assembleDraftingHubMatter(args: {
     includedDocumentLabels: inclusionLabels(inclusions),
     selectedTemplateCount: selectedTemplates.length,
     selectedTemplates,
-    draftCount: currentDrafts.length,
-    recentDrafts: currentDrafts.slice(0, 5),
+    draftCount: currentDraftCount,
+    recentDrafts,
     supersededDrafts,
-    supersededDraftCount: supersededDrafts.length,
+    supersededDraftCount,
   }
 }
 
@@ -348,6 +458,9 @@ export async function fetchDraftingHubMatter(matterId: string): Promise<{
     reviewedBy: doc.reviewed_by ?? null,
   }))
 
+  const currentDrafts = drafts.filter(draft => !draft.supersededAt)
+  const supersededDrafts = drafts.filter(draft => draft.supersededAt)
+
   return {
     matter: assembleDraftingHubMatter({
       matter,
@@ -355,7 +468,10 @@ export async function fetchDraftingHubMatter(matterId: string): Promise<{
       details: (detailsRes.data as MatterDetailsRow | null) ?? null,
       matterNumber: (matterNumbersRes.data as { matter_number: string | null } | null)?.matter_number ?? null,
       selectedTemplates,
-      drafts,
+      currentDraftCount: currentDrafts.length,
+      recentDrafts: currentDrafts.slice(0, 5),
+      supersededDrafts,
+      supersededDraftCount: supersededDrafts.length,
     }),
     error: null,
   }
