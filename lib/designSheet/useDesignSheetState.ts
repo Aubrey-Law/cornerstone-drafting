@@ -26,6 +26,8 @@ type ApiErrorResponse = { error?: string }
 type SaveDesignSheetResponse = ApiErrorResponse & { id?: string; updated_at?: string; version?: number; conflict?: boolean }
 type AddContactResponse = ApiErrorResponse & { contact?: MatterContact }
 
+const READINESS_DEBOUNCE_MS = 300
+
 export interface LpData {
   li_plan_coverage: string
   li_design_sheet_data: Record<string, unknown>
@@ -81,6 +83,7 @@ export function useDesignSheetState({
   const changeGenerationRef = useRef(0)
   const savedGenerationRef = useRef(0)
   const [exporting, setExporting] = useState(false)
+  const [readinessSheet, setReadinessSheet] = useState(sheet)
 
   const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
@@ -105,7 +108,9 @@ export function useDesignSheetState({
     if (saveStatus === 'dirty' || saveStatus === 'saving') return
 
     serverSheetStampRef.current = stamp
-    setSheet(rebuildSheetFromServer())
+    const nextSheet = rebuildSheetFromServer()
+    setSheet(nextSheet)
+    setReadinessSheet(nextSheet)
     expectedUpdatedAtRef.current = stamp
     setExpectedUpdatedAt(stamp)
     setLastSavedAt(stamp)
@@ -113,13 +118,19 @@ export function useDesignSheetState({
     setDirtyFields(new Set())
   }, [rebuildSheetFromServer, saveStatus, sheetProp?.updated_at])
 
+  // Debounce readiness so the summary rail does not recompute on every keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setReadinessSheet(sheet), READINESS_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [sheet])
+
   // ── Readiness ──────────────────────────────────────────────────────────────
   const readiness = useMemo(() => computeDesignSheetReadiness({
-    sheet,
+    sheet: readinessSheet,
     matter,
     isLP,
     lpData: lpDataState,
-  }), [isLP, lpDataState, matter, sheet])
+  }), [isLP, lpDataState, matter, readinessSheet])
   const documentInclusions = readiness.documentInclusions
 
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set())

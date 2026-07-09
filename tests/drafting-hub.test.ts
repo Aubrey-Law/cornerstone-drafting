@@ -20,7 +20,7 @@ describe('drafting hub and workspace', () => {
     expect(query).toContain(".from('doc_selections')")
     expect(query).toContain(".select('design_sheet_id, doc_type, variant, party, selected')")
     expect(query).toContain(".from('matter_documents')")
-    expect(query).toContain(".eq('folder', 'draft')")
+    expect(query).toContain("rpc('drafting_hub_draft_rollups'")
     expect(query).toContain("matter.marital_status")
     expect(query).toContain('docSelectionTemplateKey(selection)')
     expect(query).not.toContain('template_filename')
@@ -104,6 +104,27 @@ describe('drafting hub and workspace', () => {
     expect(loader).toContain('await ensureDesignSheetSeededFromIntake(matterId)')
     expect(seedModule).toContain('street: intake.address_line1')
     expect(seedModule).toContain('city: intake.city')
+  })
+
+  it('lazy-loads generate and review steps in the drafting workspace', () => {
+    const workspace = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/DraftingWorkspace.tsx'),
+      'utf8',
+    )
+
+    expect(workspace).toContain("import dynamic from 'next/dynamic'")
+    expect(workspace).toContain("dynamic(() => import('./GenerateStep')")
+    expect(workspace).toContain("dynamic(() => import('./ReviewStep')")
+    expect(workspace).not.toContain("import GenerateStep from './GenerateStep'")
+    expect(workspace).not.toContain("import ReviewStep from './ReviewStep'")
+  })
+
+  it('debounces design readiness in the shared design sheet state hook', () => {
+    const state = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/useDesignSheetState.ts'), 'utf8')
+
+    expect(state).toContain('READINESS_DEBOUNCE_MS = 300')
+    expect(state).toContain('setReadinessSheet(sheet)')
+    expect(state).toContain('sheet: readinessSheet')
   })
 
   it('documents the one-way intake sync policy in Intake Review', () => {
