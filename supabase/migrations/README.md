@@ -22,6 +22,7 @@ Cornerstone Lite uses a **greenfield Supabase project** with two migration layer
 | 9 | `20260710500000_lite_portal_messages.sql` | Portal message threads |
 | 10 | `20260711000000_lite_matter_aging.sql` | Matter aging view + SLA settings |
 | 11 | `20260712000000_lite_communications.sql` | SMS, email, calls, softphone, Retell |
+| 12 | `20260713000000_lite_matter_details_columns.sql` | `matter_details` columns for matter create + setup |
 
 The archived CRM portal history (167 files) lives in [`../migrations_archive/portal/`](../migrations_archive/portal/README.md).
 
