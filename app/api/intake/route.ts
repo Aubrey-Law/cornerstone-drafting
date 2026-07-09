@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAdminClient, ADMIN_EMAIL } from '@/lib/supabaseAdmin'
 import { sendEmail } from '@/lib/email/send'
 import { appUrl } from '@/lib/urls'
+import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 import { intakePayloadTouchesLead, syncLeadFromIntake } from '@/lib/syncLeadFromIntake'
 import { getSubmissionErrors, type IntakeRow } from '@/lib/intakeSections'
 import { getIntakeReadinessFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
@@ -388,6 +389,7 @@ export async function POST(req: Request) {
       const matterId = (matter as { id?: string } | null)?.id ?? null
       void notifyIntakeComplete(clientName, clientEmail, matterId)
         .catch((err) => console.error('[intake POST token] notify error:', err))
+      revalidateSidebarCounts()
     }
 
     return NextResponse.json({ id: existingId })
@@ -774,6 +776,7 @@ export async function POST(req: Request) {
     const clientEmail = body.email ?? user.email ?? ''
     void notifyIntakeComplete(clientName, clientEmail, existingMatter?.id ?? null)
       .catch((err) => console.error('[intake POST bearer] notify error:', err))
+    revalidateSidebarCounts()
   }
 
   return NextResponse.json({ id: recordId })

@@ -1,0 +1,39 @@
+export interface SidebarCounts {
+  intakeReviewCount: number
+  draftingNeedsDesignCount: number
+  agingRedCount: number
+  agingAmberCount: number
+  unassignedCallsCount: number
+}
+
+export type SidebarBadgeTone = 'destructive' | 'accent'
+
+export interface SidebarBadge {
+  value: number
+  tone: SidebarBadgeTone
+}
+
+export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
+  intakeReviewCount: 0,
+  draftingNeedsDesignCount: 0,
+  agingRedCount: 0,
+  agingAmberCount: 0,
+  unassignedCallsCount: 0,
+}
+
+export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
+  if (href === '/admin/matters' && counts.intakeReviewCount > 0) {
+    return { value: counts.intakeReviewCount, tone: 'destructive' }
+  }
+  if (href === '/admin/drafting' && counts.draftingNeedsDesignCount > 0) {
+    return { value: counts.draftingNeedsDesignCount, tone: 'accent' }
+  }
+  if (href === '/admin/pipeline/aging') {
+    if (counts.agingRedCount > 0) return { value: counts.agingRedCount, tone: 'destructive' }
+    if (counts.agingAmberCount > 0) return { value: counts.agingAmberCount, tone: 'accent' }
+  }
+  if (href === '/admin/calls' && counts.unassignedCallsCount > 0) {
+    return { value: counts.unassignedCallsCount, tone: 'accent' }
+  }
+  return null
+}
