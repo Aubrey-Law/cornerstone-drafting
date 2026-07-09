@@ -20,8 +20,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PipelineSlaSettings } from './PipelineSlaSettings'
 
-type Tab = 'models' | 'api-keys' | 'connectors'
+type Tab = 'models' | 'api-keys' | 'connectors' | 'sla'
 
 interface ApiKeyStatus {
   provider: string
@@ -258,7 +259,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Model preferences, bring-your-own API keys, and MCP connectors for drafting tools.
+          Model preferences, API keys, MCP connectors, and matter stage SLA.
         </p>
       </div>
 
@@ -268,6 +269,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
             ['models', 'Models'],
             ['api-keys', 'API Keys'],
             ['connectors', 'Connectors'],
+            ['sla', 'Stage SLA'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -524,6 +526,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
           </ul>
         </section>
       )}
+
+      {tab === 'sla' && <PipelineSlaSettings />}
     </div>
   )
 }
