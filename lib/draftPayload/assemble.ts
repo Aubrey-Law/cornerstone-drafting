@@ -23,6 +23,8 @@ import {
   draftPayloadChildren,
   pick,
 } from '@/lib/draftPayload/helpers'
+import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
+import { getWillPersonalRepresentativePowers } from '@/lib/designSheetWillPowers'
 import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import {
   draftPayloadTrustProvisions,
@@ -309,13 +311,40 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     pet_care_option: (designSheet.pet_care_option as 'omit' | 'direct_bequest' | 'pet_trust') ?? 'omit',
     pet_care_details: designSheet.pet_care_details ?? {},
     specific_bequests: designSheet.specific_bequests ?? [],
+    pr_powers: getWillPersonalRepresentativePowers(designSheet),
   }
+
+  const sheetDpoaProvisions = getDesignSheetDpoaProvisions(designSheet)
 
   const dpoa_provisions: DraftPayload['dpoa_provisions'] = {
     coagent_manner: (designSheet.dpoa_coagent_manner as DraftPayload['dpoa_provisions']['coagent_manner']) ?? 'independently',
     self_dealing_reviewer: designSheet.dpoa_self_dealing_reviewer ?? null,
     self_dealing_reviewer_alt: designSheet.dpoa_self_dealing_reviewer_alt ?? null,
     include_section_l: designSheet.dpoa_include_section_l === 'yes',
+    agent_compensation: sheetDpoaProvisions.agent_compensation,
+    coagent_serving: sheetDpoaProvisions.coagent_serving,
+    allow_gifts: sheetDpoaProvisions.allow_gifts,
+    trust_powers: {
+      agent_may_create_trusts: sheetDpoaProvisions.agent_may_create_trusts,
+      agent_may_create_trusts_for_dependents: sheetDpoaProvisions.agent_may_create_trusts_for_dependents,
+      allow_agent_as_trustee: sheetDpoaProvisions.allow_agent_as_trustee,
+      agent_may_create_medicaid_trusts: sheetDpoaProvisions.agent_may_create_medicaid_trusts,
+      agent_may_modify_sole_settlor_trusts: sheetDpoaProvisions.agent_may_modify_sole_settlor_trusts,
+      agent_may_modify_joint_trusts: sheetDpoaProvisions.agent_may_modify_joint_trusts,
+    },
+    special_powers: {
+      allow_delegation: sheetDpoaProvisions.allow_delegation,
+      prohibit_arbitration: sheetDpoaProvisions.prohibit_arbitration,
+      power_529_plans: sheetDpoaProvisions.power_529_plans,
+      allow_medical_information_access: sheetDpoaProvisions.allow_medical_information_access,
+      power_digital_assets: sheetDpoaProvisions.power_digital_assets,
+      allow_self_designation_beneficiary: sheetDpoaProvisions.allow_self_designation_beneficiary,
+    },
+    basic_powers: sheetDpoaProvisions.basic_powers,
+    all_basic_powers: sheetDpoaProvisions.all_basic_powers,
+    additional_powers: sheetDpoaProvisions.additional_powers,
+    specific_businesses: sheetDpoaProvisions.specific_businesses,
+    additional_limitations: sheetDpoaProvisions.additional_limitations,
   }
 
   const hcp_provisions: DraftPayload['hcp_provisions'] = {

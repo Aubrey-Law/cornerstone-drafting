@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic'
 import '@/app/intake/guided.css'
 import { designFieldTargetId, type DesignSectionSummary } from '@/lib/designSheetReadiness'
 import { cn } from '@/lib/utils'
-import { designPlanTypeLabel, designPlanTypeIncludesTrust } from '@/lib/designPlanType'
+import { designPlanTypeLabel } from '@/lib/designPlanType'
 import {
   type DesignDocumentInclusions,
   type DesignDocumentKey,
@@ -120,7 +120,7 @@ export default function DesignSheetShell({
     : 0
 
   const lastName = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/).pop() ?? ''
-  const includesTrust = designPlanTypeIncludesTrust(sheet.plan_type) || documentInclusions.trust
+  const includesTrust = documentInclusions.trust
 
   const selectedDocKeys = useMemo(
     () => (Object.keys(documentInclusions) as Array<keyof DesignDocumentInclusions>)

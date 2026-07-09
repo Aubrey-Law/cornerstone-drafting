@@ -2,7 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  designPlanTypeIncludesRevocableTrust,
   designPlanTypeIncludesTrust,
+  planTypeDisallowsRevocableTrustDocument,
   designPlanTypeLabel,
   normalizeDesignPlanType,
 } from '@/lib/designPlanType'
@@ -32,6 +34,9 @@ describe('design plan type normalization', () => {
     expect(designPlanTypeIncludesTrust('pour_over')).toBe(true)
     expect(designPlanTypeIncludesTrust('testamentary_trust')).toBe(true)
     expect(designPlanTypeIncludesTrust('outright_will')).toBe(false)
+    expect(designPlanTypeIncludesRevocableTrust('pour_over')).toBe(true)
+    expect(designPlanTypeIncludesRevocableTrust('testamentary_trust')).toBe(false)
+    expect(planTypeDisallowsRevocableTrustDocument('testamentary_trust')).toBe(true)
     expect(designPlanTypeIncludesTrust('joint_trust')).toBe(false)
   })
 })

@@ -45,6 +45,10 @@ export function FiduciaryRoleSection({
   coShortcutContact,
   coShortcutLabel,
   title,
+  primaryLabel,
+  altLabel,
+  coLabel,
+  slotScope = 'all',
 }: {
   role: FiduciaryRole
   slots: FiduciarySlot[]
@@ -66,9 +70,23 @@ export function FiduciaryRoleSection({
   coShortcutContact?: Contact | null
   coShortcutLabel?: string
   title?: string
+  primaryLabel?: string
+  altLabel?: string
+  coLabel?: string
+  slotScope?: 'all' | 'primary' | 'backup'
 }) {
   const config = ROLE_CONFIG[role]
-  const groups = slotsByOrder(slots)
+  const resolvedConfig = {
+    ...config,
+    primaryLabel: primaryLabel ?? config.primaryLabel,
+    altLabel: altLabel ?? config.altLabel,
+    coLabel: coLabel ?? config.coLabel,
+  }
+  const groups = slotsByOrder(slots).filter(group => {
+    if (slotScope === 'primary') return group.principal.order === 0
+    if (slotScope === 'backup') return group.principal.order > 0
+    return true
+  })
   const primarySlot = groups.find(group => group.principal.order === 0)?.principal ?? null
   const primaryGroup = groups.find(group => group.principal.order === 0) ?? null
 
@@ -104,7 +122,7 @@ export function FiduciaryRoleSection({
     .filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i)
 
   return (
-    <SectionBlock title={title ?? config.title}>
+    <SectionBlock title={title ?? resolvedConfig.title}>
       {sameAsTrustee !== undefined && onSameAsTrusteeToggle && (
         <div className="mb-4 flex items-center gap-2">
           <Checkbox checked={sameAsTrustee} onCheckedChange={onSameAsTrusteeToggle} />
@@ -121,7 +139,7 @@ export function FiduciaryRoleSection({
             }}
           />
           <span className="text-xs text-foreground">
-            {s.label ?? `${s.contact.first_name} as ${config.primaryLabel.toLowerCase()}`}
+            {s.label ?? `${s.contact.first_name} as ${resolvedConfig.primaryLabel.toLowerCase()}`}
           </span>
         </div>
       ))}
@@ -133,7 +151,7 @@ export function FiduciaryRoleSection({
             onCheckedChange={checked => handleCoShortcutToggle(checked === true)}
           />
           <span className="text-xs text-foreground">
-            {coShortcutLabel ?? `Spouse as initial ${config.coLabel.toLowerCase()}`}
+            {coShortcutLabel ?? `Spouse as initial ${resolvedConfig.coLabel.toLowerCase()}`}
           </span>
         </div>
       )}
@@ -142,8 +160,8 @@ export function FiduciaryRoleSection({
         {groups.map((group, groupIdx) => {
           const isPrimary = group.principal.order === 0
           const label = isPrimary
-            ? config.primaryLabel
-            : `${config.altLabel} ${group.principal.order}`
+            ? resolvedConfig.primaryLabel
+            : `${resolvedConfig.altLabel} ${group.principal.order}`
           const slotState = (slotStates?.[group.principal.id] ?? 'filled') as SlotState
 
           return (
@@ -179,13 +197,13 @@ export function FiduciaryRoleSection({
                 )}
               </div>
 
-              {config.allowCo && group.coSlots.length > 0 && (
+              {resolvedConfig.allowCo && group.coSlots.length > 0 && (
                 <div className="ml-8 mt-2 space-y-2 border-l-2 border-border pl-4">
                   {group.coSlots.map((coSlot, coIndex) => (
                     <div key={coSlot.id} className="flex items-start gap-2">
                       <div className="flex-1">
                         <ContactPicker
-                          role={`${config.coLabel} ${coIndex + 1} (${isPrimary ? 'Primary' : `Alt ${group.principal.order}`})`}
+                          role={`${resolvedConfig.coLabel} ${coIndex + 1} (${isPrimary ? 'Primary' : `Alt ${group.principal.order}`})`}
                           value={contactById(contacts, coSlot.contact_id, extraContacts)}
                           onChange={c => onSlotsChange(setSlotContact(slots, coSlot.id, c?.id ?? null))}
                           contacts={[...extraContacts, ...(contacts as Contact[])]}
@@ -197,7 +215,7 @@ export function FiduciaryRoleSection({
                         type="button"
                         onClick={() => onSlotsChange(removeCo(slots, coSlot.id))}
                         className="mt-6 rounded p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive"
-                        title={`Remove ${config.coLabel.toLowerCase()}`}
+                        title={`Remove ${resolvedConfig.coLabel.toLowerCase()}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -206,7 +224,7 @@ export function FiduciaryRoleSection({
                 </div>
               )}
 
-              {config.allowCo && group.coSlots.length < config.maxCo && (
+              {resolvedConfig.allowCo && group.coSlots.length < resolvedConfig.maxCo && (
                 <div className="ml-8 mt-1.5 pl-4">
                   <button
                     type="button"
@@ -214,7 +232,7 @@ export function FiduciaryRoleSection({
                     className="flex items-center gap-1 text-[11px] font-medium text-accent transition-colors hover:text-accent/80"
                   >
                     <Plus className="h-3 w-3" />
-                    Add {config.coLabel}
+                    Add {resolvedConfig.coLabel}
                   </button>
                 </div>
               )}
@@ -227,17 +245,21 @@ export function FiduciaryRoleSection({
         })}
       </div>
 
-      <div className="mt-4 border-t border-border pt-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-xs"
-          onClick={() => onSlotsChange(addAlternate(slots))}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add Alternate {config.title.split(' / ')[0]}
-        </Button>
-      </div>
+      {slotScope !== 'primary' && (
+        <div className="mt-4 border-t border-border pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => onSlotsChange(addAlternate(slots))}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {slotScope === 'backup'
+              ? 'Add backup agent'
+              : `Add Alternate ${resolvedConfig.title.split(' / ')[0]}`}
+          </Button>
+        </div>
+      )}
     </SectionBlock>
   )
 }

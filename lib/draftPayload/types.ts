@@ -145,12 +145,41 @@ export interface DraftPayload {
     pet_care_option: 'omit' | 'direct_bequest' | 'pet_trust'
     pet_care_details: Record<string, unknown>
     specific_bequests: unknown[]
+    pr_powers: {
+      allow_pay_taxes_debts_expenses: boolean
+      allow_manage_digital_assets: boolean
+      include_distribution_cash_or_kind: boolean
+    }
   }
   dpoa_provisions: {
     coagent_manner: 'independently' | 'jointly' | 'majority'
     self_dealing_reviewer: string | null
     self_dealing_reviewer_alt: string | null
     include_section_l: boolean
+    agent_compensation: 'prevailing_professional' | 'reasonable' | 'none' | null
+    coagent_serving: 'jointly' | 'separately' | 'silent' | null
+    allow_gifts: boolean
+    trust_powers: {
+      agent_may_create_trusts: boolean
+      agent_may_create_trusts_for_dependents: boolean
+      allow_agent_as_trustee: boolean
+      agent_may_create_medicaid_trusts: boolean
+      agent_may_modify_sole_settlor_trusts: boolean
+      agent_may_modify_joint_trusts: boolean
+    }
+    special_powers: {
+      allow_delegation: boolean
+      prohibit_arbitration: boolean
+      power_529_plans: boolean
+      allow_medical_information_access: boolean
+      power_digital_assets: boolean
+      allow_self_designation_beneficiary: boolean
+    }
+    basic_powers: Record<string, boolean>
+    all_basic_powers: boolean
+    additional_powers: string | null
+    specific_businesses: string | null
+    additional_limitations: string | null
   }
   hcp_provisions: {
     anatomical_gift: 'all' | 'specified' | 'none' | null
