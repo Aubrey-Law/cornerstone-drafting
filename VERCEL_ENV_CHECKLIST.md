@@ -42,7 +42,7 @@ Google Cloud and Azure Entra redirect URIs must point at Supabase, not this app:
 
 Run `node scripts/validateOAuth.mjs` after changing provider settings.
 
-## Optional
+## Optional — drafting / ops
 
 | Variable | Purpose |
 |----------|---------|
@@ -54,11 +54,55 @@ Run `node scripts/validateOAuth.mjs` after changing provider settings.
 | `SENTRY_AUTH_TOKEN` | Source map upload on production builds |
 | `ADMIN_EMAIL` | Default admin contact email in server helpers |
 
+## Optional — Resend (lite alerts)
+
+| Variable | Purpose |
+|----------|---------|
+| `RESEND_API_KEY` | Transactional email (message alerts, intake complete) |
+| `EMAILS_ENABLED` | Hard kill switch (`false` / `0` / `off` suppresses all sends) |
+
+Categories used: `message_alert`, `portal_message_notice`, `intake_complete_alert`, `intake_invite`, `manual`. No full portal email-settings matrix.
+
+## Optional — Twilio (SMS + softphone)
+
+| Variable | Purpose |
+|----------|---------|
+| `TWILIO_ACCOUNT_SID` | Account SID |
+| `TWILIO_AUTH_TOKEN` | Auth token (webhook signature verify) |
+| `TWILIO_SMS_FROM` or `TWILIO_MESSAGING_SERVICE_SID` | Outbound SMS |
+| `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | Browser Voice SDK tokens |
+| `TWILIO_TWIML_APP_SID` | TwiML App for outbound softphone |
+| `TWILIO_CALLER_ID` | Outbound caller ID |
+| `TWILIO_INBOUND_CLIENT_IDENTITIES` | Comma-separated staff user UUIDs to ring |
+| `TWILIO_INBOUND_FALLBACK_URL` | Fallthrough (e.g. Retell) when no answer |
+| `TWILIO_INBOUND_RING_TIMEOUT` | Seconds before fallback |
+| `TWILIO_RECORD_CALLS` | Optional call recording |
+| `TWILIO_WEBHOOK_BASE_URL` | Public base for status callbacks if different from `NEXT_PUBLIC_APP_URL` |
+
+Point Twilio Voice / Messaging webhooks at this app’s host (`/api/webhooks/twilio/*`, `/api/voice/*`). Softphone FAB hides when Voice env is incomplete.
+
+## Optional — Microsoft Graph (Outlook send)
+
+| Variable | Purpose |
+|----------|---------|
+| `MICROSOFT_GRAPH_CLIENT_ID` | Entra app client ID |
+| `MICROSOFT_GRAPH_CLIENT_SECRET` | Entra app secret |
+| `MICROSOFT_GRAPH_REDIRECT_URI` | Must match `/api/admin/microsoft/callback` on this host |
+| `MICROSOFT_GRAPH_TENANT_ID` | Optional; defaults to `common` |
+
+Staff connect Outlook under **Settings**. Manual matter email uses Graph when connected; otherwise Resend `manual` category.
+
+## Optional — Retell
+
+| Variable | Purpose |
+|----------|---------|
+| `RETELL_API_KEY` | Verify Retell webhook signatures |
+
+Webhook URL: `https://<host>/api/webhooks/retell`
+
 ## Not used in this app
 
-The following from the full portal are **not** required:
-
-- Lawmatics, Twilio, Cal.com, Microsoft Graph / OneDrive
-- Resend / email kill switch (client plan-review email removed)
-- Portal host split (`NEXT_PUBLIC_PORTAL_HOST`, `NEXT_PUBLIC_APP_HOST`)
-- DocuSeal / SignWell
+- Lawmatics, Cal.com, DocuSeal / SignWell
+- Leads CRM / unified admin inbox / AI email triage
+- Portal hostname split (`NEXT_PUBLIC_PORTAL_HOST`) — single host, role-based routing
+- Full 12-category email settings matrix from aubrey-law-app
