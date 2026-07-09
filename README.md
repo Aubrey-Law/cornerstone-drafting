@@ -46,7 +46,7 @@ Dev server: [http://localhost:3002](http://localhost:3002)
 
 | Route | Purpose |
 |-------|---------|
-| `/intake` | Client intake questionnaire |
+| `/intake` | Full guided intake questionnaire (parity with aubrey-law-app) |
 | `/documents` | Shared PDFs + client uploads |
 | `/messages` | Matter messaging with the firm |
 | `/dashboard` | Thin portal home |

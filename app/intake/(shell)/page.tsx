@@ -1,14 +1,12 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { Lock } from 'lucide-react'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
-import { getAdminClient } from '@/lib/supabaseAdmin'
+import { type IntakeRow } from '@/lib/intakeSections'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
-import { loadHouseholdChildren } from '@/lib/contacts/loadHouseholdChildren'
-import SimplifiedIntakeForm from '@/components/intake/SimplifiedIntakeForm'
-import { Button } from '@/components/ui/button'
+import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
+import GuidedInterview from '@/components/intake/GuidedInterview'
+import { RequestUnlockButton } from './RequestUnlockButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,28 +18,36 @@ export default async function IntakeHomePage() {
   if (!user) redirect('/auth/login')
 
   const intake = await getOrCreateClientIntakeForUser(supabase, user)
-  const intakeId = intake.id as string
-  const submitted = intake.status === 'submitted' || intake.status === 'approved'
+
+  const intakeRow = (await hydrateIntakeWithContacts(
+    supabase,
+    intake as Record<string, unknown>,
+    intake.id as string,
+  )) as IntakeRow
+
+  const submitted = intakeRow.status === 'submitted' || intakeRow.status === 'approved'
 
   if (submitted) {
-    const firstName = (intake.first_name as string) || null
+    const firstName = (intakeRow.first_name as string) || null
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/50 dark:bg-amber-950/30">
           <div className="flex items-start gap-3">
-            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-foreground">
+              <h1 className="text-lg font-semibold text-amber-900 dark:text-amber-100">
                 Thank you{firstName ? `, ${firstName}` : ''}
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                We&apos;ve received your questionnaire. The firm will review it shortly.
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-200/90">
+                We&apos;ve received your questionnaire. We look forward to reviewing it with you at our meeting.
                 To request changes, email{' '}
                 <a href={`mailto:${firm.email}`} className="underline">{firm.email}</a>.
               </p>
-              <Button asChild size="sm" className="mt-4">
-                <Link href="/dashboard">Return to dashboard</Link>
-              </Button>
+              <div className="mt-4">
+                <RequestUnlockButton
+                  requestedAt={(intakeRow.unlock_requested_at as string | null) ?? null}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -49,35 +55,11 @@ export default async function IntakeHomePage() {
     )
   }
 
-  let spouse: Awaited<ReturnType<typeof loadSpouseContact>> = null
-  let children: Awaited<ReturnType<typeof loadHouseholdChildren>> = []
-  try {
-    const admin = getAdminClient()
-    const [spouseRow, childRows] = await Promise.all([
-      loadSpouseContact(admin, intakeId),
-      loadHouseholdChildren(admin, intakeId),
-    ])
-    spouse = spouseRow
-    children = childRows ?? []
-  } catch (err) {
-    console.error('[intake page] household load failed:', err)
-  }
-
-  const initialData: Record<string, unknown> = {
-    ...intake,
-    spouse_first_name: spouse?.first_name ?? '',
-    spouse_last_name: spouse?.last_name ?? '',
-    spouse_middle_name: spouse?.middle_name ?? '',
-    spouse_date_of_birth: spouse?.date_of_birth ?? '',
-    spouse_email: spouse?.email ?? '',
-    spouse_phone: spouse?.phone ?? '',
-    // DesignSheetChild uses display `name` + `dob`; the form splits name on load.
-    children: children.map((c) => ({
-      name: c.name,
-      dob: c.dob,
-      date_of_birth: c.dob,
-    })),
-  }
-
-  return <SimplifiedIntakeForm initialData={initialData} intakeId={intakeId} />
+  return (
+    <GuidedInterview
+      initialData={intakeRow as Record<string, unknown>}
+      intakeId={intake.id as string}
+      mode="client"
+    />
+  )
 }

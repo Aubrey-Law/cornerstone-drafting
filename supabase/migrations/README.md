@@ -25,6 +25,7 @@ Cornerstone Lite uses a **greenfield Supabase project** with two migration layer
 | 12 | `20260713000000_lite_matter_details_columns.sql` | `matter_details` columns for matter create + setup |
 | 13 | `20260714000000_lite_intake_invite_tokens.sql` | Hashed intake invite tokens for client signup |
 | 14 | `20260715000000_lite_design_sheets_intake_columns.sql` | Design sheet intake/editable columns + `contacts.is_minor` |
+| 15 | `20260716000000_lite_full_intake_columns.sql` | Full intake questionnaire columns, documents, fiduciary roles |
 
 The archived CRM portal history (167 files) lives in [`../migrations_archive/portal/`](../migrations_archive/portal/README.md).
 
@@ -38,13 +39,13 @@ Use a **new** Supabase project for Cornerstone Lite — not the live Aubrey Law 
 # Link your greenfield project (one-time)
 npx supabase link --project-ref <your-project-ref>
 
-# Apply all 14 migrations in order
+# Apply all 15 migrations in order
 npx supabase db push
 ```
 
 ### Option B — SQL Editor
 
-If you paste migrations manually in the dashboard, run **every file above in order** (1 → 14). Do not start with `20260710000000_lite_intake_portal.sql`.
+If you paste migrations manually in the dashboard, run **every file above in order** (1 → 15). Do not start with `20260710000000_lite_intake_portal.sql`.
 
 ### Option C — Local dev
 
@@ -91,7 +92,7 @@ ALTER TABLE public.client_intake ...
 `client_intake` is created in `20260705000000_drafting_baseline_core.sql`. Fix:
 
 1. Run migrations 1–7 first (or use `supabase db push` / `supabase db reset` on a greenfield project).
-2. Then run lite migrations 8–14.
+2. Then run lite migrations 8–15.
 
 ## Common error: `jurisdiction_state` / `plan_type` on `matter_details`
 

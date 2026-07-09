@@ -121,7 +121,11 @@ export function getDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'ma
  * Stored in `decisions` JSONB alongside `document_inclusions` — no dedicated
  * column.
  */
-export type TrustPlanningType = 'outright_to_spouse' | 'disclaimer' | 'clayton_election'
+export type TrustPlanningType =
+  | 'standard'
+  | 'outright_to_spouse'
+  | 'disclaimer'
+  | 'clayton_election'
 
 export function getTrustPlanningType(sheet: Pick<DesignSheet, 'decisions'>): TrustPlanningType {
   const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}

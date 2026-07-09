@@ -26,6 +26,17 @@ describe('intake client auth', () => {
     expect(send).toContain('/intake/auth?invite=')
     expect(send).not.toContain('/auth/login?redirectTo=/intake')
   })
+
+  it('uses full GuidedInterview wizard (not simplified form)', () => {
+    const page = fs.readFileSync(
+      path.join(process.cwd(), 'app/intake/(shell)/page.tsx'),
+      'utf8',
+    )
+    expect(page).toContain('GuidedInterview')
+    expect(page).toContain('hydrateIntakeWithContacts')
+    expect(fs.existsSync(path.join(process.cwd(), 'components/intake/IntakeWizard.tsx'))).toBe(true)
+    expect(fs.existsSync(path.join(process.cwd(), 'lib/intakeSections.ts'))).toBe(true)
+  })
 })
 
 describe('intakeInviteTokens', () => {
