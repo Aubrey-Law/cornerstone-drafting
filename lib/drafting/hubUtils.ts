@@ -33,7 +33,7 @@ export function matchesHubSearch(item: DraftingHubMatter, query: string): boolea
 
 export function hubReadinessBucket(item: DraftingHubMatter): HubReadinessFilter {
   if (!item.designSheet) return 'needs_design'
-  if (item.setupBlockers.length > 0 || item.includedDocumentLabels.length === 0) return 'needs_setup'
+  if (item.includedDocumentLabels.length === 0) return 'needs_setup'
   return 'ready'
 }
 
