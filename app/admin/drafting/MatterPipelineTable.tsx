@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
+import { useDebouncedPrefetch } from '@/lib/useDebouncedPrefetch'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -74,70 +75,98 @@ export default function MatterPipelineTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {matters.map((item, index) => {
-              const matter = item.matter
-              const readiness = hubReadinessLabel(item)
-              const lastActivity = hubLastActivityAt(item)
-              const focused = index === focusedIndex
-              const updating = updatingId === matter.matter_id
-
-              return (
-                <TableRow
-                  key={matter.matter_id}
-                  data-state={focused ? 'selected' : undefined}
-                  className={cn('cursor-pointer', updating && 'opacity-60')}
-                  onClick={() => onOpen(matter.matter_id)}
-                >
-                  <TableCell className="max-w-[12rem] font-medium">
-                    <span className="block truncate">{matter.client_name || 'Unnamed client'}</span>
-                    {matter.spouse_name && (
-                      <span className="block truncate text-[11px] font-normal text-muted-foreground">
-                        & {matter.spouse_name}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-[10rem]">
-                    <span className="block truncate text-muted-foreground">
-                      {[item.matterNumber, matter.matter_name || matter.plan_type].filter(Boolean).join(' · ') || '—'}
-                    </span>
-                  </TableCell>
-                  <TableCell onClick={e => e.stopPropagation()}>
-                    <select
-                      value={matter.stage}
-                      disabled={updating}
-                      onChange={e => void handleStageSelect(item, e.target.value as MatterStage)}
-                      className="max-w-[10rem] rounded border border-border bg-background px-2 py-1 text-xs"
-                      aria-label={`Stage for ${matter.client_name ?? 'matter'}`}
-                    >
-                      {STAGES.map(stage => (
-                        <option key={stage.key} value={stage.key}>{stage.label}</option>
-                      ))}
-                    </select>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={cn(
-                        'border-0 text-[10px]',
-                        readiness.tone === 'success' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
-                      )}
-                    >
-                      {readiness.label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{item.includedDocumentLabels.length}</TableCell>
-                  <TableCell className="text-right tabular-nums">{item.draftCount}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {lastActivity ? formatDate(lastActivity) : '—'}
-                  </TableCell>
-                  <TableCell className="max-w-[8rem] truncate text-muted-foreground">
-                    {matter.practice_area || '—'}
-                  </TableCell>
-                </TableRow>
-              )
-            })}
+            {matters.map((item, index) => (
+              <MatterPipelineTableRow
+                key={item.matter.matter_id}
+                item={item}
+                index={index}
+                focusedIndex={focusedIndex}
+                updatingId={updatingId}
+                onOpen={onOpen}
+                onStageSelect={handleStageSelect}
+              />
+            ))}
           </TableBody>
         </Table>
       </div>
     </div>
+  )
+}
+
+function MatterPipelineTableRow({
+  item,
+  index,
+  focusedIndex,
+  updatingId,
+  onOpen,
+  onStageSelect,
+}: {
+  item: DraftingHubMatter
+  index: number
+  focusedIndex: number
+  updatingId: string | null
+  onOpen: (matterId: string) => void
+  onStageSelect: (item: DraftingHubMatter, nextStage: MatterStage) => void
+}) {
+  const matter = item.matter
+  const readiness = hubReadinessLabel(item)
+  const lastActivity = hubLastActivityAt(item)
+  const focused = index === focusedIndex
+  const updating = updatingId === matter.matter_id
+  const { schedulePrefetch, cancelPrefetch } = useDebouncedPrefetch(`/admin/drafting/${matter.matter_id}`)
+
+  return (
+    <TableRow
+      data-state={focused ? 'selected' : undefined}
+      className={cn('cursor-pointer', updating && 'opacity-60')}
+      onClick={() => onOpen(matter.matter_id)}
+      onMouseEnter={schedulePrefetch}
+      onMouseLeave={cancelPrefetch}
+    >
+      <TableCell className="max-w-[12rem] font-medium">
+        <span className="block truncate">{matter.client_name || 'Unnamed client'}</span>
+        {matter.spouse_name && (
+          <span className="block truncate text-[11px] font-normal text-muted-foreground">
+            & {matter.spouse_name}
+          </span>
+        )}
+      </TableCell>
+      <TableCell className="max-w-[10rem]">
+        <span className="block truncate text-muted-foreground">
+          {[item.matterNumber, matter.matter_name || matter.plan_type].filter(Boolean).join(' · ') || '—'}
+        </span>
+      </TableCell>
+      <TableCell onClick={e => e.stopPropagation()}>
+        <select
+          value={matter.stage}
+          disabled={updating}
+          onChange={e => void onStageSelect(item, e.target.value as MatterStage)}
+          className="max-w-[10rem] rounded border border-border bg-background px-2 py-1 text-xs"
+          aria-label={`Stage for ${matter.client_name ?? 'matter'}`}
+        >
+          {STAGES.map(stage => (
+            <option key={stage.key} value={stage.key}>{stage.label}</option>
+          ))}
+        </select>
+      </TableCell>
+      <TableCell>
+        <Badge
+          className={cn(
+            'border-0 text-[10px]',
+            readiness.tone === 'success' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
+          )}
+        >
+          {readiness.label}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{item.includedDocumentLabels.length}</TableCell>
+      <TableCell className="text-right tabular-nums">{item.draftCount}</TableCell>
+      <TableCell className="text-muted-foreground">
+        {lastActivity ? formatDate(lastActivity) : '—'}
+      </TableCell>
+      <TableCell className="max-w-[8rem] truncate text-muted-foreground">
+        {matter.practice_area || '—'}
+      </TableCell>
+    </TableRow>
   )
 }

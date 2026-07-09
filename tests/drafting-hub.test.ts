@@ -138,6 +138,13 @@ describe('drafting hub and workspace', () => {
     expect(state).toContain('sheet: readinessSheet')
   })
 
+  it('prefetches drafting workspace routes on hub hover', () => {
+    const kanban = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineKanban.tsx'), 'utf8')
+    const table = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'), 'utf8')
+    expect(kanban).toContain('useDebouncedPrefetch')
+    expect(table).toContain('useDebouncedPrefetch')
+  })
+
   it('documents the one-way intake sync policy in Intake Review', () => {
     const intakeSection = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/IntakeSection.tsx'),
