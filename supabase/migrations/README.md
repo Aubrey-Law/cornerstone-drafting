@@ -27,6 +27,7 @@ Cornerstone Lite uses a **greenfield Supabase project** with two migration layer
 | 14 | `20260715000000_lite_design_sheets_intake_columns.sql` | Design sheet intake/editable columns + `contacts.is_minor` |
 | 15 | `20260716000000_lite_full_intake_columns.sql` | Full intake questionnaire columns, documents, fiduciary roles |
 | 16 | `20260717000000_drafting_hub_draft_rollups.sql` | Hub draft count/recent rollups RPC |
+| 17 | `20260718000000_lite_messages_realtime.sql` | Realtime publication for portal `messages` |
 
 The archived CRM portal history (167 files) lives in [`../migrations_archive/portal/`](../migrations_archive/portal/README.md).
 
@@ -40,7 +41,7 @@ Use a **new** Supabase project for Cornerstone Lite — not the live Aubrey Law 
 # Link your greenfield project (one-time)
 npx supabase link --project-ref <your-project-ref>
 
-# Apply all 16 migrations in order
+# Apply all 17 migrations in order
 npx supabase db push
 ```
 
