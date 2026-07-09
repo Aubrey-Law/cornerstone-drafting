@@ -140,10 +140,12 @@ Point Twilio Voice / Messaging webhooks at this app’s host (`/api/webhooks/twi
 |----------|---------|
 | `MICROSOFT_GRAPH_CLIENT_ID` | Entra app client ID |
 | `MICROSOFT_GRAPH_CLIENT_SECRET` | Entra app secret |
-| `MICROSOFT_GRAPH_REDIRECT_URI` | Must match `/api/admin/microsoft/callback` on this host |
+| `MICROSOFT_GRAPH_REDIRECT_URI` | Must exactly match an Entra redirect URI on this host. Preferred: `https://<host>/api/admin/microsoft/callback`. Alias also supported: `https://<host>/api/microsoft/callback` |
 | `MICROSOFT_GRAPH_TENANT_ID` | Optional; defaults to `common` |
 
 Staff connect Outlook under **Settings**. Manual matter email uses Graph when connected; otherwise Resend `manual` category.
+
+**Entra app registration:** Under **Authentication → Redirect URIs**, add the same URL as `MICROSOFT_GRAPH_REDIRECT_URI` (e.g. `https://cornerstone.aubreylegal.com/api/microsoft/callback` or `.../api/admin/microsoft/callback`). A mismatch causes 404 or `redirect_uri` token errors.
 
 ## Optional — Retell
 
