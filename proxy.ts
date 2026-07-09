@@ -1,10 +1,27 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { safeAdminRedirectPath } from '@/lib/auth/safeRedirect'
+import { safeAdminRedirectPath, safeClientRedirectPath } from '@/lib/auth/safeRedirect'
 
 const ADMIN_ROLES = ['attorney', 'admin']
+const CLIENT_ROLE = 'client'
 
-const SESSION_REQUIRED_PREFIXES = ['/admin', '/api/documents', '/api/admin', '/api/drafting']
+const ADMIN_PREFIXES = ['/admin', '/api/admin', '/api/drafting']
+const PORTAL_PATHS = ['/dashboard', '/documents', '/messages', '/intake']
+const SESSION_REQUIRED_PREFIXES = [
+  ...ADMIN_PREFIXES,
+  '/api/documents',
+  '/api/messages',
+  '/api/intake',
+  ...PORTAL_PATHS,
+]
+
+function isAdminPath(pathname: string) {
+  return ADMIN_PREFIXES.some(p => pathname === p || pathname.startsWith(`${p}/`))
+}
+
+function isPortalPath(pathname: string) {
+  return PORTAL_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`))
+}
 
 function redirectToLogin(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone()
@@ -36,13 +53,27 @@ function supabaseUnavailable(pathname: string) {
   <body>
     <main>
       <h1>App temporarily unavailable</h1>
-      <p>We cannot load the drafting app right now. Please try again shortly.</p>
+      <p>We cannot load the app right now. Please try again shortly.</p>
       <p class="path">Requested page: ${escapedPath}</p>
     </main>
   </body>
 </html>`,
     { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
   )
+}
+
+async function resolveRole(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+  claimRole: string | undefined,
+): Promise<string | null> {
+  if (claimRole) return claimRole
+  const { data: userData } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single()
+  return userData?.role ?? null
 }
 
 export async function proxy(request: NextRequest) {
@@ -55,7 +86,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (pathname.startsWith('/api/health')) {
+  if (pathname.startsWith('/api/health') || pathname.startsWith('/api/webhooks')) {
     return NextResponse.next()
   }
 
@@ -101,29 +132,52 @@ export async function proxy(request: NextRequest) {
     return redirectToLogin(request, pathname)
   }
 
-  if (userId && pathname === '/auth/login') {
-    let role: string | null = claimRole ?? null
-    if (!role) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', userId)
-        .single()
-      role = userData?.role ?? null
+  if (userId && (requiresSession || shouldRedirectAuthenticatedLogin)) {
+    const role = await resolveRole(supabase, userId, claimRole)
+
+    if (pathname === '/auth/login') {
+      const adminRedirect = safeAdminRedirectPath(searchParams.get('redirectTo'))
+      const clientRedirect = safeClientRedirectPath(searchParams.get('redirectTo'))
+      let destinationPath = '/auth/login'
+      if (role && ADMIN_ROLES.includes(role)) {
+        destinationPath = adminRedirect ?? '/admin/drafting'
+      } else if (role === CLIENT_ROLE) {
+        destinationPath = clientRedirect ?? '/dashboard'
+      }
+      return NextResponse.redirect(new URL(destinationPath, request.url))
     }
 
-    const requestedRedirect = safeAdminRedirectPath(searchParams.get('redirectTo'))
-    const destinationPath =
-      role && ADMIN_ROLES.includes(role)
-        ? (requestedRedirect ?? '/admin/drafting')
-        : '/auth/login'
+    if (isAdminPath(pathname) && (!role || !ADMIN_ROLES.includes(role))) {
+      if (role === CLIENT_ROLE) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+      return redirectToLogin(request, pathname)
+    }
 
-    return NextResponse.redirect(new URL(destinationPath, request.url))
+    if (isPortalPath(pathname) && role !== CLIENT_ROLE) {
+      if (role && ADMIN_ROLES.includes(role)) {
+        return NextResponse.redirect(new URL('/admin/drafting', request.url))
+      }
+      return redirectToLogin(request, pathname)
+    }
   }
 
   return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/', '/admin/:path*', '/auth/login', '/api/documents/:path*', '/api/admin/:path*', '/api/drafting/:path*'],
+  matcher: [
+    '/',
+    '/admin/:path*',
+    '/auth/login',
+    '/dashboard/:path*',
+    '/documents/:path*',
+    '/messages/:path*',
+    '/intake/:path*',
+    '/api/documents/:path*',
+    '/api/admin/:path*',
+    '/api/drafting/:path*',
+    '/api/messages/:path*',
+    '/api/intake/:path*',
+  ],
 }

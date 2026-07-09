@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
-import { safeAdminRedirectPath } from '@/lib/auth/safeRedirect'
+import { safeAdminRedirectPath, safeClientRedirectPath } from '@/lib/auth/safeRedirect'
 import { toast } from 'sonner'
 
 const ADMIN_ROLES = ['attorney', 'admin'] as const
@@ -38,12 +38,17 @@ function MicrosoftIcon() {
 const oauthBtnCls =
   'flex w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted disabled:opacity-50'
 
-async function resolveAdminDestination(userId: string, redirectTo: string | null): Promise<string> {
+async function resolveDestination(userId: string, redirectTo: string | null): Promise<string> {
   const { data } = await supabase.from('users').select('role').eq('id', userId).single()
-  if (data?.role && ADMIN_ROLES.includes(data.role as (typeof ADMIN_ROLES)[number])) {
+  const role = data?.role as string | undefined
+  if (role && ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) {
     return safeAdminRedirectPath(redirectTo) ?? '/admin/drafting'
   }
-  return '/auth/login?error=staff_only'
+  if (role === 'client') {
+    return safeClientRedirectPath(redirectTo) ?? '/dashboard'
+  }
+  await supabase.auth.signOut()
+  return '/auth/login?error=auth_failed'
 }
 
 function LoginForm() {
@@ -62,7 +67,7 @@ function LoginForm() {
     if (error === 'firm_domain_required') {
       toast.error('Staff sign-in requires an @aubreylegal.com account.')
     } else if (error === 'staff_only') {
-      toast.error('This app is for attorney and admin accounts only.')
+      toast.error('Staff accounts only for that destination. Clients can sign in below.')
     } else if (error === 'auth_failed') {
       toast.error('Sign-in failed. Please try again.')
     }
@@ -71,14 +76,14 @@ function LoginForm() {
   async function signInWithOAuth(provider: 'google' | 'azure') {
     setOauthPending(provider)
     const callbackUrl = new URL('/auth/callback', window.location.origin)
-    const safeRedirect = safeAdminRedirectPath(redirectTo)
+    const safeRedirect =
+      safeAdminRedirectPath(redirectTo) ?? safeClientRedirectPath(redirectTo)
     if (safeRedirect) callbackUrl.searchParams.set('redirectTo', safeRedirect)
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: callbackUrl.toString(),
-        // Email scope is required so the callback can enforce @aubreylegal.com.
         scopes: provider === 'azure' ? 'email openid profile' : 'email',
       },
     })
@@ -95,7 +100,7 @@ function LoginForm() {
     if (signInError) {
       toast.error(signInError.message)
     } else if (data.user) {
-      const destination = await resolveAdminDestination(data.user.id, redirectTo)
+      const destination = await resolveDestination(data.user.id, redirectTo)
       router.push(destination)
       router.refresh()
     }
@@ -120,15 +125,17 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 dark">
       <div className="w-full max-w-md space-y-8">
         <div className="flex justify-center">
-          <Link href="/auth/login" aria-label="Cornerstone Drafting home" className="rounded-sm transition-opacity hover:opacity-90">
+          <Link href="/auth/login" aria-label="Cornerstone home" className="rounded-sm transition-opacity hover:opacity-90">
             <Image src="/logos/aubrey-law-stacked-dark.svg" alt="Aubrey Law" width={240} height={140} priority />
           </Link>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border bg-card p-8 shadow-sm">
           <div>
-            <h2 className="text-center text-lg font-medium text-foreground">Drafting sign in</h2>
-            <p className="mt-1 text-center text-xs text-muted-foreground/60">Attorney and admin access only</p>
+            <h2 className="text-center text-lg font-medium text-foreground">Sign in</h2>
+            <p className="mt-1 text-center text-xs text-muted-foreground/60">
+              Staff and client access
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -158,23 +165,23 @@ function LoginForm() {
           </div>
 
           <div>
-            <label htmlFor="admin-email" className="block text-sm font-medium text-foreground">
+            <label htmlFor="login-email" className="block text-sm font-medium text-foreground">
               Email address
             </label>
             <input
-              id="admin-email"
+              id="login-email"
               type="email"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
               className={inputCls}
-              placeholder="you@aubreylegal.com"
+              placeholder="you@example.com"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between gap-3">
-              <label htmlFor="admin-password" className="block text-sm font-medium text-foreground">
+              <label htmlFor="login-password" className="block text-sm font-medium text-foreground">
                 Password
               </label>
               <button
@@ -187,7 +194,7 @@ function LoginForm() {
               </button>
             </div>
             <input
-              id="admin-password"
+              id="login-password"
               type="password"
               required
               value={password}
