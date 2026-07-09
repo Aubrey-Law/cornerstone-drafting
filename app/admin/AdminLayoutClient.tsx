@@ -35,6 +35,11 @@ const StaffSoftphone = dynamic(
   { ssr: false },
 )
 
+const GlobalSearch = dynamic(
+  () => import('@/components/GlobalSearch').then(m => ({ default: m.GlobalSearch })),
+  { ssr: false },
+)
+
 const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 
 const navItems = [
@@ -230,7 +235,10 @@ export default function AdminLayoutClient({
             </Button>
             <span className="text-sm font-semibold">Cornerstone</span>
           </div>
-          <div className="hidden md:block" />
+          <div className="hidden md:block md:flex-1 md:max-w-md">
+            <GlobalSearch />
+          </div>
+          <div className="hidden md:block md:flex-1" />
           <div className="flex items-center gap-2">
             <ThemeToggle variant="default" />
             <div className="hidden text-right sm:block">
