@@ -533,13 +533,10 @@ const ADMIN_ROLES = new Set(['attorney', 'admin'])
 
 interface UnlockIntakeArgs {
   intakeId: string
-  leadId?: string | null
   matterId?: string | null
 }
 
-/** Re-open a submitted intake for client editing. Attorney/admin only.
- *  Logs to matter_activity if a matter exists; otherwise to crm_activity on
- *  the lead. */
+/** Re-open a submitted intake for client editing. Attorney/admin only. */
 export async function unlockIntake(args: UnlockIntakeArgs): Promise<void> {
   const sb = await createServerSupabase()
   const { data: { user } } = await sb.auth.getUser()
@@ -556,11 +553,9 @@ export async function unlockIntake(args: UnlockIntakeArgs): Promise<void> {
 
   const admin = getAdminClient()
 
-  // Look up the intake and resolve the matter_id / lead_id we'll use for
-  // logging and revalidation, even if the caller didn't pass them.
   const { data: intake, error: intakeError } = await admin
     .from('client_intake')
-    .select('id, lead_id')
+    .select('id')
     .eq('id', args.intakeId)
     .maybeSingle()
   if (intakeError) throw new Error(intakeError.message)
@@ -576,15 +571,11 @@ export async function unlockIntake(args: UnlockIntakeArgs): Promise<void> {
     resolvedMatterId = (matter?.id as string | undefined) ?? null
   }
 
-  const resolvedLeadId =
-    args.leadId ?? (intake.lead_id as string | null | undefined) ?? null
-
   const { error: updateError } = await admin
     .from('client_intake')
     .update({
       status: 'draft',
       intake_completed_at: null,
-      // Clear any pending client unlock request — it's been honored.
       unlock_requested_at: null,
       unlock_request_note: null,
     })
@@ -592,7 +583,7 @@ export async function unlockIntake(args: UnlockIntakeArgs): Promise<void> {
   if (updateError) throw new Error(updateError.message)
 
   if (resolvedMatterId) {
-    await admin.from('matter_activity').insert({
+    const { error: activityError } = await admin.from('matter_activity').insert({
       matter_id: resolvedMatterId,
       event_type: 'status_changed',
       actor_id: user.id,
@@ -602,15 +593,11 @@ export async function unlockIntake(args: UnlockIntakeArgs): Promise<void> {
       detail: 'Re-opened the submitted intake for client editing.',
       metadata: { kind: 'intake_unlocked', client_intake_id: args.intakeId },
     })
+    if (activityError) {
+      console.warn('[unlockIntake] matter_activity skipped:', activityError.message)
+    }
     revalidatePath(`/admin/matters/${resolvedMatterId}`)
-  } else if (resolvedLeadId) {
-    await admin.from('crm_activity').insert({
-      lead_id: resolvedLeadId,
-      type: 'intake_unlocked',
-      payload: { client_intake_id: args.intakeId, by: caller.email ?? user.email ?? null },
-    })
   }
 
-  if (resolvedLeadId) revalidatePath(`/admin/leads/${resolvedLeadId}`)
   revalidatePath('/intake')
 }
