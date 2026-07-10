@@ -2,7 +2,7 @@ export type PracticeAreaCode = 'EP' | 'EP-LP' | 'Probate'
 
 export const PRACTICE_AREA_OPTIONS: { value: PracticeAreaCode; label: string }[] = [
   { value: 'EP', label: 'Estate Planning' },
-  { value: 'EP-LP', label: 'Estate Planning | LP' },
+  { value: 'EP-LP', label: 'Estate Planning - LP' },
   { value: 'Probate', label: 'Probate' },
 ]
 
@@ -10,6 +10,7 @@ const LEGACY_PRACTICE_AREA_VALUES: Record<string, PracticeAreaCode> = {
   'Estate Planning': 'EP',
   'Estate Planning (LP)': 'EP-LP',
   'Estate Planning | LP': 'EP-LP',
+  'Estate Planning - LP': 'EP-LP',
   'Estate Planning-LP': 'EP-LP',
   Probate: 'Probate',
   'Probate (LP)': 'Probate',

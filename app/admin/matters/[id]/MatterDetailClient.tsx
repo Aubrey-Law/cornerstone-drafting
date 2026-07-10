@@ -22,7 +22,7 @@ import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { listDocuments } from '@/lib/documents'
 import { computeAssetAggregates } from '@/lib/assets/aggregates'
-import { normalizePracticeArea } from '@/lib/practiceArea'
+import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import {
   stageLabel,
   type MatterActivity,
@@ -263,6 +263,9 @@ function MatterDetailClientInner({
       await saveMatterDetailField(field, value)
       if (field === 'signing_date' && typeof value === 'string') {
         setMatter(current => ({ ...current, signing_date: value }))
+      }
+      if (field === 'practice_area' && typeof value === 'string') {
+        setMatter(current => ({ ...current, practice_area: value }))
       }
     },
     [saveMatterDetailField],
@@ -781,7 +784,7 @@ function MatterDetailClientInner({
   const lastPortalMessage = portalMessages.length > 0 ? portalMessages[portalMessages.length - 1] : null
 
   const subtitleParts = [
-    matter.practice_area || 'Estate Planning',
+    practiceAreaLabel(matterDetails?.practice_area ?? matter.practice_area),
     matter.matter_name || null,
     matterNum ? `#${matterNum}` : null,
   ].filter(Boolean)
@@ -1160,7 +1163,7 @@ function MatterDetailClientInner({
           matterId={matterId}
           clientIntakeId={liveIntakeId}
           clientUserId={clientIntakeRow?.client_user_id ?? clientIntakeRow?.user_id ?? null}
-          practiceArea={matter.practice_area ?? 'Estate Planning'}
+          practiceArea={practiceAreaLabel(matterDetails?.practice_area ?? matter.practice_area)}
           clientName={matter.client_name || matter.matter_name || 'Client'}
           open={intakeSheetOpen}
           onClose={() => setIntakeSheetOpen(false)}

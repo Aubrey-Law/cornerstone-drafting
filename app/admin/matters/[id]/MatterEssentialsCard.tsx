@@ -1,9 +1,17 @@
 'use client'
 
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn, formatDate } from '@/lib/utils'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { planTypeLabel } from '@/lib/matterPlanType'
+import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea'
 import type { PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
 
@@ -39,6 +47,8 @@ export function MatterEssentialsCard({
     planTypeLabel(details?.plan_type ?? matter.plan_type) ||
     '—'
 
+  const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
+
   const actualSigningDate = matter.signing_date ?? details?.signing_date ?? null
 
   return (
@@ -50,6 +60,25 @@ export function MatterEssentialsCard({
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-1.5">
+          <FieldLabel>Practice area</FieldLabel>
+          <Select
+            value={practiceArea}
+            onValueChange={value => void onSaveField('practice_area', value)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRACTICE_AREA_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <label className="space-y-1.5">
           <FieldLabel>Target signing date</FieldLabel>
           <Input
