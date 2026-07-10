@@ -59,6 +59,7 @@ import { resolveMatterIntake, unlockIntake } from '@/app/actions/adminIntake'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterOverviewHero } from './MatterOverviewHero'
+import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterOverviewAssets } from './MatterOverviewAssets'
@@ -758,6 +759,13 @@ export default function MatterDetailClient({
                 </Button>
               )}
             </div>
+            <MatterAssistantQuickPrompts
+              className="flex flex-wrap gap-2"
+              prompts={[
+                { label: 'Summarize intake', prompt: "Summarize this client's situation" },
+                { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
+              ]}
+            />
             {intakeUrl && (
               <p className="break-all rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 {intakeUrl}

@@ -126,3 +126,59 @@ supabase start
 supabase db reset
 # seed test matters before using the hub
 ```
+
+---
+
+## Part 5 — Twilio softphone (browser Voice + call logging)
+
+Cornerstone uses the same Twilio browser softphone stack as the full portal. Configuration is **env-only** (no Settings UI).
+
+### Environment variables
+
+See [`VERCEL_ENV_CHECKLIST.md`](VERCEL_ENV_CHECKLIST.md) — required for Voice:
+
+| Variable | Purpose |
+|---|---|
+| `TWILIO_ACCOUNT_SID` | Account |
+| `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | Browser Voice SDK JWT |
+| `TWILIO_TWIML_APP_SID` | Outbound softphone TwiML App |
+| `TWILIO_CALLER_ID` | Outbound caller ID |
+| `TWILIO_AUTH_TOKEN` | Webhook signature verification |
+| `TWILIO_INBOUND_CLIENT_IDENTITIES` | Comma-separated Supabase staff user UUIDs to ring on inbound |
+| `TWILIO_INBOUND_FALLBACK_URL` | Optional Retell/Smith.ai fallthrough when no answer |
+| `TWILIO_INBOUND_RING_TIMEOUT` | Seconds before fallback (default 20) |
+| `NEXT_PUBLIC_APP_URL` | Public host for status callbacks |
+
+The admin FAB is hidden when Voice env is incomplete (`isTwilioVoiceConfigured()` in `lib/twilio/config.ts`).
+
+### Twilio Console wiring
+
+| Resource | Voice URL |
+|---|---|
+| TwiML App (outbound softphone) | `https://<host>/api/voice` |
+| Business line (inbound) | `https://<host>/api/voice/inbound` |
+| Status callbacks (automatic via code) | `https://<host>/api/webhooks/twilio/voice-status` |
+| Retell webhook (if used) | `https://<host>/api/webhooks/retell` |
+
+### Staff identity for inbound ring
+
+1. Supabase Studio → Authentication → Users → copy the staff user's UUID.
+2. Set `TWILIO_INBOUND_CLIENT_IDENTITIES=<uuid>` (comma-separate for multiple attorneys).
+3. The same UUID is used as the Twilio Client identity in `GET /api/token` (admin JWT → `user.id`).
+
+### Smoke test checklist
+
+0. **Env audit (admin):** while signed in, `GET /api/admin/twilio/status` returns which Voice/SMS variables are missing (no secret values). Useful when the phone FAB is hidden or inbound does not ring.
+1. Sign in as staff → confirm phone FAB appears (when Voice env complete).
+2. Open FAB → token loads → dial a test number → call connects.
+3. Confirm row in `calls` table and entry on `/admin/calls`.
+4. Open a matter → **Calls** tab → assigned/unassigned call appears.
+5. Inbound: call business line → browser rings → answer → status webhook logs call.
+
+### Code map
+
+- UI: `components/softphone/Softphone.tsx`, `app/admin/components/StaffSoftphone.tsx`
+- Token: `app/api/token/route.ts`
+- TwiML: `app/api/voice/route.ts`, `app/api/voice/inbound/route.ts`, `app/api/voice/inbound-fallback/route.ts`
+- Logging: `app/api/webhooks/twilio/voice-status/route.ts`, `app/api/webhooks/retell/route.ts`
+

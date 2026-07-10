@@ -38,7 +38,7 @@ export function StaffSoftphone() {
       {open && (
         <div
           ref={panelRef}
-          className="fixed bottom-20 right-6 z-50"
+          className="fixed bottom-20 right-20 z-50"
           role="dialog"
           aria-label="Softphone"
         >
@@ -63,7 +63,7 @@ export function StaffSoftphone() {
         aria-label={open ? 'Close softphone' : 'Open softphone'}
         aria-expanded={open}
         className={cn(
-          'fixed bottom-6 right-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-border shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+          'fixed bottom-6 right-20 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-border shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           open
             ? 'bg-accent text-accent-foreground'
             : 'bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground',

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useMemo, useState } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Plus, RefreshCw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,6 +16,7 @@ import { ASSET_CATEGORIES, ASSET_CHART_COLORS } from '@/lib/assets/categories'
 import { buildOwnershipLabels } from '@/lib/assets/labels'
 import type { AssetIntakeInput, AssetIntakeRow } from '@/types/assetIntake'
 import { useMatterAssets } from '../useMatterAssets'
+import { openCornerstoneAssistant } from '@/app/admin/components/adminChatEvents'
 
 interface MatterAssetsTabProps {
   matterId?: string
@@ -169,6 +170,16 @@ function MatterAssetsTabImpl({
         <Button className="gap-1.5 bg-brand-navy hover:bg-brand-navy/90" onClick={openAdd}>
           <Plus className="h-4 w-4" />
           Add new asset
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => openCornerstoneAssistant({ prompt: 'Analyze MA estate tax exposure', send: true })}
+        >
+          <Sparkles className="h-3.5 w-3.5 text-accent" />
+          Analyze MA estate tax
         </Button>
         <Button type="button" variant="link" className="h-auto px-0 text-sm" onClick={() => setImportOpen(true)}>
           Import assets from spreadsheet or document
