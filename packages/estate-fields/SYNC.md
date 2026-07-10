@@ -28,6 +28,10 @@ The package lives at `aubrey-law-app/packages/estate-fields/`. Field registry ch
 | `DesignField` / `IntakeField` | `react/` | DesignField only |
 | `citizenshipFromHousehold` | App `lib/sharedFields/syncPortal.ts` | N/A (no intake sync) |
 
+## Cornerstone Lite intake seed
+
+`lib/designSheet/seedFromIntake.ts` consumes `SHARED_PREFILLED_DESIGN_KEYS` from the registry via `syncFieldToDesign`, `syncGoalsNotesFromIntake`, and `syncConcernsFromIntake`. Fiduciary slot arrays are seeded from `contact_roles` via `lib/contacts/intakeFiduciarySnapshot.ts`. CI guard: `tests/design-sheet-seed-from-intake.test.ts` (`covers registry prefilled design keys`).
+
 ## Breaking changes
 
 If you rename a `SharedFieldId` or change option `value` strings:

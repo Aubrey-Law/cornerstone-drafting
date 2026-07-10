@@ -1,14 +1,21 @@
 import type { HouseholdChildInput } from './childMapping'
 import type { HouseholdPerson } from './getHousehold'
+import { parentageFromIntakeParent } from './parentageFromIntake'
 
 /**
  * Merge a raw children-save payload entry with the matching existing contacts
  * row, preserving attorney-set relationship/parentage/is_minor when the caller
  * doesn't supply them.
  */
+export interface MergeChildInputContext {
+  clientFirstName?: string | null
+  spouseFirstName?: string | null
+}
+
 export function mergeChildInput(
   raw: Record<string, unknown>,
   existing: HouseholdPerson | undefined,
+  context: MergeChildInputContext = {},
 ): HouseholdChildInput {
   const cid = typeof raw.contact_id === 'string' ? raw.contact_id : null
   const suppliedRel =
@@ -21,6 +28,12 @@ export function mergeChildInput(
     | 'spouse'
     | null
     | undefined
+  const parentageFromWizard =
+    suppliedParentage !== undefined
+      ? suppliedParentage
+      : raw.parent !== undefined
+        ? parentageFromIntakeParent(raw.parent, context.clientFirstName, context.spouseFirstName)
+        : undefined
 
   return {
     contact_id: cid,
@@ -30,7 +43,7 @@ export function mergeChildInput(
     dob: (raw.date_of_birth as string) || null,
     relationship: suppliedRel ?? existing?.child_relationship ?? 'biological',
     parentage:
-      suppliedParentage !== undefined ? suppliedParentage : (existing?.parentage ?? null),
+      parentageFromWizard !== undefined ? parentageFromWizard : (existing?.parentage ?? null),
     is_minor:
       typeof raw.is_minor === 'boolean'
         ? raw.is_minor
