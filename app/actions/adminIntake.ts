@@ -506,11 +506,12 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
         body: JSON.stringify(buildExtendedDataNote(args.data)),
       })
 
-      await admin.from('status_history').insert({
+      await admin.from('matter_activity').insert({
         matter_id: matter.id,
-        from_stage: 'intake',
-        to_stage: 'drafting',
-        note: 'Intake submitted via admin Fill Intake',
+        event_type: 'stage_changed',
+        title: 'Intake submitted',
+        detail: 'Intake submitted via admin Fill Intake',
+        metadata: { from_stage: 'intake', to_stage: 'drafting' },
       })
     }
 

@@ -264,8 +264,15 @@ export async function POST(req: Request) {
 
     let reviewFlags: IntakeReadinessFlag[] = []
     if (body.status === 'submitted') {
+      let hydratedForSubmit: Record<string, unknown>
+      try {
+        hydratedForSubmit = await hydrateIntakeWithContacts(admin, { ...tokenRow, ...cleanPayload }, existingId)
+      } catch (error) {
+        console.error('[intake POST token] hydrate for submit failed:', error)
+        return NextResponse.json({ error: 'Could not validate intake for submission.' }, { status: 500 })
+      }
       const mergedForSubmit = overlayRequestContactIntakeData(
-        await hydrateIntakeWithContacts(admin, { ...tokenRow, ...cleanPayload }, existingId),
+        hydratedForSubmit,
         body,
       ) as IntakeRow
       const submitErrors = getSubmissionErrors(mergedForSubmit)
@@ -371,7 +378,7 @@ export async function POST(req: Request) {
         if (advanced) {
           await admin.from('matter_activity').insert({
             matter_id: matter.id,
-            event_type: 'stage_change',
+            event_type: 'intake_completed',
             title: 'Intake submitted',
             detail: 'Client submitted intake questionnaire',
           })
@@ -389,7 +396,11 @@ export async function POST(req: Request) {
       const matterId = (matter as { id?: string } | null)?.id ?? null
       void notifyIntakeComplete(clientName, clientEmail, matterId)
         .catch((err) => console.error('[intake POST token] notify error:', err))
-      revalidateSidebarCounts()
+      try {
+        revalidateSidebarCounts()
+      } catch (err) {
+        console.error('[intake POST token] sidebar revalidate failed:', err)
+      }
     }
 
     return NextResponse.json({ id: existingId })
@@ -545,13 +556,31 @@ export async function POST(req: Request) {
       )
     }
     if (body.status === 'submitted') {
-      const admin = getAdminClient()
-      const mergedForSubmit = overlayRequestContactIntakeData(
-        await hydrateIntakeWithContacts(
+      let admin: ReturnType<typeof getAdminClient>
+      try {
+        admin = getAdminClient()
+      } catch (error) {
+        console.error('[intake POST] admin client unavailable for submit validation:', error)
+        return NextResponse.json(
+          { error: 'Intake submission is temporarily unavailable. Please try again or contact the firm.' },
+          { status: 503 },
+        )
+      }
+
+      let hydratedForSubmit: Record<string, unknown>
+      try {
+        hydratedForSubmit = await hydrateIntakeWithContacts(
           admin,
           { ...(existingForSubmit ?? {}), ...cleanPayload },
           (existingForSubmit?.id as string | undefined) ?? existingId,
-        ),
+        )
+      } catch (error) {
+        console.error('[intake POST] hydrate for submit failed:', error)
+        return NextResponse.json({ error: 'Could not validate intake for submission.' }, { status: 500 })
+      }
+
+      const mergedForSubmit = overlayRequestContactIntakeData(
+        hydratedForSubmit,
         body,
       ) as IntakeRow
       const submitErrors = getSubmissionErrors(mergedForSubmit)
@@ -753,7 +782,7 @@ export async function POST(req: Request) {
         if (advanced) {
           await admin.from('matter_activity').insert({
             matter_id: existingMatter.id,
-            event_type: 'stage_change',
+            event_type: 'intake_completed',
             title: 'Intake submitted',
             detail: 'Client submitted intake questionnaire',
           })
@@ -776,7 +805,11 @@ export async function POST(req: Request) {
     const clientEmail = body.email ?? user.email ?? ''
     void notifyIntakeComplete(clientName, clientEmail, existingMatter?.id ?? null)
       .catch((err) => console.error('[intake POST bearer] notify error:', err))
-    revalidateSidebarCounts()
+    try {
+      revalidateSidebarCounts()
+    } catch (err) {
+      console.error('[intake POST bearer] sidebar revalidate failed:', err)
+    }
   }
 
   return NextResponse.json({ id: recordId })
