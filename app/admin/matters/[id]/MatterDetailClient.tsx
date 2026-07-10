@@ -743,49 +743,9 @@ export default function MatterDetailClient({
               sendIntakePending={sendingIntake}
             />
 
-            <MatterEssentialsCard
-              matter={matter}
-              details={matterDetails}
-              designSheetPlanType={designSheetPlanType}
-              onSaveField={handleSaveMatterDetailField}
-            />
+            <MatterOverviewContacts matterId={matterId} matter={matter} />
 
-            <MatterKeyDatesRow
-              matterCreated={matter.matter_created}
-              intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
-              intakeSubmittedAt={matter.intake_submitted_at}
-              draftsSentAt={matter.drafts_sent_at}
-              signingDate={matter.signing_date}
-              scheduledSigningDate={matterDetails?.scheduled_signing_date ?? null}
-              closedDate={matterDetails?.closed_date ?? null}
-              stage={matter.stage}
-              details={matterDetails}
-            />
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
-              <div>
-                <p className="text-sm font-medium">Documents</p>
-                <p className="text-xs text-muted-foreground">
-                  Upload, review, and share drafts in the drafting workspace.
-                </p>
-              </div>
-              <Button type="button" size="sm" variant="outline" asChild>
-                <Link href={`/admin/drafting/${matterId}?step=review`}>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open review
-                </Link>
-              </Button>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Client
-                </p>
-                <p className="text-sm font-medium">{matter.client_name || '—'}</p>
-                <p className="text-xs text-muted-foreground">{matter.client_email || '—'}</p>
-                <p className="text-xs text-muted-foreground">{matter.client_phone || '—'}</p>
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Stage
@@ -826,32 +786,67 @@ export default function MatterDetailClient({
               <Button
                 type="button"
                 size="sm"
+                variant="outline"
+                className="gap-1.5 text-xs"
                 onClick={() => void handleSendIntake()}
                 disabled={sendingIntake}
               >
-                <Send className="h-3.5 w-3.5" />
+                <Send className="h-3.5 w-3.5 text-accent" />
                 {sendingIntake ? 'Sending…' : 'Send intake'}
               </Button>
+              <MatterAssistantQuickPrompts
+                className="contents"
+                prompts={[
+                  { label: 'Summarize intake', prompt: "Summarize this client's situation" },
+                  { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
+                ]}
+              />
               {intakeUrl && (
-                <Button type="button" size="sm" variant="outline" onClick={() => void copyIntakeUrl()}>
+                <Button type="button" size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => void copyIntakeUrl()}>
                   Copy intake link
                 </Button>
               )}
             </div>
-            <MatterAssistantQuickPrompts
-              className="flex flex-wrap gap-2"
-              prompts={[
-                { label: 'Summarize intake', prompt: "Summarize this client's situation" },
-                { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
-              ]}
-            />
             {intakeUrl && (
               <p className="break-all rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 {intakeUrl}
               </p>
             )}
 
-            <MatterOverviewContacts matterId={matterId} matter={matter} />
+            <MatterEssentialsCard
+              matter={matter}
+              details={matterDetails}
+              designSheetPlanType={designSheetPlanType}
+              onSaveField={handleSaveMatterDetailField}
+            />
+
+            <MatterKeyDatesRow
+              matterCreated={matter.matter_created}
+              intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
+              intakeSubmittedAt={matter.intake_submitted_at}
+              draftsSentAt={matter.drafts_sent_at}
+              signingDate={matter.signing_date}
+              scheduledSigningDate={matterDetails?.scheduled_signing_date ?? null}
+              closedDate={matterDetails?.closed_date ?? null}
+              stage={matter.stage}
+              details={matterDetails}
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Documents</p>
+                <p className="text-xs text-muted-foreground">
+                  Upload, review, and share drafts in the drafting workspace.
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="outline" asChild>
+                <Link href={`/admin/drafting/${matterId}?step=review`}>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open review
+                </Link>
+              </Button>
+            </div>
+
             <IntakeSyncStatusCard
               matterId={matterId}
               intakeCompleted={intakeCompleted}
