@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { MatterNextAction } from '@/lib/matterNextAction'
+import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
+import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel } from '@/lib/matter/unreviewedUploads'
 import { stageLabel, type MatterStage } from '@/types/database'
 
 interface MatterOverviewHeroProps {
@@ -14,8 +16,10 @@ interface MatterOverviewHeroProps {
   agingHealth: 'red' | 'amber' | 'green' | null
   nextAction: MatterNextAction
   unreadPortalCount: number
+  unreviewedUploadCounts?: UnreviewedUploadCounts
   lastPortalMessage: { body: string; created_at: string; sender_role: string } | null
   onSendIntake?: () => void
+  onReviewUploads?: () => void
   sendIntakePending?: boolean
 }
 
@@ -31,11 +35,15 @@ export function MatterOverviewHero({
   agingHealth,
   nextAction,
   unreadPortalCount,
+  unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   lastPortalMessage,
   onSendIntake,
+  onReviewUploads,
   sendIntakePending,
 }: MatterOverviewHeroProps) {
   const isIntakeAction = nextAction.href === '#send-intake'
+  const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
+  const uploadDetail = formatUnreviewedUploadDetail(unreviewedUploadCounts)
 
   return (
     <section className="rounded-lg border border-border bg-card p-4 md:p-5">
@@ -55,6 +63,24 @@ export function MatterOverviewHero({
             {unreadPortalCount > 0 && (
               <Badge variant="outline" className="text-[10px]">
                 {unreadPortalCount} unread message{unreadPortalCount === 1 ? '' : 's'}
+              </Badge>
+            )}
+            {unreviewedUploadCounts.total > 0 && (
+              <Badge
+                variant="outline"
+                className="cursor-pointer border-amber-border bg-amber-bg text-[10px] text-amber hover:bg-amber-bg/80"
+                title={uploadDetail}
+                onClick={onReviewUploads}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onReviewUploads?.()
+                  }
+                }}
+                role={onReviewUploads ? 'button' : undefined}
+                tabIndex={onReviewUploads ? 0 : undefined}
+              >
+                {uploadLabel}
               </Badge>
             )}
           </div>

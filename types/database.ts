@@ -42,6 +42,9 @@ export interface PipelineMatter {
   client_review_notes?: Array<{ id: string; section: string; text: string; created_at: string; resolved?: boolean; resolved_at?: string }> | null
   practice_area?: string | null
   client_status?: string | null
+  unreviewed_intake_upload_count?: number
+  unreviewed_portal_upload_count?: number
+  unreviewed_upload_count?: number
 }
 
 /* ─── contacts table ──────────────────────────────────────────────────────── */

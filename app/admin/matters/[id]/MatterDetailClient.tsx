@@ -55,8 +55,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
+import {
+  mergeUnreviewedCounts,
+  type UnreviewedUploadCounts,
+} from '@/lib/matter/unreviewedUploads'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
-import { resolveMatterIntake, unlockIntake } from '@/app/actions/adminIntake'
+import { resolveMatterIntake, unlockIntake, markIntakeUploadsReviewed, markPortalUploadsReviewed } from '@/app/actions/adminIntake'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterOverviewHero } from './MatterOverviewHero'
@@ -69,6 +73,7 @@ import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssist
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterOverviewAssets } from './MatterOverviewAssets'
+import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { useMatterNotes } from './useMatterNotes'
@@ -107,6 +112,7 @@ interface MatterDetailClientProps {
   resyncPreviewCount?: number
   twilioSmsEnabled?: boolean
   emailSendEnabled?: boolean
+  unreviewedUploadCounts?: UnreviewedUploadCounts
 }
 
 type PortalMessage = {
@@ -146,6 +152,7 @@ export default function MatterDetailClient({
   resyncPreviewCount = 0,
   twilioSmsEnabled = false,
   emailSendEnabled = false,
+  unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
 }: MatterDetailClientProps) {
   const token = useAccessToken()
   const router = useRouter()
@@ -165,6 +172,12 @@ export default function MatterDetailClient({
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
   const [generatingNumber, setGeneratingNumber] = useState(false)
   const [unlocking, setUnlocking] = useState(false)
+  const [portalUploadsOpen, setPortalUploadsOpen] = useState(false)
+  const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
+
+  useEffect(() => {
+    setUnreviewedUploadCounts(initialUnreviewedUploadCounts)
+  }, [initialUnreviewedUploadCounts])
 
   const [portalMessages, setPortalMessages] = useState<PortalMessage[]>([])
   const [portalLoading, setPortalLoading] = useState(false)
@@ -294,23 +307,62 @@ export default function MatterDetailClient({
     }
   }, [matterId, router])
 
+  const handleMarkIntakeUploadsReviewed = useCallback(async (intakeId: string) => {
+    try {
+      await markIntakeUploadsReviewed({ intakeId, matterId })
+      setUnreviewedUploadCounts(prev => mergeUnreviewedCounts(0, prev.portal))
+    } catch {
+      /* non-blocking */
+    }
+  }, [matterId])
+
+  const handleMarkPortalUploadsReviewed = useCallback(async () => {
+    try {
+      await markPortalUploadsReviewed({ matterId })
+      setUnreviewedUploadCounts(prev => mergeUnreviewedCounts(prev.intake, 0))
+    } catch {
+      /* non-blocking */
+    }
+  }, [matterId])
+
   const openIntakeSheet = useCallback(async () => {
-    if (liveIntakeId) {
+    const openSheet = async (intakeId: string | null) => {
+      if (intakeId) {
+        await handleMarkIntakeUploadsReviewed(intakeId)
+      }
       setIntakeSheetOpen(true)
+    }
+
+    if (liveIntakeId) {
+      await openSheet(liveIntakeId)
       return
     }
     try {
       const resolved = await resolveMatterIntake(matterId)
       if (resolved) {
         setLiveIntakeId(resolved)
-        setIntakeSheetOpen(true)
+        await openSheet(resolved)
       } else {
-        setIntakeSheetOpen(true)
+        await openSheet(null)
       }
     } catch {
-      setIntakeSheetOpen(true)
+      await openSheet(null)
     }
-  }, [liveIntakeId, matterId])
+  }, [handleMarkIntakeUploadsReviewed, liveIntakeId, matterId])
+
+  const handleReviewUploads = useCallback(() => {
+    if (unreviewedUploadCounts.intake > 0) {
+      void openIntakeSheet()
+      return
+    }
+    if (unreviewedUploadCounts.portal > 0) {
+      setPortalUploadsOpen(true)
+      void handleMarkPortalUploadsReviewed()
+      window.requestAnimationFrame(() => {
+        document.getElementById('portal-uploads')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+  }, [handleMarkPortalUploadsReviewed, openIntakeSheet, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
 
   const loadPortalMessages = useCallback(async () => {
     if (!token) return
@@ -684,8 +736,10 @@ export default function MatterDetailClient({
               agingHealth={agingHealth}
               nextAction={nextAction}
               unreadPortalCount={unreadPortalCount}
+              unreviewedUploadCounts={unreviewedUploadCounts}
               lastPortalMessage={lastPortalMessage}
               onSendIntake={() => void handleSendIntake()}
+              onReviewUploads={handleReviewUploads}
               sendIntakePending={sendingIntake}
             />
 
@@ -804,6 +858,12 @@ export default function MatterDetailClient({
               designSheetSeeded={designSheetSeeded}
               reviewFlags={reviewFlags}
               resyncPreviewCount={resyncPreviewCount}
+            />
+            <MatterPortalUploadsCard
+              matterId={matterId}
+              open={portalUploadsOpen}
+              onOpenChange={setPortalUploadsOpen}
+              onOpened={() => void handleMarkPortalUploadsReviewed()}
             />
             <MatterOverviewAssets
               matterId={matterId}

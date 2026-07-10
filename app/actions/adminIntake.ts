@@ -20,6 +20,7 @@ import { getHousehold } from '@/lib/contacts/getHousehold'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { linkIntakeToMatter } from '@/lib/intake/linkIntakeToMatter'
 import { resolveMatterIntakeIdForMatter } from '@/lib/intake/resolveMatterIntakeId'
+import { markIntakeUploadsReviewed as persistIntakeUploadsReviewed, markPortalUploadsReviewed as persistPortalUploadsReviewed } from '@/lib/matter/unreviewedUploads'
 
 async function syncIntakeToDesignSheet(
   admin: ReturnType<typeof getAdminClient>,
@@ -600,4 +601,71 @@ export async function unlockIntake(args: UnlockIntakeArgs): Promise<void> {
   }
 
   revalidatePath('/intake')
+}
+
+interface MarkUploadsReviewedArgs {
+  intakeId: string
+  matterId: string
+}
+
+/** Mark intake questionnaire uploads as reviewed by staff (attorney/admin only). */
+export async function markIntakeUploadsReviewed(args: MarkUploadsReviewedArgs): Promise<void> {
+  const sb = await createServerSupabase()
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: caller } = await sb
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (!caller || !ADMIN_ROLES.has(caller.role as string)) {
+    throw new Error('Forbidden')
+  }
+
+  const admin = getAdminClient()
+  const { data: intake, error: intakeError } = await admin
+    .from('client_intake')
+    .select('id')
+    .eq('id', args.intakeId)
+    .maybeSingle()
+  if (intakeError) throw new Error(intakeError.message)
+  if (!intake) throw new Error('Intake not found')
+
+  await persistIntakeUploadsReviewed(admin, args.intakeId)
+  revalidatePath(`/admin/matters/${args.matterId}`)
+  revalidatePath('/admin/matters')
+}
+
+interface MarkPortalUploadsReviewedArgs {
+  matterId: string
+}
+
+/** Mark client portal uploads as reviewed by staff (attorney/admin only). */
+export async function markPortalUploadsReviewed(args: MarkPortalUploadsReviewedArgs): Promise<void> {
+  const sb = await createServerSupabase()
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: caller } = await sb
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (!caller || !ADMIN_ROLES.has(caller.role as string)) {
+    throw new Error('Forbidden')
+  }
+
+  const admin = getAdminClient()
+  const { data: matter, error: matterError } = await admin
+    .from('matters')
+    .select('id')
+    .eq('id', args.matterId)
+    .maybeSingle()
+  if (matterError) throw new Error(matterError.message)
+  if (!matter) throw new Error('Matter not found')
+
+  await persistPortalUploadsReviewed(admin, args.matterId)
+  revalidatePath(`/admin/matters/${args.matterId}`)
+  revalidatePath('/admin/matters')
 }

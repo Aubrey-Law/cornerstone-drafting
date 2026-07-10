@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { fetchMatterAgingHealth } from '@/lib/queries/matterOverview'
 import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
+import { fetchUnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { isTwilioSmsConfigured } from '@/lib/twilio/config'
 import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -33,7 +34,7 @@ export default async function MatterDetailPage({ params }: Params) {
     designSheet,
     intakeSnapshot,
   ] = await Promise.all([
-    admin.from('matters').select('client_intake_id, matter_number').eq('id', id).maybeSingle(),
+    admin.from('matters').select('client_intake_id, matter_number, portal_uploads_reviewed_at').eq('id', id).maybeSingle(),
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
     admin
       .from('matter_notes')
@@ -49,6 +50,7 @@ export default async function MatterDetailPage({ params }: Params) {
     id: string
     intake_sent_at: string | null
     intake_completed_at: string | null
+    uploads_reviewed_at?: string | null
     email: string | null
     first_name: string | null
     status?: string | null
@@ -61,7 +63,7 @@ export default async function MatterDetailPage({ params }: Params) {
   if (intakeId) {
     const { data } = await admin
       .from('client_intake')
-      .select('id, intake_sent_at, intake_completed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note')
+      .select('id, intake_sent_at, intake_completed_at, uploads_reviewed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note')
       .eq('id', intakeId)
       .maybeSingle()
     clientIntakeRow = data
@@ -77,6 +79,15 @@ export default async function MatterDetailPage({ params }: Params) {
       }).filter(row => row.selected && row.currentDisplay !== row.proposedDisplay).length
     : 0
 
+  const portalUploadsReviewedAt = (matterRow?.portal_uploads_reviewed_at ?? null) as string | null
+  const unreviewedUploadCounts = await fetchUnreviewedUploadCounts(
+    admin,
+    id,
+    intakeId,
+    clientIntakeRow?.uploads_reviewed_at ?? null,
+    portalUploadsReviewedAt,
+  ).catch(() => ({ intake: 0, portal: 0, total: 0 }))
+
   return (
     <MatterDetailClient
       matter={matter}
@@ -88,6 +99,7 @@ export default async function MatterDetailPage({ params }: Params) {
       matterNumber={matterNumber}
       matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
+      unreviewedUploadCounts={unreviewedUploadCounts}
       initialNotes={(notes ?? []) as MatterNoteRow[]}
       designSheetSeeded={designSheetSeeded}
       reviewFlags={reviewFlags}

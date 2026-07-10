@@ -6,8 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Briefcase, Plus, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
 import { stageLabel, type PipelineMatter } from '@/types/database'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -251,12 +253,33 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                 {filtered.map(m => (
                   <tr key={m.matter_id} className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-3 py-2.5">
-                      <Link
-                        href={`/admin/matters/${m.matter_id}`}
-                        className="font-medium text-foreground hover:underline"
-                      >
-                        {m.client_name || m.matter_name || 'Untitled'}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/admin/matters/${m.matter_id}`}
+                          className="font-medium text-foreground hover:underline"
+                        >
+                          {m.client_name || m.matter_name || 'Untitled'}
+                        </Link>
+                        {(m.unreviewed_upload_count ?? 0) > 0 && (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-border bg-amber-bg text-[10px] text-amber"
+                            title={formatUnreviewedUploadDetail(
+                              mergeUnreviewedCounts(
+                                m.unreviewed_intake_upload_count ?? 0,
+                                m.unreviewed_portal_upload_count ?? 0,
+                              ),
+                            )}
+                          >
+                            {formatUnreviewedUploadLabel(
+                              mergeUnreviewedCounts(
+                                m.unreviewed_intake_upload_count ?? 0,
+                                m.unreviewed_portal_upload_count ?? 0,
+                              ),
+                            )}
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="hidden px-3 py-2.5 text-muted-foreground sm:table-cell">
                       {m.client_email || '—'}
