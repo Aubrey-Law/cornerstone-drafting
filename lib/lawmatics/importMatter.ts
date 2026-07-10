@@ -101,14 +101,28 @@ export async function importMatterFromLawmaticsProspect(
   } = mapped
   const intakeRow = buildIntakeRow(intakeFields, lmId)
 
-  const { data: intake, error: intakeError } = await admin
+  const { data: existingIntake, error: readIntakeError } = await admin
     .from('client_intake')
-    .upsert(intakeRow, { onConflict: 'lawmatics_matter_id', ignoreDuplicates: false })
     .select('id, email, full_name')
-    .single()
+    .eq('lawmatics_matter_id', lmId)
+    .maybeSingle()
 
-  if (intakeError || !intake) {
-    throw new Error(intakeError?.message ?? 'Could not upsert intake')
+  if (readIntakeError) {
+    throw new Error(readIntakeError.message)
+  }
+
+  const intakeResult = existingIntake
+    ? await admin
+        .from('client_intake')
+        .update(intakeRow)
+        .eq('id', existingIntake.id)
+        .select('id, email, full_name')
+        .single()
+    : await admin.from('client_intake').insert(intakeRow).select('id, email, full_name').single()
+
+  const intake = intakeResult.data
+  if (intakeResult.error || !intake) {
+    throw new Error(intakeResult.error?.message ?? 'Could not upsert intake')
   }
 
   await upsertSpouseContact(admin, intake.id, (spouse_name as string | null) ?? null)
