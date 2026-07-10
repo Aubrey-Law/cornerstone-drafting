@@ -95,6 +95,14 @@ Expect `✓ azure: redirects to provider login`. Then click **Continue with Micr
 
 > **Note:** Microsoft **Graph** (Outlook send from Settings) uses a *different* Entra app and redirect (`/api/admin/microsoft/callback`) — see below. You can reuse one app with both redirect URIs, or register two apps.
 
+## Optional — Granola (meeting notes import)
+
+| Variable | Purpose |
+|----------|---------|
+| `GRANOLA_API_KEY` | Personal API key from Granola desktop → Settings → API (starts with `grn_`). Powers **Add meeting notes** on matter detail — lists recent meetings and pulls AI summaries into internal `meeting-notes` documents. |
+
+Without this key, staff can still paste notes manually in the dialog; Granola list/fetch returns a clear configuration error.
+
 ## Optional — drafting / ops
 
 | Variable | Purpose |

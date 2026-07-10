@@ -11,6 +11,7 @@ import {
   ExternalLink,
   FilePenLine,
   Loader as Loader2,
+  NotebookPen,
   Send,
   Trash2,
   Upload,
@@ -74,6 +75,7 @@ import { MatterActivityTab } from './MatterActivityTab'
 import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterOverviewAssets } from './MatterOverviewAssets'
 import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
+import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { useMatterNotes } from './useMatterNotes'
@@ -836,15 +838,26 @@ export default function MatterDetailClient({
               <div>
                 <p className="text-sm font-medium">Documents</p>
                 <p className="text-xs text-muted-foreground">
-                  Upload, review, and share drafts in the drafting workspace.
+                  Upload, review, and share drafts in the drafting workspace. Add internal meeting notes below.
                 </p>
               </div>
-              <Button type="button" size="sm" variant="outline" asChild>
-                <Link href={`/admin/drafting/${matterId}?step=review`}>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open review
-                </Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => document.getElementById('meeting-notes')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                >
+                  <NotebookPen className="h-3.5 w-3.5" />
+                  Meeting notes
+                </Button>
+                <Button type="button" size="sm" variant="outline" asChild>
+                  <Link href={`/admin/drafting/${matterId}?step=review`}>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open review
+                  </Link>
+                </Button>
+              </div>
             </div>
 
             <IntakeSyncStatusCard
@@ -860,6 +873,7 @@ export default function MatterDetailClient({
               onOpenChange={setPortalUploadsOpen}
               onOpened={() => void handleMarkPortalUploadsReviewed()}
             />
+            <MatterMeetingNotesCard matterId={matterId} />
             <MatterOverviewAssets
               matterId={matterId}
               matter={matter}
