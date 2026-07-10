@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo, useState, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Briefcase, Plus, Search, Trash2, X } from 'lucide-react'
+import { Briefcase, Database, Plus, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type { MatterListRow } from '@/lib/queries/matters'
@@ -30,6 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
+const LawmaticsImportDialog = dynamic(() => import('./LawmaticsImportDialog'), { ssr: false })
 
 interface MattersClientProps {
   matters: MatterListRow[]
@@ -95,6 +98,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const [filters, setFilters] = useState<MatterFilters>(EMPTY_FILTERS)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
+  const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
@@ -110,6 +114,18 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   useEffect(() => {
     if (searchParams.get('create') === '1') setCreateOpen(true)
   }, [searchParams])
+
+  useEffect(() => {
+    if (searchParams.get('lm_connected') === '1') {
+      toast.success('Lawmatics connected')
+      router.replace('/admin/matters')
+    }
+    const lmError = searchParams.get('lm_error')
+    if (lmError) {
+      toast.error(`Lawmatics connection failed: ${lmError}`)
+      router.replace('/admin/matters')
+    }
+  }, [router, searchParams])
 
   const intakeStatuses = useMemo(() => {
     const set = new Set<string>()
@@ -342,10 +358,16 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
               Open a matter for overview, documents, contacts, and communications.
             </p>
           </div>
-          <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            Create Matter
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setLawmaticsOpen(true)}>
+              <Database className="h-3.5 w-3.5" />
+              Import from Lawmatics
+            </Button>
+            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Create Matter
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -747,6 +769,8 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LawmaticsImportDialog open={lawmaticsOpen} onOpenChange={setLawmaticsOpen} />
     </div>
   )
 }
