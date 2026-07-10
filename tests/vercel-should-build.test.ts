@@ -23,6 +23,10 @@ describe('vercel-should-build.sh', () => {
     expect(run({ VERCEL_ENV: 'preview', VERCEL_GIT_COMMIT_MESSAGE: 'wip' })).toBe(0)
   })
 
+  it('builds when branch is main even without VERCEL_ENV', () => {
+    expect(run({ VERCEL_GIT_COMMIT_REF: 'main', VERCEL_GIT_COMMIT_MESSAGE: 'ship' })).toBe(1)
+  })
+
   it('honors [skip deploy] in commit messages', () => {
     expect(
       run({ VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_MESSAGE: 'docs [skip deploy]' }),

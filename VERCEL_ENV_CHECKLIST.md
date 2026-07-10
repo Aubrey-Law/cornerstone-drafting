@@ -173,7 +173,9 @@ Webhook URL: `https://<host>/api/webhooks/retell`
 | Skip a `main` push | Include `[skip deploy]` in the commit message |
 | Preview/staging URL | Vercel dashboard → **Deployments** → **Redeploy** on the branch you want |
 
-Ensure **Settings → Build and Deployment → Automatically expose System Environment Variables** is enabled so `scripts/vercel-should-build.sh` can read `VERCEL_ENV`.
+No dashboard toggle is required for this policy — it is enforced by `vercel.json` plus `scripts/vercel-should-build.sh` (which also reads git when Vercel system vars are absent).
+
+Optional: **Settings → Environment Variables** → **Enable access to System Environment Variables** (often already on). Not required for the build-skip script.
 
 ---
 
