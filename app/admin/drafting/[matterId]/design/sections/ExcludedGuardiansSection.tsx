@@ -31,22 +31,33 @@ export function ExcludedGuardians({
   const entries = getExcludedGuardians(sheet)
   const pickerContacts = contacts as unknown as PickerContact[]
 
-  const syncEntries = (nextEntries: ExcludedGuardianEntry[], flag = enabled) => {
-    onChange('decisions', prevSheet => setExcludedGuardians(prevSheet, nextEntries))
-    onChange('excluded_guardian_name', flag ? formatExcludedGuardianName(nextEntries, contacts) : null)
+  const applyEntries = (
+    updater: (current: ExcludedGuardianEntry[]) => ExcludedGuardianEntry[],
+    options?: { flag?: boolean },
+  ) => {
+    const flag = options?.flag ?? enabled
+    onChange('decisions', prevSheet => {
+      const nextEntries = updater(getExcludedGuardians(prevSheet))
+      return setExcludedGuardians(prevSheet, nextEntries)
+    })
+    onChange('excluded_guardian_name', prevSheet => {
+      if (!flag) return null
+      return formatExcludedGuardianName(getExcludedGuardians(prevSheet), contacts)
+    })
   }
 
   const updateEntry = (index: number, patch: Partial<ExcludedGuardianEntry>) => {
-    const next = entries.map((entry, i) => (i === index ? { ...entry, ...patch } : entry))
-    syncEntries(next)
+    applyEntries(current =>
+      current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)),
+    )
   }
 
   const addEntry = () => {
-    syncEntries([...entries, { contact_id: '', reason: null }])
+    applyEntries(current => [...current, { contact_id: '', reason: null }])
   }
 
   const removeEntry = (index: number) => {
-    syncEntries(entries.filter((_, i) => i !== index))
+    applyEntries(current => current.filter((_, i) => i !== index))
   }
 
   const contactById = (id: string): PickerContact | null =>
@@ -68,11 +79,12 @@ export function ExcludedGuardians({
             const next = checked === true
             onChange('excluded_guardian_flag', next)
             if (!next) {
-              syncEntries([], false)
-            } else if (entries.length === 0) {
-              syncEntries([{ contact_id: '', reason: null }], true)
+              applyEntries(() => [], { flag: false })
             } else {
-              onChange('excluded_guardian_name', formatExcludedGuardianName(entries, contacts))
+              applyEntries(
+                current => (current.length > 0 ? current : [{ contact_id: '', reason: null }]),
+                { flag: true },
+              )
             }
           }}
         />
@@ -84,7 +96,7 @@ export function ExcludedGuardians({
       {enabled && (
         <div className="mt-4 space-y-4">
           {entries.map((entry, index) => (
-            <div key={`${entry.contact_id || 'new'}-${index}`} className="rounded-lg border border-border bg-muted/20 p-3">
+            <div key={`excluded-guardian-${index}`} className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <div>
                   <FieldLabel>Excluded individual</FieldLabel>

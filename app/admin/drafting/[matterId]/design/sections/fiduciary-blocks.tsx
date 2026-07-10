@@ -263,23 +263,43 @@ export function FiduciaryBlock({
   const spouseContact = isMarriedSheet(sheet) ? findSpouseContact(contacts, matter, sheet) : null
   const clientContact = findClientContact(contacts, matter, sheet)
 
-  const persistSlots = useCallback((slots: FiduciarySlot[]) => {
-    const resolved = resolveSlotContactIds(slots, clientContact, spouseContact)
-    onChange(field, normalizeFiduciarySlots(resolved) as DesignSheet[keyof DesignSheet])
+  const persistSlots = useCallback((
+    updater: FiduciarySlot[] | ((prev: FiduciarySlot[]) => FiduciarySlot[]),
+  ) => {
+    onChange(field, prevSheet => {
+      const current = (prevSheet[field] as FiduciarySlot[] | null) ?? []
+      const resolvedCurrent = resolveSlotContactIds(current, clientContact, spouseContact)
+      const next = typeof updater === 'function' ? updater(resolvedCurrent) : updater
+      const resolved = resolveSlotContactIds(next, clientContact, spouseContact)
+      return normalizeFiduciarySlots(resolved) as DesignSheet[keyof DesignSheet]
+    })
   }, [clientContact, field, onChange, spouseContact])
 
   // Ensure a primary slot exists in persisted sheet state, not only in display memory.
   useEffect(() => {
     if (slotScope === 'backup') return
     if (!slotsMissingPrimary(rawSlots)) return
-    persistSlots([...defaultPrimarySlot(), ...rawSlots])
-  }, [persistSlots, rawSlots, slotScope])
+    onChange(field, prevSheet => {
+      const current = (prevSheet[field] as FiduciarySlot[] | null) ?? []
+      if (!slotsMissingPrimary(current)) return current as DesignSheet[typeof field]
+      const next = [...defaultPrimarySlot(), ...current]
+      const resolved = resolveSlotContactIds(next, clientContact, spouseContact)
+      return normalizeFiduciarySlots(resolved) as DesignSheet[typeof field]
+    })
+  }, [clientContact, field, onChange, rawSlots, slotScope, spouseContact])
 
   // Upgrade legacy synthetic shortcut ids after contacts are loaded.
   useEffect(() => {
     if (!slotsNeedContactIdResolution(rawSlots, clientContact, spouseContact)) return
-    persistSlots(rawSlots)
-  }, [clientContact, persistSlots, rawSlots, spouseContact])
+    onChange(field, prevSheet => {
+      const current = (prevSheet[field] as FiduciarySlot[] | null) ?? []
+      if (!slotsNeedContactIdResolution(current, clientContact, spouseContact)) {
+        return current as DesignSheet[typeof field]
+      }
+      const resolved = resolveSlotContactIds(current, clientContact, spouseContact)
+      return normalizeFiduciarySlots(resolved) as DesignSheet[typeof field]
+    })
+  }, [clientContact, field, onChange, rawSlots, spouseContact])
 
   const resolvedSlots = resolveSlotContactIds(rawSlots, clientContact, spouseContact)
   const slotsForDisplay = (() => {
@@ -288,23 +308,28 @@ export function FiduciaryBlock({
     return [...defaultPrimarySlot(), ...resolvedSlots]
   })()
 
-  const handleSlotsChange = useCallback((slots: FiduciarySlot[]) => {
-    persistSlots(slots)
+  const handleSlotsChange = useCallback((
+    updater: FiduciarySlot[] | ((prev: FiduciarySlot[]) => FiduciarySlot[]),
+  ) => {
+    persistSlots(updater)
   }, [persistSlots])
 
   const handleSlotStateChange = useCallback((slotId: string, state: SlotState) => {
-    onChange('fiduciary_slot_states', {
-      ...(sheet.fiduciary_slot_states ?? {}),
+    onChange('fiduciary_slot_states', prevSheet => ({
+      ...(prevSheet.fiduciary_slot_states ?? {}),
       [slotId]: state,
-    })
-  }, [onChange, sheet.fiduciary_slot_states])
+    }))
+  }, [onChange])
 
   const contactsForDisplay = [clientContact, spouseContact]
     .filter((c): c is MatterContact => Boolean(c))
     .reduce<MatterContact[]>((acc, c) => (acc.some(x => x.id === c.id) ? acc : [...acc, c]), contacts)
 
   return (
-    <div id={designFieldTargetId(String(field))} tabIndex={-1}>
+    <div
+      id={designFieldTargetId(slotScope === 'backup' ? `${String(field)}:backup` : String(field))}
+      tabIndex={-1}
+    >
       <FiduciaryRoleSection
         role={role}
         slots={slotsForDisplay}

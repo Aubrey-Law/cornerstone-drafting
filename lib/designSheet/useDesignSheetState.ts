@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { flushSync } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
@@ -19,6 +20,13 @@ import {
   INTAKE_PREFILLED_FIELDS,
   normalizeOverrideValue,
 } from './buildInitialSheet'
+import { shouldApplyServerSheetProps } from '@/lib/designSheet/shouldApplyServerSheetProps'
+import {
+  prepareDesignSheetForSave,
+  readDesignSheetDraft,
+  resolveInitialDesignSheet,
+  writeDesignSheetDraft,
+} from '@/lib/designSheet/designSheetDraft'
 import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
 
 export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
@@ -62,10 +70,22 @@ export function useDesignSheetState({
   const router = useRouter()
   const isLP = normalizePracticeArea(matter.practice_area) === 'EP-LP'
 
+  const hasLocalEditsRef = useRef(false)
   const [sheet, setSheet] = useState<DesignSheet>(() => {
-    const base = formatPhoneFieldsDeep(buildInitialSheet(sheetProp))
-    if (!applyDefaults) return base
-    return { ...base, ...computeDesignSheetDefaults(base, matter) }
+    const resolved = resolveInitialDesignSheet({
+      matterId,
+      sheetProp,
+      buildFromProps: () => {
+        const base = formatPhoneFieldsDeep(buildInitialSheet(sheetProp))
+        if (!applyDefaults) return base
+        return { ...base, ...computeDesignSheetDefaults(base, matter) }
+      },
+    })
+    // Session draft means the attorney already edited this matter in this tab.
+    if (readDesignSheetDraft(matterId)) {
+      hasLocalEditsRef.current = true
+    }
+    return resolved
   })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [_dirtyFields, setDirtyFields] = useState<Set<string>>(new Set())
@@ -76,6 +96,8 @@ export function useDesignSheetState({
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(() => sheetProp?.updated_at ?? null)
   const expectedUpdatedAtRef = useRef<string | null>(sheetProp?.updated_at ?? null)
   const serverSheetStampRef = useRef<string | null>(sheetProp?.updated_at ?? null)
+  /** Last `sheetProp.updated_at` applied to local state — avoids clobbering edits after a local save when props are still stale. */
+  const propsSheetStampRef = useRef<string | null>(sheetProp?.updated_at ?? null)
   const [saveRetryCount, setSaveRetryCount] = useState(0)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistInFlightRef = useRef(false)
@@ -88,36 +110,78 @@ export function useDesignSheetState({
 
   const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
+  /** Apply sheet state and keep sheetRef in sync immediately (not after useEffect). */
+  const commitSheet = useCallback((
+    updater: DesignSheet | ((previous: DesignSheet) => DesignSheet),
+  ) => {
+    setSheet(previous => {
+      const next = typeof updater === 'function'
+        ? (updater as (previous: DesignSheet) => DesignSheet)(previous)
+        : updater
+      sheetRef.current = next
+      writeDesignSheetDraft({
+        matterId,
+        sheet: next,
+        baseUpdatedAt: serverSheetStampRef.current ?? expectedUpdatedAtRef.current,
+      })
+      return next
+    })
+  }, [matterId])
+
+  /** Wait for any in-flight React sheet updates before reading sheetRef for persistence. */
+  const flushSheetRef = useCallback((): Promise<void> => {
+    return new Promise(resolve => {
+      flushSync(() => {
+        commitSheet(current => current)
+      })
+      resolve()
+    })
+  }, [commitSheet])
+
   useEffect(() => {
     sheetRef.current = sheet
   }, [sheet])
 
-  const rebuildSheetFromServer = useCallback(() => {
-    const base = formatPhoneFieldsDeep(buildInitialSheet(sheetProp))
-    if (!applyDefaults) return base
-    return { ...base, ...computeDesignSheetDefaults(base, matter) }
-  }, [applyDefaults, matter, sheetProp])
+  const sheetPropRef = useRef(sheetProp)
+  sheetPropRef.current = sheetProp
 
   useEffect(() => {
     expectedUpdatedAtRef.current = expectedUpdatedAt
   }, [expectedUpdatedAt])
 
-  // Keep local concurrency token and sheet aligned when the server refreshes props.
+  // Keep local state aligned when the server component refreshes props (e.g. router.refresh).
+  // Depend only on updated_at + saveStatus — not sheetProp identity — so drafting-workspace
+  // parent re-renders cannot re-enter this effect and wipe local decisions.
   useEffect(() => {
     const stamp = sheetProp?.updated_at ?? null
-    if (!stamp || stamp === serverSheetStampRef.current) return
-    if (saveStatus === 'dirty' || saveStatus === 'saving') return
+    const decision = shouldApplyServerSheetProps({
+      stamp,
+      propsSheetStamp: propsSheetStampRef.current,
+      serverSheetStamp: serverSheetStampRef.current,
+      saveStatus,
+      hasLocalEdits: hasLocalEditsRef.current,
+    })
+    if (decision.action === 'ignore' || !stamp) return
 
+    if (decision.action === 'acknowledge') {
+      propsSheetStampRef.current = stamp
+      return
+    }
+
+    propsSheetStampRef.current = stamp
     serverSheetStampRef.current = stamp
-    const nextSheet = rebuildSheetFromServer()
-    setSheet(nextSheet)
+    const base = formatPhoneFieldsDeep(buildInitialSheet(sheetPropRef.current))
+    const nextSheet = applyDefaults
+      ? { ...base, ...computeDesignSheetDefaults(base, matter) }
+      : base
+    commitSheet(nextSheet)
     setReadinessSheet(nextSheet)
     expectedUpdatedAtRef.current = stamp
     setExpectedUpdatedAt(stamp)
     setLastSavedAt(stamp)
     setSaveStatus('saved')
     setDirtyFields(new Set())
-  }, [rebuildSheetFromServer, saveStatus, sheetProp?.updated_at])
+  }, [applyDefaults, commitSheet, matter, saveStatus, sheetProp?.updated_at])
 
   // Debounce readiness so the summary rail does not recompute on every keystroke.
   useEffect(() => {
@@ -186,6 +250,7 @@ export function useDesignSheetState({
 
   // ── Field updates with override tracking ─────────────────────────────────────
   const markDirty = useCallback((field: string) => {
+    hasLocalEditsRef.current = true
     changeGenerationRef.current += 1
     setDirtyFields(prev => new Set(prev).add(field))
     setSaveStatus('dirty')
@@ -208,7 +273,7 @@ export function useDesignSheetState({
     field,
     value,
   ) => {
-    setSheet(prev => {
+    commitSheet(prev => {
       const fieldName = field as string
       const resolved = typeof value === 'function'
         ? value(prev)
@@ -234,7 +299,7 @@ export function useDesignSheetState({
       return { ...next, overrides }
     })
     markDirty(field as string)
-  }, [markDirty])
+  }, [commitSheet, markDirty])
 
   // ── Persistence ──────────────────────────────────────────────────────────────
   const persistSheet = useCallback(async (): Promise<boolean> => {
@@ -253,14 +318,18 @@ export function useDesignSheetState({
           await sleep(1000 * 2 ** (attempt - 1))
         }
         try {
+          await flushSheetRef()
           const persistedSheetId = sheetProp?.id || sheetRef.current.id
+          const sheetForSave = prepareDesignSheetForSave(sheetRef.current)
           const response = await fetch(`/api/admin/matters/${matterId}/design-sheet`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               sheetId: persistedSheetId || null,
               expectedUpdatedAt: expectedUpdatedAtRef.current,
-              sheet: formatPhoneFieldsDeep(sheetRef.current),
+              sheet: sheetForSave,
+              // Authoritative decisions blob — API must not lose this to stale merges.
+              decisions: sheetRef.current.decisions ?? {},
             }),
           })
           const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse
@@ -271,9 +340,11 @@ export function useDesignSheetState({
               expectedUpdatedAtRef.current = serverUpdatedAt
               setExpectedUpdatedAt(serverUpdatedAt)
               setLastSavedAt(serverUpdatedAt)
+              serverSheetStampRef.current = serverUpdatedAt
             }
             // Another save likely landed first — retry with the server token before surfacing an error.
             if (serverUpdatedAt && attempt < maxAttempts - 1) continue
+            hasLocalEditsRef.current = false
             finishPersist(generationAtSaveStart)
             toast.error('This design sheet was updated elsewhere. Reloading the latest version.')
             router.refresh()
@@ -285,12 +356,16 @@ export function useDesignSheetState({
           }
 
           if (!persistedSheetId) {
-            setSheet(prev => ({ ...prev, id: result.id as string, matter_id: matterId }))
+            commitSheet(prev => ({ ...prev, id: result.id as string, matter_id: matterId }))
           }
           const savedAt = result.updated_at ?? new Date().toISOString()
           expectedUpdatedAtRef.current = savedAt
           setExpectedUpdatedAt(savedAt)
           setLastSavedAt(savedAt)
+          // Advance the local-save watermark only. Do NOT move propsSheetStampRef here —
+          // sheetProp still has the pre-save updated_at until RSC refreshes, and matching
+          // propsSheetStampRef to savedAt would make the sync effect treat those stale
+          // props as "new" when saveStatus flips to saved.
           serverSheetStampRef.current = savedAt
           finishPersist(generationAtSaveStart)
           return true
@@ -316,7 +391,7 @@ export function useDesignSheetState({
         setSaveStatus('dirty')
       }
     }
-  }, [finishPersist, matterId, router, sheetProp?.id])
+  }, [commitSheet, finishPersist, flushSheetRef, matterId, router, sheetProp?.id])
 
   const handleSave = useCallback(() => {
     startTransition(async () => { await persistSheet() })
@@ -411,12 +486,12 @@ export function useDesignSheetState({
 
   // ── Import / Export ─────────────────────────────────────────────────────────
   const handleImportedDesignSheetFields = useCallback((patch: DesignSheetImportProposal) => {
-    setSheet(prev => ({ ...prev, ...patch } as DesignSheet))
+    commitSheet(prev => ({ ...prev, ...patch } as DesignSheet))
     setSaveStatus('saved')
     setDirtyFields(new Set())
     setLastSavedAt(new Date().toISOString())
     router.refresh()
-  }, [router])
+  }, [commitSheet, router])
 
   const handleExportDesignSheet = useCallback(async () => {
     setExporting(true)
@@ -452,7 +527,7 @@ export function useDesignSheetState({
   return {
     isLP,
     sheet,
-    setSheet,
+    setSheet: commitSheet,
     saveStatus,
     saveStatusText,
     lastSavedAt,
@@ -488,3 +563,5 @@ export function useDesignSheetState({
     readinessTotal: readiness.total,
   }
 }
+
+export type DesignSheetState = ReturnType<typeof useDesignSheetState>

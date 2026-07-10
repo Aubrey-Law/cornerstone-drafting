@@ -91,12 +91,18 @@ export function DeedDocumentSection({ sheet, onChange }: SectionProps) {
     ? decisions.deed as Record<string, unknown>
     : {}
   const updateDeed = (key: string, value: unknown) => {
-    onChange('decisions', {
-      ...decisions,
-      deed: {
-        ...deed,
-        [key]: value,
-      },
+    onChange('decisions', prevSheet => {
+      const prevDecisions = prevSheet.decisions ?? {}
+      const prevDeed = typeof prevDecisions.deed === 'object' && prevDecisions.deed !== null && !Array.isArray(prevDecisions.deed)
+        ? prevDecisions.deed as Record<string, unknown>
+        : {}
+      return {
+        ...prevDecisions,
+        deed: {
+          ...prevDeed,
+          [key]: value,
+        },
+      }
     })
   }
 

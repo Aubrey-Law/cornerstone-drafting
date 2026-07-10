@@ -1,34 +1,60 @@
 import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import {
   buildDesignSheetPersistencePayload,
   inflateDesignSheetRow,
 } from '@/lib/designSheetPersistence'
 import {
   CLIENT_PRIMARY_CONTACT_ID,
+  primaryContactId,
   resolveSlotContactIds,
   SPOUSE_PRIMARY_CONTACT_ID,
 } from '@/app/admin/drafting/[matterId]/design/sections/fiduciary-blocks'
-import type { FiduciarySlot, MatterContact } from '@/types/database'
+import { setSlotContact, addBackupAgent } from '@/app/admin/drafting/[matterId]/design/sections/fiduciary-helpers'
+import type { DesignSheet, FiduciarySlot, MatterContact } from '@/types/database'
 
 const filledExecutorSlots: FiduciarySlot[] = [
   { id: 'executor-1', contact_id: 'contact-abc', is_co: false, order: 0 },
 ]
 
 describe('fiduciary slot persistence', () => {
-  it('strips fiduciary slot arrays from decisions when saving to columns', () => {
+  it('strips writable column keys from decisions when saving (plan_type, fiduciary slots)', () => {
     const payload = buildDesignSheetPersistencePayload({
+      plan_type: 'pour_over',
       executor_slots: filledExecutorSlots,
       decisions: {
+        plan_type: 'outright_will',
         executor_slots: [],
         healthcare_provisions: { hipaa_include_poa: true },
       },
     } as Parameters<typeof buildDesignSheetPersistencePayload>[0])
 
+    expect(payload.plan_type).toBe('pour_over')
     expect(payload.executor_slots).toEqual(filledExecutorSlots)
-    expect((payload.decisions as Record<string, unknown>).executor_slots).toBeUndefined()
-    expect((payload.decisions as Record<string, unknown>).healthcare_provisions).toEqual({
+    const decisions = payload.decisions as Record<string, unknown>
+    expect(decisions.plan_type).toBeUndefined()
+    expect(decisions.executor_slots).toBeUndefined()
+    expect(decisions.healthcare_provisions).toEqual({
       hipaa_include_poa: true,
     })
+  })
+
+  it('round-trips plan_type through save payload and inflate without decisions shadow', () => {
+    const payload = buildDesignSheetPersistencePayload({
+      plan_type: 'testamentary_trust',
+      decisions: {
+        plan_type: 'pour_over',
+        estate_plan_design: { will: true },
+      },
+    } as Parameters<typeof buildDesignSheetPersistencePayload>[0])
+
+    const inflated = inflateDesignSheetRow({
+      ...payload,
+      decisions: payload.decisions,
+    })
+
+    expect(inflated?.plan_type).toBe('testamentary_trust')
   })
 
   it('prefers decisions fiduciary slots when the column only has empty placeholders', () => {
@@ -97,5 +123,60 @@ describe('resolveSlotContactIds', () => {
     ]
 
     expect(resolveSlotContactIds(slots, clientContact, spouseContact)[0].contact_id).toBe('real-spouse-id')
+  })
+})
+
+describe('functional fiduciary slot updates', () => {
+  it('sequential functional updates read the latest sheet state', () => {
+    let sheet = {
+      executor_slots: [{ id: 'executor-1', contact_id: null, is_co: false, order: 0 }],
+    } as Partial<DesignSheet>
+
+    const onChange = <K extends keyof DesignSheet>(
+      field: K,
+      value: DesignSheet[K] | ((previous: DesignSheet) => DesignSheet[K]),
+    ) => {
+      const resolved = typeof value === 'function'
+        ? value(sheet as DesignSheet)
+        : value
+      sheet = { ...sheet, [field]: resolved }
+    }
+
+    onChange('executor_slots', prev => setSlotContact(prev.executor_slots ?? [], 'executor-1', 'contact-a'))
+    onChange('executor_slots', prev => {
+      expect(primaryContactId(prev.executor_slots)).toBe('contact-a')
+      return setSlotContact(prev.executor_slots ?? [], 'executor-1', 'contact-b')
+    })
+
+    expect(primaryContactId(sheet.executor_slots)).toBe('contact-b')
+  })
+
+  it('adds backup agents at order 1+ for backup-only sections', () => {
+    const empty = addBackupAgent([])
+    expect(empty).toHaveLength(1)
+    expect(empty[0]?.order).toBe(1)
+
+    const withPrimary = addBackupAgent([
+      { id: 'primary', contact_id: 'contact-1', is_co: false, order: 0 },
+    ])
+    expect(withPrimary.filter(s => !s.is_co).map(s => s.order)).toEqual([0, 1])
+  })
+
+  it('uses functional onChange in fiduciary block slot persistence', () => {
+    const blocks = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/fiduciary-blocks.tsx'),
+      'utf8',
+    )
+    const roleSection = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/FiduciaryRoleSection.tsx'),
+      'utf8',
+    )
+
+    expect(blocks).toContain('onChange(field, prevSheet =>')
+    expect(blocks).toContain("onChange('fiduciary_slot_states', prevSheet =>")
+    expect(blocks).not.toMatch(/persistSlots\(rawSlots\)/)
+    expect(roleSection).toContain('onSlotsChange(prev =>')
+    expect(roleSection).toContain('addBackupAgent(prev)')
+    expect(roleSection).not.toMatch(/onSlotsChange\(setSlotContact\(slots/)
   })
 })

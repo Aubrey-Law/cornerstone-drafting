@@ -361,20 +361,20 @@ export function FiduciaryCardGrid({
   const handleEdit = async (contact: MatterContact, details: FiduciaryContactDetails) => {
     if (!onUpdateContact || !contact.id) throw new Error('Contact updates are not available')
     const saved = await onUpdateContact(contact.id, contact)
-    onChange('decisions', setFiduciaryContactDetails(sheet, saved.id, details))
+    onChange('decisions', prevSheet => setFiduciaryContactDetails(prevSheet, saved.id, details))
   }
 
   const handleAdd = async (contact: MatterContact, details: FiduciaryContactDetails) => {
     const { id: _id, ...data } = contact
     const saved = contact.id ? contact : await onAddContact(data)
-    onChange('decisions', setFiduciaryContactDetails(sheet, saved.id, details))
+    onChange('decisions', prevSheet => setFiduciaryContactDetails(prevSheet, saved.id, details))
     onPoolChange([...poolContactIds, saved.id])
     setShowAdd(false)
   }
 
   const handleRemove = (contactId: string) => {
     onPoolChange(poolContactIds.filter(id => id !== contactId))
-    onChange('decisions', removeFiduciaryContactDetails(sheet, contactId))
+    onChange('decisions', prevSheet => removeFiduciaryContactDetails(prevSheet, contactId))
   }
 
   return (

@@ -145,6 +145,18 @@ describe('drafting hub and workspace', () => {
     expect(state).toContain('READINESS_DEBOUNCE_MS = 300')
     expect(state).toContain('setReadinessSheet(sheet)')
     expect(state).toContain('sheet: readinessSheet')
+    expect(state).toContain('shouldApplyServerSheetProps')
+    expect(state).not.toContain('propsSheetStampRef.current = savedAt')
+  })
+
+  it('keeps design sheet state above Guided/Express switches in the drafting workspace', () => {
+    const workspace = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/DraftingWorkspace.tsx'),
+      'utf8',
+    )
+    expect(workspace).toContain('useDesignSheetState({')
+    expect(workspace).toContain('designState={designState}')
+    expect(workspace).toContain('Do not override an existing localStorage/URL choice')
   })
 
   it('prefetches drafting workspace routes on hub hover', () => {

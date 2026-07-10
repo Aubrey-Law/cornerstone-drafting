@@ -81,13 +81,12 @@ export function TransfersAssignmentsSection({
     },
   ) => {
     setForm(nextForm)
-    const decisions = commitRealEstateTransferToSheet(sheet, nextForm, {
+    onChange('decisions', prevSheet => commitRealEstateTransferToSheet(prevSheet, nextForm, {
       selectedDocs: Array.from(meta?.selectedDocs ?? selectedDocs),
       uploadName: meta?.uploadName !== undefined ? meta.uploadName : uploadName,
       hasExtracted: meta?.hasExtracted !== undefined ? meta.hasExtracted : hasExtracted,
-    })
-    onChange('decisions', decisions)
-  }, [sheet, onChange, selectedDocs, uploadName, hasExtracted])
+    }))
+  }, [onChange, selectedDocs, uploadName, hasExtracted])
 
   const handleFormChange = (nextForm: RealEstateTransferFormState) => {
     commit(nextForm)

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
+import { useDesignSheetState } from '@/lib/designSheet/useDesignSheetState'
 import DesignSheetShell from '@/app/admin/drafting/[matterId]/design/DesignSheetShell'
 import ExpressDesignSheet from '@/app/admin/drafting/[matterId]/design/ExpressDesignSheet'
 import type { DesignSheet, MatterContact, MatterDocument, PipelineMatter } from '@/types/database'
@@ -70,10 +71,27 @@ export default function DraftingWorkspace({
   const { savePreferences, loadPreferences } = useUserPreferences()
   const rawStep = searchParams.get('step')
   const isLP = normalizePracticeArea(matter.practice_area) === 'EP-LP'
+
+  // Own design-sheet state at the workspace level so Guided ↔ Express switches (and
+  // step changes) do not remount a fresh hook and wipe in-progress edits with the
+  // stale server `sheet` prop.
+  const designState = useDesignSheetState({
+    matterId,
+    matter,
+    contacts,
+    sheet,
+    lpData,
+    applyDefaults: true,
+  })
+
   const designReadiness = useMemo(() => {
-    if (!sheet) return null
-    return computeDesignSheetReadiness({ sheet, matter, isLP, lpData })
-  }, [isLP, lpData, matter, sheet])
+    return computeDesignSheetReadiness({
+      sheet: designState.sheet,
+      matter,
+      isLP,
+      lpData: designState.lpDataState,
+    })
+  }, [designState.lpDataState, designState.sheet, isLP, matter])
   const designComplete = designReadiness?.complete ?? false
   const step: Step = isStep(rawStep) ? rawStep : defaultStep(designComplete, hubMatter)
 
@@ -126,7 +144,14 @@ export default function DraftingWorkspace({
   useEffect(() => {
     void loadPreferences().then(prefs => {
       const view = prefs?.drafting?.designView
-      if (view === 'guided' || view === 'express') setUserDesignView(view)
+      // Do not override an existing localStorage/URL choice — that remounted the
+      // design sheet mid-edit and wiped unsaved (or just-saved) field state.
+      const stored = typeof window !== 'undefined'
+        ? window.localStorage.getItem(DESIGN_VIEW_STORAGE_KEY)
+        : null
+      if (!isDesignView(stored) && (view === 'guided' || view === 'express')) {
+        setUserDesignView(view)
+      }
       if (!prefs?.drafting?.designViewHintDismissed) setShowDesignViewHint(true)
     })
   }, [loadPreferences])
@@ -291,6 +316,7 @@ export default function DraftingWorkspace({
                   sheet={sheet}
                   lpData={lpData}
                   intakeSnapshot={intakeSnapshot}
+                  designState={designState}
                   onOpenDrafting={() => setStep('generate')}
                   initialFocus={initialFocus}
                 />
@@ -302,6 +328,7 @@ export default function DraftingWorkspace({
                   sheet={sheet}
                   lpData={lpData}
                   intakeSnapshot={intakeSnapshot}
+                  designState={designState}
                   embedded
                   onOpenDrafting={() => setStep('generate')}
                   initialFocus={initialFocus}
@@ -318,8 +345,8 @@ export default function DraftingWorkspace({
               hubMatter={hubMatter}
               sourcePreview={{
                 matter,
-                sheet,
-                contacts,
+                sheet: designState.sheet,
+                contacts: designState.contactsState,
                 intakeSnapshot,
               }}
               onAdvance={() => setStep('review')}

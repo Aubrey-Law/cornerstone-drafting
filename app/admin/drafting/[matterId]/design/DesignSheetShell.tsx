@@ -13,7 +13,7 @@ import {
   type DesignDocumentInclusions,
   type DesignDocumentKey,
 } from '@/lib/designSheetDocumentInclusions'
-import { useDesignSheetState } from '@/lib/designSheet/useDesignSheetState'
+import { useDesignSheetState, type DesignSheetState } from '@/lib/designSheet/useDesignSheetState'
 import {
   BrandBar,
   DesignSummaryRail,
@@ -59,27 +59,47 @@ interface DesignSheetShellProps {
   /** When null, show the section overview. Otherwise show that section as its own page. */
   activeSectionId?: string | null
   initialFocus?: { sectionId: string; targetField: string | null } | null
+  /**
+   * Parent-owned design sheet state (drafting workspace). When set, this shell does not
+   * create its own autosave hook — so Guided/Express switches keep edits.
+   */
+  designState?: DesignSheetState
 }
 
 function mapSaveStatus(status: 'saved' | 'dirty' | 'saving' | 'error'): GuidedSaveStatus {
   return status
 }
 
-export default function DesignSheetShell({
+export default function DesignSheetShell(props: DesignSheetShellProps) {
+  if (props.designState) {
+    return <DesignSheetShellImpl {...props} s={props.designState} />
+  }
+  return <DesignSheetShellWithHook {...props} />
+}
+
+function DesignSheetShellWithHook(props: DesignSheetShellProps) {
+  const s = useDesignSheetState({
+    matterId: props.matterId,
+    matter: props.matter,
+    contacts: props.contacts,
+    sheet: props.sheet,
+    lpData: props.lpData,
+  })
+  return <DesignSheetShellImpl {...props} s={s} />
+}
+
+function DesignSheetShellImpl({
   matterId,
   matter,
-  contacts,
-  sheet: sheetProp,
-  lpData,
   intakeSnapshot,
   embedded = false,
   onOpenDrafting,
   activeSectionId = null,
   initialFocus = null,
-}: DesignSheetShellProps) {
+  s,
+}: DesignSheetShellProps & { s: DesignSheetState }) {
   const router = useRouter()
   const [, startNavigation] = useTransition()
-  const s = useDesignSheetState({ matterId, matter, contacts, sheet: sheetProp, lpData })
   const {
     isLP,
     sheet,

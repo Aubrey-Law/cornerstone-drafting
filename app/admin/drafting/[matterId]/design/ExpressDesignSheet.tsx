@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import type { DesignDocumentInclusions, DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
-import { useDesignSheetState, type LpData } from '@/lib/designSheet/useDesignSheetState'
+import { useDesignSheetState, type DesignSheetState, type LpData } from '@/lib/designSheet/useDesignSheetState'
 import { DesignValidationProvider, AccordionBadge } from './sections/shared'
 import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import { buildDesignSectionDefs } from './designSectionCatalog'
@@ -41,6 +41,11 @@ interface ExpressDesignSheetProps {
   onOpenDrafting?: () => void
   /** Optional deep link from generation preflight back to a specific field. */
   initialFocus?: { sectionId: string; targetField: string | null } | null
+  /**
+   * Parent-owned design sheet state (drafting workspace). When set, this view does not
+   * create its own autosave hook — so Guided/Express switches keep edits.
+   */
+  designState?: DesignSheetState
 }
 
 interface SectionDef {
@@ -58,17 +63,33 @@ interface SectionDef {
  * surface. Shares all save/validation behaviour with the guided DesignSheetShell
  * via useDesignSheetState.
  */
-export default function ExpressDesignSheet({
+export default function ExpressDesignSheet(props: ExpressDesignSheetProps) {
+  if (props.designState) {
+    return <ExpressDesignSheetImpl {...props} s={props.designState} />
+  }
+  return <ExpressDesignSheetWithHook {...props} />
+}
+
+function ExpressDesignSheetWithHook(props: ExpressDesignSheetProps) {
+  const s = useDesignSheetState({
+    matterId: props.matterId,
+    matter: props.matter,
+    contacts: props.contacts,
+    sheet: props.sheet,
+    lpData: props.lpData,
+    applyDefaults: true,
+  })
+  return <ExpressDesignSheetImpl {...props} s={s} />
+}
+
+function ExpressDesignSheetImpl({
   matterId,
   matter,
-  contacts,
-  sheet: sheetProp,
-  lpData,
   intakeSnapshot,
   onOpenDrafting,
   initialFocus = null,
-}: ExpressDesignSheetProps) {
-  const s = useDesignSheetState({ matterId, matter, contacts, sheet: sheetProp, lpData, applyDefaults: true })
+  s,
+}: ExpressDesignSheetProps & { s: DesignSheetState }) {
   const {
     isLP, sheet, updateField, validationValue, saveStatus, saveStatusText,
     contactsState, handleAddContact, handleUpdateContact, handleRemoveContact,

@@ -34,6 +34,50 @@ function escapeXml(value: string): string {
     .replaceAll("'", '&apos;')
 }
 
+/**
+ * Word often splits a single `{{ field }}` or `{% if %}` across several runs
+ * (spell-check, manual edits), leaving OOXML tags inside the delimiter span.
+ * Nunjucks then sees `{% if </w:t>` and throws "unexpected token: <". Strip
+ * only the XML inside each delimiter span so tags are contiguous again.
+ */
+export function repairSplitNunjucksInXml(xml: string): string {
+  let result = ''
+  let i = 0
+
+  while (i < xml.length) {
+    const openBlock = xml.indexOf('{%', i)
+    const openVar = xml.indexOf('{{', i)
+    let next = -1
+    let isBlock = false
+
+    if (openBlock === -1 && openVar === -1) {
+      result += xml.slice(i)
+      break
+    }
+    if (openBlock !== -1 && (openVar === -1 || openBlock < openVar)) {
+      next = openBlock
+      isBlock = true
+    } else {
+      next = openVar
+    }
+
+    result += xml.slice(i, next)
+    const closeToken = isBlock ? '%}' : '}}'
+    const close = xml.indexOf(closeToken, next + 2)
+    if (close === -1) {
+      result += xml.slice(next)
+      break
+    }
+
+    const end = close + closeToken.length
+    const segment = xml.slice(next, end)
+    result += segment.includes('<') ? segment.replace(/<[^>]+>/g, '') : segment
+    i = end
+  }
+
+  return result
+}
+
 function clientFooterName(context: NodeEstateContext): string {
   const value = getPath(context, 'client.full_name')
   return value == null ? '' : String(value).toUpperCase()
@@ -193,7 +237,9 @@ export function renderNodeEstateDocxTemplate({
 
     const rendered = replaceStaticMarkers(
       renderNodeEstateText(
-        stripControlOnlyParagraphs(hoistParagraphConditionals(file.asText())),
+        repairSplitNunjucksInXml(
+          stripControlOnlyParagraphs(hoistParagraphConditionals(file.asText())),
+        ),
         context,
         {
           include_clause: (clauseId: string, state?: string) => clauses.include(clauseId, context, state),

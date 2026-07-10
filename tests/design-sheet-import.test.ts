@@ -231,10 +231,11 @@ describe('design sheet persistence import safety', () => {
       trust_name: 'Existing Trust',
       client_name: 'Jane Doe',
       children: [{ name: 'Alex Doe', dob: null, relationship: 'biological', is_minor: true }],
-      decisions: {
-        drafting_notes: 'Keep these notes',
-      },
+      drafting_notes: 'Keep these notes',
     })
+    // Writable columns are stripped out of decisions on save.
+    expect((payload.decisions as Record<string, unknown>).drafting_notes).toBeUndefined()
+    expect((payload.decisions as Record<string, unknown>).client_name).toBeUndefined()
   })
 
   it('stores lite-missing template fields in decisions (not as unknown columns)', () => {

@@ -60,6 +60,16 @@ export function addAlternate(slots: FiduciarySlot[]): FiduciarySlot[] {
   return [...normalized, createSlot(maxOrder + 1)]
 }
 
+/** Add a backup/alternate principal at order >= 1 (backup-only UI sections). */
+export function addBackupAgent(slots: FiduciarySlot[]): FiduciarySlot[] {
+  const normalized = normalizeFiduciarySlots(slots)
+  const backupOrders = normalized
+    .filter(s => !s.is_co && s.order > 0)
+    .map(s => s.order)
+  const nextOrder = backupOrders.length > 0 ? Math.max(...backupOrders) + 1 : 1
+  return [...normalized, createSlot(nextOrder)]
+}
+
 export function removeAlternate(slots: FiduciarySlot[], order: number): FiduciarySlot[] {
   if (order === 0) return slots // never remove primary
   const filtered = slots.filter(s => s.order !== order)

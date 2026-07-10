@@ -233,7 +233,7 @@ export function ContactsFiduciariesSection({
       )
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error ?? 'Failed to remove contact')
-      onChange('decisions', removeContactProfile(sheet, contact.id))
+      onChange('decisions', prevSheet => removeContactProfile(prevSheet, contact.id))
       onRemoveContact?.(contact.id)
       toast.success('Contact removed')
     } catch (err) {
@@ -278,7 +278,7 @@ export function ContactsFiduciariesSection({
       date_of_birth: values.date_of_birth || null,
       ...relationshipPatch,
     }
-    onChange('decisions', setContactProfile(sheet, contact.id, profilePatch))
+    onChange('decisions', prevSheet => setContactProfile(prevSheet, contact.id, profilePatch))
   }
 
   return (
@@ -296,7 +296,7 @@ export function ContactsFiduciariesSection({
               <Checkbox
                 checked={inclusions[opt.key]}
                 onCheckedChange={checked =>
-                  onChange('decisions', setFiduciaryDocumentInclusion(sheet, opt.key, checked === true))
+                  onChange('decisions', prevSheet => setFiduciaryDocumentInclusion(prevSheet, opt.key, checked === true))
                 }
                 className="mt-0.5"
               />

@@ -62,7 +62,7 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
   const [additionalLimitations, setAdditionalLimitations] = useState(provisions.additional_limitations ?? '')
 
   const updateProvisions = (patch: Parameters<typeof setDesignSheetDpoaProvisions>[1]) => {
-    onChange('decisions', setDesignSheetDpoaProvisions(sheet, patch))
+    onChange('decisions', prevSheet => setDesignSheetDpoaProvisions(prevSheet, patch))
   }
 
   const updateCoagentServing = (serving: DpoaCoagentServing) => {

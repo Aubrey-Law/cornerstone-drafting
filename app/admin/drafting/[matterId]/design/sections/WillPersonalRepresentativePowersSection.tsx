@@ -14,7 +14,7 @@ export function WillPersonalRepresentativePowersSection({ sheet, onChange }: Sec
   const powers = getWillPersonalRepresentativePowers(sheet)
 
   const updatePowers = (patch: Parameters<typeof setWillPersonalRepresentativePowers>[1]) => {
-    onChange('decisions', setWillPersonalRepresentativePowers(sheet, patch))
+    onChange('decisions', prevSheet => setWillPersonalRepresentativePowers(prevSheet, patch))
   }
 
   return (

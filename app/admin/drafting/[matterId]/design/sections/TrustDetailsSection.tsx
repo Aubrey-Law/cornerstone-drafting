@@ -101,7 +101,7 @@ function TrustNameFormatFields({
 }) {
   const format = getTrustNameFormat(sheet, scope)
   const update = (patch: Parameters<typeof setTrustNameFormat>[2]) =>
-    onChange('decisions', setTrustNameFormat(sheet, scope, patch))
+    onChange('decisions', prevSheet => setTrustNameFormat(prevSheet, scope, patch))
 
   return (
     <div className="space-y-3">
@@ -176,7 +176,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   const autoMaritalDeductionSavings = spousalFunding === 'disclaimer' || spousalFunding === 'clayton_election'
 
   const updateTrustDetails = (patch: Parameters<typeof setTrustDetails>[1]) =>
-    onChange('decisions', setTrustDetails(sheet, patch))
+    onChange('decisions', prevSheet => setTrustDetails(prevSheet, patch))
 
   if (scope === 'spouse') {
     const spouseNominationOptions = nominationOptionsForContext({
@@ -189,20 +189,20 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
 
     const handleSpouseNominationChange = (value: string) => {
       const nomination = (value || null) as InitialTrusteeNomination | null
-      const nextTrustDetails = {
-        ...trustDetails,
-        spouse_initial_trustee_nomination: nomination,
-      }
-      onChange('decisions', setTrustDetails(sheet, { spouse_initial_trustee_nomination: nomination }))
-      const slotPatch = applyTrusteeNominationsFromSheet(
-        sheet,
-        nextTrustDetails,
-        clientContact,
-        spouseContact,
-      )
-      if (slotPatch.spouse_trustee_slots) {
-        onChange('spouse_trustee_slots', slotPatch.spouse_trustee_slots)
-      }
+      onChange('decisions', prevSheet => setTrustDetails(prevSheet, { spouse_initial_trustee_nomination: nomination }))
+      onChange('spouse_trustee_slots', prevSheet => {
+        const nextTrustDetails = {
+          ...getTrustDetails(prevSheet),
+          spouse_initial_trustee_nomination: nomination,
+        }
+        const slotPatch = applyTrusteeNominationsFromSheet(
+          prevSheet,
+          nextTrustDetails,
+          clientContact,
+          spouseContact,
+        )
+        return slotPatch.spouse_trustee_slots ?? prevSheet.spouse_trustee_slots
+      })
     }
 
     return (
@@ -268,20 +268,20 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
 
   const handleClientNominationChange = (value: string) => {
     const nomination = (value || null) as InitialTrusteeNomination | null
-    const nextTrustDetails = {
-      ...trustDetails,
-      initial_trustee_nomination: nomination,
-    }
-    onChange('decisions', setTrustDetails(sheet, { initial_trustee_nomination: nomination }))
-    const slotPatch = applyTrusteeNominationsFromSheet(
-      sheet,
-      nextTrustDetails,
-      clientContact,
-      spouseContact,
-    )
-    if (slotPatch.trustee_slots) {
-      onChange('trustee_slots', slotPatch.trustee_slots)
-    }
+    onChange('decisions', prevSheet => setTrustDetails(prevSheet, { initial_trustee_nomination: nomination }))
+    onChange('trustee_slots', prevSheet => {
+      const nextTrustDetails = {
+        ...getTrustDetails(prevSheet),
+        initial_trustee_nomination: nomination,
+      }
+      const slotPatch = applyTrusteeNominationsFromSheet(
+        prevSheet,
+        nextTrustDetails,
+        clientContact,
+        spouseContact,
+      )
+      return slotPatch.trustee_slots ?? prevSheet.trustee_slots
+    })
   }
 
   const pickerContacts = contacts as unknown as PickerContact[]
@@ -354,7 +354,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
                 <Checkbox
                   checked={spousalFunding === option.value}
                   onCheckedChange={checked => {
-                    if (checked) onChange('decisions', setTrustPlanningType(sheet, option.value))
+                    if (checked) onChange('decisions', prevSheet => setTrustPlanningType(prevSheet, option.value))
                   }}
                   className="mt-0.5"
                 />
@@ -468,20 +468,20 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
                 })}
                 onChange={value => {
                   const nomination = (value || null) as InitialTrusteeNomination | null
-                  const nextTrustDetails = {
-                    ...trustDetails,
-                    spouse_initial_trustee_nomination: nomination,
-                  }
-                  onChange('decisions', setTrustDetails(sheet, { spouse_initial_trustee_nomination: nomination }))
-                  const slotPatch = applyTrusteeNominationsFromSheet(
-                    sheet,
-                    nextTrustDetails,
-                    clientContact,
-                    spouseContact,
-                  )
-                  if (slotPatch.spouse_trustee_slots) {
-                    onChange('spouse_trustee_slots', slotPatch.spouse_trustee_slots)
-                  }
+                  onChange('decisions', prevSheet => setTrustDetails(prevSheet, { spouse_initial_trustee_nomination: nomination }))
+                  onChange('spouse_trustee_slots', prevSheet => {
+                    const nextTrustDetails = {
+                      ...getTrustDetails(prevSheet),
+                      spouse_initial_trustee_nomination: nomination,
+                    }
+                    const slotPatch = applyTrusteeNominationsFromSheet(
+                      prevSheet,
+                      nextTrustDetails,
+                      clientContact,
+                      spouseContact,
+                    )
+                    return slotPatch.spouse_trustee_slots ?? prevSheet.spouse_trustee_slots
+                  })
                 }}
               />
             </div>

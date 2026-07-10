@@ -229,6 +229,9 @@ function normalizeTrustProtector(value: unknown) {
 export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
   const input = formatPhoneFieldsDeep(data) as Record<string, unknown>
   const payload: Record<string, unknown> = {}
+  // Start from the canonical decisions object. inflateDesignSheetRow mirrors decision
+  // keys onto the sheet top-level for convenience; those mirrors go stale when the UI
+  // updates only `decisions` (e.g. document_inclusions.trust) and must NOT win here.
   const decisions: Record<string, unknown> = isRecord(input.decisions) ? { ...input.decisions } : {}
 
   for (const [key, value] of Object.entries(input)) {
@@ -237,15 +240,17 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
 
     if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
       payload[key] = normalizeColumnValue(key, value)
-    } else {
+    } else if (!(key in decisions)) {
       decisions[key] = value
     }
   }
 
-  // Slot arrays belong on dedicated columns; stale copies in decisions caused reloads to
-  // ignore attorney selections when the column still held empty placeholder slots.
-  for (const key of FIDUCIARY_SLOT_COLUMN_KEYS) {
-    delete decisions[key]
+  // Writable columns belong on dedicated fields; stale copies in decisions caused reloads
+  // to prefer legacy jsonb values (e.g. plan_type, fiduciary slots) over saved columns.
+  for (const key of WRITABLE_DESIGN_SHEET_COLUMNS) {
+    if (key !== 'decisions') {
+      delete decisions[key]
+    }
   }
 
   payload.decisions = decisions
@@ -262,21 +267,21 @@ export function inflateDesignSheetRow(row: Record<string, unknown> | null): Desi
     if (SYSTEM_COLUMNS.has(key) || key === 'decisions') continue
     if (RETIRED_DESIGN_SHEET_KEYS.has(key)) continue
 
-    if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
-      if (FIDUCIARY_SLOT_COLUMN_KEYS.has(key)) {
-        sheet[key] = mergeFiduciarySlotColumn(sheet[key], value)
-        continue
-      }
+    // Only promote writable column values from decisions (legacy rows that stored
+    // column data in jsonb). Decision-only keys (document_inclusions, estate_plan_design,
+    // etc.) must stay inside `decisions` — mirroring them onto the sheet top-level made
+    // autosave overwrite newer decisions with stale copies.
+    if (!WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) continue
 
-      const current = sheet[key]
-      // Prefer decisions when the column is null/empty but decisions has real data
-      // (fields that previously fell through to decisions before being added to WRITABLE).
-      const currentEmptyArray = Array.isArray(current) && current.length === 0
-      const decisionNonEmptyArray = Array.isArray(value) && value.length > 0
-      if (current == null || current === '' || (currentEmptyArray && decisionNonEmptyArray)) {
-        sheet[key] = value
-      }
-    } else {
+    if (FIDUCIARY_SLOT_COLUMN_KEYS.has(key)) {
+      sheet[key] = mergeFiduciarySlotColumn(sheet[key], value)
+      continue
+    }
+
+    const current = sheet[key]
+    const currentEmptyArray = Array.isArray(current) && current.length === 0
+    const decisionNonEmptyArray = Array.isArray(value) && value.length > 0
+    if (current == null || current === '' || (currentEmptyArray && decisionNonEmptyArray)) {
       sheet[key] = value
     }
   }

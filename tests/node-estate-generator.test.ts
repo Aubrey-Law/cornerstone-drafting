@@ -5,7 +5,7 @@ import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
-import { hoistParagraphConditionals, renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
+import { hoistParagraphConditionals, repairSplitNunjucksInXml, renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
 import { loadNodeEstatePackage, loadNodeEstateStateRules } from '@/lib/estateGenerator/node/config'
 import { buildNodeEstateContext } from '@/lib/estateGenerator/node/context'
 import { generateEstatePlanDocumentsNode, generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
@@ -649,6 +649,15 @@ describe('node estate generator text rendering', () => {
     } finally {
       fs.rmSync(templatePath, { force: true })
     }
+  })
+
+  describe('repairSplitNunjucksInXml', () => {
+    it('joins merge tags Word split across runs with OOXML in between', () => {
+      const xml = '<w:p><w:r><w:t>{% if </w:t></w:r><w:r><w:t>client.aka</w:t></w:r><w:r><w:t> %}shown{% endif %}</w:t></w:r></w:p>'
+      expect(repairSplitNunjucksInXml(xml)).toBe(
+        '<w:p><w:r><w:t>{% if client.aka %}shown{% endif %}</w:t></w:r></w:p>',
+      )
+    })
   })
 
   describe('hoistParagraphConditionals', () => {

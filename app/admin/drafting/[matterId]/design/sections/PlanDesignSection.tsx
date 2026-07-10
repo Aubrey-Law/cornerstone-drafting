@@ -120,7 +120,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
   const updateDecisions = (
     ...updates: Array<(current: Pick<typeof sheet, 'decisions'>) => Record<string, unknown>>
   ) => {
-    onChange('decisions', mergeDecisionUpdates(sheet, ...updates))
+    onChange('decisions', prevSheet => mergeDecisionUpdates(prevSheet, ...updates))
   }
 
   const updateDocument = (key: keyof typeof inclusions, checked: boolean) => {
@@ -133,23 +133,29 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
 
   const handlePlanTypeSelect = (value: string) => {
     const nextPlanType = value as DesignPlanType
-    onChange('plan_type', value)
+    onChange('plan_type', () => nextPlanType)
 
     if (planTypeDisallowsRevocableTrustDocument(nextPlanType)) {
-      if (inclusions.trust) {
-        updateDecisions(
+      onChange('decisions', prevSheet => {
+        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
+        if (!inclusionsForPlan.trust) return prevSheet.decisions ?? {}
+        return mergeDecisionUpdates(prevSheet,
           current => setDocumentInclusion(current, 'trust', false),
           current => setEstatePlanDesignSetup(current, { trust: false, will_title: 'last_will' }),
         )
-      }
+      })
       return
     }
 
-    if (designPlanTypeIncludesRevocableTrust(nextPlanType) && !inclusions.trust) {
-      updateDecisions(
-        current => setDocumentInclusion(current, 'trust', true),
-        current => setEstatePlanDesignSetup(current, { trust: true, will_title: 'pour_over_will' }),
-      )
+    if (designPlanTypeIncludesRevocableTrust(nextPlanType)) {
+      onChange('decisions', prevSheet => {
+        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
+        if (inclusionsForPlan.trust) return prevSheet.decisions ?? {}
+        return mergeDecisionUpdates(prevSheet,
+          current => setDocumentInclusion(current, 'trust', true),
+          current => setEstatePlanDesignSetup(current, { trust: true, will_title: 'pour_over_will' }),
+        )
+      })
     }
   }
 
@@ -216,7 +222,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
     const next = new Set(selectedAssetTransferDocs)
     if (checked) next.add(docType)
     else next.delete(docType)
-    onChange('decisions', setSelectedAssetTransferDocs(sheet, Array.from(next)))
+    onChange('decisions', prevSheet => setSelectedAssetTransferDocs(prevSheet, Array.from(next)))
   }
 
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''

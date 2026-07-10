@@ -9,6 +9,7 @@ import { SectionBlock, SlotStateToggle } from './shared'
 import ContactPicker, { type Contact } from './ContactPicker'
 import {
   addAlternate,
+  addBackupAgent,
   removeAlternate,
   addCo,
   removeCo,
@@ -53,7 +54,7 @@ export function FiduciaryRoleSection({
   role: FiduciaryRole
   slots: FiduciarySlot[]
   contacts: MatterContact[]
-  onSlotsChange: (slots: FiduciarySlot[]) => void
+  onSlotsChange: (updater: FiduciarySlot[] | ((prev: FiduciarySlot[]) => FiduciarySlot[])) => void
   onAddContact: (data: Omit<Contact, 'id'>) => Promise<Contact>
   onUpdateContact?: (id: string, data: Omit<Contact, 'id'>) => Promise<Contact>
   slotStates: Record<string, SlotState> | null
@@ -110,11 +111,16 @@ export function FiduciaryRoleSection({
   const handleCoShortcutToggle = (checked: boolean) => {
     if (!coContact || !primaryGroup) return
     if (checked) {
-      const withCo = addCo(slots, 0)
-      const coSlot = [...withCo].reverse().find(s => s.order === 0 && s.is_co && !s.contact_id)
-      onSlotsChange(coSlot ? setSlotContact(withCo, coSlot.id, coContact.id) : withCo)
+      onSlotsChange(prev => {
+        const withCo = addCo(prev, 0)
+        const coSlot = [...withCo].reverse().find(s => s.order === 0 && s.is_co && !s.contact_id)
+        return coSlot ? setSlotContact(withCo, coSlot.id, coContact.id) : withCo
+      })
     } else {
-      onSlotsChange(shortcutCoSlot ? removeCo(slots, shortcutCoSlot.id) : removeCoForOrder(slots, 0))
+      onSlotsChange(prev => {
+        const coSlot = prev.find(s => s.order === 0 && s.is_co && s.contact_id === coContact.id) ?? null
+        return coSlot ? removeCo(prev, coSlot.id) : removeCoForOrder(prev, 0)
+      })
     }
   }
 
@@ -138,7 +144,7 @@ export function FiduciaryRoleSection({
           <Checkbox
             checked={primarySlot.contact_id === s.contact.id}
             onCheckedChange={checked => {
-              onSlotsChange(setSlotContact(slots, primarySlot.id, checked ? s.contact.id : null))
+              onSlotsChange(prev => setSlotContact(prev, primarySlot.id, checked ? s.contact.id : null))
             }}
           />
           <span className="text-xs text-foreground">
@@ -182,7 +188,7 @@ export function FiduciaryRoleSection({
                     role={label}
                     required={isPrimary}
                     value={contactById(pickerContacts, group.principal.contact_id, extraContacts)}
-                    onChange={c => onSlotsChange(setSlotContact(slots, group.principal.id, c?.id ?? null))}
+                    onChange={c => onSlotsChange(prev => setSlotContact(prev, group.principal.id, c?.id ?? null))}
                     contacts={pickerContacts}
                     onAddContact={onAddContact}
                     onUpdateContact={onUpdateContact}
@@ -191,7 +197,7 @@ export function FiduciaryRoleSection({
                 {!isPrimary && (
                   <button
                     type="button"
-                    onClick={() => onSlotsChange(removeAlternate(slots, group.principal.order))}
+                    onClick={() => onSlotsChange(prev => removeAlternate(prev, group.principal.order))}
                     className="mt-8 rounded p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive"
                     title="Remove alternate"
                   >
@@ -208,7 +214,7 @@ export function FiduciaryRoleSection({
                         <ContactPicker
                           role={`${resolvedConfig.coLabel} ${coIndex + 1} (${isPrimary ? 'Primary' : `Alt ${group.principal.order}`})`}
                           value={contactById(pickerContacts, coSlot.contact_id, extraContacts)}
-                          onChange={c => onSlotsChange(setSlotContact(slots, coSlot.id, c?.id ?? null))}
+                          onChange={c => onSlotsChange(prev => setSlotContact(prev, coSlot.id, c?.id ?? null))}
                           contacts={pickerContacts}
                           onAddContact={onAddContact}
                           onUpdateContact={onUpdateContact}
@@ -216,7 +222,7 @@ export function FiduciaryRoleSection({
                       </div>
                       <button
                         type="button"
-                        onClick={() => onSlotsChange(removeCo(slots, coSlot.id))}
+                        onClick={() => onSlotsChange(prev => removeCo(prev, coSlot.id))}
                         className="mt-6 rounded p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive"
                         title={`Remove ${resolvedConfig.coLabel.toLowerCase()}`}
                       >
@@ -231,7 +237,7 @@ export function FiduciaryRoleSection({
                 <div className="ml-8 mt-1.5 pl-4">
                   <button
                     type="button"
-                    onClick={() => onSlotsChange(addCo(slots, group.principal.order))}
+                    onClick={() => onSlotsChange(prev => addCo(prev, group.principal.order))}
                     className="flex items-center gap-1 text-[11px] font-medium text-accent transition-colors hover:text-accent/80"
                   >
                     <Plus className="h-3 w-3" />
@@ -255,7 +261,9 @@ export function FiduciaryRoleSection({
             variant="outline"
             size="sm"
             className="gap-1.5 text-xs"
-            onClick={() => onSlotsChange(addAlternate(slots))}
+            onClick={() => onSlotsChange(prev => (
+              slotScope === 'backup' ? addBackupAgent(prev) : addAlternate(prev)
+            ))}
           >
             <Plus className="h-3.5 w-3.5" />
             {slotScope === 'backup'
