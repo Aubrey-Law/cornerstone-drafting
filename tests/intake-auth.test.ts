@@ -34,6 +34,8 @@ describe('intake client auth', () => {
     )
     expect(page).toContain('GuidedInterview')
     expect(page).toContain('hydrateIntakeWithContacts')
+    expect(page).toContain("intake.status === 'submitted'")
+    expect(page).toContain('if (!submitted)')
     expect(fs.existsSync(path.join(process.cwd(), 'components/intake/IntakeWizard.tsx'))).toBe(true)
     expect(fs.existsSync(path.join(process.cwd(), 'lib/intakeSections.ts'))).toBe(true)
   })

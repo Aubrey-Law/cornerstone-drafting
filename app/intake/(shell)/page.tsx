@@ -19,13 +19,23 @@ export default async function IntakeHomePage() {
 
   const intake = await getOrCreateClientIntakeForUser(supabase, user)
 
-  const intakeRow = (await hydrateIntakeWithContacts(
-    supabase,
-    intake as Record<string, unknown>,
-    intake.id as string,
-  )) as IntakeRow
+  const submitted =
+    intake.status === 'submitted' || intake.status === 'approved'
 
-  const submitted = intakeRow.status === 'submitted' || intakeRow.status === 'approved'
+  // The thank-you screen only needs core intake columns; skip contact hydration
+  // after submit so a transient contacts/roles read cannot break the page refresh.
+  let intakeRow = intake as IntakeRow
+  if (!submitted) {
+    try {
+      intakeRow = (await hydrateIntakeWithContacts(
+        supabase,
+        intake as Record<string, unknown>,
+        intake.id as string,
+      )) as IntakeRow
+    } catch (error) {
+      console.error('[intake page] contact hydration failed:', error)
+    }
+  }
 
   if (submitted) {
     const firstName = (intakeRow.first_name as string) || null
