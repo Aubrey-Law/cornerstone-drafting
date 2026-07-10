@@ -1,7 +1,7 @@
 'use client'
 
-import { memo, useEffect, useMemo, useState } from 'react'
-import { Layers, Plus, RefreshCw, Sparkles } from 'lucide-react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { Layers, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -44,6 +44,7 @@ function MatterAssetsTabImpl({
   const [bulkOpen, setBulkOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<AssetIntakeRow | null>(null)
   const [syncingDesignSheet, setSyncingDesignSheet] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
   const {
     assets,
@@ -54,6 +55,7 @@ function MatterAssetsTabImpl({
     createAsset,
     updateAsset,
     deleteAsset,
+    deleteAssets,
     exportReport,
   } = useMatterAssets({
     intakeId,
@@ -76,6 +78,40 @@ function MatterAssetsTabImpl({
     () => groupAssetsByCategory(assets, filter === 'all' ? null : filter),
     [assets, filter],
   )
+
+  const selectedCount = selectedIds.size
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [filter])
+
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const valid = new Set(assets.map(asset => asset.id))
+      const next = new Set([...prev].filter(id => valid.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [assets])
+
+  const toggleSelected = useCallback((assetId: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (checked) next.add(assetId)
+      else next.delete(assetId)
+      return next
+    })
+  }, [])
+
+  const toggleAllVisible = useCallback((assetIds: string[], checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      for (const id of assetIds) {
+        if (checked) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  }, [])
 
   const allocationSegments = useMemo(() => {
     return ASSET_CATEGORIES.map((cat, i) => ({
@@ -138,6 +174,23 @@ function MatterAssetsTabImpl({
     const confirmed = window.confirm(`Delete "${asset.description || 'this asset'}"? This cannot be undone.`)
     if (!confirmed) return
     await deleteAsset(asset.id)
+    setSelectedIds(prev => {
+      if (!prev.has(asset.id)) return prev
+      const next = new Set(prev)
+      next.delete(asset.id)
+      return next
+    })
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    const confirmed = window.confirm(
+      `Delete ${ids.length} selected asset${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
+    )
+    if (!confirmed) return
+    await deleteAssets(ids)
+    setSelectedIds(new Set())
   }
 
   async function handleSyncDesignSheet() {
@@ -236,7 +289,36 @@ function MatterAssetsTabImpl({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <AssetCategoryFilters value={filter} onChange={setFilter} />
+            <div className="flex flex-wrap items-center gap-3">
+              <AssetCategoryFilters value={filter} onChange={setFilter} />
+              {selectedCount > 0 && (
+                <>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedCount} selected
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-destructive hover:text-destructive"
+                    disabled={saving}
+                    onClick={() => void handleBulkDelete()}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete selected
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    Clear
+                  </Button>
+                </>
+              )}
+            </div>
             <Button type="button" variant="link" className="h-auto px-0 text-sm" onClick={() => void exportReport()}>
               Export Asset Report
             </Button>
@@ -245,6 +327,9 @@ function MatterAssetsTabImpl({
           <AssetTable
             groups={groups}
             ownershipLabels={ownershipLabels}
+            selectedIds={selectedIds}
+            onToggleSelected={toggleSelected}
+            onToggleAllVisible={toggleAllVisible}
             onEdit={openEdit}
             onDelete={handleDelete}
           />
