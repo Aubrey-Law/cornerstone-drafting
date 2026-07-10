@@ -7,7 +7,6 @@ import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/databas
 import type { SectionProps } from './shared'
 import { AttorneySelect, FieldLabel, SectionBlock } from './shared'
 import {
-  cloneSlots,
   findClientContact,
   findSpouseContact,
   FiduciaryBlock,
@@ -32,7 +31,6 @@ function useFiduciaryContext(props: DocumentFiduciaryProps) {
   const spouseContact = married ? findSpouseContact(contacts, matter, sheet) : null
   const clientFirst = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/)[0] || ''
   const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
-  const spouseTrusteeSource = separateTrusts ? sheet.spouse_trustee_slots : sheet.trustee_slots
   const hasMinorChildren = sheetHasMinorChildren(sheet.children)
   const blockProps = { ...props, contacts, matter }
 
@@ -44,7 +42,6 @@ function useFiduciaryContext(props: DocumentFiduciaryProps) {
     spouseContact,
     clientFirst,
     spouseFirst,
-    spouseTrusteeSource,
     hasMinorChildren,
     blockProps,
   }
@@ -147,7 +144,6 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
     spouseContact,
     clientFirst,
     spouseFirst,
-    spouseTrusteeSource,
     hasMinorChildren,
     blockProps,
   } = useFiduciaryContext(props)
@@ -176,14 +172,9 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
         {...blockProps}
         role="executor"
         sectionTitle={`${clientFirst || 'Client'}'s Personal Representative`}
-        sameAsTrustee={sheet.executor_same_as_trustee}
-        onSameAsTrusteeToggle={() => {
-          const next = !sheet.executor_same_as_trustee
-          onChange('executor_same_as_trustee', next)
-          if (next) onChange('executor_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['executor_slots'])
-        }}
-        primaryShortcutContact={spouseContact}
-        primaryShortcutLabel={spouseContact ? `${spouseFirst || 'Spouse'} as primary personal representative` : undefined}
+        clientShortcutContact={clientContact}
+        clientShortcutLabel={clientContact ? `${clientFirst} as initial personal representative` : undefined}
+        spouseOptionLabel={spouseContact ? `${spouseFirst} as initial personal representative` : undefined}
       />
 
       {spouseDocs && (
@@ -192,17 +183,9 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
           role="executor"
           slotField="spouse_executor_slots"
           sectionTitle={`${spouseFirst || 'Spouse'}'s Personal Representative`}
-          sameAsTrustee={sheet.spouse_executor_same_as_trustee}
-          sameAsTrusteeLabel="Same as Spouse's Trustees"
-          onSameAsTrusteeToggle={() => {
-            const next = !sheet.spouse_executor_same_as_trustee
-            onChange('spouse_executor_same_as_trustee', next)
-            if (next) {
-              onChange('spouse_executor_slots', cloneSlots(spouseTrusteeSource) as DesignSheet['spouse_executor_slots'])
-            }
-          }}
-          primaryShortcutContact={clientContact}
-          primaryShortcutLabel={clientContact ? `${clientFirst || 'Client'} as primary personal representative` : undefined}
+          clientShortcutContact={clientContact}
+          clientShortcutLabel={clientContact ? `${clientFirst} as initial personal representative` : undefined}
+          spouseOptionLabel={spouseContact ? `${spouseFirst} as initial personal representative` : undefined}
         />
       )}
 
@@ -226,7 +209,6 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
 }
 
 export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
-  const { sheet, onChange } = props
   const { inclusions, spouseDocs, clientContact, spouseContact, clientFirst, spouseFirst, blockProps } = useFiduciaryContext(props)
 
   if (!inclusions.dpoa) return null
@@ -240,13 +222,9 @@ export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
         sectionTitle={`${clientFirst || 'Client'}'s First Attorney-in-Fact(s)`}
         primaryLabel="First Attorney-in-Fact"
         coLabel="Co-Agent"
-        sameAsTrustee={sheet.poa_same_as_trustee}
-        onSameAsTrusteeToggle={() => {
-          const next = !sheet.poa_same_as_trustee
-          onChange('poa_same_as_trustee', next)
-          if (next) onChange('poa_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['poa_slots'])
-        }}
-        spouseOptionLabel={spouseContact ? 'Spouse as DPOA agent' : undefined}
+        clientShortcutContact={clientContact}
+        clientShortcutLabel={clientContact ? `${clientFirst} as initial attorney-in-fact` : undefined}
+        spouseOptionLabel={spouseContact ? `${spouseFirst} as initial attorney-in-fact` : undefined}
       />
       <FiduciaryBlock
         {...blockProps}
@@ -267,17 +245,9 @@ export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
             sectionTitle={`${spouseFirst || 'Spouse'}'s First Attorney-in-Fact(s)`}
             primaryLabel="First Attorney-in-Fact"
             coLabel="Co-Agent"
-            sameAsTrustee={sheet.spouse_poa_same_as_trustee}
-            sameAsTrusteeLabel="Same as Spouse's Trustees"
-            onSameAsTrusteeToggle={() => {
-              const next = !sheet.spouse_poa_same_as_trustee
-              onChange('spouse_poa_same_as_trustee', next)
-              if (next) {
-                onChange('spouse_poa_slots', cloneSlots(props.sheet.spouse_trustee_slots) as DesignSheet['spouse_poa_slots'])
-              }
-            }}
-            primaryShortcutContact={clientContact}
-            primaryShortcutLabel="Client as spouse / partner DPOA agent"
+            clientShortcutContact={clientContact}
+            clientShortcutLabel={clientContact ? `${clientFirst} as initial attorney-in-fact` : undefined}
+            spouseOptionLabel={spouseContact ? `${spouseFirst} as initial attorney-in-fact` : undefined}
           />
           <FiduciaryBlock
             {...blockProps}
@@ -295,7 +265,7 @@ export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
 }
 
 export function HealthCareFiduciarySections(props: DocumentFiduciaryProps) {
-  const { spouseDocs, clientContact, spouseContact, blockProps, inclusions } = useFiduciaryContext(props)
+  const { spouseDocs, clientContact, spouseContact, clientFirst, spouseFirst, blockProps, inclusions } = useFiduciaryContext(props)
 
   if (!inclusions.healthcare) return null
 
@@ -304,7 +274,9 @@ export function HealthCareFiduciarySections(props: DocumentFiduciaryProps) {
       <FiduciaryBlock
         {...blockProps}
         role="hcp"
-        spouseOptionLabel={spouseContact ? 'Spouse as health care agent' : undefined}
+        clientShortcutContact={clientContact}
+        clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
+        spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
       />
 
       {spouseDocs && (
@@ -313,8 +285,9 @@ export function HealthCareFiduciarySections(props: DocumentFiduciaryProps) {
           role="hcp"
           slotField="spouse_hcp_slots"
           sectionTitle="Spouse / Partner Health Care Proxy"
-          primaryShortcutContact={clientContact}
-          primaryShortcutLabel="Client as spouse / partner health care agent"
+          clientShortcutContact={clientContact}
+          clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
+          spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
         />
       )}
     </>

@@ -168,6 +168,19 @@ export function setDocumentInclusion(
   }
 }
 
+/** Apply multiple decisions patches in sequence so batched UI updates do not clobber each other. */
+export function mergeDecisionUpdates(
+  sheet: Pick<DesignSheet, 'decisions'>,
+  ...updates: Array<(current: Pick<DesignSheet, 'decisions'>) => Record<string, unknown>>
+): Record<string, unknown> {
+  let current: Pick<DesignSheet, 'decisions'> = sheet
+  for (const update of updates) {
+    const nextDecisions = update(current)
+    current = { decisions: nextDecisions }
+  }
+  return isRecord(current.decisions) ? current.decisions : {}
+}
+
 function defaultWillTitle(inclusions: Pick<DesignDocumentInclusions, 'trust'>): EstatePlanWillTitle {
   return inclusions.trust ? 'pour_over_will' : 'last_will'
 }

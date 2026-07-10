@@ -20,7 +20,10 @@ import type { SlotState } from '@/types/planReview'
 
 export interface SectionProps {
   sheet: DesignSheet
-  onChange: <K extends keyof DesignSheet>(field: K, value: DesignSheet[K]) => void
+  onChange: <K extends keyof DesignSheet>(
+    field: K,
+    value: DesignSheet[K] | ((previous: DesignSheet) => DesignSheet[K]),
+  ) => void
 }
 
 // ── Field-level validation ─────────────────────────────────────────────────────

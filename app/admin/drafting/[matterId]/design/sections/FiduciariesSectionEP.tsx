@@ -7,13 +7,13 @@ import type { DesignSheet, FiduciarySlot, MatterContact, PipelineMatter } from '
 import { AttorneyNoteBanner, DesignSectionContent, SectionBlock } from './shared'
 import type { SectionProps } from './shared'
 import {
-  cloneSlots,
   findClientContact,
   findSpouseContact,
   isMarriedSheet,
   partyFullName,
   PartyTabs,
   primaryContactId,
+  resolveSlotContactIds,
   setPrimaryContact,
 } from './fiduciary-blocks'
 
@@ -68,57 +68,30 @@ function RoleShortcuts({
   sheet,
   onChange,
   primaryOptions,
-  showCopyTrustees,
+  clientContact,
+  spouseContact,
 }: {
   roles: PrimaryRole[]
   slotFields: Record<PrimaryRole, keyof DesignSheet>
   sheet: DesignSheet
   onChange: Props['onChange']
   primaryOptions: { contact: MatterContact; label: string }[]
-  showCopyTrustees: boolean
+  clientContact: MatterContact | null
+  spouseContact: MatterContact | null
 }) {
   const setPrimary = (role: PrimaryRole, contact: MatterContact | null, checked: boolean) => {
     const field = slotFields[role]
-    const slots = (sheet[field] as FiduciarySlot[] | null) ?? []
-    onChange(
-      field,
-      (checked && contact
-        ? setPrimaryContact(slots, contact.id)
-        : contact && primaryContactId(slots) === contact.id
-          ? setPrimaryContact(slots, null)
-          : slots) as DesignSheet[typeof field],
-    )
-  }
-
-  const copyTrusteesToRole = (role: PrimaryRole) => {
-    const field = slotFields[role]
-    if (role === 'executor' && field === 'executor_slots') {
-      onChange('executor_same_as_trustee', true)
-      onChange('executor_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['executor_slots'])
-      return
-    }
-    if (role === 'poa' && field === 'poa_slots') {
-      onChange('poa_same_as_trustee', true)
-      onChange('poa_slots', cloneSlots(sheet.trustee_slots) as DesignSheet['poa_slots'])
-      return
-    }
-    if (role === 'executor' && field === 'spouse_executor_slots') {
-      onChange('spouse_executor_same_as_trustee', true)
-      onChange(
-        'spouse_executor_slots',
-        cloneSlots(sheet.spouse_trustee_slots?.length ? sheet.spouse_trustee_slots : sheet.trustee_slots) as DesignSheet['spouse_executor_slots'],
-      )
-      return
-    }
-    if (role === 'poa' && field === 'spouse_poa_slots') {
-      onChange('spouse_poa_same_as_trustee', true)
-      onChange(
-        'spouse_poa_slots',
-        cloneSlots(sheet.spouse_trustee_slots?.length ? sheet.spouse_trustee_slots : sheet.trustee_slots) as DesignSheet['spouse_poa_slots'],
-      )
-      return
-    }
-    onChange(field, cloneSlots(sheet.trustee_slots) as DesignSheet[typeof field])
+    onChange(field, prevSheet => {
+      const slots = (prevSheet[field] as FiduciarySlot[] | null) ?? []
+      const resolved = resolveSlotContactIds(slots, clientContact, spouseContact)
+      if (checked && contact) {
+        return setPrimaryContact(resolved, contact.id) as DesignSheet[typeof field]
+      }
+      if (contact && primaryContactId(resolved) === contact.id) {
+        return setPrimaryContact(resolved, null) as DesignSheet[typeof field]
+      }
+      return resolved as DesignSheet[typeof field]
+    })
   }
 
   return (
@@ -142,15 +115,6 @@ function RoleShortcuts({
                 />
               ))}
             </div>
-            {showCopyTrustees && role !== 'hcp' && (
-              <button
-                type="button"
-                className="text-xs font-medium text-accent hover:text-accent/80"
-                onClick={() => copyTrusteesToRole(role)}
-              >
-                Copy trustees to {roleLabel.toLowerCase()} slots
-              </button>
-            )}
           </div>
         )
       })}
@@ -189,19 +153,19 @@ export function FiduciariesSectionEP({ sheet, onChange, contacts, matter }: Prop
 
   const clientOptions = [
     ...(clientContact
-      ? [{ contact: clientContact, label: `${clientFirst} as primary {role}` }]
+      ? [{ contact: clientContact, label: `${clientFirst} as initial {role}` }]
       : []),
     ...(spouseContact
-      ? [{ contact: spouseContact, label: `${spouseFirst} as primary {role}` }]
+      ? [{ contact: spouseContact, label: `${spouseFirst} as initial {role}` }]
       : []),
   ]
 
   const spouseOptions = [
     ...(spouseContact
-      ? [{ contact: spouseContact, label: `${spouseFirst} as primary {role}` }]
+      ? [{ contact: spouseContact, label: `${spouseFirst} as initial {role}` }]
       : []),
     ...(clientContact
-      ? [{ contact: clientContact, label: `${clientFirst} as primary {role}` }]
+      ? [{ contact: clientContact, label: `${clientFirst} as initial {role}` }]
       : []),
   ]
 
@@ -211,7 +175,7 @@ export function FiduciariesSectionEP({ sheet, onChange, contacts, matter }: Prop
   return (
     <DesignSectionContent>
       <AttorneyNoteBanner>
-        Use the shortcuts below to name the client or spouse as primary for key roles. Detailed successor
+        Use the shortcuts below to name the client or spouse as initial for key roles. Detailed successor
         nominations remain on the Trust, Will, Financial POA, and Health Care sections.
       </AttorneyNoteBanner>
 
@@ -237,7 +201,8 @@ export function FiduciariesSectionEP({ sheet, onChange, contacts, matter }: Prop
           sheet={sheet}
           onChange={onChange}
           primaryOptions={party === 'spouse' ? spouseOptions : clientOptions}
-          showCopyTrustees={inclusions.trust}
+          clientContact={clientContact}
+          spouseContact={spouseContact}
         />
       </SectionBlock>
     </DesignSectionContent>

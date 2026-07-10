@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   defaultDocumentInclusions,
   getDocumentInclusions,
+  getEstatePlanDesignSetup,
   getTrustPlanningType,
+  mergeDecisionUpdates,
+  setDocumentInclusion,
+  setEstatePlanDesignSetup,
   setTrustPlanningType,
 } from '@/lib/designSheetDocumentInclusions'
 
@@ -60,6 +64,41 @@ describe('design sheet document inclusions', () => {
       plan_type: 'outright_will',
       marital_status: 'single',
     }).trust).toBe(false)
+  })
+
+  it('merges sequential core document inclusion updates without clobbering prior patches', () => {
+    const sheet = {
+      decisions: {
+        document_inclusions: {
+          trust: true,
+          will: true,
+          dpoa: true,
+          healthcare: true,
+        },
+        estate_plan_design: {
+          will: true,
+          power_of_attorney: true,
+        },
+      },
+    }
+
+    const uncheckedWill = mergeDecisionUpdates(sheet,
+      current => setDocumentInclusion(current, 'will', false),
+      current => setEstatePlanDesignSetup(current, { will: false }),
+    )
+
+    expect(getDocumentInclusions({ decisions: uncheckedWill }).will).toBe(false)
+    expect(getEstatePlanDesignSetup({ decisions: uncheckedWill }).will).toBe(false)
+    expect(getDocumentInclusions({ decisions: uncheckedWill }).dpoa).toBe(true)
+
+    const uncheckedDpoa = mergeDecisionUpdates(
+      { decisions: uncheckedWill },
+      current => setDocumentInclusion(current, 'dpoa', false),
+      current => setEstatePlanDesignSetup(current, { power_of_attorney: false }),
+    )
+
+    expect(getDocumentInclusions({ decisions: uncheckedDpoa }).dpoa).toBe(false)
+    expect(getEstatePlanDesignSetup({ decisions: uncheckedDpoa }).power_of_attorney).toBe(false)
   })
 
   it('defaults the trust planning type to outright_to_spouse and toggles it via the decisions JSONB', () => {

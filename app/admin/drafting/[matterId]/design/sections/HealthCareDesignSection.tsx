@@ -13,7 +13,7 @@ import {
   type AnatomicalGiftPreference,
 } from '@/lib/designSheetHealthcareProvisions'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
-import { FiduciaryBlock, isMarriedSheet } from './fiduciary-blocks'
+import { FiduciaryBlock, findClientContact, findSpouseContact, isMarriedSheet } from './fiduciary-blocks'
 import type { SectionProps } from './shared'
 import {
   DesignSheetCheckboxOption,
@@ -166,11 +166,14 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
   const provisions = getDesignSheetHealthcareProvisions(sheet)
   const clientFirst = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/)[0] || ''
   const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
-  const spouseDocs = isMarriedSheet(sheet) && inclusions.spouse_docs
+  const married = isMarriedSheet(sheet)
+  const spouseDocs = married && inclusions.spouse_docs
+  const clientContact = findClientContact(contacts, matter, sheet)
+  const spouseContact = married ? findSpouseContact(contacts, matter, sheet) : null
   const settlorLabel = clientFirst || 'Settlor'
 
   const updateProvisions = (patch: Parameters<typeof setDesignSheetHealthcareProvisions>[1]) => {
-    onChange('decisions', setDesignSheetHealthcareProvisions(sheet, patch))
+    onChange('decisions', prevSheet => setDesignSheetHealthcareProvisions(prevSheet, patch))
   }
 
   const toggleHipaaAgent = (
@@ -228,6 +231,9 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
         sectionTitle={`${clientFirst || 'Client'}'s Health Care Proxy`}
         primaryLabel="First Agent"
         altLabel="First Agent"
+        clientShortcutContact={clientContact}
+        clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
+        spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
       />
       <FiduciaryBlock
         {...props}
@@ -260,6 +266,9 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
             sectionTitle={`${spouseFirst || 'Spouse'}'s Health Care Proxy`}
             primaryLabel="First Agent"
             altLabel="First Agent"
+            clientShortcutContact={clientContact}
+            clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
+            spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
           />
           <FiduciaryBlock
             {...props}
@@ -329,7 +338,7 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
         </div>
       </SectionBlock>
 
-      {spouseDocs ? (
+      {married ? (
         <>
           {renderAdditionalHipaaAgents(
             `${clientFirst || 'Client'}'s Additional HIPAA Agents`,

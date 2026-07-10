@@ -10,6 +10,7 @@ import {
   getEstatePlanDesignSetup,
   setEstatePlanDesignSetup,
   type EstatePlanAncillaryDocumentKey,
+  mergeDecisionUpdates,
   setDocumentInclusion,
 } from '@/lib/designSheetDocumentInclusions'
 import {
@@ -116,12 +117,18 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
     'include_asset_spreadsheet',
   ]
 
+  const updateDecisions = (
+    ...updates: Array<(current: Pick<typeof sheet, 'decisions'>) => Record<string, unknown>>
+  ) => {
+    onChange('decisions', mergeDecisionUpdates(sheet, ...updates))
+  }
+
   const updateDocument = (key: keyof typeof inclusions, checked: boolean) => {
-    onChange('decisions', setDocumentInclusion(sheet, key, checked))
+    updateDecisions(current => setDocumentInclusion(current, key, checked))
   }
 
   const updateEstatePlanSetup = (patch: Parameters<typeof setEstatePlanDesignSetup>[1]) => {
-    onChange('decisions', setEstatePlanDesignSetup(sheet, patch))
+    updateDecisions(current => setEstatePlanDesignSetup(current, patch))
   }
 
   const handlePlanTypeSelect = (value: string) => {
@@ -130,15 +137,19 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
 
     if (planTypeDisallowsRevocableTrustDocument(nextPlanType)) {
       if (inclusions.trust) {
-        updateDocument('trust', false)
-        updateEstatePlanSetup({ trust: false, will_title: 'last_will' })
+        updateDecisions(
+          current => setDocumentInclusion(current, 'trust', false),
+          current => setEstatePlanDesignSetup(current, { trust: false, will_title: 'last_will' }),
+        )
       }
       return
     }
 
     if (designPlanTypeIncludesRevocableTrust(nextPlanType) && !inclusions.trust) {
-      updateDocument('trust', true)
-      updateEstatePlanSetup({ trust: true, will_title: 'pour_over_will' })
+      updateDecisions(
+        current => setDocumentInclusion(current, 'trust', true),
+        current => setEstatePlanDesignSetup(current, { trust: true, will_title: 'pour_over_will' }),
+      )
     }
   }
 
@@ -148,21 +159,27 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
   ) => {
     if (key === 'trust') {
       if (planTypeDisallowsRevocableTrustDocument(normalizedPlanType)) return
-      updateDocument('trust', checked)
-      updateEstatePlanSetup({
-        trust: checked,
-        will_title: checked ? 'pour_over_will' : 'last_will',
-      })
+      updateDecisions(
+        current => setDocumentInclusion(current, 'trust', checked),
+        current => setEstatePlanDesignSetup(current, {
+          trust: checked,
+          will_title: checked ? 'pour_over_will' : 'last_will',
+        }),
+      )
       return
     }
     if (key === 'will') {
-      updateDocument('will', checked)
-      updateEstatePlanSetup({ will: checked })
+      updateDecisions(
+        current => setDocumentInclusion(current, 'will', checked),
+        current => setEstatePlanDesignSetup(current, { will: checked }),
+      )
       return
     }
     if (key === 'power_of_attorney') {
-      updateDocument('dpoa', checked)
-      updateEstatePlanSetup({ power_of_attorney: checked })
+      updateDecisions(
+        current => setDocumentInclusion(current, 'dpoa', checked),
+        current => setEstatePlanDesignSetup(current, { power_of_attorney: checked }),
+      )
       return
     }
 
@@ -171,12 +188,14 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
       hipaa_authorization: key === 'hipaa_authorization' ? checked : estatePlanSetup.hipaa_authorization,
       living_will: key === 'living_will' ? checked : estatePlanSetup.living_will,
     }
-    updateDocument('healthcare', Object.values(nextHealthcare).some(Boolean))
-    updateEstatePlanSetup({
-      health_care_proxy: nextHealthcare.health_care_proxy,
-      hipaa_authorization: nextHealthcare.hipaa_authorization,
-      living_will: nextHealthcare.living_will,
-    })
+    updateDecisions(
+      current => setDocumentInclusion(current, 'healthcare', Object.values(nextHealthcare).some(Boolean)),
+      current => setEstatePlanDesignSetup(current, {
+        health_care_proxy: nextHealthcare.health_care_proxy,
+        hipaa_authorization: nextHealthcare.hipaa_authorization,
+        living_will: nextHealthcare.living_will,
+      }),
+    )
   }
 
   const updateAncillaryDocument = (key: EstatePlanAncillaryDocumentKey, checked: boolean) => {

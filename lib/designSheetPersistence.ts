@@ -41,6 +41,38 @@ const ARRAY_DESIGN_SHEET_FIELDS = new Set([
   'staggered_distributions',
 ])
 
+/** Fiduciary slot arrays stored as top-level columns — never shadow in decisions jsonb. */
+const FIDUCIARY_SLOT_COLUMN_KEYS = new Set([
+  'trustee_slots',
+  'executor_slots',
+  'poa_slots',
+  'hcp_slots',
+  'guardian_slots',
+  'temporary_guardian_slots',
+  'spouse_trustee_slots',
+  'spouse_executor_slots',
+  'spouse_poa_slots',
+  'spouse_hcp_slots',
+])
+
+function isFiduciarySlotArray(value: unknown): value is Array<{ contact_id?: string | null }> {
+  return Array.isArray(value)
+}
+
+function fiduciarySlotsHaveAssignment(slots: unknown): boolean {
+  if (!isFiduciarySlotArray(slots)) return false
+  return slots.some(slot => typeof slot?.contact_id === 'string' && slot.contact_id.length > 0)
+}
+
+/** Prefer column slots when they carry assignments; otherwise fall back to decisions. */
+function mergeFiduciarySlotColumn(columnValue: unknown, decisionsValue: unknown): unknown {
+  if (fiduciarySlotsHaveAssignment(columnValue)) return columnValue
+  if (fiduciarySlotsHaveAssignment(decisionsValue)) return decisionsValue
+  if (isFiduciarySlotArray(columnValue) && columnValue.length > 0) return columnValue
+  if (isFiduciarySlotArray(decisionsValue) && decisionsValue.length > 0) return decisionsValue
+  return columnValue ?? decisionsValue ?? []
+}
+
 // Columns added by 20260715000000_lite_design_sheets_intake_columns.sql — intake seed
 // must write here (not only into decisions) so isDesignSheetUnseeded and resync work.
 const INTAKE_MIRROR_DESIGN_SHEET_COLUMNS = [
@@ -210,6 +242,12 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
     }
   }
 
+  // Slot arrays belong on dedicated columns; stale copies in decisions caused reloads to
+  // ignore attorney selections when the column still held empty placeholder slots.
+  for (const key of FIDUCIARY_SLOT_COLUMN_KEYS) {
+    delete decisions[key]
+  }
+
   payload.decisions = decisions
   return payload
 }
@@ -225,6 +263,11 @@ export function inflateDesignSheetRow(row: Record<string, unknown> | null): Desi
     if (RETIRED_DESIGN_SHEET_KEYS.has(key)) continue
 
     if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
+      if (FIDUCIARY_SLOT_COLUMN_KEYS.has(key)) {
+        sheet[key] = mergeFiduciarySlotColumn(sheet[key], value)
+        continue
+      }
+
       const current = sheet[key]
       // Prefer decisions when the column is null/empty but decisions has real data
       // (fields that previously fell through to decisions before being added to WRITABLE).

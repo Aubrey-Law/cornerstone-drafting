@@ -203,16 +203,22 @@ export function useDesignSheetState({
     setDirtyFields(new Set())
   }, [])
 
-  const updateField = useCallback(<K extends keyof DesignSheet>(field: K, value: DesignSheet[K]) => {
+  const updateField = useCallback(<K extends keyof DesignSheet>(
+    field: K,
+    value: DesignSheet[K] | ((previous: DesignSheet) => DesignSheet[K]),
+  ) => {
     setSheet(prev => {
       const fieldName = field as string
-      const next = { ...prev, [field]: value }
+      const resolved = typeof value === 'function'
+        ? (value as (previous: DesignSheet) => DesignSheet[K])(prev)
+        : value
+      const next = { ...prev, [field]: resolved }
       if (!INTAKE_PREFILLED_FIELDS.has(fieldName)) return next
 
       const previousOverrides = prev.overrides ?? {}
       const existing = previousOverrides[fieldName]
       const original = existing?.original ?? normalizeOverrideValue(prev[field])
-      const updated = normalizeOverrideValue(value)
+      const updated = normalizeOverrideValue(resolved)
       const overrides = { ...previousOverrides }
 
       if (updated === original) {
