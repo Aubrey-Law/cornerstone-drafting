@@ -116,8 +116,8 @@ function intakeChildren(intake: IntakeSnapshot): DesignSheetChild[] | null {
   return children.length > 0 ? children : null
 }
 
-function fiduciarySlots(slots: FiduciarySlot[] | null | undefined): FiduciarySlot[] | null {
-  if (!slots?.length) return null
+function fiduciarySlots(slots: FiduciarySlot[] | null | undefined): FiduciarySlot[] | undefined {
+  if (!slots?.length) return undefined
   return slots
 }
 
