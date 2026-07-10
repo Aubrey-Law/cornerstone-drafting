@@ -7,7 +7,7 @@ import { Briefcase, Plus, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
-import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
+import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
 import { stageLabel, type PipelineMatter } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -34,10 +34,6 @@ interface MattersClientProps {
   matters: PipelineMatter[]
   loadError?: string | null
 }
-
-const CREATE_PRACTICE_OPTIONS = PRACTICE_AREA_OPTIONS.filter(
-  o => o.value === 'EP' || o.value === 'EP-LP',
-)
 
 export default function MattersClient(props: MattersClientProps) {
   return (
@@ -70,7 +66,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [clientPhone, setClientPhone] = useState('')
-  const [planType, setPlanType] = useState<'EP' | 'EP-LP'>('EP')
+  const [planType, setPlanType] = useState<PracticeAreaCode>('EP')
   const [deleteTarget, setDeleteTarget] = useState<PipelineMatter | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
@@ -285,7 +281,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                       {m.client_email || '—'}
                     </td>
                     <td className="hidden px-3 py-2.5 text-muted-foreground md:table-cell">
-                      {m.practice_area || '—'}
+                      {practiceAreaLabel(m.practice_area)}
                     </td>
                     <td className="px-3 py-2.5">{stageLabel(m.stage)}</td>
                     <td className="hidden px-3 py-2.5 capitalize text-muted-foreground lg:table-cell">
@@ -380,12 +376,12 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             </div>
             <div className="grid gap-1.5">
               <Label>Practice area</Label>
-              <Select value={planType} onValueChange={v => setPlanType(v as 'EP' | 'EP-LP')}>
+              <Select value={planType} onValueChange={v => setPlanType(v as PracticeAreaCode)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {CREATE_PRACTICE_OPTIONS.map(o => (
+                  {PRACTICE_AREA_OPTIONS.map(o => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
                     </SelectItem>
