@@ -99,7 +99,7 @@ export function MatterOverviewContacts({ matterId, matter }: { matterId: string;
   if (loading) {
     return (
       <div className="rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
-        Loading household contacts…
+        Loading family contacts…
       </div>
     )
   }
@@ -109,7 +109,7 @@ export function MatterOverviewContacts({ matterId, matter }: { matterId: string;
   return (
     <section className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold">Household</h3>
+        <h3 className="text-sm font-semibold">Family</h3>
         <p className="text-xs text-muted-foreground">
           Client, spouse, and children from intake.
         </p>
@@ -126,7 +126,7 @@ export function MatterOverviewContacts({ matterId, matter }: { matterId: string;
         ))}
       </PersonContactCardGrid>
       {!clientContact && (
-        <p className="text-xs text-muted-foreground">No household contact data yet. Use Intake to add client information.</p>
+        <p className="text-xs text-muted-foreground">No family contact data yet. Use Intake to add client information.</p>
       )}
     </section>
   )

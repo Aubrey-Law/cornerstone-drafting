@@ -745,6 +745,76 @@ export default function MatterDetailClient({
               sendIntakePending={sendingIntake}
             />
 
+            <MatterOverviewContacts matterId={matterId} matter={matter} />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Stage
+                </p>
+                <Select
+                  value={matter.stage}
+                  onValueChange={v => void handleStageChange(v as MatterStage)}
+                  disabled={stageSaving}
+                >
+                  <SelectTrigger className="h-8 w-full max-w-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STAGES.map(s => (
+                      <SelectItem key={s.key} value={s.key}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Intake status
+                </p>
+                <p className="text-sm capitalize">
+                  {matter.intake_status?.replace(/_/g, ' ') || '—'}
+                </p>
+                {matter.intake_sent_at && (
+                  <p className="text-xs text-muted-foreground">
+                    Sent {new Date(matter.intake_sent_at).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-xs"
+                onClick={() => void handleSendIntake()}
+                disabled={sendingIntake}
+              >
+                <Send className="h-3.5 w-3.5 text-accent" />
+                {sendingIntake ? 'Sending…' : 'Send intake'}
+              </Button>
+              <MatterAssistantQuickPrompts
+                className="contents"
+                prompts={[
+                  { label: 'Summarize intake', prompt: "Summarize this client's situation" },
+                  { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
+                ]}
+              />
+              {intakeUrl && (
+                <Button type="button" size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => void copyIntakeUrl()}>
+                  Copy intake link
+                </Button>
+              )}
+            </div>
+            {intakeUrl && (
+              <p className="break-all rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                {intakeUrl}
+              </p>
+            )}
+
             <MatterEssentialsCard
               matter={matter}
               details={matterDetails}
@@ -790,81 +860,6 @@ export default function MatterDetailClient({
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Client
-                </p>
-                <p className="text-sm font-medium">{matter.client_name || '—'}</p>
-                <p className="text-xs text-muted-foreground">{matter.client_email || '—'}</p>
-                <p className="text-xs text-muted-foreground">{matter.client_phone || '—'}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Stage
-                </p>
-                <Select
-                  value={matter.stage}
-                  onValueChange={v => void handleStageChange(v as MatterStage)}
-                  disabled={stageSaving}
-                >
-                  <SelectTrigger className="h-8 w-full max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STAGES.map(s => (
-                      <SelectItem key={s.key} value={s.key}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Intake status
-                </p>
-                <p className="text-sm capitalize">
-                  {matter.intake_status?.replace(/_/g, ' ') || '—'}
-                </p>
-                {matter.intake_sent_at && (
-                  <p className="text-xs text-muted-foreground">
-                    Sent {new Date(matter.intake_sent_at).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void handleSendIntake()}
-                disabled={sendingIntake}
-              >
-                <Send className="h-3.5 w-3.5" />
-                {sendingIntake ? 'Sending…' : 'Send intake'}
-              </Button>
-              {intakeUrl && (
-                <Button type="button" size="sm" variant="outline" onClick={() => void copyIntakeUrl()}>
-                  Copy intake link
-                </Button>
-              )}
-            </div>
-            <MatterAssistantQuickPrompts
-              className="flex flex-wrap gap-2"
-              prompts={[
-                { label: 'Summarize intake', prompt: "Summarize this client's situation" },
-                { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
-              ]}
-            />
-            {intakeUrl && (
-              <p className="break-all rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                {intakeUrl}
-              </p>
-            )}
-
-            <MatterOverviewContacts matterId={matterId} matter={matter} />
             <IntakeSyncStatusCard
               matterId={matterId}
               intakeCompleted={intakeCompleted}
