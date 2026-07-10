@@ -59,6 +59,7 @@ export interface EstateGeneratorData {
   dpoa: Record<string, unknown>
   testamentary_trust: Record<string, unknown>
   fiduciaries: Record<string, unknown>
+  fiduciary_display: Record<string, unknown>
   healthcare: Record<string, unknown>
   hipaa: Record<string, unknown>
   execution: Record<string, unknown>
@@ -712,7 +713,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         primary_has_spouse: Boolean(payload.client.full_name),
       },
     },
-    fiduciary_display: fiduciaryDisplay,
+    fiduciary_display: { ...fiduciaryDisplay } as Record<string, unknown>,
     healthcare: {
       agent: {
         primary: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.primary, payload.fiduciaries.hcp_primary, {
@@ -815,21 +816,23 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       narrative: fundingPlan.narrative ?? '',
       checklist_items: fundingPlan.checklist_items ?? [],
     },
-    homestead: payload.homestead ?? {
-      beneficiary_names: '',
-      primary_beneficiary_name: '',
-      beneficiary_pronoun_possessive: 'their',
-      trustee_pronoun_possessive: 'his/her/their',
-      servicemember_names: '',
-      property_address_line: '',
-      trust_deed_book: '',
-      trust_deed_page: '',
-      deed_registry_district: '',
-      deed_book: '',
-      deed_page: '',
-      certificate_number: '',
-      land_court_document_number: '',
-    },
+    homestead: {
+      ...(payload.homestead ?? {
+        beneficiary_names: '',
+        primary_beneficiary_name: '',
+        beneficiary_pronoun_possessive: 'their',
+        trustee_pronoun_possessive: 'his/her/their',
+        servicemember_names: '',
+        property_address_line: '',
+        trust_deed_book: '',
+        trust_deed_page: '',
+        deed_registry_district: '',
+        deed_book: '',
+        deed_page: '',
+        certificate_number: '',
+        land_court_document_number: '',
+      }),
+    } as Record<string, unknown>,
     tax: {
       sensitive_estate: payload.trust?.ma_estate_taxable ?? false,
     },

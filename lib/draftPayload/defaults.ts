@@ -2,7 +2,14 @@ import { getFiduciaryDocumentInclusions } from '@/lib/designSheet/fiduciaryDocum
 import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
 import { buildFiduciaryRoleDetailsFromDesignSheet } from '@/lib/draftPayload/fiduciaryDetails'
-import type { DraftPayload } from '@/lib/draftPayload/types'
+import type { DesignSheetRow, DraftPayload } from '@/lib/draftPayload/types'
+
+const EMPTY_DESIGN_SHEET = {
+  id: '',
+  status: null,
+  decisions: null,
+  hcp_anatomical_gift: null,
+} as DesignSheetRow
 
 export function defaultDraftPayloadSupplementary(): Pick<
   DraftPayload,
@@ -16,7 +23,7 @@ export function defaultDraftPayloadSupplementary(): Pick<
   | 'goals_notes'
   | 'concerns'
 > {
-  const emptySheet = { decisions: null, hcp_anatomical_gift: null }
+  const emptySheet = EMPTY_DESIGN_SHEET
   const healthcare = draftPayloadHealthcare(emptySheet, [])
 
   return {

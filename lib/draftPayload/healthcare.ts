@@ -59,7 +59,15 @@ export function draftPayloadHealthcare(
   hcp_provisions: DraftPayloadHcpProvisions
   hipaa_provisions: DraftPayloadHipaaProvisions
 } {
-  const provisions = getDesignSheetHealthcareProvisions(designSheet)
+  const provisions = getDesignSheetHealthcareProvisions({
+    decisions: designSheet.decisions ?? null,
+    hcp_anatomical_gift:
+      designSheet.hcp_anatomical_gift === 'all'
+      || designSheet.hcp_anatomical_gift === 'specified'
+      || designSheet.hcp_anatomical_gift === 'none'
+        ? designSheet.hcp_anatomical_gift
+        : null,
+  })
   const clientHipaaAgents = resolveContactDetails(
     provisions.client_hipaa_additional_agent_contact_ids,
     contacts,
