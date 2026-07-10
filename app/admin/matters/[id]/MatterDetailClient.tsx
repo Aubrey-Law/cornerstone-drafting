@@ -240,7 +240,7 @@ export default function MatterDetailClient({
     if (!window.confirm('Re-open the submitted intake for client editing?')) return
     setUnlocking(true)
     try {
-      await unlockIntake({ intakeId: liveIntakeId, matterId, leadId: null })
+      await unlockIntake({ intakeId: liveIntakeId, matterId })
       setIntakeCompleted(false)
       toast.success('Intake unlocked for client editing')
       router.refresh()
