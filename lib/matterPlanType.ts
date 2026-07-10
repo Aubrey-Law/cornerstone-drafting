@@ -1,6 +1,7 @@
-export type MatterPlanType = 'Will Plan' | 'Trust Plan' | 'N/A'
+export type MatterPlanType = 'TBD' | 'Will Plan' | 'Trust Plan' | 'N/A'
 
 export const MATTER_PLAN_TYPE_OPTIONS: Array<{ value: MatterPlanType; label: string }> = [
+  { value: 'TBD', label: 'TBD' },
   { value: 'Will Plan', label: 'Will Plan' },
   { value: 'Trust Plan', label: 'Trust Plan' },
   { value: 'N/A', label: 'N/A' },
@@ -18,7 +19,7 @@ const LEGACY_PLAN_TYPES = new Set([
 export function normalizePlanType(value: unknown): MatterPlanType {
   if (typeof value !== 'string') return 'N/A'
   const trimmed = value.trim()
-  if (trimmed === 'Will Plan' || trimmed === 'Trust Plan' || trimmed === 'N/A') {
+  if (trimmed === 'TBD' || trimmed === 'Will Plan' || trimmed === 'Trust Plan' || trimmed === 'N/A') {
     return trimmed
   }
   if (LEGACY_PLAN_TYPES.has(trimmed)) return 'N/A'

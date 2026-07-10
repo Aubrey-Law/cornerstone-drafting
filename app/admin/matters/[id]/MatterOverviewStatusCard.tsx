@@ -15,14 +15,26 @@ interface MatterOverviewStatusCardProps {
   onStageChange: (stage: MatterStage) => void
 }
 
+function isMarried(maritalStatus: string | null | undefined): boolean {
+  return maritalStatus?.trim().toLowerCase() === 'married'
+}
+
 export function MatterOverviewStatusCard({
   matter,
   stageSaving,
   onStageChange,
 }: MatterOverviewStatusCardProps) {
+  const showSpouse = isMarried(matter.marital_status)
+
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div
+        className={
+          showSpouse
+            ? 'grid gap-4 md:grid-cols-2 lg:grid-cols-4'
+            : 'grid gap-4 md:grid-cols-3'
+        }
+      >
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             Client
@@ -31,6 +43,16 @@ export function MatterOverviewStatusCard({
           <p className="text-xs text-muted-foreground">{matter.client_email || '—'}</p>
           <p className="text-xs text-muted-foreground">{matter.client_phone || '—'}</p>
         </div>
+        {showSpouse && (
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Spouse
+            </p>
+            <p className="text-sm font-medium">{matter.spouse_name || '—'}</p>
+            <p className="text-xs text-muted-foreground">{matter.spouse_email || '—'}</p>
+            <p className="text-xs text-muted-foreground">{matter.spouse_phone || '—'}</p>
+          </div>
+        )}
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             Stage

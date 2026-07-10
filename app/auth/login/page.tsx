@@ -5,7 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
-import { safeAdminRedirectPath, safeClientRedirectPath } from '@/lib/auth/safeRedirect'
+import {
+  DEFAULT_ADMIN_HOME,
+  safeAdminRedirectPath,
+  safeClientRedirectPath,
+} from '@/lib/auth/safeRedirect'
 import { ensureUserProfile } from '@/lib/auth/ensureUserProfile'
 import { toast } from 'sonner'
 
@@ -49,7 +53,7 @@ async function resolveDestination(userId: string, redirectTo: string | null): Pr
 
   const role = await ensureUserProfile(supabase, user)
   if (role && ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) {
-    return safeAdminRedirectPath(redirectTo) ?? '/admin/drafting'
+    return safeAdminRedirectPath(redirectTo) ?? DEFAULT_ADMIN_HOME
   }
   if (role === 'client') {
     return safeClientRedirectPath(redirectTo) ?? '/dashboard'

@@ -48,4 +48,12 @@ ALTER TABLE public.design_sheets ADD COLUMN IF NOT EXISTS spouse_pronouns text;
 ALTER TABLE public.design_sheets ADD COLUMN IF NOT EXISTS excluded_guardian_flag boolean DEFAULT false;
 ALTER TABLE public.design_sheets ADD COLUMN IF NOT EXISTS excluded_guardian_name text;
 
+ALTER TABLE public.matter_details ADD COLUMN IF NOT EXISTS conflict_cleared boolean;
+ALTER TABLE public.matter_details ADD COLUMN IF NOT EXISTS engagement_signed boolean;
+ALTER TABLE public.matter_details ADD COLUMN IF NOT EXISTS legal_plan_service_start date;
+ALTER TABLE public.matter_details ADD COLUMN IF NOT EXISTS legal_plan_service_end date;
+ALTER TABLE public.matter_details ADD COLUMN IF NOT EXISTS pb_inventory_due_date date;
+
+ALTER TABLE public.matters ADD COLUMN IF NOT EXISTS matter_number_manual boolean NOT NULL DEFAULT false;
+
 NOTIFY pgrst, 'reload schema';

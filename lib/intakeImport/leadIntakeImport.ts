@@ -417,6 +417,12 @@ async function parseAndSaveIntakeDraft(args: {
 
   if (matterId) {
     await linkIntakeToMatter(admin, matterId, intakeId)
+    const { ensureDesignSheetSeededFromIntake } = await import('@/lib/designSheet/ensureDesignSheetSeeded')
+    try {
+      await ensureDesignSheetSeededFromIntake(matterId)
+    } catch (error) {
+      console.error('[intake import] design sheet seed failed:', error)
+    }
   }
 
   return { intakeId, data: formData }

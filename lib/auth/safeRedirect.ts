@@ -1,3 +1,5 @@
+export const DEFAULT_ADMIN_HOME = '/admin/matters'
+
 const ADMIN_REDIRECT_PREFIXES = ['/admin']
 
 const CLIENT_REDIRECT_ALLOWLIST = [

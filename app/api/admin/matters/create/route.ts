@@ -1,29 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
-import { normalizePracticeArea, practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
+import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
-
-async function generateSimpleMatterNumber(
-  admin: ReturnType<typeof getAdminClient>,
-  practiceArea: string,
-): Promise<string> {
-  const year = new Date().getFullYear()
-  const code = practiceAreaMatterCode(practiceArea)
-  const prefix = `${year}-${code}-`
-
-  const { data } = await admin
-    .from('matters')
-    .select('matter_number')
-    .like('matter_number', `${prefix}%`)
-    .order('matter_number', { ascending: false })
-    .limit(1)
-
-  const last = data?.[0]?.matter_number as string | undefined
-  const lastSeq = last ? Number.parseInt(last.slice(prefix.length), 10) : 0
-  const next = Number.isFinite(lastSeq) ? lastSeq + 1 : 1
-  return `${prefix}${String(next).padStart(3, '0')}`
-}
+import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 
 export async function POST(req: Request) {
   const { err, userId } = await requireAdmin(req)
@@ -76,7 +56,12 @@ export async function POST(req: Request) {
     )
   }
 
-  const matterNumber = await generateSimpleMatterNumber(admin, practiceArea)
+  const matterNumber = await generateUniqueMatterNumber(admin, {
+    year: new Date().getFullYear(),
+    practiceArea,
+    clientLastName: last_name,
+    clientFirstName: first_name,
+  })
   const now = new Date().toISOString()
 
   const { data: matter, error: matterError } = await admin

@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { safeAdminRedirectPath, safeClientRedirectPath } from '@/lib/auth/safeRedirect'
+import {
+  DEFAULT_ADMIN_HOME,
+  safeAdminRedirectPath,
+  safeClientRedirectPath,
+} from '@/lib/auth/safeRedirect'
 
 const ADMIN_ROLES = ['attorney', 'admin']
 const CLIENT_ROLE = 'client'
@@ -89,7 +93,7 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === '/') {
     const url = request.nextUrl.clone()
-    url.pathname = '/admin/drafting'
+    url.pathname = DEFAULT_ADMIN_HOME
     return NextResponse.redirect(url)
   }
 
@@ -151,7 +155,7 @@ export async function proxy(request: NextRequest) {
       const clientRedirect = safeClientRedirectPath(searchParams.get('redirectTo'))
       let destinationPath = '/auth/login'
       if (role && ADMIN_ROLES.includes(role)) {
-        destinationPath = adminRedirect ?? '/admin/drafting'
+        destinationPath = adminRedirect ?? DEFAULT_ADMIN_HOME
       } else if (role === CLIENT_ROLE) {
         destinationPath = clientRedirect ?? '/dashboard'
       }
@@ -167,7 +171,7 @@ export async function proxy(request: NextRequest) {
 
     if (isPortalPath(pathname) && role !== CLIENT_ROLE) {
       if (role && ADMIN_ROLES.includes(role)) {
-        return NextResponse.redirect(new URL('/admin/drafting', request.url))
+        return NextResponse.redirect(new URL(DEFAULT_ADMIN_HOME, request.url))
       }
       return redirectToLogin(request, pathname)
     }

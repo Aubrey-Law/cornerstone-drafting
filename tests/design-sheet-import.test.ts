@@ -229,9 +229,9 @@ describe('design sheet persistence import safety', () => {
 
     expect(payload).toMatchObject({
       trust_name: 'Existing Trust',
+      client_name: 'Jane Doe',
+      children: [{ name: 'Alex Doe', dob: null, relationship: 'biological', is_minor: true }],
       decisions: {
-        client_name: 'Jane Doe',
-        children: [{ name: 'Alex Doe', dob: null, relationship: 'biological', is_minor: true }],
         drafting_notes: 'Keep these notes',
       },
     })
@@ -244,10 +244,9 @@ describe('design sheet persistence import safety', () => {
     } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
 
     expect(payload).toEqual({
+      client_name: 'Jane Doe',
       client_pronouns: 'she/her',
-      decisions: {
-        client_name: 'Jane Doe',
-      },
+      decisions: {},
     })
   })
 
@@ -259,11 +258,10 @@ describe('design sheet persistence import safety', () => {
     } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
 
     expect(payload).toMatchObject({
+      client_name: 'Jane Doe',
       excluded_guardian_flag: true,
       excluded_guardian_name: 'John Smith',
-      decisions: {
-        client_name: 'Jane Doe',
-      },
+      decisions: {},
     })
   })
 
@@ -274,9 +272,8 @@ describe('design sheet persistence import safety', () => {
     } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
 
     expect(payload).toEqual({
-      decisions: {
-        client_name: 'Jane Doe',
-      },
+      client_name: 'Jane Doe',
+      decisions: {},
     })
   })
 
@@ -291,7 +288,7 @@ describe('design sheet persistence import safety', () => {
       },
     })
 
-    expect(inflated?.client_name).toBe('Current Decision Client')
+    expect(inflated?.client_name).toBe('Stale Column Client')
     expect(inflated?.trust_name).toBe('Column Trust')
   })
 })

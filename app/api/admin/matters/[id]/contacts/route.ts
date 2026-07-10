@@ -6,6 +6,7 @@ import {
   insertFiduciaryContactsForIntake,
   sanitizeLeadFiduciaryContacts,
 } from '@/lib/leadFiduciaries'
+import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -117,16 +118,27 @@ export async function GET(req: NextRequest, { params }: Params) {
   })
 }
 
+type HouseholdPostBody = {
+  relationship_type: 'spouse' | 'child'
+  first_name: string
+  last_name: string
+  middle_name?: string | null
+  suffix?: string | null
+  preferred_name?: string | null
+  preferred_pronoun?: string | null
+  date_of_birth?: string | null
+  email?: string | null
+  phone?: string | null
+  address_line1?: string | null
+}
+
 export async function POST(req: NextRequest, { params }: Params) {
   const { err } = await requireAdmin(req)
   if (err) return err
 
   const { id: matterId } = await params
   const admin = getAdminClient()
-  const body = await req.json().catch(() => null) as { contacts?: unknown } | null
-  const { contacts, error: sanitizeError } = sanitizeLeadFiduciaryContacts(body?.contacts)
-  if (sanitizeError) return NextResponse.json({ error: sanitizeError }, { status: 400 })
-  if (contacts.length === 0) return NextResponse.json({ error: 'At least one contact is required' }, { status: 400 })
+  const body = await req.json().catch(() => null) as { contacts?: unknown; household?: HouseholdPostBody } | null
 
   const { data: matter } = await admin
     .from('matters')
@@ -138,8 +150,48 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
   }
 
+  const intakeId = matter.client_intake_id as string
+
+  if (body?.household) {
+    const h = body.household
+    if (h.relationship_type !== 'spouse' && h.relationship_type !== 'child') {
+      return NextResponse.json({ error: 'relationship_type must be spouse or child' }, { status: 400 })
+    }
+    const first = h.first_name?.trim() ?? ''
+    const last = h.last_name?.trim() ?? ''
+    if (!first && !last) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    }
+
+    try {
+      const { id } = await saveHouseholdContact(admin, {
+        householdId: intakeId,
+        relationship_type: h.relationship_type,
+        first_name: first,
+        last_name: last,
+        middle_name: h.middle_name ?? null,
+        suffix: h.suffix ?? null,
+        preferred_name: h.preferred_name ?? null,
+        preferred_pronoun: h.preferred_pronoun ?? null,
+        date_of_birth: h.date_of_birth ?? null,
+        email: h.email ?? null,
+        phone: h.phone ?? null,
+        address_line1: h.address_line1 ?? null,
+        source: 'attorney_intake',
+      })
+      return NextResponse.json({ ok: true, contactId: id })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save household member'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
+
+  const { contacts, error: sanitizeError } = sanitizeLeadFiduciaryContacts(body?.contacts)
+  if (sanitizeError) return NextResponse.json({ error: sanitizeError }, { status: 400 })
+  if (contacts.length === 0) return NextResponse.json({ error: 'At least one contact is required' }, { status: 400 })
+
   const result = await insertFiduciaryContactsForIntake(admin, {
-    clientIntakeId: matter.client_intake_id as string,
+    clientIntakeId: intakeId,
     contacts,
     source: ADMIN_FIDUCIARY_CONTACT_SOURCE,
   })

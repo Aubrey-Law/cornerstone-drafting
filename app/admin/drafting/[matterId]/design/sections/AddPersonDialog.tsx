@@ -159,7 +159,9 @@ export function AddPersonDialog({
     : form.fiduciary_type === 'individual' || form.fiduciary_type === 'independent_professional'
 
   async function handleSubmit() {
-    if (!form.first_name.trim() || !form.last_name.trim()) {
+    const firstName = form.first_name.trim()
+    const lastName = form.last_name.trim() || firstName
+    if (!firstName) {
       toast.error('Name is required.')
       return
     }
@@ -167,6 +169,8 @@ export function AddPersonDialog({
     try {
       await onSave({
         ...form,
+        first_name: firstName,
+        last_name: lastName,
         phone: formatPhoneForStorage(form.phone) ?? form.phone,
       })
       onOpenChange(false)
@@ -244,11 +248,11 @@ export function AddPersonDialog({
                     : 'Beneficiary Name'
               }
               onChange={e => {
-                const parts = e.target.value.trim().split(/\s+/).filter(Boolean)
+                const parts = e.target.value.split(/\s+/).filter(Boolean)
                 const first = parts[0] ?? ''
                 const last = parts.length > 1 ? parts[parts.length - 1] : ''
                 const middle = parts.length > 2 ? parts.slice(1, -1).join(' ') : ''
-                setForm(prev => ({ ...prev, first_name: first, middle_name: middle, last_name: last || first }))
+                setForm(prev => ({ ...prev, first_name: first, middle_name: middle, last_name: last }))
               }}
             />
           </div>

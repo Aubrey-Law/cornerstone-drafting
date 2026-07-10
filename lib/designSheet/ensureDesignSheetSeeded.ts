@@ -64,16 +64,20 @@ export async function ensureDesignSheetSeededFromIntake(
     return ensureBlankDesignSheet(matterId, sheet)
   }
 
-  const seedPayload = buildDesignSheetPersistencePayload(buildIntakeSeedPayload(intake))
   const now = new Date().toISOString()
 
   if (sheet?.id) {
     if (!isDesignSheetUnseeded(sheet)) return false
 
+    const mergedSeedPayload = buildDesignSheetPersistencePayload({
+      ...sheet,
+      ...buildIntakeSeedPayload(intake),
+    })
+
     const { error } = await admin
       .from('design_sheets')
       .update({
-        ...seedPayload,
+        ...mergedSeedPayload,
         updated_at: now,
       })
       .eq('id', sheet.id)
@@ -95,6 +99,8 @@ export async function ensureDesignSheetSeededFromIntake(
   if (matterError) throw new Error(matterError.message)
   if (!matter?.client_intake_id) return false
 
+  const insertSeedPayload = buildDesignSheetPersistencePayload(buildIntakeSeedPayload(intake))
+
   const { error: insertError } = await admin
     .from('design_sheets')
     .insert({
@@ -102,7 +108,7 @@ export async function ensureDesignSheetSeededFromIntake(
       client_intake_id: matter.client_intake_id,
       version: 1,
       status: 'draft',
-      ...seedPayload,
+      ...insertSeedPayload,
       updated_at: now,
     })
 

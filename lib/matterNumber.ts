@@ -8,6 +8,30 @@ export function formatMatterNumber(year: number, code: MatterCode, seq: number):
   return `${year}-${code}-${String(seq).padStart(3, '0')}`
 }
 
+/** Slug for client last name in matter numbers, e.g. "Mary O'Brien" -> "OBrien". */
+export function clientNameMatterSlug(fullName: string | null | undefined): string {
+  const trimmed = (fullName ?? '').trim()
+  if (!trimmed) return 'Client'
+  const parts = trimmed.split(/\s+/)
+  const last = parts[parts.length - 1] ?? parts[0] ?? 'Client'
+  const slug = last.replace(/[^a-zA-Z0-9]/g, '')
+  return slug || 'Client'
+}
+
+export function matterNumberPrefix(year: number, code: MatterCode, clientSlug: string): string {
+  return `${year}-${code}-${clientSlug}-`
+}
+
+/** Format with client name, e.g. "2026-EP-Smith-001". */
+export function formatMatterNumberWithClient(
+  year: number,
+  code: MatterCode,
+  clientSlug: string,
+  seq: number,
+): string {
+  return `${matterNumberPrefix(year, code, clientSlug)}${String(seq).padStart(3, '0')}`
+}
+
 /**
  * Extract the numeric sequence from a matter number given its `YYYY-CODE-`
  * prefix. Returns null when the value doesn't match the prefix or the tail
@@ -23,6 +47,12 @@ export function parseMatterSeq(matterNumber: string, prefix: string): number | n
 interface GenerateMatterNumberInput {
   year: number
   practiceArea: unknown
+  clientLastName?: string | null
+  clientFirstName?: string | null
+}
+
+interface SetMatterNumberOptions {
+  manual?: boolean
 }
 
 /**
@@ -38,17 +68,20 @@ export async function setMatterNumber(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: SupabaseClient<any, any, any>,
   matterId: string,
-  value: string | null
+  value: string | null,
+  options?: SetMatterNumberOptions,
 ): Promise<Record<string, unknown> | null> {
   const next = value === '' ? null : value
+  const matterUpdate: { matter_number: string | null; matter_number_manual?: boolean } = {
+    matter_number: next,
+  }
+  if (options?.manual !== undefined) {
+    matterUpdate.matter_number_manual = options.manual
+  }
 
-  // Update the canonical column and confirm a row actually matched. Without the
-  // row-count check a bad matterId would silently no-op here while the
-  // matter_details upsert below still "succeeds" — the value would show
-  // optimistically and then vanish on reload (the read pulls matters.matter_number).
   const { data: matterRows, error: matterErr } = await admin
     .from('matters')
-    .update({ matter_number: next })
+    .update(matterUpdate)
     .eq('id', matterId)
     .select('id')
   if (matterErr) throw new Error(matterErr.message)
@@ -56,13 +89,11 @@ export async function setMatterNumber(
     throw new Error(`No matter found for id "${matterId}" — matter number not saved`)
   }
 
-  // Upsert (not update) so the copy persists even when no matter_details row
-  // exists yet — a plain update would silently no-op in that case.
   const { data, error: detailsErr } = await admin
     .from('matter_details')
     .upsert(
       { client_id: matterId, matter_number: next },
-      { onConflict: 'client_id' }
+      { onConflict: 'client_id' },
     )
     .select()
     .single()
@@ -72,19 +103,20 @@ export async function setMatterNumber(
 }
 
 /**
- * Allocate the next sequential matter number for a (year, practice area):
- *   "2026-EP-001", "2026-EP-002", ...
- * Reads the current max sequence for the "YYYY-CODE-" prefix and increments.
+ * Allocate the next sequential matter number for a (year, practice area, client):
+ *   "2026-EP-Smith-001", "2026-EP-Smith-002", ...
+ * Reads the current max sequence for the "YYYY-CODE-LastName-" prefix and increments.
  * The matter_number unique index is the source of truth: on a collision (a
  * concurrent allocation took the same NNN) we bump and retry.
  */
 export async function generateUniqueMatterNumber(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: SupabaseClient<any, any, any>,
-  input: GenerateMatterNumberInput
+  input: GenerateMatterNumberInput,
 ): Promise<string> {
   const code = practiceAreaMatterCode(input.practiceArea)
-  const prefix = `${input.year}-${code}-`
+  const clientSlug = clientNameMatterSlug(input.clientLastName || input.clientFirstName)
+  const prefix = matterNumberPrefix(input.year, code, clientSlug)
 
   const { data: rows, error } = await admin
     .from('matters')
@@ -99,7 +131,7 @@ export async function generateUniqueMatterNumber(
   }
 
   for (let attempt = 1; attempt <= 50; attempt++) {
-    const candidate = formatMatterNumber(input.year, code, maxSeq + attempt)
+    const candidate = formatMatterNumberWithClient(input.year, code, clientSlug, maxSeq + attempt)
     const { data: clash, error: clashErr } = await admin
       .from('matters')
       .select('id')

@@ -34,7 +34,7 @@ export default async function MatterDetailPage({ params }: Params) {
     designSheet,
     intakeSnapshot,
   ] = await Promise.all([
-    admin.from('matters').select('client_intake_id, matter_number, portal_uploads_reviewed_at').eq('id', id).maybeSingle(),
+    admin.from('matters').select('client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at').eq('id', id).maybeSingle(),
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
     admin
       .from('matter_notes')
@@ -70,6 +70,7 @@ export default async function MatterDetailPage({ params }: Params) {
   }
 
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
+  const matterNumberManual = Boolean(matterRow?.matter_number_manual)
   const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
   const reviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
   const resyncPreviewCount = intakeSnapshot && designSheet
@@ -97,6 +98,7 @@ export default async function MatterDetailPage({ params }: Params) {
       intakeId={intakeId}
       clientIntakeRow={clientIntakeRow}
       matterNumber={matterNumber}
+      matterNumberManual={matterNumberManual}
       matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
       unreviewedUploadCounts={unreviewedUploadCounts}

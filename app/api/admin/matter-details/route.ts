@@ -66,7 +66,7 @@ export async function PATCH(req: Request) {
   const { err } = await requireAdmin(req)
   if (err) return err
 
-  const { matterId, field, value } = await req.json()
+  const { matterId, field, value, manual } = await req.json()
   if (!matterId || !field) {
     return NextResponse.json({ error: 'matterId and field are required' }, { status: 400 })
   }
@@ -75,10 +75,15 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: `Field "${field}" is not writable` }, { status: 400 })
   }
 
+  const admin = getAdminClient()
+  const normalizedValue = value === '' ? null : value
+
   if (field === 'matter_number') {
     // matter_number lives on two tables; setMatterNumber keeps them in sync.
     try {
-      const row = await setMatterNumber(getAdminClient(), matterId, value)
+      const row = await setMatterNumber(admin, matterId, normalizedValue, {
+        manual: manual === false ? false : true,
+      })
       return NextResponse.json({ row })
     } catch (e) {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'Save failed' }, { status: 500 })
@@ -87,11 +92,10 @@ export async function PATCH(req: Request) {
 
   // Use upsert with onConflict: 'client_id' — handles both insert and update atomically.
   // The UNIQUE constraint on client_id makes this safe with no race condition.
-  const admin = getAdminClient()
   const { data, error } = await admin
     .from('matter_details')
     .upsert(
-      { client_id: matterId, [field]: value === '' ? null : value },
+      { client_id: matterId, [field]: normalizedValue },
       { onConflict: 'client_id' }
     )
     .select()
@@ -103,6 +107,23 @@ export async function PATCH(req: Request) {
       .filter(Boolean)
       .join(' — ')
     return NextResponse.json({ error: detail || 'Unknown DB error' }, { status: 500 })
+  }
+
+  if (field === 'plan_type') {
+    const { data: matter } = await admin
+      .from('matters')
+      .select('client_intake_id')
+      .eq('id', matterId)
+      .maybeSingle()
+    if (matter?.client_intake_id) {
+      const { error: intakeErr } = await admin
+        .from('client_intake')
+        .update({ plan_type: normalizedValue })
+        .eq('id', matter.client_intake_id)
+      if (intakeErr) {
+        return NextResponse.json({ error: intakeErr.message }, { status: 500 })
+      }
+    }
   }
 
   return NextResponse.json({ row: data })

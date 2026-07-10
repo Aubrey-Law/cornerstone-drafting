@@ -50,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
 import {
   type CommunicationChannel,
@@ -115,6 +116,7 @@ interface MatterDetailClientProps {
     unlock_request_note?: string | null
   } | null
   matterNumber?: string | null
+  matterNumberManual?: boolean
   matterDetails?: MatterDetailsRow | null
   designSheetPlanType?: string | null
   initialNotes?: MatterNoteRow[]
@@ -185,6 +187,7 @@ function MatterDetailClientInner({
   intakeId: initialIntakeId = null,
   clientIntakeRow = null,
   matterNumber: initialMatterNumber = null,
+  matterNumberManual: initialMatterNumberManual = false,
   matterDetails: initialMatterDetails = null,
   designSheetPlanType = null,
   initialNotes = [],
@@ -218,6 +221,7 @@ function MatterDetailClientInner({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
+  const [matterNumberManual, setMatterNumberManual] = useState(initialMatterNumberManual)
   const [generatingNumber, setGeneratingNumber] = useState(false)
   const [unlocking, setUnlocking] = useState(false)
   const [portalUploadsOpen, setPortalUploadsOpen] = useState(false)
@@ -266,6 +270,9 @@ function MatterDetailClientInner({
       }
       if (field === 'practice_area' && typeof value === 'string') {
         setMatter(current => ({ ...current, practice_area: value }))
+      }
+      if (field === 'plan_type' && typeof value === 'string') {
+        setMatter(current => ({ ...current, plan_type: value }))
       }
     },
     [saveMatterDetailField],
@@ -325,6 +332,10 @@ function MatterDetailClientInner({
   useEffect(() => {
     setMatterNum(initialMatterNumber)
   }, [initialMatterNumber])
+
+  useEffect(() => {
+    setMatterNumberManual(initialMatterNumberManual)
+  }, [initialMatterNumberManual])
 
   useEffect(() => {
     setLiveIntakeId(initialIntakeId)
@@ -430,7 +441,31 @@ function MatterDetailClientInner({
     }
   }, [liveIntakeId, matterId, router, unlocking])
 
+  const handleSaveMatterNumber = useCallback(async (value: string) => {
+    const trimmed = value.trim()
+    const next = trimmed === '' ? null : trimmed
+    if (next === (matterNum ?? null)) return
+    try {
+      const patchRes = await fetch('/api/admin/matter-details', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matterId, field: 'matter_number', value: next, manual: true }),
+      })
+      const patchBody = await patchRes.json().catch(() => ({}))
+      if (!patchRes.ok) throw new Error(patchBody.error ?? 'Failed to save matter number')
+      setMatterNum(next)
+      setMatterNumberManual(true)
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save matter number')
+    }
+  }, [matterId, matterNum, router])
+
   const handleGenerateMatterNumber = useCallback(async () => {
+    if (matterNumberManual) {
+      toast.error('Matter number was manually set')
+      return
+    }
     setGeneratingNumber(true)
     try {
       const res = await fetch(`/api/admin/matters/${matterId}/matter-number`, { method: 'POST' })
@@ -440,11 +475,12 @@ function MatterDetailClientInner({
       const patchRes = await fetch('/api/admin/matter-details', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matterId, field: 'matter_number', value: num }),
+        body: JSON.stringify({ matterId, field: 'matter_number', value: num, manual: false }),
       })
       const patchBody = await patchRes.json().catch(() => ({}))
       if (!patchRes.ok) throw new Error(patchBody.error ?? 'Failed to save matter number')
       setMatterNum(num)
+      setMatterNumberManual(false)
       toast.success('Matter number updated')
       router.refresh()
     } catch (e) {
@@ -452,7 +488,7 @@ function MatterDetailClientInner({
     } finally {
       setGeneratingNumber(false)
     }
-  }, [matterId, router])
+  }, [matterId, matterNumberManual, router])
 
   const handleMarkIntakeUploadsReviewed = useCallback(async (intakeId: string) => {
     try {
@@ -809,21 +845,35 @@ function MatterDetailClientInner({
             <p className="mt-0.5 text-xs text-muted-foreground">
               {subtitleParts.join(' · ')}
             </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="mt-1 h-7 gap-1 px-2 text-[11px]"
-              disabled={generatingNumber}
-              onClick={() => void handleGenerateMatterNumber()}
-            >
-              {generatingNumber ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Zap className="h-3 w-3" />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Input
+                key={matterNum ?? 'empty'}
+                className="h-8 max-w-[220px] text-xs tabular-nums"
+                defaultValue={matterNum ?? ''}
+                placeholder="e.g. 2026-EP-Smith-001"
+                onBlur={event => void handleSaveMatterNumber(event.target.value)}
+              />
+              {!matterNumberManual && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1 px-2 text-[11px]"
+                  disabled={generatingNumber}
+                  onClick={() => void handleGenerateMatterNumber()}
+                >
+                  {generatingNumber ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Zap className="h-3 w-3" />
+                  )}
+                  {matterNum ? 'Auto-generate' : 'Generate matter #'}
+                </Button>
               )}
-              {matterNum ? 'Regenerate matter #' : 'Generate matter #'}
-            </Button>
+              {matterNumberManual && (
+                <span className="text-[11px] text-muted-foreground">Manually set</span>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>

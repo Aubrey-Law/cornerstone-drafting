@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabaseServer'
-import { safeAdminRedirectPath, safeClientRedirectPath } from '@/lib/auth/safeRedirect'
+import {
+  DEFAULT_ADMIN_HOME,
+  safeAdminRedirectPath,
+  safeClientRedirectPath,
+} from '@/lib/auth/safeRedirect'
 import { ensureUserProfile, isFirmEmail } from '@/lib/auth/ensureUserProfile'
 
 const ADMIN_ROLES = ['attorney', 'admin'] as const
@@ -44,7 +48,7 @@ export async function GET(request: Request) {
       await supabase.auth.signOut()
       return NextResponse.redirect(`${origin}/auth/login?error=firm_domain_required`)
     }
-    const destination = safeAdminRedirectPath(rawRedirect) ?? '/admin/drafting'
+    const destination = safeAdminRedirectPath(rawRedirect) ?? DEFAULT_ADMIN_HOME
     return NextResponse.redirect(new URL(destination, origin))
   }
 

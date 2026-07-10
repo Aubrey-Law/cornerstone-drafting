@@ -35,8 +35,8 @@ export function IntakeSyncStatusCard({
       const previewBody = await previewRes.json().catch(() => ({}))
       if (!previewRes.ok) throw new Error(previewBody.error ?? 'Could not load resync preview')
 
-      const fields = (previewBody.preview?.fields ?? [])
-        .filter((f: { selected?: boolean }) => f.selected !== false)
+      const fields = (Array.isArray(previewBody.preview) ? previewBody.preview : [])
+        .filter((f: { selected?: boolean; blocked?: boolean }) => f.selected !== false && !f.blocked)
         .map((f: { field: string }) => f.field)
 
       if (fields.length === 0) {

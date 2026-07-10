@@ -388,11 +388,12 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
       .maybeSingle()
     matterIdForSync = (matter?.id as string | undefined) ?? null
   }
-  await syncIntakeToDesignSheet(admin, intakeId, matterIdForSync, reviewFlags)
-
   if (args.matterId) {
     await linkIntakeToMatter(admin, args.matterId, intakeId)
+    matterIdForSync = args.matterId
   }
+
+  await syncIntakeToDesignSheet(admin, intakeId, matterIdForSync, reviewFlags)
 
   if (args.leadId) revalidatePath(`/admin/leads/${args.leadId}`)
   if (args.matterId) revalidatePath(`/admin/matters/${args.matterId}`)

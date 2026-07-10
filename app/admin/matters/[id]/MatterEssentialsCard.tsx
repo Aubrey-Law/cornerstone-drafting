@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/select'
 import { cn, formatDate } from '@/lib/utils'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
-import { planTypeLabel } from '@/lib/matterPlanType'
+import { MATTER_PLAN_TYPE_OPTIONS, normalizePlanType } from '@/lib/matterPlanType'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea'
 import type { PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -42,10 +42,10 @@ export function MatterEssentialsCard({
   onSaveField,
 }: MatterEssentialsCardProps) {
 
-  const planTypeDisplay =
-    designPlanTypeLabel(designSheetPlanType) ||
-    planTypeLabel(details?.plan_type ?? matter.plan_type) ||
-    '—'
+  const matterPlanType = normalizePlanType(details?.plan_type ?? matter.plan_type ?? 'TBD')
+  const designPlanTypeNote = designSheetPlanType
+    ? designPlanTypeLabel(designSheetPlanType)
+    : null
 
   const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
 
@@ -105,9 +105,26 @@ export function MatterEssentialsCard({
 
         <div className="space-y-1.5">
           <FieldLabel>Plan type</FieldLabel>
-          <p className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm text-foreground">
-            {planTypeDisplay}
-          </p>
+          <Select
+            value={matterPlanType}
+            onValueChange={value => void onSaveField('plan_type', value)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MATTER_PLAN_TYPE_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {designPlanTypeNote && (
+            <p className="text-[11px] text-muted-foreground">
+              Design sheet: {designPlanTypeNote}
+            </p>
+          )}
         </div>
 
         <label className="space-y-1.5">
