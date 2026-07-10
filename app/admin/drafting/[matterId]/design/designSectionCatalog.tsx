@@ -15,7 +15,7 @@ import {
 } from '@/lib/designSheet/designSectionNav'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
-import { AccordionBadge } from './sections/shared'
+import { AccordionBadge, type DesignSheetOnChange } from './sections/shared'
 import { ClientInformationSection } from './sections/PersonalSection'
 import { FamilySection } from './sections/FamilySection'
 import { PlanDesignSection } from './sections/PlanDesignSection'
@@ -54,7 +54,7 @@ export interface BuildDesignSectionsArgs {
   } | null
   documentInclusions: DesignDocumentInclusions
   selectedDocKeysCount: number
-  updateField: <K extends keyof DesignSheet>(field: K, value: DesignSheet[K]) => void
+  updateField: DesignSheetOnChange
   updateLpPatch: (patch: Record<string, unknown>) => void
   handleAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   handleUpdateContact: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>

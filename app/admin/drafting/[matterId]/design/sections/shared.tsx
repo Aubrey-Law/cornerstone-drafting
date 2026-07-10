@@ -18,12 +18,14 @@ import type { SlotState } from '@/types/planReview'
 
 // ── Shared props ──────────────────────────────────────────────────────────────
 
+export type DesignSheetOnChange = <K extends keyof DesignSheet>(
+  field: K,
+  value: DesignSheet[K] | ((previous: DesignSheet) => DesignSheet[K]),
+) => void
+
 export interface SectionProps {
   sheet: DesignSheet
-  onChange: <K extends keyof DesignSheet>(
-    field: K,
-    value: DesignSheet[K] | ((previous: DesignSheet) => DesignSheet[K]),
-  ) => void
+  onChange: DesignSheetOnChange
 }
 
 // ── Field-level validation ─────────────────────────────────────────────────────

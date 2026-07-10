@@ -19,6 +19,7 @@ import {
   INTAKE_PREFILLED_FIELDS,
   normalizeOverrideValue,
 } from './buildInitialSheet'
+import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
 
 export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
 
@@ -203,14 +204,14 @@ export function useDesignSheetState({
     setDirtyFields(new Set())
   }, [])
 
-  const updateField = useCallback(<K extends keyof DesignSheet>(
-    field: K,
-    value: DesignSheet[K] | ((previous: DesignSheet) => DesignSheet[K]),
+  const updateField = useCallback<DesignSheetOnChange>((
+    field,
+    value,
   ) => {
     setSheet(prev => {
       const fieldName = field as string
       const resolved = typeof value === 'function'
-        ? (value as (previous: DesignSheet) => DesignSheet[K])(prev)
+        ? value(prev)
         : value
       const next = { ...prev, [field]: resolved }
       if (!INTAKE_PREFILLED_FIELDS.has(fieldName)) return next

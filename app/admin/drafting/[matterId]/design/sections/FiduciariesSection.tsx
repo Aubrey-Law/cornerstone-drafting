@@ -1,6 +1,7 @@
 'use client'
 
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
+import type { DesignSheetOnChange } from './shared'
 import { FiduciariesSectionEP } from './FiduciariesSectionEP'
 import { FiduciariesSectionLP } from './FiduciariesSectionLP'
 
@@ -16,7 +17,7 @@ export interface FiduciariesSectionProps {
   isLP: boolean
   // EP
   sheet: DesignSheet
-  onChange: <K extends keyof DesignSheet>(field: K, value: DesignSheet[K]) => void
+  onChange: DesignSheetOnChange
   // LP
   lpData: LpData | null
   onLpChange: (key: string, value: unknown) => void
