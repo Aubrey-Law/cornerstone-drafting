@@ -110,11 +110,20 @@ describe('drafting hub and workspace', () => {
   it('seeds intake values through the shared ensure helper', () => {
     const loader = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/loadDraftingMatterContext.ts'), 'utf8')
     const seedModule = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/seedFromIntake.ts'), 'utf8')
+    const ensureModule = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/ensureDesignSheetSeeded.ts'), 'utf8')
+    const migration = fs.readFileSync(
+      path.join(process.cwd(), 'supabase/migrations/20260723000000_lite_design_sheets_excluded_guardian.sql'),
+      'utf8',
+    )
 
     expect(loader).toContain("import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'")
     expect(loader).toContain('ensureDesignSheetSeededFromIntake(matterId, { sheet, intake: intakeSnapshot })')
+    expect(loader).toContain('ensureDesignSheetSeededFromIntake failed')
     expect(seedModule).toContain('street: intake.address_line1')
     expect(seedModule).toContain('city: intake.city')
+    expect(ensureModule).toContain('ensureBlankDesignSheet')
+    expect(migration).toContain('excluded_guardian_flag')
+    expect(migration).toContain('excluded_guardian_name')
   })
 
   it('lazy-loads generate and review steps in the drafting workspace', () => {

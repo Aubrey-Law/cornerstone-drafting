@@ -4,7 +4,8 @@ import type { Ownership } from '@/lib/estateTax'
 import type { Database } from '@/types/supabase'
 
 export function normalizeImportedOwnership(raw: unknown): Ownership {
-  const v = String(raw ?? 'client').toLowerCase()
+  const v = String(raw ?? 'client').toLowerCase().trim()
+  if (!v || v === 'primary' || v === 'client' || v.includes('client')) return 'client'
   if (v.includes('spouse')) return 'spouse'
   if (v.includes('joint')) return 'joint'
   return 'client'

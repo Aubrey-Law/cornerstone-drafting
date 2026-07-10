@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { linkIntakeToMatter } from '@/lib/intake/linkIntakeToMatter'
+import { MATTER_INTAKE_LINK_COLUMNS } from '@/lib/matters/matterIntakeLink'
 
 type AdminClient = SupabaseClient<Database>
 
@@ -147,11 +148,12 @@ export async function resolveMatterIntakeId(
     .order('updated_at', { ascending: false })
     .limit(10)
 
-  if (syncError) throw new Error(syncError.message)
-
-  for (const job of syncJobs ?? []) {
-    const id = job.client_intake_id as string | null | undefined
-    if (id) candidates.push(id)
+  // Cornerstone Lite omits the intake_sync_jobs outbox table.
+  if (!syncError) {
+    for (const job of syncJobs ?? []) {
+      const id = job.client_intake_id as string | null | undefined
+      if (id) candidates.push(id)
+    }
   }
 
   for (const id of syncJobIntakeIds) {
@@ -172,30 +174,20 @@ export async function resolveMatterIntakeIdForMatter(
 ): Promise<string | null> {
   const { data: matter, error } = await admin
     .from('matters')
-    .select('client_intake_id, lead_id, client_id')
+    .select(MATTER_INTAKE_LINK_COLUMNS)
     .eq('id', matterId)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   if (!matter) return null
 
-  let clientEmail: string | null = null
-  const leadId = (matter.lead_id as string | null) ?? null
-  if (leadId) {
-    const { data: lead, error: leadError } = await admin
-      .from('leads')
-      .select('email')
-      .eq('id', leadId)
-      .maybeSingle()
-    if (leadError) throw new Error(leadError.message)
-    clientEmail = (lead?.email as string | null | undefined) ?? null
-  }
+  const leadId = null
 
   return resolveMatterIntakeId(admin, {
     matterId,
     clientIntakeId: (matter.client_intake_id as string | null) ?? null,
     leadId,
     clientUserId: (matter.client_id as string | null) ?? null,
-    clientEmail,
+    clientEmail: null,
   })
 }

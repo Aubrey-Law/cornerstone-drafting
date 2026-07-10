@@ -14,9 +14,41 @@ export interface EnsureDesignSheetSeedContext {
   intake?: IntakeSnapshot | null
 }
 
+async function ensureBlankDesignSheet(
+  matterId: string,
+  existingSheet: DesignSheet | null | undefined,
+): Promise<boolean> {
+  if (existingSheet?.id) return false
+
+  const admin = getAdminClient()
+  const { data: matter, error: matterError } = await admin
+    .from('matters')
+    .select('client_intake_id')
+    .eq('id', matterId)
+    .maybeSingle()
+
+  if (matterError) throw new Error(matterError.message)
+  if (!matter?.client_intake_id) return false
+
+  const { error: insertError } = await admin
+    .from('design_sheets')
+    .insert({
+      matter_id: matterId,
+      client_intake_id: matter.client_intake_id,
+      version: 1,
+      status: 'draft',
+      updated_at: new Date().toISOString(),
+    })
+
+  if (insertError) throw new Error(insertError.message)
+  return true
+}
+
 /**
  * One-time seed: copy client intake into an empty design sheet.
  * Returns true when a seed write occurred.
+ * Always ensures a design_sheets row exists when the matter has client_intake_id,
+ * so the drafting workspace can open even if intake seed data is incomplete.
  */
 export async function ensureDesignSheetSeededFromIntake(
   matterId: string,
@@ -28,7 +60,9 @@ export async function ensureDesignSheetSeededFromIntake(
     context.intake !== undefined ? Promise.resolve(context.intake) : fetchIntakeForMatter(matterId),
   ])
 
-  if (!intake?.first_name) return false
+  if (!intake?.first_name) {
+    return ensureBlankDesignSheet(matterId, sheet)
+  }
 
   const seedPayload = buildDesignSheetPersistencePayload(buildIntakeSeedPayload(intake))
   const now = new Date().toISOString()
@@ -44,7 +78,11 @@ export async function ensureDesignSheetSeededFromIntake(
       })
       .eq('id', sheet.id)
 
-    if (error) throw new Error(error.message)
+    if (error) {
+      // Sheet exists — do not block the workspace on a seed-column mismatch.
+      console.error('design sheet seed update failed:', error.message)
+      return false
+    }
     return true
   }
 
@@ -68,6 +106,10 @@ export async function ensureDesignSheetSeededFromIntake(
       updated_at: now,
     })
 
-  if (insertError) throw new Error(insertError.message)
+  if (insertError) {
+    console.error('design sheet seed insert failed:', insertError.message)
+    // Fall back to a blank sheet so /admin/drafting/[matterId] can still load.
+    return ensureBlankDesignSheet(matterId, null)
+  }
   return true
 }

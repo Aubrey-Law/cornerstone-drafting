@@ -251,6 +251,22 @@ describe('design sheet persistence import safety', () => {
     })
   })
 
+  it('persists excluded-guardian fields as writable columns (required for new-matter seed)', () => {
+    const payload = buildDesignSheetPersistencePayload({
+      client_name: 'Jane Doe',
+      excluded_guardian_flag: true,
+      excluded_guardian_name: 'John Smith',
+    } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
+
+    expect(payload).toMatchObject({
+      excluded_guardian_flag: true,
+      excluded_guardian_name: 'John Smith',
+      decisions: {
+        client_name: 'Jane Doe',
+      },
+    })
+  })
+
   it('does not persist legacy inheritance-structure values', () => {
     const payload = buildDesignSheetPersistencePayload({
       client_name: 'Jane Doe',

@@ -45,5 +45,7 @@ END $$;
 
 ALTER TABLE public.design_sheets ADD COLUMN IF NOT EXISTS client_pronouns text;
 ALTER TABLE public.design_sheets ADD COLUMN IF NOT EXISTS spouse_pronouns text;
+ALTER TABLE public.design_sheets ADD COLUMN IF NOT EXISTS excluded_guardian_flag boolean DEFAULT false;
+ALTER TABLE public.design_sheets ADD COLUMN IF NOT EXISTS excluded_guardian_name text;
 
 NOTIFY pgrst, 'reload schema';

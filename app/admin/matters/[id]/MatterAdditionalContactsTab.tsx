@@ -109,14 +109,24 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        id: nextSheet.id,
-        updated_at: nextSheet.updated_at,
-        decisions: nextSheet.decisions,
+        sheetId: nextSheet.id,
+        expectedUpdatedAt: nextSheet.updated_at,
+        sheet: {
+          decisions: nextSheet.decisions,
+        },
       }),
     })
-    const body = await res.json().catch(() => ({}))
+    const body = await res.json().catch(() => ({})) as {
+      error?: string
+      id?: string
+      updated_at?: string
+    }
     if (!res.ok) throw new Error(body.error ?? 'Failed to save contact profile')
-    if (body.sheet) setSheet(body.sheet as DesignSheet)
+    setSheet({
+      ...nextSheet,
+      id: typeof body.id === 'string' ? body.id : nextSheet.id,
+      updated_at: typeof body.updated_at === 'string' ? body.updated_at : nextSheet.updated_at,
+    })
   }
 
   const handleAddContacts = async (inputs: FiduciaryContactInput[]) => {

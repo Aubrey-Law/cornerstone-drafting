@@ -5,6 +5,7 @@ import { emptyAdminIntakeFormData, type AdminIntakeFormData } from '@/types/admi
 import { formatPhoneForStorage } from '@/lib/phone'
 import type { Lead } from '@/types/leads'
 import { linkIntakeToMatter } from '@/lib/intake/linkIntakeToMatter'
+import { MATTER_INTAKE_LINK_COLUMNS } from '@/lib/matters/matterIntakeLink'
 
 export const MIN_IMPORT_TEXT_LENGTH = 20
 export const MAX_IMPORT_TEXT_LENGTH = 60_000
@@ -369,7 +370,7 @@ async function parseAndSaveIntakeDraft(args: {
     const [{ data: matter, error: matterErr }, { data: pipeline, error: pipelineErr }] = await Promise.all([
       admin
         .from('matters')
-        .select('id, client_intake_id, lead_id, client_id')
+        .select(MATTER_INTAKE_LINK_COLUMNS)
         .eq('id', matterId)
         .maybeSingle(),
       admin
@@ -382,7 +383,7 @@ async function parseAndSaveIntakeDraft(args: {
     if (pipelineErr) throw new Error(pipelineErr.message)
     if (!matter) throw new Error('Matter not found')
 
-    leadId = (matter.lead_id as string | null | undefined) ?? null
+    leadId = args.leadId ?? null
     clientIntakeId = (matter.client_intake_id as string | null | undefined) ?? null
     clientUserId = (matter.client_id as string | null | undefined) ?? null
     const nameParts = String(pipeline?.client_name ?? '').trim().split(/\s+/).filter(Boolean)

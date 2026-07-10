@@ -39,7 +39,12 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
   let sheet = await fetchDesignSheet(matterId)
   const needsSeed = !sheet || isDesignSheetUnseeded(sheet)
   if (needsSeed) {
-    await ensureDesignSheetSeededFromIntake(matterId, { sheet, intake: intakeSnapshot })
+    try {
+      await ensureDesignSheetSeededFromIntake(matterId, { sheet, intake: intakeSnapshot })
+    } catch (error) {
+      // Seed failures must not take down the drafting workspace error boundary.
+      console.error('ensureDesignSheetSeededFromIntake failed:', error)
+    }
     sheet = await fetchDesignSheet(matterId)
   }
 
