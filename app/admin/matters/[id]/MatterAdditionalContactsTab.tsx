@@ -17,6 +17,11 @@ import {
   setContactProfile,
   type ContactProfile,
 } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import {
+  contactProfileRelationshipPatch,
+  relationshipLabelForContact,
+  relationshipSelectionToStructured,
+} from '@/lib/kinship/relationshipLabels'
 import { contactFullName } from '@/app/admin/drafting/[matterId]/design/sections/ContactPicker'
 import type { PersonFormValues } from '@/app/admin/drafting/[matterId]/design/sections/AddPersonDialog'
 
@@ -164,6 +169,12 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
     mode: 'fiduciary' | 'beneficiary',
     existingId?: string,
   ) => {
+    const structured = relationshipSelectionToStructured(
+      values.relationship_selection,
+      values.relationship_custom,
+    )
+    const relationshipPatch = contactProfileRelationshipPatch(structured, 'client')
+
     const payload: Omit<MatterContact, 'id'> = {
       first_name: values.first_name.trim(),
       last_name: values.last_name.trim(),
@@ -172,7 +183,7 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
       phone: values.phone?.trim() || undefined,
       email: values.email?.trim() || undefined,
       address: values.address?.trim() || undefined,
-      relationship: values.relationship_detail?.trim() || values.relationship_to || undefined,
+      relationship: relationshipLabelForContact(structured),
       date_of_birth: values.date_of_birth || null,
     }
 
@@ -184,9 +195,8 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
       is_beneficiary: mode === 'beneficiary' ? true : Boolean(values.also_beneficiary),
       fiduciary_type: values.fiduciary_type,
       beneficiary_type: values.beneficiary_type,
-      relationship_to: values.relationship_to,
-      relationship_detail: values.relationship_detail,
       date_of_birth: values.date_of_birth || null,
+      ...relationshipPatch,
     }
     const nextSheet = {
       ...sheet,

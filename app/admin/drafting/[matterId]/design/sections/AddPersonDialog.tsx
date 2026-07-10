@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CircleHelp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,12 @@ import {
   type ContactProfile,
   type FiduciaryEntityType,
 } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import {
+  buildRelationshipPickerOptions,
+  legacyRelationshipToStructured,
+  structuredFromContactProfile,
+  structuredToSelection,
+} from '@/lib/kinship/relationshipLabels'
 import { contactFullName } from './ContactPicker'
 
 export interface PersonFormValues {
@@ -49,8 +55,8 @@ export interface PersonFormValues {
   phone?: string
   email?: string
   address?: string
-  relationship_to?: 'client' | 'spouse' | 'joint' | 'other'
-  relationship_detail?: string
+  relationship_selection?: string
+  relationship_custom?: string
   also_beneficiary?: boolean
   also_fiduciary?: boolean
 }
@@ -80,14 +86,20 @@ function emptyForm(mode: 'fiduciary' | 'beneficiary'): PersonFormValues {
     phone: '',
     email: '',
     address: '',
-    relationship_to: 'client',
-    relationship_detail: '',
+    relationship_selection: '',
+    relationship_custom: '',
     also_beneficiary: false,
     also_fiduciary: false,
   }
 }
 
 function contactToForm(contact: MatterContact, profile?: ContactProfile): PersonFormValues {
+  const structured = structuredFromContactProfile(profile)
+    ?? legacyRelationshipToStructured(
+      profile?.relationship_to ?? 'client',
+      profile?.relationship_detail ?? contact.relationship,
+    )
+
   return {
     fiduciary_type: profile?.fiduciary_type ?? 'individual',
     beneficiary_type: profile?.beneficiary_type ?? 'individual',
@@ -99,30 +111,15 @@ function contactToForm(contact: MatterContact, profile?: ContactProfile): Person
     phone: formatPhoneDisplay(contact.phone) || '',
     email: contact.email ?? '',
     address: contact.address ?? '',
-    relationship_to: profile?.relationship_to ?? 'client',
-    relationship_detail: profile?.relationship_detail ?? contact.relationship ?? '',
+    relationship_selection: structuredToSelection(structured),
+    relationship_custom: structured?.kind === 'other' ? structured.custom ?? '' : '',
     also_beneficiary: Boolean(profile?.is_beneficiary),
     also_fiduciary: Boolean(profile?.is_fiduciary),
   }
 }
 
 function relationshipOptions(clientName: string, spouseName: string) {
-  const clientFirst = clientName.split(/\s+/)[0] || 'Client'
-  const spouseFirst = spouseName.split(/\s+/)[0] || 'Spouse'
-  const options: Array<{ value: 'client' | 'spouse' | 'joint' | 'other'; label: string }> = [
-    { value: 'client', label: clientName || clientFirst },
-  ]
-  if (spouseName) {
-    options.push({ value: 'spouse', label: spouseName || spouseFirst })
-    if (clientName) {
-      options.push({
-        value: 'joint',
-        label: `${clientName} and ${spouseName}`,
-      })
-    }
-  }
-  options.push({ value: 'other', label: 'Other' })
-  return options
+  return buildRelationshipPickerOptions({ clientName, spouseName })
 }
 
 function isEntityType(type?: FiduciaryEntityType): boolean {
@@ -182,6 +179,17 @@ export function AddPersonDialog({
   }
 
   const relOptions = relationshipOptions(clientName, spouseName)
+  const relGroups = useMemo(() => {
+    const seen = new Set<string>()
+    return relOptions
+      .map(opt => opt.group)
+      .filter(group => {
+        if (seen.has(group)) return false
+        seen.add(group)
+        return true
+      })
+  }, [relOptions])
+  const showRelationshipCustom = form.relationship_selection === 'other:other'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -328,39 +336,49 @@ export function AddPersonDialog({
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
-                  <Label>Relationship to Client</Label>
+                  <Label>Relationship</Label>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <CircleHelp className="h-3.5 w-3.5 text-muted-foreground" />
                     </TooltipTrigger>
-                    <TooltipContent className="text-xs">Which client this relationship describes.</TooltipContent>
+                    <TooltipContent className="max-w-xs text-xs">
+                      Pick how this person is related. Documents can show sister for the client and sister-in-law for the spouse automatically.
+                    </TooltipContent>
                   </Tooltip>
                 </div>
                 <Select
-                  value={form.relationship_to}
+                  value={form.relationship_selection || undefined}
                   onValueChange={v => setForm(prev => ({
                     ...prev,
-                    relationship_to: v as PersonFormValues['relationship_to'],
+                    relationship_selection: v,
+                    relationship_custom: v === 'other:other' ? prev.relationship_custom : '',
                   }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Relationship to" />
+                    <SelectValue placeholder="Select relationship" />
                   </SelectTrigger>
                   <SelectContent>
-                    {relOptions.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    {relGroups.map(group => (
+                      <div key={group}>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                        {relOptions.filter(opt => opt.group === group).map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </div>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>Relationship</Label>
-                <Input
-                  placeholder={mode === 'fiduciary' ? 'attorney' : 'sister'}
-                  value={form.relationship_detail ?? ''}
-                  onChange={e => setForm(prev => ({ ...prev, relationship_detail: e.target.value }))}
-                />
-              </div>
+              {showRelationshipCustom && (
+                <div className="space-y-1.5">
+                  <Label>Relationship detail</Label>
+                  <Input
+                    placeholder="e.g. godparent, neighbor"
+                    value={form.relationship_custom ?? ''}
+                    onChange={e => setForm(prev => ({ ...prev, relationship_custom: e.target.value }))}
+                  />
+                </div>
+              )}
             </div>
           )}
 

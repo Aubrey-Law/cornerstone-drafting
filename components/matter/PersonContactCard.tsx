@@ -13,6 +13,7 @@ import { formatDobWithAge } from '@/lib/dob'
 import { formatPhoneDisplay } from '@/lib/phone'
 import type { MatterContact } from '@/types/database'
 import type { ContactProfile } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import { formatContactRelationshipLine } from '@/lib/kinship/relationshipLabels'
 
 function contactName(c: MatterContact): string {
   return [c.first_name, c.middle_name, c.last_name].filter(Boolean).join(' ').trim() || '—'
@@ -20,19 +21,7 @@ function contactName(c: MatterContact): string {
 
 function relationshipLine(contact: MatterContact, profile?: ContactProfile, roleLabel?: string): string | null {
   if (roleLabel) return roleLabel
-  if (profile?.relationship_detail?.trim()) {
-    const base = profile.relationship_to === 'client'
-      ? 'client'
-      : profile.relationship_to === 'spouse'
-        ? 'spouse'
-        : profile.relationship_to === 'joint'
-          ? 'client and spouse'
-          : null
-    if (base) return `(${profile.relationship_detail.trim()} — ${base})`
-    return `(${profile.relationship_detail.trim()})`
-  }
-  if (contact.relationship?.trim()) return `(${contact.relationship.trim()})`
-  return null
+  return formatContactRelationshipLine(profile, contact, 'client')
 }
 
 export interface PersonContactCardProps {

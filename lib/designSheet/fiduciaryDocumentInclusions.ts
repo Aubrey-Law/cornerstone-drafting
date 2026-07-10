@@ -1,4 +1,5 @@
 import type { DesignSheet } from '@/types/database'
+import type { RelationshipKind } from '@/lib/kinship/relationshipLabels'
 
 export type FiduciaryDocumentInclusionKey =
   | 'show_phone'
@@ -104,7 +105,10 @@ export interface ContactProfile {
   is_fiduciary?: boolean
   is_beneficiary?: boolean
   relationship_to?: 'client' | 'spouse' | 'joint' | 'other'
+  /** @deprecated Prefer relationship_kind — kept for display/back-compat */
   relationship_detail?: string
+  relationship_kind?: RelationshipKind
+  relationship_custom?: string | null
   date_of_birth?: string | null
 }
 

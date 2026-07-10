@@ -44,6 +44,12 @@ import {
   type ContactProfile,
   type FiduciaryEntityType,
 } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import {
+  contactProfileRelationshipPatch,
+  formatContactRelationshipLine,
+  relationshipLabelForContact,
+  relationshipSelectionToStructured,
+} from '@/lib/kinship/relationshipLabels'
 
 interface Props extends SectionProps {
   contacts: MatterContact[]
@@ -72,19 +78,7 @@ function formatAddress(contact: MatterContact): string | null {
 }
 
 function relationshipLine(contact: MatterContact, profile: ContactProfile | undefined): string | null {
-  if (profile?.relationship_detail?.trim()) {
-    const base = profile.relationship_to === 'client'
-      ? 'client'
-      : profile.relationship_to === 'spouse'
-        ? 'spouse'
-        : profile.relationship_to === 'joint'
-          ? 'client and spouse'
-          : null
-    if (base) return `(${profile.relationship_detail.trim()} — ${base})`
-    return `(${profile.relationship_detail.trim()})`
-  }
-  if (contact.relationship?.trim()) return `(${contact.relationship.trim()})`
-  return null
+  return formatContactRelationshipLine(profile, contact, 'client')
 }
 
 function PersonCard({
@@ -252,6 +246,12 @@ export function ContactsFiduciariesSection({
     mode: 'fiduciary' | 'beneficiary',
     existingId?: string,
   ) => {
+    const structured = relationshipSelectionToStructured(
+      values.relationship_selection,
+      values.relationship_custom,
+    )
+    const relationshipPatch = contactProfileRelationshipPatch(structured, 'client')
+
     const payload: Omit<MatterContact, 'id'> = {
       first_name: values.first_name.trim(),
       last_name: values.last_name.trim(),
@@ -260,7 +260,7 @@ export function ContactsFiduciariesSection({
       phone: values.phone?.trim() || undefined,
       email: values.email?.trim() || undefined,
       address: values.address?.trim() || undefined,
-      relationship: values.relationship_detail?.trim() || values.relationship_to || undefined,
+      relationship: relationshipLabelForContact(structured),
     }
 
     let contact: MatterContact
@@ -275,9 +275,8 @@ export function ContactsFiduciariesSection({
       is_beneficiary: mode === 'beneficiary' ? true : Boolean(values.also_beneficiary),
       fiduciary_type: values.fiduciary_type,
       beneficiary_type: values.beneficiary_type,
-      relationship_to: values.relationship_to,
-      relationship_detail: values.relationship_detail,
       date_of_birth: values.date_of_birth || null,
+      ...relationshipPatch,
     }
     onChange('decisions', setContactProfile(sheet, contact.id, profilePatch))
   }
