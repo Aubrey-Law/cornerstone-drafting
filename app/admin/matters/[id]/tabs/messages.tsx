@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { TabsContent } from '@/components/ui/tabs'
+import { CallList } from '@/components/calls/CallList'
 import { SetupBanner } from '@/components/SetupBanner'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 
@@ -35,6 +36,7 @@ type SmsMessage = {
 }
 
 export interface MatterMessagesTabProps {
+  matterId: string
   portalMessages: PortalMessage[]
   portalLoading: boolean
   portalDraft: string
@@ -63,6 +65,7 @@ export interface MatterMessagesTabProps {
 
 export function MatterMessagesTab(props: MatterMessagesTabProps) {
   const {
+    matterId,
     portalMessages,
     portalLoading,
     portalDraft,
@@ -90,7 +93,7 @@ export function MatterMessagesTab(props: MatterMessagesTabProps) {
   } = props
 
   return (
-    <TabsContent value="messages" className="space-y-8">
+    <TabsContent value="communications" className="space-y-8">
       <section className="space-y-3">
         <div>
           <h3 className="text-sm font-semibold">Portal messages</h3>
@@ -228,6 +231,14 @@ export function MatterMessagesTab(props: MatterMessagesTabProps) {
             </Button>
           </div>
         )}
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Calls</h3>
+          <p className="text-xs text-muted-foreground">Logged Twilio and Retell calls for this matter.</p>
+        </div>
+        <CallList matterId={matterId} />
       </section>
     </TabsContent>
   )

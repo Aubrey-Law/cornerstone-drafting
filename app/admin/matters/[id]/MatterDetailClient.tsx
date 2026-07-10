@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ChevronDown,
   ClipboardList,
+  ExternalLink,
   FilePenLine,
   Loader as Loader2,
   Send,
@@ -18,16 +19,16 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { listDocuments } from '@/lib/documents'
+import { normalizePracticeArea } from '@/lib/practiceArea'
 import {
   STAGES,
   stageLabel,
   type MatterActivity,
   type MatterContact,
-  type MatterDocument,
   type MatterStage,
   type PipelineMatter,
 } from '@/types/database'
+import type { MatterDetailsRow } from '@/types/matter-details'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import {
@@ -59,6 +60,11 @@ import { resolveMatterIntake, unlockIntake } from '@/app/actions/adminIntake'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterOverviewHero } from './MatterOverviewHero'
+import { MatterEssentialsCard } from './MatterEssentialsCard'
+import { MatterKeyDatesRow } from './MatterKeyDatesRow'
+import { MatterLegalPlanCard } from './MatterLegalPlanCard'
+import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
+import { useMatterDetailsSave } from './useMatterDetailsSave'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterOverviewContacts } from './MatterOverviewContacts'
@@ -70,7 +76,6 @@ import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { MatterNotesTab } from './tabs/notes'
 import { MatterTasksTab } from './tabs/tasks'
 import { MatterMessagesTab } from './tabs/messages'
-import { MatterCallsTab } from './tabs/calls'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
@@ -94,6 +99,8 @@ interface MatterDetailClientProps {
     unlock_request_note?: string | null
   } | null
   matterNumber?: string | null
+  matterDetails?: MatterDetailsRow | null
+  designSheetPlanType?: string | null
   initialNotes?: MatterNoteRow[]
   designSheetSeeded?: boolean
   reviewFlags?: IntakeReadinessFlag[]
@@ -123,13 +130,6 @@ type SmsMessage = {
   actor_name: string | null
 }
 
-function formatBytes(size: number) {
-  if (!Number.isFinite(size) || size <= 0) return '—'
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
-
 export default function MatterDetailClient({
   matter: initialMatter,
   matterId,
@@ -138,6 +138,8 @@ export default function MatterDetailClient({
   intakeId: initialIntakeId = null,
   clientIntakeRow = null,
   matterNumber: initialMatterNumber = null,
+  matterDetails: initialMatterDetails = null,
+  designSheetPlanType = null,
   initialNotes = [],
   designSheetSeeded = false,
   reviewFlags = [],
@@ -158,8 +160,6 @@ export default function MatterDetailClient({
   const [stageSaving, setStageSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
-  const [documents, setDocuments] = useState<MatterDocument[]>([])
-  const [docsLoading, setDocsLoading] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
@@ -184,6 +184,25 @@ export default function MatterDetailClient({
 
   const [activity, setActivity] = useState<MatterActivity[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
+
+  const { details: matterDetails, saveField: saveMatterDetailField } = useMatterDetailsSave(
+    matterId,
+    initialMatterDetails,
+  )
+
+  const handleSaveMatterDetailField = useCallback(
+    async (field: keyof MatterDetailsRow, value: unknown) => {
+      await saveMatterDetailField(field, value)
+      if (field === 'signing_date' && typeof value === 'string') {
+        setMatter(current => ({ ...current, signing_date: value }))
+      }
+    },
+    [saveMatterDetailField],
+  )
+
+  const practiceArea = normalizePracticeArea(matterDetails?.practice_area ?? matter.practice_area)
+  const showLegalPlan = practiceArea === 'EP-LP'
+  const showProbate = practiceArea === 'Probate'
 
   useEffect(() => {
     setMatter(initialMatter)
@@ -434,33 +453,6 @@ export default function MatterDetailClient({
     }
   }
 
-  const loadDocuments = useCallback(async () => {
-    setDocsLoading(true)
-    try {
-      const docs = await listDocuments(matter.matter_id)
-      setDocuments(docs)
-    } catch {
-      setDocuments([])
-    } finally {
-      setDocsLoading(false)
-    }
-  }, [matter.matter_id])
-
-  useEffect(() => {
-    void loadDocuments()
-  }, [loadDocuments])
-
-  const docsByFolder = useMemo(() => {
-    const map = new Map<string, MatterDocument[]>()
-    for (const doc of documents) {
-      const folder = doc.folder || 'other'
-      const list = map.get(folder) ?? []
-      list.push(doc)
-      map.set(folder, list)
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [documents])
-
   const handleStageChange = async (stage: MatterStage) => {
     if (!token || stage === matter.stage) return
     setStageSaving(true)
@@ -678,12 +670,10 @@ export default function MatterDetailClient({
         <Tabs defaultValue="overview" className="gap-4">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="contacts">Additional Contacts</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
-            <TabsTrigger value="messages">Messages</TabsTrigger>
-            <TabsTrigger value="calls">Calls</TabsTrigger>
+            <TabsTrigger value="communications">Communications</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
@@ -698,6 +688,41 @@ export default function MatterDetailClient({
               onSendIntake={() => void handleSendIntake()}
               sendIntakePending={sendingIntake}
             />
+
+            <MatterEssentialsCard
+              matter={matter}
+              details={matterDetails}
+              designSheetPlanType={designSheetPlanType}
+              onSaveField={handleSaveMatterDetailField}
+            />
+
+            <MatterKeyDatesRow
+              matterCreated={matter.matter_created}
+              intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
+              intakeSubmittedAt={matter.intake_submitted_at}
+              draftsSentAt={matter.drafts_sent_at}
+              signingDate={matter.signing_date}
+              scheduledSigningDate={matterDetails?.scheduled_signing_date ?? null}
+              closedDate={matterDetails?.closed_date ?? null}
+              stage={matter.stage}
+              details={matterDetails}
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Documents</p>
+                <p className="text-xs text-muted-foreground">
+                  Upload, review, and share drafts in the drafting workspace.
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="outline" asChild>
+                <Link href={`/admin/drafting/${matterId}?step=review`}>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open review
+                </Link>
+              </Button>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -780,40 +805,17 @@ export default function MatterDetailClient({
               reviewFlags={reviewFlags}
               resyncPreviewCount={resyncPreviewCount}
             />
-            <MatterOverviewAssets matterId={matterId} matter={matter} intakeId={liveIntakeId} />
-          </TabsContent>
-
-          <TabsContent value="documents" className="space-y-4">
-            {docsLoading ? (
-              <p className="text-xs text-muted-foreground">Loading documents…</p>
-            ) : docsByFolder.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border px-6 py-12 text-center text-xs text-muted-foreground">
-                No documents for this matter yet.
-              </div>
-            ) : (
-              docsByFolder.map(([folder, docs]) => (
-                <div key={folder} className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {folder}
-                  </h3>
-                  <ul className="divide-y divide-border rounded-md border border-border">
-                    {docs.map(doc => (
-                      <li
-                        key={doc.id}
-                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-                      >
-                        <span className="font-medium">{doc.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatBytes(doc.size)}
-                          {doc.created_at
-                            ? ` · ${new Date(doc.created_at).toLocaleDateString()}`
-                            : ''}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
+            <MatterOverviewAssets
+              matterId={matterId}
+              matter={matter}
+              intakeId={liveIntakeId}
+              defaultOpen={intakeCompleted}
+            />
+            {showLegalPlan && (
+              <MatterLegalPlanCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />
+            )}
+            {showProbate && (
+              <MatterProbateEssentialsCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />
             )}
           </TabsContent>
 
@@ -853,6 +855,7 @@ export default function MatterDetailClient({
           />
 
           <MatterMessagesTab
+            matterId={matter.matter_id}
             portalMessages={portalMessages}
             portalLoading={portalLoading}
             portalDraft={portalDraft}
@@ -878,8 +881,6 @@ export default function MatterDetailClient({
             onSendSms={() => void sendSms()}
             onSendEmail={() => void sendEmail()}
           />
-
-          <MatterCallsTab matterId={matter.matter_id} />
 
           <TabsContent value="activity">
             <MatterActivityTab activity={activity} loading={activityLoading} />

@@ -58,7 +58,8 @@ const WRITABLE_FIELDS = new Set([
   'pb_qualifies_small_estate', 'pb_real_property_parcel_count',
   'pb_ancillary_probate_required', 'pb_ancillary_probate_state',
   // Status + Legal Plan
-  'matter_status', 'legal_plan', 'legal_plan_id', 'client_status',
+  'matter_status', 'legal_plan', 'legal_plan_id', 'legal_plan_type',
+  'legal_plan_service_start', 'legal_plan_service_end', 'client_status',
 ])
 
 export async function PATCH(req: Request) {

@@ -8,6 +8,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
+import type { MatterDetailsRow } from '@/types/matter-details'
 import MatterDetailClient from './MatterDetailClient'
 
 export const dynamic = 'force-dynamic'
@@ -85,6 +86,8 @@ export default async function MatterDetailPage({ params }: Params) {
       intakeId={intakeId}
       clientIntakeRow={clientIntakeRow}
       matterNumber={matterNumber}
+      matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
+      designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
       initialNotes={(notes ?? []) as MatterNoteRow[]}
       designSheetSeeded={designSheetSeeded}
       reviewFlags={reviewFlags}
