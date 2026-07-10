@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Clock } from 'lucide-react'
+import { ArrowRight, Clock, TriangleAlert as AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,10 +17,12 @@ interface MatterOverviewHeroProps {
   nextAction: MatterNextAction
   unreadPortalCount: number
   unreviewedUploadCounts?: UnreviewedUploadCounts
+  reviewFlagsCount: number
   lastPortalMessage: { body: string; created_at: string; sender_role: string } | null
-  onSendIntake?: () => void
+  onIntakeActionClick?: () => void
+  onUnreadClick?: () => void
+  onReviewFlagsClick?: () => void
   onReviewUploads?: () => void
-  sendIntakePending?: boolean
 }
 
 const AGING_BADGE: Record<'red' | 'amber' | 'green', string> = {
@@ -36,10 +38,12 @@ export function MatterOverviewHero({
   nextAction,
   unreadPortalCount,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
+  reviewFlagsCount,
   lastPortalMessage,
-  onSendIntake,
+  onIntakeActionClick,
+  onUnreadClick,
+  onReviewFlagsClick,
   onReviewUploads,
-  sendIntakePending,
 }: MatterOverviewHeroProps) {
   const isIntakeAction = nextAction.href === '#send-intake'
   const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
@@ -61,9 +65,22 @@ export function MatterOverviewHero({
               </Badge>
             )}
             {unreadPortalCount > 0 && (
-              <Badge variant="outline" className="text-[10px]">
-                {unreadPortalCount} unread message{unreadPortalCount === 1 ? '' : 's'}
-              </Badge>
+              <button type="button" onClick={onUnreadClick} className="inline-flex">
+                <Badge variant="outline" className="cursor-pointer text-[10px] hover:bg-muted">
+                  {unreadPortalCount} unread message{unreadPortalCount === 1 ? '' : 's'}
+                </Badge>
+              </button>
+            )}
+            {reviewFlagsCount > 0 && (
+              <button type="button" onClick={onReviewFlagsClick} className="inline-flex">
+                <Badge
+                  variant="outline"
+                  className="cursor-pointer border-amber-200 bg-amber-50 text-[10px] text-amber-800 hover:bg-amber-100"
+                >
+                  <AlertTriangle className="mr-1 h-3 w-3" />
+                  {reviewFlagsCount} review flag{reviewFlagsCount === 1 ? '' : 's'}
+                </Badge>
+              </button>
             )}
             {unreviewedUploadCounts.total > 0 && (
               <Badge
@@ -101,10 +118,10 @@ export function MatterOverviewHero({
               type="button"
               size="sm"
               variant={nextAction.tone === 'warning' ? 'default' : 'outline'}
-              disabled={sendIntakePending}
-              onClick={onSendIntake}
+              onClick={onIntakeActionClick}
             >
-              {sendIntakePending ? 'Sending…' : nextAction.cta}
+              {nextAction.cta}
+              <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           ) : (
             <Button type="button" size="sm" asChild>

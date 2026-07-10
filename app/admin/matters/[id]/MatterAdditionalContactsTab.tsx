@@ -29,9 +29,10 @@ interface Props {
   matterId: string
   matter: PipelineMatter
   initialContacts: MatterContact[]
+  embedded?: boolean
 }
 
-export function MatterAdditionalContactsTab({ matterId, matter, initialContacts }: Props) {
+export function MatterAdditionalContactsTab({ matterId, matter, initialContacts, embedded = false }: Props) {
   const token = useAccessToken()
   const [contacts, setContacts] = useState(initialContacts)
   const [sheet, setSheet] = useState<DesignSheet | null>(null)
@@ -220,17 +221,31 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts 
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">Additional Contacts</h3>
-          <p className="text-xs text-muted-foreground">
-            Fiduciaries, beneficiaries, and other contacts. Import from text or upload a document.
-          </p>
+      {!embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Additional Contacts</h3>
+            <p className="text-xs text-muted-foreground">
+              Fiduciaries, beneficiaries, and other contacts. Import from text or upload a document.
+            </p>
+          </div>
+          <FiduciaryContactTools onSubmit={handleAddContacts} />
         </div>
-        <FiduciaryContactTools onSubmit={handleAddContacts} />
-      </div>
+      )}
 
-      <section className="space-y-3">
+      {embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">
+          <div>
+            <h3 className="text-sm font-semibold">Additional contacts</h3>
+            <p className="text-xs text-muted-foreground">
+              Fiduciaries, beneficiaries, and other contacts. Import from text or upload a document.
+            </p>
+          </div>
+          <FiduciaryContactTools onSubmit={handleAddContacts} />
+        </div>
+      )}
+
+      <section id="fiduciaries" className="scroll-mt-24 space-y-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fiduciaries</h4>
         {fiduciaryContacts.length === 0 ? (
           <p className="text-xs text-muted-foreground">No fiduciaries added yet.</p>
@@ -259,7 +274,7 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts 
         </Button>
       </section>
 
-      <section className="space-y-3">
+      <section id="beneficiaries" className="scroll-mt-24 space-y-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Beneficiaries</h4>
         {beneficiaryContacts.length === 0 ? (
           <p className="text-xs text-muted-foreground">No beneficiaries added yet.</p>
@@ -288,7 +303,7 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts 
       </section>
 
       {otherContacts.length > 0 && (
-        <section className="space-y-3">
+        <section id="other-contacts" className="scroll-mt-24 space-y-3">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Other Contacts</h4>
           <PersonContactCardGrid>
             {otherContacts.map(contact => (

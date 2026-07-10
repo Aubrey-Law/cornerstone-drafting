@@ -36,7 +36,7 @@ const ADMIN_NOTIFY_EMAIL = ADMIN_EMAIL
 type SupabaseAdminClient = ReturnType<typeof getAdminClient>
 
 async function notifyIntakeComplete(clientName: string, clientEmail: string, matterId: string | null): Promise<void> {
-  const matterLink = matterId ? appUrl(`/admin/matters/${matterId}`) : appUrl('/admin/matters')
+  const matterLink = matterId ? appUrl(`/admin/matters/${matterId}?tab=overview`) : appUrl('/admin/matters')
   await sendEmail({
     category: 'intake_complete_alert',
     to: ADMIN_NOTIFY_EMAIL,
