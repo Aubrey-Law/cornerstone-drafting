@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { Layers, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -9,8 +9,8 @@ import { AssetPortfolioSummary } from '@/components/assets/AssetPortfolioSummary
 import { AssetDonutChart } from '@/components/assets/AssetDonutChart'
 import { AssetCategoryFilters } from '@/components/assets/AssetCategoryFilters'
 import { AssetTable } from '@/components/assets/AssetTable'
+import { BulkAssetsDialog } from '@/components/assets/BulkAssetsDialog'
 import { AssetFormDialog } from '@/components/assets/AssetFormDialog'
-import { ImportAssetsDialog } from '@/components/assets/ImportAssetsDialog'
 import { computeAssetAggregates, groupAssetsByCategory } from '@/lib/assets/aggregates'
 import { ASSET_CATEGORIES, ASSET_CHART_COLORS } from '@/lib/assets/categories'
 import { buildOwnershipLabels } from '@/lib/assets/labels'
@@ -41,7 +41,7 @@ function MatterAssetsTabImpl({
 }: MatterAssetsTabProps) {
   const [filter, setFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<AssetIntakeRow | null>(null)
   const [syncingDesignSheet, setSyncingDesignSheet] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
@@ -236,8 +236,15 @@ function MatterAssetsTabImpl({
           <Sparkles className="h-3.5 w-3.5 text-accent" />
           Analyze MA estate tax
         </Button>
-        <Button type="button" variant="link" className="h-auto px-0 text-sm" onClick={() => setImportOpen(true)}>
-          Import assets from spreadsheet or document
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setBulkOpen(true)}
+        >
+          <Layers className="h-3.5 w-3.5" />
+          Bulk assets
         </Button>
         {matterId && (
           <Button
@@ -267,8 +274,9 @@ function MatterAssetsTabImpl({
               <Plus className="h-3.5 w-3.5" />
               Add First Asset
             </Button>
-            <Button type="button" variant="link" size="sm" onClick={() => setImportOpen(true)}>
-              Import assets from spreadsheet or document
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setBulkOpen(true)}>
+              <Layers className="h-3.5 w-3.5" />
+              Bulk assets
             </Button>
           </div>
         </div>
@@ -340,12 +348,13 @@ function MatterAssetsTabImpl({
         onSave={handleSave}
       />
 
-      <ImportAssetsDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
+      <BulkAssetsDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
         intakeId={intakeId}
         accessToken={accessToken}
-        onImported={() => void load()}
+        ownershipLabels={ownershipLabels}
+        onSaved={() => void load()}
       />
     </div>
   )

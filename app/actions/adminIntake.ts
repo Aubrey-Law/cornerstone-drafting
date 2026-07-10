@@ -20,6 +20,7 @@ import { getHousehold } from '@/lib/contacts/getHousehold'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { linkIntakeToMatter } from '@/lib/intake/linkIntakeToMatter'
 import { resolveMatterIntakeIdForMatter } from '@/lib/intake/resolveMatterIntakeId'
+import { MATTER_INTAKE_LINK_COLUMNS } from '@/lib/matters/matterIntakeLink'
 import { markIntakeUploadsReviewed as persistIntakeUploadsReviewed, markPortalUploadsReviewed as persistPortalUploadsReviewed } from '@/lib/matter/unreviewedUploads'
 
 async function syncIntakeToDesignSheet(
@@ -285,7 +286,7 @@ async function findOrCreateIntake(
   if (args.matterId) {
     const { data: matter, error: matterError } = await admin
       .from('matters')
-      .select('client_intake_id, client_id, lead_id')
+      .select(MATTER_INTAKE_LINK_COLUMNS)
       .eq('id', args.matterId)
       .maybeSingle()
     if (matterError) throw new Error(matterError.message)
@@ -297,31 +298,13 @@ async function findOrCreateIntake(
       return intakeId
     }
 
-    const effectiveLeadId = args.leadId ?? (matter.lead_id as string | null)
-
-    if (effectiveLeadId) {
-      const { data: existing } = await admin
-        .from('client_intake')
-        .select('id')
-        .eq('lead_id', effectiveLeadId)
-        .maybeSingle()
-      if (existing?.id) {
-        const intakeId = existing.id as string
-        await linkIntakeToMatter(admin, args.matterId, intakeId)
-        return intakeId
-      }
-    }
-
     const userId = await resolveUserId((matter.client_id as string | null | undefined) ?? args.clientUserId)
-    const insertRow: Record<string, unknown> = {
-      ...initialPayload,
-      user_id: userId,
-    }
-    if (effectiveLeadId) insertRow.lead_id = effectiveLeadId
-
     const { data: newRecord, error: insertError } = await admin
       .from('client_intake')
-      .insert(insertRow)
+      .insert({
+        ...initialPayload,
+        user_id: userId,
+      })
       .select('id')
       .single()
     if (insertError) throw new Error(insertError.message)
