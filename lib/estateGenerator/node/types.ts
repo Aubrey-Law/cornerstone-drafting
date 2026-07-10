@@ -7,6 +7,7 @@ export type NodeEstatePackageName =
   | 'joint-trust'
   | 'joint-trust-simplified'
   | 'parental-guardian-appointment'
+  | 'temporary-delegation-parental-powers'
   | 'personal-property-memorandum'
   | 'pourover-will'
   | 'simple-will'
@@ -15,6 +16,11 @@ export type NodeEstatePackageName =
   | 'spouse-testamentary-trust-will'
   | 'testamentary-trust-will'
   | 'trust-individual-single'
+  | 'certificate-of-trust'
+  | 'assignment-of-personal-property'
+  | 'funding-instructions'
+  | 'trust-funding-plan'
+  | 'homestead-trustee'
   | 'young-adult-estate-plan'
 
 export interface NodeEstatePackageDocument {
@@ -79,6 +85,7 @@ export type NodeEstateContext = NodeEstateData & {
   has_spouse: boolean
   has_children: boolean
   has_minor_children: boolean
+  minor_children: Array<Record<string, unknown>>
   has_blended_family: boolean
   has_co_poa: boolean
   has_solo_poa: boolean
@@ -91,7 +98,18 @@ export type NodeEstateContext = NodeEstateData & {
   hcp_anatomical_all: boolean
   hcp_anatomical_specified: boolean
   hcp_anatomical_none: boolean
+  hcp_anatomical_defer: boolean
+  hcp_client_advance_prolong_life: boolean
+  hcp_client_advance_dnr: boolean
+  hcp_client_advance_do_not_prolong: boolean
+  hcp_spouse_advance_prolong_life: boolean
+  hcp_spouse_advance_dnr: boolean
+  hcp_spouse_advance_do_not_prolong: boolean
   hipaa_psychotherapy_authorized: boolean
+  hipaa_include_poa: boolean
+  hipaa_include_trustees: boolean
+  hipaa_list_fiduciaries_by_name: boolean
+  hipaa_list_fiduciaries_general: boolean
   uses_revocable_trust: boolean
   requires_guardian_clause: boolean
   has_specific_gifts: boolean
@@ -108,6 +126,7 @@ export type NodeEstateContext = NodeEstateData & {
   include_general_disinheritance: boolean
   disinherit_issue: boolean
   owns_real_property: boolean
+  has_assets: boolean
   tax_sensitive_estate: boolean
   state_requires_self_proving_affidavit: boolean
   signing_scheduled: boolean

@@ -95,6 +95,9 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   outrightWill.residuary = outrightResiduary
   const dpoa = { ...recordValue(data.dpoa) }
   dpoa.include_section_l = Boolean(dpoa.include_section_l)
+  dpoa.include_entity_powers = Boolean(dpoa.include_entity_powers)
+  dpoa.include_advanced_trust_gifting = Boolean(dpoa.include_advanced_trust_gifting)
+  dpoa.include_extended_personal_care = Boolean(dpoa.include_extended_personal_care)
   dpoa.self_dealing_reviewer = recordValue(dpoa.self_dealing_reviewer)
   dpoa.self_dealing_reviewer_alt = recordValue(dpoa.self_dealing_reviewer_alt)
   const healthcare = { ...recordValue(data.healthcare) }
@@ -121,13 +124,25 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     : BLANK_NOTARY_COMMISSION
 
   const hasMinorChildren = childRecords.some(child => Boolean(child.minor)) || Boolean(planning.has_minor_children)
+  const minorChildren = children.filter(child => Boolean(child.minor))
   const hasCoPoa = isPresent(getPath(data, 'fiduciaries.agent.co_primary.full_name'))
   const poaAction = typeof agent.co_agents_action === 'string' ? agent.co_agents_action : 'separate'
   const hasDpoaSelfDealingReviewer = isPresent(getPath(dpoa, 'self_dealing_reviewer.full_name'))
   const hasDpoaSelfDealingReviewerAlt = isPresent(getPath(dpoa, 'self_dealing_reviewer_alt.full_name'))
   const anatomicalGift = typeof healthcare.anatomical_gift === 'string' ? healthcare.anatomical_gift : null
+  const clientAnatomicalGift = typeof healthcare.client_anatomical_gift === 'string'
+    ? healthcare.client_anatomical_gift
+    : null
   const hasAnatomicalSpecified = anatomicalGift === 'specified' && isPresent(healthcare.anatomical_specified)
   const hipaaPsychotherapyNotes = typeof hipaa.psychotherapy_notes === 'string' ? hipaa.psychotherapy_notes : null
+  const clientAdvanceDirective = typeof healthcare.client_advance_directive === 'string'
+    ? healthcare.client_advance_directive
+    : null
+  const spouseAdvanceDirective = typeof healthcare.spouse_advance_directive === 'string'
+    ? healthcare.spouse_advance_directive
+    : null
+  const assetItems = arrayValue(assets.items)
+  const ownsRealProperty = Boolean(assets.real_property) || assetItems.some(item => item.category === 'real_property')
   const simultaneousDeath = typeof will.simultaneous_death === 'string' ? will.simultaneous_death : 'omit'
   const petCareOption = typeof petCare.option === 'string' ? petCare.option : 'omit'
 
@@ -135,6 +150,7 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     ...data,
     client,
     children,
+    minor_children: minorChildren,
     will,
     trust,
     pour_over: pourOver,
@@ -156,10 +172,21 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     aif_has_spouse: Boolean(agent.primary_has_spouse),
     has_dpoa_self_dealing_reviewer: hasDpoaSelfDealingReviewer,
     has_dpoa_self_dealing_reviewer_alt: hasDpoaSelfDealingReviewerAlt,
-    hcp_anatomical_all: anatomicalGift === 'all',
+    hcp_anatomical_all: anatomicalGift === 'all' || clientAnatomicalGift === 'yes',
     hcp_anatomical_specified: hasAnatomicalSpecified,
-    hcp_anatomical_none: anatomicalGift === 'none',
+    hcp_anatomical_none: anatomicalGift === 'none' || clientAnatomicalGift === 'no',
+    hcp_anatomical_defer: clientAnatomicalGift === 'defer',
+    hcp_client_advance_prolong_life: clientAdvanceDirective === 'prolong_life',
+    hcp_client_advance_dnr: clientAdvanceDirective === 'do_not_resuscitate',
+    hcp_client_advance_do_not_prolong: clientAdvanceDirective === 'do_not_prolong_life',
+    hcp_spouse_advance_prolong_life: spouseAdvanceDirective === 'prolong_life',
+    hcp_spouse_advance_dnr: spouseAdvanceDirective === 'do_not_resuscitate',
+    hcp_spouse_advance_do_not_prolong: spouseAdvanceDirective === 'do_not_prolong_life',
     hipaa_psychotherapy_authorized: hipaaPsychotherapyNotes === 'authorize',
+    hipaa_include_poa: Boolean(hipaa.include_poa),
+    hipaa_include_trustees: Boolean(hipaa.include_trustees),
+    hipaa_list_fiduciaries_by_name: hipaa.list_fiduciaries_by_name === 'by_name',
+    hipaa_list_fiduciaries_general: hipaa.list_fiduciaries_by_name === 'general_language',
     uses_revocable_trust: Boolean(planning.uses_revocable_trust),
     requires_guardian_clause: hasMinorChildren,
     has_specific_gifts: gifts.length > 0,
@@ -176,7 +203,8 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     include_general_disinheritance: familyRecord.include_general_disinheritance,
     disinherit_issue: familyRecord.disinherit_issue,
     family: familyRecord,
-    owns_real_property: Boolean(assets.real_property),
+    owns_real_property: ownsRealProperty,
+    has_assets: assetItems.length > 0,
     tax_sensitive_estate: Boolean(tax.sensitive_estate),
     state_requires_self_proving_affidavit: Boolean(stateRules.requires_self_proving_affidavit),
     signing_scheduled: signingScheduled,

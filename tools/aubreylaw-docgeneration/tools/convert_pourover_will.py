@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Convert the provided pour-over will into a generator-ready template."""
+"""Convert the provided pour-over will into a generator-ready template.
+
+Superseded for Cornerstone work by convert_cornerstone_pourover_will.py, which
+uses source-forms/estate/cornerstone/pourover-will_cv1.docx.
+"""
 
 from pathlib import Path
 

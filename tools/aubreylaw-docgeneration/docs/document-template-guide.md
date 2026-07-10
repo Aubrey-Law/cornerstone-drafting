@@ -400,6 +400,7 @@ List any new field paths with type, required status, and description.
 | --- | --- |
 | [procedure.md](./procedure.md) | Short build procedure |
 | [README.md](../README.md) | Generator CLI quick start |
+| [Design sheet section guides](../../../docs/design-sheet-sections/README.md) | Per-section field maps, conditionals, and generator gaps |
 | `schemas/data-dictionary.json` | Canonical field paths |
 | `docs/*-placeholder-map.md` | Per-document field and logic maps |
 | `scripts/generate-*-template.ts` | Programmatic template builders |

@@ -10,6 +10,7 @@ import { loadNodeEstatePackage, loadNodeEstateStateRules } from '@/lib/estateGen
 import { buildNodeEstateContext } from '@/lib/estateGenerator/node/context'
 import { generateEstatePlanDocumentsNode, generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
 import { renderNodeEstateText } from '@/lib/estateGenerator/node/renderText'
+import { toEstateGeneratorData } from '@/lib/estateGenerator/toGeneratorData'
 import { getPath, missingRequiredFields } from '@/lib/estateGenerator/node/validation'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
@@ -306,6 +307,57 @@ describe('node estate generator config', () => {
         output: '00-estate-plan-summary.docx',
       },
     ])
+  })
+
+  it('renders the estate plan summary for married draft payload data', async () => {
+    const payload = draftPayload({
+      matter: { type: 'married_joint' },
+      spouse: { first_name: 'John', last_name: 'Example', full_name: 'John Example' },
+      documents: {
+        include_trust: true,
+        include_pour_over_will: true,
+        include_dpoa: true,
+        include_hcp: true,
+        include_hipaa: true,
+        include_ahd: true,
+        spouse_docs: true,
+      },
+    })
+    const result = await generateNodeEstatePackage({
+      data: toEstateGeneratorData(payload) as Record<string, unknown>,
+      packageName: 'estate-plan-summary',
+      state: 'MA',
+      root,
+      allowDraft: true,
+    })
+
+    if (!result.ok) throw new Error(result.error)
+    const xml = xmlFromDocx(result.files[0].buffer)
+    expect(xml).toContain('JANE EXAMPLE')
+    expect(xml).toContain('JOHN EXAMPLE')
+  })
+
+  it('renders the estate plan summary template from the married example JSON', async () => {
+    const data = JSON.parse(
+      fs.readFileSync(path.join(root, 'examples/client-ma-estate-plan-summary.json'), 'utf8'),
+    ) as Record<string, unknown>
+
+    const result = await generateNodeEstatePackage({
+      data,
+      packageName: 'estate-plan-summary',
+      state: 'MA',
+      root,
+      allowDraft: true,
+    })
+
+    if (!result.ok) throw new Error(result.error)
+
+    const xml = xmlFromDocx(result.files[0].buffer)
+    expect(xml).toContain('Estate Plan Summary')
+    expect(xml).toContain('JORDAN COUPLETON')
+    expect(xml).toContain('RILEY COUPLETON')
+    expect(xml).not.toContain('{{')
+    expect(xml).not.toContain('{%')
   })
 
   it('loads the parental guardian appointment package config', () => {
@@ -1320,22 +1372,29 @@ describe('node estate generator package generation', () => {
   })
 
   it('adds an individual estate plan summary to app-level draft generation', async () => {
-    const result = await generateEstatePlanDocumentsNode(draftPayload())
+    const result = await generateNodeEstatePackage({
+      data: toEstateGeneratorData(draftPayload()) as Record<string, unknown>,
+      packageName: 'estate-plan-summary',
+      state: 'MA',
+      root,
+      allowDraft: true,
+    })
 
     if (!result.ok) throw new Error(result.error)
 
-    const summaryXml = xmlFromDocx(result.files.at(-1)!.buffer)
-    expect(result.files.at(-1)!.name).toBe('00-estate-plan-summary.docx')
+    const summaryXml = xmlFromDocx(result.files[0].buffer)
+    expect(result.files[0].name).toBe('00-estate-plan-summary.docx')
     expect(summaryXml).toContain('Estate Plan Summary')
-    expect(summaryXml).toContain('This package summarizes the draft documents prepared for Jane Example.')
+    expect(summaryXml).toContain('JANE EXAMPLE')
     expect(summaryXml).toContain('Your Revocable Living Trust')
-    expect(summaryXml).toContain('Trustees: Jane Example serves initially. Successor trustee: Samuel Successor')
+    expect(summaryXml).toContain('Initial Trustee: JANE EXAMPLE')
+    expect(summaryXml).toContain('SAMUEL SUCCESSOR')
     expect(summaryXml).not.toContain('{{')
     expect(summaryXml).not.toContain('{%')
   })
 
   it('adds couple language to the estate plan summary for married joint plans', async () => {
-    const result = await generateEstatePlanDocumentsNode(draftPayload({
+    const payload = draftPayload({
       matter: {
         type: 'married_joint',
       },
@@ -1365,23 +1424,22 @@ describe('node estate generator package generation', () => {
         spouse_dpoa_primary: 'Sloane Spouse Agent',
         spouse_hcp_primary: 'Harper Spouse Proxy',
       },
-    }))
+    })
+    const result = await generateNodeEstatePackage({
+      data: toEstateGeneratorData(payload) as Record<string, unknown>,
+      packageName: 'estate-plan-summary',
+      state: 'MA',
+      root,
+      allowDraft: true,
+    })
 
     if (!result.ok) throw new Error(result.error)
 
-    const summaryXml = xmlFromDocx(result.files.at(-1)!.buffer)
-    expect(result.packageNames).toEqual([
-      'joint-trust',
-      'pourover-will',
-      'spouse-pourover-will',
-      'incapacity-documents',
-      'spouse-incapacity-documents',
-      'estate-plan-summary',
-    ])
-    expect(summaryXml).toContain('Jane Example and John Example')
-    expect(summaryXml).toContain('Your Estate Plan as a Couple')
-    expect(summaryXml).toContain('This package summarizes the draft documents prepared for Jane Example and John Example.')
-    expect(summaryXml).toContain('companion will documents for John Example')
+    const summaryXml = xmlFromDocx(result.files[0].buffer)
+    expect(summaryXml).toContain('JANE EXAMPLE &amp; JOHN EXAMPLE')
+    expect(summaryXml).toContain('Your Revocable Living Trust')
+    expect(summaryXml).toContain('Each of your Wills serves as a safety net')
+    expect(summaryXml).toContain('JOHN EXAMPLE')
     expect(summaryXml).not.toContain('{{')
     expect(summaryXml).not.toContain('{%')
   })

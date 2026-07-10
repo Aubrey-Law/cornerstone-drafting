@@ -1,0 +1,104 @@
+{
+  "client": {
+    "full_name": "Jordan Coupleton",
+    "first_name": "Jordan",
+    "date_of_birth": "January 1, 1970",
+    "street_address": "12 Oak Street, Boston, MA 02118",
+    "county": "Suffolk",
+    "state": "MA"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "Riley Coupleton",
+    "first_name": "Riley",
+    "date_of_birth": "February 2, 1972"
+  },
+  "children": [
+    { "full_name": "Sam Coupleton", "relationship": "Child", "date_of_birth": "March 3, 2010", "minor": true },
+    { "full_name": "Casey Coupleton", "relationship": "Child", "date_of_birth": "April 4, 2002", "minor": false }
+  ],
+  "planning": {
+    "include_trust": true,
+    "include_pour_over_will": true,
+    "include_dpoa": true,
+    "include_hcp": true,
+    "include_ahd": true,
+    "include_hipaa": true,
+    "include_ppm": true,
+    "spouse_docs": true,
+    "uses_revocable_trust": true
+  },
+  "trust": {
+    "name": "The Coupleton Family Trust",
+    "display_date": "June 1, 2026",
+    "date": "June 1, 2026",
+    "include_common_trust_for_children": true,
+    "special_distributions_age": "23",
+    "descendants_distribution": {
+      "method": "staged",
+      "stage_1_age": "30",
+      "stage_2_age": "35",
+      "stage_3_age": ""
+    },
+    "contingent_beneficiary": { "full_name": "Pat Coupleton" },
+    "provisions": {
+      "include_creditor_divorce_provisions": true,
+      "include_no_contest_clause": true
+    },
+    "survivorship_requirement_days": "45"
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "co_primary": { "full_name": "Riley Coupleton" },
+      "successor": { "full_name": "Alex Friend" },
+      "second_successor": { "full_name": "Jamie Friend" }
+    },
+    "executor": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "co_primary": { "full_name": "" },
+      "successor": { "full_name": "Alex Friend" },
+      "second_successor": { "full_name": "Jamie Friend" }
+    },
+    "spouse_executor": {
+      "primary": { "full_name": "Riley Coupleton" },
+      "co_primary": { "full_name": "" },
+      "successor": { "full_name": "Jamie Friend" }
+    },
+    "agent": {
+      "primary": { "full_name": "Riley Coupleton" },
+      "co_primary": { "full_name": "" },
+      "successor": { "full_name": "Alex Friend" }
+    },
+    "spouse_agent": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "co_primary": { "full_name": "" },
+      "successor": { "full_name": "Jamie Friend" }
+    }
+  },
+  "healthcare": {
+    "agent": {
+      "primary": { "full_name": "Riley Coupleton", "relationship": "Spouse" },
+      "alternate": { "full_name": "Alex Friend" }
+    },
+    "spouse_agent": {
+      "primary": { "full_name": "Jordan Coupleton", "relationship": "Spouse" },
+      "alternate": { "full_name": "Jamie Friend" }
+    },
+    "client_anatomical_gift": "no"
+  },
+  "guardians": {
+    "primary": { "full_name": "Alex Friend" },
+    "successor": { "full_name": "Jamie Friend" },
+    "second_successor": { "full_name": "Pat Coupleton" },
+    "temporary": { "full_name": "Nina Neighbor" },
+    "temporary_successor": { "full_name": "Owen Neighbor" }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "June 20, 2026",
+    "ordinal_doc_date": "20th day of June, 2026",
+    "signing_county": "Suffolk",
+    "notary_commission": "January 1, 2030"
+  }
+}

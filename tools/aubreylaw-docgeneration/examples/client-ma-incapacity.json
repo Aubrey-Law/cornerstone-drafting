@@ -60,7 +60,24 @@
         "relationship": "Sister",
         "address": "789 Backup Avenue, Cambridge, MA",
         "phone": "555-0101"
+      },
+      "second_alternate": {
+        "full_name": "",
+        "relationship": "",
+        "address": "",
+        "phone": ""
       }
     }
+  },
+  "hipaa": {
+    "include_trustees": true,
+    "include_poa": false,
+    "psychotherapy_notes": "authorize",
+    "client_additional_agents": []
+  },
+  "dpoa": {
+    "include_entity_powers": true,
+    "include_advanced_trust_gifting": false,
+    "include_extended_personal_care": true
   }
 }

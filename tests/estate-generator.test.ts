@@ -814,13 +814,15 @@ describe('estate generator mapping', () => {
       },
     })
 
-    expect(deriveEstateGeneratorPackages(minorChildDocs)).toEqual(['parental-guardian-appointment', 'estate-plan-summary'])
-    expect(estateGeneratorCoverageWarnings(minorChildDocs)).toEqual([
-      'Selected documents are not yet backed by estate generator packages: Temporary delegation of parental powers.',
+    expect(deriveEstateGeneratorPackages(minorChildDocs)).toEqual([
+      'parental-guardian-appointment',
+      'temporary-delegation-parental-powers',
+      'estate-plan-summary',
     ])
+    expect(estateGeneratorCoverageWarnings(minorChildDocs)).toEqual([])
   })
 
-  it('warns when selected ancillary documents are not generated yet', () => {
+  it('does not warn when selected guardian documents are backed by packages', () => {
     const warnings = estateGeneratorCoverageWarnings(payload({
       matter: { type: 'married_joint' },
       spouse: {
@@ -837,9 +839,7 @@ describe('estate generator mapping', () => {
       },
     }))
 
-    expect(warnings).toContain(
-      'Selected documents are not yet backed by estate generator packages: Temporary delegation of parental powers.',
-    )
+    expect(warnings).toEqual([])
   })
 
   it('builds the JSON shape expected by the estate generator', () => {

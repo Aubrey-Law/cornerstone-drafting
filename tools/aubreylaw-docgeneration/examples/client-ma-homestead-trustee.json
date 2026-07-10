@@ -1,0 +1,54 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "street_address": "123 Main Street",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk",
+    "pronoun_subject": "she",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "John Example",
+    "pronoun_possessive": "his"
+  },
+  "has_spouse": true,
+  "trust": {
+    "name": "Jane Example Revocable Trust",
+    "display_name": "JANE EXAMPLE REVOCABLE TRUST, U/A dated May 21, 2026",
+    "date": "May 21, 2026"
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": {
+        "full_name": "Jane Example"
+      },
+      "co_primary": {
+        "full_name": "Thomas Trustee"
+      }
+    }
+  },
+  "homestead": {
+    "beneficiary_names": "Jane Example and John Example",
+    "primary_beneficiary_name": "Jane Example",
+    "beneficiary_pronoun_possessive": "their",
+    "trustee_pronoun_possessive": "his/her/their",
+    "servicemember_names": "",
+    "property_address_line": "123 Main Street, Boston",
+    "trust_deed_book": "",
+    "trust_deed_page": "",
+    "deed_registry_district": "Suffolk",
+    "deed_book": "12345",
+    "deed_page": "67",
+    "certificate_number": "",
+    "land_court_document_number": ""
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 21, 2026",
+    "ordinal_doc_date": "the 21st day of May, 2026",
+    "signing_county": "Suffolk",
+    "notary_commission": "January 1, 2030"
+  }
+}

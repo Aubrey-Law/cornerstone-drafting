@@ -197,7 +197,7 @@ export const ROLE_CONFIG: Record<FiduciaryRole, RoleConfig> = {
     primaryLabel: 'Primary Temporary Guardian',
     altLabel: 'Alternate Temporary Guardian',
     coLabel: 'Co-Temporary Guardian',
-    allowCo: false,
-    maxCo: 0,
+    allowCo: true,
+    maxCo: 1,
   },
 }

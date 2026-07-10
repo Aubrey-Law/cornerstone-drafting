@@ -67,13 +67,14 @@ const SIGNING_COUNTY_OPTIONS = [
 ]
 
 const FUNDING_DOCUMENT_LABELS: Record<
-  'certificate_of_trust' | 'assignment_of_personal_property' | 'funding_instructions' | 'funding_recommendation',
+  'certificate_of_trust' | 'assignment_of_personal_property' | 'funding_instructions' | 'funding_recommendation' | 'homestead_trustee',
   string
 > = {
   certificate_of_trust: 'Certificate of Trust',
   assignment_of_personal_property: 'Assignment of Personal Property',
   funding_instructions: 'Funding Instructions',
   funding_recommendation: 'Funding Recommendation',
+  homestead_trustee: 'Declaration of Homestead (Trustee)',
 }
 
 const ANCILLARY_DOCUMENT_LABELS: Record<
@@ -103,6 +104,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
     'assignment_of_personal_property',
     'funding_instructions',
     'funding_recommendation',
+    'homestead_trustee',
   ]
   const standaloneAncillaryKeys: StandaloneAncillaryDocumentKey[] = [
     'trust_summary',

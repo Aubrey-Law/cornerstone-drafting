@@ -71,5 +71,9 @@ export function conditionalMissingFieldsForPackage(
     }
   }
 
+  if (packageName === 'temporary-delegation-parental-powers') {
+    requiredFields.push('guardians.temporary.full_name')
+  }
+
   return missingRequiredFields(context, requiredFields)
 }

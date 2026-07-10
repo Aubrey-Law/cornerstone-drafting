@@ -1,0 +1,17 @@
+{
+  "name": "trust-funding-plan",
+  "description": "Personalized trust funding recommendations — hybrid template with asset inventory from design sheet and attorney-reviewed narrative sections.",
+  "required_fields": [
+    "client.full_name",
+    "trust.display_name",
+    "assets.items"
+  ],
+  "documents": [
+    {
+      "id": "trust-funding-plan",
+      "title": "Trust Funding Recommendations",
+      "template": "templates/trust-funding-plan.docx",
+      "output": "01-trust-funding-plan.docx"
+    }
+  ]
+}

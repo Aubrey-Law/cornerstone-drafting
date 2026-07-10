@@ -1,5 +1,16 @@
 import type { DesignSheetChild, RemoteCharity, StaggeredTier } from '@/types/database'
 import type { TrustPlanningType } from '@/lib/designSheetDocumentInclusions'
+import type { FiduciaryDocumentInclusions } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import type { DraftPayloadAsset } from '@/lib/draftPayload/assets'
+import type { DraftPayloadFundingPlan } from '@/lib/draftPayload/fundingPlan'
+import type { DraftPayloadHomestead } from '@/lib/draftPayload/homestead'
+import type { DraftPayloadExcludedGuardian } from '@/lib/draftPayload/excludedGuardians'
+import type { DraftPayloadFiduciaryRoleDetails } from '@/lib/draftPayload/fiduciaryDetails'
+import type {
+  DraftPayloadHealthcareProvisions,
+  DraftPayloadHcpProvisions,
+  DraftPayloadHipaaProvisions,
+} from '@/lib/draftPayload/healthcare'
 import type { DraftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import type { DraftPayloadTrustProvisions } from '@/lib/draftPayload/trustProvisions'
 
@@ -87,6 +98,7 @@ export interface DraftPayload {
     guardian_successor: string | null
     guardian_second_successor: string | null
     temp_guardian_primary: string | null
+    temp_guardian_co: string | null
     temp_guardian_successor: string | null
     temp_guardian_second_successor: string | null
     spouse_pr_primary: string | null
@@ -118,6 +130,12 @@ export interface DraftPayload {
     include_deed?: boolean
     include_trustees_certificate?: boolean
     include_real_estate_trust?: boolean
+    include_certificate_of_trust?: boolean
+    include_assignment_of_personal_property?: boolean
+    include_funding_instructions?: boolean
+    include_funding_recommendation?: boolean
+    include_homestead_trustee?: boolean
+    include_estate_plan_summary?: boolean
     spouse_docs: boolean
     /** Individual-trust structure; `disclaimer` selects the married-individual disclaimer trust. */
     trust_planning_type: TrustPlanningType
@@ -160,6 +178,9 @@ export interface DraftPayload {
     self_dealing_reviewer: string | null
     self_dealing_reviewer_alt: string | null
     include_section_l: boolean
+    include_entity_powers: boolean
+    include_advanced_trust_gifting: boolean
+    include_extended_personal_care: boolean
     agent_compensation: 'prevailing_professional' | 'reasonable' | 'none' | null
     coagent_serving: 'jointly' | 'separately' | 'silent' | null
     allow_gifts: boolean
@@ -185,13 +206,17 @@ export interface DraftPayload {
     specific_businesses: string | null
     additional_limitations: string | null
   }
-  hcp_provisions: {
-    anatomical_gift: 'all' | 'specified' | 'none' | null
-    anatomical_specified: string | null
-  }
-  hipaa_provisions: {
-    psychotherapy_notes: 'authorize' | 'do_not_authorize' | null
-  }
+  hcp_provisions: DraftPayloadHcpProvisions
+  hipaa_provisions: DraftPayloadHipaaProvisions
+  healthcare_provisions?: DraftPayloadHealthcareProvisions
+  fiduciary_display?: FiduciaryDocumentInclusions
+  fiduciary_details?: DraftPayloadFiduciaryRoleDetails
+  excluded_guardians?: DraftPayloadExcludedGuardian[]
+  assets?: DraftPayloadAsset[]
+  funding_plan?: DraftPayloadFundingPlan
+  homestead?: DraftPayloadHomestead
+  goals_notes?: string | null
+  concerns?: string | null
   execution: {
     signing_month: string | null
     signing_year: string | null
@@ -398,6 +423,9 @@ export interface DesignSheetRow {
   spouse_executor_slots?: FiduciarySlotRow[] | null
   spouse_poa_slots?: FiduciarySlotRow[] | null
   spouse_hcp_slots?: FiduciarySlotRow[] | null
+  assets?: import('@/types/database').AssetItem[] | null
+  goals_notes?: string | null
+  concerns?: string | null
   decisions?: Record<string, unknown> | null
 }
 

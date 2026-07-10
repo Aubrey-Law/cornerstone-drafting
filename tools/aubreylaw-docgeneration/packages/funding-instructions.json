@@ -1,0 +1,19 @@
+{
+  "name": "funding-instructions",
+  "description": "Trust funding instructions and checklist for revocable living trust clients.",
+  "required_fields": [
+    "client.full_name",
+    "trust.name",
+    "trust.display_name",
+    "trust.date",
+    "fiduciaries.trustee.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "funding-instructions",
+      "title": "Trust Funding Instructions & Checklist",
+      "template": "templates/funding-instructions.docx",
+      "output": "01-funding-instructions.docx"
+    }
+  ]
+}

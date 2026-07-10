@@ -1,0 +1,56 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "street_address": "123 Main Street",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk",
+    "signing_county": "Suffolk",
+    "date_of_birth": "January 1, 1970",
+    "pronoun_subject": "she",
+    "pronoun_object": "her",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "John Example",
+    "pronoun_subject": "he",
+    "pronoun_object": "him",
+    "pronoun_possessive": "his"
+  },
+  "children": [
+    {
+      "full_name": "Alex Example",
+      "date_of_birth": "March 4, 2015",
+      "minor": true
+    },
+    {
+      "full_name": "Taylor Example",
+      "date_of_birth": "August 12, 2018",
+      "minor": true
+    }
+  ],
+  "guardians": {
+    "temporary": {
+      "full_name": "Grace Guardian",
+      "address": "456 Care Street, Boston, MA 02108",
+      "phone": "(617) 555-0100"
+    },
+    "temporary_co": {
+      "full_name": "Co Guardian Example",
+      "address": "456 Care Street, Boston, MA 02108",
+      "phone": "(617) 555-0101"
+    },
+    "temporary_successor": {
+      "full_name": "Backup Guardian",
+      "address": "789 Backup Avenue, Cambridge, MA 02139"
+    }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 21, 2026",
+    "ordinal_doc_date": "the 21st day of May, 2026",
+    "signing_county": "Suffolk",
+    "notary_commission": "January 1, 2030"
+  }
+}

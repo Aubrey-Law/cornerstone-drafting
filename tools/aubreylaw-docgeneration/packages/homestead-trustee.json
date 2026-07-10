@@ -1,0 +1,22 @@
+{
+  "name": "homestead-trustee",
+  "description": "Massachusetts Declaration of Homestead for homes owned by trustee(s) under M.G.L. c. 188.",
+  "required_fields": [
+    "client.full_name",
+    "trust.display_name",
+    "trust.date",
+    "fiduciaries.trustee.primary.full_name",
+    "homestead.beneficiary_names",
+    "homestead.property_address_line",
+    "execution.ordinal_doc_date",
+    "execution.signing_county"
+  ],
+  "documents": [
+    {
+      "id": "homestead-trustee",
+      "title": "Declaration of Homestead (Trustee)",
+      "template": "templates/homestead-trustee.docx",
+      "output": "01-homestead-trustee.docx"
+    }
+  ]
+}

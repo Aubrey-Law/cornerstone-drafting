@@ -1,10 +1,20 @@
 # Pour-Over Will Placeholder and Logic Map
 
 Source form:
-`source-forms/Pourover_Will.docx`
+`source-forms/estate/cornerstone/pourover-will_cv1.docx`
+
+Conversion script:
+`tools/convert_cornerstone_pourover_will.py`
 
 Generated template:
 `templates/pourover-will.docx`
+
+Re-run conversion:
+
+```bash
+cd tools/aubreylaw-docgeneration
+.venv/bin/python3 tools/convert_cornerstone_pourover_will.py
+```
 
 ## Identified Placeholders
 
@@ -40,6 +50,30 @@ Generated template:
 | `has_excluded_guardians` | excluded guardian list present | Guardian exclusion paragraph |
 | successor PR present | `fiduciaries.executor.successor.full_name` set | Vacancy / successor-nomination sentence (omitted entirely if no successor) |
 | second successor PR present | `fiduciaries.executor.second_successor.full_name` set | Switches the successor nomination to an ordered chain ("first, …; and second, …"); each tier may add a co-successor via `co_successor` / `co_second_successor` |
+| PR nomination power (cv1) | always present | "Should all of the said personal representatives decline…" — each PR may nominate a replacement |
+
+## Cornerstone cv1 conversion notes (2026-07-10)
+
+The cv1 source was **mostly pre-templated** with Jinja placeholders and `include_clause()` calls. The conversion script:
+
+- Copies source to `source-forms/estate/cornerstone/pourover-will_cv1.docx`
+- **Removes** two legacy duplicate PR paragraphs that still used bracket placeholders (`[Initial Personal Representative]`, `[CLIENT PR]`)
+- **Fixes** the primary PR nomination paragraph (cv1 had a broken `{% else %}` without a matching `{% if %}`)
+- **Preserves** the cv1 PR nomination-power paragraph ("Should all of the said personal representatives decline…")
+- Applies family/disinheritance conditional patches (`include_child_gender_markers`, `include_afterborn_children`, `include_expectant_children`, `omissions_intentional`)
+
+This **replaces** the prior `templates/pourover-will.docx` (same package output path). The older `tools/convert_pourover_will.py` targeted `source-forms/Pourover_Will.docx` and is superseded for Cornerstone work.
+
+Test render:
+
+```bash
+cd tools/aubreylaw-docgeneration
+.venv/bin/python3 al-generator.py generate --allow-draft \
+  --data examples/client-ma-pourover.json \
+  --package pourover-will --state MA --out output/ma-pourover
+```
+
+Note: `examples/client-ma-pourover.json` is minimal; full renders need `will.*`, `pour_over.alternate_disposition_text`, and top-level family flags (the Node estate generator flattens these from `family.*`; `al-generator.py` does not yet).
 
 ## Clause Library Candidates
 
@@ -63,4 +97,4 @@ Generated template:
 
 - The source document is Massachusetts-specific.
 - Legal text was preserved as source material where possible, but the generated template and clauses still require attorney review before use.
-- The source form includes guardian exclusion language with a `TO BE DETERMINED` placeholder; this should remain conditional and only appear when excluded guardians are provided.
+- The cv1 source already templates guardian exclusion via `{% if requires_guardian_clause and has_excluded_guardians %}` with a loop over `guardians.excluded[]` (no `TO BE DETERMINED` placeholder).

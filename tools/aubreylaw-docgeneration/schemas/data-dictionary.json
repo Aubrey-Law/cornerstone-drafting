@@ -309,6 +309,36 @@
     "required": "conditional",
     "description": "Primary guardian nominee when minor children exist."
   },
+  "guardians.temporary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Temporary agent for parental delegation under MGL c.190B §5-103."
+  },
+  "guardians.temporary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address of temporary parental delegation agent."
+  },
+  "guardians.temporary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number of temporary parental delegation agent."
+  },
+  "guardians.temporary_co.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-temporary agent appointed jointly with the primary temporary agent."
+  },
+  "guardians.temporary_successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Alternate temporary agent for parental delegation."
+  },
+  "guardians.temporary_successor.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address of alternate temporary parental delegation agent."
+  },
   "guardians.excluded[].full_name": {
     "type": "array",
     "required": false,
@@ -338,6 +368,11 @@
     "type": "string",
     "required": "conditional",
     "description": "Alternate health care agent name."
+  },
+  "healthcare.agent.second_alternate.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Second alternate health care agent name. Cornerstone cv1 template supports a second successor; design sheet currently provides only primary + one successor."
   },
   "healthcare.anatomical_gift": {
     "type": "string",

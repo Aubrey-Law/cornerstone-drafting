@@ -16,6 +16,7 @@ export type EstatePlanAncillaryDocumentKey =
   | 'assignment_of_personal_property'
   | 'funding_instructions'
   | 'funding_recommendation'
+  | 'homestead_trustee'
   | 'trust_summary'
   | 'estate_plan_summary'
   | 'estate_plan_signing_guide'
@@ -58,6 +59,7 @@ export const ESTATE_PLAN_ANCILLARY_LABELS: Record<EstatePlanAncillaryDocumentKey
   assignment_of_personal_property: 'Assignment of Personal Property',
   funding_instructions: 'Funding Instructions',
   funding_recommendation: 'Funding Recommendation',
+  homestead_trustee: 'Declaration of Homestead (Trustee)',
   trust_summary: 'Trust Summary',
   estate_plan_summary: 'Estate Plan Summary',
   estate_plan_signing_guide: 'Estate Plan Signing Guide',
@@ -179,6 +181,7 @@ function normalizeAncillaryDocuments(
     assignment_of_personal_property: typeof raw.assignment_of_personal_property === 'boolean' ? raw.assignment_of_personal_property : trustIncluded,
     funding_instructions: typeof raw.funding_instructions === 'boolean' ? raw.funding_instructions : trustIncluded,
     funding_recommendation: typeof raw.funding_recommendation === 'boolean' ? raw.funding_recommendation : trustIncluded,
+    homestead_trustee: typeof raw.homestead_trustee === 'boolean' ? raw.homestead_trustee : trustIncluded,
     trust_summary: typeof raw.trust_summary === 'boolean' ? raw.trust_summary : trustIncluded,
     estate_plan_summary: typeof raw.estate_plan_summary === 'boolean' ? raw.estate_plan_summary : true,
     estate_plan_signing_guide: typeof raw.estate_plan_signing_guide === 'boolean' ? raw.estate_plan_signing_guide : true,

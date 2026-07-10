@@ -22,6 +22,7 @@ export const REAL_ESTATE_TRANSFER_FIELD_KEYS = [
   'consideration',
   'execution_date',
   'certificate_execution_county',
+  'trust_term_extension_years',
 ] as const
 
 export type RealEstateTransferFieldKey = (typeof REAL_ESTATE_TRANSFER_FIELD_KEYS)[number]
@@ -58,6 +59,7 @@ export const REAL_ESTATE_TRANSFER_FIELDS: RealEstateTransferFieldMeta[] = [
   { key: 'settlor', label: 'Settlor', section: 'trust' },
   { key: 'beneficial_owners', label: 'Beneficial owners', section: 'trust', multiline: true },
   { key: 'certificate_execution_county', label: 'Certificate execution county', section: 'certificate' },
+  { key: 'trust_term_extension_years', label: 'Successive trust term (years)', section: 'trust' },
 ]
 
 export const DEED_EXTRACTED_FIELD_KEYS = REAL_ESTATE_TRANSFER_FIELDS

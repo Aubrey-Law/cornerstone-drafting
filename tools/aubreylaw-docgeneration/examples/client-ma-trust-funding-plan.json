@@ -1,0 +1,78 @@
+{
+  "client": {
+    "full_name": "Brian Woo",
+    "street_address": "106 Selwyn Road",
+    "city": "Newton",
+    "state": "MA",
+    "county": "Middlesex",
+    "pronoun_subject": "he",
+    "pronoun_possessive": "his"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "Amy Woo",
+    "pronoun_subject": "she",
+    "pronoun_possessive": "her"
+  },
+  "trust": {
+    "name": "Brian Woo Revocable Trust",
+    "display_name": "BRIAN WOO REVOCABLE TRUST, U/A dated May 21, 2026",
+    "spouse_display_name": "AMY WOO REVOCABLE TRUST, U/A dated May 21, 2026",
+    "date": "May 21, 2026",
+    "spousal_funding": "disclaimer"
+  },
+  "assets": {
+    "real_property": true,
+    "total_gross_value": "$10,480,000",
+    "total_net_value": "$10,250,000",
+    "items": [
+      {
+        "category": "real_property",
+        "category_label": "Real Estate",
+        "description": "Primary Residence — 106 Selwyn Rd, Newton",
+        "institution": null,
+        "owner": "Joint",
+        "estimated_value": "$1,300,000",
+        "gross_value": "$1,300,000",
+        "net_value": "$1,070,000"
+      },
+      {
+        "category": "financial",
+        "category_label": "Bank Accounts",
+        "description": "Citizens Bank — Checking",
+        "institution": "Citizens Bank",
+        "owner": "Joint",
+        "estimated_value": "$80,000",
+        "gross_value": "$80,000",
+        "net_value": "$80,000"
+      }
+    ]
+  },
+  "funding_plan": {
+    "narrative": "Section A — Real Estate\nPrimary Residence (106 Selwyn Road, Newton):\nTitle is currently held jointly. We suggest recording deeds conveying each spouse's 50% interest to the respective revocable trust after plan implementation.\n\nSection D — Retirement Accounts (Do NOT Fund into Trusts)\nRetirement accounts should NOT be retitled into either trust. Update beneficiary designations instead (spouse primary; respective trust contingent after confirming see-through trust requirements).",
+    "checklist_items": [
+      {
+        "number": "1",
+        "action": "Record quitclaim deed — Brian's 50% interest in primary residence to Brian's Trust (Middlesex County Registry)",
+        "trust": "Brian's Trust",
+        "priority": "HIGH"
+      },
+      {
+        "number": "2",
+        "action": "Update beneficiary designations on Brian's 401(k) — Primary: Amy; Contingent: Brian's Trust",
+        "trust": "Brian's Trust",
+        "priority": "HIGH"
+      }
+    ]
+  },
+  "tax": {
+    "sensitive_estate": true
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 21, 2026",
+    "ordinal_doc_date": "the 21st day of May, 2026",
+    "signing_county": "Middlesex",
+    "notary_commission": "January 1, 2030"
+  }
+}

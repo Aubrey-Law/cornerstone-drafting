@@ -1,0 +1,23 @@
+{
+  "name": "assignment-of-personal-property",
+  "description": "Massachusetts assignment of tangible personal property to a revocable trust.",
+  "required_fields": [
+    "client.full_name",
+    "client.street_address",
+    "client.city",
+    "client.state",
+    "client.pronoun_subject",
+    "trust.display_name",
+    "trust.date",
+    "fiduciaries.trustee.primary.full_name",
+    "execution.signing_county"
+  ],
+  "documents": [
+    {
+      "id": "assignment-of-personal-property",
+      "title": "Assignment of Personal Property",
+      "template": "templates/assignment-of-personal-property.docx",
+      "output": "01-assignment-of-personal-property.docx"
+    }
+  ]
+}

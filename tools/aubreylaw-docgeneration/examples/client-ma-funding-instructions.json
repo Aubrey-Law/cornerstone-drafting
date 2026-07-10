@@ -1,0 +1,39 @@
+{
+  "client": {
+    "full_name": "Jane Example",
+    "street_address": "123 Main Street",
+    "city": "Boston",
+    "state": "MA",
+    "county": "Suffolk",
+    "pronoun_subject": "she",
+    "pronoun_possessive": "her"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "John Example",
+    "pronoun_subject": "he",
+    "pronoun_possessive": "his"
+  },
+  "trust": {
+    "name": "Jane and John Example Revocable Trust",
+    "display_name": "JANE AND JOHN EXAMPLE REVOCABLE TRUST, U/A dated May 21, 2026",
+    "date": "May 21, 2026"
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": {
+        "full_name": "Jane Example"
+      },
+      "co_primary": {
+        "full_name": "John Example"
+      }
+    }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "May 21, 2026",
+    "ordinal_doc_date": "the 21st day of May, 2026",
+    "signing_county": "Suffolk",
+    "notary_commission": "January 1, 2030"
+  }
+}

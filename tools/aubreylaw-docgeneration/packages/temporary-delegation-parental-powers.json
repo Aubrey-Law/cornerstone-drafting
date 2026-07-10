@@ -1,0 +1,20 @@
+{
+  "name": "temporary-delegation-parental-powers",
+  "description": "Massachusetts temporary delegation of parental powers under MGL c.190B §5-103.",
+  "required_fields": [
+    "client.full_name",
+    "client.street_address",
+    "client.city",
+    "client.state",
+    "children[].full_name",
+    "guardians.temporary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "temporary-delegation-parental-powers",
+      "title": "Temporary Delegation of Parental Powers",
+      "template": "templates/temporary-delegation-parental-powers.docx",
+      "output": "01-temporary-delegation-parental-powers.docx"
+    }
+  ]
+}

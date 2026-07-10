@@ -15,6 +15,13 @@ import {
   descendantsDistributionMethod,
   trustCoTrusteesAction,
 } from '@/lib/draftPayload/trustProvisions'
+import { draftPayloadHasRealProperty } from '@/lib/draftPayload/assets'
+import { assetCategoryLabel } from '@/lib/draftPayload/fundingPlan'
+import {
+  generatorPersonFromContactDetail,
+  getDraftPayloadFiduciaryDisplay,
+} from '@/lib/draftPayload/fiduciaryDetails'
+import type { DraftPayloadContactDetail } from '@/lib/draftPayload/fiduciaryDetails'
 
 export type EstateGeneratorPackage =
   | 'core-estate'
@@ -24,6 +31,7 @@ export type EstateGeneratorPackage =
   | 'joint-trust'
   | 'joint-trust-simplified'
   | 'parental-guardian-appointment'
+  | 'temporary-delegation-parental-powers'
   | 'personal-property-memorandum'
   | 'pourover-will'
   | 'simple-will'
@@ -32,6 +40,11 @@ export type EstateGeneratorPackage =
   | 'spouse-testamentary-trust-will'
   | 'testamentary-trust-will'
   | 'trust-individual-single'
+  | 'certificate-of-trust'
+  | 'assignment-of-personal-property'
+  | 'funding-instructions'
+  | 'trust-funding-plan'
+  | 'homestead-trustee'
   | 'young-adult-estate-plan'
 
 export interface EstateGeneratorData {
@@ -54,6 +67,8 @@ export interface EstateGeneratorData {
   guardians: Record<string, unknown>
   family: Record<string, unknown>
   assets: Record<string, unknown>
+  funding_plan: Record<string, unknown>
+  homestead: Record<string, unknown>
   tax: Record<string, unknown>
   drafting_notes?: string
 }
@@ -324,20 +339,43 @@ export function deriveEstateGeneratorPackages(payload: DraftPayload): EstateGene
     packages.push('parental-guardian-appointment')
   }
 
+  if (docs.include_temp_delegation) {
+    packages.push('temporary-delegation-parental-powers')
+  }
+
+  if (docs.include_certificate_of_trust) {
+    packages.push('certificate-of-trust')
+  }
+
+  if (docs.include_assignment_of_personal_property) {
+    packages.push('assignment-of-personal-property')
+  }
+
+  if (docs.include_funding_instructions) {
+    packages.push('funding-instructions')
+  }
+
+  if (docs.include_funding_recommendation) {
+    packages.push('trust-funding-plan')
+  }
+
+  if (docs.include_homestead_trustee) {
+    packages.push('homestead-trustee')
+  }
+
   if (docs.include_young_adult_estate_plan) {
     packages.push('young-adult-estate-plan')
   }
 
-  return packages.length > 0 ? [...packages, 'estate-plan-summary'] : packages
+  if (packages.length > 0 && docs.include_estate_plan_summary !== false) {
+    packages.push('estate-plan-summary')
+  }
+
+  return packages
 }
 
-export function unsupportedEstateGeneratorDocumentLabels(payload: DraftPayload): string[] {
-  const docs = payload.documents
-  const labels: string[] = []
-
-  if (docs.include_temp_delegation) labels.push('Temporary delegation of parental powers')
-
-  return labels
+export function unsupportedEstateGeneratorDocumentLabels(_payload: DraftPayload): string[] {
+  return []
 }
 
 export function estateGeneratorBlockingError(_payload: DraftPayload): string | undefined {
@@ -421,6 +459,31 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     relationship: entry.relationship,
   }))
   const { specificGifts, charitableGifts } = normalizeSpecificBequests(payload.will_provisions.specific_bequests)
+  const fiduciaryDisplay = payload.fiduciary_display ?? getDraftPayloadFiduciaryDisplay({ decisions: null })
+  const fiduciaryDetails = payload.fiduciary_details
+  const payloadAssets = payload.assets ?? []
+  const fundingPlan = payload.funding_plan ?? { narrative: null, checklist_items: [] }
+  const assetValueTotal = payloadAssets.reduce((sum, asset) => {
+    const value = asset.estimated_value
+    return typeof value === 'number' && Number.isFinite(value) ? sum + value : sum
+  }, 0)
+  const excludedGuardians = payload.excluded_guardians?.length
+    ? payload.excluded_guardians
+    : payload.client.excluded_guardian
+      ? [{ full_name: payload.client.excluded_guardian, reason: null }]
+      : []
+  const hcpProvisions = payload.hcp_provisions
+  const hipaaProvisions = payload.hipaa_provisions
+  const hipaaClientAgents = hipaaProvisions.client_additional_agents ?? []
+  const hipaaSpouseAgents = hipaaProvisions.spouse_additional_agents ?? []
+
+  function fiduciaryPerson(
+    detail: DraftPayloadContactDetail | null | undefined,
+    fallbackName: string | null | undefined,
+    fallbackExtra: Record<string, unknown> = {},
+  ) {
+    return generatorPersonFromContactDetail(detail, fallbackName, fallbackExtra, fiduciaryDisplay)
+  }
 
   return {
     client: {
@@ -466,6 +529,8 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       include_parental_appointment: docs.include_parental_appointment,
       include_young_adult_estate_plan: docs.include_young_adult_estate_plan,
       spouse_docs: docs.spouse_docs,
+      client_goals: payload.goals_notes ?? null,
+      client_concerns: payload.concerns ?? null,
     },
     will: {
       pr_structure: payload.will_provisions.pr_structure ?? 'single',
@@ -565,7 +630,20 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     },
     dpoa: {
       coagent_manner: payload.dpoa_provisions.coagent_manner,
+      coagent_serving: payload.dpoa_provisions.coagent_serving,
       include_section_l: payload.dpoa_provisions.include_section_l,
+      include_entity_powers: payload.dpoa_provisions.include_entity_powers,
+      include_advanced_trust_gifting: payload.dpoa_provisions.include_advanced_trust_gifting,
+      include_extended_personal_care: payload.dpoa_provisions.include_extended_personal_care,
+      agent_compensation: payload.dpoa_provisions.agent_compensation,
+      allow_gifts: payload.dpoa_provisions.allow_gifts,
+      all_basic_powers: payload.dpoa_provisions.all_basic_powers,
+      basic_powers: payload.dpoa_provisions.basic_powers,
+      additional_powers: payload.dpoa_provisions.additional_powers,
+      specific_businesses: payload.dpoa_provisions.specific_businesses,
+      additional_limitations: payload.dpoa_provisions.additional_limitations,
+      trust_powers: payload.dpoa_provisions.trust_powers,
+      special_powers: payload.dpoa_provisions.special_powers,
       self_dealing_reviewer: person(payload.dpoa_provisions.self_dealing_reviewer),
       self_dealing_reviewer_alt: person(payload.dpoa_provisions.self_dealing_reviewer_alt),
     },
@@ -580,87 +658,110 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     },
     fiduciaries: {
       executor: {
-        primary: person(payload.fiduciaries.pr_primary),
-        co_primary: person(payload.fiduciaries.pr_co_primary),
-        successor: person(payload.fiduciaries.pr_successor),
-        co_successor: person(payload.fiduciaries.pr_co_successor),
-        second_successor: person(payload.fiduciaries.pr_second_successor),
+        primary: fiduciaryPerson(fiduciaryDetails?.executor.primary, payload.fiduciaries.pr_primary),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.executor.co_primary, payload.fiduciaries.pr_co_primary),
+        successor: fiduciaryPerson(fiduciaryDetails?.executor.successor, payload.fiduciaries.pr_successor),
+        co_successor: fiduciaryPerson(fiduciaryDetails?.executor.co_successor, payload.fiduciaries.pr_co_successor),
+        second_successor: fiduciaryPerson(fiduciaryDetails?.executor.second_successor, payload.fiduciaries.pr_second_successor),
       },
       spouse_executor: {
-        primary: person(payload.fiduciaries.spouse_pr_primary),
+        primary: fiduciaryPerson(fiduciaryDetails?.spouse_executor.primary, payload.fiduciaries.spouse_pr_primary),
         co_primary: person(null),
-        successor: person(payload.fiduciaries.spouse_pr_successor),
+        successor: fiduciaryPerson(fiduciaryDetails?.spouse_executor.successor, payload.fiduciaries.spouse_pr_successor),
         co_successor: person(null),
         second_successor: person(null),
       },
       trustee: {
-        primary: person(firstText(payload.fiduciaries.trustee_initial, payload.client.full_name)),
-        co_primary: person(payload.fiduciaries.trustee_co),
-        successor: person(payload.fiduciaries.trustee_successor),
-        co_successor: person(payload.fiduciaries.trustee_co_successor),
-        second_successor: person(payload.fiduciaries.trustee_second_successor),
-        co_second_successor: person(payload.fiduciaries.trustee_co_second_successor),
+        primary: fiduciaryPerson(
+          fiduciaryDetails?.trustee.primary,
+          firstText(payload.fiduciaries.trustee_initial, payload.client.full_name),
+        ),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.trustee.co_primary, payload.fiduciaries.trustee_co),
+        successor: fiduciaryPerson(fiduciaryDetails?.trustee.successor, payload.fiduciaries.trustee_successor),
+        co_successor: fiduciaryPerson(fiduciaryDetails?.trustee.co_successor, payload.fiduciaries.trustee_co_successor),
+        second_successor: fiduciaryPerson(fiduciaryDetails?.trustee.second_successor, payload.fiduciaries.trustee_second_successor),
+        co_second_successor: fiduciaryPerson(fiduciaryDetails?.trustee.co_second_successor, payload.fiduciaries.trustee_co_second_successor),
         co_trustees_action: trustCoTrusteesAction(trustProvisions.co_trustee_decision)
           || payload.will_provisions.cotrustee_decision_standard
           || 'joint',
       },
       testamentary_trustee: {
-        primary: person(payload.fiduciaries.trustee_initial),
+        primary: fiduciaryPerson(fiduciaryDetails?.trustee.primary, payload.fiduciaries.trustee_initial),
         co_primary: testamentaryCoTrustee(payload),
-        successor: person(payload.fiduciaries.trustee_successor),
+        successor: fiduciaryPerson(fiduciaryDetails?.trustee.successor, payload.fiduciaries.trustee_successor),
         co_trustees_action: testamentaryCoTrusteesAction(payload.will_provisions.cotrustee_decision_standard),
       },
       spouse_testamentary_trustee: {
-        primary: person(payload.fiduciaries.spouse_trustee_successor),
+        primary: fiduciaryPerson(undefined, payload.fiduciaries.spouse_trustee_successor),
         co_primary: person(null),
         successor: person(null),
         co_trustees_action: testamentaryCoTrusteesAction(payload.will_provisions.cotrustee_decision_standard),
       },
       agent: {
-        primary: person(payload.fiduciaries.dpoa_primary),
-        co_primary: person(payload.fiduciaries.dpoa_co_agent),
-        successor: person(payload.fiduciaries.dpoa_successor),
+        primary: fiduciaryPerson(fiduciaryDetails?.agent.primary, payload.fiduciaries.dpoa_primary),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.agent.co_primary, payload.fiduciaries.dpoa_co_agent),
+        successor: fiduciaryPerson(fiduciaryDetails?.agent.successor, payload.fiduciaries.dpoa_successor),
         co_agents_action: poaCoAgentsAction(payload.dpoa_provisions.coagent_manner),
         primary_has_spouse: Boolean(payload.spouse),
       },
       spouse_agent: {
-        primary: person(payload.fiduciaries.spouse_dpoa_primary),
+        primary: fiduciaryPerson(fiduciaryDetails?.spouse_agent.primary, payload.fiduciaries.spouse_dpoa_primary),
         co_primary: person(null),
-        successor: person(payload.fiduciaries.spouse_dpoa_successor),
+        successor: fiduciaryPerson(fiduciaryDetails?.spouse_agent.successor, payload.fiduciaries.spouse_dpoa_successor),
         co_agents_action: poaCoAgentsAction(payload.dpoa_provisions.coagent_manner),
         primary_has_spouse: Boolean(payload.client.full_name),
       },
     },
+    fiduciary_display: fiduciaryDisplay,
     healthcare: {
       agent: {
-        primary: person(payload.fiduciaries.hcp_primary, {
+        primary: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.primary, payload.fiduciaries.hcp_primary, {
           relationship: payload.fiduciaries.hcp_primary_relationship ?? null,
           address: payload.fiduciaries.hcp_primary_address ?? payload.client.address ?? '',
-          phone: '',
         }),
-        alternate: person(payload.fiduciaries.hcp_successor, {
+        alternate: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.alternate, payload.fiduciaries.hcp_successor, {
           relationship: payload.fiduciaries.hcp_successor_relationship ?? null,
           address: payload.fiduciaries.hcp_successor_address ?? '',
-          phone: '',
         }),
+        second_alternate: person(null),
       },
       spouse_agent: {
-        primary: person(payload.fiduciaries.spouse_hcp_primary, {
+        primary: fiduciaryPerson(fiduciaryDetails?.spouse_healthcare_agent.primary, payload.fiduciaries.spouse_hcp_primary, {
           relationship: payload.fiduciaries.spouse_hcp_primary_relationship ?? null,
           address: payload.fiduciaries.spouse_hcp_primary_address ?? payload.client.address ?? '',
-          phone: '',
         }),
-        alternate: person(payload.fiduciaries.spouse_hcp_successor, {
+        alternate: fiduciaryPerson(fiduciaryDetails?.spouse_healthcare_agent.alternate, payload.fiduciaries.spouse_hcp_successor, {
           relationship: payload.fiduciaries.spouse_hcp_successor_relationship ?? null,
           address: payload.fiduciaries.spouse_hcp_successor_address ?? '',
-          phone: '',
         }),
       },
-      anatomical_gift: payload.hcp_provisions.anatomical_gift,
-      anatomical_specified: payload.hcp_provisions.anatomical_specified ?? '',
+      anatomical_gift: hcpProvisions.anatomical_gift,
+      anatomical_specified: hcpProvisions.anatomical_specified ?? '',
+      client_anatomical_gift: hcpProvisions.client_anatomical_gift,
+      spouse_anatomical_gift: hcpProvisions.spouse_anatomical_gift,
+      spouse_anatomical_restrictions: hcpProvisions.spouse_anatomical_restrictions,
+      client_advance_directive: hcpProvisions.client_advance_directive,
+      spouse_advance_directive: hcpProvisions.spouse_advance_directive,
     },
     hipaa: {
-      psychotherapy_notes: payload.hipaa_provisions.psychotherapy_notes,
+      psychotherapy_notes: hipaaProvisions.psychotherapy_notes,
+      include_poa: hipaaProvisions.include_poa,
+      include_trustees: hipaaProvisions.include_trustees,
+      list_fiduciaries_by_name: hipaaProvisions.list_fiduciaries_by_name,
+      client_additional_agents: hipaaClientAgents.map(agent => person(agent.full_name, {
+        relationship: agent.relationship,
+        address: agent.address,
+        phone: agent.phone,
+        email: agent.email,
+        date_of_birth: agent.date_of_birth,
+      })),
+      spouse_additional_agents: hipaaSpouseAgents.map(agent => person(agent.full_name, {
+        relationship: agent.relationship,
+        address: agent.address,
+        phone: agent.phone,
+        email: agent.email,
+        date_of_birth: agent.date_of_birth,
+      })),
     },
     execution: compactObject({
       signing_scheduled: Boolean(signingDate || payload.execution.signing_county || notaryCommission),
@@ -673,13 +774,14 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     specific_gifts: specificGifts,
     charitable_gifts: charitableGifts,
     guardians: {
-      primary: person(payload.fiduciaries.guardian_primary),
-      successor: person(payload.fiduciaries.guardian_successor),
-      second_successor: person(payload.fiduciaries.guardian_second_successor),
-      temporary: person(payload.fiduciaries.temp_guardian_primary),
-      temporary_successor: person(payload.fiduciaries.temp_guardian_successor),
-      temporary_second_successor: person(payload.fiduciaries.temp_guardian_second_successor),
-      excluded: payload.client.excluded_guardian ? [person(payload.client.excluded_guardian)] : [],
+      primary: fiduciaryPerson(fiduciaryDetails?.guardians.primary, payload.fiduciaries.guardian_primary),
+      successor: fiduciaryPerson(fiduciaryDetails?.guardians.successor, payload.fiduciaries.guardian_successor),
+      second_successor: fiduciaryPerson(fiduciaryDetails?.guardians.second_successor, payload.fiduciaries.guardian_second_successor),
+      temporary: fiduciaryPerson(fiduciaryDetails?.guardians.temporary, payload.fiduciaries.temp_guardian_primary),
+      temporary_co: fiduciaryPerson(fiduciaryDetails?.guardians.temporary_co, payload.fiduciaries.temp_guardian_co),
+      temporary_successor: fiduciaryPerson(fiduciaryDetails?.guardians.temporary_successor, payload.fiduciaries.temp_guardian_successor),
+      temporary_second_successor: fiduciaryPerson(fiduciaryDetails?.guardians.temporary_second_successor, payload.fiduciaries.temp_guardian_second_successor),
+      excluded: excludedGuardians.map(entry => person(entry.full_name, { reason: entry.reason })),
     },
     family: {
       blended_family: blended,
@@ -693,7 +795,40 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       disinherited,
     },
     assets: {
-      real_property: false,
+      real_property: draftPayloadHasRealProperty(payloadAssets),
+      total_gross_value: assetValueTotal > 0 ? formatMoney(assetValueTotal) : '',
+      total_net_value: assetValueTotal > 0 ? formatMoney(assetValueTotal) : '',
+      items: payloadAssets.map(asset => ({
+        category: asset.category,
+        category_label: assetCategoryLabel(asset.category),
+        description: asset.description,
+        institution: asset.institution,
+        owner: null,
+        estimated_value: formatMoney(asset.estimated_value),
+        gross_value: formatMoney(asset.estimated_value),
+        net_value: formatMoney(asset.estimated_value),
+        notes: asset.notes,
+        from_intake: asset.from_intake,
+      })),
+    },
+    funding_plan: {
+      narrative: fundingPlan.narrative ?? '',
+      checklist_items: fundingPlan.checklist_items ?? [],
+    },
+    homestead: payload.homestead ?? {
+      beneficiary_names: '',
+      primary_beneficiary_name: '',
+      beneficiary_pronoun_possessive: 'their',
+      trustee_pronoun_possessive: 'his/her/their',
+      servicemember_names: '',
+      property_address_line: '',
+      trust_deed_book: '',
+      trust_deed_page: '',
+      deed_registry_district: '',
+      deed_book: '',
+      deed_page: '',
+      certificate_number: '',
+      land_court_document_number: '',
     },
     tax: {
       sensitive_estate: payload.trust?.ma_estate_taxable ?? false,

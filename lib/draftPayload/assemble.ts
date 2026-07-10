@@ -33,6 +33,15 @@ import {
   draftPayloadTrustProvisions,
   formatTrustDisplayName,
 } from '@/lib/draftPayload/trustProvisions'
+import { draftPayloadAssets } from '@/lib/draftPayload/assets'
+import { draftPayloadFundingPlan } from '@/lib/draftPayload/fundingPlan'
+import { draftPayloadHomestead } from '@/lib/draftPayload/homestead'
+import { draftPayloadExcludedGuardians } from '@/lib/draftPayload/excludedGuardians'
+import {
+  buildFiduciaryRoleDetailsFromDesignSheet,
+  getDraftPayloadFiduciaryDisplay,
+} from '@/lib/draftPayload/fiduciaryDetails'
+import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
@@ -318,12 +327,33 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
   }
 
   const sheetDpoaProvisions = getDesignSheetDpoaProvisions(designSheet)
+  const healthcareBundle = draftPayloadHealthcare(designSheet, contacts)
+  const excludedGuardians = draftPayloadExcludedGuardians(designSheet, contacts)
+  const payloadAssets = draftPayloadAssets(designSheet)
+  const fundingPlan = draftPayloadFundingPlan(designSheet)
+  const homestead = draftPayloadHomestead(designSheet)
+  const fiduciaryDisplay = getDraftPayloadFiduciaryDisplay(designSheet)
+  const fiduciaryDetails = buildFiduciaryRoleDetailsFromDesignSheet(
+    designSheet,
+    contacts,
+    {
+      full_name: clientFullName,
+      address: clientAddress,
+    },
+    spouse ? {
+      full_name: spouse.full_name,
+      address: null,
+    } : null,
+  )
 
   const dpoa_provisions: DraftPayload['dpoa_provisions'] = {
     coagent_manner: (designSheet.dpoa_coagent_manner as DraftPayload['dpoa_provisions']['coagent_manner']) ?? 'independently',
     self_dealing_reviewer: designSheet.dpoa_self_dealing_reviewer ?? null,
     self_dealing_reviewer_alt: designSheet.dpoa_self_dealing_reviewer_alt ?? null,
     include_section_l: designSheet.dpoa_include_section_l === 'yes',
+    include_entity_powers: sheetDpoaProvisions.include_entity_powers,
+    include_advanced_trust_gifting: sheetDpoaProvisions.include_advanced_trust_gifting,
+    include_extended_personal_care: sheetDpoaProvisions.include_extended_personal_care,
     agent_compensation: sheetDpoaProvisions.agent_compensation,
     coagent_serving: sheetDpoaProvisions.coagent_serving,
     allow_gifts: sheetDpoaProvisions.allow_gifts,
@@ -350,14 +380,8 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     additional_limitations: sheetDpoaProvisions.additional_limitations,
   }
 
-  const hcp_provisions: DraftPayload['hcp_provisions'] = {
-    anatomical_gift: (designSheet.hcp_anatomical_gift as DraftPayload['hcp_provisions']['anatomical_gift']) ?? null,
-    anatomical_specified: designSheet.hcp_anatomical_specified ?? null,
-  }
-
-  const hipaa_provisions: DraftPayload['hipaa_provisions'] = {
-    psychotherapy_notes: (designSheet.hipaa_psychotherapy_notes as DraftPayload['hipaa_provisions']['psychotherapy_notes']) ?? null,
-  }
+  const hcp_provisions = healthcareBundle.hcp_provisions
+  const hipaa_provisions = healthcareBundle.hipaa_provisions
 
   const execution: DraftPayload['execution'] = {
     signing_month: designSheet.signing_month ?? null,
@@ -391,9 +415,11 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
       zip: clientZip,
       email: designSheet.client_email ?? null,
       phone: formatPhoneDisplay(designSheet.client_phone) || null,
-      excluded_guardian: designSheet.excluded_guardian_flag
-        ? (designSheet.excluded_guardian_name ?? null)
-        : null,
+      excluded_guardian: excludedGuardians[0]?.full_name ?? (
+        designSheet.excluded_guardian_flag
+          ? (designSheet.excluded_guardian_name ?? null)
+          : null
+      ),
     },
     spouse,
     children: designChildren,
@@ -406,6 +432,15 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     dpoa_provisions,
     hcp_provisions,
     hipaa_provisions,
+    healthcare_provisions: healthcareBundle.healthcare_provisions,
+    fiduciary_display: fiduciaryDisplay,
+    fiduciary_details: fiduciaryDetails,
+    excluded_guardians: excludedGuardians,
+    assets: payloadAssets,
+    funding_plan: fundingPlan,
+    homestead,
+    goals_notes: designSheet.goals_notes ?? null,
+    concerns: designSheet.concerns ?? null,
     execution,
     design_sheet_id: designSheet.id,
     special_provisions: details?.ep_special_provisions ?? null,

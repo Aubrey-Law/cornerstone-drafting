@@ -42,6 +42,9 @@ export const DPOA_BASIC_POWER_LABELS: Record<DpoaBasicPowerKey, string> = {
 }
 
 export interface DesignSheetDpoaProvisions {
+  include_entity_powers: boolean
+  include_advanced_trust_gifting: boolean
+  include_extended_personal_care: boolean
   agent_compensation: DpoaAgentCompensation | null
   coagent_serving: DpoaCoagentServing | null
   allow_gifts: boolean
@@ -69,6 +72,9 @@ const DEFAULT_BASIC_POWERS = Object.fromEntries(
 ) as Record<DpoaBasicPowerKey, boolean>
 
 const DEFAULT_DPOA_PROVISIONS: DesignSheetDpoaProvisions = {
+  include_entity_powers: false,
+  include_advanced_trust_gifting: false,
+  include_extended_personal_care: false,
   agent_compensation: 'reasonable',
   coagent_serving: 'separately',
   allow_gifts: false,
@@ -152,6 +158,9 @@ export function getDesignSheetDpoaProvisions(
   const allBasicPowers = readBoolean(raw, 'all_basic_powers', DPOA_BASIC_POWER_KEYS.every(key => basicPowers[key]))
 
   return {
+    include_entity_powers: readBoolean(raw, 'include_entity_powers', DEFAULT_DPOA_PROVISIONS.include_entity_powers),
+    include_advanced_trust_gifting: readBoolean(raw, 'include_advanced_trust_gifting', DEFAULT_DPOA_PROVISIONS.include_advanced_trust_gifting),
+    include_extended_personal_care: readBoolean(raw, 'include_extended_personal_care', DEFAULT_DPOA_PROVISIONS.include_extended_personal_care),
     agent_compensation: readCompensation(raw),
     coagent_serving: readCoagentServing(raw) ?? coagentServingFromLegacyManner(sheet.dpoa_coagent_manner),
     allow_gifts: readBoolean(raw, 'allow_gifts', DEFAULT_DPOA_PROVISIONS.allow_gifts),

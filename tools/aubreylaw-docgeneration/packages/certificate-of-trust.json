@@ -1,0 +1,24 @@
+{
+  "name": "certificate-of-trust",
+  "description": "Massachusetts certification of trust under M.G.L. c. 203E § 1013 and c. 184 § 35.",
+  "required_fields": [
+    "client.full_name",
+    "client.street_address",
+    "client.city",
+    "client.state",
+    "client.pronoun_subject",
+    "trust.display_name",
+    "trust.date",
+    "fiduciaries.trustee.primary.full_name",
+    "execution.signing_county",
+    "execution.notary_commission"
+  ],
+  "documents": [
+    {
+      "id": "certificate-of-trust",
+      "title": "Certification of Trust",
+      "template": "templates/certificate-of-trust.docx",
+      "output": "01-certificate-of-trust.docx"
+    }
+  ]
+}

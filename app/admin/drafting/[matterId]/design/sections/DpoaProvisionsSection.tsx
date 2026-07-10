@@ -91,8 +91,34 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
   return (
     <div>
       <AttorneyNoteBanner>
-        Select compensation, co-agent decision-making, gifting and trust powers, and attorney-in-fact authority below.
+        Select optional document modules, compensation, co-agent decision-making, gifting and trust powers, and attorney-in-fact authority below.
       </AttorneyNoteBanner>
+
+      <SectionBlock
+        title="Optional Document Modules"
+        subtitle="The Cornerstone POA template includes three opt-in sections. Leave unchecked for the leanest document."
+      >
+        <div className="space-y-3">
+          <DesignSheetCheckboxOption
+            label="Entity & Business"
+            description="Includes oil/gas/mineral powers through partnership and LLC powers (Section 3.J through Section 3.L)."
+            checked={provisions.include_entity_powers}
+            onChange={checked => updateProvisions({ include_entity_powers: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Advanced Trust & Gifting"
+            description="Includes amend-trust powers and gifting subsections (c) through (g)."
+            checked={provisions.include_advanced_trust_gifting}
+            onChange={checked => updateProvisions({ include_advanced_trust_gifting: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Extended Personal Care"
+            description="Includes recreation, religious, and companionship powers (Section 4.D through 4.F) and pet care (Section 5.I)."
+            checked={provisions.include_extended_personal_care}
+            onChange={checked => updateProvisions({ include_extended_personal_care: checked })}
+          />
+        </div>
+      </SectionBlock>
 
       <SectionBlock title="Compensation for Agents">
         <div className="space-y-3">

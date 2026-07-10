@@ -263,6 +263,13 @@ def context_for(data: dict[str, Any], state: str) -> dict[str, Any]:
     trust = context.setdefault("trust", {})
     if isinstance(trust, dict):
         trust["display_date"] = trust.get("date") or "________________, 20___"
+    children = context.get("children")
+    if isinstance(children, list):
+        context["minor_children"] = [
+            child for child in children if isinstance(child, dict) and child.get("minor")
+        ]
+    else:
+        context["minor_children"] = []
     execution = context.setdefault("execution", {})
     if isinstance(execution, dict):
         signing_scheduled = bool(execution.get("signing_scheduled"))
@@ -316,7 +323,11 @@ def apply_document_formatting(path: Path) -> None:
 
     for section in document.sections:
         for footer in (section.footer, section.first_page_footer, section.even_page_footer):
-            for paragraph in footer.paragraphs:
+            try:
+                paragraphs = footer.paragraphs
+            except KeyError:
+                continue
+            for paragraph in paragraphs:
                 apply_run_font(paragraph, FOOTER_FONT_SIZE_PT)
             for table in footer.tables:
                 for row in table.rows:

@@ -5,6 +5,8 @@ import {
   type TrustPlanningType,
 } from '@/lib/designSheetDocumentInclusions'
 import { getPersistedRealEstateTransfer } from '@/lib/designSheetRealEstateTransfer'
+import { getContactProfiles } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import { getRelationshipLabel, structuredFromContactProfile } from '@/lib/kinship/relationshipLabels'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import type { ContactRow, DesignSheetRow, FiduciarySlotRow } from '@/lib/draftPayload/types'
@@ -195,6 +197,7 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     guardian_second_successor: get('guardian', 'client', 3),
     // Temporary Guardian — design-sheet only (no contact_role); filled by slot overlay
     temp_guardian_primary:          null,
+    temp_guardian_co:               null,
     temp_guardian_successor:        null,
     temp_guardian_second_successor: null,
     // Spouse — executor / PR
@@ -252,12 +255,18 @@ export function overlayDesignSheetFiduciarySlots(
 
   function slotRelationship(slots: FiduciarySlotRow[], order: number): string | null | undefined {
     const slot = slots.find(item => item.order === order && !item.is_co)
-    // The client or spouse named as their counterpart's agent is a "Spouse".
     if (slot?.contact_id === CLIENT_PRIMARY_CONTACT_ID || slot?.contact_id === SPOUSE_PRIMARY_CONTACT_ID) {
       return 'Spouse'
     }
     const contact = slotContact(slots, order)
-    return contact ? contactRelationship(contact) : undefined
+    if (!contact) return undefined
+
+    const profiles = designSheet ? getContactProfiles(designSheet) : {}
+    const structured = structuredFromContactProfile(profiles[contact.id])
+    const kindLabel = getRelationshipLabel(structured, 'client')
+    if (kindLabel) return kindLabel
+
+    return contactRelationship(contact)
   }
 
   function applyName<K extends keyof DraftPayload['fiduciaries']>(
@@ -305,6 +314,7 @@ export function overlayDesignSheetFiduciarySlots(
 
   const tempGuardian = getDesignSlots(designSheet, 'temporary_guardian_slots')
   applyName('temp_guardian_primary', tempGuardian, 0)
+  applyName('temp_guardian_co', tempGuardian, 0, true)
   applyName('temp_guardian_successor', tempGuardian, 1)
   applyName('temp_guardian_second_successor', tempGuardian, 2)
 
@@ -356,6 +366,7 @@ export function emptyFiduciarySlots(): DraftPayload['fiduciaries'] {
     guardian_successor: null,
     guardian_second_successor: null,
     temp_guardian_primary: null,
+    temp_guardian_co: null,
     temp_guardian_successor: null,
     temp_guardian_second_successor: null,
     spouse_pr_primary: null,
@@ -466,6 +477,7 @@ export function deriveDocuments(
       assignment_of_personal_property: inclusions.trust,
       funding_instructions: inclusions.trust,
       funding_recommendation: inclusions.trust,
+      homestead_trustee: inclusions.trust,
       trust_summary: inclusions.trust,
       estate_plan_summary: true,
       estate_plan_signing_guide: true,
@@ -498,6 +510,12 @@ export function deriveDocuments(
     include_deed:                   isEP && selectedAssetDocs.has('deed'),
     include_trustees_certificate:   isEP && selectedAssetDocs.has('trustees_certificate'),
     include_real_estate_trust:      isEP && selectedAssetDocs.has('real_estate_trust'),
+    include_certificate_of_trust:   isEP && includeTrust && setup.ancillary_documents.certificate_of_trust,
+    include_assignment_of_personal_property: isEP && includeTrust && setup.ancillary_documents.assignment_of_personal_property,
+    include_funding_instructions: isEP && includeTrust && setup.ancillary_documents.funding_instructions,
+    include_funding_recommendation: isEP && includeTrust && setup.ancillary_documents.funding_recommendation,
+    include_homestead_trustee:      isEP && includeTrust && setup.ancillary_documents.homestead_trustee,
+    include_estate_plan_summary:    isEP && setup.ancillary_documents.estate_plan_summary,
     spouse_docs:                    isMarried && inclusions.spouse_docs,
     trust_planning_type:            trustPlanningType,
   }

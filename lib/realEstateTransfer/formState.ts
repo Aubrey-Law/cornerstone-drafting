@@ -184,6 +184,7 @@ export function buildTemplateFields(form: RealEstateTransferFormState): RealEsta
     property_city: propertyCity,
     property_state: propertyState,
     property_county: propertyCounty,
+    trust_term_extension_years: deed.trust_term_extension_years?.trim() || '21',
   }
 }
 
