@@ -15,11 +15,15 @@ import { ownershipLabel } from '@/lib/assets/labels'
 import { CATEGORY_DETAILS } from '@/lib/estateTax'
 import type { AssetIntakeRow } from '@/types/assetIntake'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 
 interface AssetTableProps {
   groups: CategoryGroup[]
   ownershipLabels: OwnershipLabels
+  selectedIds: Set<string>
+  onToggleSelected: (assetId: string, checked: boolean) => void
+  onToggleAllVisible: (assetIds: string[], checked: boolean) => void
   onEdit: (asset: AssetIntakeRow) => void
   onDelete: (asset: AssetIntakeRow) => void
 }
@@ -37,8 +41,22 @@ function assetTypeLabel(asset: AssetIntakeRow): string {
   return categoryLabel(asset.category)
 }
 
-export function AssetTable({ groups, ownershipLabels, onEdit, onDelete }: AssetTableProps) {
+export function AssetTable({
+  groups,
+  ownershipLabels,
+  selectedIds,
+  onToggleSelected,
+  onToggleAllVisible,
+  onEdit,
+  onDelete,
+}: AssetTableProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  const visibleAssets = groups.flatMap(group => group.assets)
+  const visibleIds = visibleAssets.map(asset => asset.id)
+  const selectedVisibleCount = visibleIds.filter(id => selectedIds.has(id)).length
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected
 
   const grandTotal = groups.reduce((s, g) => s + g.total, 0)
   const grandDebt = groups.reduce((s, g) => s + g.debt, 0)
@@ -57,6 +75,13 @@ export function AssetTable({ groups, ownershipLabels, onEdit, onDelete }: AssetT
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <th className="w-10 px-3 py-3">
+              <Checkbox
+                checked={allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false}
+                onCheckedChange={checked => onToggleAllVisible(visibleIds, checked === true)}
+                aria-label="Select all visible assets"
+              />
+            </th>
             <th className="px-4 py-3">Asset</th>
             <th className="px-4 py-3">Description</th>
             <th className="px-4 py-3">Type</th>
@@ -77,7 +102,7 @@ export function AssetTable({ groups, ownershipLabels, onEdit, onDelete }: AssetT
                   key={`group-${group.key}`}
                   className="border-b border-border bg-muted/20 font-medium"
                 >
-                  <td className="px-4 py-2.5" colSpan={8}>
+                  <td className="px-4 py-2.5" colSpan={9}>
                     <button
                       type="button"
                       className="flex items-center gap-2 text-left text-sm"
@@ -99,8 +124,21 @@ export function AssetTable({ groups, ownershipLabels, onEdit, onDelete }: AssetT
                     const docCount = assetDocumentCount(asset)
                     const config = CATEGORY_DETAILS[asset.category]
                     return (
-                      <tr key={asset.id} className="border-b border-border/60 hover:bg-muted/10">
-                        <td className="px-4 py-2.5 pl-10 font-medium">{assetDisplayName(asset)}</td>
+                      <tr
+                        key={asset.id}
+                        className={cn(
+                          'border-b border-border/60 hover:bg-muted/10',
+                          selectedIds.has(asset.id) && 'bg-brand-navy/5',
+                        )}
+                      >
+                        <td className="px-3 py-2.5">
+                          <Checkbox
+                            checked={selectedIds.has(asset.id)}
+                            onCheckedChange={checked => onToggleSelected(asset.id, checked === true)}
+                            aria-label={`Select ${asset.description || 'asset'}`}
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 pl-4 font-medium">{assetDisplayName(asset)}</td>
                         <td className="px-4 py-2.5 text-muted-foreground">
                           {asset.description || '—'}
                         </td>
@@ -151,7 +189,7 @@ export function AssetTable({ groups, ownershipLabels, onEdit, onDelete }: AssetT
                   })}
                 {!isCollapsed && (
                   <tr className="border-b border-border bg-muted/10 text-xs font-medium text-muted-foreground">
-                    <td className="px-4 py-2 pl-10" colSpan={4}>
+                    <td className="px-4 py-2 pl-10" colSpan={5}>
                       {group.label} subtotal
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{formatAssetCurrency(group.total)}</td>
@@ -166,6 +204,7 @@ export function AssetTable({ groups, ownershipLabels, onEdit, onDelete }: AssetT
             )
           })}
           <tr className={cn('bg-muted/30 font-semibold')}>
+            <td className="px-3 py-3" />
             <td className="px-4 py-3" colSpan={4}>
               Total
             </td>

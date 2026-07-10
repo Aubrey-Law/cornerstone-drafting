@@ -140,6 +140,34 @@ export function useMatterAssets({ intakeId, accessToken, enabled = true }: UseMa
     [intakeId, accessToken],
   )
 
+  const deleteAssets = useCallback(
+    async (assetIds: string[]) => {
+      if (!intakeId || !accessToken || assetIds.length === 0) return
+      setSaving(true)
+      try {
+        const res = await fetch(`/api/admin/assets/${intakeId}/bulk-delete`, {
+          method: 'POST',
+          headers: authHeaders(accessToken),
+          body: JSON.stringify({ asset_ids: assetIds }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error ?? 'Failed to delete assets')
+
+        const deleted = Number(data.deleted) || 0
+        const removed = new Set(assetIds)
+        setAssets(prev => prev.filter(a => !removed.has(a.id)))
+        toast.success(`Deleted ${deleted} asset${deleted === 1 ? '' : 's'}`)
+        return deleted
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete assets')
+        throw err
+      } finally {
+        setSaving(false)
+      }
+    },
+    [intakeId, accessToken],
+  )
+
   const exportReport = useCallback(async () => {
     if (!intakeId || !accessToken) return
     try {
@@ -178,6 +206,7 @@ export function useMatterAssets({ intakeId, accessToken, enabled = true }: UseMa
     createAsset,
     updateAsset,
     deleteAsset,
+    deleteAssets,
     exportReport,
     setAssets,
   }
