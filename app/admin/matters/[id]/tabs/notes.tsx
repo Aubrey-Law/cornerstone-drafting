@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
+import { AssistantNotePromptButton } from '@/app/admin/components/AssistantNotePromptButton'
 
 type EditableNoteType = 'Internal' | 'Client comm.'
 type MatterNoteListItem = Pick<MatterNoteRow, 'id' | 'body' | 'created_at' | 'note_type'>
@@ -160,6 +161,10 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
       )}
 
       <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-medium text-muted-foreground">AI assistant</p>
+          <AssistantNotePromptButton />
+        </div>
         <Textarea
           ref={textareaRef}
           placeholder="Add a note... (Cmd+Enter to save)"

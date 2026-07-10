@@ -3,6 +3,11 @@ import { logAiUsage } from '@/lib/aiUsage'
 
 const anthropic = new Anthropic()
 
+/** Resolve Anthropic SDK client (env ANTHROPIC_API_KEY). */
+export async function getAnthropicClient(): Promise<Anthropic> {
+  return anthropic
+}
+
 export type AnthropicMessageRequest = Parameters<typeof anthropic.messages.create>[0]
 export type AnthropicMessageResponse = Anthropic.Message
 

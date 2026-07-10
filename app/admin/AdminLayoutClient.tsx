@@ -22,6 +22,12 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 import dynamic from 'next/dynamic'
+import { FloatingChatButton } from './components/FloatingChatButton'
+import {
+  CORNERSTONE_CHAT_OPEN_EVENT,
+  type CornerstoneChatOpenDetail,
+} from './components/adminChatEvents'
+import { useMatterDisplayName } from './components/useMatterDisplayName'
 import {
   EMPTY_SIDEBAR_COUNTS,
   getNavBadge,
@@ -37,6 +43,11 @@ const StaffSoftphone = dynamic(
 
 const GlobalSearch = dynamic(
   () => import('@/components/GlobalSearch').then(m => ({ default: m.GlobalSearch })),
+  { ssr: false },
+)
+
+const ChatPanel = dynamic(
+  () => import('./components/ChatPanel').then(m => m.ChatPanel),
   { ssr: false },
 )
 
@@ -68,6 +79,9 @@ export default function AdminLayoutClient({
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [badgeCounts, setBadgeCounts] = useState<SidebarCounts>(EMPTY_SIDEBAR_COUNTS)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [pendingChatAction, setPendingChatAction] = useState<CornerstoneChatOpenDetail | null>(null)
+  const matterDisplayName = useMatterDisplayName()
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +125,17 @@ export default function AdminLayoutClient({
     } catch {
       /* ignore */
     }
+  }, [])
+
+  useEffect(() => {
+    function handleOpenChat(event: Event) {
+      const detail = (event as CustomEvent<CornerstoneChatOpenDetail>).detail
+      setPendingChatAction(detail ?? {})
+      setChatOpen(true)
+    }
+
+    window.addEventListener(CORNERSTONE_CHAT_OPEN_EVENT, handleOpenChat)
+    return () => window.removeEventListener(CORNERSTONE_CHAT_OPEN_EVENT, handleOpenChat)
   }, [])
 
   const setSidebarCollapsed = (next: boolean) => {
@@ -268,6 +293,16 @@ export default function AdminLayoutClient({
       </Sheet>
 
       {twilioVoiceEnabled ? <StaffSoftphone /> : null}
+      <FloatingChatButton isOpen={chatOpen} onOpen={() => setChatOpen(true)} />
+      {chatOpen && (
+        <ChatPanel
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          pendingAction={pendingChatAction}
+          onPendingActionHandled={() => setPendingChatAction(null)}
+          matterDisplayName={matterDisplayName}
+        />
+      )}
     </div>
   )
 }
