@@ -172,8 +172,6 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
         {...blockProps}
         role="executor"
         sectionTitle={`${clientFirst || 'Client'}'s Personal Representative`}
-        clientShortcutContact={clientContact}
-        clientShortcutLabel={clientContact ? `${clientFirst} as initial personal representative` : undefined}
         spouseOptionLabel={spouseContact ? `${spouseFirst} as initial personal representative` : undefined}
       />
 
@@ -185,7 +183,6 @@ export function WillFiduciarySections(props: DocumentFiduciaryProps) {
           sectionTitle={`${spouseFirst || 'Spouse'}'s Personal Representative`}
           clientShortcutContact={clientContact}
           clientShortcutLabel={clientContact ? `${clientFirst} as initial personal representative` : undefined}
-          spouseOptionLabel={spouseContact ? `${spouseFirst} as initial personal representative` : undefined}
         />
       )}
 
@@ -222,8 +219,6 @@ export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
         sectionTitle={`${clientFirst || 'Client'}'s First Attorney-in-Fact(s)`}
         primaryLabel="First Attorney-in-Fact"
         coLabel="Co-Agent"
-        clientShortcutContact={clientContact}
-        clientShortcutLabel={clientContact ? `${clientFirst} as initial attorney-in-fact` : undefined}
         spouseOptionLabel={spouseContact ? `${spouseFirst} as initial attorney-in-fact` : undefined}
       />
       <FiduciaryBlock
@@ -247,7 +242,6 @@ export function DpoaFiduciarySections(props: DocumentFiduciaryProps) {
             coLabel="Co-Agent"
             clientShortcutContact={clientContact}
             clientShortcutLabel={clientContact ? `${clientFirst} as initial attorney-in-fact` : undefined}
-            spouseOptionLabel={spouseContact ? `${spouseFirst} as initial attorney-in-fact` : undefined}
           />
           <FiduciaryBlock
             {...blockProps}
@@ -274,8 +268,6 @@ export function HealthCareFiduciarySections(props: DocumentFiduciaryProps) {
       <FiduciaryBlock
         {...blockProps}
         role="hcp"
-        clientShortcutContact={clientContact}
-        clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
         spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
       />
 
@@ -287,7 +279,6 @@ export function HealthCareFiduciarySections(props: DocumentFiduciaryProps) {
           sectionTitle="Spouse / Partner Health Care Proxy"
           clientShortcutContact={clientContact}
           clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
-          spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
         />
       )}
     </>

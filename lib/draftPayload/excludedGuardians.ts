@@ -1,4 +1,4 @@
-import { getExcludedGuardians } from '@/lib/designSheet/excludedGuardians'
+import { getResolvedExcludedGuardians } from '@/lib/designSheet/excludedGuardians'
 import type { ContactRow, DesignSheetRow } from '@/lib/draftPayload/types'
 
 export interface DraftPayloadExcludedGuardian {
@@ -15,7 +15,7 @@ export function draftPayloadExcludedGuardians(
   designSheet: Pick<DesignSheetRow, 'decisions' | 'excluded_guardian_flag' | 'excluded_guardian_name'>,
   contacts: ContactRow[],
 ): DraftPayloadExcludedGuardian[] {
-  const entries = getExcludedGuardians(designSheet)
+  const entries = getResolvedExcludedGuardians(designSheet)
   const contactsById = new Map(contacts.map(contact => [contact.id, contact]))
   const resolved: DraftPayloadExcludedGuardian[] = []
 

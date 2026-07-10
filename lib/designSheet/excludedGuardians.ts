@@ -23,7 +23,11 @@ export function getExcludedGuardians(sheet: Pick<DesignSheet, 'decisions'>): Exc
       contact_id: typeof entry.contact_id === 'string' ? entry.contact_id : '',
       reason: typeof entry.reason === 'string' ? entry.reason : null,
     }))
-    .filter(entry => entry.contact_id)
+}
+
+/** Entries with a selected contact — for payload / generator output. */
+export function getResolvedExcludedGuardians(sheet: Pick<DesignSheet, 'decisions'>): ExcludedGuardianEntry[] {
+  return getExcludedGuardians(sheet).filter(entry => entry.contact_id)
 }
 
 export function setExcludedGuardians(

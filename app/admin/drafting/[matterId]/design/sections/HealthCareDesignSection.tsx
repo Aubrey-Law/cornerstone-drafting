@@ -231,8 +231,6 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
         sectionTitle={`${clientFirst || 'Client'}'s Health Care Proxy`}
         primaryLabel="First Agent"
         altLabel="First Agent"
-        clientShortcutContact={clientContact}
-        clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
         spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
       />
       <FiduciaryBlock
@@ -268,7 +266,6 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
             altLabel="First Agent"
             clientShortcutContact={clientContact}
             clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
-            spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
           />
           <FiduciaryBlock
             {...props}

@@ -152,18 +152,12 @@ export function FiduciariesSectionEP({ sheet, onChange, contacts, matter }: Prop
   }
 
   const clientOptions = [
-    ...(clientContact
-      ? [{ contact: clientContact, label: `${clientFirst} as initial {role}` }]
-      : []),
     ...(spouseContact
       ? [{ contact: spouseContact, label: `${spouseFirst} as initial {role}` }]
       : []),
   ]
 
   const spouseOptions = [
-    ...(spouseContact
-      ? [{ contact: spouseContact, label: `${spouseFirst} as initial {role}` }]
-      : []),
     ...(clientContact
       ? [{ contact: clientContact, label: `${clientFirst} as initial {role}` }]
       : []),
@@ -175,8 +169,9 @@ export function FiduciariesSectionEP({ sheet, onChange, contacts, matter }: Prop
   return (
     <DesignSectionContent>
       <AttorneyNoteBanner>
-        Use the shortcuts below to name the client or spouse as initial for key roles. Detailed successor
-        nominations remain on the Trust, Will, Financial POA, and Health Care sections.
+        Use the shortcuts below to name the spouse as initial for the client&apos;s roles, or the
+        client as initial for the spouse&apos;s roles. Detailed successor nominations remain on the
+        Trust, Will, Financial POA, and Health Care sections.
       </AttorneyNoteBanner>
 
       {showTabs && (

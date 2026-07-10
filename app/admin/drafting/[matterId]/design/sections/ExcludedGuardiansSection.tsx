@@ -32,7 +32,7 @@ export function ExcludedGuardians({
   const pickerContacts = contacts as unknown as PickerContact[]
 
   const syncEntries = (nextEntries: ExcludedGuardianEntry[], flag = enabled) => {
-    onChange('decisions', setExcludedGuardians(sheet, nextEntries))
+    onChange('decisions', prevSheet => setExcludedGuardians(prevSheet, nextEntries))
     onChange('excluded_guardian_name', flag ? formatExcludedGuardianName(nextEntries, contacts) : null)
   }
 
