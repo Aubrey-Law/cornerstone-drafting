@@ -99,7 +99,7 @@ function contactName(contact: MatterContact | ContactRow): string {
   return [contact.first_name, contact.middle_name, contact.last_name].filter(Boolean).join(' ').trim() || 'this person'
 }
 
-function emptyPatchValues<T extends Record<string, string>>(values: T): Record<string, string | null> {
+function emptyPatchValues(values: ClientFormValues | ContactFormValues): Record<string, string | null> {
   const patch: Record<string, string | null> = {}
   for (const [key, value] of Object.entries(values)) {
     patch[key] = value.trim() === '' ? null : value.trim()
