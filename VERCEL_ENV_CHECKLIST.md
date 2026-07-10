@@ -163,6 +163,20 @@ Staff connect Outlook under **Settings**. Manual matter email uses Graph when co
 
 Webhook URL: `https://<host>/api/webhooks/retell`
 
+## Deployments (cost control)
+
+`vercel.json` limits **automatic** builds to **production (`main`)** only. PR/feature-branch pushes do not run the full estate-generator + Next build.
+
+| Need | How |
+|------|-----|
+| Verify locally | `npm run dev` + local Supabase (see `AGENTS.md`) |
+| Skip a `main` push | Include `[skip deploy]` in the commit message |
+| Preview/staging URL | Vercel dashboard → **Deployments** → **Redeploy** on the branch you want |
+
+Ensure **Settings → Build and Deployment → Automatically expose System Environment Variables** is enabled so `scripts/vercel-should-build.sh` can read `VERCEL_ENV`.
+
+---
+
 ## Not used in this app
 
 - Lawmatics, Cal.com, DocuSeal / SignWell
