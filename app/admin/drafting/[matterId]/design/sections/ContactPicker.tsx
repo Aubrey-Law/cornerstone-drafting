@@ -120,7 +120,8 @@ export default function ContactPicker({ role, required, value, onChange, contact
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const filtered = contacts.filter(c => {
+  const filtered = contacts.filter((c, index, arr) => {
+    if (!c?.id || arr.findIndex(x => x.id === c.id) !== index) return false
     const q = query.toLowerCase()
     return contactFullName(c).toLowerCase().includes(q)
   }).slice(0, 5)
@@ -192,7 +193,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
               <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
-          <button onClick={() => onChange(null)} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+          <button type="button" onClick={() => onChange(null)} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -219,6 +220,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
                 filtered.map(c => (
                   <button
                     key={c.id}
+                    type="button"
                     onClick={() => { onChange(c); setQuery(''); setShowDropdown(false) }}
                     className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
                   >
@@ -237,6 +239,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
                 <div className="px-3 py-3 text-center text-[12px] text-muted-foreground">No matches</div>
               ) : null}
               <button
+                type="button"
                 onClick={() => {
                   setShowAddModal(true)
                   setShowDropdown(false)

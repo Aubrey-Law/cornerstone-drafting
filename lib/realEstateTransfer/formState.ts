@@ -31,7 +31,11 @@ export interface RealEstateTransferFormState {
   trustNames: string[]
   realtyTrustName: string
   realtyTrustDate: string
+  /** Preferred: matter contact id (or design-sheet client/spouse shortcut ids). */
+  trusteeContactId: string
+  /** @deprecated Prefer trusteeContactId; retained for read/write compat. */
   trusteeSource: 'client' | 'spouse' | 'fiduciary'
+  /** @deprecated Prefer trusteeContactId; retained for read/write compat. */
   trusteeFiduciaryId: string
   fiduciaries: FiduciaryParty[]
   beneficialOwners: BeneficialOwnerEntry[]
@@ -54,6 +58,7 @@ export function emptyRealEstateTransferFormState(): RealEstateTransferFormState 
     trustNames: [],
     realtyTrustName: '',
     realtyTrustDate: '',
+    trusteeContactId: '',
     trusteeSource: 'client',
     trusteeFiduciaryId: '',
     fiduciaries: [],
@@ -102,10 +107,32 @@ function resolvePartyName(
 }
 
 function resolveTrusteeName(form: RealEstateTransferFormState): string {
+  const contactId = form.trusteeContactId.trim()
+  if (contactId) {
+    if (contactId === '__design_sheet_client__') return form.clientName.trim()
+    if (contactId === '__design_sheet_spouse__') return form.spouseName.trim()
+    const fiduciary = form.fiduciaries.find(item => item.id === contactId)
+    if (fiduciary?.name.trim()) return fiduciary.name.trim()
+  }
+
+  // Legacy fallback when only trusteeSource / trusteeFiduciaryId are set.
   if (form.trusteeSource === 'client') return form.clientName.trim()
   if (form.trusteeSource === 'spouse') return form.spouseName.trim()
   const fiduciary = form.fiduciaries.find(item => item.id === form.trusteeFiduciaryId)
   return fiduciary?.name.trim() ?? ''
+}
+
+/** Keep legacy source fields aligned with the contact-id selection. */
+export function deriveLegacyTrusteeFields(
+  trusteeContactId: string,
+): Pick<RealEstateTransferFormState, 'trusteeSource' | 'trusteeFiduciaryId'> {
+  if (!trusteeContactId || trusteeContactId === '__design_sheet_client__') {
+    return { trusteeSource: 'client', trusteeFiduciaryId: '' }
+  }
+  if (trusteeContactId === '__design_sheet_spouse__') {
+    return { trusteeSource: 'spouse', trusteeFiduciaryId: '' }
+  }
+  return { trusteeSource: 'fiduciary', trusteeFiduciaryId: trusteeContactId }
 }
 
 function formatGranteeLine(name: string, form: RealEstateTransferFormState): string {

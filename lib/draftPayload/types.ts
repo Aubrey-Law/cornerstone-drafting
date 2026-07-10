@@ -114,6 +114,10 @@ export interface DraftPayload {
     include_parental_appointment: boolean
     include_temp_delegation: boolean
     include_young_adult_estate_plan?: boolean
+    /** Asset-transfer package (design-sheet Transfers & Assignments). */
+    include_deed?: boolean
+    include_trustees_certificate?: boolean
+    include_real_estate_trust?: boolean
     spouse_docs: boolean
     /** Individual-trust structure; `disclaimer` selects the married-individual disclaimer trust. */
     trust_planning_type: TrustPlanningType

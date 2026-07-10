@@ -121,6 +121,9 @@ export function FiduciaryRoleSection({
   const extraContacts = [...primaryShortcuts.map(s => s.contact), ...(coContact ? [coContact] : [])]
     .filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i)
 
+  const pickerContacts = [...extraContacts, ...(contacts as Contact[])]
+    .filter((c, i, arr) => Boolean(c?.id) && arr.findIndex(x => x.id === c.id) === i)
+
   return (
     <SectionBlock title={title ?? resolvedConfig.title}>
       {sameAsTrustee !== undefined && onSameAsTrusteeToggle && (
@@ -165,7 +168,7 @@ export function FiduciaryRoleSection({
           const slotState = (slotStates?.[group.principal.id] ?? 'filled') as SlotState
 
           return (
-            <div key={group.principal.id}>
+            <div key={`${group.principal.order}-${group.principal.id}`}>
               <div className="flex items-start gap-2">
                 <div className="flex-1">
                   <div className="mb-1">
@@ -178,9 +181,9 @@ export function FiduciaryRoleSection({
                   <ContactPicker
                     role={label}
                     required={isPrimary}
-                    value={contactById(contacts, group.principal.contact_id, extraContacts)}
+                    value={contactById(pickerContacts, group.principal.contact_id, extraContacts)}
                     onChange={c => onSlotsChange(setSlotContact(slots, group.principal.id, c?.id ?? null))}
-                    contacts={[...extraContacts, ...(contacts as Contact[])]}
+                    contacts={pickerContacts}
                     onAddContact={onAddContact}
                     onUpdateContact={onUpdateContact}
                   />
@@ -204,9 +207,9 @@ export function FiduciaryRoleSection({
                       <div className="flex-1">
                         <ContactPicker
                           role={`${resolvedConfig.coLabel} ${coIndex + 1} (${isPrimary ? 'Primary' : `Alt ${group.principal.order}`})`}
-                          value={contactById(contacts, coSlot.contact_id, extraContacts)}
+                          value={contactById(pickerContacts, coSlot.contact_id, extraContacts)}
                           onChange={c => onSlotsChange(setSlotContact(slots, coSlot.id, c?.id ?? null))}
-                          contacts={[...extraContacts, ...(contacts as Contact[])]}
+                          contacts={pickerContacts}
                           onAddContact={onAddContact}
                           onUpdateContact={onUpdateContact}
                         />
@@ -248,6 +251,7 @@ export function FiduciaryRoleSection({
       {slotScope !== 'primary' && (
         <div className="mt-4 border-t border-border pt-3">
           <Button
+            type="button"
             variant="outline"
             size="sm"
             className="gap-1.5 text-xs"

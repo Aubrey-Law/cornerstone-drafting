@@ -17,9 +17,10 @@ import { conditionalMissingFieldsForPackage } from '@/lib/estateGenerator/node/p
 import { isNodeEstatePackageSupported } from '@/lib/estateGenerator/node/support'
 import type { NodeEstateData, NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
 import { missingRequiredFields } from '@/lib/estateGenerator/node/validation'
+import { assetTransferPreflightDocuments } from '@/lib/realEstateTransfer/draftIntegration'
 
 export interface EstateDraftPreflightDocument {
-  packageName: EstateGeneratorPackage
+  packageName: string
   title: string
   filename: string
 }
@@ -112,6 +113,8 @@ export function buildEstateDraftPreflight(
     warnings.push(`Selected package(s) require the temporary Python fallback: ${fallbackPackageNames.join(', ')}.`)
   }
 
+  documentsToGenerate.push(...assetTransferPreflightDocuments(payload.documents))
+
   const uniqueMissing = uniqueStrings(missing)
   let error: string | undefined
 
@@ -119,7 +122,7 @@ export function buildEstateDraftPreflight(
   // still generates with visible `[[ MISSING: field ]]` markers where each empty
   // value would go. They are surfaced via the `missing` array (shown in the
   // drafting UI). Only the structural problems below actually block generation.
-  if (packageNames.length === 0) {
+  if (packageNames.length === 0 && documentsToGenerate.length === 0) {
     error = 'No supported estate generator packages are selected.'
   } else if (blockingError) {
     error = blockingError

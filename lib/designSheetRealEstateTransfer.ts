@@ -6,6 +6,7 @@ import {
 } from '@/lib/realEstateTransfer/fields'
 import {
   emptyRealEstateTransferFormState,
+  deriveLegacyTrusteeFields,
   type BeneficialOwnerEntry,
   type FiduciaryParty,
   type PartySelection,
@@ -23,6 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export interface PersistedRealEstateTransferState {
   realtyTrustName: string
   realtyTrustDate: string
+  trusteeContactId: string
   trusteeSource: RealEstateTransferFormState['trusteeSource']
   trusteeFiduciaryId: string
   beneficialOwners: BeneficialOwnerEntry[]
@@ -38,13 +40,14 @@ function emptyPersistedState(): PersistedRealEstateTransferState {
   return {
     realtyTrustName: '',
     realtyTrustDate: '',
+    trusteeContactId: CLIENT_PRIMARY_CONTACT_ID,
     trusteeSource: 'client',
     trusteeFiduciaryId: '',
     beneficialOwners: [],
     grantees: [],
     deedFields: {},
     extraTrustNames: [],
-    selectedDocs: ['deed', 'trustees_certificate', 'real_estate_trust'],
+    selectedDocs: [],
     uploadName: null,
     hasExtracted: false,
   }
@@ -87,20 +90,34 @@ function readDocTypes(raw: unknown): RealEstateTransferDocType[] {
   return raw.filter((item): item is RealEstateTransferDocType => typeof item === 'string' && allowed.has(item as RealEstateTransferDocType))
 }
 
+function migrateTrusteeContactId(raw: Record<string, unknown>): string {
+  if (typeof raw.trusteeContactId === 'string' && raw.trusteeContactId.trim()) {
+    return raw.trusteeContactId.trim()
+  }
+  if (raw.trusteeSource === 'spouse') return SPOUSE_PRIMARY_CONTACT_ID
+  if (raw.trusteeSource === 'fiduciary' && typeof raw.trusteeFiduciaryId === 'string' && raw.trusteeFiduciaryId.trim()) {
+    return raw.trusteeFiduciaryId.trim()
+  }
+  return CLIENT_PRIMARY_CONTACT_ID
+}
+
 export function getPersistedRealEstateTransfer(
   sheet: Pick<DesignSheet, 'decisions'>,
 ): PersistedRealEstateTransferState {
   const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
   const raw = isRecord(decisions.real_estate_transfer) ? decisions.real_estate_transfer : {}
   const defaults = emptyPersistedState()
+  const trusteeContactId = migrateTrusteeContactId(raw)
+  const legacy = deriveLegacyTrusteeFields(trusteeContactId)
 
   return {
     realtyTrustName: typeof raw.realtyTrustName === 'string' ? raw.realtyTrustName : defaults.realtyTrustName,
     realtyTrustDate: typeof raw.realtyTrustDate === 'string' ? raw.realtyTrustDate : defaults.realtyTrustDate,
+    trusteeContactId,
     trusteeSource: raw.trusteeSource === 'spouse' || raw.trusteeSource === 'fiduciary'
       ? raw.trusteeSource
-      : defaults.trusteeSource,
-    trusteeFiduciaryId: typeof raw.trusteeFiduciaryId === 'string' ? raw.trusteeFiduciaryId : defaults.trusteeFiduciaryId,
+      : legacy.trusteeSource,
+    trusteeFiduciaryId: typeof raw.trusteeFiduciaryId === 'string' ? raw.trusteeFiduciaryId : legacy.trusteeFiduciaryId,
     beneficialOwners: readBeneficialOwners(raw.beneficialOwners),
     grantees: readPartySelections(raw.grantees),
     deedFields: coerceRealEstateTransferFields(raw.deedFields),
@@ -206,6 +223,7 @@ export function buildFormStateFromDesignSheet(
     fiduciaries: collectFiduciaryParties(sheet, matter, contacts),
     realtyTrustName: persisted.realtyTrustName,
     realtyTrustDate: persisted.realtyTrustDate,
+    trusteeContactId: persisted.trusteeContactId,
     trusteeSource: persisted.trusteeSource,
     trusteeFiduciaryId: persisted.trusteeFiduciaryId,
     beneficialOwners: persisted.beneficialOwners,
@@ -219,11 +237,18 @@ export function extractPersistedState(
   sheet: Pick<DesignSheet, 'trust_name' | 'spouse_trust_name'>,
 ): Omit<PersistedRealEstateTransferState, 'selectedDocs' | 'uploadName' | 'hasExtracted'> {
   const sheetTrustNames = new Set(collectTrustNames(sheet))
+  const trusteeContactId = form.trusteeContactId.trim()
+    || migrateTrusteeContactId({
+      trusteeSource: form.trusteeSource,
+      trusteeFiduciaryId: form.trusteeFiduciaryId,
+    })
+  const legacy = deriveLegacyTrusteeFields(trusteeContactId)
   return {
     realtyTrustName: form.realtyTrustName,
     realtyTrustDate: form.realtyTrustDate,
-    trusteeSource: form.trusteeSource,
-    trusteeFiduciaryId: form.trusteeFiduciaryId,
+    trusteeContactId,
+    trusteeSource: legacy.trusteeSource,
+    trusteeFiduciaryId: legacy.trusteeFiduciaryId,
     beneficialOwners: form.beneficialOwners,
     grantees: form.grantees,
     deedFields: form.deedFields,
@@ -240,19 +265,36 @@ export function hasRealEstateTransferData(form: RealEstateTransferFormState): bo
   )
 }
 
+/** True when Estate Plan Design has opted into any asset-transfer document. */
+export function hasSelectedAssetTransferDocs(sheet: Pick<DesignSheet, 'decisions'>): boolean {
+  return getPersistedRealEstateTransfer(sheet).selectedDocs.length > 0
+}
+
+export function setSelectedAssetTransferDocs(
+  sheet: Pick<DesignSheet, 'decisions'>,
+  selectedDocs: RealEstateTransferDocType[],
+): Record<string, unknown> {
+  const unique = Array.from(new Set(selectedDocs))
+  const withTransfer = setPersistedRealEstateTransfer(sheet, {
+    ...getPersistedRealEstateTransfer(sheet),
+    selectedDocs: unique,
+  })
+  // `document_inclusions.deed` gates the Transfers & Assignments nav section.
+  return setDocumentInclusion({ decisions: withTransfer }, 'deed', unique.length > 0)
+}
+
 export function commitRealEstateTransferToSheet(
   sheet: Pick<DesignSheet, 'decisions' | 'trust_name' | 'spouse_trust_name'>,
   form: RealEstateTransferFormState,
   meta?: Partial<Pick<PersistedRealEstateTransferState, 'selectedDocs' | 'uploadName' | 'hasExtracted'>>,
 ): Record<string, unknown> {
-  let decisions: Record<string, unknown> = setPersistedRealEstateTransfer(sheet, {
+  const selectedDocs = meta?.selectedDocs
+    ?? getPersistedRealEstateTransfer(sheet).selectedDocs
+  const withTransfer = setPersistedRealEstateTransfer(sheet, {
     ...extractPersistedState(form, sheet),
     ...meta,
+    selectedDocs,
   })
 
-  if (hasRealEstateTransferData(form)) {
-    decisions = setDocumentInclusion({ decisions }, 'deed', true)
-  }
-
-  return decisions
+  return setDocumentInclusion({ decisions: withTransfer }, 'deed', selectedDocs.length > 0)
 }

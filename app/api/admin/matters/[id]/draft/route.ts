@@ -22,6 +22,11 @@ import {
   resolveEstateGeneratorEngine,
   type EstateGeneratorEngine,
 } from '@/lib/estateGenerator/engine'
+import {
+  generateAssetTransferFilesFromDesignSheet,
+  selectedRealEstateTransferDocTypes,
+} from '@/lib/realEstateTransfer/draftIntegration'
+import type { DesignSheet, MatterContact } from '@/types/database'
 
 // Per-document marker report returned to the drafting UI. A non-zero markerCount
 // means the document still contains `[TODO:`, `[[ MISSING ]]`, or leftover
@@ -283,6 +288,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const engine: EstateGeneratorEngine = resolveEstateGeneratorEngine()
     const usingEstateGenerator = engine !== 'supabase'
     const admin = getAdminClient()
+    const assetTransferDocTypes = selectedRealEstateTransferDocTypes(payload.documents)
     let generateResult
     // Which generator actually produced the files, recorded per document for
     // provenance. Starts at the configured engine and is corrected when the Node
@@ -293,6 +299,20 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (!nodeGenerateResult.ok && nodeGenerateResult.status === 501) {
         generationEngine = 'supabase'
         generateResult = await import('@/lib/estateGenerator/runEstateGenerator').then(mod => mod.generateEstatePlanDocuments(payload))
+      } else if (
+        !nodeGenerateResult.ok
+        && assetTransferDocTypes.length > 0
+        && (nodeGenerateResult.error ?? '').includes('No supported estate generator packages')
+      ) {
+        // Asset-transfer-only matters: estate packages may be empty while deed/trust
+        // docs are still selected in Estate Plan Design.
+        generateResult = {
+          ok: true as const,
+          files: [],
+          missing: [],
+          warnings: nodeGenerateResult.warnings ?? [],
+          clientSlug: payload.client.full_name?.replace(/\s+/g, '-') || payload.matter.id,
+        }
       } else {
         generateResult = nodeGenerateResult
       }
@@ -317,7 +337,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         return { filename: f.name, buffer: f.buffer, title: meta.title, owner: meta.owner }
       })
     } else {
-      if (usingEstateGenerator) {
+      if (usingEstateGenerator && assetTransferDocTypes.length === 0) {
         return NextResponse.json(
           {
             error: generateResult.error ?? 'Document generation failed',
@@ -340,7 +360,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         }
         generationEngine = pythonFallbackEngineLabel()
         generatedFiles = await generateFallbackFiles(req, canonicalMatterId, token, payload)
-      } else {
+      } else if (assetTransferDocTypes.length === 0) {
         return NextResponse.json(
           {
             error: generateResult.error ?? 'Document generation failed',
@@ -348,6 +368,46 @@ export async function POST(req: NextRequest, { params }: Params) {
             warnings: draftWarnings,
           },
           { status: generateResult.status }
+        )
+      }
+    }
+
+    if (assetTransferDocTypes.length > 0 && payload.design_sheet_id) {
+      const { data: sheetRow } = await admin
+        .from('design_sheets')
+        .select('*')
+        .eq('id', payload.design_sheet_id)
+        .maybeSingle()
+      if (sheetRow) {
+        let contacts: MatterContact[] = []
+        const { data: matterRow } = await admin
+          .from('matters')
+          .select('client_intake_id')
+          .eq('id', canonicalMatterId)
+          .maybeSingle()
+        if (matterRow?.client_intake_id) {
+          const { data: contactsRaw } = await admin
+            .from('contacts')
+            .select('*')
+            .eq('client_intake_id', matterRow.client_intake_id)
+          contacts = (contactsRaw ?? []) as MatterContact[]
+        }
+        const assetFiles = generateAssetTransferFilesFromDesignSheet(
+          sheetRow as DesignSheet,
+          {
+            client_name: payload.client.full_name,
+            spouse_name: payload.spouse?.full_name ?? null,
+          },
+          contacts,
+          payload.documents,
+        )
+        generatedFiles.push(
+          ...assetFiles.map(file => ({
+            filename: file.name,
+            buffer: file.buffer,
+            title: file.title,
+            owner: null,
+          })),
         )
       }
     }

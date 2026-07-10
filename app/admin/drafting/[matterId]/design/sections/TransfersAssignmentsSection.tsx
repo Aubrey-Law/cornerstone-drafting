@@ -6,15 +6,24 @@ import {
   commitRealEstateTransferToSheet,
   getPersistedRealEstateTransfer,
 } from '@/lib/designSheetRealEstateTransfer'
-import { REAL_ESTATE_TRANSFER_DOC_TYPES, type RealEstateTransferDocType } from '@/lib/realEstateTransfer/fields'
+import { type RealEstateTransferDocType } from '@/lib/realEstateTransfer/fields'
 import { RealEstateTransferWorkflow } from '@/lib/realEstateTransfer/RealEstateTransferWorkflow'
 import type { RealEstateTransferFormState } from '@/lib/realEstateTransfer/formState'
-import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
+import type { MatterContact, PipelineMatter } from '@/types/database'
+import type { Contact as PickerContact } from './ContactPicker'
+import {
+  CLIENT_PRIMARY_CONTACT_ID,
+  SPOUSE_PRIMARY_CONTACT_ID,
+  findClientContact,
+  findSpouseContact,
+} from './fiduciary-blocks'
 import { SectionBlock, type SectionProps } from './shared'
 
 interface TransfersAssignmentsSectionProps extends SectionProps {
   matter: PipelineMatter
   contacts: MatterContact[]
+  onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
 }
 
 export function TransfersAssignmentsSection({
@@ -22,6 +31,8 @@ export function TransfersAssignmentsSection({
   onChange,
   matter,
   contacts,
+  onAddContact,
+  onUpdateContact,
 }: TransfersAssignmentsSectionProps) {
   const persisted = useMemo(() => getPersistedRealEstateTransfer(sheet), [sheet.decisions])
 
@@ -29,10 +40,37 @@ export function TransfersAssignmentsSection({
     buildFormStateFromDesignSheet(sheet, matter, contacts),
   )
   const [selectedDocs, setSelectedDocs] = useState<Set<RealEstateTransferDocType>>(
-    () => new Set(persisted.selectedDocs.length > 0 ? persisted.selectedDocs : REAL_ESTATE_TRANSFER_DOC_TYPES),
+    () => new Set(persisted.selectedDocs),
   )
   const [uploadName, setUploadName] = useState<string | null>(persisted.uploadName)
   const [hasExtracted, setHasExtracted] = useState(persisted.hasExtracted)
+
+  const clientContact = useMemo(
+    () => findClientContact(contacts, matter, sheet),
+    [contacts, matter, sheet],
+  )
+  const spouseContact = useMemo(
+    () => findSpouseContact(contacts, matter, sheet),
+    [contacts, matter, sheet],
+  )
+
+  // Prefer stable design-sheet shortcut ids so persisted trusteeContactId resolves in the picker.
+  const shortcutContacts = useMemo(() => {
+    const shortcuts: PickerContact[] = []
+    if (clientContact) {
+      shortcuts.push({
+        ...(clientContact as unknown as PickerContact),
+        id: CLIENT_PRIMARY_CONTACT_ID,
+      })
+    }
+    if (spouseContact) {
+      shortcuts.push({
+        ...(spouseContact as unknown as PickerContact),
+        id: SPOUSE_PRIMARY_CONTACT_ID,
+      })
+    }
+    return shortcuts
+  }, [clientContact, spouseContact])
 
   const commit = useCallback((
     nextForm: RealEstateTransferFormState,
@@ -70,6 +108,24 @@ export function TransfersAssignmentsSection({
     commit(form, { hasExtracted: value })
   }
 
+  const adaptAdd = async (data: Omit<PickerContact, 'id'>): Promise<PickerContact> => {
+    const created = await onAddContact(data as Omit<MatterContact, 'id'>)
+    return created as unknown as PickerContact
+  }
+
+  const adaptUpdate = onUpdateContact
+    ? async (id: string, data: Omit<PickerContact, 'id'>): Promise<PickerContact> => {
+      const updated = await onUpdateContact(id, data as Omit<MatterContact, 'id'>)
+      return updated as unknown as PickerContact
+    }
+    : undefined
+
+  useEffect(() => {
+    setSelectedDocs(new Set(persisted.selectedDocs))
+    setUploadName(persisted.uploadName)
+    setHasExtracted(persisted.hasExtracted)
+  }, [persisted])
+
   useEffect(() => {
     const fresh = buildFormStateFromDesignSheet(sheet, matter, contacts)
     setForm(current => ({
@@ -82,6 +138,9 @@ export function TransfersAssignmentsSection({
       clientPropertyCounty: fresh.clientPropertyCounty,
       trustNames: fresh.trustNames,
       fiduciaries: fresh.fiduciaries,
+      trusteeContactId: current.trusteeContactId || fresh.trusteeContactId,
+      trusteeSource: current.trusteeContactId ? current.trusteeSource : fresh.trusteeSource,
+      trusteeFiduciaryId: current.trusteeContactId ? current.trusteeFiduciaryId : fresh.trusteeFiduciaryId,
     }))
   }, [
     sheet,
@@ -122,6 +181,13 @@ export function TransfersAssignmentsSection({
             clientInfoReadOnly: true,
             allowFiduciaryEditing: false,
             allowTrustNameEditing: true,
+            hideDocumentPicker: true,
+          }}
+          trusteePicker={{
+            contacts: contacts as unknown as PickerContact[],
+            shortcutContacts,
+            onAddContact: adaptAdd,
+            onUpdateContact: adaptUpdate,
           }}
         />
       </SectionBlock>

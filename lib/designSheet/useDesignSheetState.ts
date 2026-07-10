@@ -295,7 +295,12 @@ export function useDesignSheetState({
     } catch (err) {
       console.error(err)
       setSaveStatus('error')
-      toast.error('Unable to save design sheet after several attempts')
+      const detail = err instanceof Error && err.message ? err.message : null
+      toast.error(
+        detail && detail !== 'Unable to save design sheet'
+          ? `Unable to save design sheet after several attempts: ${detail}`
+          : 'Unable to save design sheet after several attempts',
+      )
       return false
     } finally {
       persistInFlightRef.current = false

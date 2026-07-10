@@ -69,9 +69,23 @@ describe('formatGrantees', () => {
       ...emptyRealEstateTransferFormState(),
       clientName: 'Jane Doe',
       realtyTrustName: '1 Main Street Realty Trust',
+      trusteeContactId: '__design_sheet_client__',
       grantees: [{ id: '1', source: 'realty_trust' as const }],
     }
     expect(formatGrantees(form)).toBe('Jane Doe, Trustee of the 1 Main Street Realty Trust')
+  })
+
+  it('resolves trustee from contact id in fiduciaries', () => {
+    const form = {
+      ...emptyRealEstateTransferFormState(),
+      clientName: 'Jane Doe',
+      realtyTrustName: '1 Main Street Realty Trust',
+      trusteeContactId: 'contact-9',
+      trusteeSource: 'fiduciary' as const,
+      fiduciaries: [{ id: 'contact-9', name: 'Alex Trustee' }],
+      grantees: [{ id: '1', source: 'realty_trust' as const }],
+    }
+    expect(formatGrantees(form)).toBe('Alex Trustee, Trustee of the 1 Main Street Realty Trust')
   })
 })
 

@@ -10,25 +10,71 @@ export function defaultPrimarySlot(): FiduciarySlot[] {
   return [createSlot(0)]
 }
 
+/**
+ * Repair corrupt slot arrays that cause "choose 1 → two names populate":
+ * - duplicate slot ids (setSlotContact updates every match)
+ * - multiple non-co principals at the same order (draft joins their names)
+ */
+export function normalizeFiduciarySlots(slots: FiduciarySlot[]): FiduciarySlot[] {
+  const seenIds = new Set<string>()
+  const principalOrders = new Set<number>()
+  const next: FiduciarySlot[] = []
+
+  const sorted = [...slots].sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order
+    return a.is_co === b.is_co ? 0 : a.is_co ? 1 : -1
+  })
+
+  for (const slot of sorted) {
+    let id = slot.id
+    if (!id || seenIds.has(id)) {
+      id = crypto.randomUUID()
+    }
+    seenIds.add(id)
+
+    if (!slot.is_co) {
+      if (principalOrders.has(slot.order)) {
+        // Extra principal at this order — keep only the first; drop empty dupes,
+        // otherwise promote filled dupes to the next free alternate order.
+        if (!slot.contact_id) continue
+        let order = slot.order + 1
+        while (principalOrders.has(order)) order += 1
+        principalOrders.add(order)
+        next.push({ ...slot, id, order })
+        continue
+      }
+      principalOrders.add(slot.order)
+    }
+
+    next.push(id === slot.id ? slot : { ...slot, id })
+  }
+
+  return next
+}
+
 // ── Slot mutations (all return new arrays) ──────────────────────────────────
 
 export function addAlternate(slots: FiduciarySlot[]): FiduciarySlot[] {
-  const maxOrder = slots.length > 0 ? Math.max(...slots.map(s => s.order)) : -1
-  return [...slots, createSlot(maxOrder + 1)]
+  const normalized = normalizeFiduciarySlots(slots)
+  const maxOrder = normalized.length > 0 ? Math.max(...normalized.map(s => s.order)) : -1
+  return [...normalized, createSlot(maxOrder + 1)]
 }
 
 export function removeAlternate(slots: FiduciarySlot[], order: number): FiduciarySlot[] {
   if (order === 0) return slots // never remove primary
   const filtered = slots.filter(s => s.order !== order)
   // Re-number: orders above the removed one shift down by 1
-  return filtered.map(s => s.order > order ? { ...s, order: s.order - 1 } : s)
+  return normalizeFiduciarySlots(
+    filtered.map(s => s.order > order ? { ...s, order: s.order - 1 } : s),
+  )
 }
 
 export function addCo(slots: FiduciarySlot[], order: number): FiduciarySlot[] {
-  if (coSlotsForOrder(slots, order).length >= 3) return slots
-  const idx = slots.findIndex(s => s.order === order && !s.is_co)
-  if (idx === -1) return slots
-  const next = [...slots]
+  const normalized = normalizeFiduciarySlots(slots)
+  if (coSlotsForOrder(normalized, order).length >= 3) return normalized
+  const idx = normalized.findIndex(s => s.order === order && !s.is_co)
+  if (idx === -1) return normalized
+  const next = [...normalized]
   const lastCoIdx = next.reduce((lastIdx, slot, i) => (
     slot.order === order && slot.is_co ? i : lastIdx
   ), idx)
@@ -55,7 +101,14 @@ export function setSlotContact(
   slotId: string,
   contactId: string | null
 ): FiduciarySlot[] {
-  return slots.map(s => s.id === slotId ? { ...s, contact_id: contactId } : s)
+  const normalized = normalizeFiduciarySlots(slots)
+  // Prefer exact id match after normalization; fall back to first match only once.
+  let updated = false
+  return normalized.map(s => {
+    if (updated || s.id !== slotId) return s
+    updated = true
+    return { ...s, contact_id: contactId }
+  })
 }
 
 // ── Slot grouping ────────────────────────────────────────────────────────────
@@ -78,9 +131,9 @@ export function slotsByOrder(slots: FiduciarySlot[]): SlotGroup[] {
     const existing = map.get(s.order)
     if (s.is_co) {
       if (existing) existing.coSlots.push(s)
-    } else {
-      if (!existing) map.set(s.order, { principal: s, coSlots: [] })
-      else existing.principal = s
+    } else if (!existing) {
+      // Keep the first principal at each order; extras are repaired on write.
+      map.set(s.order, { principal: s, coSlots: [] })
     }
   }
 

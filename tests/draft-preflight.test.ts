@@ -464,6 +464,24 @@ describe('estate draft preflight', () => {
     expect(preflight.error).toBeUndefined()
   })
 
+  it('lists selected asset-transfer documents alongside estate packages', () => {
+    const preflight = buildEstateDraftPreflight(payload({
+      documents: {
+        include_deed: true,
+        include_trustees_certificate: true,
+        include_real_estate_trust: false,
+      },
+    }))
+
+    expect(preflight.canGenerate).toBe(true)
+    expect(preflight.documentsToGenerate.map(document => document.filename)).toEqual(expect.arrayContaining([
+      'Deed.docx',
+      'Trustees-Certificate.docx',
+      '00-estate-plan-summary.docx',
+    ]))
+    expect(preflight.documentsToGenerate.map(document => document.filename)).not.toContain('Real-Estate-Trust.docx')
+  })
+
   it('flags missing minor-child guardian data on a simple will preflight without blocking', () => {
     const preflight = buildEstateDraftPreflight(payload({
       matter: { minor_children: true },

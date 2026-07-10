@@ -2,11 +2,11 @@
 
 import { useState, useCallback } from 'react'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import ContactPicker from './ContactPicker'
 import type { Contact } from './ContactPicker'
+import { isMarriedSheet, partyFullName, PartyTabs } from './fiduciary-blocks'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,7 +82,9 @@ interface Props {
 // ── FiduciariesSectionLP ──────────────────────────────────────────────────────
 
 export function FiduciariesSectionLP({ lpData, sheet, contacts, onChange, matter, onAddContact, onUpdateContact }: Props) {
-  const isMarried = !!matter.spouse_name
+  const isMarried = isMarriedSheet(sheet) || !!(sheet.spouse_name ?? matter.spouse_name)
+  const clientName = partyFullName(sheet, matter, 'client')
+  const spouseName = partyFullName(sheet, matter, 'spouse')
   const hasMinorChildren = sheetHasMinorChildren(sheet.children)
   const planCoverage = (lpData?.li_plan_coverage ?? 'no_trust') as PlanCoverage
 
@@ -127,24 +129,13 @@ export function FiduciariesSectionLP({ lpData, sheet, contacts, onChange, matter
 
   return (
     <div className="space-y-6">
-      {/* Party tabs */}
       {isMarried && (
-        <div className="flex gap-0.5 rounded-lg bg-gray-100 p-[2px]">
-          {(['client', 'spouse'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={cn(
-                'flex-1 rounded-md px-3 py-2 text-[13px] transition-all',
-                activeTab === t
-                  ? 'bg-card font-semibold text-primary shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              {t === 'client' ? (matter.client_name ?? 'Client') : (matter.spouse_name ?? 'Spouse / Partner')}
-            </button>
-          ))}
-        </div>
+        <PartyTabs
+          value={activeTab}
+          onChange={setActiveTab}
+          clientLabel={clientName}
+          spouseLabel={spouseName}
+        />
       )}
 
       {activeTab === 'client' ? (

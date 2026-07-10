@@ -21,7 +21,10 @@ import {
   deriveDocuments,
   designSheetForDocumentInclusions,
   draftPayloadChildren,
+  estatePlanSetupFromSheet,
+  isEstatePlanningPracticeArea,
   pick,
+  selectedAssetTransferDocsFromSheet,
 } from '@/lib/draftPayload/helpers'
 import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getWillPersonalRepresentativePowers } from '@/lib/designSheetWillPowers'
@@ -143,9 +146,7 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
   }
 
   const effectivePracticeArea = details?.practice_area ?? null
-  const isEP = effectivePracticeArea != null &&
-    (effectivePracticeArea.toUpperCase().includes('EP') ||
-     effectivePracticeArea.toLowerCase().includes('estate'))
+  const isEP = isEstatePlanningPracticeArea(effectivePracticeArea)
 
   const trustType: DraftPayload['matter']['trust_type'] = isEP
     ? ((details?.ep_trust_type as 'revocable_living' | null) ?? 'revocable_living')
@@ -280,6 +281,8 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
     normalizedPlanType,
     documentInclusions,
     trustPlanningType,
+    estatePlanSetupFromSheet(designSheetForDocumentInclusions(designSheet)),
+    selectedAssetTransferDocsFromSheet(designSheet),
   )
 
   // ── Will / DPOA / HCP / HIPAA provisions ──────────────────────────────────

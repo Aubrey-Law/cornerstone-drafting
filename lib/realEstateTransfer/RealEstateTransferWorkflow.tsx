@@ -28,6 +28,7 @@ import {
 import {
   buildTemplateFields,
   createId,
+  deriveLegacyTrusteeFields,
   mergeExtractedDeedFields,
   partySourceLabel,
   suggestRealtyTrustNames,
@@ -36,6 +37,10 @@ import {
   type PartySource,
   type RealEstateTransferFormState,
 } from '@/lib/realEstateTransfer/formState'
+import ContactPicker, {
+  contactFullName,
+  type Contact as PickerContact,
+} from '@/app/admin/drafting/[matterId]/design/sections/ContactPicker'
 
 const DEED_INPUT_FIELDS = REAL_ESTATE_TRANSFER_FIELDS.filter(
   field =>
@@ -48,6 +53,16 @@ export interface RealEstateTransferWorkflowOptions {
   clientInfoReadOnly?: boolean
   allowFiduciaryEditing?: boolean
   allowTrustNameEditing?: boolean
+  /** When true, hide the local "Generate documents" card (docs are chosen in Estate Plan Design). */
+  hideDocumentPicker?: boolean
+}
+
+export interface RealEstateTransferTrusteePickerProps {
+  contacts: PickerContact[]
+  onAddContact: (data: Omit<PickerContact, 'id'>) => Promise<PickerContact>
+  onUpdateContact?: (id: string, data: Omit<PickerContact, 'id'>) => Promise<PickerContact>
+  /** Synthetic client/spouse contacts included in the picker pool. */
+  shortcutContacts?: PickerContact[]
 }
 
 export interface RealEstateTransferWorkflowProps {
@@ -60,6 +75,8 @@ export interface RealEstateTransferWorkflowProps {
   hasExtracted: boolean
   onHasExtractedChange: (value: boolean) => void
   options?: RealEstateTransferWorkflowOptions
+  /** When provided, Trustee uses ContactPicker (design-sheet contact pool). */
+  trusteePicker?: RealEstateTransferTrusteePickerProps
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -231,12 +248,20 @@ export function RealEstateTransferWorkflow({
   hasExtracted,
   onHasExtractedChange,
   options = {},
+  trusteePicker,
 }: RealEstateTransferWorkflowProps) {
   const {
     clientInfoReadOnly = false,
     allowFiduciaryEditing = true,
     allowTrustNameEditing = true,
+    hideDocumentPicker = false,
   } = options
+
+  const showDeedFields = selectedDocs.has('deed')
+  const showTrustFields = selectedDocs.has('real_estate_trust') || selectedDocs.has('trustees_certificate')
+  const showCertificateFields = selectedDocs.has('trustees_certificate')
+  const showUpload = showDeedFields || showCertificateFields
+  const showAnyTransferUi = showDeedFields || showTrustFields || showCertificateFields
 
   const accessToken = useAccessToken()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -246,8 +271,42 @@ export function RealEstateTransferWorkflow({
 
   const trustNameSuggestions = useMemo(() => suggestRealtyTrustNames(form), [form])
 
+  const pickerContacts = useMemo(() => {
+    if (!trusteePicker) return [] as PickerContact[]
+    const shortcuts = trusteePicker.shortcutContacts ?? []
+    const seen = new Set<string>()
+    const merged: PickerContact[] = []
+    for (const contact of [...shortcuts, ...trusteePicker.contacts]) {
+      if (!contact?.id || seen.has(contact.id)) continue
+      seen.add(contact.id)
+      merged.push(contact)
+    }
+    return merged
+  }, [trusteePicker])
+
+  const selectedTrusteeContact = useMemo(() => {
+    if (!form.trusteeContactId) return null
+    return pickerContacts.find(contact => contact.id === form.trusteeContactId) ?? null
+  }, [form.trusteeContactId, pickerContacts])
+
   const updateForm = (patch: Partial<RealEstateTransferFormState>) => {
     onFormChange({ ...form, ...patch })
+  }
+
+  const setTrusteeContact = (contact: PickerContact | null) => {
+    const trusteeContactId = contact?.id ?? ''
+    const legacy = deriveLegacyTrusteeFields(trusteeContactId)
+    const name = contact ? contactFullName(contact).trim() : ''
+    const fiduciaries = contact && name && !form.fiduciaries.some(item => item.id === contact.id)
+      ? [...form.fiduciaries, { id: contact.id, name }]
+      : contact && name
+        ? form.fiduciaries.map(item => (item.id === contact.id ? { ...item, name } : item))
+        : form.fiduciaries
+    updateForm({
+      trusteeContactId,
+      ...legacy,
+      fiduciaries,
+    })
   }
 
   const updateDeedField = (key: RealEstateTransferFieldKey, value: string) => {
@@ -284,6 +343,8 @@ export function RealEstateTransferWorkflow({
     updateForm({
       fiduciaries: [...form.fiduciaries, { id, name: '' }],
       trusteeFiduciaryId: form.trusteeFiduciaryId || id,
+      trusteeContactId: form.trusteeContactId || id,
+      trusteeSource: 'fiduciary',
     })
   }
 
@@ -295,9 +356,11 @@ export function RealEstateTransferWorkflow({
 
   const removeFiduciary = (id: string) => {
     const remaining = form.fiduciaries.filter(item => item.id !== id)
+    const nextFiduciaryId = form.trusteeFiduciaryId === id ? (remaining[0]?.id ?? '') : form.trusteeFiduciaryId
     updateForm({
       fiduciaries: remaining,
-      trusteeFiduciaryId: form.trusteeFiduciaryId === id ? (remaining[0]?.id ?? '') : form.trusteeFiduciaryId,
+      trusteeFiduciaryId: nextFiduciaryId,
+      trusteeContactId: form.trusteeContactId === id ? nextFiduciaryId : form.trusteeContactId,
     })
   }
 
@@ -390,8 +453,17 @@ export function RealEstateTransferWorkflow({
 
   const working = busy !== null || isPending
 
+  if (!showAnyTransferUi && hideDocumentPicker) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Select asset transfer documents in Estate Plan Design to configure transfer fields here.
+      </p>
+    )
+  }
+
   return (
     <div className="space-y-6">
+      {showUpload && (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">1. Upload deed PDF</CardTitle>
@@ -431,10 +503,12 @@ export function RealEstateTransferWorkflow({
           )}
         </CardContent>
       </Card>
+      )}
 
+      {showTrustFields && (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">2. Realty trust</CardTitle>
+          <CardTitle className="text-base">{showUpload ? '2. Realty trust' : '1. Realty trust'}</CardTitle>
           <CardDescription>
             {clientInfoReadOnly
               ? 'Client and property details are pulled from the design sheet. Configure the realty trust, trustee, and beneficial owners.'
@@ -593,69 +667,99 @@ export function RealEstateTransferWorkflow({
 
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Trustee</h3>
-            <Select
-              value={form.trusteeSource}
-              onValueChange={value => updateForm({
-                trusteeSource: value as RealEstateTransferFormState['trusteeSource'],
-              })}
-            >
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="client">Client</SelectItem>
-                <SelectItem value="spouse">Spouse</SelectItem>
-                <SelectItem value="fiduciary">Fiduciary</SelectItem>
-              </SelectContent>
-            </Select>
-            {form.trusteeSource === 'fiduciary' && (
-              <div className="space-y-2">
-                {form.fiduciaries.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    {allowFiduciaryEditing
-                      ? 'Add a fiduciary to select as trustee.'
-                      : 'Assign fiduciaries in the Fiduciaries section to select a trustee here.'}
-                  </p>
-                ) : (
-                  form.fiduciaries.map(fiduciary => (
-                    <div
-                      key={fiduciary.id}
-                      className="flex items-center gap-2 rounded-md border border-border p-3"
-                    >
-                      <Checkbox
-                        checked={form.trusteeFiduciaryId === fiduciary.id}
-                        onCheckedChange={() => updateForm({ trusteeFiduciaryId: fiduciary.id })}
-                      />
-                      {allowFiduciaryEditing ? (
-                        <Input
-                          placeholder="Fiduciary name"
-                          value={fiduciary.name}
-                          onChange={event => updateFiduciary(fiduciary.id, event.target.value)}
-                        />
-                      ) : (
-                        <span className="text-sm">{fiduciary.name}</span>
-                      )}
-                      {allowFiduciaryEditing && (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => removeFiduciary(fiduciary.id)}
-                          aria-label="Remove fiduciary"
+            {trusteePicker ? (
+              <ContactPicker
+                role="Trustee"
+                required
+                value={selectedTrusteeContact}
+                onChange={setTrusteeContact}
+                contacts={pickerContacts}
+                onAddContact={trusteePicker.onAddContact}
+                onUpdateContact={trusteePicker.onUpdateContact}
+              />
+            ) : (
+              <>
+                <Select
+                  value={form.trusteeSource}
+                  onValueChange={value => {
+                    const trusteeSource = value as RealEstateTransferFormState['trusteeSource']
+                    const trusteeContactId = trusteeSource === 'spouse'
+                      ? '__design_sheet_spouse__'
+                      : trusteeSource === 'fiduciary'
+                        ? (form.trusteeFiduciaryId || form.fiduciaries[0]?.id || '')
+                        : '__design_sheet_client__'
+                    updateForm({
+                      trusteeSource,
+                      trusteeContactId,
+                      trusteeFiduciaryId: trusteeSource === 'fiduciary'
+                        ? (form.trusteeFiduciaryId || form.fiduciaries[0]?.id || '')
+                        : '',
+                    })
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client">Client</SelectItem>
+                    <SelectItem value="spouse">Spouse</SelectItem>
+                    <SelectItem value="fiduciary">Fiduciary</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.trusteeSource === 'fiduciary' && (
+                  <div className="space-y-2">
+                    {form.fiduciaries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {allowFiduciaryEditing
+                          ? 'Add a fiduciary to select as trustee.'
+                          : 'Assign fiduciaries in the Fiduciaries section to select a trustee here.'}
+                      </p>
+                    ) : (
+                      form.fiduciaries.map(fiduciary => (
+                        <div
+                          key={fiduciary.id}
+                          className="flex items-center gap-2 rounded-md border border-border p-3"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))
+                          <Checkbox
+                            checked={form.trusteeFiduciaryId === fiduciary.id}
+                            onCheckedChange={() => updateForm({
+                              trusteeFiduciaryId: fiduciary.id,
+                              trusteeContactId: fiduciary.id,
+                              trusteeSource: 'fiduciary',
+                            })}
+                          />
+                          {allowFiduciaryEditing ? (
+                            <Input
+                              placeholder="Fiduciary name"
+                              value={fiduciary.name}
+                              onChange={event => updateFiduciary(fiduciary.id, event.target.value)}
+                            />
+                          ) : (
+                            <span className="text-sm">{fiduciary.name}</span>
+                          )}
+                          {allowFiduciaryEditing && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeFiduciary(fiduciary.id)}
+                              aria-label="Remove fiduciary"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                    {allowFiduciaryEditing && (
+                      <Button type="button" variant="outline" size="sm" onClick={addFiduciary}>
+                        <Plus className="mr-1 h-4 w-4" />
+                        Add fiduciary
+                      </Button>
+                    )}
+                  </div>
                 )}
-                {allowFiduciaryEditing && (
-                  <Button type="button" variant="outline" size="sm" onClick={addFiduciary}>
-                    <Plus className="mr-1 h-4 w-4" />
-                    Add fiduciary
-                  </Button>
-                )}
-              </div>
+              </>
             )}
           </div>
 
@@ -775,10 +879,14 @@ export function RealEstateTransferWorkflow({
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {showDeedFields && (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">3. Deed</CardTitle>
+          <CardTitle className="text-base">
+            {showUpload && showTrustFields ? '3. Deed' : showUpload || showTrustFields ? '2. Deed' : '1. Deed'}
+          </CardTitle>
           <CardDescription>
             {hasExtracted
               ? 'Review deed fields extracted from the uploaded PDF and select grantees.'
@@ -852,10 +960,41 @@ export function RealEstateTransferWorkflow({
                 )}
               </div>
             ))}
+            {showCertificateFields && (
+              <div className="space-y-1.5">
+                <Label htmlFor="certificate_execution_county">Certificate execution county</Label>
+                <Input
+                  id="certificate_execution_county"
+                  value={form.deedFields.certificate_execution_county ?? ''}
+                  onChange={event => updateDeedField('certificate_execution_county', event.target.value)}
+                />
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {showCertificateFields && !showDeedFields && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Trustee&apos;s Certificate</CardTitle>
+            <CardDescription>Fields used for the Trustee&apos;s Certificate.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1.5">
+              <Label htmlFor="certificate_execution_county">Certificate execution county</Label>
+              <Input
+                id="certificate_execution_county"
+                value={form.deedFields.certificate_execution_county ?? ''}
+                onChange={event => updateDeedField('certificate_execution_county', event.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!hideDocumentPicker && (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">4. Generate documents</CardTitle>
@@ -888,6 +1027,7 @@ export function RealEstateTransferWorkflow({
           </Button>
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

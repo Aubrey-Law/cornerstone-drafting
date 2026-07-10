@@ -50,6 +50,10 @@ export function getDesignSectionNavItems(args: {
 
   if (documentInclusions.trust) {
     items.push({ id: DESIGN_SECTION_IDS.assetSchedules, label: 'Asset Schedules' })
+  }
+
+  // Asset-transfer docs are opted in from Estate Plan Design (document_inclusions.deed).
+  if (documentInclusions.deed) {
     items.push({ id: DESIGN_SECTION_IDS.transfersAssignments, label: 'Transfers & Assignments' })
   }
 

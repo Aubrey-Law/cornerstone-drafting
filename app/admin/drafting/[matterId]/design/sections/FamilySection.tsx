@@ -207,6 +207,7 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
                       <div>
                         <PrefilledInput
                           label="Date of Birth"
+                          type="date"
                           value={child.dob ?? ''}
                           onChange={v => updateChild(idx, { dob: v || null })}
                         />

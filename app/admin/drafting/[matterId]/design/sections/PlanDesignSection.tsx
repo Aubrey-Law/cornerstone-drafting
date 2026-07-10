@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { PlanStructurePicker } from '@/components/guided/PlanStructurePicker'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
@@ -12,6 +13,15 @@ import {
   setDocumentInclusion,
 } from '@/lib/designSheetDocumentInclusions'
 import {
+  getPersistedRealEstateTransfer,
+  setSelectedAssetTransferDocs,
+} from '@/lib/designSheetRealEstateTransfer'
+import {
+  DOCUMENT_TYPES,
+  REAL_ESTATE_TRANSFER_DOC_TYPES,
+  type RealEstateTransferDocType,
+} from '@/lib/realEstateTransfer/fields'
+import {
   DESIGN_PLAN_TYPE_OPTIONS,
   designPlanTypeIncludesRevocableTrust,
   normalizeDesignPlanType,
@@ -19,8 +29,9 @@ import {
   type DesignPlanType,
 } from '@/lib/designPlanType'
 import { Input } from '@/components/ui/input'
+import { toDateInputValue } from '@/lib/dob'
 import {
-  AttorneyInput,
+  AttorneyDateInput,
   AttorneyNoteBanner,
   AttorneySelect,
   ClientDecisionCallout,
@@ -175,6 +186,18 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
     })
   }
 
+  const selectedAssetTransferDocs = useMemo(
+    () => new Set(getPersistedRealEstateTransfer(sheet).selectedDocs),
+    [sheet.decisions],
+  )
+
+  const updateAssetTransferDoc = (docType: RealEstateTransferDocType, checked: boolean) => {
+    const next = new Set(selectedAssetTransferDocs)
+    if (checked) next.add(docType)
+    else next.delete(docType)
+    onChange('decisions', setSelectedAssetTransferDocs(sheet, Array.from(next)))
+  }
+
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
   const trustCheckboxDisabled = planTypeDisallowsRevocableTrustDocument(normalizedPlanType)
 
@@ -319,6 +342,27 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
               </div>
             </div>
           </div>
+
+          <div>
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Asset Transfer Documents</p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Selected documents are generated with the estate plan. Transfers &amp; Assignments only shows fields needed for the checked documents.
+            </p>
+            <div className="space-y-3">
+              {REAL_ESTATE_TRANSFER_DOC_TYPES.map(docType => (
+                <label
+                  key={docType}
+                  className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5"
+                >
+                  <Checkbox
+                    checked={selectedAssetTransferDocs.has(docType)}
+                    onCheckedChange={value => updateAssetTransferDoc(docType, value === true)}
+                  />
+                  <span className="text-sm text-foreground">{DOCUMENT_TYPES[docType].label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
       </SectionBlock>
 
@@ -343,7 +387,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
             <FieldLabel>Signing Date</FieldLabel>
             <Input
               type="date"
-              value={sheet.signing_date ?? ''}
+              value={toDateInputValue(sheet.signing_date)}
               onChange={e => handleSigningDateChange(e.target.value)}
               className="h-10"
             />
@@ -356,11 +400,10 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
             options={SIGNING_COUNTY_OPTIONS.map(county => ({ value: county, label: county }))}
             onChange={v => onChange('signing_county', v || null)}
           />
-          <AttorneyInput
+          <AttorneyDateInput
             fieldName="notary_commission_expiration"
             label="Notary Commission Expiration"
             value={sheet.notary_commission_expiration ?? ''}
-            placeholder="MM/DD/YYYY"
             onChange={v => onChange('notary_commission_expiration', v || null)}
           />
         </div>

@@ -8,6 +8,7 @@ import type { DesignSheet, FiduciaryRole, FiduciarySlot, MatterContact, Pipeline
 import type { SlotState } from '@/types/planReview'
 import type { SectionProps } from './shared'
 import { FiduciaryRoleSection } from './FiduciaryRoleSection'
+import { normalizeFiduciarySlots } from './fiduciary-helpers'
 
 export const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
 export const SPOUSE_PRIMARY_CONTACT_ID = '__design_sheet_spouse__'
@@ -60,6 +61,56 @@ export interface FiduciaryBlockProps extends SectionProps {
 export function isMarriedSheet(sheet: DesignSheet) {
   const marital = (sheet.marital_status ?? '').toLowerCase()
   return marital.includes('married') && !marital.includes('never')
+}
+
+/** Full display name for party tabs / section labels (sheet first, then matter). */
+export function partyFullName(
+  sheet: DesignSheet,
+  matter: PipelineMatter,
+  party: 'client' | 'spouse',
+): string {
+  if (party === 'client') {
+    return (sheet.client_name ?? matter.client_name ?? '').trim() || 'Client'
+  }
+  return (sheet.spouse_name ?? matter.spouse_name ?? '').trim() || 'Spouse / Partner'
+}
+
+/** Client / spouse segmented tabs for fiduciary role assignment when married. */
+export function PartyTabs({
+  value,
+  onChange,
+  clientLabel,
+  spouseLabel,
+}: {
+  value: 'client' | 'spouse'
+  onChange: (v: 'client' | 'spouse') => void
+  clientLabel: string
+  spouseLabel: string
+}) {
+  return (
+    <div className="flex gap-0.5 rounded-lg bg-muted p-[2px]" role="tablist" aria-label="Party">
+      {([
+        { id: 'client' as const, label: clientLabel },
+        { id: 'spouse' as const, label: spouseLabel },
+      ]).map(tab => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={value === tab.id}
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            'flex-1 rounded-md px-3 py-2 text-[13px] transition-all',
+            value === tab.id
+              ? 'bg-card font-semibold text-primary shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function splitDisplayName(name: string): { first_name: string; last_name: string } {
@@ -158,7 +209,7 @@ export function FiduciaryBlock({
 }: FiduciaryBlockProps) {
   const field = slotField ?? SLOT_FIELDS[role]
   const handleSlotsChange = useCallback((slots: FiduciarySlot[]) => {
-    onChange(field, slots as DesignSheet[keyof DesignSheet])
+    onChange(field, normalizeFiduciarySlots(slots) as DesignSheet[keyof DesignSheet])
   }, [field, onChange])
 
   const handleSlotStateChange = useCallback((slotId: string, state: SlotState) => {

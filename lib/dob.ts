@@ -7,8 +7,30 @@ export function parseDob(value: string | null | undefined): Date | null {
     if (!y || !m || !d) return null
     return new Date(Date.UTC(y, m - 1, d))
   }
+  // US-style MM/DD/YYYY (common in intake / attorney notes)
+  const us = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (us) {
+    const month = Number(us[1])
+    const day = Number(us[2])
+    const year = Number(us[3])
+    if (!month || !day || !year) return null
+    return new Date(Date.UTC(year, month - 1, day))
+  }
   const parsed = new Date(trimmed)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+/** Normalize any stored date string to `YYYY-MM-DD` for `<input type="date">`. */
+export function toDateInputValue(value: string | null | undefined): string {
+  if (!value?.trim()) return ''
+  const trimmed = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const parsed = parseDob(trimmed)
+  if (!parsed) return ''
+  const y = parsed.getUTCFullYear()
+  const m = String(parsed.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(parsed.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 /** Completed years at `now`, evaluated on the UTC calendar (legal age boundaries). */

@@ -169,6 +169,7 @@ describe('buildFormStateFromDesignSheet', () => {
       decisions: setPersistedRealEstateTransfer(baseSheet(), {
         realtyTrustName: '1 Main Street Realty Trust',
         realtyTrustDate: '2020-01-15',
+        trusteeContactId: CLIENT_PRIMARY_CONTACT_ID,
         grantees: [{ id: 'g1', source: 'realty_trust' }],
         deedFields: { grantor: 'Prior Owner' },
       }),
@@ -177,25 +178,55 @@ describe('buildFormStateFromDesignSheet', () => {
     const form = buildFormStateFromDesignSheet(sheet, matter, contacts)
     expect(form.realtyTrustName).toBe('1 Main Street Realty Trust')
     expect(form.realtyTrustDate).toBe('2020-01-15')
+    expect(form.trusteeContactId).toBe(CLIENT_PRIMARY_CONTACT_ID)
     expect(form.grantees).toHaveLength(1)
     expect(form.deedFields.grantor).toBe('Prior Owner')
+  })
+
+  it('migrates legacy trusteeSource into trusteeContactId', () => {
+    const sheet = {
+      ...baseSheet(),
+      decisions: {
+        real_estate_transfer: {
+          trusteeSource: 'spouse',
+          trusteeFiduciaryId: '',
+        },
+      },
+    }
+
+    const form = buildFormStateFromDesignSheet(sheet as DesignSheet, matter, contacts)
+    expect(form.trusteeContactId).toBe('__design_sheet_spouse__')
+    expect(form.trusteeSource).toBe('spouse')
   })
 })
 
 describe('commitRealEstateTransferToSheet', () => {
-  it('persists transfer state and enables deed document inclusion', () => {
+  it('persists transfer state and enables deed document inclusion when docs are selected', () => {
     const sheet = baseSheet()
     const form = buildFormStateFromDesignSheet(sheet, matter, contacts)
     form.realtyTrustName = 'Doe Realty Trust'
     form.grantees = [{ id: 'g1', source: 'realty_trust' }]
 
-    const decisions = commitRealEstateTransferToSheet(sheet, form)
+    const decisions = commitRealEstateTransferToSheet(sheet, form, {
+      selectedDocs: ['deed', 'real_estate_trust'],
+    })
     const persisted = getPersistedRealEstateTransfer({ decisions })
     const inclusions = getDocumentInclusions({ ...sheet, decisions })
 
     expect(persisted.realtyTrustName).toBe('Doe Realty Trust')
+    expect(persisted.selectedDocs).toEqual(['deed', 'real_estate_trust'])
     expect(inclusions.deed).toBe(true)
     expect(hasRealEstateTransferData(form)).toBe(true)
     expect(buildTemplateFields(form).trust_name).toBe('Doe Realty Trust')
+  })
+
+  it('clears deed document inclusion when no asset-transfer docs are selected', () => {
+    const sheet = baseSheet()
+    const form = buildFormStateFromDesignSheet(sheet, matter, contacts)
+    form.realtyTrustName = 'Doe Realty Trust'
+
+    const decisions = commitRealEstateTransferToSheet(sheet, form, { selectedDocs: [] })
+    const inclusions = getDocumentInclusions({ ...sheet, decisions })
+    expect(inclusions.deed).toBe(false)
   })
 })

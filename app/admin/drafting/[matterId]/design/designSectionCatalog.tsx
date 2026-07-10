@@ -169,6 +169,8 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         onChange={updateField}
         matter={matter}
         contacts={contacts}
+        onAddContact={handleAddContact}
+        onUpdateContact={handleUpdateContact}
       />
     ),
     [DESIGN_SECTION_IDS.attorneyNotes]: () => <GoalsSection sheet={sheet} onChange={updateField} />,
@@ -177,7 +179,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
   const subtitles: Partial<Record<string, string>> = {
     [DESIGN_SECTION_IDS.intakeReview]: 'Client answers (read-only)',
     [DESIGN_SECTION_IDS.estatePlanDesign]: `${selectedDocKeysCount} document${selectedDocKeysCount === 1 ? '' : 's'} selected`,
-    [DESIGN_SECTION_IDS.transfersAssignments]: 'Deed & realty trust',
+    [DESIGN_SECTION_IDS.transfersAssignments]: 'Deed, trustee certificate & realty trust',
   }
 
   const titles: Partial<Record<string, string>> = {

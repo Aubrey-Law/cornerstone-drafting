@@ -79,7 +79,13 @@ function emptyPreserveSlot(template: FiduciaryPickerEntry): FiduciaryPickerEntry
 
 function contactMatchesEntry(contact: ContactRecord, entry: FiduciaryPickerEntry): boolean {
   const cid = typeof entry.contact_id === 'string' ? entry.contact_id : null
-  if (cid && typeof contact.id === 'string' && contact.id === cid) return true
+  if (cid) {
+    // When a contact id is set, only that row is selected — never also match
+    // another person who happens to share the same first/last name.
+    return typeof contact.id === 'string' && contact.id === cid
+  }
+  const hasName = Boolean((entry.first_name ?? '').trim() || (entry.last_name ?? '').trim())
+  if (!hasName) return false
   const norm = (s: string | undefined | null) => (s ?? '').trim().toLowerCase()
   return norm(contact.first_name) === norm(entry.first_name) && norm(contact.last_name) === norm(entry.last_name)
 }

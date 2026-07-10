@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+import { toDateInputValue } from '@/lib/dob'
 import type { DesignSheet, MatterContact } from '@/types/database'
 import {
   getFiduciaryContactDetails,
@@ -266,7 +267,7 @@ export function FiduciaryEditDialog({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Date of Birth (Optional)</Label>
-              <Input type="date" value={form.date_of_birth} onChange={e => setForm(f => ({ ...f, date_of_birth: e.target.value }))} />
+              <Input type="date" value={toDateInputValue(form.date_of_birth)} onChange={e => setForm(f => ({ ...f, date_of_birth: e.target.value }))} />
             </div>
           </div>
 

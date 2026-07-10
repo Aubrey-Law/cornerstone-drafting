@@ -17,7 +17,10 @@ export interface DesignSheetHealthcareProvisions {
   hipaa_include_poa: boolean
   hipaa_include_trustees: boolean
   hipaa_list_fiduciaries_by_name: HipaaFiduciaryListing | null
+  /** @deprecated Prefer client_hipaa_additional_agent_contact_ids; kept for read/write compat. */
   hipaa_additional_agent_contact_ids: string[]
+  client_hipaa_additional_agent_contact_ids: string[]
+  spouse_hipaa_additional_agent_contact_ids: string[]
 }
 
 const DEFAULT_HEALTHCARE_PROVISIONS: DesignSheetHealthcareProvisions = {
@@ -30,6 +33,8 @@ const DEFAULT_HEALTHCARE_PROVISIONS: DesignSheetHealthcareProvisions = {
   hipaa_include_trustees: false,
   hipaa_list_fiduciaries_by_name: null,
   hipaa_additional_agent_contact_ids: [],
+  client_hipaa_additional_agent_contact_ids: [],
+  spouse_hipaa_additional_agent_contact_ids: [],
 }
 
 function healthcareProvisionsRaw(sheet: Pick<DesignSheet, 'decisions'>): Record<string, unknown> {
@@ -65,6 +70,19 @@ function readHipaaListing(raw: Record<string, unknown>): HipaaFiduciaryListing |
   return null
 }
 
+function readContactIdList(raw: Record<string, unknown>, key: string): string[] {
+  const value = raw[key]
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+}
+
+/** Prefer per-party lists; migrate legacy shared list onto the client side. */
+function readClientHipaaAdditionalAgents(raw: Record<string, unknown>): string[] {
+  if (Array.isArray(raw.client_hipaa_additional_agent_contact_ids)) {
+    return readContactIdList(raw, 'client_hipaa_additional_agent_contact_ids')
+  }
+  return readContactIdList(raw, 'hipaa_additional_agent_contact_ids')
+}
+
 export function anatomicalGiftFromLegacy(value: string | null | undefined): AnatomicalGiftPreference | null {
   if (value === 'all') return 'yes'
   if (value === 'none') return 'no'
@@ -94,9 +112,10 @@ export function getDesignSheetHealthcareProvisions(
     hipaa_include_poa: readBoolean(raw, 'hipaa_include_poa', DEFAULT_HEALTHCARE_PROVISIONS.hipaa_include_poa),
     hipaa_include_trustees: readBoolean(raw, 'hipaa_include_trustees', DEFAULT_HEALTHCARE_PROVISIONS.hipaa_include_trustees),
     hipaa_list_fiduciaries_by_name: readHipaaListing(raw),
-    hipaa_additional_agent_contact_ids: Array.isArray(raw.hipaa_additional_agent_contact_ids)
-      ? raw.hipaa_additional_agent_contact_ids.filter((v): v is string => typeof v === 'string')
-      : [],
+    client_hipaa_additional_agent_contact_ids: readClientHipaaAdditionalAgents(raw),
+    spouse_hipaa_additional_agent_contact_ids: readContactIdList(raw, 'spouse_hipaa_additional_agent_contact_ids'),
+    // Mirror client list for callers still reading the legacy key.
+    hipaa_additional_agent_contact_ids: readClientHipaaAdditionalAgents(raw),
   }
 }
 
@@ -106,12 +125,25 @@ export function setDesignSheetHealthcareProvisions(
 ) {
   const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
   const current = getDesignSheetHealthcareProvisions(sheet)
+  const next: DesignSheetHealthcareProvisions = {
+    ...current,
+    ...patch,
+  }
+
+  // Keep legacy key in sync with the client list so older readers stay correct.
+  if (
+    patch.client_hipaa_additional_agent_contact_ids !== undefined
+    || patch.hipaa_additional_agent_contact_ids !== undefined
+  ) {
+    const clientIds = patch.client_hipaa_additional_agent_contact_ids
+      ?? patch.hipaa_additional_agent_contact_ids
+      ?? next.client_hipaa_additional_agent_contact_ids
+    next.client_hipaa_additional_agent_contact_ids = clientIds
+    next.hipaa_additional_agent_contact_ids = clientIds
+  }
 
   return {
     ...decisions,
-    healthcare_provisions: {
-      ...current,
-      ...patch,
-    },
+    healthcare_provisions: next,
   }
 }

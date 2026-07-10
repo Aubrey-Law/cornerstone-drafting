@@ -173,14 +173,51 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
     onChange('decisions', setDesignSheetHealthcareProvisions(sheet, patch))
   }
 
-  const toggleHipaaAgent = (contactId: string) => {
-    const current = new Set(provisions.hipaa_additional_agent_contact_ids)
+  const toggleHipaaAgent = (
+    party: 'client' | 'spouse',
+    contactId: string,
+  ) => {
+    const key = party === 'client'
+      ? 'client_hipaa_additional_agent_contact_ids'
+      : 'spouse_hipaa_additional_agent_contact_ids'
+    const current = new Set(provisions[key])
     if (current.has(contactId)) current.delete(contactId)
     else current.add(contactId)
-    updateProvisions({ hipaa_additional_agent_contact_ids: Array.from(current) })
+    updateProvisions({ [key]: Array.from(current) })
   }
 
   if (!inclusions.healthcare) return null
+
+  const renderAdditionalHipaaAgents = (
+    title: string,
+    description: string,
+    selectedIds: string[],
+    party: 'client' | 'spouse',
+  ) => (
+    <SectionBlock title={title}>
+      <p className="mb-4 text-sm text-muted-foreground">{description}</p>
+      <div className="space-y-2">
+        {contacts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No contacts available. Add contacts in the Contacts section.</p>
+        ) : (
+          contacts.map(contact => {
+            const name = `${contact.first_name} ${contact.last_name}`.trim()
+            const selected = selectedIds.includes(contact.id)
+            return (
+              <label key={contact.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => toggleHipaaAgent(party, contact.id)}
+                />
+                <span className="text-sm text-foreground">{name}</span>
+              </label>
+            )
+          })
+        )}
+      </div>
+    </SectionBlock>
+  )
 
   return (
     <div>
@@ -292,31 +329,29 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
         </div>
       </SectionBlock>
 
-      <SectionBlock title="Additional HIPAA Agents">
-        <p className="mb-4 text-sm text-muted-foreground">
-          Select individuals who may access {settlorLabel}&apos;s medical information. Any trustees (if applicable), healthcare agents, and attorneys-in-fact (if checked above) will already be included, so you do not have to select them here.
-        </p>
-        <div className="space-y-2">
-          {contacts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No contacts available. Add contacts in the Contacts section.</p>
-          ) : (
-            contacts.map(contact => {
-              const name = `${contact.first_name} ${contact.last_name}`.trim()
-              const selected = provisions.hipaa_additional_agent_contact_ids.includes(contact.id)
-              return (
-                <label key={contact.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleHipaaAgent(contact.id)}
-                  />
-                  <span className="text-sm text-foreground">{name}</span>
-                </label>
-              )
-            })
+      {spouseDocs ? (
+        <>
+          {renderAdditionalHipaaAgents(
+            `${clientFirst || 'Client'}'s Additional HIPAA Agents`,
+            `Select individuals who may access ${(clientFirst || 'the client')}'s medical information. Any trustees (if applicable), healthcare agents, and attorneys-in-fact (if checked above) will already be included, so you do not have to select them here.`,
+            provisions.client_hipaa_additional_agent_contact_ids,
+            'client',
           )}
-        </div>
-      </SectionBlock>
+          {renderAdditionalHipaaAgents(
+            `${spouseFirst || 'Spouse'}'s Additional HIPAA Agents`,
+            `Select individuals who may access ${(spouseFirst || 'the spouse')}'s medical information. Any trustees (if applicable), healthcare agents, and attorneys-in-fact (if checked above) will already be included, so you do not have to select them here.`,
+            provisions.spouse_hipaa_additional_agent_contact_ids,
+            'spouse',
+          )}
+        </>
+      ) : (
+        renderAdditionalHipaaAgents(
+          'Additional HIPAA Agents',
+          `Select individuals who may access ${settlorLabel}'s medical information. Any trustees (if applicable), healthcare agents, and attorneys-in-fact (if checked above) will already be included, so you do not have to select them here.`,
+          provisions.client_hipaa_additional_agent_contact_ids,
+          'client',
+        )
+      )}
 
       <AdvanceDirectiveBlock
         title={`${clientFirst || 'Client'}'s Advance Health Directive`}

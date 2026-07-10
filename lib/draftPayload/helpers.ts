@@ -1,13 +1,13 @@
-import type { DesignSheetChild } from '@/types/database'
 import {
-  getDocumentInclusions,
-  getTrustPlanningType,
+  getEstatePlanDesignSetup,
   type DesignDocumentInclusions,
+  type EstatePlanDesignSetup,
   type TrustPlanningType,
 } from '@/lib/designSheetDocumentInclusions'
-import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
+import { getPersistedRealEstateTransfer } from '@/lib/designSheetRealEstateTransfer'
+import { normalizePracticeArea } from '@/lib/practiceArea'
 import type { DraftPayload } from '@/lib/draftPayload/types'
-import type { ClientIntakeRow, ContactRow, DesignSheetRow, FiduciarySlotRow, MatterDetailsRow } from '@/lib/draftPayload/types'
+import type { ContactRow, DesignSheetRow, FiduciarySlotRow } from '@/lib/draftPayload/types'
 
 const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
 const SPOUSE_PRIMARY_CONTACT_ID = '__design_sheet_spouse__'
@@ -427,6 +427,18 @@ export function buildFiduciariesFromDesignSheet(
   return applyLegacyDesignSheetFiduciaries(fromSlots, designSheet)
 }
 
+/**
+ * Estate-planning practice areas drive draft packages. Missing/blank practice
+ * area normalizes to EP (see normalizePracticeArea) so a matter that is already
+ * in the design/draft flow still gets trust/will/DPOA/HCP packages — previously
+ * a null practice_area made isEP false and preflight only listed parental
+ * appointment (ungated) + estate-plan-summary.
+ */
+export function isEstatePlanningPracticeArea(practiceArea: string | null | undefined): boolean {
+  const normalized = normalizePracticeArea(practiceArea)
+  return normalized === 'EP' || normalized === 'EP-LP'
+}
+
 export function deriveDocuments(
   practiceArea: string | null,
   ancillaryDocs: string[],
@@ -436,29 +448,72 @@ export function deriveDocuments(
   planType: string | null,
   inclusions: DesignDocumentInclusions,
   trustPlanningType: TrustPlanningType,
+  estatePlanSetup?: EstatePlanDesignSetup,
+  assetTransferDocs?: ReadonlyArray<'deed' | 'trustees_certificate' | 'real_estate_trust'>,
 ): DraftPayload['documents'] {
-  const isEP = practiceArea != null &&
-    (practiceArea.toUpperCase().includes('EP') || practiceArea.toLowerCase().includes('estate'))
+  const isEP = isEstatePlanningPracticeArea(practiceArea)
+  const setup = estatePlanSetup ?? {
+    trust: inclusions.trust,
+    will: inclusions.will,
+    power_of_attorney: inclusions.dpoa,
+    health_care_proxy: inclusions.healthcare,
+    hipaa_authorization: inclusions.healthcare,
+    living_will: inclusions.healthcare,
+    will_title: inclusions.trust ? 'pour_over_will' as const : 'last_will' as const,
+    signing_type: 'undecided' as const,
+    ancillary_documents: {
+      certificate_of_trust: inclusions.trust,
+      assignment_of_personal_property: inclusions.trust,
+      funding_instructions: inclusions.trust,
+      funding_recommendation: inclusions.trust,
+      trust_summary: inclusions.trust,
+      estate_plan_summary: true,
+      estate_plan_signing_guide: true,
+      successor_trustee_checklist: inclusions.trust,
+      fiduciary_role_guide: true,
+      flowchart: false,
+      include_asset_spreadsheet: false,
+    },
+  }
 
   const isPourOver = planType === 'pour_over'
   const isOutright = planType === 'outright_will'
   const isTestamentary = planType === 'testamentary_trust'
-  const includeTrust = isPourOver && inclusions.trust  // RLT only ships with pour-over
+  const includeTrust = isPourOver && setup.trust  // RLT only ships with pour-over
+  const selectedAssetDocs = new Set(assetTransferDocs ?? [])
 
   return {
     include_trust:                  isEP && includeTrust,
-    include_pour_over_will:         isEP && inclusions.will && isPourOver,
-    include_simple_will:            isEP && inclusions.will && isOutright,
-    include_testamentary_trust_will: isEP && inclusions.will && isTestamentary,
-    include_dpoa:                   isEP && inclusions.dpoa,
-    include_hcp:                    isEP && inclusions.healthcare,
-    include_hipaa:                  isEP && inclusions.healthcare,
-    include_ahd:                    isEP && inclusions.healthcare,
-    include_ppm:                    isEP && inclusions.will,
-    include_parental_appointment:   hasMinorChildren || ancillaryDocs.includes('parental_appointment'),
-    include_temp_delegation:        hasMinorChildren,
+    include_pour_over_will:         isEP && setup.will && isPourOver,
+    include_simple_will:            isEP && setup.will && isOutright,
+    include_testamentary_trust_will: isEP && setup.will && isTestamentary,
+    include_dpoa:                   isEP && setup.power_of_attorney,
+    include_hcp:                    isEP && setup.health_care_proxy,
+    include_hipaa:                  isEP && setup.hipaa_authorization,
+    include_ahd:                    isEP && setup.living_will,
+    include_ppm:                    isEP && setup.will,
+    include_parental_appointment:   isEP && (hasMinorChildren || ancillaryDocs.includes('parental_appointment')),
+    include_temp_delegation:        isEP && hasMinorChildren,
     include_young_adult_estate_plan: isEP && hasYoungAdultChild && inclusions.young_adult_estate_plan,
+    include_deed:                   isEP && selectedAssetDocs.has('deed'),
+    include_trustees_certificate:   isEP && selectedAssetDocs.has('trustees_certificate'),
+    include_real_estate_trust:      isEP && selectedAssetDocs.has('real_estate_trust'),
     spouse_docs:                    isMarried && inclusions.spouse_docs,
     trust_planning_type:            trustPlanningType,
   }
+}
+
+/** Resolve asset-transfer doc selections from the design sheet for draft payload / preflight. */
+export function selectedAssetTransferDocsFromSheet(
+  designSheet: Pick<DesignSheetRow, 'decisions'> | null,
+): Array<'deed' | 'trustees_certificate' | 'real_estate_trust'> {
+  if (!designSheet) return []
+  return getPersistedRealEstateTransfer({ decisions: designSheet.decisions ?? null }).selectedDocs
+}
+
+/** Convenience for callers that already have a design-sheet-shaped row. */
+export function estatePlanSetupFromSheet(
+  designSheet: Parameters<typeof getEstatePlanDesignSetup>[0],
+): EstatePlanDesignSetup {
+  return getEstatePlanDesignSetup(designSheet)
 }

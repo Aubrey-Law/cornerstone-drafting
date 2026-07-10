@@ -1,8 +1,19 @@
 import type { DesignSheet, DesignSheetUpdate } from '@/types/database'
+import { toDateInputValue } from '@/lib/dob'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
 
 const SYSTEM_COLUMNS = new Set(['id', 'matter_id', 'client_intake_id', 'created_at', 'updated_at'])
 const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
+
+/** Postgres `date` columns — empty / non-ISO strings must become null or the update fails. */
+const DATE_DESIGN_SHEET_COLUMNS = new Set([
+  'client_dob',
+  'spouse_dob',
+  'marriage_date',
+  'doc_date',
+  'signing_date',
+  'notary_commission_expiration',
+])
 
 // jsonb fields that must always inflate to an array. A few legacy rows have a
 // `{}` default stored instead of `[]`, which would crash `.some`/`.map` callers
@@ -73,6 +84,12 @@ const INTAKE_MIRROR_DESIGN_SHEET_COLUMNS = [
   'overrides',
 ] as const
 
+/**
+ * Columns that exist on the Cornerstone Lite `design_sheets` table.
+ * Anything else is stored under `decisions` jsonb (see buildDesignSheetPersistencePayload).
+ * Do NOT list aubrey-law-app-only columns here — PostgREST rejects unknown columns and
+ * the client surfaces "Unable to save design sheet after several attempts".
+ */
 const WRITABLE_DESIGN_SHEET_COLUMNS = new Set([
   ...INTAKE_MIRROR_DESIGN_SHEET_COLUMNS,
   'version',
@@ -81,8 +98,6 @@ const WRITABLE_DESIGN_SHEET_COLUMNS = new Set([
   'real_property_transfer',
   'trust_name',
   'trust_type',
-  'client2_trust_name',
-  'original_trust_date',
   'restatement',
   'trust_protector',
   'marital_trust_type',
@@ -101,11 +116,6 @@ const WRITABLE_DESIGN_SHEET_COLUMNS = new Set([
   'notary_commission',
   'flags',
   'drafting_notes',
-  'lawmatics_prospect_id',
-  'lawmatics_matter_id',
-  'lawmatics_synced_at',
-  'created_by',
-  'updated_by',
   'decisions',
   'fiduciary_slot_states',
   'goals_notes',
@@ -113,29 +123,15 @@ const WRITABLE_DESIGN_SHEET_COLUMNS = new Set([
   'assets',
   'is_joint',
   'spouse_trust_name',
-  'include_child_gender_markers',
-  'omissions_intentional',
-  'disinherited_children',
-  'disinherit_issue',
-  'additional_disinheritance_language',
-  'include_additional_beneficiaries',
   'disinheritances',
-  'stagger_age_1',
-  'stagger_pct_1',
-  'stagger_age_2',
-  'stagger_pct_2',
-  'stagger_age_3',
-  'tangible_property_distribution',
-  'tangible_property_named_individual',
-  'include_common_disaster',
-  'include_guardians_allowance',
-  'beneficiary_as_cotrustee',
-  'beneficiary_as_sole_trustee',
   'remote_beneficiary',
-  'provision_lifestyle_disability',
-  'provision_substance_abuse',
-  'provision_married_beneficiary',
-  // Universal additions
+  'remote_beneficiary_individuals',
+  'remote_beneficiary_charities',
+  'residual_beneficiary_individuals',
+  'staggered_distributions',
+  'distribution_method',
+  'distribution_age',
+  // Universal additions present on lite
   'client_aka',
   'client_pronouns',
   'spouse_pronouns',
@@ -146,47 +142,26 @@ const WRITABLE_DESIGN_SHEET_COLUMNS = new Set([
   'signing_year',
   'signing_county',
   'notary_commission_expiration',
-  // DPOA
-  'dpoa_coagent_manner',
-  'dpoa_include_self_dealing',
-  'dpoa_self_dealing_reviewer',
-  'dpoa_self_dealing_reviewer_alt',
-  'dpoa_include_section_l',
-  // HCP
-  'hcp_anatomical_gift',
-  'hcp_anatomical_specified',
-  // HIPAA
-  'hipaa_psychotherapy_notes',
-  // Will common
   'specific_bequests',
-  'pet_care_option',
-  'pet_care_details',
-  'pr_structure',
-  'bond',
-  'supervision',
-  'simultaneous_death',
-  'utma_age',
-  'no_contest_clause',
-  'include_disclaimer_article',
-  'include_self_proving_affidavit',
   'excluded_guardian_flag',
   'excluded_guardian_name',
-  // Pour-Over
-  'trust_date',
-  'pour_over_alternate_disposition',
-  'pour_over_alternate_named',
-  // Outright
-  'outright_residuary',
-  'outright_residuary_named',
-  'outright_residuary_alternate',
-  // Testamentary trust
-  'trustee_structure',
-  'cotrustee_decision_standard',
-  'beneficiary_structure',
-  'single_beneficiary_name',
-  'single_beneficiary_remainder',
-  'age_distribution_schedule',
-  'trust_protector_name',
+  // Slot / co-fiduciary columns on lite baseline + intake migrations
+  'temporary_guardian_slots',
+  'spouse_trustee_slots',
+  'trustee_co',
+  'trustee_alt1_co',
+  'trustee_alt2',
+  'executor_co',
+  'executor_alt1_co',
+  'executor_same_as_trustee',
+  'spouse_executor_same_as_trustee',
+  'poa_co',
+  'poa_same_as_trustee',
+  'hcp_co',
+  'hcp_alt1_co',
+  'guardian_co',
+  'guardian_alt1_co',
+  'intake_review_flags',
 ])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -199,6 +174,13 @@ function normalizeColumnValue(key: string, value: unknown) {
   }
   if (key === 'fiduciary_slot_states' && value == null) {
     return {}
+  }
+  if (DATE_DESIGN_SHEET_COLUMNS.has(key)) {
+    if (value == null || value === '') return null
+    if (typeof value === 'string') {
+      const normalized = toDateInputValue(value)
+      return normalized || null
+    }
   }
   return value
 }
@@ -243,7 +225,14 @@ export function inflateDesignSheetRow(row: Record<string, unknown> | null): Desi
     if (RETIRED_DESIGN_SHEET_KEYS.has(key)) continue
 
     if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
-      sheet[key] ??= value
+      const current = sheet[key]
+      // Prefer decisions when the column is null/empty but decisions has real data
+      // (fields that previously fell through to decisions before being added to WRITABLE).
+      const currentEmptyArray = Array.isArray(current) && current.length === 0
+      const decisionNonEmptyArray = Array.isArray(value) && value.length > 0
+      if (current == null || current === '' || (currentEmptyArray && decisionNonEmptyArray)) {
+        sheet[key] = value
+      }
     } else {
       sheet[key] = value
     }

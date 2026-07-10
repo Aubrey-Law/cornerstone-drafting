@@ -3,7 +3,7 @@
 import { createContext, forwardRef, useContext, useImperativeHandle, useRef } from 'react'
 import { CircleAlert as AlertCircle, CircleHelp as HelpCircle, TriangleAlert as AlertTriangle, Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { formatAgeLabel } from '@/lib/dob'
+import { formatAgeLabel, toDateInputValue } from '@/lib/dob'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -229,6 +229,7 @@ export function PrefilledInput({ label, value, originalValue, onChange, type = '
 }) {
   const isOverride = originalValue !== undefined
   const { showError, onBlur } = useFieldValidation(fieldName)
+  const inputValue = type === 'date' ? toDateInputValue(value) : value
   return (
     <div>
       <FieldLabel>{label}</FieldLabel>
@@ -237,7 +238,7 @@ export function PrefilledInput({ label, value, originalValue, onChange, type = '
           id={fieldId(fieldName)}
           data-design-field={fieldName ? String(fieldName) : undefined}
           type={type}
-          value={value}
+          value={inputValue}
           onChange={e => onChange?.(e.target.value)}
           onBlur={onBlur}
           className={cn(
@@ -365,22 +366,25 @@ export function PrefilledSelect({ label, value, originalValue, options, onChange
   )
 }
 
-export function AttorneyInput({ label, value, placeholder, onChange, fieldName }: {
+export function AttorneyInput({ label, value, placeholder, onChange, fieldName, type = 'text' }: {
   label: string
   value: string
   placeholder?: string
   onChange?: (v: string) => void
   fieldName?: keyof DesignSheet | string
+  type?: string
 }) {
   const { showError, onBlur } = useFieldValidation(fieldName)
+  const inputValue = type === 'date' ? toDateInputValue(value) : value
   return (
     <div>
       <FieldLabel>{label}</FieldLabel>
       <Input
         id={fieldId(fieldName)}
         data-design-field={fieldName ? String(fieldName) : undefined}
-        value={value}
-        placeholder={placeholder}
+        type={type}
+        value={inputValue}
+        placeholder={type === 'date' ? undefined : placeholder}
         onChange={e => onChange?.(e.target.value)}
         onBlur={onBlur}
         className={cn(
@@ -390,6 +394,29 @@ export function AttorneyInput({ label, value, placeholder, onChange, fieldName }
       />
       {showError && <RequiredForDraftingNote />}
     </div>
+  )
+}
+
+/** Attorney-only date field using the native date picker (`YYYY-MM-DD` storage). */
+export function AttorneyDateInput({
+  label,
+  value,
+  onChange,
+  fieldName,
+}: {
+  label: string
+  value: string
+  onChange?: (v: string) => void
+  fieldName?: keyof DesignSheet | string
+}) {
+  return (
+    <AttorneyInput
+      label={label}
+      value={value}
+      onChange={onChange}
+      fieldName={fieldName}
+      type="date"
+    />
   )
 }
 

@@ -237,6 +237,39 @@ describe('design sheet persistence import safety', () => {
     })
   })
 
+  it('stores lite-missing template fields in decisions (not as unknown columns)', () => {
+    const payload = buildDesignSheetPersistencePayload({
+      client_name: 'Jane Doe',
+      hipaa_psychotherapy_notes: 'authorize',
+      dpoa_coagent_manner: 'independently',
+      pour_over_alternate_disposition: 'named',
+      temporary_guardian_slots: [{ id: 'tg-1', contact_id: 'c-1', is_co: false, order: 0 }],
+    } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
+
+    expect(payload.hipaa_psychotherapy_notes).toBeUndefined()
+    expect(payload.dpoa_coagent_manner).toBeUndefined()
+    expect(payload.pour_over_alternate_disposition).toBeUndefined()
+    expect(payload.temporary_guardian_slots).toEqual([
+      { id: 'tg-1', contact_id: 'c-1', is_co: false, order: 0 },
+    ])
+    expect(payload.decisions).toMatchObject({
+      hipaa_psychotherapy_notes: 'authorize',
+      dpoa_coagent_manner: 'independently',
+      pour_over_alternate_disposition: 'named',
+    })
+  })
+
+  it('normalizes non-ISO date strings before writing date columns', () => {
+    const payload = buildDesignSheetPersistencePayload({
+      client_name: 'Jane Doe',
+      notary_commission_expiration: '07/15/2027',
+      signing_date: '',
+    } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
+
+    expect(payload.notary_commission_expiration).toBe('2027-07-15')
+    expect(payload.signing_date).toBeNull()
+  })
+
   it('persists client pronouns as a writable design-sheet column (#292 re-added them)', () => {
     const payload = buildDesignSheetPersistencePayload({
       client_name: 'Jane Doe',

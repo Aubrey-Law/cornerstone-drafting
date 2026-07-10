@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import {
+  AttorneyDateInput,
   AttorneyInput,
   AttorneyNoteBanner,
   AttorneySelect,
@@ -270,10 +271,9 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
       {(scope === 'all' || scope === 'will') && isPourOver && (
         <SectionBlock title="Pour-Over Will Specifics">
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <AttorneyInput
+            <AttorneyDateInput
               label="Trust Date"
               value={sheet.trust_date ?? ''}
-              placeholder="MM/DD/YYYY"
               onChange={v => onChange('trust_date', v || null)}
             />
             <AttorneySelect
