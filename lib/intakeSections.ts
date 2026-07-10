@@ -195,10 +195,12 @@ export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIss
       if (!text(data, 'city')) issues.push(issue('Enter your city.'))
       if (!text(data, 'state')) issues.push(issue('Enter your state.'))
       if (!text(data, 'zip')) issues.push(issue('Enter your ZIP code.'))
-      if (!text(data, 'county')) issues.push(issue('Select your Massachusetts county.', 'warning'))
-      else {
+      if (!text(data, 'date_of_birth')) issues.push(issue('Enter your date of birth.'))
+      if (!text(data, 'county')) {
+        issues.push(issue('Select your Massachusetts county.'))
+      } else {
         const countyError = validateIntakeField('county', data.county)
-        if (countyError) issues.push(issue(countyError, 'warning'))
+        if (countyError) issues.push(issue(countyError))
       }
       return issues
     }
@@ -225,12 +227,15 @@ export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIss
     case 'children': {
       const children = getChildren(data)
       if (children.length === 0) return [issue('Add at least one child.')]
+      const requireDob = data.has_minor_children === true
       return children.flatMap((child, index) => {
         const childIssues: IntakeSectionIssue[] = []
         if (!recordText(child, 'first_name') || !recordText(child, 'last_name')) {
           childIssues.push(issue(`Enter first and last name for child ${index + 1}.`))
         }
-        if (!recordText(child, 'date_of_birth')) {
+        if (requireDob && !recordText(child, 'date_of_birth')) {
+          childIssues.push(issue(`Enter date of birth for child ${index + 1}.`))
+        } else if (!requireDob && !recordText(child, 'date_of_birth')) {
           childIssues.push(issue(`Enter date of birth for child ${index + 1}.`, 'warning'))
         }
         return childIssues
@@ -272,7 +277,14 @@ export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIss
       ]
     }
     case 'guardian':
-      return requiredFiduciaryIssue(data, 'fid_guardian_client', 'Name a guardian if you know who you want, or leave this blank to discuss later.', 'warning')
+      return requiredFiduciaryIssue(
+        data,
+        'fid_guardian_client',
+        data.has_minor_children === true
+          ? 'Name a guardian for your minor children.'
+          : 'Name a guardian if you know who you want, or leave this blank to discuss later.',
+        data.has_minor_children === true ? 'error' : 'warning',
+      )
     default:
       return []
   }

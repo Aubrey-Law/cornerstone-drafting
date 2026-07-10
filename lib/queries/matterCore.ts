@@ -3,7 +3,8 @@ import { inflateDesignSheetRow } from '@/lib/designSheetPersistence'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import { loadHouseholdChildren } from '@/lib/contacts/loadHouseholdChildren'
-import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
+import { loadIntakeFiduciarySnapshot } from '@/lib/contacts/intakeFiduciarySnapshot'
+import type { PipelineMatter, DesignSheet, MatterContact, DesignSheetChild, FiduciarySlot } from '@/types/database'
 
 function normalizeFlags(m: PipelineMatter): PipelineMatter {
   const raw = m.flags as unknown
@@ -112,6 +113,8 @@ export interface IntakeSnapshot {
   county: string | null
   marital_status: string | null
   preferred_pronoun: string | null
+  prior_names: string | null
+  is_us_citizen: boolean | null
   spouse_first_name: string | null
   spouse_middle_name: string | null
   spouse_last_name: string | null
@@ -119,12 +122,16 @@ export interface IntakeSnapshot {
   spouse_phone: string | null
   spouse_email: string | null
   spouse_preferred_pronoun: string | null
+  spouse_prior_names: string | null
+  spouse_is_us_citizen: boolean | null
   date_of_marriage: string | null
-  children: Array<{ name: string; date_of_birth: string | null; relationship: string }> | null
+  children: DesignSheetChild[] | null
   has_minor_children: boolean | null
+  planning_goals: string[] | null
   planning_objectives: string | null
   special_circumstances: string[] | null
   special_notes: string | null
+  excluded_guardian: string | null
   has_will: boolean | null
   has_trust: boolean | null
   has_poa: boolean | null
@@ -150,6 +157,14 @@ export interface IntakeSnapshot {
   hcp_alternate: string | null
   guardian_primary: string | null
   guardian_alternate: string | null
+  trustee_slots: FiduciarySlot[] | null
+  executor_slots: FiduciarySlot[] | null
+  poa_slots: FiduciarySlot[] | null
+  hcp_slots: FiduciarySlot[] | null
+  guardian_slots: FiduciarySlot[] | null
+  spouse_executor_slots: FiduciarySlot[] | null
+  spouse_poa_slots: FiduciarySlot[] | null
+  spouse_hcp_slots: FiduciarySlot[] | null
   goals_extended: { primaryGoals: string[]; specialConsiderations: string; wishesAndConcerns: string } | null
   real_estate_extended: Array<{ address: string; ownership: string; estimatedValue: string; hasMortgage: boolean }> | null
   financial_accounts: Array<{ institution: string; accountType: string; approximateValue: string }> | null
@@ -168,7 +183,27 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
 
   let ai: Record<string, unknown> = {}
   let spouse: Awaited<ReturnType<typeof loadSpouseContact>> = null
-  let householdChildren: Awaited<ReturnType<typeof loadHouseholdChildren>> = []
+  let householdChildren: DesignSheetChild[] = []
+  let fiduciary = {
+    trustee_primary: null as string | null,
+    trustee_alternate: null as string | null,
+    executor_primary: null as string | null,
+    executor_alternate: null as string | null,
+    poa_primary: null as string | null,
+    poa_alternate: null as string | null,
+    hcp_primary: null as string | null,
+    hcp_alternate: null as string | null,
+    guardian_primary: null as string | null,
+    guardian_alternate: null as string | null,
+    trustee_slots: null as FiduciarySlot[] | null,
+    executor_slots: null as FiduciarySlot[] | null,
+    poa_slots: null as FiduciarySlot[] | null,
+    hcp_slots: null as FiduciarySlot[] | null,
+    guardian_slots: null as FiduciarySlot[] | null,
+    spouse_executor_slots: null as FiduciarySlot[] | null,
+    spouse_poa_slots: null as FiduciarySlot[] | null,
+    spouse_hcp_slots: null as FiduciarySlot[] | null,
+  }
   if (clientIntakeId) {
     const [{ data }, spouseContact, childContacts] = await Promise.all([
       admin.from('client_intake').select('*').eq('id', clientIntakeId).maybeSingle(),
@@ -178,6 +213,7 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     if (data) ai = data as Record<string, unknown>
     spouse = spouseContact
     householdChildren = childContacts
+    fiduciary = await loadIntakeFiduciarySnapshot(admin, clientIntakeId, ai)
   }
 
   let ext: Record<string, unknown> = {}
@@ -194,13 +230,12 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
 
   const fd = (ai.financial_details ?? {}) as Record<string, unknown>
 
-  const children = householdChildren.length
-    ? householdChildren.map(c => ({
-        name: c.name,
-        date_of_birth: c.dob,
-        relationship: c.relationship,
-      }))
+  const planningGoalsRaw = ai.planning_goals
+  const planningGoals = Array.isArray(planningGoalsRaw)
+    ? planningGoalsRaw.filter((g): g is string => typeof g === 'string')
     : null
+
+  const children = householdChildren.length ? householdChildren : null
 
   return {
     first_name: (ai.first_name as string) || null,
@@ -217,6 +252,8 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     county: (ai.county as string) || null,
     marital_status: (ai.marital_status as string) || null,
     preferred_pronoun: (ai.preferred_pronoun as string) || null,
+    prior_names: (ai.prior_names as string) || null,
+    is_us_citizen: (ai.is_us_citizen as boolean) ?? null,
     spouse_first_name: spouse?.first_name || null,
     spouse_middle_name: spouse?.middle_name || null,
     spouse_last_name: spouse?.last_name || null,
@@ -224,12 +261,16 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     spouse_phone: formatPhoneDisplay(spouse?.phone ?? '') || null,
     spouse_email: spouse?.email || null,
     spouse_preferred_pronoun: spouse?.preferred_pronoun || null,
+    spouse_prior_names: spouse?.prior_names || null,
+    spouse_is_us_citizen: spouse?.is_us_citizen ?? null,
     date_of_marriage: (ai.date_of_marriage as string) || null,
-    children: children?.length ? children : null,
+    children,
     has_minor_children: (ai.has_minor_children as boolean) ?? null,
+    planning_goals: planningGoals?.length ? planningGoals : null,
     planning_objectives: (ai.planning_objectives as string) || null,
     special_circumstances: (ai.special_circumstances as string[]) || null,
     special_notes: (ai.special_notes as string) || null,
+    excluded_guardian: (ai.excluded_guardian as string) || null,
     has_will: (ai.has_will as boolean) ?? null,
     has_trust: (ai.has_trust as boolean) ?? null,
     has_poa: (ai.has_poa as boolean) ?? null,
@@ -245,16 +286,24 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     has_business: (ai.has_business as boolean) ?? null,
     business_description: (fd.business_description as string) || (ai.business_description as string) || null,
     has_investments: (ai.has_investments as boolean) ?? null,
-    trustee_primary: (ai.trustee_primary as string) || null,
-    trustee_alternate: (ai.trustee_alternate as string) || null,
-    executor_primary: (ai.executor_primary as string) || null,
-    executor_alternate: (ai.executor_alternate as string) || null,
-    poa_primary: (ai.poa_primary as string) || null,
-    poa_alternate: (ai.poa_alternate as string) || null,
-    hcp_primary: (ai.hcp_primary as string) || null,
-    hcp_alternate: (ai.hcp_alternate as string) || null,
-    guardian_primary: (ai.guardian_primary as string) || null,
-    guardian_alternate: (ai.guardian_alternate as string) || null,
+    trustee_primary: fiduciary.trustee_primary,
+    trustee_alternate: fiduciary.trustee_alternate,
+    executor_primary: fiduciary.executor_primary,
+    executor_alternate: fiduciary.executor_alternate,
+    poa_primary: fiduciary.poa_primary,
+    poa_alternate: fiduciary.poa_alternate,
+    hcp_primary: fiduciary.hcp_primary,
+    hcp_alternate: fiduciary.hcp_alternate,
+    guardian_primary: fiduciary.guardian_primary,
+    guardian_alternate: fiduciary.guardian_alternate,
+    trustee_slots: fiduciary.trustee_slots,
+    executor_slots: fiduciary.executor_slots,
+    poa_slots: fiduciary.poa_slots,
+    hcp_slots: fiduciary.hcp_slots,
+    guardian_slots: fiduciary.guardian_slots,
+    spouse_executor_slots: fiduciary.spouse_executor_slots,
+    spouse_poa_slots: fiduciary.spouse_poa_slots,
+    spouse_hcp_slots: fiduciary.spouse_hcp_slots,
     goals_extended: (ext.goals as IntakeSnapshot['goals_extended']) ?? null,
     real_estate_extended: (ext.realEstate as IntakeSnapshot['real_estate_extended']) ?? null,
     financial_accounts: (ext.financialAccounts as IntakeSnapshot['financial_accounts']) ?? null,

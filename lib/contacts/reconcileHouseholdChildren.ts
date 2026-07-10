@@ -26,12 +26,17 @@ export async function reconcileHouseholdChildren(
       .map((c) => [c.contact_id as string, c]),
   )
 
+  const childContext = {
+    clientFirstName: household.self.first_name,
+    spouseFirstName: household.spouse?.first_name ?? null,
+  }
+
   const inputs = incoming.map((c) => {
     const cid = typeof c.contact_id === 'string' ? c.contact_id : null
     const existing =
       (cid ? existingById.get(cid) : undefined) ??
       existingByName.get(contactKey(c.first_name, c.last_name))
-    return mergeChildInput(c, existing)
+    return mergeChildInput(c, existing, childContext)
   })
 
   await saveHouseholdChildren(admin, intakeId, inputs)

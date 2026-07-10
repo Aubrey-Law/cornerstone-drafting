@@ -227,7 +227,7 @@ export function IntakeSection({
               <div key={i} className="rounded-lg border border-border bg-muted/40 p-3">
                 <div className="grid grid-cols-3 gap-x-6">
                   <ReadField label="Name" value={child.name} />
-                  <ReadDobField label="Date of Birth" value={child.date_of_birth} />
+                  <ReadDobField label="Date of Birth" value={child.date_of_birth ?? child.dob} />
                   <ReadField label="Relationship" value={child.relationship} />
                 </div>
               </div>

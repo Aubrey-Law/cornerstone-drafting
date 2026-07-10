@@ -32,6 +32,7 @@ import {
   MA_COUNTY_OPTIONS,
   PLANNING_GOAL_OPTIONS,
   PRONOUN_OPTIONS,
+  CHILD_RELATIONSHIP_OPTIONS,
   REFERRAL_SOURCE_OPTIONS,
   SPECIAL_CIRCUMSTANCE_OPTIONS,
   SUFFIX_OPTIONS,
@@ -715,6 +716,7 @@ export interface ChildEntry {
   phone: string
   same_address: boolean
   parent: string
+  relationship?: string
   [key: string]: unknown
 }
 
@@ -1051,9 +1053,18 @@ export function StepSpouse({ data, update }: StepProps) {
         </FormField>
       </Row2>
       <Row2>
+        <FormField label="Date of Marriage">
+          <TextInput
+            value={(data.date_of_marriage as string) ?? ''}
+            onChange={(v) => update('date_of_marriage', v)}
+            type="date"
+          />
+        </FormField>
         <FormField label="Date of Birth">
           <TextInput value={spouse.date_of_birth ?? ''} onChange={(v) => updateSpouse('date_of_birth', v)} type="date" />
         </FormField>
+      </Row2>
+      <Row2>
         <FormField label="Pronouns">
           <IntakeField
             fieldId="spouse_pronouns"
@@ -1062,6 +1073,7 @@ export function StepSpouse({ data, update }: StepProps) {
             placeholder="Select pronouns"
           />
         </FormField>
+        <div />
       </Row2>
       <ToggleSwitch
         checked={(spouse.is_us_citizen as unknown as boolean) ?? true}
@@ -1106,6 +1118,7 @@ export function StepChildren({ data, update }: StepProps) {
       phone: '',
       same_address: false,
       parent: 'both',
+      relationship: 'biological',
     }])
   }
 
@@ -1153,6 +1166,15 @@ export function StepChildren({ data, update }: StepProps) {
               <FormField label="Date of Birth">
                 <TextInput value={child.date_of_birth} onChange={(v) => updateChild(idx, 'date_of_birth', v)} type="date" />
               </FormField>
+              <FormField label="Relationship">
+                <SelectInput
+                  value={child.relationship ?? 'biological'}
+                  onChange={(v) => updateChild(idx, 'relationship', v)}
+                  options={CHILD_RELATIONSHIP_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                />
+              </FormField>
+            </Row2>
+            <Row2>
               <FormField label="Pronouns">
                 <SelectInput
                   value={child.pronouns ?? ''}
@@ -1161,6 +1183,7 @@ export function StepChildren({ data, update }: StepProps) {
                   options={PRONOUN_OPTIONS}
                 />
               </FormField>
+              <div />
             </Row2>
             <Row2>
               <FormField label="Email">

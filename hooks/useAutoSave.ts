@@ -44,6 +44,11 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
       }
       delete payload.pronouns
 
+      if (payload.prior_name !== undefined && payload.prior_names === undefined) {
+        payload.prior_names = payload.prior_name
+      }
+      delete payload.prior_name
+
       // Pass 2: underscore fields — persist the ones that matter
       for (const [key, value] of Object.entries(data)) {
         if (!key.startsWith('_')) continue
@@ -78,6 +83,9 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
             if (s.middle_name    !== undefined) payload.spouse_middle_name    = s.middle_name
             if (s.suffix         !== undefined) payload.spouse_suffix         = s.suffix
             if (s.prior_names    !== undefined) payload.spouse_prior_names    = s.prior_names
+            if (s.prior_name     !== undefined && s.prior_names === undefined) {
+              payload.spouse_prior_names = s.prior_name
+            }
             if (s.preferred_name !== undefined) payload.spouse_preferred_name = s.preferred_name
             const spousePreferredPronoun =
               s.preferred_pronoun !== undefined ? s.preferred_pronoun : s.pronouns
