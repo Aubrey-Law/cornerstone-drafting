@@ -21,6 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_stage_tasks_open ON public.stage_tasks (status, h
 
 ALTER TABLE public.stage_tasks ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "attorneys_all_stage_tasks" ON public.stage_tasks;
 CREATE POLICY "attorneys_all_stage_tasks"
   ON public.stage_tasks FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('attorney', 'admin')))

@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS asset_intake_client_intake_id_category_idx
 
 ALTER TABLE public.asset_intake ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "clients_read_own_asset_intake" ON public.asset_intake;
 CREATE POLICY "clients_read_own_asset_intake"
   ON public.asset_intake FOR SELECT TO authenticated
   USING (
@@ -28,6 +29,7 @@ CREATE POLICY "clients_read_own_asset_intake"
     )
   );
 
+DROP POLICY IF EXISTS "clients_insert_own_asset_intake" ON public.asset_intake;
 CREATE POLICY "clients_insert_own_asset_intake"
   ON public.asset_intake FOR INSERT TO authenticated
   WITH CHECK (
@@ -38,6 +40,7 @@ CREATE POLICY "clients_insert_own_asset_intake"
     )
   );
 
+DROP POLICY IF EXISTS "clients_update_own_asset_intake" ON public.asset_intake;
 CREATE POLICY "clients_update_own_asset_intake"
   ON public.asset_intake FOR UPDATE TO authenticated
   USING (
@@ -55,6 +58,7 @@ CREATE POLICY "clients_update_own_asset_intake"
     )
   );
 
+DROP POLICY IF EXISTS "clients_delete_own_asset_intake" ON public.asset_intake;
 CREATE POLICY "clients_delete_own_asset_intake"
   ON public.asset_intake FOR DELETE TO authenticated
   USING (
@@ -65,6 +69,7 @@ CREATE POLICY "clients_delete_own_asset_intake"
     )
   );
 
+DROP POLICY IF EXISTS "attorneys_all_asset_intake" ON public.asset_intake;
 CREATE POLICY "attorneys_all_asset_intake"
   ON public.asset_intake FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('attorney', 'admin')))
