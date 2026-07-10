@@ -3,12 +3,13 @@
 import { useMemo, useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Briefcase, Plus, Search, Trash2 } from 'lucide-react'
+import { Briefcase, Plus, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
-import { stageLabel, type PipelineMatter } from '@/types/database'
+import { STAGES, stageLabel } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,8 +32,38 @@ import {
 } from '@/components/ui/select'
 
 interface MattersClientProps {
-  matters: PipelineMatter[]
+  matters: MatterListRow[]
   loadError?: string | null
+}
+
+type MatterFilters = {
+  matterNumber: string
+  clientName: string
+  email: string
+  phone: string
+  practice: string
+  stage: string
+  intake: string
+}
+
+const EMPTY_FILTERS: MatterFilters = {
+  matterNumber: '',
+  clientName: '',
+  email: '',
+  phone: '',
+  practice: 'all',
+  stage: 'all',
+  intake: 'all',
+}
+
+function matchesTextFilter(value: string | null | undefined, filter: string) {
+  const q = filter.trim().toLowerCase()
+  if (!q) return true
+  return (value ?? '').toLowerCase().includes(q)
+}
+
+function intakeStatusLabel(status: string | null | undefined) {
+  return status?.replace(/_/g, ' ') || '—'
 }
 
 export default function MattersClient(props: MattersClientProps) {
@@ -61,13 +92,16 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const token = useAccessToken()
   const router = useRouter()
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<MatterFilters>(EMPTY_FILTERS)
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [planType, setPlanType] = useState<PracticeAreaCode>('EP')
-  const [deleteTarget, setDeleteTarget] = useState<PipelineMatter | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<MatterListRow | null>(null)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
   const [createdMatterId, setCreatedMatterId] = useState<string | null>(null)
@@ -77,25 +111,92 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
     if (searchParams.get('create') === '1') setCreateOpen(true)
   }, [searchParams])
 
+  const intakeStatuses = useMemo(() => {
+    const set = new Set<string>()
+    for (const matter of matters) {
+      if (matter.intake_status) set.add(matter.intake_status)
+    }
+    return Array.from(set).sort()
+  }, [matters])
+
+  const hasActiveFilters = useMemo(() => {
+    return Boolean(
+      search.trim()
+      || filters.matterNumber.trim()
+      || filters.clientName.trim()
+      || filters.email.trim()
+      || filters.phone.trim()
+      || filters.practice !== 'all'
+      || filters.stage !== 'all'
+      || filters.intake !== 'all',
+    )
+  }, [filters, search])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return matters
     return matters.filter(m => {
-      const hay = [
-        m.client_name,
-        m.client_email,
-        m.client_phone,
-        m.matter_name,
-        m.practice_area,
-        m.stage,
-        m.intake_status,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return hay.includes(q)
+      if (q) {
+        const hay = [
+          m.matter_number,
+          m.client_name,
+          m.client_email,
+          m.client_phone,
+          m.matter_name,
+          m.practice_area,
+          m.stage,
+          m.intake_status,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      if (!matchesTextFilter(m.matter_number, filters.matterNumber)) return false
+      if (!matchesTextFilter(m.client_name || m.matter_name, filters.clientName)) return false
+      if (!matchesTextFilter(m.client_email, filters.email)) return false
+      if (!matchesTextFilter(m.client_phone, filters.phone)) return false
+      if (filters.practice !== 'all' && m.practice_area !== filters.practice) return false
+      if (filters.stage !== 'all' && m.stage !== filters.stage) return false
+      if (filters.intake !== 'all' && (m.intake_status ?? '') !== filters.intake) return false
+      return true
     })
-  }, [matters, search])
+  }, [filters, matters, search])
+
+  const selectedIds = useMemo(
+    () => filtered.filter(m => selected[m.matter_id]).map(m => m.matter_id),
+    [filtered, selected],
+  )
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(m => selected[m.matter_id])
+
+  const updateFilter = <K extends keyof MatterFilters>(key: K, value: MatterFilters[K]) => {
+    setFilters(current => ({ ...current, [key]: value }))
+  }
+
+  const clearFilters = () => {
+    setSearch('')
+    setFilters(EMPTY_FILTERS)
+  }
+
+  const toggleAllFiltered = (checked: boolean) => {
+    setSelected(current => {
+      const next = { ...current }
+      for (const matter of filtered) {
+        if (checked) next[matter.matter_id] = true
+        else delete next[matter.matter_id]
+      }
+      return next
+    })
+  }
+
+  const toggleSelected = (matterId: string, checked: boolean) => {
+    setSelected(current => {
+      const next = { ...current }
+      if (checked) next[matterId] = true
+      else delete next[matterId]
+      return next
+    })
+  }
 
   const resetCreateForm = () => {
     setClientName('')
@@ -174,9 +275,50 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
       if (!res.ok) throw new Error(body.error ?? 'Could not delete matter')
       toast.success(`Deleted matter for ${deleteTarget.client_name || 'client'}`)
       setDeleteTarget(null)
+      setSelected(current => {
+        const next = { ...current }
+        delete next[deleteTarget.matter_id]
+        return next
+      })
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not delete matter')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (!token || selectedIds.length === 0) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/admin/matters/bulk-delete', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not delete matters')
+
+      const deleted = typeof body.deleted === 'number' ? body.deleted : selectedIds.length
+      const failed = Array.isArray(body.results)
+        ? body.results.filter((result: { ok?: boolean }) => !result.ok).length
+        : 0
+
+      if (failed > 0) {
+        toast.error(`Deleted ${deleted} matter${deleted === 1 ? '' : 's'}; ${failed} failed`)
+      } else {
+        toast.success(`Deleted ${deleted} matter${deleted === 1 ? '' : 's'}`)
+      }
+
+      setBulkDeleteOpen(false)
+      setSelected({})
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete matters')
     } finally {
       setDeleting(false)
     }
@@ -186,8 +328,8 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
     ? `Could not load matters: ${loadError}`
     : matters.length === 0
       ? 'No matters yet. Create one to get started.'
-      : search.trim()
-        ? 'No matters match your search.'
+      : hasActiveFilters
+        ? 'No matters match the current filters.'
         : 'No matters to show.'
 
   return (
@@ -207,17 +349,51 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
         </div>
       </div>
 
-      <div className="border-b border-border bg-card px-4 py-3 md:px-6">
-        <div className="flex max-w-md items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
-          <Search className="h-3.5 w-3.5 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by client, email, practice area…"
-            className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-            aria-label="Search matters"
-          />
+      <div className="space-y-3 border-b border-border bg-card px-4 py-3 md:px-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex max-w-md min-w-[14rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search all fields…"
+              className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+              aria-label="Search matters"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          )}
         </div>
+        {selectedIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.length} selected
+            </span>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={deleting}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete selected
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
@@ -233,21 +409,125 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             )}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-md border border-border">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="min-w-[72rem] w-full text-left text-xs">
               <thead className="border-b border-border bg-muted/40 text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Client</th>
-                  <th className="hidden px-3 py-2 font-medium sm:table-cell">Email</th>
-                  <th className="hidden px-3 py-2 font-medium md:table-cell">Practice</th>
+                  <th className="w-10 px-3 py-2">
+                    <Checkbox
+                      checked={allFilteredSelected}
+                      onCheckedChange={checked => toggleAllFiltered(checked === true)}
+                      aria-label="Select all visible matters"
+                    />
+                  </th>
+                  <th className="px-3 py-2 font-medium">Matter Number</th>
+                  <th className="px-3 py-2 font-medium">Client Name</th>
+                  <th className="px-3 py-2 font-medium">Email</th>
+                  <th className="px-3 py-2 font-medium">Phone</th>
+                  <th className="px-3 py-2 font-medium">Practice Area</th>
                   <th className="px-3 py-2 font-medium">Stage</th>
-                  <th className="hidden px-3 py-2 font-medium lg:table-cell">Intake</th>
+                  <th className="px-3 py-2 font-medium">Intake</th>
                   <th className="w-10 px-3 py-2" aria-label="Actions" />
+                </tr>
+                <tr className="border-b border-border bg-background">
+                  <th className="px-3 py-2" />
+                  <th className="px-3 py-2">
+                    <input
+                      value={filters.matterNumber}
+                      onChange={e => updateFilter('matterNumber', e.target.value)}
+                      placeholder="Filter"
+                      aria-label="Filter by matter number"
+                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
+                    />
+                  </th>
+                  <th className="px-3 py-2">
+                    <input
+                      value={filters.clientName}
+                      onChange={e => updateFilter('clientName', e.target.value)}
+                      placeholder="Filter"
+                      aria-label="Filter by client name"
+                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
+                    />
+                  </th>
+                  <th className="px-3 py-2">
+                    <input
+                      value={filters.email}
+                      onChange={e => updateFilter('email', e.target.value)}
+                      placeholder="Filter"
+                      aria-label="Filter by email"
+                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
+                    />
+                  </th>
+                  <th className="px-3 py-2">
+                    <input
+                      value={filters.phone}
+                      onChange={e => updateFilter('phone', e.target.value)}
+                      placeholder="Filter"
+                      aria-label="Filter by phone"
+                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
+                    />
+                  </th>
+                  <th className="px-3 py-2">
+                    <select
+                      value={filters.practice}
+                      onChange={e => updateFilter('practice', e.target.value)}
+                      aria-label="Filter by practice area"
+                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    >
+                      <option value="all">All</option>
+                      {PRACTICE_AREA_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-3 py-2">
+                    <select
+                      value={filters.stage}
+                      onChange={e => updateFilter('stage', e.target.value)}
+                      aria-label="Filter by stage"
+                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    >
+                      <option value="all">All</option>
+                      {STAGES.map(stage => (
+                        <option key={stage.key} value={stage.key}>
+                          {stage.label}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-3 py-2">
+                    <select
+                      value={filters.intake}
+                      onChange={e => updateFilter('intake', e.target.value)}
+                      aria-label="Filter by intake status"
+                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    >
+                      <option value="all">All</option>
+                      {intakeStatuses.map(status => (
+                        <option key={status} value={status}>
+                          {intakeStatusLabel(status)}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.matter_id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <td className="px-3 py-2.5">
+                      <Checkbox
+                        checked={Boolean(selected[m.matter_id])}
+                        onCheckedChange={checked => toggleSelected(m.matter_id, checked === true)}
+                        aria-label={`Select matter for ${m.client_name || 'client'}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground">
+                      {m.matter_number || '—'}
+                    </td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
@@ -277,15 +557,18 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                         )}
                       </div>
                     </td>
-                    <td className="hidden px-3 py-2.5 text-muted-foreground sm:table-cell">
+                    <td className="px-3 py-2.5 text-muted-foreground">
                       {m.client_email || '—'}
                     </td>
-                    <td className="hidden px-3 py-2.5 text-muted-foreground md:table-cell">
+                    <td className="px-3 py-2.5 text-muted-foreground">
+                      {m.client_phone || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground">
                       {practiceAreaLabel(m.practice_area)}
                     </td>
                     <td className="px-3 py-2.5">{stageLabel(m.stage)}</td>
-                    <td className="hidden px-3 py-2.5 capitalize text-muted-foreground lg:table-cell">
-                      {m.intake_status?.replace(/_/g, ' ') || '—'}
+                    <td className="px-3 py-2.5 capitalize text-muted-foreground">
+                      {intakeStatusLabel(m.intake_status)}
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <button
@@ -440,6 +723,26 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             </Button>
             <Button type="button" variant="destructive" onClick={() => void handleDelete()} disabled={deleting}>
               {deleting ? 'Deleting…' : 'Delete matter'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={open => !open && setBulkDeleteOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.length} matter{selectedIds.length === 1 ? '' : 's'}?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes the selected matters, including intake, documents, design sheets, and messages.
+              This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBulkDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void handleBulkDelete()} disabled={deleting}>
+              {deleting ? 'Deleting…' : `Delete ${selectedIds.length} matter${selectedIds.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>
