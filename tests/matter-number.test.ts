@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   clientNameMatterSlug,
   formatMatterNumberWithClient,
+  matterNumberPracticeAreaPrefix,
   matterNumberPrefix,
   parseMatterSeq,
+  parseMatterSeqInPracticeArea,
 } from '@/lib/matterNumber'
 
 describe('matter number formatting', () => {
@@ -23,5 +25,15 @@ describe('matter number formatting', () => {
     expect(parseMatterSeq('2026-EP-Smith-007', prefix)).toBe(7)
     expect(parseMatterSeq('2026-EP-Smith', prefix)).toBeNull()
     expect(parseMatterSeq('2026-EP-007', '2026-EP-')).toBe(7)
+  })
+
+  it('parses sequence across a practice area and year regardless of client slug', () => {
+    const areaPrefix = matterNumberPracticeAreaPrefix(2026, 'EP')
+    expect(areaPrefix).toBe('2026-EP-')
+    expect(parseMatterSeqInPracticeArea('2026-EP-Smith-007', 2026, 'EP')).toBe(7)
+    expect(parseMatterSeqInPracticeArea('2026-EP-Jones-012', 2026, 'EP')).toBe(12)
+    expect(parseMatterSeqInPracticeArea('2026-EP-007', 2026, 'EP')).toBe(7)
+    expect(parseMatterSeqInPracticeArea('2026-EPLP-Smith-003', 2026, 'EP')).toBeNull()
+    expect(parseMatterSeqInPracticeArea('2026-EP-Smith', 2026, 'EP')).toBeNull()
   })
 })

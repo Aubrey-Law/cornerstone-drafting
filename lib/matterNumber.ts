@@ -22,6 +22,11 @@ export function matterNumberPrefix(year: number, code: MatterCode, clientSlug: s
   return `${year}-${code}-${clientSlug}-`
 }
 
+/** Prefix shared by all matters in a year + practice area (sequence scope). */
+export function matterNumberPracticeAreaPrefix(year: number, code: MatterCode): string {
+  return `${year}-${code}-`
+}
+
 /** Format with client name, e.g. "2026-EP-Smith-001". */
 export function formatMatterNumberWithClient(
   year: number,
@@ -42,6 +47,29 @@ export function parseMatterSeq(matterNumber: string, prefix: string): number | n
   const tail = matterNumber.slice(prefix.length)
   if (!/^\d+$/.test(tail)) return null
   return Number.parseInt(tail, 10)
+}
+
+/**
+ * Parse the trailing sequence for any matter in a year + practice area.
+ * Supports "2026-EP-Smith-007" and legacy "2026-EP-007".
+ */
+export function parseMatterSeqInPracticeArea(
+  matterNumber: string,
+  year: number,
+  code: MatterCode,
+): number | null {
+  const prefix = matterNumberPracticeAreaPrefix(year, code)
+  if (!matterNumber.startsWith(prefix)) return null
+
+  const tail = matterNumber.slice(prefix.length)
+  if (!tail) return null
+
+  const legacy = parseMatterSeq(matterNumber, prefix)
+  if (legacy !== null) return legacy
+
+  const match = tail.match(/-(\d+)$/)
+  if (!match) return null
+  return Number.parseInt(match[1], 10)
 }
 
 interface GenerateMatterNumberInput {
@@ -103,9 +131,10 @@ export async function setMatterNumber(
 }
 
 /**
- * Allocate the next sequential matter number for a (year, practice area, client):
- *   "2026-EP-Smith-001", "2026-EP-Smith-002", ...
- * Reads the current max sequence for the "YYYY-CODE-LastName-" prefix and increments.
+ * Allocate the next sequential matter number for a (year, practice area):
+ *   "2026-EP-Smith-001", "2026-EP-Jones-002", ...
+ * The sequence increments per practice area per year (not per client name).
+ * Reads the current max sequence for the "YYYY-CODE-" prefix and increments.
  * The matter_number unique index is the source of truth: on a collision (a
  * concurrent allocation took the same NNN) we bump and retry.
  */
@@ -116,17 +145,19 @@ export async function generateUniqueMatterNumber(
 ): Promise<string> {
   const code = practiceAreaMatterCode(input.practiceArea)
   const clientSlug = clientNameMatterSlug(input.clientLastName || input.clientFirstName)
-  const prefix = matterNumberPrefix(input.year, code, clientSlug)
+  const practiceAreaPrefix = matterNumberPracticeAreaPrefix(input.year, code)
 
   const { data: rows, error } = await admin
     .from('matters')
     .select('matter_number')
-    .like('matter_number', `${prefix}%`)
+    .like('matter_number', `${practiceAreaPrefix}%`)
   if (error) throw new Error(`matter_number lookup failed: ${error.message}`)
 
   let maxSeq = 0
   for (const row of (rows ?? []) as { matter_number: string | null }[]) {
-    const seq = row.matter_number ? parseMatterSeq(row.matter_number, prefix) : null
+    const seq = row.matter_number
+      ? parseMatterSeqInPracticeArea(row.matter_number, input.year, code)
+      : null
     if (seq !== null && seq > maxSeq) maxSeq = seq
   }
 
@@ -140,5 +171,5 @@ export async function generateUniqueMatterNumber(
     if (clashErr) throw new Error(`matter_number lookup failed: ${clashErr.message}`)
     if (!clash) return candidate
   }
-  throw new Error(`Could not allocate a unique matter number for "${prefix}"`)
+  throw new Error(`Could not allocate a unique matter number for "${practiceAreaPrefix}"`)
 }
