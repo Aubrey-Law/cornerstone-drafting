@@ -168,6 +168,7 @@ The admin FAB is hidden when Voice env is incomplete (`isTwilioVoiceConfigured()
 
 ### Smoke test checklist
 
+0. **Env audit (admin):** while signed in, `GET /api/admin/twilio/status` returns which Voice/SMS variables are missing (no secret values). Useful when the phone FAB is hidden or inbound does not ring.
 1. Sign in as staff → confirm phone FAB appears (when Voice env complete).
 2. Open FAB → token loads → dial a test number → call connects.
 3. Confirm row in `calls` table and entry on `/admin/calls`.
