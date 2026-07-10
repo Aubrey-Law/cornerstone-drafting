@@ -25,6 +25,7 @@ interface MatterAssetsTabProps {
   spouseName?: string | null
   maritalStatus?: string | null
   accessToken: string | null
+  enabled?: boolean
   onAssetCountChange?: (count: number) => void
 }
 
@@ -35,6 +36,7 @@ function MatterAssetsTabImpl({
   spouseName,
   maritalStatus,
   accessToken,
+  enabled = true,
   onAssetCountChange,
 }: MatterAssetsTabProps) {
   const [filter, setFilter] = useState('all')
@@ -56,7 +58,7 @@ function MatterAssetsTabImpl({
   } = useMatterAssets({
     intakeId,
     accessToken,
-    enabled: Boolean(intakeId),
+    enabled: enabled && Boolean(intakeId),
   })
 
   const ownershipLabels = useMemo(

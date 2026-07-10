@@ -42,7 +42,7 @@ export async function requestIntakeUnlock(note?: string): Promise<RequestUnlockR
     .eq('client_intake_id', intake.id)
     .maybeSingle()
   const adminLink = matter?.id
-    ? appUrl(`/admin/matters/${matter.id}`)
+    ? appUrl(`/admin/matters/${matter.id}?tab=communications&channel=portal`)
     : appUrl('/admin/matters')
 
   const clientName =
