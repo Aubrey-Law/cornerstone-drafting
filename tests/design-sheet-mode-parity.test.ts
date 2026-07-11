@@ -40,4 +40,12 @@ describe('design sheet mode parity', () => {
     expect(guided).toContain('attorneyPresetVersionRef.current += 1')
     expect(guided).toContain('onAttorneyPresetChange={handleAttorneyPresetChange}')
   })
+
+  it('preserves section-by-section scroll position across field updates', () => {
+    const pageView = readFileSync('app/admin/drafting/[matterId]/design/DesignSectionPageView.tsx', 'utf8')
+
+    expect(pageView).toContain('const scrollTopRef = useRef(0)')
+    expect(pageView).toContain('scrollContainer.scrollTop = scrollTopRef.current')
+    expect(pageView).toContain('scrollTopRef.current = event.currentTarget.scrollTop')
+  })
 })

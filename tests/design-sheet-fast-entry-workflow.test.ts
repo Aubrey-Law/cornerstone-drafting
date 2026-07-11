@@ -5,6 +5,7 @@ import {
   buildCopyClientToSpousePatch,
   buildTrusteesToPrimaryRolesPatch,
   orderFastEntrySections,
+  preserveFastEntrySectionOrder,
   previewAttorneyPreset,
   type AttorneyDesignPreset,
 } from '@/lib/designSheet/fastEntryWorkflow'
@@ -24,6 +25,23 @@ describe('fast-entry workflow helpers', () => {
 
     expect(orderFastEntrySections(sections, summaries).map(section => section.id))
       .toEqual(['plan', 'notes', 'trust', 'client'])
+  })
+
+  it('preserves the rendered section order when completion statuses change', () => {
+    const sections = [{ id: 'client' }, { id: 'plan' }, { id: 'trust' }]
+    const initial = preserveFastEntrySectionOrder(sections, {
+      client: { status: 'attention', detail: null },
+      plan: { status: 'none', detail: null },
+      trust: { status: 'complete', detail: null },
+    }, [])
+
+    const afterSelection = preserveFastEntrySectionOrder(sections, {
+      client: { status: 'complete', detail: null },
+      plan: { status: 'attention', detail: null },
+      trust: { status: 'complete', detail: null },
+    }, initial.map(section => section.id))
+
+    expect(afterSelection.map(section => section.id)).toEqual(['client', 'plan', 'trust'])
   })
 
   it('builds a versioned preset from allowlisted fields only', () => {
@@ -56,11 +74,23 @@ describe('fast-entry workflow helpers', () => {
     expect(applyAttorneyPreset(current, preset, { overwrite: true })).toEqual(preset.fields)
   })
 
-  it('copies client fiduciary slots to spouse roles without mutating the source', () => {
-    const trusteeSlots = [{ id: 't1', order: 0, contact_id: 'trustee-1', is_co: false }]
-    const executorSlots = [{ id: 'e1', order: 0, contact_id: 'executor-1', is_co: false }]
-    const poaSlots = [{ id: 'p1', order: 0, contact_id: 'poa-1', is_co: false }]
-    const hcpSlots = [{ id: 'h1', order: 0, contact_id: 'hcp-1', is_co: false }]
+  it('makes the client the spouse primary and copies only client backups', () => {
+    const trusteeSlots = [
+      { id: 't1', order: 0, contact_id: 'trustee-primary', is_co: false },
+      { id: 't2', order: 1, contact_id: 'trustee-backup', is_co: true },
+    ]
+    const executorSlots = [
+      { id: 'e1', order: 0, contact_id: 'executor-primary', is_co: false },
+      { id: 'e2', order: 1, contact_id: 'executor-backup', is_co: false },
+    ]
+    const poaSlots = [
+      { id: 'p1', order: 0, contact_id: 'poa-primary', is_co: false },
+      { id: 'p2', order: 1, contact_id: 'poa-backup', is_co: false },
+    ]
+    const hcpSlots = [
+      { id: 'h1', order: 0, contact_id: 'hcp-primary', is_co: false },
+      { id: 'h2', order: 1, contact_id: 'hcp-backup', is_co: false },
+    ]
     const current = sheet({
       trustee_slots: trusteeSlots,
       executor_slots: executorSlots,
@@ -75,13 +105,19 @@ describe('fast-entry workflow helpers', () => {
     })
 
     const patch = buildCopyClientToSpousePatch(current)
-    expect(patch).toMatchObject({
-      spouse_trustee_slots: trusteeSlots,
-      spouse_executor_slots: executorSlots,
-      spouse_poa_slots: poaSlots,
-      spouse_hcp_slots: hcpSlots,
-    })
+    expect(patch.spouse_trustee_slots).toEqual([
+      { id: 't1', order: 0, contact_id: '__design_sheet_client__', is_co: false },
+      { id: 't2', order: 1, contact_id: 'trustee-backup', is_co: true },
+    ])
+    expect(patch.spouse_executor_slots?.map(slot => slot.contact_id))
+      .toEqual(['__design_sheet_client__', 'executor-backup'])
+    expect(patch.spouse_poa_slots?.map(slot => slot.contact_id))
+      .toEqual(['__design_sheet_client__', 'poa-backup'])
+    expect(patch.spouse_hcp_slots?.map(slot => slot.contact_id))
+      .toEqual(['__design_sheet_client__', 'hcp-backup'])
     expect(patch.spouse_trustee_slots).not.toBe(trusteeSlots)
+    expect(patch.spouse_trustee_slots?.[1]).not.toBe(trusteeSlots[1])
+    expect(trusteeSlots[0].contact_id).toBe('trustee-primary')
     expect(patch.decisions).toMatchObject({
       healthcare_provisions: {
         client_anatomical_gift: 'yes',
@@ -90,6 +126,29 @@ describe('fast-entry workflow helpers', () => {
         spouse_advance_directive: 'do_not_prolong_life',
       },
     })
+  })
+
+  it('uses the client as the sole spouse primary when the client role is empty', () => {
+    const patch = buildCopyClientToSpousePatch(sheet({
+      trustee_slots: [],
+      executor_slots: [],
+      poa_slots: [],
+      hcp_slots: [],
+    }))
+
+    for (const slots of [
+      patch.spouse_trustee_slots,
+      patch.spouse_executor_slots,
+      patch.spouse_poa_slots,
+      patch.spouse_hcp_slots,
+    ]) {
+      expect(slots).toHaveLength(1)
+      expect(slots?.[0]).toMatchObject({
+        contact_id: '__design_sheet_client__',
+        is_co: false,
+        order: 0,
+      })
+    }
   })
 
   it('copies trustee ordering into applicable client primary roles', () => {

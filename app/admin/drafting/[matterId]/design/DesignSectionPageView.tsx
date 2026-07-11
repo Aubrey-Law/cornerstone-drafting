@@ -1,5 +1,6 @@
 'use client'
 
+import { useLayoutEffect, useRef, type UIEvent } from 'react'
 import { ChevronLeft, ChevronRight, LayoutGrid } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,23 @@ export function DesignSectionPageView({
   nextUnresolvedLabel,
   onNextUnresolved,
 }: DesignSectionPageViewProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollTopRef = useRef(0)
+  const previousSectionIdRef = useRef(section.id)
+  if (previousSectionIdRef.current !== section.id) {
+    previousSectionIdRef.current = section.id
+    scrollTopRef.current = 0
+  }
+
+  useLayoutEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (scrollContainer) scrollContainer.scrollTop = scrollTopRef.current
+  })
+
+  const handleSectionScroll = (event: UIEvent<HTMLDivElement>) => {
+    scrollTopRef.current = event.currentTarget.scrollTop
+  }
+
   const status = statusLabel(summary)
   const subtitle = section.subtitle
     ?? (summary?.status === 'attention' && summary.missing?.length
@@ -84,8 +102,10 @@ export function DesignSectionPageView({
       </div>
 
       <div
+        ref={scrollContainerRef}
         id={`design-section-${section.id}`}
         className="min-h-0 flex-1 overflow-y-auto pb-1"
+        onScroll={handleSectionScroll}
       >
         {section.render()}
       </div>
