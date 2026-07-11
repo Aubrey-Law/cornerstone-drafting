@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Check, ChevronRight, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +32,8 @@ export interface DesignAccelerationBarProps {
   expandAll?: boolean
   onShowCompletedChange?: (value: boolean) => void
   onExpandAllChange?: (value: boolean) => void
+  attorneyPreset: AttorneyDesignPreset | null
+  onAttorneyPresetChange: (preset: AttorneyDesignPreset) => void
 }
 
 export function DesignAccelerationBar({
@@ -45,15 +47,12 @@ export function DesignAccelerationBar({
   expandAll = false,
   onShowCompletedChange,
   onExpandAllChange,
+  attorneyPreset,
+  onAttorneyPresetChange,
 }: DesignAccelerationBarProps) {
-  const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
   const [presetDialogOpen, setPresetDialogOpen] = useState(false)
   const [overwritePresetConflicts, setOverwritePresetConflicts] = useState(false)
-  const { loadPreferences, savePreferences } = useUserPreferences()
-
-  useEffect(() => {
-    void loadPreferences().then(preferences => setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null))
-  }, [loadPreferences])
+  const { savePreferences } = useUserPreferences()
 
   const applyPatch = useCallback((patch: Partial<DesignSheet>) => {
     for (const [field, value] of Object.entries(patch)) {
@@ -77,9 +76,9 @@ export function DesignAccelerationBar({
       toast.error('Unable to save your standard choices.')
       return
     }
-    setAttorneyPreset(preset)
+    onAttorneyPresetChange(preset)
     toast.success('Standard choices saved for future matters.')
-  }, [savePreferences, sheet])
+  }, [onAttorneyPresetChange, savePreferences, sheet])
 
   const handleApplyPreset = useCallback(() => {
     if (!attorneyPreset) return

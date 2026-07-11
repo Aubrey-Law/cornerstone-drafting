@@ -8,4 +8,17 @@ describe('design sheet mode parity', () => {
       expect(express).toContain(`<${component}`)
     }
   })
+
+  it('owns one attorney preset source and shares updates with both consumers', () => {
+    const express = readFileSync('app/admin/drafting/[matterId]/design/ExpressDesignSheet.tsx', 'utf8')
+    const acceleration = readFileSync('components/design-sheet/DesignAccelerationBar.tsx', 'utf8')
+    const finalReview = readFileSync('components/design-sheet/DesignFinalReview.tsx', 'utf8')
+
+    expect(express.match(/loadPreferences\(\)/g)).toHaveLength(1)
+    expect(express).toContain('attorneyPreset={attorneyPreset}')
+    expect(express).toContain('onAttorneyPresetChange={setAttorneyPreset}')
+    expect(acceleration).not.toContain('loadPreferences()')
+    expect(acceleration).toContain('onAttorneyPresetChange(preset)')
+    expect(finalReview).not.toContain('loadPreferences()')
+  })
 })

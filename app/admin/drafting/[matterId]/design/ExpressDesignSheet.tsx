@@ -14,7 +14,6 @@ import {
   type SummarySectionItem,
 } from '@/components/guided'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import type { DesignDocumentInclusions, DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
@@ -28,6 +27,8 @@ import type { IntakeSnapshot } from '@/lib/queries'
 import { orderFastEntrySections } from '@/lib/designSheet/fastEntryWorkflow'
 import { DesignAccelerationBar } from '@/components/design-sheet/DesignAccelerationBar'
 import { DesignFinalReview } from '@/components/design-sheet/DesignFinalReview'
+import { useUserPreferences } from '@/lib/userPreferencesClient'
+import type { AttorneyDesignPreset } from '@/lib/designSheet/fastEntryWorkflow'
 
 const ClonePlanDialog = dynamic(
   () => import('@/components/design-sheet/ClonePlanDialog').then(m => ({ default: m.ClonePlanDialog })),
@@ -129,8 +130,18 @@ function ExpressDesignSheetImpl({
   const [showCompleted, setShowCompleted] = useState(false)
   const [expandAll, setExpandAll] = useState(false)
   const [expandedCompleted, setExpandedCompleted] = useState<Set<string>>(new Set())
+  const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
+  const { loadPreferences } = useUserPreferences()
   const sectionEls = useRef<Record<string, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let active = true
+    void loadPreferences().then(preferences => {
+      if (active) setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null)
+    })
+    return () => { active = false }
+  }, [loadPreferences])
 
   const clientDisplayName = [matter.client_name, matter.spouse_name].filter(Boolean).join(' & ') || 'Unnamed client'
 
@@ -319,6 +330,8 @@ function ExpressDesignSheetImpl({
             expandAll={expandAll}
             onShowCompletedChange={setShowCompleted}
             onExpandAllChange={setExpandAll}
+            attorneyPreset={attorneyPreset}
+            onAttorneyPresetChange={setAttorneyPreset}
           />
 
           {/* Mobile section pills */}
@@ -388,6 +401,7 @@ function ExpressDesignSheetImpl({
                 readinessComplete={readinessComplete}
                 onBlockerClick={blocker => focusField(blocker.sectionId, blocker.targetId)}
                 onGenerate={onOpenDrafting}
+                attorneyPreset={attorneyPreset}
               />
             </div>
           </div>

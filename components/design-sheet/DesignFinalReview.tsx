@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { ClipboardCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,7 +7,6 @@ import { cn } from '@/lib/utils'
 import type { DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
 import type { DesignReadinessBlocker } from '@/lib/designSheetReadiness'
 import type { AttorneyDesignPreset } from '@/lib/designSheet/fastEntryWorkflow'
-import { useUserPreferences } from '@/lib/userPreferencesClient'
 import type { DesignSheet } from '@/types/database'
 
 export interface DesignFinalReviewProps {
@@ -19,15 +17,10 @@ export interface DesignFinalReviewProps {
   readinessComplete: boolean
   onBlockerClick: (blocker: DesignReadinessBlocker) => void
   onGenerate?: () => void
+  attorneyPreset: AttorneyDesignPreset | null
 }
 
-export function DesignFinalReview({ sheet, selectedDocKeys, blockerDetails, pendingFiduciaries, readinessComplete, onBlockerClick, onGenerate }: DesignFinalReviewProps) {
-  const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
-  const { loadPreferences } = useUserPreferences()
-  useEffect(() => {
-    void loadPreferences().then(preferences => setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null))
-  }, [loadPreferences])
-
+export function DesignFinalReview({ sheet, selectedDocKeys, blockerDetails, pendingFiduciaries, readinessComplete, onBlockerClick, onGenerate, attorneyPreset }: DesignFinalReviewProps) {
   const intakeOverrides = Object.keys(sheet.overrides ?? {})
   const appliedPresetFields = attorneyPreset
     ? Object.entries(attorneyPreset.fields)
