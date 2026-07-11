@@ -114,3 +114,25 @@ describe('lead status pipeline source shape', () => {
     expect(source).toContain('View matter')
   })
 })
+
+describe('engagement send form + spouse', () => {
+  it('lead engagement route accepts spouse and upserts a spouse contact', () => {
+    const source = read('app/api/admin/leads/[id]/engagement/route.ts')
+    expect(source).toContain('spouseName')
+    expect(source).toContain('spouseEmail')
+    expect(source).toContain("relationship_type: 'spouse'")
+    expect(source).toContain('createEngagementEnvelope')
+  })
+
+  it('matter engagement route passes the spouse from the pipeline', () => {
+    const source = read('app/api/admin/matters/[id]/engagement/route.ts')
+    expect(source).toContain('spouse_email')
+    expect(source).toContain('spouse:')
+  })
+
+  it('leads client renders the send form and a provisional number', () => {
+    const source = read('app/admin/leads/LeadsClient.tsx')
+    expect(source).toContain('SendEngagementDialog')
+    expect(source).toContain('provisionalNumber')
+  })
+})

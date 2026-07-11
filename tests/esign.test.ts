@@ -47,6 +47,13 @@ describe('firma provider source shape', () => {
     expect(source).toContain('signing_link')
     expect(source).toContain('signingLink')
   })
+
+  it('supports a spouse (second signer) via the joint template', () => {
+    expect(source).toContain('FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT')
+    expect(source).toContain('jointTemplateId')
+    // The spouse is added as the second signer (order 2).
+    expect(source).toMatch(/toRecipient\(input\.spouse, 2\)/)
+  })
 })
 
 describe('in-app sign now', () => {
@@ -55,11 +62,16 @@ describe('in-app sign now', () => {
     expect(source).toContain('signingLink')
   })
 
-  it('leads client opens a signing iframe and refreshes on close', () => {
+  it('leads client opens a signing iframe on close', () => {
     const source = read('app/admin/leads/LeadsClient.tsx')
-    expect(source).toContain('Sign now')
     expect(source).toContain('<iframe')
-    expect(source).toContain('handleSignNow')
+    expect(source).toContain('closeSigning')
+  })
+
+  it('the send-engagement dialog offers an in-person Sign now action', () => {
+    const source = read('app/admin/leads/SendEngagementDialog.tsx')
+    expect(source).toContain('Sign now')
+    expect(source).toContain('onSignNow')
   })
 })
 

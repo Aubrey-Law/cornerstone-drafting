@@ -26,7 +26,7 @@ export async function POST(
 
   const { data: matter } = await admin
     .from('v_matter_pipeline')
-    .select('matter_id, client_name, client_email')
+    .select('matter_id, client_name, client_email, spouse_name, spouse_email')
     .eq('matter_id', matterId)
     .maybeSingle()
   if (!matter) return Response.json({ error: 'Matter not found' }, { status: 404 })
@@ -34,6 +34,9 @@ export async function POST(
   if (!clientEmail) {
     return Response.json({ error: 'Client email is required to send the engagement.' }, { status: 400 })
   }
+  const spouseName = matter.spouse_name?.trim() || ''
+  const spouseEmail = matter.spouse_email?.trim() || ''
+  const hasSpouse = Boolean(spouseName && spouseEmail)
 
   const { data: details } = await admin
     .from('matter_details')
@@ -50,8 +53,8 @@ export async function POST(
     }
 
     const { envelopeId, signingLink } = await provider.createEngagementEnvelope({
-      name: matter.client_name ?? 'Client',
-      email: clientEmail,
+      primary: { name: matter.client_name ?? 'Client', email: clientEmail },
+      ...(hasSpouse ? { spouse: { name: spouseName, email: spouseEmail } } : {}),
     })
 
     const { data: row, error } = await admin
