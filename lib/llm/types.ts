@@ -57,10 +57,19 @@ export interface LlmChatRequest {
   hooks?: LlmChatHooks
 }
 
+export interface LlmUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+}
+
 export interface LlmChatResult {
   reply: string
   provider: LlmProvider
   model: string
   keySource: ApiKeySource
   toolsUsed: Array<{ tool: string; ok: boolean }>
+  /** Token usage totals across tool rounds; currently populated by the Anthropic provider only. */
+  usage?: LlmUsage
 }

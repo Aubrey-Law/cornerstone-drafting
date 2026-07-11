@@ -822,8 +822,17 @@ export async function POST(req: Request) {
         for (let iteration = 0; iteration < 4; iteration++) {
           const anthropicStream = anthropic.messages.stream({
             model: chatModel,
-            max_tokens: 2048,
-            system: context.systemPrompt,
+            max_tokens: 4096,
+            // Cache the large matter context prompt so the tool loop and
+            // follow-up turns read it at ~10% of input cost. Below the model's
+            // minimum cacheable prefix (small general prompts) this is a no-op.
+            system: [
+              {
+                type: 'text' as const,
+                text: context.systemPrompt,
+                cache_control: { type: 'ephemeral' as const },
+              },
+            ],
             messages: conversation,
             ...(tools.length > 0 ? { tools } : {}),
           })

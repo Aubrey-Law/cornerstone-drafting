@@ -48,11 +48,12 @@ export async function logAiUsage(input: AiUsageLogInput): Promise<void> {
  * changes pricing.
  *
  * Rates per million tokens, USD:
- *   - claude-opus-4-5/4-7: $15 input / $75 output
- *   - claude-sonnet-*    : $3  input / $15 output
- *   - claude-haiku-*     : $0.80 input / $4 output
- *   Cache reads          : 10% of input rate
- *   Cache writes         : 125% of input rate
+ *   - claude-opus-4-6/4-7/4-8: $5 input / $25 output
+ *   - claude-opus-4-5 & older: $15 input / $75 output
+ *   - claude-sonnet-*        : $3  input / $15 output
+ *   - claude-haiku-*         : $0.80 input / $4 output
+ *   Cache reads              : 10% of input rate
+ *   Cache writes             : 125% of input rate
  */
 export function estimateUsdCost(row: {
   model: string
@@ -65,6 +66,7 @@ export function estimateUsdCost(row: {
   let inRate = 15, outRate = 75
   if (m.includes('haiku')) { inRate = 0.8; outRate = 4 }
   else if (m.includes('sonnet')) { inRate = 3; outRate = 15 }
+  else if (m.includes('opus-4-8') || m.includes('opus-4-7') || m.includes('opus-4-6')) { inRate = 5; outRate = 25 }
   else if (m.includes('opus')) { inRate = 15; outRate = 75 }
   const cacheReadRate = inRate * 0.1
   const cacheWriteRate = inRate * 1.25

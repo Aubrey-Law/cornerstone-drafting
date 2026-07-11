@@ -22,13 +22,17 @@ export const DEFAULT_LLM_PROVIDER: LlmProvider = 'anthropic'
 
 /** Preferred Anthropic model id for assistant / redline / import. */
 export type PreferredAnthropicModel =
+  | 'claude-opus-4-8'
+  | 'claude-sonnet-5'
   | 'claude-sonnet-4-6'
   | 'claude-opus-4-5'
   | 'claude-haiku-4-5'
   | string
 
 export const ANTHROPIC_MODEL_OPTIONS: Array<{ id: string; label: string }> = [
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (default)' },
+  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 (default)' },
+  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
   { id: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
   { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
 ]
@@ -46,7 +50,7 @@ export const GEMINI_MODEL_OPTIONS: Array<{ id: string; label: string }> = [
   { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
 ]
 
-export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6'
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-4-8'
 export const DEFAULT_OPENAI_MODEL = 'gpt-4.1'
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
 

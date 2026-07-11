@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ArrowUp, ClipboardCopy, FileText, FileType2, NotebookPen, Trash2, X } from 'lucide-react'
+import { ArrowUp, ClipboardCopy, FileText, FileType2, NotebookPen, Square, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -145,7 +145,8 @@ function storeMessages(messages: FloatingChatMessage[]) {
 export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled, matterDisplayName = null }: ChatPanelProps) {
   const detectedContext = useChatContext()
   const [overrideGeneral, setOverrideGeneral] = useState(false)
-  const [messages, setMessages] = useState<FloatingChatMessage[]>(loadStoredMessages)
+  const [messages, setMessages] = useState<FloatingChatMessage[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -157,9 +158,18 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const wasOpenRef = useRef(false)
   const activityDraftPromptRef = useRef<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  // Tracks which thread the current `messages` belong to, so thread switches
+  // never persist one thread's messages under another thread's key.
+  const loadedThreadRef = useRef<string | null>(null)
+
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   const chatContext = overrideGeneral ? ({ type: 'general' } as const) : detectedContext
   const prompts = useMemo(() => suggestedPrompts[chatContext.type], [chatContext.type])
+  // Matter threads are shared with the Draft assistant via matter_assistant_messages;
+  // the general thread stays in sessionStorage.
+  const threadKey = chatContext.type === 'matter' ? chatContext.id : 'general'
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
@@ -176,8 +186,50 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   }, [open])
 
   useEffect(() => {
+    if (!open) return
+    if (threadKey === 'general') {
+      setMessages(loadStoredMessages())
+      loadedThreadRef.current = 'general'
+      return
+    }
+    let stale = false
+    setHistoryLoading(true)
+    void (async () => {
+      let loaded: FloatingChatMessage[] = []
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch(`/api/admin/matters/${threadKey}/assistant`, {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        })
+        const body = await res.json().catch(() => ({})) as {
+          turns?: Array<{ role: string; content: string; createdAt?: string }>
+        }
+        if (res.ok && Array.isArray(body.turns)) {
+          loaded = body.turns.map((turn, index) => ({
+            id: `srv-${threadKey}-${index}`,
+            role: turn.role === 'user' ? 'user' as const : 'assistant' as const,
+            content: turn.content,
+            timestamp: turn.createdAt ?? new Date().toISOString(),
+            contextSnapshot: { type: 'matter', id: threadKey },
+          }))
+        }
+      } catch {
+        // Chat still works without the persisted view.
+      }
+      if (stale) return
+      setMessages(loaded)
+      loadedThreadRef.current = threadKey
+      setHistoryLoading(false)
+    })()
+    return () => {
+      stale = true
+    }
+  }, [open, threadKey])
+
+  useEffect(() => {
+    if (threadKey !== 'general' || loadedThreadRef.current !== 'general') return
     storeMessages(messages)
-  }, [messages])
+  }, [messages, threadKey])
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
@@ -207,6 +259,11 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     setInput('')
     setError(null)
     setLoading(true)
+    const controller = new AbortController()
+    abortRef.current = controller
+    let replyText = ''
+    let sawToolEvent = false
+    let persistReply: string | null = null
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -224,6 +281,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           context_type: contextAtSend.type,
           context_id: contextAtSend.type === 'general' ? undefined : contextAtSend.id,
         }),
+        signal: controller.signal,
       })
 
       if (!response.ok || !response.body) {
@@ -271,6 +329,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
             }
             if (parsed.error && !parsed.tool) throw new Error(parsed.error)
             if (parsed.tool && parsed.tool_use_id && parsed.status) {
+              sawToolEvent = true
               const preview = Array.isArray(parsed.result?.preview)
                 ? parsed.result.preview as DesignSheetImportPreviewRow[]
                 : undefined
@@ -303,6 +362,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
               continue
             }
             if (!parsed.text) continue
+            replyText += parsed.text
             setMessages(prev => prev.map(message =>
               message.id === assistantMessage.id
                 ? { ...message, content: message.content + parsed.text }
@@ -311,16 +371,48 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           }
         }
       }
+      persistReply = replyText || (sawToolEvent ? '[Prepared a design sheet proposal for review]' : null)
     } catch (err) {
-      const message = (err as Error).message || 'Chat unavailable - try again in a moment.'
-      setError(message)
-      setMessages(prev => prev.map(item =>
-        item.id === assistantMessage.id && !item.content
-          ? { ...item, content: `Error: ${message}` }
-          : item
-      ))
+      if ((err as Error).name === 'AbortError') {
+        // User stopped generation: keep any partial text, drop an empty bubble.
+        setMessages(prev => prev.filter(item => !(item.id === assistantMessage.id && !item.content && !item.toolEvents?.length)))
+        persistReply = replyText || null
+      } else {
+        const message = (err as Error).message || 'Chat unavailable - try again in a moment.'
+        setError(message)
+        setMessages(prev => prev.map(item =>
+          item.id === assistantMessage.id && !item.content
+            ? { ...item, content: `Error: ${message}` }
+            : item
+        ))
+      }
     } finally {
+      abortRef.current = null
       setLoading(false)
+      // Share matter conversations with the Draft assistant's per-matter
+      // thread. Failed sends persist nothing (matches Draft assistant).
+      if (contextAtSend.type === 'matter' && persistReply) {
+        void (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            await fetch(`/api/admin/matters/${contextAtSend.id}/assistant`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+              },
+              body: JSON.stringify({
+                turns: [
+                  { role: 'user', content: trimmed },
+                  { role: 'assistant', content: persistReply },
+                ],
+              }),
+            })
+          } catch {
+            // Best-effort: the local thread already shows the turn.
+          }
+        })()
+      }
     }
   }
 
@@ -430,7 +522,21 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     }
   }
 
-  function handleClearConversation() {
+  async function handleClearConversation() {
+    if (chatContext.type === 'matter') {
+      if (!window.confirm('Clear this matter’s assistant chat history?')) return
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch(`/api/admin/matters/${chatContext.id}/assistant`, {
+          method: 'DELETE',
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        })
+        if (!res.ok) throw new Error('Could not clear history')
+      } catch (err) {
+        flashStatus('error', (err as Error).message || 'Could not clear history.')
+        return
+      }
+    }
     setMessages([])
     setError(null)
     setActionStatus(null)
@@ -443,7 +549,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    if (event.key === 'Enter' && (!event.shiftKey || event.metaKey || event.ctrlKey)) {
       event.preventDefault()
       void sendMessage(input)
     }
@@ -593,7 +699,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           </button>
           <button
             type="button"
-            onClick={handleClearConversation}
+            onClick={() => void handleClearConversation()}
             disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -618,7 +724,9 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
         ref={threadRef}
         className="flex-1 overflow-y-auto bg-card px-4 py-4"
       >
-        {messages.length === 0 ? (
+        {historyLoading && messages.length === 0 ? (
+          <div className="text-sm leading-relaxed text-muted-foreground">Loading history…</div>
+        ) : messages.length === 0 ? (
           <div className="text-sm leading-relaxed text-muted-foreground">
             Ask me anything about this matter, your pipeline, or Massachusetts estate planning.
           </div>
@@ -650,7 +758,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           </div>
         )}
 
-        {messages.length === 0 && (
+        {!historyLoading && messages.length === 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {prompts.map(prompt => (
               <button
@@ -694,14 +802,26 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           rows={1}
           className="max-h-28 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
         />
-        <button
-          type="submit"
-          disabled={!input.trim() || loading}
-          aria-label="Send message"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowUp size={18} />
-        </button>
+        {loading ? (
+          <button
+            type="button"
+            onClick={() => abortRef.current?.abort()}
+            aria-label="Stop generating"
+            title="Stop generating"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Square size={16} />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim()}
+            aria-label="Send message"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowUp size={18} />
+          </button>
+        )}
       </form>
       <style>{`
         @keyframes cornerstone-chat-pulse {
