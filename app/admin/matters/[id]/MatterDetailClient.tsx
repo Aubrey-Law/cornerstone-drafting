@@ -978,13 +978,15 @@ function MatterDetailClientInner({
               onUnreadClick={() => setActiveTab('communications', undefined, 'portal')}
               onReviewFlagsClick={scrollToIntakeActions}
               onReviewUploads={handleReviewUploads}
-            />
-            <MatterAssistantQuickPrompts
-              className="flex flex-wrap gap-2"
-              prompts={[
-                { label: 'Summarize intake', prompt: "Summarize this client's situation" },
-                { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
-              ]}
+              quickPrompts={
+                <MatterAssistantQuickPrompts
+                  className="flex flex-wrap gap-2"
+                  prompts={[
+                    { label: 'Summarize intake', prompt: "Summarize this client's situation" },
+                    { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
+                  ]}
+                />
+              }
             />
             <MatterOverviewSummaryCards
               household={householdPreview}
@@ -1015,12 +1017,6 @@ function MatterDetailClientInner({
               intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
               onSaveField={handleSaveMatterDetailField}
             />
-            <MatterPortalUploadsCard
-              matterId={matterId}
-              open={portalUploadsOpen}
-              onOpenChange={setPortalUploadsOpen}
-              onOpened={() => void handleMarkPortalUploadsReviewed()}
-            />
             {showLegalPlan && (
               <MatterLegalPlanCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />
             )}
@@ -1035,6 +1031,12 @@ function MatterDetailClientInner({
                 />
               </div>
             )}
+            <MatterPortalUploadsCard
+              matterId={matterId}
+              open={portalUploadsOpen}
+              onOpenChange={setPortalUploadsOpen}
+              onOpened={() => void handleMarkPortalUploadsReviewed()}
+            />
           </TabsContent>
 
           <MatterPeopleTab
