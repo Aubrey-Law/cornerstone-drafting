@@ -232,7 +232,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className={cn(view === 'kanban' ? 'max-w-none' : 'mx-auto max-w-6xl')}>
+        <div>
           {filtered.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-card px-6 py-10 text-center">
               <p className="text-sm text-muted-foreground">{emptyMessage}</p>
