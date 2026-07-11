@@ -159,9 +159,13 @@ Staff connect Outlook under **Settings**. Manual matter email uses Graph when co
 
 | Variable | Purpose |
 |----------|---------|
-| `RETELL_API_KEY` | Verify Retell webhook signatures |
+| `RETELL_API_KEY` | Verify Retell webhook signatures (must be the key with the **webhook** badge in Retell) |
+| `RETELL_SUMMARY_TO` | Comma-separated emails for post-call summary alerts (default `scott@aubreylegal.com`) |
+| `RETELL_SUMMARY_SMS_TO` | E.164 mobile for SMS post-call alerts (optional; requires Twilio SMS) |
 
 Webhook URL: `https://<host>/api/webhooks/retell`
+
+On `call_analyzed`, Cornerstone upserts the call and emails/SMS the summary (`retell_call_alert` category).
 
 ## Deployments (cost control)
 

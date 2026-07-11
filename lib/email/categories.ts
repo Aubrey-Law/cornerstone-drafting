@@ -3,6 +3,7 @@ export const EMAIL_CATEGORIES = [
   'portal_message_notice',
   'intake_complete_alert',
   'intake_invite',
+  'retell_call_alert',
   'manual',
 ] as const
 
@@ -47,6 +48,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     label: 'Intake questionnaire invitation',
     description: 'Sent to a client with the secure link to complete their intake questionnaire.',
     recipient: 'client',
+  },
+  retell_call_alert: {
+    category: 'retell_call_alert',
+    label: 'Retell post-call alert',
+    description: 'Sent to the firm when Retell finishes post-call analysis on a receptionist call.',
+    recipient: 'internal',
   },
   manual: {
     category: 'manual',
