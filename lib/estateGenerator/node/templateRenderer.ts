@@ -3,7 +3,7 @@ import PizZip from 'pizzip'
 import type { NodeClauseStore } from '@/lib/estateGenerator/node/clauses'
 import type { NodeEstateContext } from '@/lib/estateGenerator/node/types'
 import { MISSING_MARKER_RE, renderNodeEstateText } from '@/lib/estateGenerator/node/renderText'
-import { UNRESOLVED_RE } from '@/lib/drafting/docxMarkerPatterns'
+import { LITERAL_BRACKET_TOKENS, UNRESOLVED_RE } from '@/lib/drafting/docxMarkerPatterns'
 import { getPath } from '@/lib/estateGenerator/node/validation'
 
 // Re-export for callers that imported from this module historically.
@@ -90,6 +90,7 @@ function trustName(context: NodeEstateContext): string {
 
 function replaceStaticMarkers(xml: string, context: NodeEstateContext): string {
   return xml
+    .replaceAll('[CLIENT FULL NAME]', escapeXml(clientFooterName(context)))
     .replaceAll('[CLIENT]', escapeXml(clientFooterName(context)))
     .replaceAll('[TRUST NAME]', escapeXml(trustName(context)))
     .replaceAll('[Double-Click to Insert Table of Contents]', 'Table of Contents')
@@ -256,7 +257,7 @@ export function renderNodeEstateDocxTemplate({
       missingFields.add(match[1])
     }
     for (const match of rendered.matchAll(UNRESOLVED_RE)) {
-      unresolved.add(match[0])
+      if (!LITERAL_BRACKET_TOKENS.has(match[0])) unresolved.add(match[0])
     }
 
     const finalXml = FONTS_NORMALIZED_PARTS.test(fileName)
