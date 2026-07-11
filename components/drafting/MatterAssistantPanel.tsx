@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, Send, Sparkles, Trash2, X } from 'lucide-react'
+import { Check, Copy, Loader2, Send, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Button } from '@/components/ui/button'
+import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 
 interface MatterAssistantPanelProps {
   matterId: string
@@ -43,7 +44,11 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
   const [busy, setBusy] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [turns, setTurns] = useState<ChatTurn[]>([])
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   const loadHistory = useCallback(async () => {
     if (!token) return
@@ -103,6 +108,8 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
     ])
     setBusy(true)
     let streamedText = ''
+    const controller = new AbortController()
+    abortRef.current = controller
 
     try {
       const res = await fetch(`/api/admin/matters/${matterId}/assistant`, {
@@ -113,6 +120,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
           Accept: 'text/event-stream',
         },
         body: JSON.stringify({ message, documentIds, stream: true }),
+        signal: controller.signal,
       })
 
       if (!res.ok) {
@@ -219,6 +227,19 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
         return next
       })
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        // User stopped generation: keep any partial text, drop an empty bubble.
+        setTurns(prev => {
+          const next = [...prev]
+          const last = next[next.length - 1]
+          if (last?.role === 'assistant') {
+            if (!streamedText) return next.slice(0, -1)
+            next[next.length - 1] = { ...last, text: streamedText, streaming: false }
+          }
+          return next
+        })
+        return
+      }
       const msg = e instanceof Error ? e.message : 'Assistant request failed'
       // Keep the user's message visible and mark the assistant turn as failed so
       // it can be retried, instead of silently dropping the pair.
@@ -231,6 +252,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
         return next
       })
     } finally {
+      abortRef.current = null
       setBusy(false)
     }
   }
@@ -285,16 +307,33 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
           turns.map((t, i) => (
             <div
               key={`${t.role}-${i}`}
-              className={`rounded-md px-2.5 py-2 text-xs whitespace-pre-wrap ${
-                t.role === 'user' ? 'bg-accent/60 ml-6' : 'bg-muted mr-4'
+              className={`rounded-md px-2.5 py-2 text-xs ${
+                t.role === 'user' ? 'bg-accent/60 ml-6 whitespace-pre-wrap' : 'bg-muted mr-4'
               }`}
             >
               {t.toolStatus ? (
                 <div className="mb-1 text-[10px] text-muted-foreground italic">{t.toolStatus}</div>
               ) : null}
-              {t.text}
+              {t.role === 'assistant' ? <ChatMarkdown content={t.text} /> : t.text}
               {t.streaming ? (
                 <span className="ml-0.5 inline-block animate-pulse text-muted-foreground">▍</span>
+              ) : null}
+              {t.role === 'assistant' && !t.streaming && t.text ? (
+                <button
+                  type="button"
+                  aria-label="Copy message"
+                  title="Copy message"
+                  className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(t.text).then(() => {
+                      setCopiedIndex(i)
+                      window.setTimeout(() => setCopiedIndex(current => (current === i ? null : current)), 1500)
+                    })
+                  }}
+                >
+                  {copiedIndex === i ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {copiedIndex === i ? 'Copied' : 'Copy'}
+                </button>
               ) : null}
               {t.error ? (
                 <div className="mt-1 flex items-center gap-2 text-[10px] text-destructive">
@@ -327,9 +366,21 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
             }
           }}
         />
-        <Button size="icon" disabled={busy || !input.trim()} onClick={() => void send()} aria-label="Send">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
+        {busy ? (
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => abortRef.current?.abort()}
+            aria-label="Stop generating"
+            title="Stop generating"
+          >
+            <Square className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button size="icon" disabled={!input.trim()} onClick={() => void send()} aria-label="Send">
+            <Send className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   )

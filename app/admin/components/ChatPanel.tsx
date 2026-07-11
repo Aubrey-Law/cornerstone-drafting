@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ArrowUp, ClipboardCopy, FileText, FileType2, NotebookPen, Trash2, X } from 'lucide-react'
+import { ArrowUp, ClipboardCopy, FileText, FileType2, NotebookPen, Square, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -157,6 +157,9 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const wasOpenRef = useRef(false)
   const activityDraftPromptRef = useRef<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   const chatContext = overrideGeneral ? ({ type: 'general' } as const) : detectedContext
   const prompts = useMemo(() => suggestedPrompts[chatContext.type], [chatContext.type])
@@ -207,6 +210,8 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     setInput('')
     setError(null)
     setLoading(true)
+    const controller = new AbortController()
+    abortRef.current = controller
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -224,6 +229,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           context_type: contextAtSend.type,
           context_id: contextAtSend.type === 'general' ? undefined : contextAtSend.id,
         }),
+        signal: controller.signal,
       })
 
       if (!response.ok || !response.body) {
@@ -312,14 +318,20 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
         }
       }
     } catch (err) {
-      const message = (err as Error).message || 'Chat unavailable - try again in a moment.'
-      setError(message)
-      setMessages(prev => prev.map(item =>
-        item.id === assistantMessage.id && !item.content
-          ? { ...item, content: `Error: ${message}` }
-          : item
-      ))
+      if ((err as Error).name === 'AbortError') {
+        // User stopped generation: keep any partial text, drop an empty bubble.
+        setMessages(prev => prev.filter(item => !(item.id === assistantMessage.id && !item.content && !item.toolEvents?.length)))
+      } else {
+        const message = (err as Error).message || 'Chat unavailable - try again in a moment.'
+        setError(message)
+        setMessages(prev => prev.map(item =>
+          item.id === assistantMessage.id && !item.content
+            ? { ...item, content: `Error: ${message}` }
+            : item
+        ))
+      }
     } finally {
+      abortRef.current = null
       setLoading(false)
     }
   }
@@ -443,7 +455,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    if (event.key === 'Enter' && (!event.shiftKey || event.metaKey || event.ctrlKey)) {
       event.preventDefault()
       void sendMessage(input)
     }
@@ -694,14 +706,26 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           rows={1}
           className="max-h-28 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
         />
-        <button
-          type="submit"
-          disabled={!input.trim() || loading}
-          aria-label="Send message"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowUp size={18} />
-        </button>
+        {loading ? (
+          <button
+            type="button"
+            onClick={() => abortRef.current?.abort()}
+            aria-label="Stop generating"
+            title="Stop generating"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Square size={16} />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim()}
+            aria-label="Send message"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowUp size={18} />
+          </button>
+        )}
       </form>
       <style>{`
         @keyframes cornerstone-chat-pulse {

@@ -1,7 +1,9 @@
 'use client'
 
-import { ClipboardList } from 'lucide-react'
+import { useState } from 'react'
+import { Check, ClipboardList, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import type {
   DesignSheetImportPreviewRow,
   DesignSheetImportProposal,
@@ -164,21 +166,42 @@ function ToolEventCard({
   )
 }
 
+function CopyMessageButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      type="button"
+      aria-label="Copy message"
+      title="Copy message"
+      className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+      onClick={() => {
+        void navigator.clipboard.writeText(content).then(() => {
+          setCopied(true)
+          window.setTimeout(() => setCopied(false), 1500)
+        })
+      }}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  )
+}
+
 export function ChatMessage({ message, onReviewDesignSheetImport }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const hasToolEvents = !isUser && (message.toolEvents?.length ?? 0) > 0
 
   return (
-    <div className={cn('mb-3 flex', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('mb-3 flex flex-col', isUser ? 'items-end' : 'items-start')}>
       <div
         className={cn(
-          'max-w-[82%] whitespace-pre-wrap break-words px-3 py-2.5 text-sm leading-relaxed shadow-xs',
+          'max-w-[82%] break-words px-3 py-2.5 text-sm leading-relaxed shadow-xs',
           isUser
-            ? 'rounded-[12px_12px_2px_12px] bg-accent text-accent-foreground'
+            ? 'whitespace-pre-wrap rounded-[12px_12px_2px_12px] bg-accent text-accent-foreground'
             : 'rounded-[12px_12px_12px_2px] border border-border bg-muted text-foreground',
         )}
       >
-        {message.content}
+        {isUser ? message.content : <ChatMarkdown content={message.content} />}
         {hasToolEvents && (
           <div className="mt-1">
             {message.toolEvents!.map(event => (
@@ -191,6 +214,7 @@ export function ChatMessage({ message, onReviewDesignSheetImport }: ChatMessageP
           </div>
         )}
       </div>
+      {!isUser && message.content ? <CopyMessageButton content={message.content} /> : null}
     </div>
   )
 }
