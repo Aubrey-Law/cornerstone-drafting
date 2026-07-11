@@ -22,9 +22,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
+import { EsignTemplateEditor } from './EsignTemplateEditor'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 
-type Tab = 'models' | 'api-keys' | 'connectors' | 'outlook' | 'email' | 'sla' | 'ai-usage'
+type Tab =
+  | 'models'
+  | 'api-keys'
+  | 'connectors'
+  | 'outlook'
+  | 'email'
+  | 'sla'
+  | 'ai-usage'
+  | 'esign-template'
 
 interface ApiKeyStatus {
   provider: string
@@ -75,7 +84,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       t === 'api-keys' ||
       t === 'connectors' ||
       t === 'sla' ||
-      t === 'ai-usage'
+      t === 'ai-usage' ||
+      t === 'esign-template'
     ) {
       setTab(t)
     }
@@ -299,7 +309,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Model preferences, API keys, MCP connectors, Outlook, email settings, AI usage, and matter stage SLA.
+          Model preferences, API keys, MCP connectors, Outlook, email settings, e-signature
+          template, AI usage, and matter stage SLA.
         </p>
       </div>
 
@@ -311,6 +322,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
             ['connectors', 'Connectors'],
             ['outlook', 'Outlook'],
             ['email', 'Email'],
+            ['esign-template', 'E-signature'],
             ['ai-usage', 'AI Usage'],
             ['sla', 'Stage SLA'],
           ] as const
@@ -631,6 +643,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       )}
 
       {tab === 'email' && <EmailSettingsSection />}
+
+      {tab === 'esign-template' && <EsignTemplateEditor />}
 
       {tab === 'ai-usage' && <AiUsagePanel />}
 

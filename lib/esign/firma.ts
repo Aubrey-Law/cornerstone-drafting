@@ -100,6 +100,59 @@ class FirmaEsignProvider implements EsignProvider {
   }
 }
 
+/**
+ * Mint a short-lived JWT that authorizes the browser-side firma.dev template
+ * editor to edit the engagement-agreement template. The API key stays on the
+ * server; only this token crosses to the client.
+ *
+ * firma.dev exposes this as a plain function endpoint (not part of the SDK's
+ * typed surface), so we call it with fetch directly — this stays correct
+ * regardless of the pinned @firma-dev/sdk version.
+ */
+export async function generateEngagementTemplateToken():
+  | Promise<{ ok: true; token: string; templateId: string } | { ok: false; error: string }> {
+  const apiKey = process.env.FIRMA_API_KEY?.trim()
+  const templateId = process.env.FIRMA_ENGAGEMENT_TEMPLATE_ID?.trim()
+  const missing = [
+    !apiKey ? 'FIRMA_API_KEY' : null,
+    !templateId ? 'FIRMA_ENGAGEMENT_TEMPLATE_ID' : null,
+  ].filter(Boolean)
+  if (missing.length > 0 || !apiKey || !templateId) {
+    return { ok: false, error: `E-signature is not configured (missing ${missing.join(', ')}).` }
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.firma.dev/functions/v1/signing-request-api/generate-template-token',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ companies_workspaces_templates_id: templateId }),
+      },
+    )
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      return {
+        ok: false,
+        error: `firma.dev returned ${response.status} generating the template token${detail ? `: ${detail}` : ''}`,
+      }
+    }
+    const data = (await response.json()) as { token?: unknown }
+    if (typeof data.token !== 'string' || !data.token) {
+      return { ok: false, error: 'firma.dev did not return a template token.' }
+    }
+    return { ok: true, token: data.token, templateId }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not reach firma.dev to generate a template token.',
+    }
+  }
+}
+
 export function resolveEsignProvider():
   | { ok: true; provider: EsignProvider }
   | { ok: false; error: string } {
