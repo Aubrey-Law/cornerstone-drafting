@@ -17,6 +17,8 @@ interface DesignSectionPageViewProps {
   previousHref: string | null
   nextHref: string | null
   onNavigate?: (href: string) => void
+  nextUnresolvedLabel?: string
+  onNextUnresolved?: () => void
 }
 
 function statusLabel(summary: DesignSectionSummary | undefined) {
@@ -36,6 +38,8 @@ export function DesignSectionPageView({
   previousHref,
   nextHref,
   onNavigate,
+  nextUnresolvedLabel,
+  onNextUnresolved,
 }: DesignSectionPageViewProps) {
   const status = statusLabel(summary)
   const subtitle = section.subtitle
@@ -86,7 +90,7 @@ export function DesignSectionPageView({
         {section.render()}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border pt-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-3">
         {previousHref ? (
           <Button
             variant="outline"
@@ -98,10 +102,12 @@ export function DesignSectionPageView({
             Previous
           </Button>
         ) : (
-          <span />
+          null
         )}
+        <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleNavigate(overviewHref)}>All sections</Button>
         {nextHref ? (
           <Button
+            variant="outline"
             size="sm"
             className="gap-1 text-xs"
             onClick={() => handleNavigate(nextHref)}
@@ -110,7 +116,10 @@ export function DesignSectionPageView({
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>
         ) : (
-          <span />
+          null
+        )}
+        {nextUnresolvedLabel && onNextUnresolved && (
+          <Button size="sm" className="ml-auto gap-1 text-xs" onClick={onNextUnresolved}>Next unresolved: {nextUnresolvedLabel}<ChevronRight className="h-3.5 w-3.5" /></Button>
         )}
       </div>
     </div>

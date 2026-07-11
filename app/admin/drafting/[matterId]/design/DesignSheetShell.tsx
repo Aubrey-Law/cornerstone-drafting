@@ -35,6 +35,11 @@ import {
 } from './designSectionCatalog'
 import { DesignSectionOverview } from './DesignSectionOverview'
 import { DesignSectionPageView } from './DesignSectionPageView'
+import { DesignAccelerationBar } from '@/components/design-sheet/DesignAccelerationBar'
+import { DesignFinalReview } from '@/components/design-sheet/DesignFinalReview'
+import { findNextUnresolvedBlocker, groupGuidedSections } from '@/lib/designSheet/guidedNavigation'
+import { useUserPreferences } from '@/lib/userPreferencesClient'
+import type { AttorneyDesignPreset } from '@/lib/designSheet/fastEntryWorkflow'
 import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 
@@ -127,7 +132,6 @@ function DesignSheetShellImpl({
     documentInclusions,
     sectionSummaries,
     blockerDetails,
-    draftBlockers,
     readinessComplete,
     readinessCompletedCount,
     readinessTotal,
@@ -135,6 +139,25 @@ function DesignSheetShellImpl({
 
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
+  const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
+  const attorneyPresetVersionRef = useRef(0)
+  const { loadPreferences } = useUserPreferences()
+
+  useEffect(() => {
+    let active = true
+    const loadVersion = attorneyPresetVersionRef.current
+    void loadPreferences().then(preferences => {
+      if (active && attorneyPresetVersionRef.current === loadVersion) {
+        setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null)
+      }
+    })
+    return () => { active = false }
+  }, [loadPreferences])
+
+  const handleAttorneyPresetChange = useCallback((preset: AttorneyDesignPreset) => {
+    attorneyPresetVersionRef.current += 1
+    setAttorneyPreset(preset)
+  }, [])
 
   const summaries = useMemo<Record<string, DesignSectionSummary>>(() => ({
     ...sectionSummaries,
@@ -186,6 +209,7 @@ function DesignSheetShellImpl({
       isLP,
       lpDataState,
       matter,
+      matterId,
       selectedDocKeys.length,
       sheet,
       updateField,
@@ -194,6 +218,10 @@ function DesignSheetShellImpl({
   )
 
   const visibleSections = useMemo(() => visibleDesignSections(sectionDefs), [sectionDefs])
+  const groupedSections = useMemo(
+    () => groupGuidedSections(visibleSections, summaries),
+    [summaries, visibleSections],
+  )
   const resolvedSectionId = resolveDesignSectionId(sectionDefs, activeSectionId)
   const activeSection = resolvedSectionId
     ? visibleSections.find(section => section.id === resolvedSectionId) ?? null
@@ -230,13 +258,14 @@ function DesignSheetShellImpl({
         const params = new URLSearchParams(window.location.search)
         params.set('step', 'design')
         params.set('section', sectionId)
-        if (focus?.targetField) params.set('focus', `${focus.sectionId}:${focus.targetField}`)
+        if (focus) params.set('focus', `${focus.sectionId}:${focus.targetField ?? ''}`)
         else params.delete('focus')
         router.push(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
         return
       }
       const params = new URLSearchParams()
       params.set('section', sectionId)
+      if (focus) params.set('focus', `${focus.sectionId}:${focus.targetField ?? ''}`)
       router.push(`/admin/drafting/${matterId}/design?${params.toString()}`, { scroll: false })
     })
   }, [embedded, matterId, router, startNavigation])
@@ -247,16 +276,15 @@ function DesignSheetShellImpl({
     })
   }, [router, startNavigation])
 
-  const initialFocusHandled = useRef(false)
   useEffect(() => {
-    if (!initialFocus || initialFocusHandled.current || !activeSection) return
+    if (!initialFocus || !activeSection) return
     if (initialFocus.sectionId !== activeSection.id) return
-    initialFocusHandled.current = true
     const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
     requestAnimationFrame(() => {
       const target = targetId ? document.getElementById(targetId) : document.getElementById(`design-section-${activeSection.id}`)
       target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      if (target instanceof HTMLElement && targetId) {
+      if (target instanceof HTMLElement) {
+        if (!targetId) target.tabIndex = -1
         target.focus({ preventScroll: true })
         target.classList.add('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
         window.setTimeout(() => {
@@ -274,6 +302,8 @@ function DesignSheetShellImpl({
   const nextHref = activeIndex >= 0 && activeIndex < visibleSections.length - 1
     ? sectionHref(visibleSections[activeIndex + 1].id)
     : null
+  const allBlockers = useMemo(() => blockerDetails.flatMap(group => group.blockers), [blockerDetails])
+  const nextRequired = findNextUnresolvedBlocker(allBlockers, resolvedSectionId)
 
   return (
     <SharedFieldsProvider>
@@ -324,6 +354,7 @@ function DesignSheetShellImpl({
                   exporting={exporting}
                   pending={isPending}
                   saveDirty={saveStatus === 'dirty'}
+                  showSave={saveStatus !== 'saved'}
                 />
               )}
             />
@@ -339,6 +370,16 @@ function DesignSheetShellImpl({
               }}
             >
               <main style={{ flex: 3, minWidth: 'min(520px, 100%)', display: 'flex', flexDirection: 'column', gap: 18, ...(embedded ? { minHeight: 0, overflowY: 'auto' } : {}) }}>
+                <DesignAccelerationBar
+                  sheet={sheet}
+                  updateField={updateField}
+                  documentInclusions={documentInclusions}
+                  nextRequired={nextRequired}
+                  onNextRequired={(blocker) => navigateToSection(blocker.sectionId, blocker)}
+                  showLayoutControls={false}
+                  attorneyPreset={attorneyPreset}
+                  onAttorneyPresetChange={handleAttorneyPresetChange}
+                />
                 {activeSection ? (
                   <DesignSectionPageView
                     section={activeSection}
@@ -349,15 +390,32 @@ function DesignSheetShellImpl({
                     previousHref={previousHref}
                     nextHref={nextHref}
                     onNavigate={navigateByHref}
+                    nextUnresolvedLabel={nextRequired?.label}
+                    onNextUnresolved={nextRequired
+                      ? () => navigateToSection(nextRequired.sectionId, nextRequired)
+                      : undefined}
                   />
                 ) : (
                   <DesignSectionOverview
                     title={introTitle}
                     subtitle="Open one section at a time. Missing fields are flagged as you go but never block drafting — your selections control which drafts are produced."
                     pct={pct}
-                    sections={visibleSections}
+                    groupedSections={groupedSections}
+                    summaries={summaries}
                     summarySections={summarySections}
                     sectionHref={sectionHref}
+                  />
+                )}
+                {!activeSection && (
+                  <DesignFinalReview
+                    sheet={sheet}
+                    selectedDocKeys={selectedDocKeys}
+                    blockerDetails={blockerDetails}
+                    pendingFiduciaries={pendingFiduciaries}
+                    readinessComplete={readinessComplete}
+                    onBlockerClick={(blocker) => navigateToSection(blocker.sectionId, blocker)}
+                    onGenerate={onOpenDrafting}
+                    attorneyPreset={attorneyPreset}
                   />
                 )}
               </main>
