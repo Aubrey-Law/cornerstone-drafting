@@ -25,6 +25,11 @@ import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 
+const ClonePlanDialog = dynamic(
+  () => import('@/components/design-sheet/ClonePlanDialog').then(m => ({ default: m.ClonePlanDialog })),
+  { ssr: false },
+)
+
 const DesignSheetImportDialog = dynamic(
   () => import('@/components/design-sheet/DesignSheetImportDialog').then(m => ({ default: m.DesignSheetImportDialog })),
   { ssr: false }
@@ -93,12 +98,13 @@ function ExpressDesignSheetImpl({
   const {
     isLP, sheet, updateField, validationValue, saveStatus, saveStatusText,
     contactsState, handleAddContact, handleUpdateContact, handleRemoveContact,
-    lpDataState, updateLpPatch, handleExportDesignSheet, handleImportedDesignSheetFields,
+    lpDataState, updateLpPatch, handleExportDesignSheet, handleImportedDesignSheetFields, applyPlanStructurePatch,
     handleSave, isPending, exporting, documentInclusions, sectionSummaries,
     blockerDetails, draftBlockers, readinessComplete, readinessCompletedCount, readinessTotal,
   } = s
 
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string>(DESIGN_SECTION_IDS.estatePlanDesign)
   const sectionEls = useRef<Record<string, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -232,6 +238,12 @@ function ExpressDesignSheetImpl({
     <SharedFieldsProvider>
     <DesignValidationProvider value={validationValue}>
       <div className="guided-interview flex h-full min-h-0 flex-col overflow-hidden">
+        <ClonePlanDialog
+          open={cloneDialogOpen}
+          onOpenChange={setCloneDialogOpen}
+          matterId={matterId}
+          onApply={applyPlanStructurePatch}
+        />
         {importDialogOpen && (
           <DesignSheetImportDialog
             open={importDialogOpen}
@@ -249,6 +261,7 @@ function ExpressDesignSheetImpl({
             savedLabel={saveStatusText}
             actions={(
               <DesignToolbarActions
+                onClonePlan={() => setCloneDialogOpen(true)}
                 onImport={() => setImportDialogOpen(true)}
                 onSave={handleSave}
                 onExport={handleExportDesignSheet}
