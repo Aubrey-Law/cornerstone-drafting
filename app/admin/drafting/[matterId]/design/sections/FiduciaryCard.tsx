@@ -22,6 +22,7 @@ import {
   type FiduciaryRelationshipTo,
 } from '@/lib/designSheet/fiduciaryContactDetails'
 import { contactFullName } from './ContactPicker'
+import type { DesignSheetOnChange } from './shared'
 
 interface FiduciaryCardProps {
   contact: MatterContact
@@ -335,7 +336,7 @@ interface FiduciaryCardGridProps {
   poolContactIds: string[]
   clientName: string
   spouseName?: string | null
-  onChange: (field: keyof DesignSheet, value: DesignSheet[keyof DesignSheet]) => void
+  onChange: DesignSheetOnChange
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onPoolChange: (ids: string[]) => void
