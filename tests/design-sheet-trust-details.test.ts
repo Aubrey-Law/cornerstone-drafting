@@ -14,7 +14,7 @@ describe('trust details design section', () => {
     expect(trustDetailsSource).toContain('Spousal Trust Funding')
     expect(trustDetailsSource).toContain('Outright to Spouse')
     expect(trustDetailsSource).toContain('Clayton Election')
-    expect(trustDetailsSource).toContain("setTrustPlanningType(sheet, option.value)")
+    expect(trustDetailsSource).toContain("setTrustPlanningType(prevSheet, option.value)")
   })
 
   it('includes trust name quick-fill suggestions and format controls', () => {

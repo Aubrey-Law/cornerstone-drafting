@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
@@ -10,7 +10,8 @@ import {
   isAdminUser,
   userCanReadDocument,
 } from '@/lib/documentSecurity'
-import { wordDocShareBlockReason } from '@/lib/documentSharing'
+import { isFirmSharedFolder, wordDocShareBlockReason } from '@/lib/documentSharing'
+import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
 
 async function getUser(req: Request) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
@@ -224,6 +225,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       { error: 'Audit log write failed; folder change reverted' },
       { status: 500 },
     )
+  }
+
+  if (!isFirmSharedFolder(fromFolder) && isFirmSharedFolder(toFolder)) {
+    after(() => notifyClientOfSharedDocument(data.matter_id, data.name))
   }
 
   return NextResponse.json({ document: data })

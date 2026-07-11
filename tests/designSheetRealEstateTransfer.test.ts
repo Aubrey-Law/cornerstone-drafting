@@ -118,14 +118,14 @@ function baseSheet(): DesignSheet {
     assets: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
-  } as DesignSheet
+  } as unknown as DesignSheet
 }
 
 const matter: PipelineMatter = {
   id: 'matter-1',
   client_name: 'Jane Doe',
   spouse_name: 'John Doe',
-} as PipelineMatter
+} as unknown as PipelineMatter
 
 const contacts: MatterContact[] = []
 

@@ -1,4 +1,5 @@
-export const DEFAULT_ADMIN_HOME = '/admin/matters'
+/** The attorney's Today page. */
+export const DEFAULT_ADMIN_HOME = '/admin'
 
 const ADMIN_REDIRECT_PREFIXES = ['/admin']
 

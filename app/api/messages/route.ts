@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getBearerToken, requireAdmin } from '@/lib/apiAuth'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
+import { notifyClientOfFirmMessage } from '@/lib/portalNotifications'
 
 function anonClient(token: string) {
   return createClient(
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
       .select()
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    after(() => notifyClientOfFirmMessage(matter_id))
     return NextResponse.json(data)
   }
 

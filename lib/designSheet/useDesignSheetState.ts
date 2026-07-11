@@ -71,23 +71,18 @@ export function useDesignSheetState({
   const router = useRouter()
   const isLP = normalizePracticeArea(matter.practice_area) === 'EP-LP'
 
-  const hasLocalEditsRef = useRef(false)
-  const [sheet, setSheet] = useState<DesignSheet>(() => {
-    const resolved = resolveInitialDesignSheet({
-      matterId,
-      sheetProp,
-      buildFromProps: () => {
-        const base = formatPhoneFieldsDeep(buildInitialSheet(sheetProp))
-        if (!applyDefaults) return base
-        return { ...base, ...computeDesignSheetDefaults(base, matter) }
-      },
-    })
-    // Session draft means the attorney already edited this matter in this tab.
-    if (readDesignSheetDraft(matterId)) {
-      hasLocalEditsRef.current = true
-    }
-    return resolved
-  })
+  // Session draft means the attorney already edited this matter in this tab.
+  const [initialDraftExists] = useState(() => Boolean(readDesignSheetDraft(matterId)))
+  const hasLocalEditsRef = useRef(initialDraftExists)
+  const [sheet, setSheet] = useState<DesignSheet>(() => resolveInitialDesignSheet({
+    matterId,
+    sheetProp,
+    buildFromProps: () => {
+      const base = formatPhoneFieldsDeep(buildInitialSheet(sheetProp))
+      if (!applyDefaults) return base
+      return { ...base, ...computeDesignSheetDefaults(base, matter) }
+    },
+  }))
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [_dirtyFields, setDirtyFields] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
@@ -143,8 +138,12 @@ export function useDesignSheetState({
     sheetRef.current = sheet
   }, [sheet])
 
+  // Latest sheetProp for the server-refresh effect below; synced in an effect
+  // declared first so it runs before any consumer in the same commit.
   const sheetPropRef = useRef(sheetProp)
-  sheetPropRef.current = sheetProp
+  useEffect(() => {
+    sheetPropRef.current = sheetProp
+  }, [sheetProp])
 
   useEffect(() => {
     expectedUpdatedAtRef.current = expectedUpdatedAt

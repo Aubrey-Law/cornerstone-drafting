@@ -59,7 +59,7 @@ describe('drafting hub and workspace', () => {
 
     expect(review).toContain('deleteDocument')
     expect(review).toContain('getDocumentViewerUrl')
-    expect(review).toContain('const handleDelete = async')
+    expect(review).toContain('const confirmDelete = async')
     expect(review).toContain('await deleteDocument(doc.id)')
     expect(review).toContain('setDeletedIds')
     expect(review).toContain('<Trash2 className="h-3.5 w-3.5" />')

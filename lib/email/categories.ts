@@ -1,9 +1,11 @@
 export const EMAIL_CATEGORIES = [
   'message_alert',
   'portal_message_notice',
+  'document_shared_notice',
   'intake_complete_alert',
   'intake_invite',
   'retell_call_alert',
+  'daily_digest',
   'manual',
 ] as const
 
@@ -37,6 +39,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     description: 'Sent to a client when the firm posts a new message in their portal conversation.',
     recipient: 'client',
   },
+  document_shared_notice: {
+    category: 'document_shared_notice',
+    label: 'Document shared notice',
+    description: 'Sent to a client when the firm shares a document to their portal.',
+    recipient: 'client',
+  },
   intake_complete_alert: {
     category: 'intake_complete_alert',
     label: 'Intake completed alert',
@@ -53,6 +61,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'retell_call_alert',
     label: 'Retell post-call alert',
     description: 'Sent to the firm when Retell finishes post-call analysis on a receptionist call.',
+    recipient: 'internal',
+  },
+  daily_digest: {
+    category: 'daily_digest',
+    label: 'Daily digest',
+    description: 'Weekday-morning summary of overdue matters, unread messages, and intakes waiting on review.',
     recipient: 'internal',
   },
   manual: {

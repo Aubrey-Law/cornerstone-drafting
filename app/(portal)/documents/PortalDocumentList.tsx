@@ -23,10 +23,21 @@ function formatDate(date: string) {
   })
 }
 
-function folderLabel(doc: MatterDocument) {
-  if (doc.folder === 'review') return 'For your review'
-  if (doc.folder === 'signed' || doc.folder === 'final') return 'Signed copy'
-  return 'Shared document'
+/** Status chip: tells the client whether a document is waiting on them. */
+function documentStatus(doc: MatterDocument): { label: string; className: string } {
+  if (doc.folder === 'review') {
+    return {
+      label: 'Action needed · please review',
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+    }
+  }
+  if (doc.folder === 'signed' || doc.folder === 'final') {
+    return {
+      label: 'Signed copy · no action needed',
+      className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+    }
+  }
+  return { label: 'Shared document', className: 'bg-muted text-muted-foreground' }
 }
 
 function DocumentRow({
@@ -51,8 +62,8 @@ function DocumentRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <p className="truncate text-sm font-medium text-foreground">{doc.name}</p>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              {folderLabel(doc)}
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${documentStatus(doc).className}`}>
+              {documentStatus(doc).label}
             </span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">

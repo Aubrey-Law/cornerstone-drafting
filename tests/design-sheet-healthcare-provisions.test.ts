@@ -42,7 +42,7 @@ describe('designSheetHealthcareProvisions additional HIPAA', () => {
       spouse_hipaa_additional_agent_contact_ids: ['s9'],
     })
 
-    const raw = (decisions as { healthcare_provisions: Record<string, unknown> }).healthcare_provisions
+    const raw = (decisions as unknown as { healthcare_provisions: Record<string, unknown> }).healthcare_provisions
     expect(raw.client_hipaa_additional_agent_contact_ids).toEqual(['c9'])
     expect(raw.spouse_hipaa_additional_agent_contact_ids).toEqual(['s9'])
     expect(raw.hipaa_additional_agent_contact_ids).toEqual(['c9'])

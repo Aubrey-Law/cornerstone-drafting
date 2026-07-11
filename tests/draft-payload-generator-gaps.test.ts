@@ -120,6 +120,7 @@ function basePayload(overrides: Partial<DraftPayload> = {}): DraftPayload {
       guardian_successor: null,
       guardian_second_successor: null,
       temp_guardian_primary: null,
+      temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
       spouse_pr_primary: null,
@@ -277,7 +278,8 @@ describe('draft payload generator gap wiring', () => {
       { full_name: 'Excluded Person', reason: 'estranged' },
       { full_name: 'Second Excluded', reason: null },
     ])
-    expect(data.fiduciaries.agent.primary).toMatchObject({
+    const agent = data.fiduciaries.agent as { primary: Record<string, unknown> }
+    expect(agent.primary).toMatchObject({
       full_name: 'Alex Agent',
       phone: '555-0111',
       relationship: 'brother',
@@ -285,7 +287,7 @@ describe('draft payload generator gap wiring', () => {
     expect(data.planning.client_goals).toBe('Fund trust and sign deed.')
     expect(data.planning.client_concerns).toBe('Blended family.')
 
-    const context = buildNodeEstateContext({ data, state: 'MA' })
+    const context = buildNodeEstateContext({ data: data as unknown as Record<string, unknown>, state: 'MA' })
     expect(context.owns_real_property).toBe(true)
     expect(context.has_assets).toBe(true)
     expect(context.hcp_client_advance_do_not_prolong).toBe(true)
@@ -440,6 +442,8 @@ describe('draft payload generator gap wiring', () => {
 
   it('prefers healthcare provisions over legacy anatomical gift column', () => {
     const bundle = draftPayloadHealthcare({
+      id: 'sheet-gaps-healthcare',
+      status: null,
       hcp_anatomical_gift: 'all',
       decisions: {
         healthcare_provisions: {

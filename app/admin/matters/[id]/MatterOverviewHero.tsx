@@ -45,7 +45,7 @@ export function MatterOverviewHero({
   onReviewFlagsClick,
   onReviewUploads,
 }: MatterOverviewHeroProps) {
-  const isIntakeAction = nextAction.href === '#send-intake'
+  const isIntakeAction = nextAction.kind === 'send-intake' || nextAction.kind === 'waiting-intake'
   const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
   const uploadDetail = formatUnreviewedUploadDetail(unreviewedUploadCounts)
 

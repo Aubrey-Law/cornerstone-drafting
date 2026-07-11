@@ -61,7 +61,7 @@ export async function chatOpenAi(
   const tools = request.tools ?? []
   const maxRounds = request.maxToolRounds ?? 4
   const toolsUsed: LlmChatResult['toolsUsed'] = []
-  let workingMessages = toOpenAiMessages(request.system, request.messages)
+  const workingMessages = toOpenAiMessages(request.system, request.messages)
 
   for (let round = 0; round < maxRounds; round++) {
     const stream = await client.chat.completions.create({

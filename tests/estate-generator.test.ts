@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
+import { defaultDraftPayloadTrustProvisions } from '@/lib/buildDraftPayload'
+import { defaultDraftPayloadDpoaProvisions } from '@/lib/draftPayload/defaults'
 import {
   deriveEstateGeneratorPackage,
   deriveEstateGeneratorPackages,
@@ -67,6 +69,9 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
     },
     trust: {
       name: 'Jane Example Revocable Living Trust',
+      spouse_name: null,
+      display_name: 'Jane Example Revocable Living Trust',
+      spouse_display_name: null,
       date: '2026-05-31',
       distribution_ages: [25, 30, 35],
       ma_estate_taxable: false,
@@ -75,6 +80,7 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
       has_ilit: false,
       ilit_trustee: null,
     },
+    trust_provisions: defaultDraftPayloadTrustProvisions(),
     fiduciaries: {
       pr_primary: 'Pat Executor',
       pr_co_primary: null,
@@ -100,6 +106,7 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
       guardian_successor: null,
       guardian_second_successor: null,
       temp_guardian_primary: null,
+      temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
       spouse_pr_primary: null,
@@ -156,13 +163,13 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
       pet_care_option: 'omit',
       pet_care_details: {},
       specific_bequests: [],
+      pr_powers: {
+        allow_pay_taxes_debts_expenses: false,
+        allow_manage_digital_assets: false,
+        include_distribution_cash_or_kind: false,
+      },
     },
-    dpoa_provisions: {
-      coagent_manner: 'independently',
-      self_dealing_reviewer: null,
-      self_dealing_reviewer_alt: null,
-      include_section_l: false,
-    },
+    dpoa_provisions: defaultDraftPayloadDpoaProvisions(),
     hcp_provisions: {
       anatomical_gift: null,
       anatomical_specified: null,

@@ -1,8 +1,10 @@
 import type { PipelineMatter } from '@/types/database'
 
 export type MatterNextActionTone = 'default' | 'warning' | 'success'
+export type MatterNextActionKind = 'send-intake' | 'waiting-intake' | 'review-intake' | 'draft'
 
 export interface MatterNextAction {
+  kind: MatterNextActionKind
   title: string
   detail: string
   href: string
@@ -17,9 +19,10 @@ export function computeMatterNextAction(matter: PipelineMatter): MatterNextActio
 
   if (!intakeSent) {
     return {
+      kind: 'send-intake',
       title: 'Send intake questionnaire',
       detail: 'Email the client a secure link to complete their intake before drafting.',
-      href: '#send-intake',
+      href: `/admin/matters/${matter.matter_id}`,
       cta: 'Send intake',
       tone: 'warning',
     }
@@ -27,9 +30,10 @@ export function computeMatterNextAction(matter: PipelineMatter): MatterNextActio
 
   if (!intakeComplete && matter.stage === 'intake') {
     return {
+      kind: 'waiting-intake',
       title: 'Waiting for client intake',
       detail: 'The invite is out — follow up if the questionnaire is still incomplete.',
-      href: '#send-intake',
+      href: `/admin/matters/${matter.matter_id}`,
       cta: 'Resend intake',
       tone: 'default',
     }
@@ -37,6 +41,7 @@ export function computeMatterNextAction(matter: PipelineMatter): MatterNextActio
 
   if (matter.stage === 'intake_review') {
     return {
+      kind: 'review-intake',
       title: 'Review submitted intake',
       detail: 'The client finished their questionnaire — review answers and open drafting.',
       href: `/admin/drafting/${matter.matter_id}`,
@@ -46,6 +51,7 @@ export function computeMatterNextAction(matter: PipelineMatter): MatterNextActio
   }
 
   return {
+    kind: 'draft',
     title: 'Open drafting workspace',
     detail: 'Complete the design sheet, generate drafts, and share reviewed documents.',
     href: `/admin/drafting/${matter.matter_id}`,

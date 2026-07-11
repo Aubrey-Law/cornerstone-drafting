@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
+import { defaultDraftPayloadTrustProvisions } from '@/lib/buildDraftPayload'
+import { defaultDraftPayloadDpoaProvisions } from '@/lib/draftPayload/defaults'
 import {
   projectDesignSheetToFlatSheet,
   projectDraftPayloadToFlatSheet,
@@ -47,6 +49,9 @@ function payload(overrides: {
     children: [{ full_name: 'Kid Client', dob: '2010-03-03', relationship: null, minor: false }],
     trust: {
       name: 'THE CLIENT FAMILY REVOCABLE LIVING TRUST',
+      spouse_name: null,
+      display_name: 'THE CLIENT FAMILY REVOCABLE LIVING TRUST',
+      spouse_display_name: null,
       date: '2026-05-31',
       distribution_ages: [25, 30, 35],
       ma_estate_taxable: false,
@@ -55,6 +60,7 @@ function payload(overrides: {
       has_ilit: false,
       ilit_trustee: null,
     },
+    trust_provisions: defaultDraftPayloadTrustProvisions(),
     fiduciaries: {
       pr_primary: 'Pat Executor',
       pr_co_primary: 'Co Executor',
@@ -80,6 +86,7 @@ function payload(overrides: {
       guardian_successor: 'Guard Two',
       guardian_second_successor: 'Guard Three',
       temp_guardian_primary: null,
+      temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
       spouse_pr_primary: 'Spouse PR',
@@ -136,13 +143,13 @@ function payload(overrides: {
       pet_care_option: 'omit',
       pet_care_details: {},
       specific_bequests: [],
+      pr_powers: {
+        allow_pay_taxes_debts_expenses: false,
+        allow_manage_digital_assets: false,
+        include_distribution_cash_or_kind: false,
+      },
     },
-    dpoa_provisions: {
-      coagent_manner: 'independently',
-      self_dealing_reviewer: null,
-      self_dealing_reviewer_alt: null,
-      include_section_l: false,
-    },
+    dpoa_provisions: defaultDraftPayloadDpoaProvisions(),
     hcp_provisions: {
       anatomical_gift: null,
       anatomical_specified: null,

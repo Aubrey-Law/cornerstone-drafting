@@ -8,5 +8,11 @@
   },
   "github": {
     "silent": true
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/daily-digest",
+      "schedule": "0 12 * * 1-5"
+    }
+  ]
 }

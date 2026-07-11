@@ -325,10 +325,13 @@ export function computeDesignSheetReadiness({
     return status === 'complete' || status === 'override'
   }).length
 
+  const blockers = requiredIds.flatMap(key => sectionSummaries[key]?.blockers ?? [])
+
   return {
-    // Cornerstone Lite: readiness summaries remain for progress UI, but nothing blocks drafting.
-    complete: true,
-    blockers: [],
+    // Cornerstone Lite policy: blockers are advisory. They power inline field
+    // hints and the summary-rail pills, but nothing may disable generation.
+    complete: blockers.length === 0,
+    blockers,
     completedCount,
     total: requiredIds.length,
     documentInclusions,

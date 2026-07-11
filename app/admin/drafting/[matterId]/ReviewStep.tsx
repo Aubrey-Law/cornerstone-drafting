@@ -19,6 +19,16 @@ import {
 import { toast } from 'sonner'
 import '@/app/intake/guided.css'
 import { GuidedIntroCard, guidedCardStyle, guidedKickerStyle } from '@/components/guided'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -67,6 +77,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const router = useRouter()
   const accessToken = useAccessToken()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set())
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [promotedIds, setPromotedIds] = useState<Set<string>>(() => new Set())
@@ -161,9 +172,15 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     }
   }
 
-  const handleDelete = async (doc: { id: string; name: string }) => {
+  const handleDelete = (doc: { id: string; name: string }) => {
     if (deletingId) return
-    if (!window.confirm(`Delete draft "${doc.name}"? This cannot be undone.`)) return
+    setPendingDelete(doc)
+  }
+
+  const confirmDelete = async () => {
+    const doc = pendingDelete
+    setPendingDelete(null)
+    if (!doc || deletingId) return
     setDeletingId(doc.id)
     try {
       await deleteDocument(doc.id)
@@ -404,7 +421,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                     variant="outline"
                     className="h-8 gap-1.5 text-xs text-red-strong hover:bg-red-bg"
                     disabled={deletingId === doc.id}
-                    onClick={() => void handleDelete(doc)}
+                    onClick={() => handleDelete(doc)}
                   >
                     {deletingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     Delete
@@ -523,6 +540,21 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         onCancel={() => setPendingPromotion(null)}
         onConfirm={confirmPromotion}
       />
+
+      <AlertDialog open={pendingDelete !== null} onOpenChange={open => { if (!open) setPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{pendingDelete?.name}&rdquo; will be permanently deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDelete()}>Delete draft</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
