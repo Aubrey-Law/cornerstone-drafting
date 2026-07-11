@@ -42,68 +42,12 @@
   .text-footnote { font-size: 13px; font-weight: 400; letter-spacing: 0; line-height: 1.55; }
   .text-category { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.60; }
 
-  .admin-surface {
-    font-size: 14px;
-    line-height: 1.55;
-  }
-
-  .admin-page {
-    margin-inline: auto;
-    width: 100%;
-    max-width: 64rem;
-    padding-block: 1.5rem;
-  }
-
-  .admin-page-wide {
-    margin-inline: auto;
-    width: 100%;
-    max-width: 80rem;
-    padding-block: 1.5rem;
-  }
-
-  .admin-page-title {
-    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-    font-size: 24px;
-    font-weight: 600;
-    letter-spacing: -0.025em;
-    line-height: 1.25;
-  }
-
   .admin-section-title {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
     font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.025em;
     line-height: 1.35;
-  }
-
-  .admin-subtle {
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--muted-foreground);
-  }
-
-  .admin-stat-card {
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    background: var(--card);
-    padding: 1rem;
-  }
-
-  .admin-stat-label {
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.35;
-    color: var(--muted-foreground);
-  }
-
-  .admin-stat-value {
-    margin-top: 0.25rem;
-    font-size: 24px;
-    font-weight: 600;
-    letter-spacing: -0.025em;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
   }
 
   /* In-app DOCX preview — inherit app theme instead of forcing white paper */

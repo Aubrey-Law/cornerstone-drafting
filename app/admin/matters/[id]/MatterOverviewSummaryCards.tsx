@@ -52,7 +52,7 @@ function SummaryCard({
     <div className="flex flex-col rounded-lg border border-border bg-card p-4">
       <div className="mb-2 flex items-center gap-2 text-muted-foreground">
         {icon}
-        <span className="text-[11px] font-semibold uppercase tracking-wide">{title}</span>
+        <span className="text-[11px] font-medium uppercase tracking-wide">{title}</span>
       </div>
       {loading ? (
         <p className="text-xs text-muted-foreground">Loading…</p>

@@ -184,7 +184,7 @@ export function MatterContactsCard({ matterId }: { matterId: string }) {
                 key={c.id}
                 contact={c}
                 roleLabel="Child"
-                roleClass="bg-amber-100 text-amber-700"
+                roleClass="bg-amber-bg text-amber"
                 editing={editingId === c.id}
                 onStartEdit={() => setEditingId(c.id)}
                 onCancel={() => setEditingId(null)}

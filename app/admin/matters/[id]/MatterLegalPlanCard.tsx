@@ -19,7 +19,7 @@ interface MatterLegalPlanCardProps {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       {children}
     </span>
   )

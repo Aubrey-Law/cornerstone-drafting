@@ -122,7 +122,7 @@ export function MatterOverviewHero({
               <button type="button" onClick={onReviewFlagsClick} className="inline-flex">
                 <Badge
                   variant="outline"
-                  className="cursor-pointer border-amber-200 bg-amber-50 text-[10px] text-amber-800 hover:bg-amber-100"
+                  className="cursor-pointer border-amber-border bg-amber-bg text-[10px] text-amber hover:bg-amber-bg/80"
                 >
                   <AlertTriangle className="mr-1 h-3 w-3" />
                   {reviewFlagsCount} review flag{reviewFlagsCount === 1 ? '' : 's'}
@@ -149,7 +149,7 @@ export function MatterOverviewHero({
             )}
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground">{nextAction.title}</h2>
+            <h2 className="text-sm font-semibold text-foreground">{nextAction.title}</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">{nextAction.detail}</p>
           </div>
           <div className="space-y-0.5">

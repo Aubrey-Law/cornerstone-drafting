@@ -923,11 +923,11 @@ function MatterDetailClientInner({
       </div>
 
       {showUnlockBanner && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 md:px-6">
+        <div className="border-b border-amber-border bg-amber-bg px-4 py-3 text-sm text-amber-strong md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium">Client requested intake changes</p>
-              <p className="text-xs text-amber-900/80">
+              <p className="text-xs text-amber">
                 {clientIntakeRow?.unlock_request_note?.trim()
                   || 'The client asked to update their submitted intake. Unlock to allow edits.'}
               </p>

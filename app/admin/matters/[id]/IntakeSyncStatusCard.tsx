@@ -83,9 +83,9 @@ export function IntakeSyncStatusCard({
           <span className="text-xs font-semibold">Intake</span>
         </span>
         {needsAttention ? (
-          <span className="text-[10px] font-semibold text-amber-600">Needs attention</span>
+          <span className="text-[10px] font-semibold text-amber-orange">Needs attention</span>
         ) : (
-          <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700">
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-green">
             <CheckCircle2 className="h-3 w-3" /> Ready
           </span>
         )}
@@ -120,7 +120,7 @@ export function IntakeSyncStatusCard({
             <ul className="space-y-1 pl-1">
               {reviewFlags.slice(0, 5).map(flag => (
                 <li key={flag.key} className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-orange" />
                   <span>{flag.message}</span>
                 </li>
               ))}
@@ -162,9 +162,9 @@ function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail: 
   return (
     <div className="flex items-start gap-2">
       {ok ? (
-        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-700" />
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green" />
       ) : (
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-orange" />
       )}
       <div>
         <span className="text-xs font-medium">{label}</span>
