@@ -11,7 +11,7 @@ describe('draftPayloadChildren', () => {
   it('uses the composed name when present', () => {
     const sheet = { children: [{ name: 'Mary Smith', dob: '2010-01-01', relationship: 'biological', is_minor: true }] }
     expect(draftPayloadChildren(sheet as unknown as LooseSheet)).toEqual([
-      { full_name: 'Mary Smith', dob: '2010-01-01', relationship: 'biological', minor: true },
+      { full_name: 'Mary Smith', dob: '2010-01-01', relationship: 'biological', parentage: null, gender: null, deceased: false, minor: true },
     ])
   })
 

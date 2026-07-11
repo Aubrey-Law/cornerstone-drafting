@@ -339,7 +339,7 @@ function DesignSheetShellImpl({
                 ) : (
                   <DesignSectionOverview
                     title={introTitle}
-                    subtitle="Open one section at a time. Required fields gate document generation — your selections control which drafts are produced."
+                    subtitle="Open one section at a time. Missing fields are flagged as you go but never block drafting — your selections control which drafts are produced."
                     pct={pct}
                     sections={visibleSections}
                     summarySections={summarySections}
@@ -367,8 +367,6 @@ function DesignSheetShellImpl({
                   onBlockerClick={(blocker) => navigateToSection(blocker.sectionId, blocker)}
                   onGenerate={onOpenDrafting}
                   generateLabel="Generate drafts →"
-                  generateDisabled={!readinessComplete}
-                  generateDisabledTitle={draftBlockers.length ? `Complete: ${draftBlockers.join(', ')}` : undefined}
                   pendingFiduciaries={pendingFiduciaries}
                   activeSectionId={resolvedSectionId ?? undefined}
                   layout={embedded ? 'column' : 'sticky'}
@@ -392,8 +390,6 @@ function DesignSheetShellImpl({
                 onBlockerClick={(blocker) => navigateToSection(blocker.sectionId, blocker)}
                 onGenerate={onOpenDrafting}
                 generateLabel="Generate drafts →"
-                generateDisabled={!readinessComplete}
-                generateDisabledTitle={draftBlockers.length ? `Complete: ${draftBlockers.join(', ')}` : undefined}
                 pendingFiduciaries={pendingFiduciaries}
                 activeSectionId={resolvedSectionId ?? undefined}
                 stickyTop={0}

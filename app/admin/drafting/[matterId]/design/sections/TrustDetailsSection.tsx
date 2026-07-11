@@ -178,6 +178,13 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   const updateTrustDetails = (patch: Parameters<typeof setTrustDetails>[1]) =>
     onChange('decisions', prevSheet => setTrustDetails(prevSheet, patch))
 
+  useEffect(() => {
+    if (trustDetails.protect_us_trust_status && !trustDetails.allow_special_trustee) {
+      updateTrustDetails({ allow_special_trustee: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trustDetails.protect_us_trust_status])
+
   if (scope === 'spouse') {
     const spouseNominationOptions = nominationOptionsForContext({
       married,
@@ -295,13 +302,6 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
     (contacts.find(c => c.id === id) ?? null) as unknown as PickerContact | null
   const residualIndividuals = sheet.residual_beneficiary_individuals ?? []
   const setResidualIndividuals = (next: string[]) => onChange('residual_beneficiary_individuals', next)
-
-  useEffect(() => {
-    if (trustDetails.protect_us_trust_status && !trustDetails.allow_special_trustee) {
-      updateTrustDetails({ allow_special_trustee: true })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trustDetails.protect_us_trust_status])
 
   const staggers = sheet.staggered_distributions ?? []
   const parseAmt = (a: string | null | undefined): number | null => {

@@ -385,8 +385,6 @@ function ExpressDesignSheetImpl({
               onBlockerClick={(blocker) => focusField(blocker.sectionId, blocker.targetId)}
               onGenerate={onOpenDrafting}
               generateLabel="Generate drafts →"
-              generateDisabled={!readinessComplete}
-              generateDisabledTitle={draftBlockers.length ? `Complete: ${draftBlockers.join(', ')}` : undefined}
               activeSectionId={activeSection}
               layout="column"
             />
@@ -410,8 +408,6 @@ function ExpressDesignSheetImpl({
                 onBlockerClick={(blocker) => focusField(blocker.sectionId, blocker.targetId)}
                 onGenerate={onOpenDrafting}
                 generateLabel="Generate drafts →"
-                generateDisabled={!readinessComplete}
-                generateDisabledTitle={draftBlockers.length ? `Complete: ${draftBlockers.join(', ')}` : undefined}
                 activeSectionId={activeSection}
                 stickyTop={0}
               />

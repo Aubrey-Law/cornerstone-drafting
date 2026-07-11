@@ -124,7 +124,7 @@ export async function chatGemini(
   const tools = request.tools ?? []
   const maxRounds = request.maxToolRounds ?? 4
   const toolsUsed: LlmChatResult['toolsUsed'] = []
-  let contents = buildGeminiContents(request.system, request.messages)
+  const contents = buildGeminiContents(request.system, request.messages)
 
   for (let round = 0; round < maxRounds; round++) {
     const [response] = await geminiGenerate({

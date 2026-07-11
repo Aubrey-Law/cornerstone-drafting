@@ -48,7 +48,7 @@ export async function chatAnthropic(
   const maxRounds = request.maxToolRounds ?? 4
   const toolsUsed: LlmChatResult['toolsUsed'] = []
   let replyText = ''
-  let workingMessages: Anthropic.MessageParam[] = request.messages.map(m => ({
+  const workingMessages: Anthropic.MessageParam[] = request.messages.map(m => ({
     role: m.role,
     content: m.content,
   }))

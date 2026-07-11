@@ -208,7 +208,7 @@ function makeSheet(overrides: Partial<DesignSheet> = {}): DesignSheet {
 }
 
 describe('computeDesignSheetReadiness', () => {
-  it('does not block drafting on missing client decisions or fields', () => {
+  it('surfaces missing client decisions and fields as advisory blockers', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet({
         client_email: null,
@@ -233,11 +233,17 @@ describe('computeDesignSheetReadiness', () => {
       lpData: null,
     })
 
-    expect(readiness.complete).toBe(true)
-    expect(readiness.blockers).toEqual([])
+    expect(readiness.complete).toBe(false)
+    const labels = readiness.blockers.map(item => item.label)
+    expect(labels).toContain('email')
+    expect(labels).toContain('trust name')
+    // Client decisions are advisory (category 'client-decision'), still reported so the UI can hint.
+    expect(readiness.blockers.some(item => item.category === 'client-decision')).toBe(true)
+    // Every blocker carries a jump target so the design sheet can scroll to the field.
+    expect(readiness.blockers.every(item => item.targetId.length > 0)).toBe(true)
   })
 
-  it('does not block drafting when guardian or children are incomplete', () => {
+  it('reports a guardian blocker when minor children lack a guardian nomination', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet({
         children: [{ name: 'Alex Doe', dob: '2015-01-01', relationship: 'biological', is_minor: true }],
@@ -248,11 +254,11 @@ describe('computeDesignSheetReadiness', () => {
       lpData: null,
     })
 
-    expect(readiness.complete).toBe(true)
-    expect(readiness.blockers).toEqual([])
+    expect(readiness.complete).toBe(false)
+    expect(readiness.blockers.map(item => item.label)).toContain('guardian')
   })
 
-  it('allows drafting when included document requirements are complete', () => {
+  it('reports complete with no blockers when included document requirements are met', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet(),
       matter: makeMatter(),
@@ -286,7 +292,7 @@ describe('computeDesignSheetReadiness', () => {
 })
 
 describe('design sheet readiness UI wiring', () => {
-  it('uses shared readiness blockers to gate drafting and jump to exact field targets', () => {
+  it('surfaces readiness blockers as advisory hints without gating generation', () => {
     const shell = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
       'utf8',
@@ -314,7 +320,9 @@ describe('design sheet readiness UI wiring', () => {
 
     expect(workspace).toContain('computeDesignSheetReadiness')
     expect(shell).toContain('readinessComplete')
-    expect(shell).toContain('generateDisabled={!readinessComplete}')
+    expect(shell).toContain('blockerDetails')
+    // Blockers hint, never gate: generation must not be disabled by readiness.
+    expect(shell).not.toContain('generateDisabled={!readinessComplete}')
     expect(sharedControls).toContain('designFieldTargetId')
     expect(personal).toContain('fieldId="client_email"')
     expect(personal).toContain('fieldId="marital_status"')
