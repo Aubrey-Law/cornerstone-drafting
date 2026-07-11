@@ -165,7 +165,7 @@ ${context.docSummary || '(none)'}`
     const result = await runLlmChat(llm, {
       system,
       messages,
-      maxTokens: 2048,
+      maxTokens: 4096,
       tools: mcpTools,
       maxToolRounds: MAX_TOOL_ROUNDS,
       executeTool: async (name, input) => {
