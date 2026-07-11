@@ -128,12 +128,10 @@ git commit -m "Add guided design sheet navigation helpers"
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-it('uses shared acceleration and final review in both design modes', () => {
+it('uses shared acceleration and final review in Fast Entry', () => {
   const express = readFileSync('app/admin/drafting/[matterId]/design/ExpressDesignSheet.tsx', 'utf8')
-  const guided = readFileSync('app/admin/drafting/[matterId]/design/DesignSheetShell.tsx', 'utf8')
   for (const component of ['DesignAccelerationBar', 'DesignFinalReview']) {
     expect(express).toContain(`<${component}`)
-    expect(guided).toContain(`<${component}`)
   }
 })
 ```
@@ -189,7 +187,7 @@ Render `DesignAccelerationBar` with layout controls enabled and `DesignFinalRevi
 
 Run: `npm test -- tests/design-sheet-mode-parity.test.ts tests/design-sheet-fast-entry-workflow.test.ts tests/user-preferences.test.ts`
 
-Expected: parity still fails only because Guided has not been wired; workflow and preference tests pass.
+Expected: all tests pass; Guided parity is added in Task 3.
 
 - [ ] **Step 7: Commit**
 
@@ -215,7 +213,7 @@ git commit -m "Share design sheet acceleration and review UI"
 
 - [ ] **Step 1: Extend tests for missing counts and completed grouping**
 
-Add assertions that attention items expose blocker counts, completed items remain in original order, and no blocker returns `null`.
+Add assertions that attention items expose blocker counts, completed items remain in original order, and no blocker returns `null`. Extend `tests/design-sheet-mode-parity.test.ts` to require `DesignAccelerationBar` and `DesignFinalReview` in both `ExpressDesignSheet.tsx` and `DesignSheetShell.tsx`.
 
 - [ ] **Step 2: Run focused tests and verify RED**
 
