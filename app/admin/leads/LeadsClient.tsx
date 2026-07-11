@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, UserPlus } from 'lucide-react'
+import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -93,10 +94,40 @@ export function LeadsClient({
 }) {
   const token = useAccessToken()
   const router = useRouter()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingLead, setEditingLead] = useState<LeadRow | null>(null)
+  const [saving, setSaving] = useState(false)
   const [busyLeadId, setBusyLeadId] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [deleting, setDeleting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+
+  const selectedIds = useMemo(
+    () => initialLeads.filter(l => selected[l.id]).map(l => l.id),
+    [initialLeads, selected],
+  )
+  const allSelected = initialLeads.length > 0 && initialLeads.every(l => selected[l.id])
+
+  const toggleSelected = (id: string, checked: boolean) => {
+    setSelected(current => {
+      const next = { ...current }
+      if (checked) next[id] = true
+      else delete next[id]
+      return next
+    })
+  }
+  const toggleAll = (checked: boolean) => {
+    setSelected(current => {
+      const next = { ...current }
+      for (const lead of initialLeads) {
+        if (checked) next[lead.id] = true
+        else delete next[lead.id]
+      }
+      return next
+    })
+  }
 
   async function authedPost(path: string, body?: unknown): Promise<Record<string, unknown>> {
     if (!token) throw new Error('Not signed in')
@@ -113,29 +144,111 @@ export function LeadsClient({
     return json
   }
 
-  const handleCreate = async () => {
+  const openCreate = () => {
+    setEditingLead(null)
+    setForm({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
+    setDialogOpen(true)
+  }
+  const openEdit = (lead: LeadRow) => {
+    setEditingLead(lead)
+    setForm({
+      name: leadName(lead) === lead.email ? '' : leadName(lead),
+      email: lead.email ?? '',
+      phone: lead.phone ?? '',
+      practiceArea: lead.practice_area ?? 'EP',
+      fee: lead.engagement_fee_quoted != null ? String(lead.engagement_fee_quoted) : '',
+    })
+    setDialogOpen(true)
+  }
+
+  const handleSave = async () => {
     if (!form.name.trim() || !form.email.trim()) {
       toast.error('Name and email are required')
       return
     }
-    setCreating(true)
+    setSaving(true)
     try {
       const fee = form.fee.trim()
-      await authedPost('/api/admin/leads', {
+      const payload = {
         clientName: form.name.trim(),
         clientEmail: form.email.trim(),
         clientPhone: form.phone.trim() || undefined,
         practiceArea: form.practiceArea,
         feeQuoted: fee === '' ? null : Number(fee),
-      })
-      toast.success('Lead added')
-      setCreateOpen(false)
-      setForm({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
+      }
+      if (editingLead) {
+        const res = await fetch(`/api/admin/leads/${editingLead.id}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+        if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Could not save lead')
+        toast.success('Lead updated')
+      } else {
+        await authedPost('/api/admin/leads', payload)
+        toast.success('Lead added')
+      }
+      setDialogOpen(false)
       router.refresh()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not add lead')
+      toast.error(e instanceof Error ? e.message : 'Could not save lead')
     } finally {
-      setCreating(false)
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteLead = async () => {
+    if (!token || !deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/leads/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Could not delete lead')
+      toast.success('Lead deleted')
+      setDeleteTarget(null)
+      setSelected(current => {
+        const next = { ...current }
+        delete next[deleteTarget.id]
+        return next
+      })
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete lead')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (!token || selectedIds.length === 0) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/admin/leads/bulk-delete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string
+        deleted?: number
+        results?: { ok?: boolean }[]
+      }
+      if (!res.ok) throw new Error(body.error ?? 'Could not delete leads')
+      const deleted = typeof body.deleted === 'number' ? body.deleted : selectedIds.length
+      const failed = Array.isArray(body.results) ? body.results.filter(r => !r.ok).length : 0
+      if (failed > 0) toast.error(`Deleted ${deleted} lead${deleted === 1 ? '' : 's'}; ${failed} failed`)
+      else toast.success(`Deleted ${deleted} lead${deleted === 1 ? '' : 's'}`)
+      setBulkDeleteOpen(false)
+      setSelected({})
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete leads')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -184,8 +297,25 @@ export function LeadsClient({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
+      <div className="flex items-center justify-between gap-2">
+        {selectedIds.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{selectedIds.length} selected</span>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={deleting}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete selected
+            </Button>
+          </div>
+        ) : (
+          <span />
+        )}
+        <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           New lead
         </Button>
@@ -203,6 +333,13 @@ export function LeadsClient({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={checked => toggleAll(checked === true)}
+                    aria-label="Select all leads"
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Practice</TableHead>
@@ -217,6 +354,13 @@ export function LeadsClient({
                 const busy = busyLeadId === lead.id
                 return (
                   <TableRow key={lead.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={Boolean(selected[lead.id])}
+                        onCheckedChange={checked => toggleSelected(lead.id, checked === true)}
+                        aria-label={`Select ${leadName(lead)}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{leadName(lead)}</TableCell>
                     <TableCell className="text-muted-foreground">{lead.email}</TableCell>
                     <TableCell>{practiceAreaLabel(lead.practice_area)}</TableCell>
@@ -258,6 +402,26 @@ export function LeadsClient({
                         >
                           Create matter
                         </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          disabled={busy}
+                          aria-label={`Edit ${leadName(lead)}`}
+                          onClick={() => openEdit(lead)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={busy}
+                          aria-label={`Delete ${leadName(lead)}`}
+                          onClick={() => setDeleteTarget(lead)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -268,10 +432,10 @@ export function LeadsClient({
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>New lead</DialogTitle>
+            <DialogTitle>{editingLead ? 'Edit lead' : 'New lead'}</DialogTitle>
             <DialogDescription>
               A lead becomes a matter when the engagement agreement is signed.
             </DialogDescription>
@@ -318,11 +482,53 @@ export function LeadsClient({
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={() => void handleCreate()} disabled={creating}>
-              {creating ? 'Adding…' : 'Add lead'}
+            <Button onClick={() => void handleSave()} disabled={saving}>
+              {saving ? 'Saving…' : editingLead ? 'Save changes' : 'Add lead'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={open => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete lead?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes {deleteTarget ? leadName(deleteTarget) : 'this lead'} and any
+              intake started. A pending engagement signature request is cancelled.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleDeleteLead()} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete lead'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={open => !open && setBulkDeleteOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedIds.length} lead{selectedIds.length === 1 ? '' : 's'}?
+            </DialogTitle>
+            <DialogDescription>
+              This permanently deletes the selected leads and any intake started. Pending engagement
+              signature requests are cancelled.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={deleting}>
+              {deleting ? 'Deleting…' : `Delete ${selectedIds.length} lead${selectedIds.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>

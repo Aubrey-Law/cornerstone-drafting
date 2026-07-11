@@ -49,3 +49,37 @@ describe('lead tracking source shape', () => {
     expect(source).toContain('storeSignedEngagement')
   })
 })
+
+describe('lead edit and delete source shape', () => {
+  it('edit/delete route exports PATCH and DELETE with a converted guard', () => {
+    const source = read('app/api/admin/leads/[id]/route.ts')
+    expect(source).toContain('requireAdmin')
+    expect(source).toContain('export async function PATCH')
+    expect(source).toContain('export async function DELETE')
+    expect(source).toContain('409')
+    expect(source).toContain('deleteLead')
+  })
+
+  it('bulk-delete route loops ids through deleteLead', () => {
+    const source = read('app/api/admin/leads/bulk-delete/route.ts')
+    expect(source).toContain('requireAdmin')
+    expect(source).toContain('deleteLead')
+    expect(source).toContain('results')
+  })
+
+  it('deleteLead refuses converted leads and cleans up the envelope + R2', () => {
+    const source = read('lib/leads/deleteLead.ts')
+    expect(source).toContain('already converted')
+    expect(source).toContain('cancelEnvelope')
+    expect(source).toContain('r2_key')
+    expect(source).toContain("from('client_intake').delete()")
+  })
+
+  it('leads client has selection, bulk delete, and an edit dialog', () => {
+    const source = read('app/admin/leads/LeadsClient.tsx')
+    expect(source).toContain('Checkbox')
+    expect(source).toContain('bulk-delete')
+    expect(source).toContain("method: 'PATCH'")
+    expect(source).toContain('Edit lead')
+  })
+})
