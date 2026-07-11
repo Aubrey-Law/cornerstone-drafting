@@ -79,7 +79,7 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Assign call from {call.participant_number}</DialogTitle>
+          <DialogTitle>Link call from {call.participant_number} to a matter</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">

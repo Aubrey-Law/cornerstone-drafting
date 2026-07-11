@@ -57,7 +57,7 @@ export function CallsPageClient({ initialCalls, filter }: Props) {
   }
 
   const emptyLabel = useMemo(
-    () => (filter === 'unassigned' ? 'No unassigned calls.' : 'No calls logged yet.'),
+    () => (filter === 'unassigned' ? 'Every call is linked to a matter.' : 'No calls logged yet.'),
     [filter],
   )
 
@@ -65,18 +65,18 @@ export function CallsPageClient({ initialCalls, filter }: Props) {
     <>
       <div className="flex gap-2">
         <Button
-          variant={filter === 'unassigned' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setFilter('unassigned')}
-        >
-          Unassigned
-        </Button>
-        <Button
           variant={filter === 'all' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setFilter('all')}
         >
-          All
+          All calls
+        </Button>
+        <Button
+          variant={filter === 'unassigned' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setFilter('unassigned')}
+        >
+          Not linked
         </Button>
       </div>
 
@@ -94,7 +94,7 @@ export function CallsPageClient({ initialCalls, filter }: Props) {
               <div className="flex shrink-0 flex-col gap-1 py-2">
                 {!call.matter_id && (
                   <Button size="sm" variant="outline" onClick={() => setAssigning(call)}>
-                    Assign
+                    Link to matter
                   </Button>
                 )}
                 <Button
