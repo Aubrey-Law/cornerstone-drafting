@@ -52,7 +52,7 @@ describe('granola meeting notes integration', () => {
       'utf8',
     )
     expect(detail).toContain('MatterMeetingNotesCard')
-    expect(detail).toContain('Meeting notes')
+    expect(card).toContain('Meeting notes')
     expect(card).toContain("listDocuments(matterId, 'meeting-notes')")
     expect(card).toContain('AddMeetingNotesDialog')
     expect(dialog).toContain('/api/admin/granola/list')

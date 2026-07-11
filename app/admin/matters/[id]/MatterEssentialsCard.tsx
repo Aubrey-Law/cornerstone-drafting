@@ -19,6 +19,7 @@ interface MatterEssentialsCardProps {
   matter: PipelineMatter
   details: MatterDetailsRow | null
   designSheetPlanType?: string | null
+  intakeCompletedAt?: string | null
   onSaveField: (field: keyof MatterDetailsRow, value: unknown) => Promise<void>
 }
 
@@ -35,10 +36,41 @@ function formatMoney(value: number | null | undefined) {
   return String(value)
 }
 
+function resolveDate(...candidates: Array<string | null | undefined>): string | null {
+  for (const value of candidates) {
+    if (value && value.trim()) return value
+  }
+  return null
+}
+
+type Milestone = {
+  key: string
+  label: string
+  date: string | null
+  complete: boolean
+}
+
+function MilestoneCell({ milestone, isLast }: { milestone: Milestone; isLast: boolean }) {
+  return (
+    <div className={cn('relative min-w-0 flex-1 px-2 first:pl-0 last:pr-0', !isLast && 'sm:border-r sm:border-border')}>
+      <FieldLabel>{milestone.label}</FieldLabel>
+      <p
+        className={cn(
+          'mt-1 text-sm font-medium',
+          milestone.complete ? 'text-foreground' : 'text-muted-foreground',
+        )}
+      >
+        {milestone.date ? formatDate(milestone.date) : '—'}
+      </p>
+    </div>
+  )
+}
+
 export function MatterEssentialsCard({
   matter,
   details,
   designSheetPlanType,
+  intakeCompletedAt,
   onSaveField,
 }: MatterEssentialsCardProps) {
 
@@ -51,13 +83,36 @@ export function MatterEssentialsCard({
 
   const actualSigningDate = matter.signing_date ?? details?.signing_date ?? null
 
+  const opened = resolveDate(details?.open_date, matter.matter_created)
+  const intakeDone = resolveDate(intakeCompletedAt, matter.intake_submitted_at, details?.intake_date)
+  const draftsSent = resolveDate(matter.drafts_sent_at, details?.draft_sent_date)
+  const signing = resolveDate(matter.signing_date, details?.signing_date, details?.scheduled_signing_date)
+  const closed = resolveDate(details?.closed_date)
+
+  const milestones: Milestone[] = [
+    { key: 'opened', label: 'Opened', date: opened, complete: Boolean(opened) },
+    { key: 'intake', label: 'Intake done', date: intakeDone, complete: Boolean(intakeDone) },
+    { key: 'drafts', label: 'Drafts sent', date: draftsSent, complete: Boolean(draftsSent) },
+    { key: 'signing', label: 'Signing', date: signing, complete: Boolean(signing) },
+    {
+      key: 'closed',
+      label: 'Closed',
+      date: closed,
+      complete: matter.stage === 'closed' || Boolean(closed),
+    },
+  ]
+
   return (
     <section className="rounded-lg border border-border bg-card p-4 md:p-5">
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold">Matter essentials</h3>
-        <p className="text-xs text-muted-foreground">
-          Key operational fields — scheduling, fees, and engagement status.
-        </p>
+      <h3 className="mb-4 text-sm font-semibold">Matter essentials</h3>
+      <div className="mb-4 flex flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:gap-0">
+        {milestones.map((milestone, index) => (
+          <MilestoneCell
+            key={milestone.key}
+            milestone={milestone}
+            isLast={index === milestones.length - 1}
+          />
+        ))}
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-1.5">

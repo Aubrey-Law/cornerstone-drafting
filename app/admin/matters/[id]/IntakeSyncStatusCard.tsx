@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, RefreshCw, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2 } from 'lucide-react'
+import { ChevronDown, RefreshCw, Send, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -14,6 +14,10 @@ interface IntakeSyncStatusCardProps {
   designSheetSeeded: boolean
   reviewFlags: IntakeReadinessFlag[]
   resyncPreviewCount: number
+  sendingIntake: boolean
+  intakeUrl: string | null
+  onSendIntake: () => void
+  onCopyIntakeUrl: () => void
 }
 
 export function IntakeSyncStatusCard({
@@ -22,6 +26,10 @@ export function IntakeSyncStatusCard({
   designSheetSeeded,
   reviewFlags,
   resyncPreviewCount,
+  sendingIntake,
+  intakeUrl,
+  onSendIntake,
+  onCopyIntakeUrl,
 }: IntakeSyncStatusCardProps) {
   const [open, setOpen] = useState(!designSheetSeeded || reviewFlags.length > 0)
   const [resyncing, setResyncing] = useState(false)
@@ -59,8 +67,10 @@ export function IntakeSyncStatusCard({
     }
   }
 
+  const intakeSent = Boolean(intakeUrl)
+
   return (
-    <div id="matter-intake-sync" className="scroll-mt-24 overflow-hidden rounded-lg border border-border bg-card">
+    <div id="matter-intake-actions" className="scroll-mt-24 overflow-hidden rounded-lg border border-border bg-card">
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -70,7 +80,7 @@ export function IntakeSyncStatusCard({
         <span className="flex items-center gap-2">
           <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', !open && '-rotate-90')} />
           <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold">Intake sync</span>
+          <span className="text-xs font-semibold">Intake</span>
         </span>
         {needsAttention ? (
           <span className="text-[10px] font-semibold text-amber-600">Needs attention</span>
@@ -107,7 +117,7 @@ export function IntakeSyncStatusCard({
           </div>
 
           {reviewFlags.length > 0 && (
-            <ul className="space-y-1 rounded-md border border-border bg-muted/20 p-2">
+            <ul className="space-y-1 pl-1">
               {reviewFlags.slice(0, 5).map(flag => (
                 <li key={flag.key} className="flex items-start gap-2 text-xs text-muted-foreground">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
@@ -121,6 +131,15 @@ export function IntakeSyncStatusCard({
           )}
 
           <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={onSendIntake} disabled={sendingIntake}>
+              <Send className="h-3.5 w-3.5" />
+              {sendingIntake ? 'Sending…' : intakeSent ? 'Resend intake' : 'Send intake'}
+            </Button>
+            {intakeUrl && (
+              <Button type="button" size="sm" variant="outline" onClick={onCopyIntakeUrl}>
+                Copy intake link
+              </Button>
+            )}
             <Button type="button" size="sm" variant="outline" disabled={resyncing} onClick={() => void handleResyncAll()}>
               <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', resyncing && 'animate-spin')} />
               Re-sync from intake
@@ -129,6 +148,10 @@ export function IntakeSyncStatusCard({
               <Link href={`/admin/drafting/${matterId}?step=design`}>Open design sheet</Link>
             </Button>
           </div>
+
+          {intakeUrl && (
+            <p className="break-all text-[11px] text-muted-foreground">{intakeUrl}</p>
+          )}
         </div>
       )}
     </div>
@@ -137,16 +160,16 @@ export function IntakeSyncStatusCard({
 
 function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
   return (
-    <div className="rounded-md border border-border px-3 py-2">
-      <div className="flex items-center gap-2">
-        {ok ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-700" />
-        ) : (
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-        )}
+    <div className="flex items-start gap-2">
+      {ok ? (
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-700" />
+      ) : (
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+      )}
+      <div>
         <span className="text-xs font-medium">{label}</span>
+        <p className="text-[11px] text-muted-foreground">{detail}</p>
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">{detail}</p>
     </div>
   )
 }

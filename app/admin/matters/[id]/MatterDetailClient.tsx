@@ -8,11 +8,9 @@ import {
   ArrowLeft,
   ChevronDown,
   ClipboardList,
-  ExternalLink,
   FilePenLine,
   Loader as Loader2,
   MoreHorizontal,
-  NotebookPen,
   Trash2,
   Upload,
   Clock as UnlockIcon,
@@ -74,7 +72,6 @@ import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageTaskCard'
 import { MatterOverviewHero } from './MatterOverviewHero'
 import { MatterEssentialsCard } from './MatterEssentialsCard'
-import { MatterKeyDatesRow } from './MatterKeyDatesRow'
 import { MatterLegalPlanCard } from './MatterLegalPlanCard'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
 import { useMatterDetailsSave } from './useMatterDetailsSave'
@@ -84,8 +81,6 @@ import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
-import { MatterOverviewStatusCard } from './MatterOverviewStatusCard'
-import { MatterIntakeActionsCard } from './MatterIntakeActionsCard'
 import { MatterOverviewSummaryCards } from './MatterOverviewSummaryCards'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { useMatterNotes } from './useMatterNotes'
@@ -310,10 +305,6 @@ function MatterDetailClientInner({
 
   const scrollToIntakeActions = useCallback(() => {
     document.getElementById('matter-intake-actions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
-
-  const scrollToIntakeSync = useCallback(() => {
-    document.getElementById('matter-intake-sync')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
   useEffect(() => {
@@ -952,7 +943,7 @@ function MatterDetailClientInner({
         <Tabs
           value={activeTab}
           onValueChange={v => setActiveTab(v as MatterTab)}
-          className="gap-4"
+          className="mx-auto w-full max-w-6xl gap-4"
         >
           <TabsList className="sticky top-0 z-10 w-full justify-start overflow-x-auto bg-background">
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -973,7 +964,9 @@ function MatterDetailClientInner({
 
           <TabsContent value="overview" className="space-y-4">
             <MatterOverviewHero
-              stage={matter.stage}
+              matter={matter}
+              stageSaving={stageSaving}
+              onStageChange={v => void handleStageChange(v)}
               daysOpen={daysOpen}
               agingHealth={agingHealth}
               nextAction={nextAction}
@@ -983,29 +976,16 @@ function MatterDetailClientInner({
               lastPortalMessage={lastPortalMessage}
               onIntakeActionClick={scrollToIntakeActions}
               onUnreadClick={() => setActiveTab('communications', undefined, 'portal')}
-              onReviewFlagsClick={scrollToIntakeSync}
+              onReviewFlagsClick={scrollToIntakeActions}
               onReviewUploads={handleReviewUploads}
             />
-            <MatterOverviewStatusCard
-              matter={matter}
-              stageSaving={stageSaving}
-              onStageChange={v => void handleStageChange(v)}
+            <MatterAssistantQuickPrompts
+              className="flex flex-wrap gap-2"
+              prompts={[
+                { label: 'Summarize intake', prompt: "Summarize this client's situation" },
+                { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
+              ]}
             />
-            <div className="space-y-3">
-              <MatterIntakeActionsCard
-                sendingIntake={sendingIntake}
-                intakeUrl={intakeUrl}
-                onSendIntake={() => void handleSendIntake()}
-                onCopyIntakeUrl={() => void copyIntakeUrl()}
-              />
-              <MatterAssistantQuickPrompts
-                className="flex flex-wrap gap-2"
-                prompts={[
-                  { label: 'Summarize intake', prompt: "Summarize this client's situation" },
-                  { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
-                ]}
-              />
-            </div>
             <MatterOverviewSummaryCards
               household={householdPreview}
               assetCount={assetsTabVisited ? assetCount : null}
@@ -1017,54 +997,23 @@ function MatterDetailClientInner({
               engineStageTaskLoading={engineStageTaskLoading}
               onNavigate={(tab, section) => setActiveTab(tab, section)}
             />
-            <MatterEssentialsCard
-              matter={matter}
-              details={matterDetails}
-              designSheetPlanType={designSheetPlanType}
-              onSaveField={handleSaveMatterDetailField}
-            />
-            <MatterKeyDatesRow
-              matterCreated={matter.matter_created}
-              intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
-              intakeSubmittedAt={matter.intake_submitted_at}
-              draftsSentAt={matter.drafts_sent_at}
-              signingDate={matter.signing_date}
-              scheduledSigningDate={matterDetails?.scheduled_signing_date ?? null}
-              closedDate={matterDetails?.closed_date ?? null}
-              stage={matter.stage}
-              details={matterDetails}
-            />
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
-              <div>
-                <p className="text-sm font-medium">Drafting workspace</p>
-                <p className="text-xs text-muted-foreground">
-                  Upload, review, and share drafts in the drafting workspace. Add internal meeting notes below.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => document.getElementById('meeting-notes')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                >
-                  <NotebookPen className="h-3.5 w-3.5" />
-                  Meeting notes
-                </Button>
-                <Button type="button" size="sm" variant="outline" asChild>
-                  <Link href={`/admin/drafting/${matterId}?step=review`}>
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Open review
-                  </Link>
-                </Button>
-              </div>
-            </div>
             <IntakeSyncStatusCard
               matterId={matterId}
               intakeCompleted={intakeCompleted}
               designSheetSeeded={designSheetSeeded}
               reviewFlags={reviewFlags}
               resyncPreviewCount={resyncPreviewCount}
+              sendingIntake={sendingIntake}
+              intakeUrl={intakeUrl}
+              onSendIntake={() => void handleSendIntake()}
+              onCopyIntakeUrl={() => void copyIntakeUrl()}
+            />
+            <MatterEssentialsCard
+              matter={matter}
+              details={matterDetails}
+              designSheetPlanType={designSheetPlanType}
+              intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
+              onSaveField={handleSaveMatterDetailField}
             />
             <MatterPortalUploadsCard
               matterId={matterId}
