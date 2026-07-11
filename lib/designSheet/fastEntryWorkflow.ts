@@ -101,17 +101,52 @@ export function orderFastEntrySections<T extends { id: string }>(
     .map(item => item.section)
 }
 
+export function preserveFastEntrySectionOrder<T extends { id: string }>(
+  sections: T[],
+  summaries: Record<string, DesignSectionSummary>,
+  previousOrder: string[],
+): T[] {
+  if (previousOrder.length === 0) return orderFastEntrySections(sections, summaries)
+
+  const sectionsById = new Map(sections.map(section => [section.id, section]))
+  const existing = previousOrder.flatMap(id => {
+    const section = sectionsById.get(id)
+    return section ? [section] : []
+  })
+  const existingIds = new Set(existing.map(section => section.id))
+  const added = orderFastEntrySections(
+    sections.filter(section => !existingIds.has(section.id)),
+    summaries,
+  )
+  return [...existing, ...added]
+}
+
 function cloneSlots(slots: FiduciarySlot[] | null | undefined): FiduciarySlot[] {
   return (slots ?? []).map(slot => ({ ...slot }))
+}
+
+const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
+
+function clientPrimaryWithBackups(slots: FiduciarySlot[] | null | undefined): FiduciarySlot[] {
+  const source = slots ?? []
+  return [
+    {
+      id: source[0]?.id ?? crypto.randomUUID(),
+      contact_id: CLIENT_PRIMARY_CONTACT_ID,
+      is_co: false,
+      order: 0,
+    },
+    ...source.slice(1).map((slot, index) => ({ ...slot, order: index + 1 })),
+  ]
 }
 
 export function buildCopyClientToSpousePatch(sheet: DesignSheet): Partial<DesignSheet> {
   const healthcare = getDesignSheetHealthcareProvisions(sheet)
   return {
-    spouse_trustee_slots: cloneSlots(sheet.trustee_slots),
-    spouse_executor_slots: cloneSlots(sheet.executor_slots),
-    spouse_poa_slots: cloneSlots(sheet.poa_slots),
-    spouse_hcp_slots: cloneSlots(sheet.hcp_slots),
+    spouse_trustee_slots: clientPrimaryWithBackups(sheet.trustee_slots),
+    spouse_executor_slots: clientPrimaryWithBackups(sheet.executor_slots),
+    spouse_poa_slots: clientPrimaryWithBackups(sheet.poa_slots),
+    spouse_hcp_slots: clientPrimaryWithBackups(sheet.hcp_slots),
     decisions: setDesignSheetHealthcareProvisions(sheet, {
       spouse_anatomical_gift: healthcare.client_anatomical_gift,
       spouse_advance_directive: healthcare.client_advance_directive,

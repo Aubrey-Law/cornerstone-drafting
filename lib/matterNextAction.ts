@@ -1,7 +1,13 @@
 import type { PipelineMatter } from '@/types/database'
 
 export type MatterNextActionTone = 'default' | 'warning' | 'success'
-export type MatterNextActionKind = 'send-intake' | 'waiting-intake' | 'review-intake' | 'draft'
+export type MatterNextActionKind =
+  | 'send-intake'
+  | 'send-engagement'
+  | 'waiting-intake'
+  | 'review-intake'
+  | 'waiting-engagement'
+  | 'draft'
 
 export interface MatterNextAction {
   kind: MatterNextActionKind
@@ -12,7 +18,17 @@ export interface MatterNextAction {
   tone: MatterNextActionTone
 }
 
-export function computeMatterNextAction(matter: PipelineMatter): MatterNextAction {
+/** Engagement e-sign state, when the caller has matter_details loaded. */
+export interface EngagementSnapshot {
+  signed: boolean
+  sentAt: string | null
+  status: string | null
+}
+
+export function computeMatterNextAction(
+  matter: PipelineMatter,
+  engagement?: EngagementSnapshot,
+): MatterNextAction {
   const intakeStatus = matter.intake_status?.toLowerCase() ?? ''
   const intakeComplete = intakeStatus === 'completed' || intakeStatus === 'approved' || intakeStatus === 'submitted'
   const intakeSent = Boolean(matter.intake_sent_at) || intakeStatus === 'sent' || intakeComplete
@@ -24,6 +40,21 @@ export function computeMatterNextAction(matter: PipelineMatter): MatterNextActio
       detail: 'Email the client a secure link to complete their intake before drafting.',
       href: `/admin/matters/${matter.matter_id}`,
       cta: 'Send intake',
+      tone: 'warning',
+    }
+  }
+
+  const engagementUnsigned = engagement && !engagement.signed
+  if (engagementUnsigned && (!engagement.sentAt || engagement.status === 'declined')) {
+    return {
+      kind: 'send-engagement',
+      title: 'Send engagement agreement',
+      detail:
+        engagement.status === 'declined'
+          ? 'The client declined the last engagement — review and resend it for signature.'
+          : 'Email the client the engagement agreement to sign before work begins.',
+      href: `/admin/matters/${matter.matter_id}`,
+      cta: 'Send engagement',
       tone: 'warning',
     }
   }
@@ -47,6 +78,17 @@ export function computeMatterNextAction(matter: PipelineMatter): MatterNextActio
       href: `/admin/drafting/${matter.matter_id}`,
       cta: 'Open drafting',
       tone: 'success',
+    }
+  }
+
+  if (engagementUnsigned && engagement.sentAt) {
+    return {
+      kind: 'waiting-engagement',
+      title: 'Awaiting engagement signature',
+      detail: `Sent ${new Date(engagement.sentAt).toLocaleDateString()} — the client hasn't signed yet.`,
+      href: `/admin/matters/${matter.matter_id}`,
+      cta: 'Resend engagement',
+      tone: 'default',
     }
   }
 

@@ -1,6 +1,6 @@
 import PizZip from 'pizzip'
 import { MISSING_MARKER_RE } from '@/lib/estateGenerator/node/renderText'
-import { UNRESOLVED_RE } from '@/lib/drafting/docxMarkerPatterns'
+import { LITERAL_BRACKET_TOKENS, UNRESOLVED_RE } from '@/lib/drafting/docxMarkerPatterns'
 
 // Literal attorney-TODO clause text (e.g. `[TODO: ATTORNEY-APPROVED NO-CONTEST
 // CLAUSE …]`) lifted verbatim from lib/drafting/clauses.ts into a generated
@@ -58,7 +58,9 @@ export function scanDocxBufferForMarkers(buffer: Buffer): DocxMarkerScan {
     const text = partText(file.asText())
     todoCount += [...text.matchAll(TODO_MARKER_RE)].length
     for (const match of text.matchAll(MISSING_MARKER_RE)) missingFields.add(match[1])
-    for (const match of text.matchAll(UNRESOLVED_RE)) unresolved.add(match[0])
+    for (const match of text.matchAll(UNRESOLVED_RE)) {
+      if (!LITERAL_BRACKET_TOKENS.has(match[0])) unresolved.add(match[0])
+    }
   }
 
   const unresolvedList = Array.from(unresolved).sort()

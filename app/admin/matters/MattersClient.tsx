@@ -31,6 +31,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const LawmaticsImportDialog = dynamic(() => import('./LawmaticsImportDialog'), { ssr: false })
 
@@ -446,41 +454,41 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="min-w-[72rem] w-full text-left text-xs">
-              <thead className="border-b border-border text-muted-foreground">
-                <tr>
-                  <th className="w-10 px-3 py-2">
+          <div className="rounded-lg border border-border bg-card">
+            <Table className="min-w-[72rem]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
                     <Checkbox
                       checked={allFilteredSelected}
                       onCheckedChange={checked => toggleAllFiltered(checked === true)}
                       aria-label="Select all visible matters"
                     />
-                  </th>
-                  <th className="px-3 py-2 font-medium">Matter Number</th>
-                  <th className="px-3 py-2 font-medium">Client Name</th>
-                  <th className="px-3 py-2 font-medium">Email</th>
-                  <th className="px-3 py-2 font-medium">Phone</th>
-                  <th className="px-3 py-2 font-medium">Practice Area</th>
-                  <th className="px-3 py-2 font-medium">Stage</th>
-                  <th className="px-3 py-2 font-medium">Intake</th>
-                  <th className="w-10 px-3 py-2" aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                  <TableHead>Matter Number</TableHead>
+                  <TableHead>Client Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Practice Area</TableHead>
+                  <TableHead>Stage</TableHead>
+                  <TableHead>Intake</TableHead>
+                  <TableHead className="w-10" aria-label="Actions" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filtered.map(m => (
-                  <tr key={m.matter_id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2.5">
+                  <TableRow key={m.matter_id}>
+                    <TableCell>
                       <Checkbox
                         checked={Boolean(selected[m.matter_id])}
                         onCheckedChange={checked => toggleSelected(m.matter_id, checked === true)}
                         aria-label={`Select matter for ${m.client_name || 'client'}`}
                       />
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {m.matter_number || '—'}
-                    </td>
-                    <td className="px-3 py-2.5">
+                    </TableCell>
+                    <TableCell>
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={`/admin/matters/${m.matter_id}`}
@@ -508,21 +516,21 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                           </Badge>
                         )}
                       </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {m.client_email || '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {m.client_phone || '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {practiceAreaLabel(m.practice_area)}
-                    </td>
-                    <td className="px-3 py-2.5">{stageLabel(m.stage)}</td>
-                    <td className="px-3 py-2.5 capitalize text-muted-foreground">
+                    </TableCell>
+                    <TableCell>{stageLabel(m.stage)}</TableCell>
+                    <TableCell className="capitalize text-muted-foreground">
                       {intakeStatusLabel(m.intake_status)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <button
                         type="button"
                         className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
@@ -531,11 +539,11 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

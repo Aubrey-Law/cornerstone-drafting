@@ -21,6 +21,9 @@ interface MatterEssentialsCardProps {
   designSheetPlanType?: string | null
   intakeCompletedAt?: string | null
   onSaveField: (field: keyof MatterDetailsRow, value: unknown) => Promise<void>
+  esignEnabled?: boolean
+  engagementSending?: boolean
+  onSendEngagement?: () => void
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -72,6 +75,9 @@ export function MatterEssentialsCard({
   designSheetPlanType,
   intakeCompletedAt,
   onSaveField,
+  esignEnabled = false,
+  engagementSending = false,
+  onSendEngagement,
 }: MatterEssentialsCardProps) {
 
   const matterPlanType = normalizePlanType(details?.plan_type ?? matter.plan_type ?? 'TBD')
@@ -88,6 +94,15 @@ export function MatterEssentialsCard({
   const draftsSent = resolveDate(matter.drafts_sent_at, details?.draft_sent_date)
   const signing = resolveDate(matter.signing_date, details?.signing_date, details?.scheduled_signing_date)
   const closed = resolveDate(details?.closed_date)
+
+  const handleFeeCollectedChange = async (checked: boolean) => {
+    await onSaveField('fee_collected', checked)
+    if (checked && !details?.fee_collected_date) {
+      await onSaveField('fee_collected_date', new Date().toISOString().slice(0, 10))
+    } else if (!checked && details?.fee_collected_date) {
+      await onSaveField('fee_collected_date', null)
+    }
+  }
 
   const milestones: Milestone[] = [
     { key: 'opened', label: 'Opened', date: opened, complete: Boolean(opened) },
@@ -198,39 +213,94 @@ export function MatterEssentialsCard({
           />
         </label>
 
-        <label className={cn('flex items-center gap-2 pt-6 sm:col-span-2')}>
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-border"
-            checked={Boolean(details?.fee_collected)}
-            onChange={event => void onSaveField('fee_collected', event.target.checked)}
+        <label className="space-y-1.5">
+          <FieldLabel>Est. estate value</FieldLabel>
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            className="h-9"
+            placeholder="0.00"
+            defaultValue={formatMoney(details?.est_estate_value)}
+            onBlur={event => {
+              const raw = event.target.value.trim()
+              void onSaveField('est_estate_value', raw === '' ? null : Number(raw))
+            }}
           />
-          <span className="text-sm font-medium">Fee collected</span>
-          {details?.fee_collected_date && (
-            <span className="text-xs text-muted-foreground">
-              ({formatDate(details.fee_collected_date)})
-            </span>
-          )}
         </label>
 
-        <label className="space-y-1.5">
-          <FieldLabel>Fee collected date</FieldLabel>
-          <Input
-            type="date"
-            className="h-9"
-            defaultValue={details?.fee_collected_date ?? ''}
-            onBlur={event => void onSaveField('fee_collected_date', event.target.value)}
-          />
-        </label>
+        <div className="space-y-1.5">
+          <FieldLabel>Fee collected</FieldLabel>
+          <div className="flex h-9 items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0 rounded border-border"
+              checked={Boolean(details?.fee_collected)}
+              onChange={event => void handleFeeCollectedChange(event.target.checked)}
+            />
+            {details?.fee_collected ? (
+              <Input
+                key={details?.fee_collected_date ?? 'unset'}
+                type="date"
+                className="h-9"
+                aria-label="Fee collected date"
+                defaultValue={details?.fee_collected_date ?? ''}
+                onBlur={event => void onSaveField('fee_collected_date', event.target.value)}
+              />
+            ) : (
+              <span className="text-sm text-muted-foreground">Not collected</span>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <FieldLabel>Engagement</FieldLabel>
+          <div className="flex h-9 flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={Boolean(details?.engagement_signed)}
+                onChange={event => void onSaveField('engagement_signed', event.target.checked)}
+              />
+              <span className="text-sm font-medium">Signed</span>
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {details?.engagement_signed
+                ? details?.engagement_signed_at
+                  ? `Signed ${formatDate(details.engagement_signed_at)}`
+                  : ''
+                : details?.engagement_status === 'declined'
+                  ? 'Declined'
+                  : details?.engagement_sent_at
+                    ? `Sent ${formatDate(details.engagement_sent_at)}`
+                    : 'Not sent'}
+            </span>
+            {esignEnabled && !details?.engagement_signed && (
+              <button
+                type="button"
+                disabled={engagementSending}
+                onClick={onSendEngagement}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {engagementSending
+                  ? 'Sending…'
+                  : details?.engagement_sent_at || details?.engagement_status === 'declined'
+                    ? 'Resend'
+                    : 'Send engagement'}
+              </button>
+            )}
+          </div>
+        </div>
 
         <label className={cn('flex items-center gap-2 pt-6')}>
           <input
             type="checkbox"
             className="h-4 w-4 rounded border-border"
-            checked={Boolean(details?.engagement_signed)}
-            onChange={event => void onSaveField('engagement_signed', event.target.checked)}
+            checked={Boolean(details?.ep_ma_estate_taxable)}
+            onChange={event => void onSaveField('ep_ma_estate_taxable', event.target.checked)}
           />
-          <span className="text-sm font-medium">Engagement signed</span>
+          <span className="text-sm font-medium">MA estate taxable</span>
         </label>
 
         <label className="space-y-1.5 sm:col-span-2">

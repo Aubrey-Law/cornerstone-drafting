@@ -23,7 +23,7 @@ export function useMatterDetailsSave(matterId: string, initial: MatterDetailsRow
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data.error ?? `Failed to save ${field}`)
         setDetails(prev => ({ ...(prev ?? {}), [field]: normalizedValue, ...(data.row ?? {}) }))
-        toast.success('Saved', { duration: 1200 })
+        toast.success('Saved', { id: 'matter-details-save', duration: 1200 })
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Save failed')
         throw error

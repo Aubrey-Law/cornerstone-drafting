@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useRef, useCallback, useTransition } from 'react'
+import { useMemo, useState, useEffect, useLayoutEffect, useRef, useCallback, useTransition, type UIEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
@@ -141,6 +141,9 @@ function DesignSheetShellImpl({
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
   const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
   const attorneyPresetVersionRef = useRef(0)
+  const pageScrollContainerRef = useRef<HTMLElement>(null)
+  const pageScrollTopRef = useRef(0)
+  const previousPageSectionIdRef = useRef<string | null>(null)
   const { loadPreferences } = useUserPreferences()
 
   useEffect(() => {
@@ -223,6 +226,20 @@ function DesignSheetShellImpl({
     [summaries, visibleSections],
   )
   const resolvedSectionId = resolveDesignSectionId(sectionDefs, activeSectionId)
+  if (previousPageSectionIdRef.current !== resolvedSectionId) {
+    previousPageSectionIdRef.current = resolvedSectionId
+    pageScrollTopRef.current = 0
+  }
+
+  useLayoutEffect(() => {
+    const pageScrollContainer = pageScrollContainerRef.current
+    if (pageScrollContainer) pageScrollContainer.scrollTop = pageScrollTopRef.current
+  })
+
+  const handlePageScroll = (event: UIEvent<HTMLElement>) => {
+    pageScrollTopRef.current = event.currentTarget.scrollTop
+  }
+
   const activeSection = resolvedSectionId
     ? visibleSections.find(section => section.id === resolvedSectionId) ?? null
     : null
@@ -369,7 +386,11 @@ function DesignSheetShellImpl({
                 overflow: embedded ? 'hidden' : undefined,
               }}
             >
-              <main style={{ flex: 3, minWidth: 'min(520px, 100%)', display: 'flex', flexDirection: 'column', gap: 18, ...(embedded ? { minHeight: 0, overflowY: 'auto' } : {}) }}>
+              <main
+                ref={pageScrollContainerRef}
+                onScroll={handlePageScroll}
+                style={{ flex: 3, minWidth: 'min(520px, 100%)', display: 'flex', flexDirection: 'column', gap: 18, ...(embedded ? { minHeight: 0, overflowY: 'auto' } : {}) }}
+              >
                 <DesignAccelerationBar
                   sheet={sheet}
                   updateField={updateField}

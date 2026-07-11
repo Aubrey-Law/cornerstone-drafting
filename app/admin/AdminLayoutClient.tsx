@@ -15,6 +15,7 @@ import {
   Phone,
   Settings,
   Sun,
+  UserPlus,
 } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
@@ -57,6 +58,7 @@ const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 const navItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
+  { href: '/admin/leads', label: 'Leads', icon: UserPlus },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
   { href: '/admin/pipeline/aging', label: 'Aging', icon: Clock },

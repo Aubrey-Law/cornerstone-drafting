@@ -120,6 +120,7 @@ interface MatterDetailClientProps {
   resyncPreviewCount?: number
   twilioSmsEnabled?: boolean
   emailSendEnabled?: boolean
+  esignEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
 }
 
@@ -191,6 +192,7 @@ function MatterDetailClientInner({
   resyncPreviewCount = 0,
   twilioSmsEnabled = false,
   emailSendEnabled = false,
+  esignEnabled = false,
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
 }: MatterDetailClientProps) {
   const token = useAccessToken()
@@ -252,7 +254,7 @@ function MatterDetailClientInner({
     setUnreviewedUploadCounts(initialUnreviewedUploadCounts)
   }, [initialUnreviewedUploadCounts])
 
-  const { details: matterDetails, saveField: saveMatterDetailField } = useMatterDetailsSave(
+  const { details: matterDetails, saveField: saveMatterDetailField, setDetails: setMatterDetails } = useMatterDetailsSave(
     matterId,
     initialMatterDetails,
   )
@@ -765,6 +767,32 @@ function MatterDetailClientInner({
     }
   }
 
+  const [sendingEngagement, setSendingEngagement] = useState(false)
+  const handleSendEngagement = async () => {
+    if (!token) {
+      toast.error('Not signed in')
+      return
+    }
+    setSendingEngagement(true)
+    try {
+      const res = await fetch(`/api/admin/matters/${matter.matter_id}/engagement`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not send engagement')
+      if (body.row) {
+        setMatterDetails(prev => ({ ...(prev ?? {}), ...(body.row as MatterDetailsRow) }))
+      }
+      toast.success(`Engagement sent to ${matter.client_email ?? 'the client'}`)
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not send engagement')
+    } finally {
+      setSendingEngagement(false)
+    }
+  }
+
   const copyIntakeUrl = async () => {
     if (!intakeUrl) return
     try {
@@ -802,7 +830,20 @@ function MatterDetailClientInner({
   const unlockRequestedAt = clientIntakeRow?.unlock_requested_at ?? null
   const showUnlockBanner = Boolean(intakeCompleted && unlockRequestedAt)
   const matterLabel = matter.client_name || matter.matter_name || 'this matter'
-  const nextAction = useMemo(() => computeMatterNextAction(matter), [matter])
+  const nextAction = useMemo(
+    () =>
+      computeMatterNextAction(
+        matter,
+        esignEnabled
+          ? {
+              signed: Boolean(matterDetails?.engagement_signed),
+              sentAt: matterDetails?.engagement_sent_at ?? null,
+              status: matterDetails?.engagement_status ?? null,
+            }
+          : undefined,
+      ),
+    [matter, matterDetails, esignEnabled],
+  )
   const daysOpen = useMemo(() => matterDaysOpen(matter.matter_created), [matter.matter_created])
   const unreadPortalCount = useMemo(
     () => portalMessages.filter(m => m.sender_role === 'client' && !m.read_at).length,
@@ -975,16 +1016,19 @@ function MatterDetailClientInner({
               reviewFlagsCount={reviewFlags.length}
               lastPortalMessage={lastPortalMessage}
               onIntakeActionClick={scrollToIntakeActions}
+              onEngagementActionClick={() => void handleSendEngagement()}
               onUnreadClick={() => setActiveTab('communications', undefined, 'portal')}
               onReviewFlagsClick={scrollToIntakeActions}
               onReviewUploads={handleReviewUploads}
-            />
-            <MatterAssistantQuickPrompts
-              className="flex flex-wrap gap-2"
-              prompts={[
-                { label: 'Summarize intake', prompt: "Summarize this client's situation" },
-                { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
-              ]}
+              quickPrompts={
+                <MatterAssistantQuickPrompts
+                  className="flex flex-wrap gap-2"
+                  prompts={[
+                    { label: 'Summarize intake', prompt: "Summarize this client's situation" },
+                    { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
+                  ]}
+                />
+              }
             />
             <MatterOverviewSummaryCards
               household={householdPreview}
@@ -1014,12 +1058,9 @@ function MatterDetailClientInner({
               designSheetPlanType={designSheetPlanType}
               intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
               onSaveField={handleSaveMatterDetailField}
-            />
-            <MatterPortalUploadsCard
-              matterId={matterId}
-              open={portalUploadsOpen}
-              onOpenChange={setPortalUploadsOpen}
-              onOpened={() => void handleMarkPortalUploadsReviewed()}
+              esignEnabled={esignEnabled}
+              engagementSending={sendingEngagement}
+              onSendEngagement={() => void handleSendEngagement()}
             />
             {showLegalPlan && (
               <MatterLegalPlanCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />
@@ -1035,6 +1076,12 @@ function MatterDetailClientInner({
                 />
               </div>
             )}
+            <MatterPortalUploadsCard
+              matterId={matterId}
+              open={portalUploadsOpen}
+              onOpenChange={setPortalUploadsOpen}
+              onOpened={() => void handleMarkPortalUploadsReviewed()}
+            />
           </TabsContent>
 
           <MatterPeopleTab

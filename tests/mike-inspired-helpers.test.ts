@@ -16,6 +16,7 @@ import {
   DEFAULT_OPENAI_MODEL,
 } from '@/lib/userPreferences'
 import { normalizeApiKeyProvider } from '@/lib/userApiKeys'
+import { estimateUsdCost } from '@/lib/aiUsage'
 
 describe('secretBox', () => {
   it('masks hints', () => {
@@ -56,7 +57,7 @@ describe('user preferences models', () => {
     })
     expect(resolveAnthropicModel(prefs)).toBe('claude-opus-4-5')
     expect(resolveAnthropicModel({})).toBe(DEFAULT_ANTHROPIC_MODEL)
-    expect(DEFAULT_ANTHROPIC_MODEL).toBe('claude-sonnet-4-6')
+    expect(DEFAULT_ANTHROPIC_MODEL).toBe('claude-opus-4-8')
   })
 
   it('parses multi-provider model preferences', () => {
@@ -83,6 +84,27 @@ describe('user preferences models', () => {
       provider: 'anthropic',
       model: DEFAULT_ANTHROPIC_MODEL,
     })
+  })
+})
+
+describe('ai usage cost estimates', () => {
+  const oneMillionInOut = {
+    input_tokens: 1_000_000,
+    output_tokens: 1_000_000,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+  }
+
+  it('prices opus 4.6+ at $5/$25 per MTok', () => {
+    expect(estimateUsdCost({ model: 'claude-opus-4-8', ...oneMillionInOut })).toBe(30)
+  })
+
+  it('prices sonnet 5 at $3/$15 per MTok', () => {
+    expect(estimateUsdCost({ model: 'claude-sonnet-5', ...oneMillionInOut })).toBe(18)
+  })
+
+  it('keeps legacy opus 4.5 at $15/$75 per MTok', () => {
+    expect(estimateUsdCost({ model: 'claude-opus-4-5', ...oneMillionInOut })).toBe(90)
   })
 })
 

@@ -13,12 +13,14 @@ export async function listMatterAssistantHistory(
   matterId: string,
   userId: string,
 ): Promise<AssistantTurn[]> {
+  // Newest rows first so long threads keep their most recent turns, then
+  // reversed back to chronological order for callers.
   const { data, error } = await admin
     .from('matter_assistant_messages')
     .select('role, content, created_at')
     .eq('matter_id', matterId)
     .eq('user_id', userId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(MAX_HISTORY_TURNS)
 
   if (error) {
@@ -28,11 +30,13 @@ export async function listMatterAssistantHistory(
     throw new Error(error.message)
   }
 
-  return (data ?? []).map(row => ({
-    role: row.role as 'user' | 'assistant',
-    content: row.content,
-    createdAt: row.created_at,
-  }))
+  return (data ?? [])
+    .map(row => ({
+      role: row.role as 'user' | 'assistant',
+      content: row.content,
+      createdAt: row.created_at,
+    }))
+    .reverse()
 }
 
 export async function appendMatterAssistantTurns(

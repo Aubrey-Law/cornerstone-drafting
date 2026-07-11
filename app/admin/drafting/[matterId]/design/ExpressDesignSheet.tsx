@@ -24,7 +24,7 @@ import { buildDesignSectionDefs } from './designSectionCatalog'
 import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
-import { orderFastEntrySections } from '@/lib/designSheet/fastEntryWorkflow'
+import { preserveFastEntrySectionOrder } from '@/lib/designSheet/fastEntryWorkflow'
 import { DesignAccelerationBar } from '@/components/design-sheet/DesignAccelerationBar'
 import { DesignFinalReview } from '@/components/design-sheet/DesignFinalReview'
 import { useUserPreferences } from '@/lib/userPreferencesClient'
@@ -135,6 +135,7 @@ function ExpressDesignSheetImpl({
   const { loadPreferences } = useUserPreferences()
   const sectionEls = useRef<Record<string, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const sectionOrderRef = useRef<string[]>([])
 
   useEffect(() => {
     let active = true
@@ -190,7 +191,11 @@ function ExpressDesignSheetImpl({
       intakeSnapshot, isLP, lpDataState, matter, matterId, selectedDocKeysCount, sheet, updateField, updateLpPatch])
 
   const orderedSections = useMemo(
-    () => orderFastEntrySections(sections, sectionSummaries),
+    () => {
+      const ordered = preserveFastEntrySectionOrder(sections, sectionSummaries, sectionOrderRef.current)
+      sectionOrderRef.current = ordered.map(section => section.id)
+      return ordered
+    },
     [sectionSummaries, sections],
   )
 

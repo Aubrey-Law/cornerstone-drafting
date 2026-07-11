@@ -6,6 +6,7 @@ import type {
   LlmCompleteResult,
   LlmConfig,
   LlmToolDefinition,
+  LlmUsage,
 } from '@/lib/llm/types'
 
 function toAnthropicTools(tools: LlmToolDefinition[]): Anthropic.Tool[] {
@@ -47,6 +48,12 @@ export async function chatAnthropic(
   const tools = request.tools ?? []
   const maxRounds = request.maxToolRounds ?? 4
   const toolsUsed: LlmChatResult['toolsUsed'] = []
+  const usage: LlmUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  }
   let replyText = ''
   const workingMessages: Anthropic.MessageParam[] = request.messages.map(m => ({
     role: m.role,
@@ -75,6 +82,10 @@ export async function chatAnthropic(
     }
 
     const final = await stream.finalMessage()
+    usage.inputTokens += final.usage.input_tokens
+    usage.outputTokens += final.usage.output_tokens
+    usage.cacheReadInputTokens += final.usage.cache_read_input_tokens ?? 0
+    usage.cacheCreationInputTokens += final.usage.cache_creation_input_tokens ?? 0
     const toolUses = final.content.filter(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
     )
@@ -91,6 +102,7 @@ export async function chatAnthropic(
         model: config.model,
         keySource: config.keySource,
         toolsUsed,
+        usage,
       }
     }
 
@@ -123,5 +135,6 @@ export async function chatAnthropic(
     model: config.model,
     keySource: config.keySource,
     toolsUsed,
+    usage,
   }
 }

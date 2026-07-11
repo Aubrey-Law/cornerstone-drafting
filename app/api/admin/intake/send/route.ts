@@ -19,30 +19,37 @@ export async function POST(req: Request) {
   const { err, userId, user } = await requireAdmin(req)
   if (err) return err
 
-  const body = await req.json().catch(() => ({})) as { matterId?: string }
+  // Accepts either a matterId (matter-attached intake) or an intakeId
+  // (standalone lead intake — the Leads page sends intake before a matter exists).
+  const body = await req.json().catch(() => ({})) as { matterId?: string; intakeId?: string }
   const matterId = typeof body.matterId === 'string' ? body.matterId.trim() : ''
-  if (!matterId) {
-    return NextResponse.json({ error: 'matterId is required' }, { status: 400 })
+  const leadIntakeId = typeof body.intakeId === 'string' ? body.intakeId.trim() : ''
+  if (!matterId && !leadIntakeId) {
+    return NextResponse.json({ error: 'matterId or intakeId is required' }, { status: 400 })
   }
 
   const admin = getAdminClient()
-  const { data: matter, error: matterError } = await admin
-    .from('matters')
-    .select('id, client_intake_id')
-    .eq('id', matterId)
-    .maybeSingle()
+  let intakeId = leadIntakeId
+  if (matterId) {
+    const { data: matter, error: matterError } = await admin
+      .from('matters')
+      .select('id, client_intake_id')
+      .eq('id', matterId)
+      .maybeSingle()
 
-  if (matterError) {
-    return NextResponse.json({ error: matterError.message }, { status: 500 })
-  }
-  if (!matter?.client_intake_id) {
-    return NextResponse.json({ error: 'Matter not found or missing intake' }, { status: 404 })
+    if (matterError) {
+      return NextResponse.json({ error: matterError.message }, { status: 500 })
+    }
+    if (!matter?.client_intake_id) {
+      return NextResponse.json({ error: 'Matter not found or missing intake' }, { status: 404 })
+    }
+    intakeId = matter.client_intake_id
   }
 
   const { data: intakeRow, error: intakeFetchError } = await admin
     .from('client_intake')
     .select('id, email, first_name, last_name')
-    .eq('id', matter.client_intake_id)
+    .eq('id', intakeId)
     .maybeSingle()
 
   if (intakeFetchError) {
@@ -62,7 +69,7 @@ export async function POST(req: Request) {
       intake_token_hash: invite.tokenHash,
       intake_token_expires_at: invite.expiresAt,
     })
-    .eq('id', matter.client_intake_id)
+    .eq('id', intakeId)
 
   if (intakeError) {
     return NextResponse.json({ error: intakeError.message }, { status: 500 })
@@ -96,20 +103,22 @@ export async function POST(req: Request) {
     },
   })
 
-  try {
-    const actorName =
-      (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? null
-    await admin.from('matter_activity').insert({
-      matter_id: matterId,
-      event_type: 'intake_sent',
-      title: 'Intake sent',
-      detail: url,
-      actor_id: userId,
-      actor_email: user?.email ?? null,
-      actor_name: actorName,
-    })
-  } catch (e) {
-    console.warn('matter_activity intake_sent skipped:', e)
+  if (matterId) {
+    try {
+      const actorName =
+        (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? null
+      await admin.from('matter_activity').insert({
+        matter_id: matterId,
+        event_type: 'intake_sent',
+        title: 'Intake sent',
+        detail: url,
+        actor_id: userId,
+        actor_email: user?.email ?? null,
+        actor_name: actorName,
+      })
+    } catch (e) {
+      console.warn('matter_activity intake_sent skipped:', e)
+    }
   }
 
   return NextResponse.json({

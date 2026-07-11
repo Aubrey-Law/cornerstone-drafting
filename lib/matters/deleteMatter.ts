@@ -1,15 +1,5 @@
-import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getR2Client, R2_BUCKET } from '@/lib/r2'
-
-async function deleteR2Key(key: string | null | undefined) {
-  if (!key?.trim()) return
-  try {
-    await getR2Client().send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }))
-  } catch (e) {
-    console.error('R2 delete failed (orphaned object):', key, e)
-  }
-}
+import { deleteR2Key } from '@/lib/r2Delete'
 
 /** Permanently delete a matter, its intake, documents (DB + best-effort R2), and related rows. */
 export async function deleteMatter(admin: SupabaseClient, matterId: string) {

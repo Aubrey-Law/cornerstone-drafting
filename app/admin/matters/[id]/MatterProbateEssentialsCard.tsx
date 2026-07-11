@@ -75,12 +75,42 @@ export function MatterProbateEssentialsCard({ details, onSaveField }: MatterProb
         </label>
 
         <label className="space-y-1.5">
+          <FieldLabel>PR appointed</FieldLabel>
+          <Input
+            type="date"
+            className="h-9"
+            defaultValue={details?.pb_pr_appointment_date ?? ''}
+            onBlur={event => void onSaveField('pb_pr_appointment_date', event.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1.5">
           <FieldLabel>Inventory due date</FieldLabel>
           <Input
             type="date"
             className="h-9"
             defaultValue={details?.pb_inventory_due_date ?? ''}
             onBlur={event => void onSaveField('pb_inventory_due_date', event.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <FieldLabel>Claims period ends</FieldLabel>
+          <Input
+            type="date"
+            className="h-9"
+            defaultValue={details?.pb_claims_period_end_date ?? ''}
+            onBlur={event => void onSaveField('pb_claims_period_end_date', event.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <FieldLabel>MA estate tax return due</FieldLabel>
+          <Input
+            type="date"
+            className="h-9"
+            defaultValue={details?.pb_m706_due_date ?? ''}
+            onBlur={event => void onSaveField('pb_m706_due_date', event.target.value)}
           />
         </label>
 
