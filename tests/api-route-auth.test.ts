@@ -4,8 +4,21 @@ import path from 'node:path'
 
 const API_ROOT = path.join(process.cwd(), 'app/api')
 
-/** Routes intentionally reachable without a logged-in firm user. */
-const PUBLIC_ROUTE_SUFFIXES = ['health/route.ts'] as const
+/**
+ * Routes intentionally reachable without a logged-in firm user. Each entry
+ * documents why anonymous access is safe — a new route only belongs here with
+ * the same kind of justification.
+ */
+const PUBLIC_ROUTE_SUFFIXES = [
+  // Deployment probe; reports configuration status only.
+  'health/route.ts',
+  // Client account creation: gated on a hashed, expiring intake invite token
+  // and the account email must match the invited email.
+  'intake/signup/route.ts',
+  // Address-autocomplete proxy used by anonymous intake clients: same-origin
+  // guard + per-IP rate limit protect the Google Places quota.
+  'places/route.ts',
+] as const
 
 function listRouteFiles(dir = API_ROOT, acc: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -41,6 +54,12 @@ describe('API route auth coverage', () => {
         return
       }
 
+      // Pure re-export aliases inherit the auth of the route they re-export
+      // (e.g. /api/microsoft/callback → /api/admin/microsoft/callback).
+      if (/export \{ \w+ \} from '.*\/route'/.test(source)) {
+        return
+      }
+
       if (routePath.includes('/admin/')) {
         expect(
           hasAny(source, [
@@ -49,6 +68,7 @@ describe('API route auth coverage', () => {
             /ENABLE_DEBUG_ROUTES/,
             /isAdmin\b/,
             /\['attorney', 'admin'\]/,
+            /\['admin', 'attorney'\]/,
           ]),
         ).toBe(true)
         return
@@ -59,6 +79,11 @@ describe('API route auth coverage', () => {
           /requireAdmin\b/,
           /getUser\b/,
           /Unauthorized/,
+          // Webhooks: cryptographic signature verification instead of a session.
+          /verifyTwilioRequest\b/,
+          /verifyRetellSignature\b/,
+          // Intake uploads: invite-token or bearer auth resolved in a shared helper.
+          /resolveIntakeUploadAccess\b/,
         ]),
       ).toBe(true)
     })
