@@ -1,9 +1,11 @@
 'use client'
 
-import { Download, Loader2, Upload } from 'lucide-react'
+import { Copy, Download, Loader2, Upload } from 'lucide-react'
 import { guidedSecondaryButtonStyle } from './styles'
 
 interface DesignToolbarActionsProps {
+  /** Opens the "copy plan structure from another matter" picker. */
+  onClonePlan?: () => void
   onImport: () => void
   onSave: () => void
   onExport: () => void
@@ -15,6 +17,7 @@ interface DesignToolbarActionsProps {
 }
 
 export function DesignToolbarActions({
+  onClonePlan,
   onImport,
   onSave,
   onExport,
@@ -37,6 +40,12 @@ export function DesignToolbarActions({
 
   return (
     <>
+      {onClonePlan && (
+        <button type="button" onClick={onClonePlan} disabled={pending} style={btnStyle()}>
+          <Copy size={14} />
+          Copy plan
+        </button>
+      )}
       <button type="button" onClick={onImport} disabled={pending} style={btnStyle()}>
         <Upload size={14} />
         Import

@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { memo, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import { Calendar, Check, Pencil, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,6 +21,8 @@ interface MatterNotesTabProps {
   noteText: string
   noteType: EditableNoteType
   notes: MatterNoteListItem[]
+  /** Meeting-note documents section (Granola imports), rendered below text notes. */
+  meetingNotes?: ReactNode
   textareaRef?: RefObject<HTMLTextAreaElement | null>
   setEditingNoteText: Dispatch<SetStateAction<string>>
   setEditingNoteType: Dispatch<SetStateAction<EditableNoteType>>
@@ -43,6 +45,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
     noteText,
     noteType,
     notes,
+    meetingNotes,
     textareaRef,
     setEditingNoteText,
     setEditingNoteType,
@@ -208,6 +211,8 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
           </Button>
         </div>
       </div>
+
+      {meetingNotes}
     </TabsContent>
   )
 }

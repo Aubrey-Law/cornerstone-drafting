@@ -18,7 +18,6 @@ run and test it inside a Cursor Cloud VM.
 | Next.js dev server | yes | `npm run dev` → http://localhost:3002 | Uses `next dev --webpack`. Reads `.env.local`. |
 | Supabase (Postgres + Auth + Storage + Studio) | yes | local stack via `supabase start` (needs Docker) | Auth + all matter/design/document data. |
 | Cloudflare R2 | optional locally | external service (no local emulator) | Only needed for document save/upload/preview and `/api/health?check=full`. Design editing + draft **download-ZIP** work without it. |
-| Python estate generator venv | optional | `npm run estate-generator:setup` | Only a fallback engine; the default `ESTATE_GENERATOR_ENGINE=node` runs in-process without it. Needs the `python3.12-venv` system package. |
 
 ### One-time environment prerequisites (not in the update script)
 
@@ -31,8 +30,6 @@ that a fresh VM needs and must be done manually (kept out of the update script o
    Start the daemon with `sudo dockerd` (run it in a background tmux session). The
    `ubuntu` user is in the `docker` group, but new shells may not pick that up — prefix
    docker/supabase commands with `sg docker -c "..."` if you hit socket permission errors.
-2. **python3.12-venv** system package is required only if you want the optional Python
-   generator: `sudo apt-get install -y python3.12-venv` then `npm run estate-generator:setup`.
 
 ### Bringing up the local stack
 

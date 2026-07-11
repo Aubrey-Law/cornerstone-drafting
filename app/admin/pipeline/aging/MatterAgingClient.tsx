@@ -31,18 +31,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-type HealthFilter = 'all' | 'red' | 'amber' | 'green' | 'overdue' | 'snoozed'
+// One question, three answers: what needs me, what's fine, what did I park.
+type HealthFilter = 'attention' | 'on-track' | 'snoozed' | 'all'
 
 const HEALTH_DOT: Record<string, string> = {
   red: 'bg-red-strong',
   amber: 'bg-amber-orange',
   green: 'bg-green',
-}
-
-const HEALTH_BADGE: Record<string, string> = {
-  red: 'border-red-strong-border bg-red-strong-bg text-red-strong',
-  amber: 'border-amber-border bg-amber-bg text-amber',
-  green: 'border-green/40 bg-green-bg text-green',
 }
 
 function SummaryTile({
@@ -250,7 +245,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
   const token = useAccessToken()
   const [rows, setRows] = useState(initialRows)
   const [tiles, setTiles] = useState(initialTiles)
-  const [healthFilter, setHealthFilter] = useState<HealthFilter>('all')
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>('attention')
   const [search, setSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [snoozeRow, setSnoozeRow] = useState<MatterAgingRow | null>(null)
@@ -294,16 +289,16 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
     await refresh()
   }
 
+  const needsAttentionCount = tiles.red + tiles.amber
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter(r => {
-      if (healthFilter === 'red' && (r.health !== 'red' || r.is_snoozed)) return false
-      if (healthFilter === 'amber' && (r.health !== 'amber' || r.is_snoozed)) return false
-      if (healthFilter === 'green' && (r.health !== 'green' || r.is_snoozed)) return false
-      if (healthFilter === 'overdue' && (!r.is_overdue || r.is_snoozed)) return false
+      if (healthFilter === 'attention' && (r.health === 'green' || r.is_snoozed)) return false
+      if (healthFilter === 'on-track' && (r.health !== 'green' || r.is_snoozed)) return false
       if (healthFilter === 'snoozed' && !r.is_snoozed) return false
       if (!q) return true
-      const hay = [r.client_name, r.client_email, r.current_stage, r.owner]
+      const hay = [r.client_name, r.client_email, r.current_stage]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -317,7 +312,8 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Matter aging</h1>
           <p className="text-sm text-muted-foreground">
-            Business-day SLA health for active matters. Snoozed items are excluded from counts.
+            {tiles.active} active matter{tiles.active === 1 ? '' : 's'}, oldest risk first. Snooze anything
+            that&apos;s waiting on something out of your hands.
           </p>
         </div>
         <Button
@@ -332,40 +328,20 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryTile
-          label="Active"
-          value={tiles.active}
-          active={healthFilter === 'all'}
-          onClick={() => setHealthFilter('all')}
+          label="Needs attention"
+          value={needsAttentionCount}
+          accent={needsAttentionCount > 0 ? 'var(--red-strong)' : undefined}
+          active={healthFilter === 'attention'}
+          onClick={() => setHealthFilter('attention')}
         />
         <SummaryTile
-          label="Red"
-          value={tiles.red}
-          accent="var(--red-strong)"
-          active={healthFilter === 'red'}
-          onClick={() => setHealthFilter('red')}
-        />
-        <SummaryTile
-          label="Amber"
-          value={tiles.amber}
-          accent="var(--amber-orange)"
-          active={healthFilter === 'amber'}
-          onClick={() => setHealthFilter('amber')}
-        />
-        <SummaryTile
-          label="Green"
+          label="On track"
           value={tiles.green}
           accent="var(--green)"
-          active={healthFilter === 'green'}
-          onClick={() => setHealthFilter('green')}
-        />
-        <SummaryTile
-          label="Overdue"
-          value={tiles.overdue}
-          accent="var(--red-strong)"
-          active={healthFilter === 'overdue'}
-          onClick={() => setHealthFilter('overdue')}
+          active={healthFilter === 'on-track'}
+          onClick={() => setHealthFilter('on-track')}
         />
         <SummaryTile
           label="Snoozed"
@@ -373,21 +349,12 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
           active={healthFilter === 'snoozed'}
           onClick={() => setHealthFilter('snoozed')}
         />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-red-strong" />
-          Overdue or needs outreach
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-amber-orange" />
-          Due within 1 business day
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-green" />
-          On track
-        </span>
+        <SummaryTile
+          label="All"
+          value={tiles.active}
+          active={healthFilter === 'all'}
+          onClick={() => setHealthFilter('all')}
+        />
       </div>
 
       <div className="relative max-w-sm">
@@ -401,7 +368,11 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
       </div>
 
       {filtered.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">No matters match your filters.</p>
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          {healthFilter === 'attention' && !search.trim()
+            ? 'Nothing needs attention — every active matter is on track.'
+            : 'No matters match your filters.'}
+        </p>
       ) : (
         <div className="rounded-lg border border-border">
           <Table>
@@ -410,10 +381,8 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
                 <TableHead className="w-8" />
                 <TableHead>Client</TableHead>
                 <TableHead>Stage</TableHead>
-                <TableHead>Owner</TableHead>
+                <TableHead>Waiting on</TableHead>
                 <TableHead>Days in stage</TableHead>
-                <TableHead>Health</TableHead>
-                <TableHead>Entered</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -426,7 +395,15 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
                         'inline-block h-2.5 w-2.5 rounded-full',
                         row.is_snoozed ? 'bg-muted-foreground/40' : HEALTH_DOT[row.health],
                       )}
-                      title={row.health}
+                      title={
+                        row.is_snoozed
+                          ? 'snoozed'
+                          : row.health === 'red'
+                            ? 'overdue or needs outreach'
+                            : row.health === 'amber'
+                              ? 'due within 1 business day'
+                              : 'on track'
+                      }
                     />
                   </TableCell>
                   <TableCell className="font-medium">
@@ -436,17 +413,11 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
                   </TableCell>
                   <TableCell>{engineStageLabel(row.current_stage)}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {row.owner === 'attorney' ? 'Attorney' : 'Client'}
+                    {row.owner === 'attorney' ? 'You' : 'Client'}
                   </TableCell>
                   <TableCell>
                     <SlaProgress row={row} />
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn('text-[10px] capitalize', HEALTH_BADGE[row.health])}>
-                      {row.is_snoozed ? 'snoozed' : row.health}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(row.stage_entered_at)}</TableCell>
                   <TableCell>
                     {row.is_snoozed ? (
                       <Button type="button" variant="ghost" size="sm" onClick={() => void unsnooze(row)}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, CheckCircle2, Clock3, Download, FileText, Loader2, X } from 'lucide-react'
@@ -185,6 +185,16 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     setCachedZip(loadDraftZipDownload(matterId))
   }, [matterId])
 
+  // Auto-run preflight when the step opens so generating is one click, not
+  // "Run Preflight" then Generate. Manual re-runs stay available.
+  const autoPreflightRan = useRef(false)
+  useEffect(() => {
+    if (autoPreflightRan.current || !accessToken || !hubMatter?.designSheet) return
+    autoPreflightRan.current = true
+    handlePreflight({ quiet: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, hubMatter?.designSheet])
+
   useEffect(() => {
     if (!isGenerating) return
     setElapsed(0)
@@ -223,10 +233,11 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     setSelectedDocs(selectedCount === all.length ? new Set() : new Set(all))
   }
 
-  const handlePreflight = () => {
+  const handlePreflight = (options?: { quiet?: boolean }) => {
+    const quiet = options?.quiet === true
     if (busy) return
     if (!accessToken) {
-      toast.error('Your session expired. Refresh and try again.')
+      if (!quiet) toast.error('Your session expired. Refresh and try again.')
       return
     }
     setBusy('preflight')
@@ -255,7 +266,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           next.fallbackPackageNames.length > 0
         ) {
           toast.warning('Review warnings before saving drafts.')
-        } else {
+        } else if (!quiet) {
           toast.success('Drafting review ready.')
         }
       } catch {
@@ -531,14 +542,14 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button
-              onClick={handlePreflight}
+              onClick={() => handlePreflight()}
               disabled={!canGenerate || busy !== null}
               variant="outline"
               className="gap-1.5 text-xs"
               title={!canGenerate ? 'Complete design sheet and document selections first' : 'Check source data before generating drafts'}
             >
               {busy === 'preflight' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-              {busy === 'preflight' ? 'Checking…' : 'Run Preflight'}
+              {busy === 'preflight' ? 'Checking…' : preflightReady ? 'Re-run preflight' : 'Run Preflight'}
             </Button>
             <Button
               onClick={handleGenerate}

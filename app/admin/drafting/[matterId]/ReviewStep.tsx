@@ -147,6 +147,58 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const draftCount = hubMatter ? Math.max(0, hubMatter.draftCount - hidden) : 0
   const supersededDrafts = (hubMatter?.supersededDrafts ?? []).filter(d => !deletedIds.has(d.id))
 
+  // Bulk actions: a full plan is many documents; reviewing and sharing them
+  // one at a time is needless clicking.
+  const [bulkBusy, setBulkBusy] = useState<'review' | 'share' | null>(null)
+  const [pendingBulkShare, setPendingBulkShare] = useState<DraftingHubDocument[] | null>(null)
+  const bulkReviewables = recentDrafts.filter(d => !isWordDocument(d.name) && !effectiveReviewedAt(d))
+  const bulkShareables = recentDrafts.filter(d =>
+    isPdfDocument(d.name) && canPromoteDraft({ markerCount: d.markerCount, reviewedAt: effectiveReviewedAt(d) }).ok,
+  )
+
+  const handleMarkAllReviewed = async () => {
+    if (bulkBusy) return
+    setBulkBusy('review')
+    let done = 0
+    for (const doc of bulkReviewables) {
+      try {
+        await setDocumentReviewed(doc.id, true)
+        setReviewedOverride(prev => ({ ...prev, [doc.id]: new Date().toISOString() }))
+        done += 1
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : `Could not mark ${doc.name} reviewed`)
+      }
+    }
+    setBulkBusy(null)
+    if (done > 0) toast.success(`Marked ${done} draft${done === 1 ? '' : 's'} reviewed`)
+  }
+
+  const confirmBulkShare = async () => {
+    const docs = pendingBulkShare ?? []
+    setPendingBulkShare(null)
+    if (docs.length === 0 || bulkBusy) return
+    setBulkBusy('share')
+    let done = 0
+    for (const doc of docs) {
+      try {
+        await updateDocumentFolder(doc.id, 'review', { confirmed: true })
+        setPromotedIds(prev => new Set(prev).add(doc.id))
+        done += 1
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : `Could not share ${doc.name}`)
+      }
+    }
+    setBulkBusy(null)
+    if (done > 0) {
+      void logMatterActivity(matterId, 'draft_promoted_to_review', 'Drafts shared with client', {
+        detail: `Shared ${done} reviewed PDF${done === 1 ? '' : 's'} with the client`,
+        metadata: { count: done, documentIds: docs.map(d => d.id) },
+      })
+      toast.success(`Shared ${done} PDF${done === 1 ? '' : 's'} with client`)
+      router.refresh()
+    }
+  }
+
   useEffect(() => {
     if (!autoExpandedSuperseded.current && supersededDrafts.length > 0) {
       setShowPrevious(true)
@@ -286,6 +338,30 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {bulkReviewables.length > 1 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-[11px]"
+                disabled={bulkBusy !== null}
+                onClick={() => void handleMarkAllReviewed()}
+              >
+                {bulkBusy === 'review' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                Mark all {bulkReviewables.length} reviewed
+              </Button>
+            )}
+            {bulkShareables.length > 1 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-[11px] text-green hover:bg-green-bg"
+                disabled={bulkBusy !== null}
+                onClick={() => setPendingBulkShare(bulkShareables)}
+              >
+                {bulkBusy === 'share' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                Share all {bulkShareables.length} ready
+              </Button>
+            )}
             <input
               ref={pdfUploadRef}
               type="file"
@@ -540,6 +616,28 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         onCancel={() => setPendingPromotion(null)}
         onConfirm={confirmPromotion}
       />
+
+      <AlertDialog open={pendingBulkShare !== null} onOpenChange={open => { if (!open) setPendingBulkShare(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Share {pendingBulkShare?.length ?? 0} reviewed PDF{(pendingBulkShare?.length ?? 0) === 1 ? '' : 's'} with the client?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              These become visible in the client portal and the client is notified by email.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-border bg-muted/40 p-2 text-xs">
+            {(pendingBulkShare ?? []).map(doc => (
+              <li key={doc.id} className="truncate font-medium">{doc.name}</li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmBulkShare()}>Share with client</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={open => { if (!open) setPendingDelete(null) }}>
         <AlertDialogContent>

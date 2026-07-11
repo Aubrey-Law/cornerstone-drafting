@@ -1072,7 +1072,6 @@ function MatterDetailClientInner({
               onOpenChange={setPortalUploadsOpen}
               onOpened={() => void handleMarkPortalUploadsReviewed()}
             />
-            <MatterMeetingNotesCard matterId={matterId} />
             {showLegalPlan && (
               <MatterLegalPlanCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />
             )}
@@ -1184,6 +1183,7 @@ function MatterDetailClientInner({
             handleDeleteNote={handleDeleteNote}
             handleUpdateNote={handleUpdateNote}
             startEditingNote={startEditingNote}
+            meetingNotes={<MatterMeetingNotesCard matterId={matterId} defaultOpen />}
           />
 
           <TabsContent value="activity">

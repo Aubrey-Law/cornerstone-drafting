@@ -291,15 +291,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     const assetTransferDocTypes = selectedRealEstateTransferDocTypes(payload.documents)
     let generateResult
     // Which generator actually produced the files, recorded per document for
-    // provenance. Starts at the configured engine and is corrected when the Node
-    // path defers to the Supabase generator or the per-document Python fallback.
+    // provenance. Starts at the configured engine and is corrected when the run
+    // falls back to per-document drafting. (The legacy Python subprocess that
+    // used to back the 501-unsupported-package path has been retired; the Node
+    // engine supports every package the design sheet can derive.)
     let generationEngine: EstateGeneratorEngine | 'python_fallback' = engine
     if (engine === 'node') {
       const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload))
-      if (!nodeGenerateResult.ok && nodeGenerateResult.status === 501) {
-        generationEngine = 'supabase'
-        generateResult = await import('@/lib/estateGenerator/runEstateGenerator').then(mod => mod.generateEstatePlanDocuments(payload))
-      } else if (
+      if (
         !nodeGenerateResult.ok
         && assetTransferDocTypes.length > 0
         && (nodeGenerateResult.error ?? '').includes('No supported estate generator packages')

@@ -495,6 +495,26 @@ export function useDesignSheetState({
   }, [matterId])
 
   // ── Import / Export ─────────────────────────────────────────────────────────
+  /**
+   * Apply a "copy plan structure" patch (see lib/designSheet/planStructureClone)
+   * through the normal field-update path so override tracking, dirty state and
+   * autosave all behave as if the attorney typed the values. `decisions` merges
+   * key-by-key so matter-specific decisions (deed, funding plan, exclusions)
+   * are preserved.
+   */
+  const applyPlanStructurePatch = useCallback((patch: Partial<DesignSheet>) => {
+    const { decisions: patchDecisions, ...rest } = patch
+    for (const [field, value] of Object.entries(rest)) {
+      updateField(field as keyof DesignSheet, value as never)
+    }
+    if (patchDecisions && typeof patchDecisions === 'object') {
+      updateField('decisions', previous => ({
+        ...(previous.decisions && typeof previous.decisions === 'object' ? previous.decisions : {}),
+        ...(patchDecisions as Record<string, unknown>),
+      }))
+    }
+  }, [updateField])
+
   const handleImportedDesignSheetFields = useCallback((patch: DesignSheetImportProposal) => {
     commitSheet(prev => ({ ...prev, ...patch } as DesignSheet))
     setSaveStatus('saved')
@@ -562,6 +582,7 @@ export function useDesignSheetState({
     // import/export
     handleImportedDesignSheetFields,
     handleExportDesignSheet,
+    applyPlanStructurePatch,
     // readiness
     readiness,
     documentInclusions,

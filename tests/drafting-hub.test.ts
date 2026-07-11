@@ -41,7 +41,9 @@ describe('drafting hub and workspace', () => {
 
     expect(step).toContain('type DraftPreflight')
     expect(step).toContain('const [preflight, setPreflight] = useState<DraftPreflight | null>(null)')
-    expect(step).toContain('const handlePreflight = () =>')
+    expect(step).toContain('const handlePreflight = (options?: { quiet?: boolean }) =>')
+    // Preflight auto-runs when the step opens so generation is one click.
+    expect(step).toContain('handlePreflight({ quiet: true })')
     expect(step).toContain('fetch(`/api/admin/matters/${matterId}/draft/preflight`')
     expect(step).toContain('const preflightReady = preflight?.matterId === matterId')
     expect(step).toContain('Save Drafts')

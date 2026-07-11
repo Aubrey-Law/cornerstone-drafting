@@ -9,7 +9,7 @@ export default async function CallsPage({
 }: {
   searchParams: Promise<{ filter?: string }>
 }) {
-  const { filter = 'unassigned' } = await searchParams
+  const { filter = 'all' } = await searchParams
   const supabase = await createServerSupabase()
 
   let q = supabase
@@ -41,7 +41,7 @@ export default async function CallsPage({
       <header>
         <h1 className="text-xl font-semibold">Calls</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Triage unassigned Twilio / Retell calls and link them to matters.
+          Recent calls across Twilio and the AI receptionist. Link a call to its matter to keep the record together.
         </p>
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>

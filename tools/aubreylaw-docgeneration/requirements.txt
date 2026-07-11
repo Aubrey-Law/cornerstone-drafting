@@ -1,3 +1,0 @@
-docxtpl
-python-docx
-jinja2

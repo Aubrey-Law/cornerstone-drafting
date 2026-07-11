@@ -38,6 +38,11 @@ import { DesignSectionPageView } from './DesignSectionPageView'
 import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 
+const ClonePlanDialog = dynamic(
+  () => import('@/components/design-sheet/ClonePlanDialog').then(m => ({ default: m.ClonePlanDialog })),
+  { ssr: false },
+)
+
 const DesignSheetImportDialog = dynamic(
   () => import('@/components/design-sheet/DesignSheetImportDialog').then(m => ({ default: m.DesignSheetImportDialog })),
   { ssr: false },
@@ -118,6 +123,7 @@ function DesignSheetShellImpl({
     updateLpPatch,
     handleImportedDesignSheetFields,
     handleExportDesignSheet,
+    applyPlanStructurePatch,
     documentInclusions,
     sectionSummaries,
     blockerDetails,
@@ -128,6 +134,7 @@ function DesignSheetShellImpl({
   } = s
 
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
 
   const summaries = useMemo<Record<string, DesignSectionSummary>>(() => ({
     ...sectionSummaries,
@@ -272,6 +279,12 @@ function DesignSheetShellImpl({
     <SharedFieldsProvider>
     <DesignValidationProvider value={validationValue}>
       <div className={cn('guided-interview flex min-h-0 flex-col', embedded ? 'h-full overflow-hidden' : 'h-full')}>
+        <ClonePlanDialog
+          open={cloneDialogOpen}
+          onOpenChange={setCloneDialogOpen}
+          matterId={matterId}
+          onApply={applyPlanStructurePatch}
+        />
         {importDialogOpen && (
           <DesignSheetImportDialog
             open={importDialogOpen}
@@ -302,6 +315,7 @@ function DesignSheetShellImpl({
               dirtyLabel="Unsaved changes"
               actions={(
                 <DesignToolbarActions
+                  onClonePlan={() => setCloneDialogOpen(true)}
                   onImport={() => setImportDialogOpen(true)}
                   onSave={handleSave}
                   onExport={handleExportDesignSheet}
