@@ -18,6 +18,20 @@ describe('guided design sheet navigation', () => {
     })
   })
 
+  it('preserves blocker counts on attention summaries and completed catalog order', () => {
+    const sections = [{ id: 'client' }, { id: 'family' }, { id: 'plan' }, { id: 'trust' }]
+    const summaries = {
+      client: { status: 'complete', detail: null, blockers: [] },
+      family: { status: 'attention', detail: null, blockers: [{ id: 'one' }, { id: 'two' }] },
+      plan: { status: 'complete', detail: null, blockers: [] },
+      trust: { status: 'attention', detail: null, blockers: [{ id: 'three' }] },
+    } as any
+
+    const groups = groupGuidedSections(sections, summaries)
+    expect(groups.attention.map(section => summaries[section.id].blockers.length)).toEqual([2, 1])
+    expect(groups.complete).toEqual([sections[0], sections[2]])
+  })
+
   it('returns the next blocker after the active section and wraps', () => {
     const blockers = [
       { id: 'client:name', sectionId: 'client' },
@@ -48,5 +62,9 @@ describe('guided design sheet navigation', () => {
     ] as any
 
     expect(findNextUnresolvedBlocker(blockers, 'family')?.id).toBe('trust:name')
+  })
+
+  it('returns null when no unresolved blocker remains', () => {
+    expect(findNextUnresolvedBlocker([], 'client')).toBeNull()
   })
 })

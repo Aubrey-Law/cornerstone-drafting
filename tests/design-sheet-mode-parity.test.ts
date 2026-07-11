@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest'
 describe('design sheet mode parity', () => {
   it('uses shared acceleration and final review in Fast Entry', () => {
     const express = readFileSync('app/admin/drafting/[matterId]/design/ExpressDesignSheet.tsx', 'utf8')
-    for (const component of ['DesignAccelerationBar', 'DesignFinalReview']) {
-      expect(express).toContain(`<${component}`)
+    const guided = readFileSync('app/admin/drafting/[matterId]/design/DesignSheetShell.tsx', 'utf8')
+    for (const source of [express, guided]) {
+      for (const component of ['DesignAccelerationBar', 'DesignFinalReview']) {
+        expect(source).toContain(`<${component}`)
+      }
     }
   })
 
@@ -24,5 +27,17 @@ describe('design sheet mode parity', () => {
     expect(acceleration).not.toContain('loadPreferences()')
     expect(acceleration).toContain('onAttorneyPresetChange(preset)')
     expect(finalReview).not.toContain('loadPreferences()')
+  })
+
+  it('owns one Guided attorney preset source and guards async loads from local saves', () => {
+    const guided = readFileSync('app/admin/drafting/[matterId]/design/DesignSheetShell.tsx', 'utf8')
+
+    expect(guided.match(/loadPreferences\(\)/g)).toHaveLength(1)
+    expect(guided).toContain('attorneyPreset={attorneyPreset}')
+    expect(guided).toContain('const attorneyPresetVersionRef = useRef(0)')
+    expect(guided).toContain('const loadVersion = attorneyPresetVersionRef.current')
+    expect(guided).toContain('attorneyPresetVersionRef.current === loadVersion')
+    expect(guided).toContain('attorneyPresetVersionRef.current += 1')
+    expect(guided).toContain('onAttorneyPresetChange={handleAttorneyPresetChange}')
   })
 })
