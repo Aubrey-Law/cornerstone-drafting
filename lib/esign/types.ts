@@ -13,10 +13,20 @@ export interface EsignEnvelopeState {
   finalDocumentUrl: string | null
 }
 
+export interface EsignSigner {
+  name: string
+  email: string
+}
+
 export interface EsignProvider {
   name: string
+  /**
+   * Solo client → single-signer template. When `spouse` is provided, a
+   * second signer is added and the two-signer (joint) template is used.
+   * `signingLink` is always the primary signer's link (for in-app Sign now).
+   */
   createEngagementEnvelope(
-    input: { name: string; email: string },
+    input: { primary: EsignSigner; spouse?: EsignSigner },
   ): Promise<{ envelopeId: string; signingLink: string | null }>
   /** Best-effort: cancel a superseded envelope before re-sending. */
   cancelEnvelope(envelopeId: string): Promise<void>

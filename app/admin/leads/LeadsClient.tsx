@@ -6,8 +6,10 @@ import { useRouter } from 'next/navigation'
 import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
+import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
+import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { formatDate } from '@/lib/utils'
+import { SendEngagementDialog } from './SendEngagementDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -97,6 +99,14 @@ function leadName(lead: LeadRow): string {
   )
 }
 
+/** Provisional lead number, e.g. 2026-EP-Smith; becomes 2026-EP-Smith-001 on conversion. */
+function provisionalNumber(lead: LeadRow): string {
+  const year = lead.created_at ? new Date(lead.created_at).getFullYear() : new Date().getFullYear()
+  const code = practiceAreaMatterCode(lead.practice_area)
+  const slug = clientNameMatterSlug(leadName(lead))
+  return `${year}-${code}-${slug}`
+}
+
 function IntakeStatusBadge({ lead }: { lead: LeadRow }) {
   if (lead.intake_completed_at || lead.status === 'completed') {
     return <Badge variant="outline" className="border-green/40 bg-green-bg text-[10px] text-green">Intake done</Badge>
@@ -140,6 +150,7 @@ export function LeadsClient({
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [signingUrl, setSigningUrl] = useState<string | null>(null)
+  const [engagementLead, setEngagementLead] = useState<LeadRow | null>(null)
 
   const filteredLeads = useMemo(
     () => initialLeads.filter(l => matchesFilter(l, filter)),
@@ -319,39 +330,6 @@ export function LeadsClient({
     }
   }
 
-  const handleSendEngagement = async (lead: LeadRow) => {
-    setBusyLeadId(lead.id)
-    try {
-      await authedPost(`/api/admin/leads/${lead.id}/engagement`)
-      toast.success(`Engagement sent to ${lead.email}`)
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not send engagement')
-    } finally {
-      setBusyLeadId(null)
-    }
-  }
-
-  const handleSignNow = async (lead: LeadRow) => {
-    setBusyLeadId(lead.id)
-    try {
-      const result = await authedPost(`/api/admin/leads/${lead.id}/engagement`)
-      const link = typeof result.signingLink === 'string' ? result.signingLink : null
-      if (!link) {
-        toast.message('Engagement sent by email', {
-          description: 'In-app signing is unavailable; the client got the signing link by email.',
-        })
-        router.refresh()
-        return
-      }
-      setSigningUrl(link)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not start signing')
-    } finally {
-      setBusyLeadId(null)
-    }
-  }
-
   const closeSigning = () => {
     setSigningUrl(null)
     // The webhook converts the lead → matter on completion; refresh to reflect it.
@@ -461,7 +439,12 @@ export function LeadsClient({
                         aria-label={`Select ${leadName(lead)}`}
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{leadName(lead)}</TableCell>
+                    <TableCell className="font-medium">
+                      {leadName(lead)}
+                      <div className="text-[11px] font-normal text-muted-foreground">
+                        {provisionalNumber(lead)}
+                      </div>
+                    </TableCell>
                     <TableCell><LeadStatusBadge lead={lead} /></TableCell>
                     <TableCell className="text-muted-foreground">{lead.email}</TableCell>
                     <TableCell>{practiceAreaLabel(lead.practice_area)}</TableCell>
@@ -490,26 +473,15 @@ export function LeadsClient({
                               {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
                             </Button>
                             {esignEnabled && lead.engagement_status !== 'signed' && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2 text-xs"
-                                  disabled={busy}
-                                  onClick={() => void handleSendEngagement(lead)}
-                                >
-                                  {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2 text-xs"
-                                  disabled={busy}
-                                  onClick={() => void handleSignNow(lead)}
-                                >
-                                  Sign now
-                                </Button>
-                              </>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                                disabled={busy}
+                                onClick={() => setEngagementLead(lead)}
+                              >
+                                {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
+                              </Button>
                             )}
                             <Button
                               size="sm"
@@ -672,6 +644,13 @@ export function LeadsClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SendEngagementDialog
+        lead={engagementLead}
+        onOpenChange={open => !open && setEngagementLead(null)}
+        onSent={() => router.refresh()}
+        onSignNow={link => setSigningUrl(link)}
+      />
 
       <Dialog open={signingUrl !== null} onOpenChange={open => !open && closeSigning()}>
         <DialogContent className="h-[85vh] max-w-4xl p-0 sm:max-w-4xl">

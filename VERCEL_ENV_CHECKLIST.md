@@ -172,7 +172,8 @@ On `call_analyzed`, Cornerstone upserts the call and emails/SMS the summary (`re
 | Variable | Purpose |
 |----------|---------|
 | `FIRMA_API_KEY` | firma.dev API key (sent as the Authorization header) |
-| `FIRMA_ENGAGEMENT_TEMPLATE_ID` | Template id of the engagement agreement in firma.dev |
+| `FIRMA_ENGAGEMENT_TEMPLATE_ID` | Single-signer engagement template (solo client) in firma.dev |
+| `FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT` | Two-signer engagement template (client + spouse). Set your existing 2-signer template here to unblock couples; build a 1-signer template for `FIRMA_ENGAGEMENT_TEMPLATE_ID` to enable solo clients |
 | `FIRMA_WEBHOOK_SECRET` | Shared secret carried on the registered webhook URL query string |
 
 Webhook URL to register in firma.dev (events: signed/completed/declined/expired):

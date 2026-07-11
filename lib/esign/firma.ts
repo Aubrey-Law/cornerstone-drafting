@@ -1,14 +1,15 @@
 import 'server-only'
 
 import { FirmaClient } from '@firma-dev/sdk'
-import type { EsignEnvelopeState, EsignProvider } from '@/lib/esign/types'
+import type { EsignEnvelopeState, EsignProvider, EsignSigner } from '@/lib/esign/types'
 
 /**
  * firma.dev e-signature provider.
  *
  * Env:
  *  - FIRMA_API_KEY: API key (sent as the Authorization header by the SDK)
- *  - FIRMA_ENGAGEMENT_TEMPLATE_ID: the engagement-agreement template id
+ *  - FIRMA_ENGAGEMENT_TEMPLATE_ID: single-signer engagement template (solo client)
+ *  - FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT: two-signer template (client + spouse)
  *  - FIRMA_WEBHOOK_SECRET: shared secret carried in the registered webhook
  *    URL's ?secret= query param — firma.dev webhooks are not signed, so the
  *    webhook handler also re-fetches envelope state from the API before
@@ -28,36 +29,50 @@ function splitName(fullName: string): { firstName: string; lastName: string | un
   return { firstName, lastName }
 }
 
+function toRecipient(signer: EsignSigner, order: number) {
+  const { firstName, lastName } = splitName(signer.name)
+  return {
+    first_name: firstName,
+    ...(lastName ? { last_name: lastName } : {}),
+    email: signer.email,
+    designation: 'Signer' as const,
+    order,
+  }
+}
+
 class FirmaEsignProvider implements EsignProvider {
   readonly name = 'firma'
   private readonly client: FirmaClient
-  private readonly templateId: string
+  private readonly singleTemplateId: string
+  private readonly jointTemplateId: string | null
 
-  constructor(apiKey: string, templateId: string) {
+  constructor(apiKey: string, singleTemplateId: string, jointTemplateId: string | null) {
     this.client = new FirmaClient({ apiKey })
-    this.templateId = templateId
+    this.singleTemplateId = singleTemplateId
+    this.jointTemplateId = jointTemplateId
   }
 
   async createEngagementEnvelope(
-    input: { name: string; email: string },
+    input: { primary: EsignSigner; spouse?: EsignSigner },
   ): Promise<{ envelopeId: string; signingLink: string | null }> {
-    const { firstName, lastName } = splitName(input.name)
-    // Template-based create+send: the recipient updates the template's sole
-    // signer (matched by order); firma.dev emails the signing link, and its
-    // response also carries the signer's direct link for in-app "Sign now".
+    // A spouse means two signer roles, which requires the joint template.
+    const templateId = input.spouse ? this.jointTemplateId : this.singleTemplateId
+    if (!templateId) {
+      throw new Error(
+        'A two-signer engagement template is not configured (set FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT).',
+      )
+    }
+    const recipients = [toRecipient(input.primary, 1)]
+    if (input.spouse) recipients.push(toRecipient(input.spouse, 2))
+
+    // Template-based create+send: recipients update the template's signer
+    // roles (matched by order); firma.dev emails each signer their link, and
+    // the response carries the primary signer's direct link for "Sign now".
     const response = await this.client.signingRequests.createAndSendSigningRequest({
-      template_id: this.templateId,
+      template_id: templateId,
       // firma.dev's create-and-send requires a signing-request name.
-      name: `Engagement Agreement — ${input.name.trim() || input.email}`,
-      recipients: [
-        {
-          first_name: firstName,
-          ...(lastName ? { last_name: lastName } : {}),
-          email: input.email,
-          designation: 'Signer',
-          order: 1,
-        },
-      ],
+      name: `Engagement Agreement — ${input.primary.name.trim() || input.primary.email}`,
+      recipients,
     })
     const envelopeId = (response as { id?: unknown })?.id
     if (typeof envelopeId !== 'string' || !envelopeId) {
@@ -165,5 +180,6 @@ export function resolveEsignProvider():
   if (missing.length > 0 || !apiKey || !templateId) {
     return { ok: false, error: `E-signature is not configured (missing ${missing.join(', ')}).` }
   }
-  return { ok: true, provider: new FirmaEsignProvider(apiKey, templateId) }
+  const jointTemplateId = process.env.FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT?.trim() || null
+  return { ok: true, provider: new FirmaEsignProvider(apiKey, templateId, jointTemplateId) }
 }
