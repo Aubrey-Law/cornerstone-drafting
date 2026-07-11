@@ -14,6 +14,8 @@ interface DesignToolbarActionsProps {
   exporting: boolean
   pending: boolean
   saveDirty: boolean
+  /** Autosave is primary; hide the manual action while the sheet is healthy. */
+  showSave?: boolean
 }
 
 export function DesignToolbarActions({
@@ -26,6 +28,7 @@ export function DesignToolbarActions({
   exporting,
   pending,
   saveDirty,
+  showSave = true,
 }: DesignToolbarActionsProps) {
   const btnStyle = (emphasis = false) => ({
     ...guidedSecondaryButtonStyle,
@@ -50,10 +53,12 @@ export function DesignToolbarActions({
         <Upload size={14} />
         Import
       </button>
-      <button type="button" onClick={onSave} disabled={pending || saving} style={btnStyle(saveDirty)}>
-        {saving && <Loader2 size={14} className="animate-spin" />}
-        {saveLabel}
-      </button>
+      {showSave && (
+        <button type="button" onClick={onSave} disabled={pending || saving} style={btnStyle(saveDirty)}>
+          {saving && <Loader2 size={14} className="animate-spin" />}
+          {saveLabel}
+        </button>
+      )}
       <button type="button" onClick={onExport} disabled={pending || exporting} style={btnStyle()}>
         {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
         Export
