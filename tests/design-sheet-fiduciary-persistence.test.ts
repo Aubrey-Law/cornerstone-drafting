@@ -19,6 +19,27 @@ const filledExecutorSlots: FiduciarySlot[] = [
 ]
 
 describe('fiduciary slot persistence', () => {
+  it('round-trips Will, POA, and health care choices stored in decisions', () => {
+    const payload = buildDesignSheetPersistencePayload({
+      bond: 'required',
+      supervision: 'supervised',
+      dpoa_include_section_l: 'yes',
+      hcp_anatomical_gift: 'none',
+      hipaa_psychotherapy_notes: 'do_not_authorize',
+      decisions: {},
+    } as Parameters<typeof buildDesignSheetPersistencePayload>[0])
+
+    const inflated = inflateDesignSheetRow(payload)
+
+    expect(inflated).toMatchObject({
+      bond: 'required',
+      supervision: 'supervised',
+      dpoa_include_section_l: 'yes',
+      hcp_anatomical_gift: 'none',
+      hipaa_psychotherapy_notes: 'do_not_authorize',
+    })
+  })
+
   it('strips writable column keys from decisions when saving (plan_type, fiduciary slots)', () => {
     const payload = buildDesignSheetPersistencePayload({
       plan_type: 'pour_over',
