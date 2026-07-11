@@ -129,19 +129,9 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
-      <div className="border-b border-border bg-card px-4 py-4 md:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Drafting</h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Pick a matter to open its drafting workspace — drag cards between stages or use the table to update pipeline status.
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div className="space-y-3 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
+          <h1 className="mr-2 text-xl font-semibold tracking-tight">Drafting</h1>
           <div className="flex max-w-md min-w-[14rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
             <input
