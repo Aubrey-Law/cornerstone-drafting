@@ -28,6 +28,7 @@ interface MatterOverviewHeroProps {
   unreviewedUploadCounts?: UnreviewedUploadCounts
   reviewFlagsCount: number
   lastPortalMessage: { body: string; created_at: string; sender_role: string } | null
+  quickPrompts?: React.ReactNode
   onIntakeActionClick?: () => void
   onUnreadClick?: () => void
   onReviewFlagsClick?: () => void
@@ -65,6 +66,7 @@ export function MatterOverviewHero({
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   reviewFlagsCount,
   lastPortalMessage,
+  quickPrompts,
   onIntakeActionClick,
   onUnreadClick,
   onReviewFlagsClick,
@@ -174,6 +176,7 @@ export function MatterOverviewHero({
               <span className="text-foreground">{lastPortalMessage.body.slice(0, 120)}{lastPortalMessage.body.length > 120 ? '…' : ''}</span>
             </p>
           )}
+          {quickPrompts && <div className="mt-1">{quickPrompts}</div>}
         </div>
         <div className="shrink-0">
           {isIntakeAction ? (
