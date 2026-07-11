@@ -32,11 +32,12 @@ export async function createMatterFromIntake(
     engagement_sent_at: string | null
     engagement_signed_at: string | null
     engagement_fee_quoted: number | null
+    lead_status: string | null
   }
   const { data: intakeData, error: intakeError } = await admin
     .from('client_intake')
     .select(
-      'id, email, first_name, last_name, full_name, practice_area, user_id, client_user_id, engagement_provider, engagement_envelope_id, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted',
+      'id, email, first_name, last_name, full_name, practice_area, user_id, client_user_id, engagement_provider, engagement_envelope_id, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_status',
     )
     .eq('id', intakeId)
     .maybeSingle()
@@ -88,7 +89,12 @@ export async function createMatterFromIntake(
     return { ok: false, error: `Failed to create matter: ${matterError?.message ?? 'unknown'}` }
   }
 
-  await admin.from('client_intake').update({ matter_id: matter.id }).eq('id', intakeId)
+  // Flag the source lead as Hired (only if it went through the lead flow;
+  // matter-origin intakes have a null lead_status and shouldn't appear as leads).
+  await admin
+    .from('client_intake')
+    .update({ matter_id: matter.id, lead_status: intake.lead_status ? 'hired' : intake.lead_status })
+    .eq('id', intakeId)
 
   const feeQuoted =
     typeof intake.engagement_fee_quoted === 'number' && Number.isFinite(intake.engagement_fee_quoted)

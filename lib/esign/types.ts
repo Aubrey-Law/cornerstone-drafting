@@ -15,7 +15,9 @@ export interface EsignEnvelopeState {
 
 export interface EsignProvider {
   name: string
-  createEngagementEnvelope(input: { name: string; email: string }): Promise<{ envelopeId: string }>
+  createEngagementEnvelope(
+    input: { name: string; email: string },
+  ): Promise<{ envelopeId: string; signingLink: string | null }>
   /** Best-effort: cancel a superseded envelope before re-sending. */
   cancelEnvelope(envelopeId: string): Promise<void>
   /** Authoritative state — webhooks are treated as hints and re-checked here. */

@@ -42,6 +42,25 @@ describe('firma provider source shape', () => {
     expect(source).toContain('getSigningRequest')
     expect(source).toContain('final_document_download_url')
   })
+
+  it('returns the signer link for in-app "Sign now"', () => {
+    expect(source).toContain('signing_link')
+    expect(source).toContain('signingLink')
+  })
+})
+
+describe('in-app sign now', () => {
+  it('lead engagement route returns the signing link', () => {
+    const source = read('app/api/admin/leads/[id]/engagement/route.ts')
+    expect(source).toContain('signingLink')
+  })
+
+  it('leads client opens a signing iframe and refreshes on close', () => {
+    const source = read('app/admin/leads/LeadsClient.tsx')
+    expect(source).toContain('Sign now')
+    expect(source).toContain('<iframe')
+    expect(source).toContain('handleSignNow')
+  })
 })
 
 describe('esign webhook route source shape', () => {

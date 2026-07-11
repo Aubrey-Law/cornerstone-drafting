@@ -49,7 +49,7 @@ export async function POST(
       await provider.cancelEnvelope(details.engagement_envelope_id)
     }
 
-    const { envelopeId } = await provider.createEngagementEnvelope({
+    const { envelopeId, signingLink } = await provider.createEngagementEnvelope({
       name: matter.client_name ?? 'Client',
       email: clientEmail,
     })
@@ -71,7 +71,7 @@ export async function POST(
       .single()
     if (error) throw new Error(error.message)
 
-    return Response.json({ row })
+    return Response.json({ row, signingLink })
   } catch (e) {
     console.error('[engagement send]', e)
     return Response.json(
