@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useState, useRef, useEffect, useId, type Dispatch, type KeyboardEvent, type SetStateAction } from 'react'
 import { Loader2, Pencil, Search, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -110,7 +110,10 @@ export default function ContactPicker({ role, required, value, onChange, contact
   const [editForm, setEditForm] = useState<ContactForm>(() => emptyContactForm())
   const [adding, setAdding] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const listboxId = useId()
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -124,7 +127,41 @@ export default function ContactPicker({ role, required, value, onChange, contact
     if (!c?.id || arr.findIndex(x => x.id === c.id) !== index) return false
     const q = query.toLowerCase()
     return contactFullName(c).toLowerCase().includes(q)
-  }).slice(0, 5)
+  })
+
+  const filteredContactIds = filtered.map(contact => contact.id).join('|')
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [query, filteredContactIds])
+
+  useEffect(() => {
+    if (showDropdown) optionRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex, showDropdown])
+
+  const selectContact = (contact: Contact) => {
+    onChange(contact)
+    setQuery('')
+    setShowDropdown(false)
+  }
+
+  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      setShowDropdown(false)
+      return
+    }
+    if (!showDropdown || filtered.length === 0) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveIndex(index => Math.min(index + 1, filtered.length - 1))
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveIndex(index => Math.max(index - 1, 0))
+    } else if (event.key === 'Enter' && filtered[activeIndex]) {
+      event.preventDefault()
+      selectContact(filtered[activeIndex])
+    }
+  }
 
   const handleAdd = async () => {
     if (!addForm.first_name.trim() || !addForm.last_name.trim()) return
@@ -206,6 +243,12 @@ export default function ContactPicker({ role, required, value, onChange, contact
               value={query}
               onChange={e => { setQuery(e.target.value); setShowDropdown(true) }}
               onFocus={() => setShowDropdown(true)}
+              onKeyDown={handleInputKeyDown}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={showDropdown}
+              aria-controls={listboxId}
+              aria-activedescendant={showDropdown && filtered[activeIndex] ? `${listboxId}-option-${activeIndex}` : undefined}
               placeholder="Search contacts…"
               className={cn(
                 'w-full rounded-lg border border-border bg-card py-2 pl-8 pr-3 text-[13px] text-foreground placeholder:text-muted-foreground',
@@ -216,28 +259,38 @@ export default function ContactPicker({ role, required, value, onChange, contact
 
           {showDropdown && (
             <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
-              {filtered.length > 0 ? (
-                filtered.map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => { onChange(c); setQuery(''); setShowDropdown(false) }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
-                      {getInitials(c)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-medium text-foreground">{contactFullName(c)}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {[c.relationship, formatPhoneDisplay(c.phone)].filter(Boolean).join(' · ') || ''}
+              <div id={listboxId} role="listbox" className="max-h-64 overflow-y-auto overscroll-contain py-1">
+                {filtered.length > 0 ? (
+                  filtered.map((c, index) => (
+                    <button
+                      key={c.id}
+                      id={`${listboxId}-option-${index}`}
+                      ref={element => { optionRefs.current[index] = element }}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeIndex}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      onClick={() => selectContact(c)}
+                      className={cn(
+                        'flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+                        index === activeIndex && 'bg-muted/50'
+                      )}
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
+                        {getInitials(c)}
                       </div>
-                    </div>
-                  </button>
-                ))
-              ) : query.trim() ? (
-                <div className="px-3 py-3 text-center text-[12px] text-muted-foreground">No matches</div>
-              ) : null}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-medium text-foreground">{contactFullName(c)}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {[c.relationship, formatPhoneDisplay(c.phone)].filter(Boolean).join(' · ') || ''}
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                ) : query.trim() ? (
+                  <div className="px-3 py-3 text-center text-[12px] text-muted-foreground">No matches</div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => {
