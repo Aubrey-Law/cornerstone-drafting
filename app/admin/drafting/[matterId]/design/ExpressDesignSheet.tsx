@@ -131,17 +131,26 @@ function ExpressDesignSheetImpl({
   const [expandAll, setExpandAll] = useState(false)
   const [expandedCompleted, setExpandedCompleted] = useState<Set<string>>(new Set())
   const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
+  const attorneyPresetVersionRef = useRef(0)
   const { loadPreferences } = useUserPreferences()
   const sectionEls = useRef<Record<string, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let active = true
+    const loadVersion = attorneyPresetVersionRef.current
     void loadPreferences().then(preferences => {
-      if (active) setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null)
+      if (active && attorneyPresetVersionRef.current === loadVersion) {
+        setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null)
+      }
     })
     return () => { active = false }
   }, [loadPreferences])
+
+  const handleAttorneyPresetChange = useCallback((preset: AttorneyDesignPreset) => {
+    attorneyPresetVersionRef.current += 1
+    setAttorneyPreset(preset)
+  }, [])
 
   const clientDisplayName = [matter.client_name, matter.spouse_name].filter(Boolean).join(' & ') || 'Unnamed client'
 
@@ -331,7 +340,7 @@ function ExpressDesignSheetImpl({
             onShowCompletedChange={setShowCompleted}
             onExpandAllChange={setExpandAll}
             attorneyPreset={attorneyPreset}
-            onAttorneyPresetChange={setAttorneyPreset}
+            onAttorneyPresetChange={handleAttorneyPresetChange}
           />
 
           {/* Mobile section pills */}

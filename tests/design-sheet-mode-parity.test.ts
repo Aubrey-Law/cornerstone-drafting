@@ -16,7 +16,11 @@ describe('design sheet mode parity', () => {
 
     expect(express.match(/loadPreferences\(\)/g)).toHaveLength(1)
     expect(express).toContain('attorneyPreset={attorneyPreset}')
-    expect(express).toContain('onAttorneyPresetChange={setAttorneyPreset}')
+    expect(express).toContain('const attorneyPresetVersionRef = useRef(0)')
+    expect(express).toContain('const loadVersion = attorneyPresetVersionRef.current')
+    expect(express).toContain('attorneyPresetVersionRef.current === loadVersion')
+    expect(express).toContain('attorneyPresetVersionRef.current += 1')
+    expect(express).toContain('onAttorneyPresetChange={handleAttorneyPresetChange}')
     expect(acceleration).not.toContain('loadPreferences()')
     expect(acceleration).toContain('onAttorneyPresetChange(preset)')
     expect(finalReview).not.toContain('loadPreferences()')
