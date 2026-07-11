@@ -8,6 +8,8 @@ import {
   twilioInboundRingTimeout,
   twilioRecordCalls,
 } from '@/lib/twilio/config'
+import { parseTwilioForm } from '@/lib/twilio/form'
+import { verifyTwilioRequest } from '@/lib/twilio/verify'
 
 const { VoiceResponse } = twilio.twiml
 
@@ -23,8 +25,13 @@ function xmlResponse(twiml: InstanceType<typeof VoiceResponse>) {
 /**
  * POST /api/voice/inbound — business-line Voice URL.
  * Rings browser softphones, then falls through to TWILIO_INBOUND_FALLBACK_URL.
+ * Public URL, but only requests signed by Twilio are answered.
  */
-export async function POST() {
+export async function POST(req: Request) {
+  const params = await parseTwilioForm(req)
+  if (!verifyTwilioRequest(req, params)) {
+    return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
+  }
   const twiml = new VoiceResponse()
   const identities = twilioInboundClientIdentities()
   const fallbackUrl = twilioInboundFallbackUrl()

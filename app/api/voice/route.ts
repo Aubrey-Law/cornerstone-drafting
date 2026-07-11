@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import twilio from 'twilio'
 import { dialStatusCallbackOptions, twilioRecordCalls } from '@/lib/twilio/config'
+import { parseTwilioForm } from '@/lib/twilio/form'
+import { verifyTwilioRequest } from '@/lib/twilio/verify'
 
 const { VoiceResponse } = twilio.twiml
 
@@ -8,11 +10,15 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/voice — TwiML App Voice Request URL (public; Twilio POSTs here).
+ * POST /api/voice — TwiML App Voice Request URL. Public URL, but only requests
+ * signed by Twilio (X-Twilio-Signature) are answered.
  */
 export async function POST(req: Request) {
-  const form = await req.formData()
-  const to = (form.get('To') || '').toString().trim()
+  const params = await parseTwilioForm(req)
+  if (!verifyTwilioRequest(req, params)) {
+    return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
+  }
+  const to = (params.To ?? '').trim()
 
   const callerId = process.env.TWILIO_CALLER_ID
   const twiml = new VoiceResponse()
