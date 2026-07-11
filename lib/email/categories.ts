@@ -5,6 +5,7 @@ export const EMAIL_CATEGORIES = [
   'intake_complete_alert',
   'intake_invite',
   'retell_call_alert',
+  'daily_digest',
   'manual',
 ] as const
 
@@ -60,6 +61,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'retell_call_alert',
     label: 'Retell post-call alert',
     description: 'Sent to the firm when Retell finishes post-call analysis on a receptionist call.',
+    recipient: 'internal',
+  },
+  daily_digest: {
+    category: 'daily_digest',
+    label: 'Daily digest',
+    description: 'Weekday-morning summary of overdue matters, unread messages, and intakes waiting on review.',
     recipient: 'internal',
   },
   manual: {
