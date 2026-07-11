@@ -35,3 +35,10 @@ None affecting Task 1. The test runner emits the existing Node `DEP0205` depreca
 - Added a regression test with two blockers in the active section plus a blocker in another section, including wraparound back to the first blocker.
 - RED command: `npm test -- tests/design-sheet-guided-navigation.test.ts` — 1 failed, 2 passed; expected `trust:name`, received `client:address`.
 - GREEN/final command: `npm test -- tests/design-sheet-guided-navigation.test.ts` — 1 test file passed, 3 tests passed, exit code 0. The existing Node `DEP0205` deprecation warning remains.
+
+## Review Fix 2: Preserve Middle-Section Blocker Order
+
+- Changed navigation to locate the active section's final blocker position, advance from there to the next different section, and wrap to the first blocker only when no later section remains.
+- Added a regression with the active section in the middle of the blocker list and two blockers in that section.
+- RED command: `npm test -- tests/design-sheet-guided-navigation.test.ts` — 1 failed, 3 passed, exit code 1; expected `trust:name`, received `client:name`.
+- GREEN/final command: `npm test -- tests/design-sheet-guided-navigation.test.ts` — 1 test file passed, 4 tests passed, exit code 0. The existing Node `DEP0205` deprecation warning remains.

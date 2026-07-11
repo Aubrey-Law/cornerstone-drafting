@@ -38,4 +38,15 @@ describe('guided design sheet navigation', () => {
     expect(findNextUnresolvedBlocker(blockers, 'client')?.id).toBe('trust:name')
     expect(findNextUnresolvedBlocker(blockers, 'trust')?.id).toBe('client:name')
   })
+
+  it('advances from a middle section past its full blocker run before wrapping', () => {
+    const blockers = [
+      { id: 'client:name', sectionId: 'client' },
+      { id: 'family:child-name', sectionId: 'family' },
+      { id: 'family:child-birth-date', sectionId: 'family' },
+      { id: 'trust:name', sectionId: 'trust' },
+    ] as any
+
+    expect(findNextUnresolvedBlocker(blockers, 'family')?.id).toBe('trust:name')
+  })
 })

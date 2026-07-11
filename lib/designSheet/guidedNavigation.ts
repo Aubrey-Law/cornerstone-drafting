@@ -19,5 +19,7 @@ export function findNextUnresolvedBlocker(
 ) {
   if (blockers.length === 0) return null
   if (!activeSectionId) return blockers[0]
-  return blockers.find(item => item.sectionId !== activeSectionId) ?? blockers[0]
+  const activeSectionEnd = blockers.findLastIndex(item => item.sectionId === activeSectionId)
+  if (activeSectionEnd === -1) return blockers[0]
+  return blockers.slice(activeSectionEnd + 1).find(item => item.sectionId !== activeSectionId) ?? blockers[0]
 }
