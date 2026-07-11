@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Check, ChevronDown, ChevronRight, ClipboardCheck, DollarSign, FileText, Heart, HeartPulse, Landmark, Lightbulb, ScrollText, Shield, Target, User, Users, WandSparkles } from 'lucide-react'
-import { toast } from 'sonner'
+import { ChevronDown, ChevronRight, DollarSign, FileText, Heart, HeartPulse, Landmark, Lightbulb, ScrollText, Shield, Target, User, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import '@/app/intake/guided.css'
 import {
@@ -16,8 +15,6 @@ import {
 } from '@/components/guided'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import type { DesignDocumentInclusions, DesignDocumentKey } from '@/lib/designSheetDocumentInclusions'
@@ -28,16 +25,9 @@ import { buildDesignSectionDefs } from './designSectionCatalog'
 import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { PipelineMatter, DesignSheet, MatterContact } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
-import { useUserPreferences } from '@/lib/userPreferencesClient'
-import type { AttorneyDesignPreset } from '@/lib/designSheet/fastEntryWorkflow'
-import {
-  applyAttorneyPreset,
-  buildAttorneyPreset,
-  buildCopyClientToSpousePatch,
-  buildTrusteesToPrimaryRolesPatch,
-  orderFastEntrySections,
-  previewAttorneyPreset,
-} from '@/lib/designSheet/fastEntryWorkflow'
+import { orderFastEntrySections } from '@/lib/designSheet/fastEntryWorkflow'
+import { DesignAccelerationBar } from '@/components/design-sheet/DesignAccelerationBar'
+import { DesignFinalReview } from '@/components/design-sheet/DesignFinalReview'
 
 const ClonePlanDialog = dynamic(
   () => import('@/components/design-sheet/ClonePlanDialog').then(m => ({ default: m.ClonePlanDialog })),
@@ -139,10 +129,6 @@ function ExpressDesignSheetImpl({
   const [showCompleted, setShowCompleted] = useState(false)
   const [expandAll, setExpandAll] = useState(false)
   const [expandedCompleted, setExpandedCompleted] = useState<Set<string>>(new Set())
-  const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
-  const [presetDialogOpen, setPresetDialogOpen] = useState(false)
-  const [overwritePresetConflicts, setOverwritePresetConflicts] = useState(false)
-  const { loadPreferences, savePreferences } = useUserPreferences()
   const sectionEls = useRef<Record<string, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -187,47 +173,6 @@ function ExpressDesignSheetImpl({
     () => orderFastEntrySections(sections, sectionSummaries),
     [sectionSummaries, sections],
   )
-
-  useEffect(() => {
-    void loadPreferences().then(preferences => {
-      setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null)
-    })
-  }, [loadPreferences])
-
-  const applyPatch = useCallback((patch: Partial<DesignSheet>) => {
-    for (const [field, value] of Object.entries(patch)) {
-      updateField(field as keyof DesignSheet, value as DesignSheet[keyof DesignSheet])
-    }
-  }, [updateField])
-
-  const presetPreview = useMemo(
-    () => attorneyPreset ? previewAttorneyPreset(sheet, attorneyPreset) : [],
-    [attorneyPreset, sheet],
-  )
-
-  const handleSavePreset = useCallback(async () => {
-    const preset = buildAttorneyPreset(sheet)
-    if (Object.keys(preset.fields).length === 0) {
-      toast.error('Complete at least one standard structural choice first.')
-      return
-    }
-    const saved = await savePreferences({ drafting: { attorneyPreset: preset } })
-    if (!saved) {
-      toast.error('Unable to save your standard choices.')
-      return
-    }
-    setAttorneyPreset(preset)
-    toast.success('Standard choices saved for future matters.')
-  }, [savePreferences, sheet])
-
-  const handleApplyPreset = useCallback(() => {
-    if (!attorneyPreset) return
-    const patch = applyAttorneyPreset(sheet, attorneyPreset, { overwrite: overwritePresetConflicts })
-    applyPatch(patch)
-    setPresetDialogOpen(false)
-    setOverwritePresetConflicts(false)
-    toast.success(`Applied ${Object.keys(patch).length} standard choice${Object.keys(patch).length === 1 ? '' : 's'}.`)
-  }, [applyPatch, attorneyPreset, overwritePresetConflicts, sheet])
 
   // ── Scroll-spy: highlight the section nearest the top of the scroll area ─────
   // Keyed on the section id set (not the section objects, which change on every
@@ -305,13 +250,6 @@ function ExpressDesignSheetImpl({
   const pendingFiduciaries = Object.entries(sheet.fiduciary_slot_states ?? {})
     .filter(([, value]) => value === 'pending_client')
     .map(([key]) => key)
-  const intakeOverrides = Object.keys(sheet.overrides ?? {})
-  const appliedPresetFields = attorneyPreset
-    ? Object.entries(attorneyPreset.fields)
-        .filter(([field, value]) => JSON.stringify(sheet[field as keyof DesignSheet]) === JSON.stringify(value))
-        .map(([field]) => field)
-    : []
-
   const toggleCompletedSection = useCallback((id: string) => {
     setExpandedCompleted(current => {
       const next = new Set(current)
@@ -325,39 +263,6 @@ function ExpressDesignSheetImpl({
     <SharedFieldsProvider>
     <DesignValidationProvider value={validationValue}>
       <div className="guided-interview flex h-full min-h-0 flex-col overflow-hidden">
-        <Dialog open={presetDialogOpen} onOpenChange={setPresetDialogOpen}>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Apply my standard choices</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              Only allowlisted structural choices are included. Client elections and intake identity fields are never preset.
-            </p>
-            <div className="max-h-72 space-y-2 overflow-y-auto">
-              {presetPreview.length === 0 ? (
-                <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">No changes are needed.</p>
-              ) : presetPreview.map(item => (
-                <div key={item.field} className="flex items-start justify-between gap-4 rounded-md border border-border px-3 py-2 text-sm">
-                  <div>
-                    <p className="font-medium capitalize">{item.field.replace(/_/g, ' ')}</p>
-                    {item.conflict && <p className="text-xs text-warning">Existing value will be kept unless overwrite is selected.</p>}
-                  </div>
-                  <span className="text-right text-xs text-muted-foreground">{String(item.presetValue)}</span>
-                </div>
-              ))}
-            </div>
-            {presetPreview.some(item => item.conflict) && (
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={overwritePresetConflicts} onCheckedChange={value => setOverwritePresetConflicts(value === true)} />
-                Replace existing structural choices shown above
-              </label>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setPresetDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleApplyPreset} disabled={presetPreview.length === 0}>Apply choices</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
         <ClonePlanDialog
           open={cloneDialogOpen}
           onOpenChange={setCloneDialogOpen}
@@ -403,42 +308,18 @@ function ExpressDesignSheetImpl({
             />
           </div>
 
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-            {nextRequired ? (
-              <Button size="sm" className="gap-1.5 text-xs" onClick={() => focusField(nextRequired.sectionId, nextRequired.targetId)}>
-                <ChevronRight className="h-3.5 w-3.5" />
-                Next required: {nextRequired.label}
-              </Button>
-            ) : (
-              <Badge className="border-0 bg-success/10 text-success"><Check className="mr-1 h-3 w-3" />Ready to generate</Badge>
-            )}
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setExpandAll(value => !value)}>
-              {expandAll ? 'Collapse completed' : 'Expand all'}
-            </Button>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Checkbox checked={showCompleted} onCheckedChange={value => setShowCompleted(value === true)} />
-              Show completed
-            </label>
-            <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
-            {attorneyPreset && (
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setPresetDialogOpen(true)}>
-                <WandSparkles className="h-3.5 w-3.5" />Apply my standards
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" className="text-xs" onClick={() => void handleSavePreset()}>
-              Save current as my standards
-            </Button>
-            {documentInclusions.spouse_docs && (
-              <Button variant="outline" size="sm" className="text-xs" onClick={() => applyPatch(buildCopyClientToSpousePatch(sheet))}>
-                Client selections → spouse
-              </Button>
-            )}
-            {documentInclusions.trust && (
-              <Button variant="outline" size="sm" className="text-xs" onClick={() => applyPatch(buildTrusteesToPrimaryRolesPatch(sheet, documentInclusions))}>
-                Trustees → primary roles
-              </Button>
-            )}
-          </div>
+          <DesignAccelerationBar
+            sheet={sheet}
+            updateField={updateField}
+            documentInclusions={documentInclusions}
+            nextRequired={nextRequired}
+            onNextRequired={blocker => focusField(blocker.sectionId, blocker.targetId)}
+            showLayoutControls
+            showCompleted={showCompleted}
+            expandAll={expandAll}
+            onShowCompletedChange={setShowCompleted}
+            onExpandAllChange={setExpandAll}
+          />
 
           {/* Mobile section pills */}
           <div className="mb-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
@@ -499,33 +380,15 @@ function ExpressDesignSheetImpl({
                 </section>
                 )
               })}
-              <section className="mb-4 rounded-xl border border-border bg-card p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4 text-accent" />Final review</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Only exceptions, unresolved work, and package choices are shown.</p>
-                  </div>
-                  <Badge className={cn('border-0', readinessComplete ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>
-                    {readinessComplete ? 'Ready' : `${blockerDetails.flatMap(group => group.blockers).length} unresolved`}
-                  </Badge>
-                </div>
-                <div className="mt-4 grid gap-4 text-xs sm:grid-cols-2">
-                  <div><p className="font-semibold text-foreground">Selected documents</p><p className="mt-1 text-muted-foreground">{selectedDocKeys.map(key => key.replace(/_/g, ' ')).join(' · ') || 'None'}</p></div>
-                  <div><p className="font-semibold text-foreground">Intake overrides</p><p className="mt-1 text-muted-foreground">{intakeOverrides.map(field => field.replace(/_/g, ' ')).join(' · ') || 'None'}</p></div>
-                  <div><p className="font-semibold text-foreground">Applied standards</p><p className="mt-1 text-muted-foreground">{appliedPresetFields.map(field => field.replace(/_/g, ' ')).join(' · ') || 'None'}</p></div>
-                  <div><p className="font-semibold text-foreground">Pending client</p><p className="mt-1 text-muted-foreground">{pendingFiduciaries.map(field => field.replace(/_/g, ' ')).join(' · ') || 'None'}</p></div>
-                </div>
-                {!readinessComplete && (
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {blockerDetails.flatMap(group => group.blockers).map(blocker => (
-                      <button key={blocker.id} type="button" onClick={() => focusField(blocker.sectionId, blocker.targetId)} className="rounded-full border border-warning/40 bg-warning/5 px-2.5 py-1 text-[11px] hover:bg-warning/10">
-                        {blocker.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {onOpenDrafting && <Button className="mt-4 w-full" disabled={!readinessComplete} onClick={onOpenDrafting}>Generate drafts →</Button>}
-              </section>
+              <DesignFinalReview
+                sheet={sheet}
+                selectedDocKeys={selectedDocKeys}
+                blockerDetails={blockerDetails}
+                pendingFiduciaries={pendingFiduciaries}
+                readinessComplete={readinessComplete}
+                onBlockerClick={blocker => focusField(blocker.sectionId, blocker.targetId)}
+                onGenerate={onOpenDrafting}
+              />
             </div>
           </div>
 
