@@ -160,6 +160,8 @@ The admin FAB is hidden when Voice env is incomplete (`isTwilioVoiceConfigured()
 | Status callbacks (automatic via code) | `https://<host>/api/webhooks/twilio/voice-status` |
 | Retell webhook (if used) | `https://<host>/api/webhooks/retell` |
 
+Post-call alerts (`call_analyzed`): email via `RETELL_SUMMARY_TO`, SMS via `RETELL_SUMMARY_SMS_TO` (see `VERCEL_ENV_CHECKLIST.md`).
+
 ### Staff identity for inbound ring
 
 1. Supabase Studio → Authentication → Users → copy the staff user's UUID.

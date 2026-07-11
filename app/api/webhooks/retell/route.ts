@@ -5,6 +5,7 @@ import {
   retellWebhookToRow,
   type RetellCallRowInsert,
 } from '@/lib/retell/normalize'
+import { notifyRetellCallAnalyzed, retellRowToNotifyInput } from '@/lib/retell/notify'
 import type { RetellWebhookPayload } from '@/lib/retell/types'
 import { verifyRetellSignature } from '@/lib/retell/verify'
 
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
   const { data: existing } = await admin
     .from('calls')
     .select(
-      'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload',
+      'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload, matter_id',
     )
     .eq('external_call_id', row.external_call_id)
     .maybeSingle()
@@ -94,12 +95,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'call id conflict' }, { status: 409 })
   }
 
-  const merged = mergeCallRow(existing as ExistingCall | null, row)
+  const existingRow = existing as ExistingCall | null
+  const merged = mergeCallRow(existingRow, row)
 
   const { error } = await admin.from('calls').upsert(merged, { onConflict: 'external_call_id' })
   if (error) {
     console.error('[retell] upsert error', { callId: row.external_call_id, error })
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (payload.event === 'call_analyzed') {
+    await notifyRetellCallAnalyzed(
+      retellRowToNotifyInput({
+        ...merged,
+        matter_id: existingRow?.matter_id ?? null,
+      }),
+      { previousSummary: existingRow?.summary ?? null },
+    )
   }
 
   return NextResponse.json({ ok: true })
