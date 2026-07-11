@@ -82,6 +82,7 @@ describe('API route auth coverage', () => {
           // Webhooks: cryptographic signature verification instead of a session.
           /verifyTwilioRequest\b/,
           /verifyRetellSignature\b/,
+          /verifyEsignWebhookSecret\b/,
           // Intake uploads: invite-token or bearer auth resolved in a shared helper.
           /resolveIntakeUploadAccess\b/,
         ]),
