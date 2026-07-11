@@ -1,5 +1,5 @@
 import type { DesignSheet, DesignSheetUpdate } from '@/types/database'
-import { buildDesignSheetPersistencePayload } from '@/lib/designSheetPersistence'
+import { buildDesignSheetPersistencePayload, stripDecisionOnlyTopLevelMirrors } from '@/lib/designSheetPersistence'
 import { parseUpdatedAt } from '@/lib/designSheet/updatedAt'
 
 const DRAFT_PREFIX = 'cornerstone:design-sheet-draft:'
@@ -111,7 +111,10 @@ export function resolveInitialDesignSheet(args: {
  * UI sheet object, which may still carry stale inflated decision mirrors.
  */
 export function prepareDesignSheetForSave(sheet: DesignSheet): DesignSheetUpdate {
-  const payload = buildDesignSheetPersistencePayload(sheet)
+  const cleaned = stripDecisionOnlyTopLevelMirrors(
+    sheet as unknown as Record<string, unknown>,
+  ) as unknown as DesignSheet
+  const payload = buildDesignSheetPersistencePayload(cleaned)
   return {
     ...payload,
     // Keep identity fields the API merge expects.

@@ -27,6 +27,7 @@ import {
   resolveInitialDesignSheet,
   writeDesignSheetDraft,
 } from '@/lib/designSheet/designSheetDraft'
+import { stripDecisionOnlyTopLevelMirrors } from '@/lib/designSheetPersistence'
 import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
 
 export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
@@ -367,6 +368,16 @@ export function useDesignSheetState({
           // propsSheetStampRef to savedAt would make the sync effect treat those stale
           // props as "new" when saveStatus flips to saved.
           serverSheetStampRef.current = savedAt
+          commitSheet(prev => stripDecisionOnlyTopLevelMirrors(
+            prev as unknown as Record<string, unknown>,
+          ) as unknown as DesignSheet)
+          writeDesignSheetDraft({
+            matterId,
+            sheet: stripDecisionOnlyTopLevelMirrors(
+              sheetRef.current as unknown as Record<string, unknown>,
+            ) as unknown as DesignSheet,
+            baseUpdatedAt: savedAt,
+          })
           finishPersist(generationAtSaveStart)
           return true
         } catch (err) {

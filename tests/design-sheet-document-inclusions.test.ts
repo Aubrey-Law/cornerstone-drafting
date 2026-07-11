@@ -148,6 +148,21 @@ describe('design sheet document inclusions', () => {
     }).trust).toBe(true)
   })
 
+  it('ignores stale top-level document_inclusions when decisions is empty', () => {
+    const payload = buildDesignSheetPersistencePayload({
+      plan_type: 'pour_over',
+      document_inclusions: { trust: false, will: true, dpoa: true, healthcare: true },
+      decisions: {},
+    } as Parameters<typeof buildDesignSheetPersistencePayload>[0])
+
+    expect((payload.decisions as Record<string, unknown>).document_inclusions).toBeUndefined()
+    expect(getDocumentInclusions({
+      plan_type: 'pour_over',
+      marital_status: null,
+      decisions: payload.decisions as Record<string, unknown>,
+    }).trust).toBe(true)
+  })
+
   it('does not let stale inflated top-level document_inclusions overwrite decisions on save', () => {
     const loaded = inflateDesignSheetRow({
       id: 'sheet-1',

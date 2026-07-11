@@ -5,6 +5,34 @@ import { formatPhoneFieldsDeep } from '@/lib/phone'
 const SYSTEM_COLUMNS = new Set(['id', 'matter_id', 'client_intake_id', 'created_at', 'updated_at'])
 const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
 
+/**
+ * Decision JSONB namespaces that must live under `sheet.decisions` only.
+ * Legacy inflate mirrored these onto the sheet top-level; stale copies must not
+ * be re-persisted when the UI updates only `decisions` (e.g. trust checkbox).
+ */
+const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
+  'contact_profiles',
+  'deed',
+  'distribution_method',
+  'document_inclusions',
+  'dpoa_provisions',
+  'estate_plan_design',
+  'excluded_guardian',
+  'excluded_guardians',
+  'excluded_person',
+  'fiduciary_contact_details',
+  'fiduciary_display_options',
+  'fiduciary_document_inclusions',
+  'funding_plan',
+  'healthcare_provisions',
+  'provisions',
+  'real_estate_transfer',
+  'staggered_ages',
+  'trust_details',
+  'trust_planning_type',
+  'will_pr_powers',
+])
+
 /** Postgres `date` columns — empty / non-ISO strings must become null or the update fails. */
 const DATE_DESIGN_SHEET_COLUMNS = new Set([
   'client_dob',
@@ -226,6 +254,17 @@ function normalizeTrustProtector(value: unknown) {
   return value
 }
 
+/** Remove stale decision mirrors from the sheet top-level (in-memory / session draft). */
+export function stripDecisionOnlyTopLevelMirrors<T extends Record<string, unknown>>(sheet: T): T {
+  const next = { ...sheet }
+  for (const key of DECISION_ONLY_TOP_LEVEL_KEYS) {
+    if (key in next && !WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
+      delete next[key]
+    }
+  }
+  return next
+}
+
 export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
   const input = formatPhoneFieldsDeep(data) as Record<string, unknown>
   const payload: Record<string, unknown> = {}
@@ -240,7 +279,8 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
 
     if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
       payload[key] = normalizeColumnValue(key, value)
-    } else if (!(key in decisions)) {
+    } else if (!(key in decisions) && !DECISION_ONLY_TOP_LEVEL_KEYS.has(key)) {
+      // Lite-only template fields without a dedicated column land in decisions jsonb.
       decisions[key] = value
     }
   }
@@ -296,5 +336,5 @@ export function inflateDesignSheetRow(row: Record<string, unknown> | null): Desi
     }
   }
 
-  return sheet as unknown as DesignSheet
+  return stripDecisionOnlyTopLevelMirrors(sheet) as unknown as DesignSheet
 }
