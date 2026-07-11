@@ -95,6 +95,42 @@ export async function DELETE(
 }
 
 /**
+ * PATCH /api/admin/matters/[id]/assistant — append already-completed turns.
+ * Used by the global assistant panel (whose chat engine is /api/admin/chat)
+ * so both surfaces share one thread per matter.
+ * Body: { turns: Array<{ role: 'user' | 'assistant', content: string }> }
+ */
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { user, err } = await requireAdmin(req)
+  if (err) return err
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id: matterId } = await params
+  const body = (await req.json().catch(() => null)) as {
+    turns?: Array<{ role?: string; content?: string }>
+  } | null
+  const rawTurns = body?.turns
+  if (!Array.isArray(rawTurns) || rawTurns.length === 0 || rawTurns.length > 4) {
+    return Response.json({ error: 'turns must be an array of 1-4 items' }, { status: 400 })
+  }
+  const turns: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  for (const turn of rawTurns) {
+    const content = typeof turn?.content === 'string' ? turn.content.trim() : ''
+    if ((turn?.role !== 'user' && turn?.role !== 'assistant') || !content) {
+      return Response.json({ error: 'each turn needs a role and non-empty content' }, { status: 400 })
+    }
+    turns.push({ role: turn.role, content: content.slice(0, 32_000) })
+  }
+
+  const admin = getAdminClient()
+  await appendMatterAssistantTurns(admin, matterId, user.id, turns)
+  return Response.json({ ok: true })
+}
+
+/**
  * POST /api/admin/matters/[id]/assistant
  * Body: { message: string, documentIds?: string[], stream?: boolean }
  */

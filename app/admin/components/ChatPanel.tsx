@@ -145,7 +145,8 @@ function storeMessages(messages: FloatingChatMessage[]) {
 export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled, matterDisplayName = null }: ChatPanelProps) {
   const detectedContext = useChatContext()
   const [overrideGeneral, setOverrideGeneral] = useState(false)
-  const [messages, setMessages] = useState<FloatingChatMessage[]>(loadStoredMessages)
+  const [messages, setMessages] = useState<FloatingChatMessage[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -158,11 +159,17 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   const wasOpenRef = useRef(false)
   const activityDraftPromptRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // Tracks which thread the current `messages` belong to, so thread switches
+  // never persist one thread's messages under another thread's key.
+  const loadedThreadRef = useRef<string | null>(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
   const chatContext = overrideGeneral ? ({ type: 'general' } as const) : detectedContext
   const prompts = useMemo(() => suggestedPrompts[chatContext.type], [chatContext.type])
+  // Matter threads are shared with the Draft assistant via matter_assistant_messages;
+  // the general thread stays in sessionStorage.
+  const threadKey = chatContext.type === 'matter' ? chatContext.id : 'general'
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
@@ -179,8 +186,50 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   }, [open])
 
   useEffect(() => {
+    if (!open) return
+    if (threadKey === 'general') {
+      setMessages(loadStoredMessages())
+      loadedThreadRef.current = 'general'
+      return
+    }
+    let stale = false
+    setHistoryLoading(true)
+    void (async () => {
+      let loaded: FloatingChatMessage[] = []
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch(`/api/admin/matters/${threadKey}/assistant`, {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        })
+        const body = await res.json().catch(() => ({})) as {
+          turns?: Array<{ role: string; content: string; createdAt?: string }>
+        }
+        if (res.ok && Array.isArray(body.turns)) {
+          loaded = body.turns.map((turn, index) => ({
+            id: `srv-${threadKey}-${index}`,
+            role: turn.role === 'user' ? 'user' as const : 'assistant' as const,
+            content: turn.content,
+            timestamp: turn.createdAt ?? new Date().toISOString(),
+            contextSnapshot: { type: 'matter', id: threadKey },
+          }))
+        }
+      } catch {
+        // Chat still works without the persisted view.
+      }
+      if (stale) return
+      setMessages(loaded)
+      loadedThreadRef.current = threadKey
+      setHistoryLoading(false)
+    })()
+    return () => {
+      stale = true
+    }
+  }, [open, threadKey])
+
+  useEffect(() => {
+    if (threadKey !== 'general' || loadedThreadRef.current !== 'general') return
     storeMessages(messages)
-  }, [messages])
+  }, [messages, threadKey])
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
@@ -212,6 +261,9 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     setLoading(true)
     const controller = new AbortController()
     abortRef.current = controller
+    let replyText = ''
+    let sawToolEvent = false
+    let persistReply: string | null = null
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -277,6 +329,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
             }
             if (parsed.error && !parsed.tool) throw new Error(parsed.error)
             if (parsed.tool && parsed.tool_use_id && parsed.status) {
+              sawToolEvent = true
               const preview = Array.isArray(parsed.result?.preview)
                 ? parsed.result.preview as DesignSheetImportPreviewRow[]
                 : undefined
@@ -309,6 +362,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
               continue
             }
             if (!parsed.text) continue
+            replyText += parsed.text
             setMessages(prev => prev.map(message =>
               message.id === assistantMessage.id
                 ? { ...message, content: message.content + parsed.text }
@@ -317,10 +371,12 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           }
         }
       }
+      persistReply = replyText || (sawToolEvent ? '[Prepared a design sheet proposal for review]' : null)
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         // User stopped generation: keep any partial text, drop an empty bubble.
         setMessages(prev => prev.filter(item => !(item.id === assistantMessage.id && !item.content && !item.toolEvents?.length)))
+        persistReply = replyText || null
       } else {
         const message = (err as Error).message || 'Chat unavailable - try again in a moment.'
         setError(message)
@@ -333,6 +389,30 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     } finally {
       abortRef.current = null
       setLoading(false)
+      // Share matter conversations with the Draft assistant's per-matter
+      // thread. Failed sends persist nothing (matches Draft assistant).
+      if (contextAtSend.type === 'matter' && persistReply) {
+        void (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            await fetch(`/api/admin/matters/${contextAtSend.id}/assistant`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+              },
+              body: JSON.stringify({
+                turns: [
+                  { role: 'user', content: trimmed },
+                  { role: 'assistant', content: persistReply },
+                ],
+              }),
+            })
+          } catch {
+            // Best-effort: the local thread already shows the turn.
+          }
+        })()
+      }
     }
   }
 
@@ -442,7 +522,21 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     }
   }
 
-  function handleClearConversation() {
+  async function handleClearConversation() {
+    if (chatContext.type === 'matter') {
+      if (!window.confirm('Clear this matter’s assistant chat history?')) return
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch(`/api/admin/matters/${chatContext.id}/assistant`, {
+          method: 'DELETE',
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        })
+        if (!res.ok) throw new Error('Could not clear history')
+      } catch (err) {
+        flashStatus('error', (err as Error).message || 'Could not clear history.')
+        return
+      }
+    }
     setMessages([])
     setError(null)
     setActionStatus(null)
@@ -605,7 +699,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           </button>
           <button
             type="button"
-            onClick={handleClearConversation}
+            onClick={() => void handleClearConversation()}
             disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -630,7 +724,9 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
         ref={threadRef}
         className="flex-1 overflow-y-auto bg-card px-4 py-4"
       >
-        {messages.length === 0 ? (
+        {historyLoading && messages.length === 0 ? (
+          <div className="text-sm leading-relaxed text-muted-foreground">Loading history…</div>
+        ) : messages.length === 0 ? (
           <div className="text-sm leading-relaxed text-muted-foreground">
             Ask me anything about this matter, your pipeline, or Massachusetts estate planning.
           </div>
@@ -662,7 +758,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           </div>
         )}
 
-        {messages.length === 0 && (
+        {!historyLoading && messages.length === 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {prompts.map(prompt => (
               <button
