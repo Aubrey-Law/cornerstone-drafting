@@ -19,6 +19,5 @@ export function findNextUnresolvedBlocker(
 ) {
   if (blockers.length === 0) return null
   if (!activeSectionId) return blockers[0]
-  const activeIndex = blockers.findIndex(item => item.sectionId === activeSectionId)
-  return blockers[(activeIndex + 1) % blockers.length]
+  return blockers.find(item => item.sectionId !== activeSectionId) ?? blockers[0]
 }

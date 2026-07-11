@@ -27,4 +27,15 @@ describe('guided design sheet navigation', () => {
     expect(findNextUnresolvedBlocker(blockers, 'client')?.id).toBe('trust:name')
     expect(findNextUnresolvedBlocker(blockers, 'trust')?.id).toBe('client:name')
   })
+
+  it('skips every blocker in the active section before wrapping to another section', () => {
+    const blockers = [
+      { id: 'client:name', sectionId: 'client' },
+      { id: 'client:address', sectionId: 'client' },
+      { id: 'trust:name', sectionId: 'trust' },
+    ] as any
+
+    expect(findNextUnresolvedBlocker(blockers, 'client')?.id).toBe('trust:name')
+    expect(findNextUnresolvedBlocker(blockers, 'trust')?.id).toBe('client:name')
+  })
 })
