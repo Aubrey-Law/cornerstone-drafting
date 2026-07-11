@@ -40,29 +40,15 @@ interface MattersClientProps {
 }
 
 type MatterFilters = {
-  matterNumber: string
-  clientName: string
-  email: string
-  phone: string
   practice: string
   stage: string
   intake: string
 }
 
 const EMPTY_FILTERS: MatterFilters = {
-  matterNumber: '',
-  clientName: '',
-  email: '',
-  phone: '',
   practice: 'all',
   stage: 'all',
   intake: 'all',
-}
-
-function matchesTextFilter(value: string | null | undefined, filter: string) {
-  const q = filter.trim().toLowerCase()
-  if (!q) return true
-  return (value ?? '').toLowerCase().includes(q)
 }
 
 function intakeStatusLabel(status: string | null | undefined) {
@@ -138,10 +124,6 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const hasActiveFilters = useMemo(() => {
     return Boolean(
       search.trim()
-      || filters.matterNumber.trim()
-      || filters.clientName.trim()
-      || filters.email.trim()
-      || filters.phone.trim()
       || filters.practice !== 'all'
       || filters.stage !== 'all'
       || filters.intake !== 'all',
@@ -167,10 +149,6 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
           .toLowerCase()
         if (!hay.includes(q)) return false
       }
-      if (!matchesTextFilter(m.matter_number, filters.matterNumber)) return false
-      if (!matchesTextFilter(m.client_name || m.matter_name, filters.clientName)) return false
-      if (!matchesTextFilter(m.client_email, filters.email)) return false
-      if (!matchesTextFilter(m.client_phone, filters.phone)) return false
       if (filters.practice !== 'all' && m.practice_area !== filters.practice) return false
       if (filters.stage !== 'all' && m.stage !== filters.stage) return false
       if (filters.intake !== 'all' && (m.intake_status ?? '') !== filters.intake) return false
@@ -350,29 +328,9 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
-      <div className="border-b border-border bg-card px-4 py-4 md:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Matters</h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Open a matter for overview, documents, contacts, and communications.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setLawmaticsOpen(true)}>
-              <Database className="h-3.5 w-3.5" />
-              Import from Lawmatics
-            </Button>
-            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" />
-              Create Matter
-            </Button>
-          </div>
-        </div>
-      </div>
-
       <div className="space-y-3 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
+          <h1 className="mr-2 text-xl font-semibold tracking-tight">Matters</h1>
           <div className="flex max-w-md min-w-[14rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
             <input
@@ -393,8 +351,65 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
               </button>
             )}
           </div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setLawmaticsOpen(true)}>
+              <Database className="h-3.5 w-3.5" />
+              Import from Lawmatics
+            </Button>
+            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Create Matter
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            Practice
+            <select
+              value={filters.practice}
+              onChange={e => updateFilter('practice', e.target.value)}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="all">All</option>
+              {PRACTICE_AREA_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            Stage
+            <select
+              value={filters.stage}
+              onChange={e => updateFilter('stage', e.target.value)}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="all">All</option>
+              {STAGES.map(stage => (
+                <option key={stage.key} value={stage.key}>
+                  {stage.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            Intake
+            <select
+              value={filters.intake}
+              onChange={e => updateFilter('intake', e.target.value)}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="all">All</option>
+              {intakeStatuses.map(status => (
+                <option key={status} value={status}>
+                  {intakeStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
           {hasActiveFilters && (
-            <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+            <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
               Clear filters
             </Button>
           )}
@@ -431,9 +446,9 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-md border border-border">
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
             <table className="min-w-[72rem] w-full text-left text-xs">
-              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
+              <thead className="border-b border-border text-muted-foreground">
                 <tr>
                   <th className="w-10 px-3 py-2">
                     <Checkbox
@@ -450,91 +465,6 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                   <th className="px-3 py-2 font-medium">Stage</th>
                   <th className="px-3 py-2 font-medium">Intake</th>
                   <th className="w-10 px-3 py-2" aria-label="Actions" />
-                </tr>
-                <tr className="border-b border-border bg-background">
-                  <th className="px-3 py-2" />
-                  <th className="px-3 py-2">
-                    <input
-                      value={filters.matterNumber}
-                      onChange={e => updateFilter('matterNumber', e.target.value)}
-                      placeholder="Filter"
-                      aria-label="Filter by matter number"
-                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
-                    />
-                  </th>
-                  <th className="px-3 py-2">
-                    <input
-                      value={filters.clientName}
-                      onChange={e => updateFilter('clientName', e.target.value)}
-                      placeholder="Filter"
-                      aria-label="Filter by client name"
-                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
-                    />
-                  </th>
-                  <th className="px-3 py-2">
-                    <input
-                      value={filters.email}
-                      onChange={e => updateFilter('email', e.target.value)}
-                      placeholder="Filter"
-                      aria-label="Filter by email"
-                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
-                    />
-                  </th>
-                  <th className="px-3 py-2">
-                    <input
-                      value={filters.phone}
-                      onChange={e => updateFilter('phone', e.target.value)}
-                      placeholder="Filter"
-                      aria-label="Filter by phone"
-                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-accent"
-                    />
-                  </th>
-                  <th className="px-3 py-2">
-                    <select
-                      value={filters.practice}
-                      onChange={e => updateFilter('practice', e.target.value)}
-                      aria-label="Filter by practice area"
-                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                    >
-                      <option value="all">All</option>
-                      {PRACTICE_AREA_OPTIONS.map(option => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </th>
-                  <th className="px-3 py-2">
-                    <select
-                      value={filters.stage}
-                      onChange={e => updateFilter('stage', e.target.value)}
-                      aria-label="Filter by stage"
-                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                    >
-                      <option value="all">All</option>
-                      {STAGES.map(stage => (
-                        <option key={stage.key} value={stage.key}>
-                          {stage.label}
-                        </option>
-                      ))}
-                    </select>
-                  </th>
-                  <th className="px-3 py-2">
-                    <select
-                      value={filters.intake}
-                      onChange={e => updateFilter('intake', e.target.value)}
-                      aria-label="Filter by intake status"
-                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                    >
-                      <option value="all">All</option>
-                      {intakeStatuses.map(status => (
-                        <option key={status} value={status}>
-                          {intakeStatusLabel(status)}
-                        </option>
-                      ))}
-                    </select>
-                  </th>
-                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
