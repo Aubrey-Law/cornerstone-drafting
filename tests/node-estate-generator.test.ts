@@ -4,6 +4,8 @@ import path from 'node:path'
 import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
+import { defaultDraftPayloadTrustProvisions } from '@/lib/buildDraftPayload'
+import { defaultDraftPayloadDpoaProvisions } from '@/lib/draftPayload/defaults'
 import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
 import { hoistParagraphConditionals, repairSplitNunjucksInXml, renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
 import { loadNodeEstatePackage, loadNodeEstateStateRules } from '@/lib/estateGenerator/node/config'
@@ -70,6 +72,9 @@ function draftPayload(overrides: DraftPayloadOverrides = {}): DraftPayload {
     children: [],
     trust: {
       name: 'Jane Example Revocable Trust',
+      spouse_name: null,
+      display_name: 'Jane Example Revocable Trust',
+      spouse_display_name: null,
       date: '2026-05-21',
       distribution_ages: [25, 30, 35],
       ma_estate_taxable: false,
@@ -78,6 +83,7 @@ function draftPayload(overrides: DraftPayloadOverrides = {}): DraftPayload {
       has_ilit: false,
       ilit_trustee: null,
     },
+    trust_provisions: defaultDraftPayloadTrustProvisions(),
     fiduciaries: {
       pr_primary: 'Emily Executor',
       pr_co_primary: null,
@@ -103,6 +109,7 @@ function draftPayload(overrides: DraftPayloadOverrides = {}): DraftPayload {
       guardian_successor: null,
       guardian_second_successor: null,
       temp_guardian_primary: null,
+      temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
       spouse_pr_primary: null,

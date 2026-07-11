@@ -14,6 +14,7 @@ import {
   PanelLeft,
   Phone,
   Settings,
+  Sun,
 } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
@@ -53,7 +54,9 @@ const ChatPanel = dynamic(
 
 const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 
-const navItems = [
+const navItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[] = [
+  // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
+  { href: '/admin', label: 'Today', icon: Sun, exact: true },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
   { href: '/admin/pipeline/aging', label: 'Aging', icon: Clock },
@@ -156,7 +159,7 @@ export default function AdminLayoutClient({
   const nav = (compact: boolean) => (
     <nav className="flex flex-col gap-1 p-2">
       {navItems.map(item => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+        const active = pathname === item.href || (!item.exact && pathname.startsWith(`${item.href}/`))
         const Icon = item.icon
         const badge = getNavBadge(item.href, badgeCounts)
         return (
