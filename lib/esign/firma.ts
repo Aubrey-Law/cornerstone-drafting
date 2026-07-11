@@ -47,6 +47,8 @@ class FirmaEsignProvider implements EsignProvider {
     // response also carries the signer's direct link for in-app "Sign now".
     const response = await this.client.signingRequests.createAndSendSigningRequest({
       template_id: this.templateId,
+      // firma.dev's create-and-send requires a signing-request name.
+      name: `Engagement Agreement — ${input.name.trim() || input.email}`,
       recipients: [
         {
           first_name: firstName,
