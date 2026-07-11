@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -30,6 +30,30 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Unread firm messages for the nav badge. RLS scopes the query to this
+  // client's matter; re-checked on every navigation so visiting /messages
+  // (which marks messages read) clears the badge on the next page change.
+  useEffect(() => {
+    let cancelled = false
+    async function loadUnread() {
+      try {
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('sender_role', 'attorney')
+          .is('read_at', null)
+        if (!cancelled) setUnreadCount(count ?? 0)
+      } catch {
+        // The badge is a hint, never worth surfacing an error for.
+      }
+    }
+    void loadUnread()
+    return () => {
+      cancelled = true
+    }
+  }, [pathname])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -60,7 +84,12 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                {item.href === '/messages' && unreadCount > 0 && (
+                  <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+                    {unreadCount}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -138,7 +167,12 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                       )}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {item.href === '/messages' && unreadCount > 0 && (
+                        <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+                          {unreadCount}
+                        </span>
+                      )}
                     </Link>
                   )
                 })}

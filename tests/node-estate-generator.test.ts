@@ -166,13 +166,13 @@ function draftPayload(overrides: DraftPayloadOverrides = {}): DraftPayload {
       pet_care_option: 'omit',
       pet_care_details: {},
       specific_bequests: [],
+      pr_powers: {
+        allow_pay_taxes_debts_expenses: false,
+        allow_manage_digital_assets: false,
+        include_distribution_cash_or_kind: false,
+      },
     },
-    dpoa_provisions: {
-      coagent_manner: 'independently',
-      self_dealing_reviewer: null,
-      self_dealing_reviewer_alt: null,
-      include_section_l: false,
-    },
+    dpoa_provisions: defaultDraftPayloadDpoaProvisions(),
     hcp_provisions: {
       anatomical_gift: null,
       anatomical_specified: null,
@@ -331,7 +331,7 @@ describe('node estate generator config', () => {
       },
     })
     const result = await generateNodeEstatePackage({
-      data: toEstateGeneratorData(payload) as Record<string, unknown>,
+      data: toEstateGeneratorData(payload) as unknown as Record<string, unknown>,
       packageName: 'estate-plan-summary',
       state: 'MA',
       root,
@@ -1389,7 +1389,7 @@ describe('node estate generator package generation', () => {
 
   it('adds an individual estate plan summary to app-level draft generation', async () => {
     const result = await generateNodeEstatePackage({
-      data: toEstateGeneratorData(draftPayload()) as Record<string, unknown>,
+      data: toEstateGeneratorData(draftPayload()) as unknown as Record<string, unknown>,
       packageName: 'estate-plan-summary',
       state: 'MA',
       root,
@@ -1442,7 +1442,7 @@ describe('node estate generator package generation', () => {
       },
     })
     const result = await generateNodeEstatePackage({
-      data: toEstateGeneratorData(payload) as Record<string, unknown>,
+      data: toEstateGeneratorData(payload) as unknown as Record<string, unknown>,
       packageName: 'estate-plan-summary',
       state: 'MA',
       root,
@@ -2708,6 +2708,7 @@ describe('node estate generator package generation', () => {
         hcp_primary: 'Henry Healthcare',
       },
       dpoa_provisions: {
+        ...defaultDraftPayloadDpoaProvisions(),
         coagent_manner: 'majority',
         self_dealing_reviewer: 'Riley Reviewer',
         self_dealing_reviewer_alt: 'Avery Alternate Reviewer',

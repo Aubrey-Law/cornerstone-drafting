@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
@@ -6,7 +6,8 @@ import {
   isClientUploadFolder,
   userCanAccessMatter,
 } from '@/lib/documentSecurity'
-import { pdfRequiredUploadReason } from '@/lib/documentSharing'
+import { isFirmSharedFolder, pdfRequiredUploadReason } from '@/lib/documentSharing'
+import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
 import {
   ALLOWED_MIME_TYPES,
   MAX_UPLOAD_BYTES,
@@ -129,6 +130,10 @@ export async function POST(req: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (isAdmin && isFirmSharedFolder(folder as MatterDocument['folder'])) {
+    after(() => notifyClientOfSharedDocument(matterId, file.name))
+  }
 
   return NextResponse.json({ document: data })
 }

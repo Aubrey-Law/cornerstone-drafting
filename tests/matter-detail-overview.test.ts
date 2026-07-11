@@ -7,12 +7,12 @@ function baseMatter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
     matter_id: 'm1',
     matter_name: 'Test',
     stage: 'intake',
-    status: null,
+    status: '',
     flags: null,
     matter_created: new Date().toISOString(),
     client_name: 'Ada Lovelace',
     client_email: 'ada@example.com',
-    client_phone: null,
+    client_phone: '',
     client_dob: null,
     client_address: null,
     spouse_name: null,
@@ -46,7 +46,8 @@ describe('matter next action', () => {
   it('prompts send intake when invite not sent', () => {
     const action = computeMatterNextAction(baseMatter())
     expect(action.cta).toBe('Send intake')
-    expect(action.href).toBe('#send-intake')
+    expect(action.kind).toBe('send-intake')
+    expect(action.href).toBe('/admin/matters/m1')
   })
 
   it('opens drafting after intake review', () => {
