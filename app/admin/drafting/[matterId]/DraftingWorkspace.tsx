@@ -173,6 +173,7 @@ export default function DraftingWorkspace({
     storedLocal: preferredDesignView,
     userPreference: userDesignView,
     designComplete,
+    hasIntake: Boolean(intakeSnapshot),
   })
 
   const setDesignView = (next: DraftingDesignView) => {

@@ -1,4 +1,9 @@
 import type { ApiKeyProvider } from '@/lib/userApiKeys'
+import {
+  ATTORNEY_PRESET_FIELDS,
+  ATTORNEY_PRESET_VERSION,
+  type AttorneyDesignPreset,
+} from '@/lib/designSheet/fastEntryWorkflow'
 
 export type DraftingDesignView = 'guided' | 'express'
 
@@ -83,6 +88,8 @@ export interface DraftingUserPreferences {
   designView?: DraftingDesignView
   /** Hide the guided vs express tooltip after first dismissal. */
   designViewHintDismissed?: boolean
+  /** Explicitly applied, versioned defaults limited to safe structural fields. */
+  attorneyPreset?: AttorneyDesignPreset
 }
 
 export interface ModelsUserPreferences {
@@ -127,6 +134,19 @@ function parseModels(raw: unknown): ModelsUserPreferences | undefined {
   return Object.keys(result).length > 0 ? result : undefined
 }
 
+function parseAttorneyPreset(raw: unknown): AttorneyDesignPreset | undefined {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const candidate = raw as { version?: unknown; fields?: unknown }
+  if (candidate.version !== ATTORNEY_PRESET_VERSION) return undefined
+  if (candidate.fields == null || typeof candidate.fields !== 'object' || Array.isArray(candidate.fields)) return undefined
+  const source = candidate.fields as Record<string, unknown>
+  const fields: Record<string, unknown> = {}
+  for (const field of ATTORNEY_PRESET_FIELDS) {
+    if (source[field] !== undefined) fields[field] = source[field]
+  }
+  return { version: ATTORNEY_PRESET_VERSION, fields: fields as AttorneyDesignPreset['fields'] }
+}
+
 export function parseUserPreferences(raw: unknown): UserPreferences {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {}
   const obj = raw as UserPreferences
@@ -139,6 +159,7 @@ export function parseUserPreferences(raw: unknown): UserPreferences {
         : {
             designView: designView === 'guided' || designView === 'express' ? designView : undefined,
             designViewHintDismissed: drafting.designViewHintDismissed === true,
+            attorneyPreset: parseAttorneyPreset(drafting.attorneyPreset),
           },
     models: parseModels(obj.models),
   }
@@ -210,10 +231,11 @@ export function resolveDesignView(args: {
   storedLocal: string | null
   userPreference?: DraftingDesignView
   designComplete: boolean
+  hasIntake?: boolean
 }): DraftingDesignView {
   if (args.urlView === 'guided' || args.urlView === 'express') return args.urlView
   if (args.userPreference === 'guided' || args.userPreference === 'express') return args.userPreference
   if (args.storedLocal === 'guided' || args.storedLocal === 'express') return args.storedLocal
-  // Default new attorneys to guided until the sheet is complete once.
-  return args.designComplete ? 'express' : 'guided'
+  // Intake-backed and completed matters benefit from unresolved-first fast entry.
+  return args.designComplete || args.hasIntake ? 'express' : 'guided'
 }
