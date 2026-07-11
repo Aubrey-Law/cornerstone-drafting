@@ -307,11 +307,15 @@ export function inflateDesignSheetRow(row: Record<string, unknown> | null): Desi
     if (SYSTEM_COLUMNS.has(key) || key === 'decisions') continue
     if (RETIRED_DESIGN_SHEET_KEYS.has(key)) continue
 
-    // Only promote writable column values from decisions (legacy rows that stored
-    // column data in jsonb). Decision-only keys (document_inclusions, estate_plan_design,
-    // etc.) must stay inside `decisions` — mirroring them onto the sheet top-level made
-    // autosave overwrite newer decisions with stale copies.
-    if (!WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) continue
+    // Decision namespaces (document_inclusions, estate_plan_design, etc.) must stay
+    // nested so stale mirrors cannot overwrite newer decisions. Ordinary template
+    // fields without dedicated Lite columns (bond, supervision, DPOA/HCP choices,
+    // etc.) are stored in decisions and must be restored to the top-level UI shape.
+    if (DECISION_ONLY_TOP_LEVEL_KEYS.has(key)) continue
+    if (!WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
+      sheet[key] = value
+      continue
+    }
 
     if (FIDUCIARY_SLOT_COLUMN_KEYS.has(key)) {
       sheet[key] = mergeFiduciarySlotColumn(sheet[key], value)
