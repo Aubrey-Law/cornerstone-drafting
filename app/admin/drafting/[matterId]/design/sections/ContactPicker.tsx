@@ -150,6 +150,12 @@ export default function ContactPicker({ role, required, value, onChange, contact
       setShowDropdown(false)
       return
     }
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && filtered.length > 0 && !showDropdown) {
+      event.preventDefault()
+      setActiveIndex(event.key === 'ArrowDown' ? 0 : filtered.length - 1)
+      setShowDropdown(true)
+      return
+    }
     if (!showDropdown || filtered.length === 0) return
     if (event.key === 'ArrowDown') {
       event.preventDefault()
@@ -260,7 +266,7 @@ export default function ContactPicker({ role, required, value, onChange, contact
           {showDropdown && (
             <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
               <div id={listboxId} role="listbox" className="max-h-64 overflow-y-auto overscroll-contain py-1">
-                {filtered.length > 0 ? (
+                {filtered.length > 0 && (
                   filtered.map((c, index) => (
                     <button
                       key={c.id}
@@ -287,10 +293,11 @@ export default function ContactPicker({ role, required, value, onChange, contact
                       </div>
                     </button>
                   ))
-                ) : query.trim() ? (
-                  <div className="px-3 py-3 text-center text-[12px] text-muted-foreground">No matches</div>
-                ) : null}
+                )}
               </div>
+              {filtered.length === 0 && query.trim() ? (
+                <div role="status" className="px-3 py-3 text-center text-[12px] text-muted-foreground">No matches</div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
