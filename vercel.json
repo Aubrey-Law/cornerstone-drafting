@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run estate-generator:setup && npm run build:next",
+  "buildCommand": "npm run build:next",
   "ignoreCommand": "bash scripts/vercel-should-build.sh",
   "git": {
     "deploymentEnabled": {

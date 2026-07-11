@@ -110,7 +110,7 @@ export function buildEstateDraftPreflight(
   }
 
   if (fallbackPackageNames.length > 0) {
-    warnings.push(`Selected package(s) require the temporary Python fallback: ${fallbackPackageNames.join(', ')}.`)
+    warnings.push(`Selected package(s) are not supported by the document generator: ${fallbackPackageNames.join(', ')}.`)
   }
 
   documentsToGenerate.push(...assetTransferPreflightDocuments(payload.documents))

@@ -10,7 +10,7 @@ Drafting (design sheet → generate → review) lives in this repo and is the so
 - Tailwind CSS v4, shadcn/ui, Radix UI
 - Supabase Postgres/Auth (greenfield baseline + lite migrations)
 - Cloudflare R2 private document storage
-- Node estate document generator (`tools/aubreylaw-docgeneration`)
+- Node estate document generator (data in `tools/aubreylaw-docgeneration`)
 - Optional: Resend (alerts), Twilio (SMS/voice), Microsoft Graph (Outlook send), Retell (AI receptionist)
 
 ## Local setup
@@ -20,7 +20,6 @@ Use Node.js 22 and npm.
 ```bash
 npm ci
 cp .env.local.save .env.local   # if you have a saved env file
-npm run estate-generator:setup
 # Start local Supabase (Docker), then:
 # sg docker -c "SUPABASE_AUTH_SITE_URL=http://localhost:3002 ./node_modules/.bin/supabase start"
 npm run dev

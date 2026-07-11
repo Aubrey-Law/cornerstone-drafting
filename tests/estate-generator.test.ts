@@ -11,11 +11,6 @@ import {
   estateGeneratorCoverageWarnings,
   toEstateGeneratorData,
 } from '@/lib/estateGenerator/toGeneratorData'
-import {
-  ESTATE_GENERATOR_SETUP_COMMAND,
-  dependencyErrorMessage,
-  resolveEstateGeneratorPythonCommand,
-} from '@/lib/estateGenerator/runtime'
 
 type DraftPayloadOverride = Partial<
   Omit<DraftPayload, 'matter' | 'client' | 'spouse' | 'documents' | 'fiduciaries' | 'trust' | 'will_provisions'>
@@ -215,58 +210,6 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
 }
 
 describe('estate generator mapping', () => {
-  it('resolves the generator Python runtime from env, local venv, project venv, then python3', () => {
-    const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
-    const cwd = process.cwd()
-    const localPython = path.join(root, '.venv', 'bin', 'python')
-    const projectPython = path.join(cwd, '.venv', 'bin', 'python')
-
-    expect(resolveEstateGeneratorPythonCommand({
-      root,
-      cwd,
-      env: { ESTATE_GENERATOR_PYTHON: '/opt/aubrey-law/python' },
-      exists: () => false,
-    })).toBe('/opt/aubrey-law/python')
-
-    expect(resolveEstateGeneratorPythonCommand({
-      root,
-      cwd,
-      env: {},
-      exists: (candidate) => candidate === localPython,
-    })).toBe(localPython)
-
-    expect(resolveEstateGeneratorPythonCommand({
-      root,
-      cwd,
-      env: {},
-      exists: (candidate) => candidate === projectPython,
-    })).toBe(projectPython)
-
-    expect(resolveEstateGeneratorPythonCommand({
-      root,
-      cwd,
-      env: {},
-      exists: () => false,
-    })).toBe('python3')
-  })
-
-  it('centralizes generator setup and missing dependency guidance', () => {
-    expect(ESTATE_GENERATOR_SETUP_COMMAND).toBe(
-      'python3 -m venv tools/aubreylaw-docgeneration/.venv && tools/aubreylaw-docgeneration/.venv/bin/pip install -r tools/aubreylaw-docgeneration/requirements.txt',
-    )
-    expect(dependencyErrorMessage()).toContain(ESTATE_GENERATOR_SETUP_COMMAND)
-    expect(dependencyErrorMessage()).toContain('ESTATE_GENERATOR_PYTHON')
-  })
-
-  it('prefers the local generator virtualenv before plain python3', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'lib/estateGenerator/runtime.ts'), 'utf8')
-
-    expect(source).toContain("path.join(root, '.venv', 'bin', 'python')")
-    expect(source).toContain("path.join(cwd, '.venv', 'bin', 'python')")
-    expect(source).toContain("candidates.find(candidate => exists(candidate)) ?? 'python3'")
-    expect(source).toContain("No module named 'docxtpl'")
-  })
-
   it('routes individual trust matters to the individual trust package', () => {
     expect(deriveEstateGeneratorPackage(payload())).toBe('trust-individual-single')
   })

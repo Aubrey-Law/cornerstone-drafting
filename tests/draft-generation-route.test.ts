@@ -44,7 +44,7 @@ describe('matter draft generation route', () => {
     expect(source.indexOf('assertR2Configured()')).toBeLessThan(source.indexOf('getR2Client()'))
   })
 
-  it('uses the Node estate generator as the draft engine with only temporary Python fallback', () => {
+  it('uses the Node estate generator as the draft engine (legacy Python subprocess retired)', () => {
     const source = fs.readFileSync(routePath, 'utf8')
     const engineSource = fs.readFileSync(path.join(process.cwd(), 'lib/estateGenerator/engine.ts'), 'utf8')
 
@@ -54,24 +54,21 @@ describe('matter draft generation route', () => {
     expect(source).toContain('const engine: EstateGeneratorEngine = resolveEstateGeneratorEngine()')
     expect(engineSource).toContain("process.env.ESTATE_GENERATOR_ENGINE?.trim().toLowerCase()")
     expect(engineSource).toContain("if (raw === 'supabase' || raw === 'typescript') return 'supabase'")
-    expect(engineSource).toContain("if (raw === 'python') return 'python'")
+    expect(engineSource).not.toContain("return 'python'")
     expect(engineSource).toContain("return 'node'")
     expect(source).toContain("await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload))")
-    expect(source).toContain('nodeGenerateResult.status === 501')
-    expect(source).toContain("await import('@/lib/estateGenerator/runEstateGenerator')")
+    expect(source).not.toContain('runEstateGenerator')
     expect(source).not.toContain("} else if (engine === 'python') {")
     expect(source).not.toContain('function shouldUsePythonEstateGenerator')
   })
 
-  it('keeps validation blockers out of the Python fallback path', () => {
-    const routeSource = fs.readFileSync(routePath, 'utf8')
+  it('keeps validation blockers as 422s, distinct from unsupported-package 501s', () => {
     const nodeSource = fs.readFileSync(path.join(process.cwd(), 'lib/estateGenerator/node/generate.ts'), 'utf8')
     const blockerSection = nodeSource.slice(
       nodeSource.indexOf('if (blockingError)'),
       nodeSource.indexOf('if (unsupported.length > 0)'),
     )
 
-    expect(routeSource).toContain('nodeGenerateResult.status === 501')
     expect(blockerSection).toContain('error: blockingError')
     expect(blockerSection).toContain('status: 422')
     expect(blockerSection).not.toContain('status: 501')

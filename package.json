@@ -16,7 +16,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "theme:generate": "tsx scripts/generate-theme-css.ts",
-    "estate-generator:setup": "python3 -m venv tools/aubreylaw-docgeneration/.venv && tools/aubreylaw-docgeneration/.venv/bin/pip install -r tools/aubreylaw-docgeneration/requirements.txt",
     "prebuild:next": "npm run theme:generate",
     "validate-env": "node scripts/validateEnv.mjs",
     "supabase": "supabase",
