@@ -21,6 +21,9 @@ interface MatterEssentialsCardProps {
   designSheetPlanType?: string | null
   intakeCompletedAt?: string | null
   onSaveField: (field: keyof MatterDetailsRow, value: unknown) => Promise<void>
+  esignEnabled?: boolean
+  engagementSending?: boolean
+  onSendEngagement?: () => void
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -72,6 +75,9 @@ export function MatterEssentialsCard({
   designSheetPlanType,
   intakeCompletedAt,
   onSaveField,
+  esignEnabled = false,
+  engagementSending = false,
+  onSendEngagement,
 }: MatterEssentialsCardProps) {
 
   const matterPlanType = normalizePlanType(details?.plan_type ?? matter.plan_type ?? 'TBD')
@@ -247,15 +253,45 @@ export function MatterEssentialsCard({
           </div>
         </div>
 
-        <label className={cn('flex items-center gap-2 pt-6')}>
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-border"
-            checked={Boolean(details?.engagement_signed)}
-            onChange={event => void onSaveField('engagement_signed', event.target.checked)}
-          />
-          <span className="text-sm font-medium">Engagement signed</span>
-        </label>
+        <div className="space-y-1.5">
+          <FieldLabel>Engagement</FieldLabel>
+          <div className="flex h-9 flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={Boolean(details?.engagement_signed)}
+                onChange={event => void onSaveField('engagement_signed', event.target.checked)}
+              />
+              <span className="text-sm font-medium">Signed</span>
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {details?.engagement_signed
+                ? details?.engagement_signed_at
+                  ? `Signed ${formatDate(details.engagement_signed_at)}`
+                  : ''
+                : details?.engagement_status === 'declined'
+                  ? 'Declined'
+                  : details?.engagement_sent_at
+                    ? `Sent ${formatDate(details.engagement_sent_at)}`
+                    : 'Not sent'}
+            </span>
+            {esignEnabled && !details?.engagement_signed && (
+              <button
+                type="button"
+                disabled={engagementSending}
+                onClick={onSendEngagement}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {engagementSending
+                  ? 'Sending…'
+                  : details?.engagement_sent_at || details?.engagement_status === 'declined'
+                    ? 'Resend'
+                    : 'Send engagement'}
+              </button>
+            )}
+          </div>
+        </div>
 
         <label className={cn('flex items-center gap-2 pt-6')}>
           <input

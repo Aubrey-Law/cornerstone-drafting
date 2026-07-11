@@ -30,6 +30,7 @@ interface MatterOverviewHeroProps {
   lastPortalMessage: { body: string; created_at: string; sender_role: string } | null
   quickPrompts?: React.ReactNode
   onIntakeActionClick?: () => void
+  onEngagementActionClick?: () => void
   onUnreadClick?: () => void
   onReviewFlagsClick?: () => void
   onReviewUploads?: () => void
@@ -68,11 +69,13 @@ export function MatterOverviewHero({
   lastPortalMessage,
   quickPrompts,
   onIntakeActionClick,
+  onEngagementActionClick,
   onUnreadClick,
   onReviewFlagsClick,
   onReviewUploads,
 }: MatterOverviewHeroProps) {
   const isIntakeAction = nextAction.kind === 'send-intake' || nextAction.kind === 'waiting-intake'
+  const isEngagementAction = nextAction.kind === 'send-engagement' || nextAction.kind === 'waiting-engagement'
   const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
   const uploadDetail = formatUnreviewedUploadDetail(unreviewedUploadCounts)
   const showSpouse = isMarried(matter.marital_status)
@@ -179,12 +182,12 @@ export function MatterOverviewHero({
           {quickPrompts && <div className="mt-1">{quickPrompts}</div>}
         </div>
         <div className="shrink-0">
-          {isIntakeAction ? (
+          {isIntakeAction || isEngagementAction ? (
             <Button
               type="button"
               size="sm"
               variant={nextAction.tone === 'warning' ? 'default' : 'outline'}
-              onClick={onIntakeActionClick}
+              onClick={isEngagementAction ? onEngagementActionClick : onIntakeActionClick}
             >
               {nextAction.cta}
               <ArrowRight className="h-3.5 w-3.5" />
