@@ -342,9 +342,11 @@ describe('design sheet readiness UI wiring', () => {
       'utf8',
     )
 
-    expect(shell).toContain("params.set('focus', `${focus.sectionId}:${focus.targetField}`)")
-    expect(shell).toContain('handledFocusToken.current === focusToken')
-    expect(express).toContain('handledFocusToken.current === focusToken')
+    expect(shell).toContain("params.set('focus', `${focus.sectionId}:${focus.targetField ?? ''}`)")
+    expect(shell).toContain('if (!targetId) target.tabIndex = -1')
+    expect(express).toContain('if (!targetId) target.tabIndex = -1')
+    expect(shell).not.toContain('handledFocusToken.current === focusToken')
+    expect(express).not.toContain('handledFocusToken.current === focusToken')
     expect(shell).not.toContain('const initialFocusHandled = useRef(false)')
     expect(express).not.toContain('const initialFocusHandled = useRef(false)')
   })

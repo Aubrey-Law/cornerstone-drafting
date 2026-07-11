@@ -227,7 +227,8 @@ function ExpressDesignSheetImpl({
     const target = (targetId ? document.getElementById(targetId) : null) ?? sectionEls.current[sectionId]
     if (!target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    if (target instanceof HTMLElement && targetId) {
+    if (target instanceof HTMLElement) {
+      if (!targetId) target.tabIndex = -1
       target.focus({ preventScroll: true })
       target.classList.add('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
       window.setTimeout(() => {
@@ -236,12 +237,8 @@ function ExpressDesignSheetImpl({
     }
   }, [])
 
-  const handledFocusToken = useRef<string | null>(null)
   useEffect(() => {
     if (!initialFocus) return
-    const focusToken = `${initialFocus.sectionId}:${initialFocus.targetField ?? ''}`
-    if (handledFocusToken.current === focusToken) return
-    handledFocusToken.current = focusToken
     const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
     window.requestAnimationFrame(() => focusField(initialFocus.sectionId, targetId))
   }, [focusField, initialFocus])

@@ -5,6 +5,7 @@ import { Loader2, Pencil, Search, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -146,27 +147,11 @@ export default function ContactPicker({ role, required, value, onChange, contact
   }
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') {
-      setShowDropdown(false)
-      return
-    }
-    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && filtered.length > 0 && !showDropdown) {
-      event.preventDefault()
-      setActiveIndex(event.key === 'ArrowDown' ? 0 : filtered.length - 1)
-      setShowDropdown(true)
-      return
-    }
-    if (!showDropdown || filtered.length === 0) return
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      setActiveIndex(index => Math.min(index + 1, filtered.length - 1))
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      setActiveIndex(index => Math.max(index - 1, 0))
-    } else if (event.key === 'Enter' && filtered[activeIndex]) {
-      event.preventDefault()
-      selectContact(filtered[activeIndex])
-    }
+    const action = contactPickerKeyAction(event.key, activeIndex, filtered.length, showDropdown)
+    if (action.preventDefault) event.preventDefault()
+    setActiveIndex(action.activeIndex)
+    setShowDropdown(action.open)
+    if (action.selectIndex !== null && filtered[action.selectIndex]) selectContact(filtered[action.selectIndex])
   }
 
   const handleAdd = async () => {

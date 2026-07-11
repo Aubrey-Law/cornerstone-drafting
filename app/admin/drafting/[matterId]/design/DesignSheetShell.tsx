@@ -258,14 +258,14 @@ function DesignSheetShellImpl({
         const params = new URLSearchParams(window.location.search)
         params.set('step', 'design')
         params.set('section', sectionId)
-        if (focus?.targetField) params.set('focus', `${focus.sectionId}:${focus.targetField}`)
+        if (focus) params.set('focus', `${focus.sectionId}:${focus.targetField ?? ''}`)
         else params.delete('focus')
         router.push(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
         return
       }
       const params = new URLSearchParams()
       params.set('section', sectionId)
-      if (focus?.targetField) params.set('focus', `${focus.sectionId}:${focus.targetField}`)
+      if (focus) params.set('focus', `${focus.sectionId}:${focus.targetField ?? ''}`)
       router.push(`/admin/drafting/${matterId}/design?${params.toString()}`, { scroll: false })
     })
   }, [embedded, matterId, router, startNavigation])
@@ -276,18 +276,15 @@ function DesignSheetShellImpl({
     })
   }, [router, startNavigation])
 
-  const handledFocusToken = useRef<string | null>(null)
   useEffect(() => {
     if (!initialFocus || !activeSection) return
-    const focusToken = `${initialFocus.sectionId}:${initialFocus.targetField ?? ''}`
-    if (handledFocusToken.current === focusToken) return
     if (initialFocus.sectionId !== activeSection.id) return
-    handledFocusToken.current = focusToken
     const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
     requestAnimationFrame(() => {
       const target = targetId ? document.getElementById(targetId) : document.getElementById(`design-section-${activeSection.id}`)
       target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      if (target instanceof HTMLElement && targetId) {
+      if (target instanceof HTMLElement) {
+        if (!targetId) target.tabIndex = -1
         target.focus({ preventScroll: true })
         target.classList.add('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
         window.setTimeout(() => {

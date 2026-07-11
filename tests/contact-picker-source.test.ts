@@ -7,15 +7,13 @@ it('renders all filtered contacts in a scrollable accessible listbox', () => {
   expect(source).toContain('role="listbox"')
   expect(source).toContain('overflow-y-auto')
   expect(source).toContain('max-h-64')
-  expect(source).toContain("event.key === 'ArrowDown'")
-  expect(source).toContain("event.key === 'Escape'")
+  expect(source).toContain('contactPickerKeyAction')
 })
 
 it('reopens a dismissed contact list with either arrow key and activates an option', () => {
   const source = readFileSync('app/admin/drafting/[matterId]/design/sections/ContactPicker.tsx', 'utf8')
-  expect(source).toContain("if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && filtered.length > 0 && !showDropdown)")
-  expect(source).toContain('setShowDropdown(true)')
-  expect(source).toContain("setActiveIndex(event.key === 'ArrowDown' ? 0 : filtered.length - 1)")
+  expect(source).toContain('setShowDropdown(action.open)')
+  expect(source).toContain('setActiveIndex(action.activeIndex)')
 })
 
 it('keeps the empty-results status outside the listbox', () => {

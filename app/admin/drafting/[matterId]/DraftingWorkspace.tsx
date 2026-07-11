@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
+import { nextConsumedDesignFocus, shouldConsumeDesignFocus } from '@/lib/designFocusNavigation'
 import { useDesignSheetState } from '@/lib/designSheet/useDesignSheetState'
 import DesignSheetShell from '@/app/admin/drafting/[matterId]/design/DesignSheetShell'
 import ExpressDesignSheet from '@/app/admin/drafting/[matterId]/design/ExpressDesignSheet'
@@ -107,7 +108,11 @@ export default function DraftingWorkspace({
   const consumedFocusRef = useRef<string | null>(rawFocus)
 
   useEffect(() => {
-    if (!rawFocus || consumedFocusRef.current === rawFocus) return
+    if (!rawFocus) {
+      consumedFocusRef.current = nextConsumedDesignFocus(rawFocus, consumedFocusRef.current)
+      return
+    }
+    if (!shouldConsumeDesignFocus(rawFocus, consumedFocusRef.current)) return
     consumedFocusRef.current = rawFocus
     const parsed = parseDesignFocusParam(rawFocus)
     if (parsed) {

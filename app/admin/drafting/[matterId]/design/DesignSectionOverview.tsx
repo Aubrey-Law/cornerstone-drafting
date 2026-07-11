@@ -40,7 +40,7 @@ export function DesignSectionOverview({
 }: DesignSectionOverviewProps) {
   const summaryById = Object.fromEntries(summarySections.map(item => [item.id, item]))
 
-  const renderCards = (sections: DesignSectionDef[]) => (
+  const renderCards = (sections: DesignSectionDef[], muted = false) => (
     <div className="grid gap-2 sm:grid-cols-2">
       {sections.map((section) => {
         const summaryItem = summaryById[section.id]
@@ -48,7 +48,7 @@ export function DesignSectionOverview({
         const status = summaryItem?.status ?? 'none'
         const blockerCount = summary?.blockers?.length ?? 0
         return (
-          <Link key={section.id} href={sectionHref(section.id)} style={guidedCardStyle} className={cn('group flex items-start gap-3 transition-colors hover:border-[var(--gi-teal)] hover:bg-muted/30')}>
+          <Link key={section.id} href={sectionHref(section.id)} style={guidedCardStyle} className={cn('group flex items-start gap-3 transition-colors hover:border-[var(--gi-teal)] hover:bg-muted/30', muted && 'opacity-60')}>
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground group-hover:bg-[rgba(26,107,114,.1)] group-hover:text-[var(--gi-teal)]">
               {status === 'attention' ? blockerCount : <StatusIcon status={status} />}
             </span>
@@ -75,7 +75,7 @@ export function DesignSectionOverview({
 
       {groupedSections.attention.length > 0 && <section><h3 className="mb-2 text-sm font-semibold">Needs attention</h3>{renderCards(groupedSections.attention)}</section>}
       {groupedSections.remaining.length > 0 && <section><h3 className="mb-2 text-sm font-semibold">Not started or optional</h3>{renderCards(groupedSections.remaining)}</section>}
-      {groupedSections.complete.length > 0 && <details><summary className="cursor-pointer text-sm font-semibold">Completed ({groupedSections.complete.length})</summary><div className="mt-2">{renderCards(groupedSections.complete)}</div></details>}
+      {groupedSections.complete.length > 0 && <details><summary className="cursor-pointer text-sm font-semibold text-muted-foreground">Completed ({groupedSections.complete.length})</summary><div className="mt-2">{renderCards(groupedSections.complete, true)}</div></details>}
     </div>
   )
 }
