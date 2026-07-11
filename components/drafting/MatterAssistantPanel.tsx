@@ -17,6 +17,7 @@ interface ChatTurn {
   text: string
   streaming?: boolean
   toolStatus?: string
+  error?: string
 }
 
 function parseSseChunk(buffer: string): { events: Array<{ event: string; data: string }>; rest: string } {
@@ -91,16 +92,17 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
     }
   }
 
-  const send = async () => {
-    if (!token || !input.trim() || busy) return
-    const message = input.trim()
-    setInput('')
+  const send = async (textOverride?: string) => {
+    const message = (textOverride ?? input).trim()
+    if (!token || !message || busy) return
+    if (textOverride === undefined) setInput('')
     setTurns(prev => [
       ...prev,
       { role: 'user', text: message },
       { role: 'assistant', text: '', streaming: true },
     ])
     setBusy(true)
+    let streamedText = ''
 
     try {
       const res = await fetch(`/api/admin/matters/${matterId}/assistant`, {
@@ -144,6 +146,7 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
           if (evt.event === 'delta') {
             const payload = JSON.parse(evt.data) as { text?: string }
             if (payload.text) {
+              streamedText += payload.text
               setTurns(prev => {
                 const next = [...prev]
                 const last = next[next.length - 1]
@@ -216,16 +219,28 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
         return next
       })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Assistant request failed')
+      const msg = e instanceof Error ? e.message : 'Assistant request failed'
+      // Keep the user's message visible and mark the assistant turn as failed so
+      // it can be retried, instead of silently dropping the pair.
       setTurns(prev => {
-        const withoutEmptyAssistant = prev.filter(
-          (t, i) => !(i === prev.length - 1 && t.role === 'assistant' && !t.text),
-        )
-        return withoutEmptyAssistant.slice(0, -1)
+        const next = [...prev]
+        const last = next[next.length - 1]
+        if (last?.role === 'assistant') {
+          next[next.length - 1] = { role: 'assistant', text: streamedText, streaming: false, error: msg }
+        }
+        return next
       })
     } finally {
       setBusy(false)
     }
+  }
+
+  const retry = (turnIndex: number) => {
+    const userTurn = turns[turnIndex - 1]
+    if (!userTurn || userTurn.role !== 'user' || busy) return
+    const message = userTurn.text
+    setTurns(prev => prev.filter((_, i) => i !== turnIndex && i !== turnIndex - 1))
+    void send(message)
   }
 
   return (
@@ -280,6 +295,20 @@ export function MatterAssistantPanel({ matterId, documentIds, onClose }: MatterA
               {t.text}
               {t.streaming ? (
                 <span className="ml-0.5 inline-block animate-pulse text-muted-foreground">▍</span>
+              ) : null}
+              {t.error ? (
+                <div className="mt-1 flex items-center gap-2 text-[10px] text-destructive">
+                  <span>{t.error}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 px-1.5 text-[10px]"
+                    disabled={busy}
+                    onClick={() => retry(i)}
+                  >
+                    Retry
+                  </Button>
+                </div>
               ) : null}
             </div>
           ))

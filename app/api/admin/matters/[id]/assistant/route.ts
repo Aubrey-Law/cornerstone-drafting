@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { logAiUsage } from '@/lib/aiUsage'
 import { runLlmChat, resolveLlmConfig } from '@/lib/llm'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import {
@@ -198,12 +199,39 @@ ${context.docSummary || '(none)'}`
       }
     })
 
-    return { reply: result.reply, toolsUsed, model: result.model, keySource: result.keySource, provider: result.provider }
+    return {
+      reply: result.reply,
+      toolsUsed,
+      model: result.model,
+      keySource: result.keySource,
+      provider: result.provider,
+      usage: result.usage,
+    }
+  }
+
+  const startedAt = Date.now()
+  const logUsage = (result: Awaited<ReturnType<typeof run>> | null, errorMessage?: string) => {
+    void logAiUsage({
+      route: 'matters/assistant',
+      contextType: 'matter',
+      matterId,
+      userId: user.id,
+      model: result?.model ?? llm.model,
+      inputTokens: result?.usage?.inputTokens ?? 0,
+      outputTokens: result?.usage?.outputTokens ?? 0,
+      cacheReadInputTokens: result?.usage?.cacheReadInputTokens ?? 0,
+      cacheCreationInputTokens: result?.usage?.cacheCreationInputTokens ?? 0,
+      durationMs: Date.now() - startedAt,
+      success: !errorMessage,
+      errorMessage: errorMessage ?? null,
+    })
   }
 
   if (!useStream) {
     try {
-      const { reply, toolsUsed, model, keySource, provider } = await run()
+      const result = await run()
+      logUsage(result)
+      const { reply, toolsUsed, model, keySource, provider } = result
       await appendMatterAssistantTurns(admin, matterId, user.id, [
         { role: 'user', content: message },
         { role: 'assistant', content: reply },
@@ -211,10 +239,9 @@ ${context.docSummary || '(none)'}`
       return Response.json({ reply, model, provider, keySource, toolsUsed })
     } catch (e) {
       console.error('[matter-assistant]', e)
-      return Response.json(
-        { error: e instanceof Error ? e.message : 'Assistant request failed' },
-        { status: 500 },
-      )
+      const msg = e instanceof Error ? e.message : 'Assistant request failed'
+      logUsage(null, msg)
+      return Response.json({ error: msg }, { status: 500 })
     }
   }
 
@@ -222,7 +249,7 @@ ${context.docSummary || '(none)'}`
   const readable = new ReadableStream({
     async start(controller) {
       try {
-        const { reply, toolsUsed, model, keySource, provider } = await run({
+        const result = await run({
           onDelta: text => {
             controller.enqueue(encoder.encode(sseLine('delta', { text })))
           },
@@ -230,6 +257,8 @@ ${context.docSummary || '(none)'}`
             controller.enqueue(encoder.encode(sseLine('tool', event)))
           },
         })
+        logUsage(result)
+        const { reply, toolsUsed, model, keySource, provider } = result
 
         await appendMatterAssistantTurns(admin, matterId, user.id, [
           { role: 'user', content: message },
@@ -251,6 +280,7 @@ ${context.docSummary || '(none)'}`
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Assistant request failed'
         console.error('[matter-assistant stream]', e)
+        logUsage(null, msg)
         controller.enqueue(encoder.encode(sseLine('error', { message: msg })))
         controller.close()
       }

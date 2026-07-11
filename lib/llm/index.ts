@@ -12,6 +12,7 @@ export type {
   LlmMessage,
   LlmProvider,
   LlmToolDefinition,
+  LlmUsage,
 } from '@/lib/llm/types'
 
 export { llmKeyMissingMessage, resolveLlmConfig } from '@/lib/llm/resolve'
