@@ -236,10 +236,12 @@ function ExpressDesignSheetImpl({
     }
   }, [])
 
-  const initialFocusHandled = useRef(false)
+  const handledFocusToken = useRef<string | null>(null)
   useEffect(() => {
-    if (!initialFocus || initialFocusHandled.current) return
-    initialFocusHandled.current = true
+    if (!initialFocus) return
+    const focusToken = `${initialFocus.sectionId}:${initialFocus.targetField ?? ''}`
+    if (handledFocusToken.current === focusToken) return
+    handledFocusToken.current = focusToken
     const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
     window.requestAnimationFrame(() => focusField(initialFocus.sectionId, targetId))
   }, [focusField, initialFocus])

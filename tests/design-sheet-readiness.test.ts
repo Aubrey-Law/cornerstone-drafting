@@ -331,6 +331,23 @@ describe('design sheet readiness UI wiring', () => {
     expect(healthcare).toContain('HIPAA Authorization')
     expect(healthcare).toContain('Advance Health Directive')
   })
+
+  it('preserves blocker focus in standalone navigation and handles each changing focus token', () => {
+    const shell = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
+      'utf8',
+    )
+    const express = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/ExpressDesignSheet.tsx'),
+      'utf8',
+    )
+
+    expect(shell).toContain("params.set('focus', `${focus.sectionId}:${focus.targetField}`)")
+    expect(shell).toContain('handledFocusToken.current === focusToken')
+    expect(express).toContain('handledFocusToken.current === focusToken')
+    expect(shell).not.toContain('const initialFocusHandled = useRef(false)')
+    expect(express).not.toContain('const initialFocusHandled = useRef(false)')
+  })
 })
 
 describe('parseDesignFocusParam', () => {

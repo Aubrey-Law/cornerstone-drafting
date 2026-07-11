@@ -265,6 +265,7 @@ function DesignSheetShellImpl({
       }
       const params = new URLSearchParams()
       params.set('section', sectionId)
+      if (focus?.targetField) params.set('focus', `${focus.sectionId}:${focus.targetField}`)
       router.push(`/admin/drafting/${matterId}/design?${params.toString()}`, { scroll: false })
     })
   }, [embedded, matterId, router, startNavigation])
@@ -275,11 +276,13 @@ function DesignSheetShellImpl({
     })
   }, [router, startNavigation])
 
-  const initialFocusHandled = useRef(false)
+  const handledFocusToken = useRef<string | null>(null)
   useEffect(() => {
-    if (!initialFocus || initialFocusHandled.current || !activeSection) return
+    if (!initialFocus || !activeSection) return
+    const focusToken = `${initialFocus.sectionId}:${initialFocus.targetField ?? ''}`
+    if (handledFocusToken.current === focusToken) return
     if (initialFocus.sectionId !== activeSection.id) return
-    initialFocusHandled.current = true
+    handledFocusToken.current = focusToken
     const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
     requestAnimationFrame(() => {
       const target = targetId ? document.getElementById(targetId) : document.getElementById(`design-section-${activeSection.id}`)
