@@ -286,20 +286,9 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     }
     const docsBeingGenerated = preflight.documentsToGenerate.filter(d => selectedDocs.has(d.filename))
 
-    // With blank required fields, require an explicit "Generate anyway" via the
-    // dialog (which lists what will be left as [[ MISSING ]]). Otherwise a plain
-    // confirm is enough.
-    if (preflight.missing.length > 0) {
-      setConfirmGenerate({ documentsToSave, docsBeingGenerated, mode: deliveryMode })
-      return
-    }
-    const confirmed = window.confirm(
-      deliveryMode === 'download'
-        ? `This will generate ${documentsToSave.length} draft document${documentsToSave.length === 1 ? '' : 's'} and download them as a ZIP file. Nothing will be saved to this matter. Continue?`
-        : `This will save ${documentsToSave.length} internal draft document${documentsToSave.length === 1 ? '' : 's'} for this matter. Finished files can be shared with the client after attorney review. Continue?`
-    )
-    if (!confirmed) return
-    runGeneration(documentsToSave, docsBeingGenerated, deliveryMode)
+    // Always confirm via the dialog; when required fields are blank it also
+    // lists what will be left as [[ MISSING ]].
+    setConfirmGenerate({ documentsToSave, docsBeingGenerated, mode: deliveryMode })
   }
 
   const runGeneration = (documentsToSave: string[], docsBeingGenerated: DraftPreflightDocument[], mode: DraftDeliveryMode) => {
@@ -870,11 +859,18 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Generate anyway — {preflight?.missing.length ?? 0} field{(preflight?.missing.length ?? 0) === 1 ? '' : 's'} blank?
+              {(preflight?.missing.length ?? 0) > 0
+                ? `Generate anyway — ${preflight?.missing.length ?? 0} field${(preflight?.missing.length ?? 0) === 1 ? '' : 's'} blank?`
+                : confirmGenerate?.mode === 'download'
+                  ? `Download ${confirmGenerate?.documentsToSave.length ?? 0} draft${(confirmGenerate?.documentsToSave.length ?? 0) === 1 ? '' : 's'} as a ZIP?`
+                  : `Generate ${confirmGenerate?.documentsToSave.length ?? 0} draft${(confirmGenerate?.documentsToSave.length ?? 0) === 1 ? '' : 's'}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              These fields are empty and will render as <code>[[ MISSING ]]</code> in the draft. You can fix them first, or
-              generate now and fill them in later.
+              {(preflight?.missing.length ?? 0) > 0
+                ? <>These fields are empty and will render as <code>[[ MISSING ]]</code> in the draft. You can fix them first, or generate now and fill them in later.</>
+                : confirmGenerate?.mode === 'download'
+                  ? 'Nothing will be saved to this matter — the drafts download to your computer as a ZIP file.'
+                  : 'Drafts are saved to this matter as internal Word documents. Finished files can be shared with the client after attorney review.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {preflight && preflight.missing.length > 0 && (
@@ -891,7 +887,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
             </ul>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel>Go back &amp; fix</AlertDialogCancel>
+            <AlertDialogCancel>{(preflight?.missing.length ?? 0) > 0 ? 'Go back & fix' : 'Cancel'}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 const ctx = confirmGenerate
@@ -899,9 +895,13 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                 if (ctx) runGeneration(ctx.documentsToSave, ctx.docsBeingGenerated, ctx.mode)
               }}
             >
-              {confirmGenerate?.mode === 'download'
-                ? 'Download with [[ MISSING ]] markers'
-                : 'Generate with [[ MISSING ]] markers'}
+              {(preflight?.missing.length ?? 0) > 0
+                ? confirmGenerate?.mode === 'download'
+                  ? 'Download with [[ MISSING ]] markers'
+                  : 'Generate with [[ MISSING ]] markers'
+                : confirmGenerate?.mode === 'download'
+                  ? 'Download ZIP'
+                  : 'Generate drafts'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
