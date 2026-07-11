@@ -103,6 +103,11 @@ export interface MatterDetailsRow {
   conflict_check_date?: string | null
   conflict_cleared?: boolean | null
   engagement_signed?: boolean | null
+  engagement_provider?: string | null
+  engagement_envelope_id?: string | null
+  engagement_status?: string | null
+  engagement_sent_at?: string | null
+  engagement_signed_at?: string | null
   fee_collected?: boolean | null
   fee_collected_date?: string | null
 

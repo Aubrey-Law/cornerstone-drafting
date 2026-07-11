@@ -65,3 +65,64 @@ describe('matter next action', () => {
     expect(matterDaysOpen(created)).toBe(5)
   })
 })
+
+describe('matter next action — engagement', () => {
+  const intakeSent = {
+    intake_status: 'sent',
+    intake_sent_at: new Date().toISOString(),
+  }
+
+  it('keeps send-intake as the top priority', () => {
+    const action = computeMatterNextAction(baseMatter(), {
+      signed: false,
+      sentAt: null,
+      status: null,
+    })
+    expect(action.kind).toBe('send-intake')
+  })
+
+  it('prompts send-engagement once intake is out but engagement never sent', () => {
+    const action = computeMatterNextAction(baseMatter(intakeSent), {
+      signed: false,
+      sentAt: null,
+      status: null,
+    })
+    expect(action.kind).toBe('send-engagement')
+    expect(action.cta).toBe('Send engagement')
+    expect(action.tone).toBe('warning')
+  })
+
+  it('prompts send-engagement again after a decline', () => {
+    const action = computeMatterNextAction(baseMatter(intakeSent), {
+      signed: false,
+      sentAt: new Date().toISOString(),
+      status: 'declined',
+    })
+    expect(action.kind).toBe('send-engagement')
+    expect(action.detail).toContain('declined')
+  })
+
+  it('waits on the signature after sending', () => {
+    const action = computeMatterNextAction(
+      baseMatter({ stage: 'drafting', intake_status: 'completed', intake_sent_at: new Date().toISOString() }),
+      { signed: false, sentAt: new Date().toISOString(), status: 'sent' },
+    )
+    expect(action.kind).toBe('waiting-engagement')
+    expect(action.cta).toBe('Resend engagement')
+  })
+
+  it('falls through to drafting once signed', () => {
+    const action = computeMatterNextAction(
+      baseMatter({ stage: 'drafting', intake_status: 'completed', intake_sent_at: new Date().toISOString() }),
+      { signed: true, sentAt: new Date().toISOString(), status: 'signed' },
+    )
+    expect(action.kind).toBe('draft')
+  })
+
+  it('is unchanged when no engagement snapshot is provided', () => {
+    const action = computeMatterNextAction(
+      baseMatter({ stage: 'drafting', intake_status: 'completed', intake_sent_at: new Date().toISOString() }),
+    )
+    expect(action.kind).toBe('draft')
+  })
+})

@@ -4,6 +4,7 @@ import { fetchMatterAgingHealth } from '@/lib/queries/matterOverview'
 import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
 import { fetchUnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { isTwilioSmsConfigured } from '@/lib/twilio/config'
+import { isEsignConfigured } from '@/lib/esign/firma'
 import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
@@ -107,6 +108,7 @@ export default async function MatterDetailPage({ params }: Params) {
       reviewFlags={reviewFlags}
       resyncPreviewCount={resyncPreviewCount}
       twilioSmsEnabled={isTwilioSmsConfigured()}
+      esignEnabled={isEsignConfigured()}
       emailSendEnabled={isMicrosoftConfigured() || Boolean(process.env.RESEND_API_KEY)}
     />
   )

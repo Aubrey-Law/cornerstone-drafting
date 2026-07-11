@@ -167,6 +167,20 @@ Webhook URL: `https://<host>/api/webhooks/retell`
 
 On `call_analyzed`, Cornerstone upserts the call and emails/SMS the summary (`retell_call_alert` category).
 
+## Optional — Firma.dev (engagement e-signature)
+
+| Variable | Purpose |
+|----------|---------|
+| `FIRMA_API_KEY` | firma.dev API key (sent as the Authorization header) |
+| `FIRMA_ENGAGEMENT_TEMPLATE_ID` | Template id of the engagement agreement in firma.dev |
+| `FIRMA_WEBHOOK_SECRET` | Shared secret carried on the registered webhook URL query string |
+
+Webhook URL to register in firma.dev (events: signed/completed/declined/expired):
+`https://<host>/api/webhooks/esign?secret=<FIRMA_WEBHOOK_SECRET>`
+
+On completion, Cornerstone stores the combined signed PDF + audit certificate in the
+matter's Signed documents and checks "Engagement signed" on the matter.
+
 ## Deployments (cost control)
 
 `vercel.json` limits **automatic** builds to **production (`main`)** only. PR/feature-branch pushes do not run the full estate-generator + Next build.
