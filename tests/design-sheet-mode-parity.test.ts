@@ -43,9 +43,13 @@ describe('design sheet mode parity', () => {
 
   it('preserves section-by-section scroll position across field updates', () => {
     const pageView = readFileSync('app/admin/drafting/[matterId]/design/DesignSectionPageView.tsx', 'utf8')
+    const guided = readFileSync('app/admin/drafting/[matterId]/design/DesignSheetShell.tsx', 'utf8')
 
     expect(pageView).toContain('const scrollTopRef = useRef(0)')
     expect(pageView).toContain('scrollContainer.scrollTop = scrollTopRef.current')
     expect(pageView).toContain('scrollTopRef.current = event.currentTarget.scrollTop')
+    expect(guided).toContain('const pageScrollTopRef = useRef(0)')
+    expect(guided).toContain('pageScrollContainer.scrollTop = pageScrollTopRef.current')
+    expect(guided).toContain('pageScrollTopRef.current = event.currentTarget.scrollTop')
   })
 })
