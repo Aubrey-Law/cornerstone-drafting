@@ -58,7 +58,7 @@ export async function POST(
       lead.full_name?.trim() ||
       [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim() ||
       'Client'
-    const { envelopeId } = await provider.createEngagementEnvelope({
+    const { envelopeId, signingLink } = await provider.createEngagementEnvelope({
       name: clientName,
       email: clientEmail,
     })
@@ -77,7 +77,7 @@ export async function POST(
       .single()
     if (error) throw new Error(error.message)
 
-    return Response.json({ row })
+    return Response.json({ row, signingLink })
   } catch (e) {
     console.error('[lead engagement send]', e)
     return Response.json(

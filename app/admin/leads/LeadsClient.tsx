@@ -139,6 +139,7 @@ export function LeadsClient({
   const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [signingUrl, setSigningUrl] = useState<string | null>(null)
 
   const filteredLeads = useMemo(
     () => initialLeads.filter(l => matchesFilter(l, filter)),
@@ -331,6 +332,32 @@ export function LeadsClient({
     }
   }
 
+  const handleSignNow = async (lead: LeadRow) => {
+    setBusyLeadId(lead.id)
+    try {
+      const result = await authedPost(`/api/admin/leads/${lead.id}/engagement`)
+      const link = typeof result.signingLink === 'string' ? result.signingLink : null
+      if (!link) {
+        toast.message('Engagement sent by email', {
+          description: 'In-app signing is unavailable; the client got the signing link by email.',
+        })
+        router.refresh()
+        return
+      }
+      setSigningUrl(link)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not start signing')
+    } finally {
+      setBusyLeadId(null)
+    }
+  }
+
+  const closeSigning = () => {
+    setSigningUrl(null)
+    // The webhook converts the lead → matter on completion; refresh to reflect it.
+    router.refresh()
+  }
+
   const handleConvert = async (lead: LeadRow) => {
     if (!window.confirm(`Create a matter for ${leadName(lead)} now?`)) return
     setBusyLeadId(lead.id)
@@ -463,15 +490,26 @@ export function LeadsClient({
                               {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
                             </Button>
                             {esignEnabled && lead.engagement_status !== 'signed' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2 text-xs"
-                                disabled={busy}
-                                onClick={() => void handleSendEngagement(lead)}
-                              >
-                                {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  disabled={busy}
+                                  onClick={() => void handleSendEngagement(lead)}
+                                >
+                                  {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  disabled={busy}
+                                  onClick={() => void handleSignNow(lead)}
+                                >
+                                  Sign now
+                                </Button>
+                              </>
                             )}
                             <Button
                               size="sm"
@@ -632,6 +670,26 @@ export function LeadsClient({
               {deleting ? 'Deleting…' : `Delete ${selectedIds.length} lead${selectedIds.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={signingUrl !== null} onOpenChange={open => !open && closeSigning()}>
+        <DialogContent className="h-[85vh] max-w-4xl p-0 sm:max-w-4xl">
+          <DialogHeader className="px-4 pt-4">
+            <DialogTitle>Sign engagement agreement</DialogTitle>
+            <DialogDescription>
+              Have the client sign here. The matter is created automatically once they finish — close
+              this window when they&apos;re done.
+            </DialogDescription>
+          </DialogHeader>
+          {signingUrl && (
+            <iframe
+              src={signingUrl}
+              title="Engagement agreement signing"
+              className="h-full w-full flex-1 rounded-b-lg border-0"
+              allow="camera; microphone; clipboard-write"
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

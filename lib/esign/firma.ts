@@ -38,10 +38,13 @@ class FirmaEsignProvider implements EsignProvider {
     this.templateId = templateId
   }
 
-  async createEngagementEnvelope(input: { name: string; email: string }): Promise<{ envelopeId: string }> {
+  async createEngagementEnvelope(
+    input: { name: string; email: string },
+  ): Promise<{ envelopeId: string; signingLink: string | null }> {
     const { firstName, lastName } = splitName(input.name)
     // Template-based create+send: the recipient updates the template's sole
-    // signer (matched by order); firma.dev emails the signing link itself.
+    // signer (matched by order); firma.dev emails the signing link, and its
+    // response also carries the signer's direct link for in-app "Sign now".
     const response = await this.client.signingRequests.createAndSendSigningRequest({
       template_id: this.templateId,
       recipients: [
@@ -58,7 +61,9 @@ class FirmaEsignProvider implements EsignProvider {
     if (typeof envelopeId !== 'string' || !envelopeId) {
       throw new Error('firma.dev did not return a signing request id')
     }
-    return { envelopeId }
+    const signingLink = (response as { first_signer?: { signing_link?: unknown } })?.first_signer
+      ?.signing_link
+    return { envelopeId, signingLink: typeof signingLink === 'string' ? signingLink : null }
   }
 
   async cancelEnvelope(envelopeId: string): Promise<void> {
