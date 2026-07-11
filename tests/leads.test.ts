@@ -7,9 +7,9 @@ function read(relPath: string): string {
 }
 
 describe('lead tracking source shape', () => {
-  it('leads page lists standalone intakes (no matter)', () => {
+  it('leads page lists lead-flow intakes', () => {
     const source = read('app/admin/leads/page.tsx')
-    expect(source).toContain("is('matter_id', null)")
+    expect(source).toContain("not('lead_status', 'is', null)")
     expect(source).toContain('isEsignConfigured')
   })
 
@@ -81,5 +81,36 @@ describe('lead edit and delete source shape', () => {
     expect(source).toContain('bulk-delete')
     expect(source).toContain("method: 'PATCH'")
     expect(source).toContain('Edit lead')
+  })
+})
+
+describe('lead status pipeline source shape', () => {
+  it('leads page filters to lead-flow rows only', () => {
+    const source = read('app/admin/leads/page.tsx')
+    expect(source).toContain("not('lead_status', 'is', null)")
+    expect(source).toContain('matter_id')
+  })
+
+  it('lead creation defaults to the lead status', () => {
+    expect(read('app/api/admin/leads/route.ts')).toContain("lead_status: 'lead'")
+  })
+
+  it('conversion flips a lead to hired', () => {
+    const source = read('lib/matters/createFromIntake.ts')
+    expect(source).toContain("'hired'")
+    expect(source).toContain('lead_status')
+  })
+
+  it('patch validates the lead status enum', () => {
+    const source = read('app/api/admin/leads/[id]/route.ts')
+    expect(source).toContain('leadStatus')
+    expect(source).toContain("['lead', 'hired', 'lost']")
+  })
+
+  it('leads client has status filter tabs and a status badge', () => {
+    const source = read('app/admin/leads/LeadsClient.tsx')
+    expect(source).toContain('LeadStatusBadge')
+    expect(source).toContain('FILTER_TABS')
+    expect(source).toContain('View matter')
   })
 })

@@ -22,6 +22,7 @@ export async function PATCH(
     clientPhone?: string
     practiceArea?: string
     feeQuoted?: number | null
+    leadStatus?: string
   }
 
   const admin = getAdminClient()
@@ -59,6 +60,12 @@ export async function PATCH(
     update.engagement_fee_quoted =
       typeof body.feeQuoted === 'number' && Number.isFinite(body.feeQuoted) ? body.feeQuoted : null
   }
+  if (body.leadStatus !== undefined) {
+    if (!['lead', 'hired', 'lost'].includes(body.leadStatus)) {
+      return NextResponse.json({ error: 'Invalid lead status' }, { status: 400 })
+    }
+    update.lead_status = body.leadStatus
+  }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
   }
@@ -68,7 +75,7 @@ export async function PATCH(
     .update(update)
     .eq('id', intakeId)
     .select(
-      'id, full_name, first_name, last_name, email, phone, practice_area, status, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, created_at',
+      'id, full_name, first_name, last_name, email, phone, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, created_at',
     )
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

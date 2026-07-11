@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -44,6 +45,8 @@ export interface LeadRow {
   phone: string | null
   practice_area: string | null
   status: string | null
+  lead_status: string | null
+  matter_id: string | null
   intake_sent_at: string | null
   intake_completed_at: string | null
   engagement_status: string | null
@@ -51,6 +54,38 @@ export interface LeadRow {
   engagement_signed_at: string | null
   engagement_fee_quoted: number | null
   created_at: string | null
+}
+
+type LeadFilter = 'open' | 'hired' | 'lost' | 'all'
+
+const LEAD_STATUS_OPTIONS = [
+  { value: 'lead', label: 'Lead' },
+  { value: 'hired', label: 'Hired' },
+  { value: 'lost', label: 'Lost' },
+] as const
+
+const FILTER_TABS: { value: LeadFilter; label: string }[] = [
+  { value: 'open', label: 'Open' },
+  { value: 'hired', label: 'Hired' },
+  { value: 'lost', label: 'Lost' },
+  { value: 'all', label: 'All' },
+]
+
+function matchesFilter(lead: LeadRow, filter: LeadFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'open') return (lead.lead_status ?? 'lead') === 'lead'
+  return lead.lead_status === filter
+}
+
+function LeadStatusBadge({ lead }: { lead: LeadRow }) {
+  const status = lead.lead_status ?? 'lead'
+  if (status === 'hired') {
+    return <Badge variant="outline" className="border-green/40 bg-green-bg text-[10px] text-green">Hired</Badge>
+  }
+  if (status === 'lost') {
+    return <Badge variant="outline" className="text-[10px] text-muted-foreground">Lost</Badge>
+  }
+  return <Badge variant="outline" className="text-[10px]">Lead</Badge>
 }
 
 function leadName(lead: LeadRow): string {
@@ -98,17 +133,33 @@ export function LeadsClient({
   const [editingLead, setEditingLead] = useState<LeadRow | null>(null)
   const [saving, setSaving] = useState(false)
   const [busyLeadId, setBusyLeadId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
+  const [filter, setFilter] = useState<LeadFilter>('open')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
 
-  const selectedIds = useMemo(
-    () => initialLeads.filter(l => selected[l.id]).map(l => l.id),
-    [initialLeads, selected],
+  const filteredLeads = useMemo(
+    () => initialLeads.filter(l => matchesFilter(l, filter)),
+    [initialLeads, filter],
   )
-  const allSelected = initialLeads.length > 0 && initialLeads.every(l => selected[l.id])
+  const counts = useMemo(() => {
+    const c: Record<LeadFilter, number> = { open: 0, hired: 0, lost: 0, all: initialLeads.length }
+    for (const l of initialLeads) {
+      const s = l.lead_status ?? 'lead'
+      if (s === 'lead') c.open += 1
+      else if (s === 'hired') c.hired += 1
+      else if (s === 'lost') c.lost += 1
+    }
+    return c
+  }, [initialLeads])
+
+  const selectedIds = useMemo(
+    () => filteredLeads.filter(l => selected[l.id]).map(l => l.id),
+    [filteredLeads, selected],
+  )
+  const allSelected = filteredLeads.length > 0 && filteredLeads.every(l => selected[l.id])
 
   const toggleSelected = (id: string, checked: boolean) => {
     setSelected(current => {
@@ -121,7 +172,7 @@ export function LeadsClient({
   const toggleAll = (checked: boolean) => {
     setSelected(current => {
       const next = { ...current }
-      for (const lead of initialLeads) {
+      for (const lead of filteredLeads) {
         if (checked) next[lead.id] = true
         else delete next[lead.id]
       }
@@ -146,7 +197,7 @@ export function LeadsClient({
 
   const openCreate = () => {
     setEditingLead(null)
-    setForm({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
+    setForm({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
     setDialogOpen(true)
   }
   const openEdit = (lead: LeadRow) => {
@@ -157,6 +208,7 @@ export function LeadsClient({
       phone: lead.phone ?? '',
       practiceArea: lead.practice_area ?? 'EP',
       fee: lead.engagement_fee_quoted != null ? String(lead.engagement_fee_quoted) : '',
+      status: lead.lead_status ?? 'lead',
     })
     setDialogOpen(true)
   }
@@ -169,7 +221,7 @@ export function LeadsClient({
     setSaving(true)
     try {
       const fee = form.fee.trim()
-      const payload = {
+      const payload: Record<string, unknown> = {
         clientName: form.name.trim(),
         clientEmail: form.email.trim(),
         clientPhone: form.phone.trim() || undefined,
@@ -177,6 +229,7 @@ export function LeadsClient({
         feeQuoted: fee === '' ? null : Number(fee),
       }
       if (editingLead) {
+        payload.leadStatus = form.status
         const res = await fetch(`/api/admin/leads/${editingLead.id}`, {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -321,11 +374,30 @@ export function LeadsClient({
         </Button>
       </div>
 
-      {initialLeads.length === 0 ? (
+      <div className="flex flex-wrap gap-1">
+        {FILTER_TABS.map(tab => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setFilter(tab.value)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              filter === tab.value
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            {tab.label} ({counts[tab.value]})
+          </button>
+        ))}
+      </div>
+
+      {filteredLeads.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card py-12 text-center">
           <UserPlus className="h-6 w-6 text-muted-foreground" aria-hidden />
           <p className="text-sm text-muted-foreground">
-            No leads yet. Add one to send the intake and engagement agreement.
+            {initialLeads.length === 0
+              ? 'No leads yet. Add one to send the intake and engagement agreement.'
+              : 'No leads in this view.'}
           </p>
         </div>
       ) : (
@@ -341,6 +413,7 @@ export function LeadsClient({
                   />
                 </TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Practice</TableHead>
                 <TableHead>Fee quoted</TableHead>
@@ -350,7 +423,7 @@ export function LeadsClient({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {initialLeads.map(lead => {
+              {filteredLeads.map(lead => {
                 const busy = busyLeadId === lead.id
                 return (
                   <TableRow key={lead.id}>
@@ -362,6 +435,7 @@ export function LeadsClient({
                       />
                     </TableCell>
                     <TableCell className="font-medium">{leadName(lead)}</TableCell>
+                    <TableCell><LeadStatusBadge lead={lead} /></TableCell>
                     <TableCell className="text-muted-foreground">{lead.email}</TableCell>
                     <TableCell>{practiceAreaLabel(lead.practice_area)}</TableCell>
                     <TableCell>
@@ -373,35 +447,43 @@ export function LeadsClient({
                     <TableCell><EngagementStatusBadge lead={lead} /></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2 text-xs"
-                          disabled={busy}
-                          onClick={() => void handleSendIntake(lead)}
-                        >
-                          {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
-                        </Button>
-                        {esignEnabled && lead.engagement_status !== 'signed' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-2 text-xs"
-                            disabled={busy}
-                            onClick={() => void handleSendEngagement(lead)}
-                          >
-                            {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
+                        {lead.matter_id ? (
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" asChild>
+                            <Link href={`/admin/matters/${lead.matter_id}`}>View matter</Link>
                           </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              disabled={busy}
+                              onClick={() => void handleSendIntake(lead)}
+                            >
+                              {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
+                            </Button>
+                            {esignEnabled && lead.engagement_status !== 'signed' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                                disabled={busy}
+                                onClick={() => void handleSendEngagement(lead)}
+                              >
+                                {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs"
+                              disabled={busy}
+                              onClick={() => void handleConvert(lead)}
+                            >
+                              Create matter
+                            </Button>
+                          </>
                         )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          disabled={busy}
-                          onClick={() => void handleConvert(lead)}
-                        >
-                          Create matter
-                        </Button>
                         <Button
                           size="icon"
                           variant="ghost"
@@ -412,16 +494,18 @@ export function LeadsClient({
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          disabled={busy}
-                          aria-label={`Delete ${leadName(lead)}`}
-                          onClick={() => setDeleteTarget(lead)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {!lead.matter_id && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            disabled={busy}
+                            aria-label={`Delete ${leadName(lead)}`}
+                            onClick={() => setDeleteTarget(lead)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -472,6 +556,23 @@ export function LeadsClient({
                 ))}
               </SelectContent>
             </Select>
+            {editingLead && (
+              <Select
+                value={form.status}
+                onValueChange={value => setForm(f => ({ ...f, status: value }))}
+              >
+                <SelectTrigger aria-label="Lead status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_STATUS_OPTIONS.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Input
               type="number"
               min={0}

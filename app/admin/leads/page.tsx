@@ -8,13 +8,14 @@ export const dynamic = 'force-dynamic'
 export default async function LeadsPage() {
   const admin = getAdminClient()
 
-  // A lead is a standalone client_intake row — no matter references it yet.
+  // A lead is any client_intake row that went through the lead flow
+  // (lead_status set). Open leads have no matter; hired leads carry matter_id.
   const { data, error } = await admin
     .from('client_intake')
     .select(
-      'id, full_name, first_name, last_name, email, phone, practice_area, status, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, created_at',
+      'id, full_name, first_name, last_name, email, phone, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, created_at',
     )
-    .is('matter_id', null)
+    .not('lead_status', 'is', null)
     .order('created_at', { ascending: false })
     .limit(200)
 

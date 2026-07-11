@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       phone: typeof body.clientPhone === 'string' ? body.clientPhone.trim() || null : null,
       practice_area: normalizePracticeArea(body.practiceArea),
       status: 'in_progress',
+      lead_status: 'lead',
       engagement_fee_quoted: feeQuoted,
     })
     .select('id')
