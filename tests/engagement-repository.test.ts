@@ -36,6 +36,14 @@ describe('engagement persistence migration', () => {
     expect(sql.match(/create policy "Staff manage engagement/g)?.length).toBe(4)
     expect(sql).toContain("u.role in ('attorney', 'admin', 'va', 'staff')")
   })
+
+  it('binds active revisions to their agreement and blocks revisions after send', () => {
+    const sql = fs.readFileSync(migrationPath, 'utf8')
+    expect(sql).toContain('unique (agreement_id, id)')
+    expect(sql).toMatch(/foreign key \(id, active_revision_id\)\s+references public\.engagement_agreement_revisions\(agreement_id, id\)/)
+    expect(sql).toContain('guard_engagement_revision_insert')
+    expect(sql).toContain("agreement_status not in ('draft', 'ready', 'failed')")
+  })
 })
 
 describe('engagement repository source shape', () => {
@@ -43,6 +51,10 @@ describe('engagement repository source shape', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'lib/engagement/repository.ts'), 'utf8')
     expect(source).toContain('client: SupabaseClient')
     expect(source).toContain("client.rpc('claim_engagement_agreement_send'")
+    expect(source).toContain('verifyRevisionApproval(input.approvalToken')
+    expect(source).toContain('p_approval_nonce: approval.claims.nonce')
+    expect(source).not.toContain('approvalNonce: string')
+    expect(source).toContain("!['draft', 'ready', 'failed'].includes(agreement.status)")
     expect(source).not.toContain('getAdminClient')
     expect(source).not.toContain('createClient(')
   })

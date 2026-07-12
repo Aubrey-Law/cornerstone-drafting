@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EngagementInput } from './types'
+import { verifyRevisionApproval } from './approval'
 
 type Json = Record<string, unknown> | unknown[]
 
@@ -45,6 +46,10 @@ export async function createAgreementRevision(
   agreementId: string,
   input: Omit<AgreementDraftInput, 'matterId' | 'leadId' | 'preparedBy'>,
 ) {
+  const agreement = await one<{ status: string }>(client.from('engagement_agreements').select('status').eq('id', agreementId).single())
+  if (!['draft', 'ready', 'failed'].includes(agreement.status)) {
+    throw new Error(`Cannot revise an agreement with status ${agreement.status}`)
+  }
   const revision = await one<{ id: string }>(client.from('engagement_agreement_revisions').insert({
     agreement_id: agreementId,
     input_snapshot: input.inputSnapshot,
@@ -71,14 +76,20 @@ export async function claimAgreementSend(client: SupabaseClient, input: {
   agreementId: string
   revisionId: string
   renderSha256: string
-  approvalNonce: string
+  approvalToken: string
   sentBy: string
 }) {
+  const approval = verifyRevisionApproval(input.approvalToken, {
+    agreementId: input.agreementId,
+    revisionId: input.revisionId,
+    sha256: input.renderSha256,
+  })
+  if (!approval.ok) throw new Error(approval.error)
   return one(client.rpc('claim_engagement_agreement_send', {
     p_agreement_id: input.agreementId,
     p_revision_id: input.revisionId,
     p_render_sha256: input.renderSha256,
-    p_approval_nonce: input.approvalNonce,
+    p_approval_nonce: approval.claims.nonce,
     p_sent_by: input.sentBy,
   }).single())
 }

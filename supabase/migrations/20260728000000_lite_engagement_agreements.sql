@@ -29,12 +29,14 @@ create table public.engagement_agreement_revisions (
   pdf_r2_key text,
   created_at timestamptz not null default now(),
   unique (agreement_id, revision_number),
-  unique (agreement_id, render_sha256)
+  unique (agreement_id, render_sha256),
+  unique (agreement_id, id)
 );
 
 alter table public.engagement_agreements
   add constraint engagement_agreements_active_revision_fkey
-  foreign key (active_revision_id) references public.engagement_agreement_revisions(id);
+  foreign key (id, active_revision_id)
+  references public.engagement_agreement_revisions(agreement_id, id);
 
 create table public.engagement_agreement_recipients (
   id uuid primary key default gen_random_uuid(),
@@ -81,6 +83,28 @@ $$;
 create trigger engagement_revision_number_before_insert
 before insert on public.engagement_agreement_revisions
 for each row execute function public.set_engagement_revision_number();
+
+create or replace function public.guard_engagement_revision_insert()
+returns trigger language plpgsql as $$
+declare agreement_status text;
+begin
+  select status into agreement_status
+  from public.engagement_agreements
+  where id = new.agreement_id
+  for update;
+  if agreement_status is null then
+    raise exception 'engagement agreement not found';
+  end if;
+  if agreement_status not in ('draft', 'ready', 'failed') then
+    raise exception 'cannot revise agreement in status %', agreement_status;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger engagement_revision_lifecycle_before_insert
+before insert on public.engagement_agreement_revisions
+for each row execute function public.guard_engagement_revision_insert();
 
 create or replace function public.claim_engagement_agreement_send(
   p_agreement_id uuid,
