@@ -8,8 +8,9 @@ const workspace = process.env.FIRMA_POC_WORKSPACE
 if (!apiKey || !docxPath || !recipientEmail || !workspace) {
   throw new Error('Missing POC environment: FIRMA_API_KEY, FIRMA_POC_DOCX, FIRMA_POC_RECIPIENT_EMAIL, and FIRMA_POC_WORKSPACE are required')
 }
-if (workspace.toLowerCase() === 'production' || workspace.toLowerCase() === 'prod') {
-  throw new Error('Refusing production Firma execution')
+const nonProductionWorkspaces = new Set(['sandbox', 'test', 'testing', 'staging', 'development', 'dev', 'non-production'])
+if (!nonProductionWorkspaces.has(workspace.trim().toLowerCase())) {
+  throw new Error('Refusing Firma execution unless FIRMA_POC_WORKSPACE explicitly names a non-production environment')
 }
 if (!recipientEmail.endsWith('@example.com') && process.env.FIRMA_POC_ALLOW_REAL !== 'true') {
   throw new Error('Refusing a real recipient without FIRMA_POC_ALLOW_REAL=true')

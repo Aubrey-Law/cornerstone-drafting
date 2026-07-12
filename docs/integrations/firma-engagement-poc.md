@@ -11,7 +11,7 @@ The guarded script creates only an **unsent** document-based request. It require
 Required local-only inputs:
 
 - `FIRMA_API_KEY`: credential for a non-production Firma workspace.
-- `FIRMA_POC_WORKSPACE`: a descriptive non-production workspace name; `production` and `prod` are refused.
+- `FIRMA_POC_WORKSPACE`: an explicit environment sentinel: `sandbox`, `test`, `testing`, `staging`, `development`, `dev`, or `non-production`. Every other value, including `production` and `prod`, is refused.
 - `FIRMA_POC_DOCX`: path to a disposable DOCX containing `[[CLIENT_1_SIGNATURE]]` and `[[CLIENT_1_DATE]]`.
 - `FIRMA_POC_RECIPIENT_EMAIL`: use an `@example.com` address for request creation. A deliverable address additionally requires `FIRMA_POC_ALLOW_REAL=true` and explicit authorization.
 
@@ -21,7 +21,7 @@ Store disposable inputs under `.firma-poc/` and redacted webhook captures under 
 
 ## Live verification record
 
-The following must be replaced with exact, redacted observations from the authorized test workspace:
+The following records exact, redacted observations from the authorized test workspace:
 
 | Contract | Verified result |
 |---|---|
@@ -29,7 +29,7 @@ The following must be replaced with exact, redacted observations from the author
 | Accepted `anchor_tags` object shape | Verified required property `anchor_string`; `anchor` was rejected with `VALIDATION_ERROR`. Signature and date entries using `recipient_id: temp_1`, percentage `width`, and percentage `height` created two fields. |
 | DOCX conversion | Verified. Firma converted the locally rendered six-page US Letter DOCX into a five-page A4 PDF (595.28 x 841.89 points). This pagination/page-size difference must be addressed or accepted during master-template validation. |
 | Anchor field placement | Verified one `signature` and one `date` field, both assigned to the real recipient UUID on page 5. |
-| Anchors removed from rendered PDF | Not verified as removed: the unsent draft PDF download visibly retained both marker strings even though Firma created the fields. Verify the actual signing view before relying on marker removal. |
+| Anchors removed from rendered PDF | Failed: both the draft and completed PDFs visibly retained the marker strings. A second draft with `remove_anchor_text: true` also retained them. |
 | Two-signer ordering | **UNVERIFIED**; this POC used one recipient. |
 | Webhook signature headers | **UNVERIFIED**; this local POC did not receive a webhook. |
 | Event ID location | Verified for audit events from `GET /signing-requests/{id}/audit`; webhook event ID remains unverified. |
@@ -53,4 +53,4 @@ Do not proceed with production anchor placement until a second layout POC proves
 2. Firma confirms a DOCX conversion option that preserves US Letter page dimensions and removes anchors; or
 3. Firma fixes or documents the observed DOCX anchor-removal behavior.
 
-After the unsent request succeeds, obtain explicit authorization for a disposable deliverable recipient, verify the documented send operation, complete signing, and capture redacted webhook headers/body plus completed-document and audit retrieval behavior. Only then update this record and add confirmed server secrets to `VERCEL_ENV_CHECKLIST.md`.
+The one-recipient send, completion, completed-document download, and audit retrieval were verified. Remaining work is limited to the explicit blockers above: acceptable layout/anchor behavior, two-signer ordering, and webhook headers/event-ID location. Do not infer any of those contracts from this POC.

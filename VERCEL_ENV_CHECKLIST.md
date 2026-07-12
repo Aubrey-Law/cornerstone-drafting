@@ -169,14 +169,16 @@ On `call_analyzed`, Cornerstone upserts the call and emails/SMS the summary (`re
 
 ## Optional — Firma.dev (engagement e-signature)
 
+The current production routes use the legacy template-based flow, so the template IDs below remain required for the corresponding solo and joint paths. The planned document-based flow is not production-ready: its POC confirmed `FIRMA_API_KEY` authentication and the document lifecycle, but layout/anchor behavior, two-signer ordering, and webhook contract verification remain blocked. Do not remove the template IDs or add new document-flow secrets until that implementation replaces the legacy routes.
+
 | Variable | Purpose |
 |----------|---------|
 | `FIRMA_API_KEY` | firma.dev API key (sent as the Authorization header) |
 | `FIRMA_ENGAGEMENT_TEMPLATE_ID` | Single-signer engagement template (solo client) in firma.dev |
 | `FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT` | Two-signer engagement template (client + spouse). Set your existing 2-signer template here to unblock couples; build a 1-signer template for `FIRMA_ENGAGEMENT_TEMPLATE_ID` to enable solo clients |
-| `FIRMA_WEBHOOK_SECRET` | Shared secret carried on the registered webhook URL query string |
+| `FIRMA_WEBHOOK_SECRET` | Shared secret used by the current app webhook URL query-string check |
 
-Webhook URL to register in firma.dev (events: signed/completed/declined/expired):
+Current webhook URL configured by the legacy integration:
 `https://<host>/api/webhooks/esign?secret=<FIRMA_WEBHOOK_SECRET>`
 
 On completion, Cornerstone stores the combined signed PDF + audit certificate in the

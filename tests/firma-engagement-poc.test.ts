@@ -28,16 +28,30 @@ describe('Firma engagement POC safety guards', () => {
     expect(result.stderr).toContain('Missing POC environment')
   })
 
-  it('refuses an explicitly production-marked workspace', () => {
+  it.each(['production', 'prod'])('refuses the %s workspace sentinel', (workspace) => {
     const result = run({
       FIRMA_API_KEY: 'test-only',
       FIRMA_POC_DOCX: '/does/not/matter.docx',
       FIRMA_POC_RECIPIENT_EMAIL: 'tester@example.com',
-      FIRMA_POC_WORKSPACE: 'production',
+      FIRMA_POC_WORKSPACE: workspace,
     })
 
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('Refusing production Firma execution')
+    expect(result.stderr).toContain('explicitly names a non-production environment')
+  })
+
+  it('refuses FIRMA_POC_SEND before reading the source document', () => {
+    const result = run({
+      FIRMA_API_KEY: 'test-only',
+      FIRMA_POC_DOCX: '/does/not/matter.docx',
+      FIRMA_POC_RECIPIENT_EMAIL: 'tester@example.com',
+      FIRMA_POC_WORKSPACE: 'sandbox',
+      FIRMA_POC_SEND: 'true',
+    })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('FIRMA_POC_SEND is not enabled')
+    expect(result.stderr).not.toContain('ENOENT')
   })
 
   it('refuses a real recipient unless explicitly allowed', () => {
