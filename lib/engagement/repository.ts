@@ -92,6 +92,24 @@ export async function recordFirmaRequest(client: SupabaseClient, agreementId: st
   return one(client.from('engagement_agreements').update({ firma_request_id: firmaRequestId }).eq('id', agreementId).eq('status', 'sending').select().single())
 }
 
+export async function claimAgreementResume(client: SupabaseClient, input: { agreementId: string; requestId: string; sentBy: string }) {
+  const { data, error } = await client.rpc('claim_engagement_agreement_resume', {
+    p_agreement_id: input.agreementId, p_firma_request_id: input.requestId, p_sent_by: input.sentBy,
+  })
+  if (error) throw new Error(error.message)
+  return { claimed: Array.isArray(data) && data.length === 1 }
+}
+
+export async function recordFirmaRecipients(client: SupabaseClient, agreementId: string, recipients: Array<{ key: string; externalId: string }>) {
+  for (const recipient of recipients) {
+    const { data, error } = await client.from('engagement_agreement_recipients')
+      .update({ firma_recipient_id: recipient.externalId })
+      .eq('agreement_id', agreementId).eq('role', recipient.key).select('id').single()
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error(`Could not persist exact recipient mapping for ${recipient.key}`)
+  }
+}
+
 export async function recordRecipientState(client: SupabaseClient, input: {
   agreementId: string; email: string; status: string; viewedAt?: string | null; signedAt?: string | null
 }) {

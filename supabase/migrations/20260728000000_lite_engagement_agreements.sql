@@ -5,6 +5,8 @@ create table public.engagement_agreements (
   status text not null default 'draft' check (status in ('draft','ready','sending','sent','viewed','partially_signed','completed','cancelled','expired','failed')),
   active_revision_id uuid,
   firma_request_id text unique,
+  send_lease_id uuid,
+  send_lease_expires_at timestamptz,
   legacy_envelope_id text,
   completed_r2_key text,
   prepared_by uuid references auth.users(id),
@@ -228,6 +230,28 @@ $$;
 
 revoke all on function public.claim_engagement_agreement_send(uuid, uuid, text, text, uuid) from public;
 grant execute on function public.claim_engagement_agreement_send(uuid, uuid, text, text, uuid) to authenticated, service_role;
+
+create or replace function public.claim_engagement_agreement_resume(
+  p_agreement_id uuid,
+  p_firma_request_id text,
+  p_sent_by uuid
+) returns setof public.engagement_agreements
+language sql security definer set search_path = public as $$
+  update public.engagement_agreements a
+  set send_lease_id = gen_random_uuid(), send_lease_expires_at = now() + interval '2 minutes', sent_by = p_sent_by, updated_at = now()
+  where a.id = p_agreement_id
+    and a.status = 'sending'
+    and a.firma_request_id = p_firma_request_id
+    and (a.send_lease_expires_at is null or a.send_lease_expires_at < now())
+    and (
+      auth.role() = 'service_role'
+      or exists (select 1 from public.users u where u.id = auth.uid() and u.id = p_sent_by and u.role in ('attorney', 'admin', 'va', 'staff'))
+    )
+  returning a.*;
+$$;
+
+revoke all on function public.claim_engagement_agreement_resume(uuid, text, uuid) from public;
+grant execute on function public.claim_engagement_agreement_resume(uuid, text, uuid) to authenticated, service_role;
 
 alter table public.engagement_agreements enable row level security;
 alter table public.engagement_agreement_revisions enable row level security;

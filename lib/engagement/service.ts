@@ -8,7 +8,7 @@ export interface EngagementServiceAgreement {
   externalRequestId?: string | null
   inputSnapshot: EngagementInput
   activeRevision: { id: string; renderSha256: string; pdf: Buffer; masterVersion?: string }
-  recipients: Array<{ key: string; name: string; email: string; order: number }>
+  recipients: Array<{ key: string; name: string; email: string; order: number; externalId?: string | null }>
 }
 
 export interface EngagementServiceRepository {
@@ -16,6 +16,7 @@ export interface EngagementServiceRepository {
   getAgreement(agreementId: string): Promise<EngagementServiceAgreement>
   createRevision(agreementId: string, rendered: EngagementRenderedRevision): Promise<unknown>
   claimSend(input: { agreementId: string; revisionId: string; renderSha256: string; approvalToken: string; sentBy: string }): Promise<{ claimed: boolean }>
+  claimResume(input: { agreementId: string; requestId: string; sentBy: string }): Promise<{ claimed: boolean }>
   releaseClaim(agreementId: string, error: string): Promise<void>
   recordRequest(agreementId: string, requestId: string): Promise<void>
   recordRecipients(agreementId: string, recipients: EsignDocumentRequestResult['recipients']): Promise<void>
@@ -37,7 +38,7 @@ interface Dependencies {
   provider: {
     createDocumentRequest(input: EsignDocumentRequestInput): Promise<EsignDocumentRequestResult>
     sendDocumentRequest(requestId: string, customMessage: string): Promise<void>
-    getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus }>
+    getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus; recipients?: EsignDocumentRequestResult['recipients'] }>
   }
   approval: {
     issue(input: { agreementId: string; revisionId: string; sha256: string; expiresInSeconds: number }): string
@@ -58,9 +59,20 @@ function anchorsFor(recipients: EngagementServiceAgreement['recipients']): Esign
 export function createEngagementService(deps: Dependencies) {
   const sentStatuses: EsignDocumentRequestStatus[] = ['sent', 'viewed', 'partially_signed', 'completed']
 
-  async function resumePersistedRequest(agreement: EngagementServiceAgreement) {
+  async function resumePersistedRequest(agreement: EngagementServiceAgreement, sentBy: string) {
     const requestId = agreement.externalRequestId as string
+    const lease = await deps.repository.claimResume({ agreementId: agreement.id, requestId, sentBy })
+    if (!lease.claimed) throw new Error('Engagement resume lease was not acquired')
     const state = await deps.provider.getDocumentRequestState(requestId)
+    const missingMappings = agreement.recipients.some(recipient => !recipient.externalId)
+    if (missingMappings) {
+      const expectedKeys = [...agreement.recipients].sort((a, b) => a.order - b.order).map(recipient => recipient.key)
+      const reconciled = state.recipients ?? []
+      if (reconciled.length !== expectedKeys.length || expectedKeys.some(key => reconciled.filter(recipient => recipient.key === key).length !== 1)) {
+        throw new Error('Provider reconciliation did not return exact recipient mappings')
+      }
+      await deps.repository.recordRecipients(agreement.id, reconciled)
+    }
     if (sentStatuses.includes(state.status)) {
       if (agreement.status !== 'sent') await deps.repository.markSent(agreement.id)
       return { requestId, duplicate: true }
@@ -98,7 +110,7 @@ export function createEngagementService(deps: Dependencies) {
       }
       const verified = deps.approval.verify(input.approvalToken, { agreementId: agreement.id, revisionId: agreement.activeRevision.id, sha256: agreement.activeRevision.renderSha256 })
       if (!verified.ok) throw new Error(verified.error)
-      if (agreement.externalRequestId) return resumePersistedRequest(agreement)
+      if (agreement.externalRequestId) return resumePersistedRequest(agreement, input.sentBy)
       const claim = await deps.repository.claimSend({ agreementId: agreement.id, revisionId: agreement.activeRevision.id, renderSha256: agreement.activeRevision.renderSha256, approvalToken: input.approvalToken, sentBy: input.sentBy })
       if (!claim.claimed) throw new Error('Engagement send claim was not acquired')
       let created: EsignDocumentRequestResult

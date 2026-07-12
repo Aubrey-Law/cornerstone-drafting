@@ -98,15 +98,21 @@ class FirmaEsignProvider implements EsignProvider {
     if (!response.ok) throw new Error(`firma.dev send failed (${response.status})`)
   }
 
-  async getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus }> {
+  async getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus; recipients?: EsignDocumentRequestResult['recipients'] }> {
     const response = await this.fetcher(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${encodeURIComponent(requestId)}`, {
       method: 'GET', headers: { Authorization: this.apiKey() },
     })
     if (!response.ok) throw new Error(`firma.dev request reconciliation failed (${response.status})`)
-    const body = await response.json() as { status?: unknown }
+    const body = await response.json() as { status?: unknown; recipients?: Array<Record<string, unknown>> }
     const raw = typeof body.status === 'string' ? body.status.toLowerCase() : 'unknown'
     const known: EsignDocumentRequestStatus[] = ['created', 'sent', 'viewed', 'partially_signed', 'completed', 'declined', 'cancelled', 'expired']
-    return { status: known.includes(raw as EsignDocumentRequestStatus) ? raw as EsignDocumentRequestStatus : 'unknown' }
+    const recipients = body.recipients?.map(recipient => {
+      if (typeof recipient.temporary_id !== 'string' || !recipient.temporary_id || typeof recipient.id !== 'string' || !recipient.id) {
+        throw new Error('firma.dev reconciliation returned a recipient without stable correlation')
+      }
+      return { key: recipient.temporary_id, externalId: recipient.id, signingLink: typeof recipient.signing_link === 'string' ? recipient.signing_link : null }
+    })
+    return { status: known.includes(raw as EsignDocumentRequestStatus) ? raw as EsignDocumentRequestStatus : 'unknown', ...(recipients ? { recipients } : {}) }
   }
 
   private apiKey(): string {

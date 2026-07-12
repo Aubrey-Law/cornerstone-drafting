@@ -53,21 +53,47 @@ describe('engagement service', () => {
   })
 
   it('resumes a persisted created request and marks it sent only after reconciliation', async () => {
-    const persisted = { ...agreement, status: 'sending', externalRequestId: 'firma-1' }
-    const repository = { getAgreement: vi.fn().mockResolvedValue(persisted), markSent: vi.fn(), claimSend: vi.fn() }
-    const provider = { getDocumentRequestState: vi.fn().mockResolvedValue({ status: 'created' }), sendDocumentRequest: vi.fn() }
+    const persisted = { ...agreement, status: 'sending', externalRequestId: 'firma-1', recipients: [{ ...agreement.recipients[0], externalId: 'recipient-1' }] }
+    const repository = { getAgreement: vi.fn().mockResolvedValue(persisted), markSent: vi.fn(), claimSend: vi.fn(), claimResume: vi.fn().mockResolvedValue({ claimed: true }) }
+    const provider = { getDocumentRequestState: vi.fn().mockResolvedValue({ status: 'created', recipients: [{ key: 'primary', externalId: 'recipient-1', signingLink: null }] }), sendDocumentRequest: vi.fn() }
     const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
     expect(await service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).toEqual({ requestId: 'firma-1', duplicate: false })
     expect(provider.sendDocumentRequest).toHaveBeenCalledWith('firma-1', 'Please sign')
     expect(repository.markSent).toHaveBeenCalledWith('a1')
   })
 
-  it('reconciles an ambiguous send failure and does not report an unsent request as success', async () => {
-    const repository = { getAgreement: vi.fn().mockResolvedValue(agreement), claimSend: vi.fn().mockResolvedValue({ claimed: true }), recordRequest: vi.fn(), recordRecipients: vi.fn(), markSent: vi.fn(), releaseClaim: vi.fn() }
-    const provider = { createDocumentRequest: vi.fn().mockResolvedValue({ requestId: 'firma-1', recipients: [{ key: 'primary', externalId: 'recipient-1', signingLink: null }] }), sendDocumentRequest: vi.fn().mockRejectedValue(new Error('timeout')), getDocumentRequestState: vi.fn().mockResolvedValue({ status: 'created' }) }
+  it('does not send when another caller owns the resume lease', async () => {
+    const persisted = { ...agreement, status: 'sending', externalRequestId: 'firma-1', recipients: [{ ...agreement.recipients[0], externalId: 'recipient-1' }] }
+    const repository = { getAgreement: vi.fn().mockResolvedValue(persisted), claimResume: vi.fn().mockResolvedValue({ claimed: false }) }
+    const provider = { getDocumentRequestState: vi.fn(), sendDocumentRequest: vi.fn() }
     const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
-    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).rejects.toThrow('timeout')
+    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).rejects.toThrow(/resume lease/i)
+    expect(provider.sendDocumentRequest).not.toHaveBeenCalled()
+  })
+
+  it('repairs missing exact recipient mappings before resuming send', async () => {
+    const persisted = { ...agreement, status: 'sending', externalRequestId: 'firma-1' }
+    const exact = [{ key: 'primary', externalId: 'recipient-1', signingLink: 'https://sign/1' }]
+    const repository = { getAgreement: vi.fn().mockResolvedValue(persisted), claimResume: vi.fn().mockResolvedValue({ claimed: true }), recordRecipients: vi.fn(), markSent: vi.fn() }
+    const provider = { getDocumentRequestState: vi.fn().mockResolvedValue({ status: 'created', recipients: exact }), sendDocumentRequest: vi.fn() }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    await service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })
+    expect(repository.recordRecipients).toHaveBeenCalledWith('a1', exact)
+    expect(provider.sendDocumentRequest).toHaveBeenCalled()
+  })
+
+  it('repairs recipient persistence failure on a leased resume before sending', async () => {
+    const persisted = { ...agreement, status: 'sending', externalRequestId: 'firma-1' }
+    const exact = [{ key: 'primary', externalId: 'recipient-1', signingLink: null }]
+    const repository = { getAgreement: vi.fn().mockResolvedValueOnce(agreement).mockResolvedValueOnce(persisted), claimSend: vi.fn().mockResolvedValue({ claimed: true }), claimResume: vi.fn().mockResolvedValue({ claimed: true }), recordRequest: vi.fn(), recordRecipients: vi.fn().mockRejectedValueOnce(new Error('recipient persistence failed')).mockResolvedValueOnce(undefined), markSent: vi.fn(), releaseClaim: vi.fn() }
+    const provider = { createDocumentRequest: vi.fn().mockResolvedValue({ requestId: 'firma-1', recipients: exact }), sendDocumentRequest: vi.fn(), getDocumentRequestState: vi.fn().mockResolvedValue({ status: 'created', recipients: exact }) }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).rejects.toThrow('recipient persistence failed')
+    expect(provider.sendDocumentRequest).not.toHaveBeenCalled()
     expect(repository.markSent).not.toHaveBeenCalled()
+    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).resolves.toEqual({ requestId: 'firma-1', duplicate: false })
+    expect(repository.recordRecipients).toHaveBeenLastCalledWith('a1', exact)
+    expect(provider.sendDocumentRequest).toHaveBeenCalledWith('firma-1', 'Please sign')
   })
 
   it('orders couple recipients and anchors deterministically', async () => {

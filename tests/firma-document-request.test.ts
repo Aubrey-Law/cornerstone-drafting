@@ -47,4 +47,16 @@ describe('Firma document requests', () => {
       anchors: [{ marker: '[[CLIENT_1_SIGNATURE]]', type: 'signature', recipientKey: 'primary', required: true }], expirationHours: 72, customMessage: 'Sign',
     })).rejects.toThrow(/correlate recipient primary/i)
   })
+
+  it('returns exact external recipient IDs during reconciliation', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'created', recipients: [
+      { id: 'external-primary', temporary_id: 'primary', signing_link: 'https://sign/primary' },
+      { id: 'external-spouse', temporary_id: 'spouse', signing_link: null },
+    ] }), { status: 200 }))
+    const provider = createFirmaEsignProvider({ apiKey: 'key', singleTemplateId: 'legacy', jointTemplateId: null, fetcher })
+    await expect(provider.getDocumentRequestState('request-1')).resolves.toEqual({ status: 'created', recipients: [
+      { key: 'primary', externalId: 'external-primary', signingLink: 'https://sign/primary' },
+      { key: 'spouse', externalId: 'external-spouse', signingLink: null },
+    ] })
+  })
 })

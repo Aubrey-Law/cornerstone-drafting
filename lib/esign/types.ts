@@ -33,6 +33,7 @@ export interface EsignDocumentRequestResult {
 }
 
 export type EsignDocumentRequestStatus = 'created' | 'sent' | 'viewed' | 'partially_signed' | 'completed' | 'declined' | 'cancelled' | 'expired' | 'unknown'
+export type EsignExternalRecipient = { key: string; externalId: string; signingLink: string | null }
 
 export interface EsignProvider {
   name: string
@@ -46,7 +47,7 @@ export interface EsignProvider {
   ): Promise<{ envelopeId: string; signingLink: string | null }>
   createDocumentRequest(input: EsignDocumentRequestInput): Promise<EsignDocumentRequestResult>
   sendDocumentRequest(requestId: string, customMessage: string): Promise<void>
-  getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus }>
+  getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus; recipients?: EsignExternalRecipient[] }>
   /** Best-effort: cancel a superseded envelope before re-sending. */
   cancelEnvelope(envelopeId: string): Promise<void>
   /** Authoritative state — webhooks are treated as hints and re-checked here. */
