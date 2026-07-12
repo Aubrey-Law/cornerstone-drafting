@@ -101,14 +101,14 @@ export function createEngagementService(deps: Dependencies) {
       return { revision, rendered }
     },
 
-    async approveAgreementRevision(agreementId: string, expiresInSeconds = 900) {
-      const agreement = await deps.repository.getAgreement(agreementId)
-      await deps.repository.markReady({ agreementId, revisionId: agreement.activeRevision.id, renderSha256: agreement.activeRevision.renderSha256 })
-      return deps.approval.issue({ agreementId, revisionId: agreement.activeRevision.id, sha256: agreement.activeRevision.renderSha256, expiresInSeconds })
+    async approveAgreementRevision(input: { agreementId: string; revisionId: string; renderSha256: string }, expiresInSeconds = 900) {
+      await deps.repository.markReady(input)
+      return deps.approval.issue({ agreementId: input.agreementId, revisionId: input.revisionId, sha256: input.renderSha256, expiresInSeconds })
     },
 
-    async sendApprovedAgreement(input: { agreementId: string; approvalToken: string; sentBy: string }) {
+    async sendApprovedAgreement(input: { agreementId: string; approvalToken: string; sentBy: string; revisionId?: string; renderSha256?: string }) {
       const agreement = await deps.repository.getAgreement(input.agreementId)
+      if ((input.revisionId && input.revisionId !== agreement.activeRevision.id) || (input.renderSha256 && input.renderSha256 !== agreement.activeRevision.renderSha256)) throw new Error('Confirmed revision does not match active revision')
       if (agreement.externalRequestId && ['sent', 'viewed', 'partially_signed', 'completed'].includes(agreement.status)) {
         return { requestId: agreement.externalRequestId, duplicate: true }
       }

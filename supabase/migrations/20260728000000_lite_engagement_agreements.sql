@@ -165,6 +165,21 @@ begin
     p_render_sha256, p_master_version, p_html_r2_key, p_pdf_r2_key
   ) returning * into created_revision;
 
+  update public.engagement_agreement_recipients
+  set name = p_input_snapshot->'primary'->>'name',
+      email = lower(p_input_snapshot->'primary'->>'email'),
+      firma_recipient_id = null, status = 'pending', sent_at = null,
+      viewed_at = null, signed_at = null, declined_at = null, updated_at = now()
+  where agreement_id = p_agreement_id and role = 'primary';
+
+  update public.engagement_agreement_recipients
+  set name = p_input_snapshot->'spouse'->>'name',
+      email = lower(p_input_snapshot->'spouse'->>'email'),
+      firma_recipient_id = null, status = 'pending', sent_at = null,
+      viewed_at = null, signed_at = null, declined_at = null, updated_at = now()
+  where agreement_id = p_agreement_id and role = 'spouse'
+    and p_input_snapshot->'spouse' is not null;
+
   update public.engagement_agreements
   set active_revision_id = created_revision.id, status = 'draft', updated_at = now()
   where id = p_agreement_id;
@@ -217,7 +232,7 @@ language sql security definer set search_path = public as $$
 $$;
 
 revoke all on function public.mark_engagement_agreement_ready(uuid, uuid, text) from public;
-grant execute on function public.mark_engagement_agreement_ready(uuid, uuid, text) to authenticated, service_role;
+grant execute on function public.mark_engagement_agreement_ready(uuid, uuid, text) to service_role;
 
 create or replace function public.claim_engagement_agreement_send(
   p_agreement_id uuid,

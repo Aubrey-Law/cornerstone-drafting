@@ -113,9 +113,24 @@ describe('engagement service', () => {
     const service = createEngagementService({ repository: repository as never, provider: {} as never, renderer, approval })
     await service.prepareAgreement({ matterId: 'm1' }, input)
     await expect(service.previewAgreement('a1', input)).resolves.toEqual({ revision: { id: 'r2' }, rendered })
-    await service.approveAgreementRevision('a1')
+    await service.approveAgreementRevision({ agreementId: 'a1', revisionId: 'r2', renderSha256: 'new' })
     expect(repository.createRevision).toHaveBeenCalledWith('a1', expect.objectContaining({ renderSha256: 'new' }))
     expect(repository.markReady).toHaveBeenCalledWith({ agreementId: 'a1', revisionId: 'r2', renderSha256: 'new' })
     expect(approval.issue).toHaveBeenCalledWith(expect.objectContaining({ revisionId: 'r2', sha256: 'new' }))
+  })
+
+  it('never approves a different active revision than the caller reviewed', async () => {
+    const repository = { markReady: vi.fn().mockRejectedValue(new Error('Engagement persistence returned no row')) }
+    const service = createEngagementService({ repository: repository as never, provider: {} as never, renderer: {} as never, approval })
+    await expect(service.approveAgreementRevision({ agreementId: 'a1', revisionId: 'r1', renderSha256: 'old' })).rejects.toThrow(/no row/)
+    expect(approval.issue).not.toHaveBeenCalledWith(expect.objectContaining({ revisionId: 'r1' }))
+  })
+
+  it('rejects send when explicit confirmed revision differs before provider use', async () => {
+    const repository = { getAgreement: vi.fn().mockResolvedValue(agreement) }
+    const provider = { createDocumentRequest: vi.fn() }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1', revisionId: 'other', renderSha256: 'hash' })).rejects.toThrow(/confirmed revision/i)
+    expect(provider.createDocumentRequest).not.toHaveBeenCalled()
   })
 })
