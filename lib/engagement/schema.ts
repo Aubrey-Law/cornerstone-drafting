@@ -62,6 +62,7 @@ function isIsoDate(value: string): boolean {
 }
 
 export function validateEngagementInput(input: unknown): EngagementValidationResult {
+  const candidate = record(input)
   const value = normalizeEngagementInput(input)
   const errors: string[] = []
 
@@ -90,6 +91,13 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
   if (!Number.isFinite(value.fee.amount) || value.fee.amount <= 0) errors.push('fee.amount')
   if (!value.fee.paymentTerms) errors.push('fee.paymentTerms')
   if (!Number.isFinite(value.expirationHours) || value.expirationHours < 1) errors.push('expirationHours')
+
+  if (
+    Object.prototype.hasOwnProperty.call(candidate, 'optionalClauseKeys')
+    && !Array.isArray(candidate.optionalClauseKeys)
+  ) {
+    errors.push('optionalClauseKeys')
+  }
 
   if (PRACTICE_AREAS.includes(value.practiceArea)) {
     const definition = agreementDefinitionFor(value.practiceArea, value.legalPlan)

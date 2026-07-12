@@ -112,4 +112,23 @@ describe('validateEngagementInput', () => {
       errors: expect.arrayContaining([error]),
     })
   })
+
+  it.each(['unapproved', null, { 0: 'unapproved' }])(
+    'rejects an explicitly supplied non-array optionalClauseKeys container (%j)',
+    optionalClauseKeys => {
+      expect(validateEngagementInput({ ...base, optionalClauseKeys })).toMatchObject({
+        ok: false,
+        errors: expect.arrayContaining(['optionalClauseKeys']),
+      })
+    },
+  )
+
+  it('defaults a genuinely omitted optionalClauseKeys value to an empty array', () => {
+    const { optionalClauseKeys: _omitted, ...withoutOptionalClauseKeys } = base
+
+    expect(validateEngagementInput(withoutOptionalClauseKeys)).toMatchObject({
+      ok: true,
+      value: { optionalClauseKeys: [] },
+    })
+  })
 })
