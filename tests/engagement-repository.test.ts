@@ -60,6 +60,15 @@ describe('engagement persistence migration', () => {
     expect(sql).toContain("old.status in ('sent', 'viewed', 'partially_signed', 'completed', 'cancelled', 'expired')")
     expect(sql).toContain("new.status in ('draft', 'ready', 'failed')")
   })
+
+  it('freezes revision rows and active revision selection after sending starts', () => {
+    const sql = fs.readFileSync(migrationPath, 'utf8')
+    expect(sql).toContain('guard_engagement_revision_mutation')
+    expect(sql).toContain('before update or delete on public.engagement_agreement_revisions')
+    expect(sql).toContain("parent_status in ('sending', 'sent', 'viewed', 'partially_signed', 'completed', 'cancelled', 'expired')")
+    expect(sql).toContain('new.active_revision_id is distinct from old.active_revision_id')
+    expect(sql).toContain("old.status not in ('draft', 'ready', 'failed')")
+  })
 })
 
 describe('engagement repository source shape', () => {

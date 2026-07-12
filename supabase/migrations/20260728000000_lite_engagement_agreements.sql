@@ -106,6 +106,25 @@ create trigger engagement_revision_lifecycle_before_insert
 before insert on public.engagement_agreement_revisions
 for each row execute function public.guard_engagement_revision_insert();
 
+create or replace function public.guard_engagement_revision_mutation()
+returns trigger language plpgsql as $$
+declare parent_status text;
+begin
+  select status into parent_status
+  from public.engagement_agreements
+  where id = old.agreement_id
+  for update;
+  if parent_status in ('sending', 'sent', 'viewed', 'partially_signed', 'completed', 'cancelled', 'expired') then
+    raise exception 'cannot mutate revision for agreement in status %', parent_status;
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+create trigger engagement_revision_lifecycle_before_mutation
+before update or delete on public.engagement_agreement_revisions
+for each row execute function public.guard_engagement_revision_mutation();
+
 create or replace function public.create_engagement_agreement_revision(
   p_agreement_id uuid,
   p_input_snapshot jsonb,
@@ -157,6 +176,10 @@ grant execute on function public.create_engagement_agreement_revision(uuid, json
 create or replace function public.guard_engagement_agreement_status_transition()
 returns trigger language plpgsql as $$
 begin
+  if new.active_revision_id is distinct from old.active_revision_id
+     and old.status not in ('draft', 'ready', 'failed') then
+    raise exception 'cannot change active revision in status %', old.status;
+  end if;
   if (
     old.status = 'sending' and new.status in ('draft', 'ready')
   ) or (
@@ -170,7 +193,7 @@ end;
 $$;
 
 create trigger engagement_agreement_status_transition_before_update
-before update of status on public.engagement_agreements
+before update on public.engagement_agreements
 for each row execute function public.guard_engagement_agreement_status_transition();
 
 create or replace function public.claim_engagement_agreement_send(
