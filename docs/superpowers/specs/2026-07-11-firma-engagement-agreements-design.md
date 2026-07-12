@@ -55,16 +55,26 @@ The system has these focused units:
 3. **Agreement service** — enforces matter access, validation, revision locking, preview generation, and send confirmation.
 4. **Firma client** — creates document-based signing requests, sends, retrieves, cancels, resends, and downloads results.
 5. **Webhook handler** — verifies Firma signatures, deduplicates events, and updates recipient and agreement status.
-6. **Matter UI** — prepares, previews, revises, sends, and monitors agreements.
+6. **Engagement workspace** — a dedicated five-step experience that prepares, previews, approves, sends, and monitors agreements from either a lead or matter.
 7. **Cornerstone MCP** — exposes a narrow conversational interface over the same agreement service after the standard UI workflow is proven.
 
 Firma template replacement is not part of the workflow. Cornerstone converts each finalized DOCX through its existing `convertDocxToPdf` worker and submits the resulting US Letter PDF as a new document-based signing request. The attorney previews the exact PDF the client will sign.
 
 The DOCX masters contain white/invisible searchable anchors that survive Cornerstone's PDF conversion. Firma uses those PDF anchors after pagination is final. The single-signer PDF lifecycle is proven; final offsets/dimensions and two-signer behavior still require visual acceptance before release.
 
-## Matter Workflow
+## Engagement Workspace
 
-From a matter, an attorney selects **Prepare engagement agreement**. Cornerstone prepopulates:
+From a lead or matter, an attorney selects **Prepare engagement agreement**. Cornerstone creates or resumes a draft and opens `/admin/engagements/[agreementId]`. The workspace borrows the drafting workflow's navigation, autosave, blockers, and final-review patterns without importing or modifying drafting internals.
+
+The workspace has five stable steps:
+
+1. **Details** — practice area, individual/couple configuration, client names/emails, legal plan, agreement date, and responsible attorney.
+2. **Terms** — scope/package, fee, payment terms, included/excluded services, approved optional clauses, expiration, and email message.
+3. **Review** — generate DOCX and PDF artifacts, show the exact signing PDF, show a concise structured-change summary, and surface blockers.
+4. **Send** — confirm signer identities, confirm the reviewed PDF revision, optionally edit the email message, and explicitly send.
+5. **Status** — show overall and per-recipient state, activity/audit history, download actions, resend, cancel, and expiration.
+
+Cornerstone prepopulates:
 
 - Practice area from `matter_details.practice_area`
 - Individual/couple from client and spouse data
@@ -73,7 +83,9 @@ From a matter, an attorney selects **Prepare engagement agreement**. Cornerstone
 
 For `EP-LP`, the plan choice is required. Selecting MetLife or LegalEase uses the shared provision set and inserts the selected plan name. Selecting ARAG activates the approved ARAG clause substitutions.
 
-The attorney reviews structured fields, generates an editable DOCX plus signing-PDF preview, and may revise those fields. Each change creates a new unsent revision and regenerates both artifacts. Sending requires explicit confirmation bound to the current PDF checksum.
+Details and Terms autosave structured data. Generating Review creates an immutable revision with editable DOCX and signing-PDF artifacts. Returning to Details or Terms and changing any signing-relevant value invalidates approval and requires a newly rendered revision. The Send step accepts only a confirmation bound to the currently displayed PDF checksum.
+
+The workspace uses its own components, routes, tables, and service. Shared visual primitives may be reused, but `app/admin/drafting`, design-sheet state, draft payload, and estate generator code remain untouched.
 
 Once sent, a revision is immutable. A correction is prepared as a new revision and signing request; Cornerstone never silently mutates an active signature packet.
 
@@ -264,7 +276,7 @@ A live Firma proof of concept must verify DOCX conversion, anchor placement, cli
 
 ## Success Criteria
 
-- A staff member can prepare either an individual or couple agreement for `EP`, `EP-LP`, or `Probate` from the matter page.
+- A staff member can prepare or resume either an individual or couple agreement for `EP`, `EP-LP`, or `Probate` from a lead or matter and complete the Details, Terms, Review, Send, and Status workflow.
 - `EP-LP` correctly renders MetLife, LegalEase, or ARAG language.
 - Ordinary agreement revisions are made in three source masters rather than six signing templates.
 - Structured matter-specific changes can be previewed before sending.

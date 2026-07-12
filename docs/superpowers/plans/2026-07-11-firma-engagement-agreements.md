@@ -35,7 +35,7 @@ New agreement-domain files live under `lib/engagement/`:
 - `service.ts` — authorization-independent business orchestration called by authenticated routes and MCP.
 - `approval.ts` — short-lived revision-bound confirmation tokens.
 
-Firma-specific code remains under `lib/esign/`. UI components live together under `components/engagement/`. API routes remain lead- and matter-scoped, with common behavior delegated to the service.
+Firma-specific code remains under `lib/esign/`. The dedicated workspace lives under `app/admin/engagements/[agreementId]/` with focused components under `components/engagement/`. Lead and matter entry points create/resume a draft and navigate to the workspace; common behavior is delegated to the service.
 
 ---
 
@@ -587,11 +587,18 @@ git commit -m "feat: secure Firma engagement webhooks"
 
 ---
 
-### Task 8: Replace Lead and Matter Send UI with Prepare, Preview, Approve, and Status
+### Task 8: Add the Five-Step Engagement Workspace
 
 **Files:**
-- Create: `components/engagement/EngagementAgreementDialog.tsx`
 - Create: `components/engagement/EngagementAgreementStatus.tsx`
+- Create: `app/admin/engagements/[agreementId]/page.tsx`
+- Create: `app/admin/engagements/[agreementId]/EngagementWorkspace.tsx`
+- Create: `components/engagement/EngagementStepNavigation.tsx`
+- Create: `components/engagement/EngagementDetailsStep.tsx`
+- Create: `components/engagement/EngagementTermsStep.tsx`
+- Create: `components/engagement/EngagementReviewStep.tsx`
+- Create: `components/engagement/EngagementSendStep.tsx`
+- Create: `components/engagement/EngagementStatusStep.tsx`
 - Create: `app/api/admin/engagement-agreements/[id]/route.ts`
 - Create: `app/api/admin/engagement-agreements/[id]/preview/route.ts`
 - Create: `app/api/admin/engagement-agreements/[id]/approve/route.ts`
@@ -605,11 +612,11 @@ git commit -m "feat: secure Firma engagement webhooks"
 
 **Interfaces:**
 - Consumes: agreement service and authenticated lead/matter context.
-- Produces: standard application workflow and a stable HTTP boundary later reused by MCP adapters.
+- Produces: a dedicated Details → Terms → Review → Send → Status workflow and a stable HTTP boundary later reused by MCP adapters.
 
 - [ ] **Step 1: Write failing route and UI tests**
 
-Test admin authorization; matter/lead ownership lookup; default practice area and spouse mode; required `EP-LP` plan; structured field edits; DOCX preview download; approval token issuance; explicit send confirmation; stale revision rejection; direct signing link display; recipient status display; and signed resend rejection.
+Test admin authorization; matter/lead ownership lookup; draft create/resume; stable step routing; default practice area and spouse mode; required `EP-LP` plan; structured autosave; review blockers; DOCX/PDF preview downloads; approval token issuance; explicit send confirmation; stale revision rejection after edits; direct signing link display; per-recipient status; and signed resend rejection.
 
 - [ ] **Step 2: Verify tests fail**
 
@@ -633,15 +640,23 @@ return new Response(bytes, {
 })
 ```
 
-- [ ] **Step 4: Implement the structured dialog**
+- [ ] **Step 4: Implement the dedicated workspace shell**
 
-Use existing shadcn components. Show practice area, individual/couple, signer emails, legal plan only for `EP-LP`, fee, payment terms, scope, optional clauses, message, expiration, preview, approval summary, and a final Send button. Disable Send whenever current form state differs from the approved revision hash.
+Create `/admin/engagements/[agreementId]` with five stable steps: Details, Terms, Review, Send, and Status. Reuse the drafting workspace's interaction principles—left-side step navigation, autosave state, completion indicators, blocker links, and final review—but do not import drafting state or modify files under `app/admin/drafting`. Persist the active step in the URL so refresh/back navigation is stable.
 
-- [ ] **Step 5: Cut existing entry points over**
+- [ ] **Step 5: Implement Details and Terms**
 
-Keep the existing lead and matter buttons/locations, but open the new dialog. Preserve pre-matter sending and direct **Sign now** links. Stop calling `createEngagementEnvelope` from the two old routes; either convert them to draft-creation compatibility endpoints or return the new agreement resource.
+Details shows practice area, individual/couple, signer names/emails, agreement date, responsible attorney, and legal plan only for `EP-LP`. Terms shows fee, payment terms, scope, included/excluded services, allowlisted optional clauses, message, and expiration. Autosave only validated structured fields and mark any post-review signing-relevant change as requiring regeneration.
 
-- [ ] **Step 6: Run focused UI/API tests**
+- [ ] **Step 6: Implement Review, Send, and Status**
+
+Review displays the exact signing PDF plus structured-change summary and blockers. Send repeats signer identities and PDF checksum/revision, requires explicit reviewed-document confirmation, and disables on stale state. Status shows overall/per-recipient state, audit activity, completed downloads, resend, cancel, and expiration.
+
+- [ ] **Step 7: Cut existing entry points over**
+
+Keep the existing lead and matter buttons/locations, but create or resume the scoped draft and navigate to `/admin/engagements/[agreementId]`. Preserve pre-matter sending and direct **Sign now** links. Stop calling `createEngagementEnvelope` from the two old routes; convert them to draft-create/resume compatibility endpoints or return the new agreement resource.
+
+- [ ] **Step 8: Run focused UI/API tests**
 
 ```bash
 npx vitest run tests/engagement-routes.test.ts tests/engagement-dialog.test.tsx tests/engagement-current-flow.test.ts tests/engagement-send.test.ts
@@ -649,19 +664,19 @@ npx vitest run tests/engagement-routes.test.ts tests/engagement-dialog.test.tsx 
 
 Expected: PASS after updating characterization assertions to the new service while retaining the business outcomes.
 
-- [ ] **Step 7: Run typecheck and scoped lint**
+- [ ] **Step 9: Run typecheck and scoped lint**
 
 ```bash
 npx tsc --noEmit --project tsconfig.json
-npx eslint components/engagement app/api/admin/engagement-agreements lib/engagement app/admin/leads/SendEngagementDialog.tsx 'app/admin/matters/[id]/MatterEssentialsCard.tsx'
+npx eslint components/engagement 'app/admin/engagements/[agreementId]' app/api/admin/engagement-agreements lib/engagement app/admin/leads/SendEngagementDialog.tsx 'app/admin/matters/[id]/MatterEssentialsCard.tsx'
 ```
 
 Expected: no new errors. If repository-wide test type errors remain, compare them to the documented baseline and record them rather than weakening checks.
 
-- [ ] **Step 8: Commit the application workflow**
+- [ ] **Step 10: Commit the application workflow**
 
 ```bash
-git add components/engagement app/api/admin/engagement-agreements app/api/admin/leads app/api/admin/matters app/admin/leads/SendEngagementDialog.tsx 'app/admin/matters/[id]/MatterEssentialsCard.tsx' tests/engagement-routes.test.ts tests/engagement-dialog.test.tsx tests/engagement-current-flow.test.ts tests/engagement-send.test.ts
+git add components/engagement 'app/admin/engagements/[agreementId]' app/api/admin/engagement-agreements app/api/admin/leads app/api/admin/matters app/admin/leads/SendEngagementDialog.tsx 'app/admin/matters/[id]/MatterEssentialsCard.tsx' tests/engagement-routes.test.ts tests/engagement-dialog.test.tsx tests/engagement-current-flow.test.ts tests/engagement-send.test.ts
 git commit -m "feat: add reviewed engagement agreement workflow"
 ```
 
