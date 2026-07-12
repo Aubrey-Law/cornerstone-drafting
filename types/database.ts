@@ -602,3 +602,67 @@ export interface MatterActivity {
   metadata: Record<string, unknown> | null
   created_at: string
 }
+
+export type EngagementAgreementStatus =
+  | 'draft' | 'ready' | 'sending' | 'sent' | 'viewed' | 'partially_signed'
+  | 'completed' | 'cancelled' | 'expired' | 'failed'
+
+export interface EngagementAgreementRow {
+  id: string
+  matter_id: string | null
+  lead_id: string | null
+  status: EngagementAgreementStatus
+  active_revision_id: string | null
+  firma_request_id: string | null
+  legacy_envelope_id: string | null
+  completed_r2_key: string | null
+  prepared_by: string | null
+  sent_by: string | null
+  sent_at: string | null
+  completed_at: string | null
+  approval_nonce: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface EngagementAgreementRevisionRow {
+  id: string
+  agreement_id: string
+  revision_number: number
+  input_snapshot: Record<string, unknown>
+  render_snapshot: Record<string, unknown>
+  render_sha256: string
+  master_version: string
+  html_r2_key: string | null
+  pdf_r2_key: string | null
+  created_at: string
+}
+
+export interface EngagementAgreementRecipientRow {
+  id: string
+  agreement_id: string
+  recipient_order: number
+  role: 'primary' | 'spouse'
+  name: string
+  email: string
+  firma_recipient_id: string | null
+  status: 'pending' | 'sent' | 'viewed' | 'signed' | 'declined' | 'failed'
+  sent_at: string | null
+  viewed_at: string | null
+  signed_at: string | null
+  declined_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface FirmaWebhookEventRow {
+  id: string
+  event_id: string
+  firma_request_id: string | null
+  event_type: string
+  payload: Record<string, unknown>
+  agreement_id: string | null
+  processed_at: string | null
+  error: string | null
+  created_at: string
+}
