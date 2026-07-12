@@ -1,6 +1,6 @@
 # Firma engagement document POC
 
-## Status: lifecycle verified; layout acceptance failed
+## Status: PDF lifecycle accepted; field offsets require template tuning
 
 An attorney-supplied trust engagement agreement was copied to the ignored `.firma-poc/` directory, given one signature anchor and one date anchor, submitted to Firma, sent to an authorized test recipient, and completed. Firma created both fields and returned a completed PDF plus audit events. The final layout is not acceptable: anchor markers remain visible beneath the filled fields, and Firma changed the locally rendered Letter pagination to A4. Tasks 6 and 7 may rely on the API lifecycle facts below but must not adopt the current anchor/layout strategy unchanged.
 
@@ -47,10 +47,21 @@ The following records exact, redacted observations from the authorized test work
 - A second unsent draft explicitly set `remove_anchor_text: true` on both anchor definitions. Its converted draft PDF still visibly retained both marker strings. Explicit removal therefore does not fix this DOCX conversion path.
 - The source agreement also still contained its previous Firma-template placeholders for a second signer and signed-date autofill; future POC sources must remove all legacy template placeholders before layout evaluation.
 
-Do not proceed with production anchor placement until a second layout POC proves one of these options:
+The direct-DOCX path is rejected. A second POC converted the DOCX locally through Cornerstone's existing LibreOffice conversion path, rendered the anchor text white/invisible, and submitted the resulting PDF to Firma. That PDF path verified:
 
-1. Cornerstone supplies a PDF that already has the required final page size and invisible/searchable anchor markers; or
-2. Firma confirms a DOCX conversion option that preserves US Letter page dimensions and removes anchors; or
-3. Firma fixes or documents the observed DOCX anchor-removal behavior.
+- Firma preserved six US Letter agreement pages at 612 x 792 points.
+- Firma found both invisible searchable anchors and created signature/date fields on page 5.
+- The completed download remained Letter size and contained seven pages: six agreement pages plus one Firma certificate page.
+- Both fields contained completed values, the request finished successfully, and the invisible marker text was not exposed to the signer.
+- The current signature height/offset overlaps the printed client-name line, and the date field needs tighter sizing/alignment. These are template/anchor-dimension adjustments, not conversion failures.
+
+Production must render the customized DOCX with white searchable anchors, convert it through Cornerstone's existing `convertDocxToPdf` worker, validate US Letter dimensions/page count/anchor cardinality, bind approval to the PDF checksum, and submit the PDF to Firma with tuned dimensions and offsets.
+
+Do not use Firma's DOCX conversion path. Before release, visually verify final signature/date placement for individual and couple variants.
+
+Rejected alternatives from the first POC were:
+
+1. Sending DOCX directly to Firma.
+2. Relying on `remove_anchor_text: true` to remove visible DOCX markers.
 
 The one-recipient send, completion, completed-document download, and audit retrieval were verified. Remaining work is limited to the explicit blockers above: acceptable layout/anchor behavior, two-signer ordering, and webhook headers/event-ID location. Do not infer any of those contracts from this POC.

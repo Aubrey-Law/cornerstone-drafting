@@ -51,16 +51,16 @@ The feature is isolated from the design sheet, draft payload, estate generator, 
 The system has these focused units:
 
 1. **Agreement definition layer** — declares allowed inputs, defaults, clauses, and conditions for each practice area.
-2. **DOCX renderer** — combines a versioned master and validated inputs into a finalized agreement containing signer anchor tags.
+2. **Agreement renderer** — combines a versioned DOCX master and validated inputs, converts it through Cornerstone's existing LibreOffice worker, and returns both editable DOCX and immutable signing PDF artifacts.
 3. **Agreement service** — enforces matter access, validation, revision locking, preview generation, and send confirmation.
 4. **Firma client** — creates document-based signing requests, sends, retrieves, cancels, resends, and downloads results.
 5. **Webhook handler** — verifies Firma signatures, deduplicates events, and updates recipient and agreement status.
 6. **Matter UI** — prepares, previews, revises, sends, and monitors agreements.
 7. **Cornerstone MCP** — exposes a narrow conversational interface over the same agreement service after the standard UI workflow is proven.
 
-Firma template replacement is not part of the workflow. Cornerstone submits each finalized DOCX as a new document-based signing request. Firma converts DOCX to PDF. This removes the same-page-count and same-page-dimension requirements imposed when replacing an existing Firma template document.
+Firma template replacement is not part of the workflow. Cornerstone converts each finalized DOCX through its existing `convertDocxToPdf` worker and submits the resulting US Letter PDF as a new document-based signing request. The attorney previews the exact PDF the client will sign.
 
-Firma anchor tags should place signature and date fields after conversion so structured edits can change pagination. The first implementation task must prove the exact anchor syntax and one-/two-signer behavior against a Firma test workspace before the architecture is treated as validated.
+The DOCX masters contain white/invisible searchable anchors that survive Cornerstone's PDF conversion. Firma uses those PDF anchors after pagination is final. The single-signer PDF lifecycle is proven; final offsets/dimensions and two-signer behavior still require visual acceptance before release.
 
 ## Matter Workflow
 
@@ -73,7 +73,7 @@ From a matter, an attorney selects **Prepare engagement agreement**. Cornerstone
 
 For `EP-LP`, the plan choice is required. Selecting MetLife or LegalEase uses the shared provision set and inserts the selected plan name. Selecting ARAG activates the approved ARAG clause substitutions.
 
-The attorney reviews structured fields, generates a preview DOCX, and may revise those fields. Each change creates or updates an unsent revision and regenerates the preview. Sending requires an explicit confirmation of the current rendered revision.
+The attorney reviews structured fields, generates an editable DOCX plus signing-PDF preview, and may revise those fields. Each change creates a new unsent revision and regenerates both artifacts. Sending requires explicit confirmation bound to the current PDF checksum.
 
 Once sent, a revision is immutable. A correction is prepared as a new revision and signing request; Cornerstone never silently mutates an active signature packet.
 

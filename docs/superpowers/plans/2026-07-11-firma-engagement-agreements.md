@@ -4,7 +4,7 @@
 
 **Goal:** Replace fixed Firma individual/couple templates with reviewed, matter-specific DOCX engagement agreements while retaining the current lead conversion, direct-signing, webhook, signed-document storage, and status workflows, then expose the same service through a narrow MCP interface.
 
-**Architecture:** Three controlled DOCX masters (`EP`, `EP-LP`, and `Probate`) render immutable agreement revisions from validated structured inputs. A provider-neutral agreement service owns authorization, revisions, recipients, approval, and lifecycle state; the existing Firma adapter creates document-based requests, and the existing webhook reconciles and stores completed agreements. MCP calls the same service only after the standard application workflow ships.
+**Architecture:** Three controlled DOCX masters (`EP`, `EP-LP`, and `Probate`) render editable agreements, then Cornerstone's existing LibreOffice worker converts them to immutable US Letter signing PDFs. A provider-neutral agreement service owns authorization, revisions, recipients, PDF-bound approval, and lifecycle state; Firma receives PDFs with invisible searchable anchors. MCP calls the same service only after the standard application workflow ships.
 
 **Tech Stack:** Next.js App Router, TypeScript, React, Supabase/Postgres with RLS, `docxtemplater`, `pizzip`, `@firma-dev/sdk`, Cloudflare R2, Vitest, MCP Streamable HTTP transport.
 
@@ -30,7 +30,7 @@ New agreement-domain files live under `lib/engagement/`:
 - `types.ts` — stable domain types and enums.
 - `schema.ts` — structured-input normalization and validation.
 - `definitions.ts` — practice-area defaults and conditional model selection.
-- `render.ts` — deterministic DOCX rendering and revision hashing.
+- `render.ts` — deterministic DOCX rendering, PDF conversion/validation, and PDF revision hashing.
 - `repository.ts` — Supabase persistence only.
 - `service.ts` — authorization-independent business orchestration called by authenticated routes and MCP.
 - `approval.ts` — short-lived revision-bound confirmation tokens.
@@ -307,11 +307,11 @@ git commit -m "feat: define engagement agreement inputs"
 
 **Interfaces:**
 - Consumes: `EngagementInput` and the six attorney-supplied Word agreements.
-- Produces: `renderEngagementAgreement(input): Promise<{ bytes: Buffer; sha256: string; masterKey: string; masterVersion: string }>`.
+- Produces: `renderEngagementAgreement(input): Promise<{ docxBytes: Buffer; pdfBytes: Buffer; pdfSha256: string; masterKey: string; masterVersion: string }>`.
 
 - [ ] **Step 1: Reconcile the six Word documents**
 
-Create a clause comparison for each practice area. Preserve the approved legal language exactly. Encode individual/couple blocks with docxtemplater conditions, use `legal_plan_display` for MetLife/LegalEase, and use `is_arag` only around the identified ARAG substitutions. Insert these exact visible anchors in the signature blocks:
+Create a clause comparison for each practice area. Preserve the approved legal language exactly. Encode individual/couple blocks with docxtemplater conditions, use `legal_plan_display` for MetLife/LegalEase, and use `is_arag` only around the identified ARAG substitutions. Insert these exact anchors in the signature blocks and format their Word runs white so they remain searchable but invisible in the converted PDF:
 
 ```text
 [[CLIENT_1_SIGNATURE]]
@@ -336,7 +336,7 @@ Expected: FAIL because `renderEngagementAgreement` does not exist.
 
 - [ ] **Step 4: Implement rendering**
 
-Use `PizZip` and `Docxtemplater` already present in the repository. Map domain input to a flat render context, enable paragraph loops, throw on unresolved tags, return a Node `Buffer`, and compute SHA-256 over the output:
+Use `PizZip` and `Docxtemplater`, then call the existing `convertDocxToPdf`. Validate US Letter page dimensions and required anchor cardinality, and compute the approval SHA-256 over the PDF bytes:
 
 ```ts
 export async function renderEngagementAgreement(input: EngagementInput) {
@@ -344,10 +344,13 @@ export async function renderEngagementAgreement(input: EngagementInput) {
   const zip = new PizZip(template)
   const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true })
   doc.render(toAgreementContext(input))
-  const bytes = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' })
+  const docxBytes = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' })
+  const pdfBytes = await convertDocxToPdf(docxBytes, 'engagement-agreement.docx')
+  await validateSigningPdf(pdfBytes, input.clientMode)
   return {
-    bytes,
-    sha256: createHash('sha256').update(bytes).digest('hex'),
+    docxBytes,
+    pdfBytes,
+    pdfSha256: createHash('sha256').update(pdfBytes).digest('hex'),
     masterKey: input.practiceArea.toLowerCase(),
     masterVersion: '1',
   }
@@ -470,7 +473,7 @@ git commit -m "feat: persist engagement agreement revisions"
 
 - [ ] **Step 1: Write failing provider and service tests**
 
-Mock Firma and assert document bytes—not `template_id`—are sent; temporary recipient IDs map to confirmed anchor definitions; individual output has one recipient; couple output has two ordered recipients; stale approvals fail before Firma is called; duplicate sends return the existing request; and the external request ID is persisted.
+Mock Firma and assert PDF bytes—not DOCX bytes or `template_id`—are sent; temporary recipient IDs map to confirmed anchor definitions; individual output has one recipient; couple output has two ordered recipients; stale approvals fail before Firma is called; duplicate sends return the existing request; and the external request ID is persisted.
 
 - [ ] **Step 2: Verify tests fail**
 
