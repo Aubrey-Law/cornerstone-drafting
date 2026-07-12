@@ -88,8 +88,27 @@ export async function claimAgreementSend(client: SupabaseClient, input: {
   return { claimed: Array.isArray(data) && data.length === 1 }
 }
 
+export async function markAgreementReady(client: SupabaseClient, input: {
+  agreementId: string; revisionId: string; renderSha256: string
+}) {
+  return one(client.rpc('mark_engagement_agreement_ready', {
+    p_agreement_id: input.agreementId,
+    p_revision_id: input.revisionId,
+    p_render_sha256: input.renderSha256,
+  }).single())
+}
+
 export async function recordFirmaRequest(client: SupabaseClient, agreementId: string, firmaRequestId: string) {
   return one(client.from('engagement_agreements').update({ firma_request_id: firmaRequestId }).eq('id', agreementId).eq('status', 'sending').select().single())
+}
+
+export async function releaseAgreementClaim(client: SupabaseClient, agreementId: string, error: string) {
+  const { error: updateError } = await client.from('engagement_agreements').update({ status: 'failed', send_lease_id: null, send_lease_expires_at: null, updated_at: new Date().toISOString() }).eq('id', agreementId).eq('status', 'sending')
+  if (updateError) throw new Error(`${error}: ${updateError.message}`)
+}
+
+export async function markAgreementSent(client: SupabaseClient, agreementId: string) {
+  return one(client.from('engagement_agreements').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', agreementId).eq('status', 'sending').select().single())
 }
 
 export async function claimAgreementResume(client: SupabaseClient, input: { agreementId: string; requestId: string; sentBy: string }) {

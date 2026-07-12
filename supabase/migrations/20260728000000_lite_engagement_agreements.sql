@@ -198,6 +198,27 @@ create trigger engagement_agreement_status_transition_before_update
 before update on public.engagement_agreements
 for each row execute function public.guard_engagement_agreement_status_transition();
 
+create or replace function public.mark_engagement_agreement_ready(
+  p_agreement_id uuid,
+  p_revision_id uuid,
+  p_render_sha256 text
+) returns setof public.engagement_agreements
+language sql security definer set search_path = public as $$
+  update public.engagement_agreements a
+  set status = 'ready', approval_nonce = null, updated_at = now()
+  from public.engagement_agreement_revisions r
+  where a.id = p_agreement_id
+    and a.status in ('draft', 'ready', 'failed')
+    and a.active_revision_id = p_revision_id
+    and r.id = p_revision_id
+    and r.agreement_id = a.id
+    and r.render_sha256 = p_render_sha256
+  returning a.*;
+$$;
+
+revoke all on function public.mark_engagement_agreement_ready(uuid, uuid, text) from public;
+grant execute on function public.mark_engagement_agreement_ready(uuid, uuid, text) to authenticated, service_role;
+
 create or replace function public.claim_engagement_agreement_send(
   p_agreement_id uuid,
   p_revision_id uuid,

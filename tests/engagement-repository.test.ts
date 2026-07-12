@@ -31,6 +31,8 @@ describe('engagement persistence migration', () => {
   it('provides atomic send claiming and staff read/write policies', () => {
     const sql = fs.readFileSync(migrationPath, 'utf8')
     expect(sql).toContain('claim_engagement_agreement_send')
+    expect(sql).toContain('mark_engagement_agreement_ready')
+    expect(sql).toMatch(/active_revision_id = p_revision_id[\s\S]*render_sha256 = p_render_sha256/)
     expect(sql).toContain("status = 'ready'")
     expect(sql).toContain("status = 'sending'")
     expect(sql.match(/create policy "Staff manage engagement/g)?.length).toBe(4)

@@ -15,6 +15,7 @@ export interface EngagementServiceRepository {
   createDraft(input: { matterId?: string; leadId?: string; preparedBy?: string | null; inputSnapshot: EngagementInput }): Promise<unknown>
   getAgreement(agreementId: string): Promise<EngagementServiceAgreement>
   createRevision(agreementId: string, rendered: EngagementRenderedRevision): Promise<unknown>
+  markReady(input: { agreementId: string; revisionId: string; renderSha256: string }): Promise<unknown>
   claimSend(input: { agreementId: string; revisionId: string; renderSha256: string; approvalToken: string; sentBy: string }): Promise<{ claimed: boolean }>
   claimResume(input: { agreementId: string; requestId: string; sentBy: string }): Promise<{ claimed: boolean }>
   releaseClaim(agreementId: string, error: string): Promise<void>
@@ -24,6 +25,7 @@ export interface EngagementServiceRepository {
 }
 
 export interface EngagementRenderedRevision {
+  docx?: Buffer
   pdf: Buffer
   renderSha256: string
   masterVersion: string
@@ -95,11 +97,13 @@ export function createEngagementService(deps: Dependencies) {
       if (!validated.ok) throw new Error(`Invalid engagement input: ${validated.errors.join(', ')}`)
       const rendered = await deps.renderer.render(validated.value)
       if (!rendered.pdf.subarray(0, 4).equals(Buffer.from('%PDF'))) throw new Error('Renderer did not produce a PDF')
-      return deps.repository.createRevision(agreementId, rendered)
+      const revision = await deps.repository.createRevision(agreementId, rendered)
+      return { revision, rendered }
     },
 
     async approveAgreementRevision(agreementId: string, expiresInSeconds = 900) {
       const agreement = await deps.repository.getAgreement(agreementId)
+      await deps.repository.markReady({ agreementId, revisionId: agreement.activeRevision.id, renderSha256: agreement.activeRevision.renderSha256 })
       return deps.approval.issue({ agreementId, revisionId: agreement.activeRevision.id, sha256: agreement.activeRevision.renderSha256, expiresInSeconds })
     },
 

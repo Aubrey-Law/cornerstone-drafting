@@ -107,13 +107,15 @@ describe('engagement service', () => {
   })
 
   it('prepare, preview, and approve use the current validated revision', async () => {
-    const repository = { createDraft: vi.fn().mockResolvedValue({ id: 'a1' }), createRevision: vi.fn().mockResolvedValue({ id: 'r2' }), getAgreement: vi.fn().mockResolvedValue({ ...agreement, activeRevision: { ...agreement.activeRevision, id: 'r2', renderSha256: 'new' } }) }
-    const renderer = { render: vi.fn().mockResolvedValue({ pdf: Buffer.from('%PDF new'), renderSha256: 'new', masterVersion: 'v1' }) }
+    const repository = { createDraft: vi.fn().mockResolvedValue({ id: 'a1' }), createRevision: vi.fn().mockResolvedValue({ id: 'r2' }), markReady: vi.fn().mockResolvedValue({ id: 'a1' }), getAgreement: vi.fn().mockResolvedValue({ ...agreement, activeRevision: { ...agreement.activeRevision, id: 'r2', renderSha256: 'new' } }) }
+    const rendered = { docx: Buffer.from('PK docx'), pdf: Buffer.from('%PDF new'), renderSha256: 'new', masterVersion: 'v1' }
+    const renderer = { render: vi.fn().mockResolvedValue(rendered) }
     const service = createEngagementService({ repository: repository as never, provider: {} as never, renderer, approval })
     await service.prepareAgreement({ matterId: 'm1' }, input)
-    await service.previewAgreement('a1', input)
+    await expect(service.previewAgreement('a1', input)).resolves.toEqual({ revision: { id: 'r2' }, rendered })
     await service.approveAgreementRevision('a1')
     expect(repository.createRevision).toHaveBeenCalledWith('a1', expect.objectContaining({ renderSha256: 'new' }))
+    expect(repository.markReady).toHaveBeenCalledWith({ agreementId: 'a1', revisionId: 'r2', renderSha256: 'new' })
     expect(approval.issue).toHaveBeenCalledWith(expect.objectContaining({ revisionId: 'r2', sha256: 'new' }))
   })
 })
