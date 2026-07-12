@@ -29,8 +29,8 @@ const response = await fetch(
       document,
       recipients: [{ id: 'temp_1', first_name: 'Test', last_name: 'Client', email: recipientEmail, designation: 'Signer', order: 1 }],
       anchor_tags: [
-        { anchor: '[[CLIENT_1_SIGNATURE]]', type: 'signature', recipient_id: 'temp_1', required: true },
-        { anchor: '[[CLIENT_1_DATE]]', type: 'date', recipient_id: 'temp_1', required: true, date_signing_default: true },
+        { anchor_string: '[[CLIENT_1_SIGNATURE]]', type: 'signature', recipient_id: 'temp_1', width: 25, height: 5 },
+        { anchor_string: '[[CLIENT_1_DATE]]', type: 'date', recipient_id: 'temp_1', width: 18, height: 4 },
       ],
     }),
   },

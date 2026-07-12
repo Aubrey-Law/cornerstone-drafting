@@ -1,12 +1,12 @@
 # Firma engagement document POC
 
-## Status: blocked before live execution
+## Status: unsent creation verified; send lifecycle pending
 
-This repository does not currently contain a disposable engagement DOCX, and the local environment does not contain Firma POC credentials. No Firma request has been created, no agreement has been sent, and none of the contracts below are verified. Tasks 6 and 7 must not treat this document as API-contract evidence until the live checklist is completed with redacted results.
+An attorney-supplied trust engagement agreement was copied to the ignored `.firma-poc/` directory, given one signature anchor and one date anchor, and submitted to Firma using the configured POC credentials. Firma created an unsent draft with one recipient and two fields. No agreement has been sent yet. Tasks 6 and 7 may rely on the verified creation facts below, but not on the still-unverified send, signing, webhook, download, or audit contracts.
 
 ## Safe preflight
 
-The guarded script creates only an **unsent** document-based request. It requires an explicitly named non-production workspace and refuses real recipient domains unless separately authorized. Sending is disabled until Firma's send endpoint is verified.
+The guarded script creates only an **unsent** document-based request. It requires an explicitly named non-production workspace and refuses real recipient domains unless separately authorized. Sending remains disabled until explicitly authorized and implemented as a separate verification step.
 
 Required local-only inputs:
 
@@ -19,15 +19,17 @@ Run `node scripts/firma-engagement-poc.mjs`. Do not set `FIRMA_POC_SEND=true`; t
 
 Store disposable inputs under `.firma-poc/` and redacted webhook captures under `firma-webhook-captures/`. Both paths are ignored by Git. Never record API keys, tokens, client data, signing links, or unredacted payloads here.
 
-## Live verification record (not yet completed)
+## Live verification record
 
 The following must be replaced with exact, redacted observations from the authorized test workspace:
 
 | Contract | Verified result |
 |---|---|
-| Tested Firma API version | **UNVERIFIED** |
-| Accepted `anchor_tags` object shape | **UNVERIFIED** (the script currently uses the proposed shape from the implementation plan) |
-| Anchors removed from rendered PDF | **UNVERIFIED** |
+| Tested Firma API version | Document-based `POST /signing-requests` as documented in the v01.17.00 reference; response status was `draft`. |
+| Accepted `anchor_tags` object shape | Verified required property `anchor_string`; `anchor` was rejected with `VALIDATION_ERROR`. Signature and date entries using `recipient_id: temp_1`, percentage `width`, and percentage `height` created two fields. |
+| DOCX conversion | Verified. Firma converted the locally rendered six-page US Letter DOCX into a five-page A4 PDF (595.28 x 841.89 points). This pagination/page-size difference must be addressed or accepted during master-template validation. |
+| Anchor field placement | Verified one `signature` and one `date` field, both assigned to the real recipient UUID on page 5. |
+| Anchors removed from rendered PDF | Not verified as removed: the unsent draft PDF download visibly retained both marker strings even though Firma created the fields. Verify the actual signing view before relying on marker removal. |
 | Two-signer ordering | **UNVERIFIED** |
 | Webhook signature headers | **UNVERIFIED** |
 | Event ID location | **UNVERIFIED** |

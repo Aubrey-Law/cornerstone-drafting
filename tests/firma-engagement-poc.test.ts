@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -12,6 +13,13 @@ function run(env: Record<string, string> = {}) {
 }
 
 describe('Firma engagement POC safety guards', () => {
+  it('uses the documented Firma anchor tag property', () => {
+    const source = fs.readFileSync(script, 'utf8')
+    expect(source).toContain("anchor_string: '[[CLIENT_1_SIGNATURE]]'")
+    expect(source).toContain("anchor_string: '[[CLIENT_1_DATE]]'")
+    expect(source).not.toMatch(/\{ anchor:/)
+  })
+
   it('fails before doing work when the POC environment is incomplete', () => {
     const result = run()
 
