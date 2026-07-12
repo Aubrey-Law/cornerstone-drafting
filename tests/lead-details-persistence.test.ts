@@ -121,4 +121,56 @@ describe('lead details and notes migration', () => {
     expect(source).toContain('to authenticated')
     expect(source).toContain('to service_role')
   })
+
+  it('derives the actor from trusted JWT context and separates service-role calls', () => {
+    const source = sql()
+    expect(source).toContain("auth.role() = 'service_role'")
+    expect(source).toContain('v_actor_id := auth.uid()')
+    expect(source).toContain('p_actor_id is distinct from v_actor_id')
+    expect(source).not.toContain("current_user <> 'service_role'")
+    expect(source).toContain("u.id = v_actor_id and u.role in ('attorney', 'admin')")
+  })
+
+  it('fails closed on missing or malformed direct-RPC details', () => {
+    const source = sql()
+    expect(source).toContain("jsonb_typeof(p_details) <> 'object'")
+    expect(source).toContain("nullif(trim(p_details->>'firstname'), '') is null")
+    expect(source).toContain("nullif(trim(p_details->>'lastname'), '') is null")
+    expect(source).toContain("jsonb_typeof(p_details->'firstname') <> 'string'")
+    expect(source).toContain("jsonb_typeof(p_details->'lastname') <> 'string'")
+    expect(source).toContain("nullif(trim(p_details->>'email'), '') is null")
+    expect(source).toContain("jsonb_typeof(p_details->'email') <> 'string'")
+    expect(source).toContain("p_details->>'email' !~*")
+    expect(source).toContain("p_details->>'status' is null")
+    expect(source).toContain("jsonb_typeof(p_details->'fee') not in ('number', 'null')")
+    expect(source).toContain("jsonb_typeof(p_spouse) <> 'object'")
+    expect(source).toContain("nullif(trim(p_spouse->>'firstname'), '') is null")
+    expect(source).toContain("jsonb_typeof(p_spouse->'firstname') <> 'string'")
+  })
+
+  it('makes note authors immutable while retaining author/admin deletion', () => {
+    const source = sql()
+    expect(source).toContain('create function public.preserve_lead_note_provenance')
+    expect(source).toContain('new.actor_id is distinct from old.actor_id')
+    expect(source.match(/before update on public\.lead_(?:meeting_)?notes/g)).toHaveLength(2)
+    expect(source.match(/actor_id = \(select auth\.uid\(\)\) or exists/g)).toHaveLength(2)
+  })
+
+  it('advances updated_at on both note tables', () => {
+    const source = sql()
+    expect(source).toContain('new.updated_at := statement_timestamp()')
+    expect(source.match(/before update on public\.lead_(?:meeting_)?notes/g)).toHaveLength(2)
+  })
+
+  it('keeps spouse mutation and exactly one activity insert inside the RPC transaction', () => {
+    const source = sql()
+    const functionBody = source.slice(
+      source.indexOf('create or replace function public.update_lead_details'),
+      source.indexOf('revoke execute on function public.update_lead_details'),
+    )
+    expect(functionBody.match(/insert into public\.lead_activity/g)).toHaveLength(1)
+    expect(functionBody).toContain("delete from public.contacts where client_intake_id = p_lead_id and relationship_type = 'spouse'")
+    expect(functionBody).toContain("on conflict (client_intake_id) where relationship_type = 'spouse'")
+    expect(functionBody.indexOf('delete from public.contacts')).toBeLessThan(functionBody.indexOf('insert into public.lead_activity'))
+  })
 })

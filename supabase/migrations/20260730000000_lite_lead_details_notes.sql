@@ -30,6 +30,27 @@ create unique index lead_meeting_notes_granola_unique_idx
   on public.lead_meeting_notes (lead_id, granola_note_id)
   where granola_note_id is not null;
 
+create function public.preserve_lead_note_provenance()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.actor_id is distinct from old.actor_id then
+    raise exception 'Note author cannot be changed' using errcode = '22023';
+  end if;
+  new.updated_at := statement_timestamp();
+  return new;
+end;
+$$;
+
+create trigger preserve_lead_notes_provenance
+  before update on public.lead_notes
+  for each row execute function public.preserve_lead_note_provenance();
+create trigger preserve_lead_meeting_notes_provenance
+  before update on public.lead_meeting_notes
+  for each row execute function public.preserve_lead_note_provenance();
+
 alter table public.lead_notes enable row level security;
 alter table public.lead_meeting_notes enable row level security;
 
@@ -68,17 +89,84 @@ set search_path = pg_catalog, public
 as $$
 declare
   v_lead public.client_intake;
+  v_actor_id uuid;
 begin
-  if (current_user <> 'service_role' and p_actor_id is distinct from auth.uid())
-     or not exists (select 1 from public.users u where u.id = p_actor_id and u.role in ('attorney', 'admin')) then
-    raise exception 'Attorney or admin access required' using errcode = '42501';
+  -- A service-role caller has no end-user identity. It must not supply an
+  -- untrusted author; activity is intentionally system-authored (NULL).
+  if auth.role() = 'service_role' then
+    if p_actor_id is not null then
+      raise exception 'Service-role calls cannot assign an actor' using errcode = '42501';
+    end if;
+    v_actor_id := null;
+  else
+    v_actor_id := auth.uid();
+    if v_actor_id is null
+       or p_actor_id is distinct from v_actor_id
+       or not exists (select 1 from public.users u where u.id = v_actor_id and u.role in ('attorney', 'admin')) then
+      raise exception 'Attorney or admin access required' using errcode = '42501';
+    end if;
   end if;
 
-  if p_details->>'status' not in ('lead', 'hired', 'lost') then
+  if p_details is null or jsonb_typeof(p_details) <> 'object' then
+    raise exception 'Lead details must be an object' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_details->'firstName') <> 'string'
+     or jsonb_typeof(p_details->'lastName') <> 'string'
+     or nullif(trim(p_details->>'firstName'), '') is null
+     or nullif(trim(p_details->>'lastName'), '') is null then
+    raise exception 'Client first and last name are required' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_details->'email') <> 'string'
+     or nullif(trim(p_details->>'email'), '') is null
+     or p_details->>'email' !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+    raise exception 'Valid client email is required' using errcode = '22023';
+  end if;
+  if p_details->>'status' is null or p_details->>'status' not in ('lead', 'hired', 'lost') then
     raise exception 'Invalid lead status' using errcode = '22023';
   end if;
-  if nullif(p_details->>'fee', '')::numeric < 0 then
+  if not (p_details ? 'fee')
+     or jsonb_typeof(p_details->'fee') not in ('number', 'null')
+     or (jsonb_typeof(p_details->'fee') = 'number' and (p_details->>'fee')::numeric < 0) then
     raise exception 'Invalid fee' using errcode = '22023';
+  end if;
+  if p_spouse is not null and p_spouse <> 'null'::jsonb then
+    if jsonb_typeof(p_spouse) <> 'object'
+       or jsonb_typeof(p_spouse->'firstName') <> 'string'
+       or jsonb_typeof(p_spouse->'lastName') <> 'string'
+       or nullif(trim(p_spouse->>'firstName'), '') is null
+       or nullif(trim(p_spouse->>'lastName'), '') is null then
+      raise exception 'Spouse first and last name are required' using errcode = '22023';
+    end if;
+    if nullif(trim(p_spouse->>'email'), '') is not null
+       and p_spouse->>'email' !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+      raise exception 'Invalid spouse email' using errcode = '22023';
+    end if;
+  end if;
+
+  -- Validate scalar optional fields before any row is locked or changed.
+  if exists (
+    select 1 from jsonb_each(p_details) item
+    where item.key in ('middleName', 'preferredName', 'phone', 'dateOfBirth',
+      'addressLine1', 'addressLine2', 'city', 'state', 'zip', 'county',
+      'maritalStatus', 'practiceArea', 'source')
+      and jsonb_typeof(item.value) not in ('string', 'null')
+  ) then
+    raise exception 'Lead detail fields must be strings or null' using errcode = '22023';
+  end if;
+  if p_spouse is not null and p_spouse <> 'null'::jsonb and exists (
+    select 1 from jsonb_each(p_spouse) item
+    where item.key in ('middleName', 'preferredName', 'email', 'phone', 'dateOfBirth')
+      and jsonb_typeof(item.value) not in ('string', 'null')
+  ) then
+    raise exception 'Spouse detail fields must be strings or null' using errcode = '22023';
+  end if;
+
+  if nullif(p_details->>'dateOfBirth', '') is not null then
+    perform (p_details->>'dateOfBirth')::date;
+  end if;
+  if p_spouse is not null and p_spouse <> 'null'::jsonb
+     and nullif(p_spouse->>'dateOfBirth', '') is not null then
+    perform (p_spouse->>'dateOfBirth')::date;
   end if;
 
   select * into v_lead from public.client_intake where id = p_lead_id for update;
@@ -109,7 +197,7 @@ begin
   end if;
 
   insert into public.lead_activity (lead_id, event_type, title, detail, actor_id)
-  values (p_lead_id, 'details_updated', 'Lead details updated', 'Client and household details updated', p_actor_id);
+  values (p_lead_id, 'details_updated', 'Lead details updated', 'Client and household details updated', v_actor_id);
   return v_lead;
 end;
 $$;
