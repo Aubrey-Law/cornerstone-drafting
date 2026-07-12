@@ -20,6 +20,14 @@ Status: DONE
 - Scoped ESLint — 0 errors, 7 pre-existing-style `no-explicit-any` warnings in the lead UI boundary.
 - `git diff --check` — passed.
 
+## Final Hired-flow correction
+
+- Removed route-level matter deletion and status compensation. Hired requests send the prior non-Hired status to the details RPC, then delegate conversion and the Hired transition exclusively to `createMatterFromIntake`.
+- Moved the conversion helper's intake link/Hired update until after required `matter_details` persistence succeeds, so a failed conversion does not publish Hired.
+- Handler coverage now proves conversion failure performs no cleanup/update, success returns the linked Hired row and spouse, and repeated Hired returns the existing matter and spouse.
+- RED: focused handler suite failed 2 tests because the route performed success/failure status updates and cleanup.
+- GREEN: exact focused suite passed 5 files and 61 tests; scoped ESLint reported 0 errors and 15 existing `no-explicit-any` warnings; diff check passed.
+
 ## Scope review
 
 - No drafting internals changed.

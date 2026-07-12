@@ -89,13 +89,6 @@ export async function createMatterFromIntake(
     return { ok: false, error: `Failed to create matter: ${matterError?.message ?? 'unknown'}` }
   }
 
-  // Flag the source lead as Hired (only if it went through the lead flow;
-  // matter-origin intakes have a null lead_status and shouldn't appear as leads).
-  await admin
-    .from('client_intake')
-    .update({ matter_id: matter.id, lead_status: intake.lead_status ? 'hired' : intake.lead_status })
-    .eq('id', intakeId)
-
   const feeQuoted =
     typeof intake.engagement_fee_quoted === 'number' && Number.isFinite(intake.engagement_fee_quoted)
       ? intake.engagement_fee_quoted
@@ -128,6 +121,13 @@ export async function createMatterFromIntake(
   if (detailsError) {
     return { ok: false, error: `Failed to create matter details: ${detailsError.message}` }
   }
+
+  // Publish the conversion only after the matter's required details exist.
+  // Until this succeeds the lead remains visible under its prior status.
+  await admin
+    .from('client_intake')
+    .update({ matter_id: matter.id, lead_status: intake.lead_status ? 'hired' : intake.lead_status })
+    .eq('id', intakeId)
 
   try {
     await ensureDesignSheetSeededFromIntake(matter.id)

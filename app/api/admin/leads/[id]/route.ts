@@ -52,12 +52,9 @@ export async function PATCH(
   if (requestedHired) {
     const converted = await createMatterFromIntake(admin, intakeId, { actorId: userId ?? null })
     if (!converted.ok) {
-      await admin.from('matters').delete().eq('client_intake_id', intakeId)
-      await admin.from('client_intake').update({ lead_status: persistedDetails.status, matter_id: null }).eq('id', intakeId)
       return NextResponse.json({ error: converted.error }, { status: 500 })
     }
     matterId = converted.matterId
-    await admin.from('client_intake').update({ lead_status: 'hired' }).eq('id', intakeId)
   }
   if (details.status === 'lost') { /* retained as a lead; the RPC persisted lost */ }
   const [{ data: persistedLead }, { data: spouse }] = await Promise.all([

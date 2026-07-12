@@ -10,12 +10,12 @@ import { PATCH } from '@/app/api/admin/leads/[id]/route'
 
 const valid = { firstName:'Jane',middleName:'',lastName:'Doe',preferredName:'',email:'jane@example.com',phone:'',dateOfBirth:'',addressLine1:'',addressLine2:'',city:'',state:'',zip:'',county:'',maritalStatus:'married',practiceArea:'EP',source:'Referral',status:'lead',fee:4500,spouse:null }
 
-function harness({ lead={id:'l1',matter_id:null,lead_status:'lead'}, spouse=null, rpcError=null as null|{message:string} }={}) {
+function harness({ lead={id:'l1',matter_id:null,lead_status:'lead'}, finalLead=lead, spouse=null, rpcError=null as null|{message:string} }={}) {
   const calls:{rpc:any[];updates:any[];deletes:string[]}={rpc:[],updates:[],deletes:[]}
   const admin={
     rpc:vi.fn(async (name:string,args:any)=>{calls.rpc.push([name,args]);return {data:{...lead,lead_status:args.p_details.status},error:rpcError}}),
     from:vi.fn((table:string)=>{
-      const chain:any={select:()=>chain,eq:()=>chain,maybeSingle:async()=>({data:table==='client_intake'?lead:spouse,error:null}),single:async()=>({data:table==='client_intake'?lead:spouse,error:null}),update:(value:any)=>{calls.updates.push([table,value]);return chain},delete:()=>{calls.deletes.push(table);return chain}}
+      const chain:any={select:()=>chain,eq:()=>chain,maybeSingle:async()=>({data:table==='client_intake'?lead:spouse,error:null}),single:async()=>({data:table==='client_intake'?finalLead:spouse,error:null}),update:(value:any)=>{calls.updates.push([table,value]);return chain},delete:()=>{calls.deletes.push(table);return chain}}
       return chain
     }),
   }
@@ -34,6 +34,6 @@ describe('lead details PATCH handler',()=>{
   it('returns complete lead and spouse for repeated Hired',async()=>{const spouse={id:'s1',first_name:'John'};harness({lead:{id:'l1',matter_id:'m1',lead_status:'hired'},spouse});const res=await PATCH(request({...valid,status:'hired'}),params);expect(await res.json()).toEqual({lead:{id:'l1',matter_id:'m1',lead_status:'hired'},spouse,matterId:'m1'})})
   it.each([['creates',null],['updates',{firstName:'John',middleName:null,lastName:'Doe',preferredName:null,email:null,phone:null,dateOfBirth:null}],['deletes',null]])('%s spouse through the RPC payload',async(_label,spouse)=>{const {calls}=harness();await PATCH(request({...valid,spouse}),params);expect(calls.rpc[0][1].p_spouse).toEqual(spouse)})
   it('persists Lost without invoking conversion',async()=>{const {calls}=harness();const res=await PATCH(request({...valid,status:'lost'}),params);expect(res.status).toBe(200);expect(calls.rpc[0][1].p_details.status).toBe('lost');expect(mocks.createMatter).not.toHaveBeenCalled()})
-  it('does not persist Hired until conversion succeeds',async()=>{const {calls}=harness();await PATCH(request({...valid,status:'hired'}),params);expect(calls.rpc[0][1].p_details.status).toBe('lead');expect(mocks.createMatter).toHaveBeenCalledTimes(1);expect(calls.updates).toContainEqual(['client_intake',{lead_status:'hired'}])})
-  it('compensates a failed Hired conversion and leaves the prior status',async()=>{const {calls}=harness();mocks.createMatter.mockResolvedValue({ok:false,error:'matter failed'});const res=await PATCH(request({...valid,status:'hired'}),params);expect(res.status).toBe(500);expect(calls.rpc[0][1].p_details.status).toBe('lead');expect(calls.updates).toContainEqual(['client_intake',{lead_status:'lead',matter_id:null}])})
+  it('lets conversion alone persist Hired and returns the linked row and spouse',async()=>{const spouse={id:'s1'};const {calls}=harness({finalLead:{id:'l1',matter_id:'m1',lead_status:'hired'},spouse});const res=await PATCH(request({...valid,status:'hired'}),params);expect(calls.rpc[0][1].p_details.status).toBe('lead');expect(mocks.createMatter).toHaveBeenCalledTimes(1);expect(calls.updates).toEqual([]);expect(await res.json()).toEqual({lead:{id:'l1',matter_id:'m1',lead_status:'hired'},spouse,matterId:'m1'})})
+  it('returns conversion failure without cleanup or a Hired persistence request',async()=>{const {calls}=harness();mocks.createMatter.mockResolvedValue({ok:false,error:'matter failed'});const res=await PATCH(request({...valid,status:'hired'}),params);expect(res.status).toBe(500);expect(calls.rpc[0][1].p_details.status).toBe('lead');expect(calls.updates).toEqual([]);expect(calls.deletes).toEqual([])})
 })
