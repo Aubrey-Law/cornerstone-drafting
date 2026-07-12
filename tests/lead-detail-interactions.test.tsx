@@ -41,5 +41,27 @@ describe('lead detail page', () => {
     const fetchMock=vi.spyOn(globalThis,'fetch'); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     await user.click(screen.getByRole('button',{name:'Edit'})); const input=screen.getByLabelText('Email'); await user.clear(input); await user.type(input,'bad'); await user.click(screen.getByRole('button',{name:'Save'}))
     expect(await screen.findByText('Invalid email')).toBeTruthy(); expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toBeTruthy()
+  })
+
+  it('confirms removal of a newly entered spouse and preserves values when declined', async () => {
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(false); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Edit'})); await user.click(screen.getByRole('button',{name:'Add spouse'})); await user.type(screen.getByLabelText('Spouse first name'),'John'); await user.click(screen.getByRole('button',{name:'Remove spouse'}))
+    expect(confirm).toHaveBeenCalled(); expect((screen.getByLabelText('Spouse first name') as HTMLInputElement).value).toBe('John')
+  })
+
+  it('removes an entirely blank new spouse without confirmation', async () => {
+    const confirm=vi.spyOn(window,'confirm'); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Edit'})); await user.click(screen.getByRole('button',{name:'Add spouse'})); await user.click(screen.getByRole('button',{name:'Remove spouse'})); expect(confirm).not.toHaveBeenCalled(); expect(screen.getByRole('button',{name:'Add spouse'})).toBeTruthy()
+  })
+
+  it('uses supported selects and retains fields after an announced server error', async () => {
+    vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:false,json:async()=>({error:'Save failed'})} as Response); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Edit'})); expect(screen.getByRole('combobox',{name:'Status'})).toBeTruthy(); expect(screen.getByRole('combobox',{name:'Marital status'})).toBeTruthy(); expect(screen.getByRole('combobox',{name:'Practice area'})).toBeTruthy(); const first=screen.getByLabelText('First name'); await user.clear(first); await user.type(first,'Edited'); await user.click(screen.getByRole('button',{name:'Save'})); expect((await screen.findByRole('alert')).textContent).toContain('Save failed'); expect((first as HTMLInputElement).value).toBe('Edited')
+  })
+
+  it('submits the edit form from the keyboard', async () => {
+    const fetchMock=vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:true,json:async()=>({lead,spouse})} as Response); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Edit'})); await user.type(screen.getByLabelText('First name'),'{Enter}'); expect(fetchMock).toHaveBeenCalledWith('/api/admin/leads/l1',expect.objectContaining({method:'PATCH'}))
   })
 })

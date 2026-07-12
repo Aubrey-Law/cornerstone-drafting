@@ -24,3 +24,18 @@ Status: DONE
 
 - No drafting internals changed.
 - Task 1 validation/RPC interfaces were consumed without contract changes.
+
+## Review fixes
+
+- Replaced route source-string assertions with direct `PATCH` handler tests covering authorization, missing and converted leads, spouse RPC payloads, Lost retention, Hired success/failure, and repeated-Hired response completeness.
+- Hired edits now persist details under the prior non-Hired status, convert next, and mark Hired only after success. Conversion failures compensate partial matter/link state and restore the prior status.
+- Repeated Hired requests now return the existing spouse with the stable response contract.
+- Spouse removal confirmation now derives from current form values, including newly entered spouses.
+- Added semantic form submission, labeled Select controls for enumerations, explicit button types, and announced errors.
+
+### Review TDD evidence
+
+- RED: `npx vitest run tests/lead-detail-route.test.ts tests/lead-detail-interactions.test.tsx` — 6 expected failures covering Hired ordering/compensation, idempotent spouse response, populated-new-spouse confirmation, selects, and alert semantics.
+- GREEN: `npx vitest run tests/lead-detail-interactions.test.tsx tests/lead-detail-route.test.ts tests/lead-details-persistence.test.ts tests/leads.test.ts tests/lead-workflow.test.ts` — 5 files, 61 tests passed.
+- Scoped ESLint — 0 errors; warnings are limited to existing boundary/test `no-explicit-any` usage.
+- `git diff --check` — passed.

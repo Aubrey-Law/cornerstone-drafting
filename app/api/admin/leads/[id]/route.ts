@@ -32,7 +32,8 @@ export async function PATCH(
     .maybeSingle()
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
   if (lead.matter_id && details.status === 'hired') {
-    return NextResponse.json({ lead, spouse: null, matterId: lead.matter_id })
+    const { data: spouse } = await admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle()
+    return NextResponse.json({ lead, spouse: spouse ?? null, matterId: lead.matter_id })
   }
   if (lead.matter_id) {
     return NextResponse.json(
@@ -41,15 +42,22 @@ export async function PATCH(
     )
   }
 
+  const requestedHired = details.status === 'hired'
+  const persistedDetails = requestedHired ? { ...details, status: lead.lead_status === 'lost' ? 'lost' : 'lead' } : details
   const { data: savedLead, error } = await admin.rpc('update_lead_details', {
-    p_lead_id: intakeId, p_details: details, p_spouse: details.spouse, p_actor_id: null,
+    p_lead_id: intakeId, p_details: persistedDetails, p_spouse: details.spouse, p_actor_id: null,
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   let matterId: string | undefined
-  if (details.status === 'hired') {
+  if (requestedHired) {
     const converted = await createMatterFromIntake(admin, intakeId, { actorId: userId ?? null })
-    if (!converted.ok) return NextResponse.json({ error: converted.error }, { status: 500 })
+    if (!converted.ok) {
+      await admin.from('matters').delete().eq('client_intake_id', intakeId)
+      await admin.from('client_intake').update({ lead_status: persistedDetails.status, matter_id: null }).eq('id', intakeId)
+      return NextResponse.json({ error: converted.error }, { status: 500 })
+    }
     matterId = converted.matterId
+    await admin.from('client_intake').update({ lead_status: 'hired' }).eq('id', intakeId)
   }
   if (details.status === 'lost') { /* retained as a lead; the RPC persisted lost */ }
   const [{ data: persistedLead }, { data: spouse }] = await Promise.all([
