@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { createAgreementRevision } from '@/lib/engagement/repository'
 
 const migrationPath = path.join(
   process.cwd(),
@@ -77,6 +78,15 @@ describe('engagement persistence migration', () => {
 })
 
 describe('engagement repository source shape', () => {
+  it('passes the exact validated signer snapshot into the single atomic revision RPC', async () => {
+    const snapshot = { practiceArea:'EP', clientMode:'couple', agreementDate:'2026-07-12', primary:{name:'Edited Primary',email:'EDITED@EXAMPLE.COM'}, spouse:{name:'Edited Spouse',email:'SPOUSE@EXAMPLE.COM'}, legalPlan:null, fee:{amount:1,paymentTerms:'Due'}, scopeKey:'standard', optionalClauseKeys:[], emailMessage:'', expirationHours:72 }
+    const single = vi.fn().mockResolvedValue({ data:{ id:'r2' }, error:null })
+    const rpc = vi.fn().mockReturnValue({ single })
+    await createAgreementRevision({ rpc } as never, 'a1', { inputSnapshot:snapshot as never, renderSha256:'hash', masterVersion:'1' })
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith('create_engagement_agreement_revision', expect.objectContaining({ p_agreement_id:'a1', p_input_snapshot:snapshot }))
+  })
+
   it('uses an injected client and the atomic send RPC', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'lib/engagement/repository.ts'), 'utf8')
     expect(source).toContain('client: SupabaseClient')

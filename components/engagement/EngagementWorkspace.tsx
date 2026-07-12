@@ -1,8 +1,9 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { canSendReviewedRevision, engagementStep, ENGAGEMENT_STEPS } from './workspaceState'
 
-const steps = ['details', 'terms', 'review', 'send', 'status'] as const
+const steps = ENGAGEMENT_STEPS
 type Step = typeof steps[number]
 type Agreement = any
 
@@ -10,8 +11,7 @@ function download(base64: string, name: string, type: string) { const a=document
 
 export default function EngagementWorkspace({ agreement }: { agreement: Agreement }) {
   const router=useRouter(), searchParams=useSearchParams()
-  const requested=searchParams.get('step') as Step | null
-  const step: Step=steps.includes(requested as Step) ? requested as Step : 'details'
+  const step: Step=engagementStep(searchParams.get('step'))
   const initial=agreement.active_revision.input_snapshot
   const [input,setInput]=useState(initial), [preview,setPreview]=useState<any>(null), [approvalToken,setApprovalToken]=useState(''), [confirmExactRevision,setConfirmExactRevision]=useState(false), [message,setMessage]=useState('')
   const revision=preview?.revision?.id ?? agreement.active_revision.id
@@ -25,6 +25,6 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
   {step==='details'&&<section><h2 className="text-xl font-semibold">Details</h2><p className="my-3 rounded bg-slate-50 p-3">Supported definition: Estate Planning / Couple</p><label className="block">Agreement date<input className="block w-full rounded border p-2" type="date" value={input.agreementDate} onChange={e=>edit({agreementDate:e.target.value})}/></label>{[['Primary', 'primary'],['Spouse','spouse']].map(([label,key])=><div className="mt-4 grid gap-3 sm:grid-cols-2" key={key}><label>{label} name<input className="block w-full rounded border p-2" value={input[key].name} onChange={e=>edit({[key]:{...input[key],name:e.target.value}})}/></label><label>{label} email<input className="block w-full rounded border p-2" value={input[key].email} onChange={e=>edit({[key]:{...input[key],email:e.target.value}})}/></label></div>)}</section>}
   {step==='terms'&&<section><h2 className="text-xl font-semibold">Terms</h2><label className="block mt-3">Flat fee<input className="block w-full rounded border p-2" type="number" value={input.fee.amount} onChange={e=>edit({fee:{...input.fee,amount:Number(e.target.value)}})}/></label><label className="block mt-3">Payment terms<textarea className="block w-full rounded border p-2" value={input.fee.paymentTerms} onChange={e=>edit({fee:{...input.fee,paymentTerms:e.target.value}})}/></label><p className="mt-4 text-sm">Scope: Standard trust estate plan. Agreement text is fixed and cannot be freely edited.</p></section>}
   {step==='review'&&<section><h2 className="text-xl font-semibold">Review</h2>{blockers.length?<div className="my-3 text-red-700">Validation blockers: {blockers.join(', ')}</div>:<button className="my-3 rounded bg-blue-700 px-4 py-2 text-white" onClick={generate}>Generate preview</button>}{preview&&<div className="space-x-3"><button onClick={()=>download(preview.docxBase64,'engagement.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document')}>Download editable DOCX</button><button onClick={()=>download(preview.pdfBase64,'engagement.pdf','application/pdf')}>Download signing PDF</button><button onClick={approve}>Approve revision</button></div>}<p className="mt-4 font-mono text-xs">Revision {revision} / PDF SHA-256 {sha}</p></section>}
-  {step==='send'&&<section><h2 className="text-xl font-semibold">Send</h2><p>{input.primary.name} ({input.primary.email}); {input.spouse.name} ({input.spouse.email})</p><p className="my-3 font-mono text-xs">Revision {revision} / {sha}</p><label><input type="checkbox" checked={confirmExactRevision} onChange={e=>setConfirmExactRevision(e.target.checked)}/> I confirm this exact revision was reviewed.</label><button className="mt-4 block rounded bg-emerald-700 px-4 py-2 text-white disabled:opacity-40" disabled={!approvalToken||!confirmExactRevision} onClick={send}>Send for signature</button></section>}
+  {step==='send'&&<section><h2 className="text-xl font-semibold">Send</h2><p>{input.primary.name} ({input.primary.email}); {input.spouse.name} ({input.spouse.email})</p><p className="my-3 font-mono text-xs">Revision {revision} / {sha}</p><label><input type="checkbox" checked={confirmExactRevision} onChange={e=>setConfirmExactRevision(e.target.checked)}/> I confirm this exact revision was reviewed.</label><button className="mt-4 block rounded bg-emerald-700 px-4 py-2 text-white disabled:opacity-40" disabled={!canSendReviewedRevision({approvalToken,confirmExactRevision,revisionId:revision,pdfSha256:sha})} onClick={send}>Send for signature</button></section>}
   {step==='status'&&<section><h2 className="text-xl font-semibold">Status</h2><p>Overall: {agreement.status}</p><ul>{agreement.recipients.map((r:any)=><li key={r.id}>{r.name}: {r.status}</li>)}</ul><p className="mt-4 text-sm text-slate-600">Completed document actions are unavailable until Firma reports and persists completion.</p></section>}{message&&<p className="mt-5 rounded bg-slate-100 p-3">{message}</p>}</main></div></div>
 }

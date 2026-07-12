@@ -43,6 +43,12 @@ describe('engagement approval and send routes', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it.each([{ revisionId:'', pdfSha256:'hash-1' }, { revisionId:'r1', pdfSha256:'' }, { revisionId:undefined, pdfSha256:'hash-1' }])('rejects missing reviewed revision identity before the service', async missing => {
+    const { POST } = await import('@/app/api/admin/engagement-agreements/[id]/send/route')
+    await POST(new Request('http://test',{method:'POST',body:JSON.stringify({approvalToken:'token',confirmExactRevision:true,...missing})}),{params:Promise.resolve({id:'a1'})})
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('page loader independently authorizes before its service-role scoped read', async () => {
     requireStaff.mockRejectedValue(new Error('Forbidden'))
     const { default: Page } = await import('@/app/admin/engagements/[agreementId]/page')

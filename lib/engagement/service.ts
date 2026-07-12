@@ -106,9 +106,10 @@ export function createEngagementService(deps: Dependencies) {
       return deps.approval.issue({ agreementId: input.agreementId, revisionId: input.revisionId, sha256: input.renderSha256, expiresInSeconds })
     },
 
-    async sendApprovedAgreement(input: { agreementId: string; approvalToken: string; sentBy: string; revisionId?: string; renderSha256?: string }) {
+    async sendApprovedAgreement(input: { agreementId: string; approvalToken: string; sentBy: string; revisionId: string; renderSha256: string }) {
+      if (!input.revisionId.trim() || !input.renderSha256.trim()) throw new Error('Confirmed revision ID and PDF hash are required')
       const agreement = await deps.repository.getAgreement(input.agreementId)
-      if ((input.revisionId && input.revisionId !== agreement.activeRevision.id) || (input.renderSha256 && input.renderSha256 !== agreement.activeRevision.renderSha256)) throw new Error('Confirmed revision does not match active revision')
+      if (input.revisionId !== agreement.activeRevision.id || input.renderSha256 !== agreement.activeRevision.renderSha256) throw new Error('Confirmed revision does not match active revision')
       if (agreement.externalRequestId && ['sent', 'viewed', 'partially_signed', 'completed'].includes(agreement.status)) {
         return { requestId: agreement.externalRequestId, duplicate: true }
       }
