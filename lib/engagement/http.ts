@@ -1,5 +1,6 @@
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { isSupportedWorkspaceDefinition } from '@/components/engagement/workspaceState'
 
 export async function requireEngagementStaff() {
   const auth = await getCachedClaims()
@@ -12,7 +13,7 @@ export async function requireEngagementStaff() {
 export async function getScopedAgreement(id: string) {
   const { data } = await getAdminClient().from('engagement_agreements').select('*, active_revision:engagement_agreement_revisions!active_revision_id(*), recipients:engagement_agreement_recipients(*)').eq('id', id).maybeSingle()
   const snapshot = (data as any)?.active_revision?.input_snapshot
-  if (!data || !data.matter_id || !snapshot || snapshot.practiceArea !== 'EP' || snapshot.clientMode !== 'couple' || snapshot.scopeKey !== 'standard' || snapshot.legalPlan !== null) throw new Error('Engagement agreement not found or unavailable')
+  if (!data || !snapshot || !isSupportedWorkspaceDefinition({ matterId:data.matter_id, ...snapshot })) throw new Error('Engagement agreement not found or unavailable')
   return data as any
 }
 
