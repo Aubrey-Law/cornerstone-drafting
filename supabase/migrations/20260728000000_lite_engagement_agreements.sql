@@ -106,6 +106,73 @@ create trigger engagement_revision_lifecycle_before_insert
 before insert on public.engagement_agreement_revisions
 for each row execute function public.guard_engagement_revision_insert();
 
+create or replace function public.create_engagement_agreement_revision(
+  p_agreement_id uuid,
+  p_input_snapshot jsonb,
+  p_render_snapshot jsonb,
+  p_render_sha256 text,
+  p_master_version text,
+  p_html_r2_key text default null,
+  p_pdf_r2_key text default null
+) returns setof public.engagement_agreement_revisions
+language plpgsql set search_path = public as $$
+declare
+  agreement_status text;
+  next_revision_number integer;
+  created_revision public.engagement_agreement_revisions;
+begin
+  select status into agreement_status
+  from public.engagement_agreements
+  where id = p_agreement_id
+  for update;
+  if agreement_status is null then
+    raise exception 'engagement agreement not found';
+  end if;
+  if agreement_status not in ('draft', 'ready', 'failed') then
+    raise exception 'cannot revise agreement in status %', agreement_status;
+  end if;
+
+  select coalesce(max(revision_number), 0) + 1 into next_revision_number
+  from public.engagement_agreement_revisions
+  where agreement_id = p_agreement_id;
+
+  insert into public.engagement_agreement_revisions (
+    agreement_id, revision_number, input_snapshot, render_snapshot,
+    render_sha256, master_version, html_r2_key, pdf_r2_key
+  ) values (
+    p_agreement_id, next_revision_number, p_input_snapshot, p_render_snapshot,
+    p_render_sha256, p_master_version, p_html_r2_key, p_pdf_r2_key
+  ) returning * into created_revision;
+
+  update public.engagement_agreements
+  set active_revision_id = created_revision.id, status = 'draft', updated_at = now()
+  where id = p_agreement_id;
+  return next created_revision;
+end;
+$$;
+
+revoke all on function public.create_engagement_agreement_revision(uuid, jsonb, jsonb, text, text, text, text) from public;
+grant execute on function public.create_engagement_agreement_revision(uuid, jsonb, jsonb, text, text, text, text) to authenticated, service_role;
+
+create or replace function public.guard_engagement_agreement_status_transition()
+returns trigger language plpgsql as $$
+begin
+  if (
+    old.status = 'sending' and new.status in ('draft', 'ready')
+  ) or (
+    old.status in ('sent', 'viewed', 'partially_signed', 'completed', 'cancelled', 'expired')
+    and new.status in ('draft', 'ready', 'failed')
+  ) then
+    raise exception 'cannot reset agreement from status % to %', old.status, new.status;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger engagement_agreement_status_transition_before_update
+before update of status on public.engagement_agreements
+for each row execute function public.guard_engagement_agreement_status_transition();
+
 create or replace function public.claim_engagement_agreement_send(
   p_agreement_id uuid,
   p_revision_id uuid,

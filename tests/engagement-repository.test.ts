@@ -44,6 +44,22 @@ describe('engagement persistence migration', () => {
     expect(sql).toContain('guard_engagement_revision_insert')
     expect(sql).toContain("agreement_status not in ('draft', 'ready', 'failed')")
   })
+
+  it('creates and activates revisions atomically under an agreement row lock', () => {
+    const sql = fs.readFileSync(migrationPath, 'utf8')
+    expect(sql).toContain('create_engagement_agreement_revision')
+    expect(sql).toMatch(/from public\.engagement_agreements[\s\S]*for update/)
+    expect(sql).toContain('max(revision_number)')
+    expect(sql).toContain('active_revision_id = created_revision.id')
+  })
+
+  it('prevents sent lifecycle states from being reset to editable states', () => {
+    const sql = fs.readFileSync(migrationPath, 'utf8')
+    expect(sql).toContain('guard_engagement_agreement_status_transition')
+    expect(sql).toContain("old.status = 'sending' and new.status in ('draft', 'ready')")
+    expect(sql).toContain("old.status in ('sent', 'viewed', 'partially_signed', 'completed', 'cancelled', 'expired')")
+    expect(sql).toContain("new.status in ('draft', 'ready', 'failed')")
+  })
 })
 
 describe('engagement repository source shape', () => {
@@ -51,10 +67,11 @@ describe('engagement repository source shape', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'lib/engagement/repository.ts'), 'utf8')
     expect(source).toContain('client: SupabaseClient')
     expect(source).toContain("client.rpc('claim_engagement_agreement_send'")
+    expect(source).toContain("client.rpc('create_engagement_agreement_revision'")
+    expect(source).not.toContain("client.from('engagement_agreement_revisions').insert")
     expect(source).toContain('verifyRevisionApproval(input.approvalToken')
     expect(source).toContain('p_approval_nonce: approval.claims.nonce')
     expect(source).not.toContain('approvalNonce: string')
-    expect(source).toContain("!['draft', 'ready', 'failed'].includes(agreement.status)")
     expect(source).not.toContain('getAdminClient')
     expect(source).not.toContain('createClient(')
   })

@@ -46,23 +46,15 @@ export async function createAgreementRevision(
   agreementId: string,
   input: Omit<AgreementDraftInput, 'matterId' | 'leadId' | 'preparedBy'>,
 ) {
-  const agreement = await one<{ status: string }>(client.from('engagement_agreements').select('status').eq('id', agreementId).single())
-  if (!['draft', 'ready', 'failed'].includes(agreement.status)) {
-    throw new Error(`Cannot revise an agreement with status ${agreement.status}`)
-  }
-  const revision = await one<{ id: string }>(client.from('engagement_agreement_revisions').insert({
-    agreement_id: agreementId,
-    input_snapshot: input.inputSnapshot,
-    render_snapshot: input.renderSnapshot ?? {},
-    render_sha256: input.renderSha256,
-    master_version: input.masterVersion,
-    html_r2_key: input.htmlR2Key ?? null,
-    pdf_r2_key: input.pdfR2Key ?? null,
-  }).select().single())
-  await one(client.from('engagement_agreements').update({
-    active_revision_id: revision.id,
-    status: 'draft',
-  }).eq('id', agreementId).select().single())
+  const revision = await one<{ id: string }>(client.rpc('create_engagement_agreement_revision', {
+    p_agreement_id: agreementId,
+    p_input_snapshot: input.inputSnapshot,
+    p_render_snapshot: input.renderSnapshot ?? {},
+    p_render_sha256: input.renderSha256,
+    p_master_version: input.masterVersion,
+    p_html_r2_key: input.htmlR2Key ?? null,
+    p_pdf_r2_key: input.pdfR2Key ?? null,
+  }).single())
   return { agreementId, revision }
 }
 
