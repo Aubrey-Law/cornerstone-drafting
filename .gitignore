@@ -25,3 +25,7 @@ supabase/.temp/
 
 # Sentry
 .env.sentry-build-plugin
+
+# Firma engagement proof-of-concept artifacts
+.firma-poc/
+firma-webhook-captures/
