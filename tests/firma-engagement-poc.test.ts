@@ -17,6 +17,7 @@ describe('Firma engagement POC safety guards', () => {
     const source = fs.readFileSync(script, 'utf8')
     expect(source).toContain("anchor_string: '[[CLIENT_1_SIGNATURE]]'")
     expect(source).toContain("anchor_string: '[[CLIENT_1_DATE]]'")
+    expect(source.match(/remove_anchor_text: true/g)).toHaveLength(2)
     expect(source).not.toMatch(/\{ anchor:/)
   })
 
