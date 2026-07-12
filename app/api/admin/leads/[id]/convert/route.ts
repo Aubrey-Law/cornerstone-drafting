@@ -18,5 +18,6 @@ export async function POST(
   const admin = getAdminClient()
   const result = await createMatterFromIntake(admin, intakeId, { actorId: userId ?? null })
   if (!result.ok) return Response.json({ error: result.error }, { status: 500 })
+  await admin.from('lead_activity').insert({ lead_id: intakeId, event_type: 'converted', title: 'Lead converted to matter', detail: result.matterNumber, actor_id: userId })
   return Response.json({ matterId: result.matterId, matterNumber: result.matterNumber })
 }

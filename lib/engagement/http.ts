@@ -13,7 +13,7 @@ export async function requireEngagementStaff() {
 export async function getScopedAgreement(id: string) {
   const { data } = await getAdminClient().from('engagement_agreements').select('*, active_revision:engagement_agreement_revisions!active_revision_id(*), recipients:engagement_agreement_recipients(*)').eq('id', id).maybeSingle()
   const snapshot = (data as any)?.active_revision?.input_snapshot
-  if (!data || !snapshot || !isSupportedWorkspaceDefinition({ matterId:data.matter_id, ...snapshot })) throw new Error('Engagement agreement not found or unavailable')
+  if (!data || !snapshot || !isSupportedWorkspaceDefinition({ matterId:data.matter_id, leadId:data.lead_id, ...snapshot })) throw new Error('Engagement agreement not found or unavailable')
   return data as any
 }
 

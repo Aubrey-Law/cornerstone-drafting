@@ -10,6 +10,7 @@ import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, practiceAreaMatterCode } from
 import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { formatDate } from '@/lib/utils'
 import { SendEngagementDialog } from './SendEngagementDialog'
+import LawmaticsImportDialog from '../matters/LawmaticsImportDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -151,6 +152,7 @@ export function LeadsClient({
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [signingUrl, setSigningUrl] = useState<string | null>(null)
   const [engagementLead, setEngagementLead] = useState<LeadRow | null>(null)
+  const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
 
   const filteredLeads = useMemo(
     () => initialLeads.filter(l => matchesFilter(l, filter)),
@@ -373,10 +375,10 @@ export function LeadsClient({
         ) : (
           <span />
         )}
-        <Button size="sm" onClick={openCreate}>
+        <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setLawmaticsOpen(true)}>Import from Lawmatics</Button><Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4" />
-          New lead
-        </Button>
+          Create lead matter
+        </Button></div>
       </div>
 
       <div className="flex flex-wrap gap-1">
@@ -440,7 +442,7 @@ export function LeadsClient({
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      {leadName(lead)}
+                      <Link href={`/admin/leads/${lead.id}`} className="hover:underline">{leadName(lead)}</Link>
                       <div className="text-[11px] font-normal text-muted-foreground">
                         {provisionalNumber(lead)}
                       </div>
@@ -602,6 +604,7 @@ export function LeadsClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <LawmaticsImportDialog open={lawmaticsOpen} onOpenChange={setLawmaticsOpen} defaultTarget="lead" />
 
       <Dialog open={deleteTarget !== null} onOpenChange={open => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">

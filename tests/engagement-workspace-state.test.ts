@@ -11,10 +11,11 @@ describe('engagement workspace interaction state', () => {
     expect(canSendReviewedRevision(valid)).toBe(true)
     for (const patch of [{approvalToken:''},{confirmExactRevision:false},{revisionId:''},{pdfSha256:''}]) expect(canSendReviewedRevision({...valid,...patch})).toBe(false)
   })
-  it('fails closed for unsupported or lead-backed workspace state', () => {
+  it('supports matter- and lead-backed couple workspaces and fails closed otherwise', () => {
     const valid={matterId:'m1',practiceArea:'EP',clientMode:'couple',scopeKey:'standard',legalPlan:null}
     expect(isSupportedWorkspaceDefinition(valid)).toBe(true)
-    expect(isSupportedWorkspaceDefinition({...valid,matterId:null})).toBe(false)
+    expect(isSupportedWorkspaceDefinition({...valid,matterId:null,leadId:'l1'})).toBe(true)
+    expect(isSupportedWorkspaceDefinition({...valid,matterId:null,leadId:null})).toBe(false)
     expect(isSupportedWorkspaceDefinition({...valid,clientMode:'individual'})).toBe(false)
   })
 })

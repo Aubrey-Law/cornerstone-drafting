@@ -57,6 +57,8 @@ export async function renderEngagementAgreement(input: unknown, dependencies: En
     spouse_email: value.spouse.email,
     flat_fee: formatFee(value.fee.amount),
     payment_terms: value.fee.paymentTerms,
+    additional_clauses: value.additionalClauses ?? [],
+    schedule_a_clauses: value.scheduleAClauses ?? [],
   })
   const docxBytes = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' }) as Buffer
   const convert = dependencies.convertDocx ?? convertDocxToPdf

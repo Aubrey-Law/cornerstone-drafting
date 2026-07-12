@@ -74,7 +74,8 @@ export async function importMatterFromLawmaticsProspect(
   accessToken: string,
   lmId: string,
   actorId: string | null,
-): Promise<{ matterId: string; created: boolean }> {
+  target: 'lead' | 'matter' = 'matter',
+): Promise<{ matterId?: string; leadId?: string; created: boolean }> {
   const res = await fetch(`https://api.lawmatics.com/v1/prospects/${encodeURIComponent(lmId)}?fields=all`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
@@ -131,8 +132,13 @@ export async function importMatterFromLawmaticsProspect(
   const nameParts = splitName(fullName)
   await admin
     .from('client_intake')
-    .update({ first_name: nameParts.first, last_name: nameParts.last })
+    .update({ first_name: nameParts.first, last_name: nameParts.last, ...(target === 'lead' ? { lead_status: 'lead', lead_source: typeof campaign === 'string' ? campaign : null, engagement_fee_quoted: typeof matter_fee === 'number' ? matter_fee : null } : {}) })
     .eq('id', intake.id)
+
+  if (target === 'lead') {
+    await admin.from('lead_activity').insert({ lead_id: intake.id, event_type: 'imported', title: 'Imported from Lawmatics', detail: `Lawmatics prospect ${lmId}`, actor_id: actorId })
+    return { leadId: intake.id, created: !existingIntake }
+  }
 
   const { data: existingMatter } = await admin
     .from('matters')

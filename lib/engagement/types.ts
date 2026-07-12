@@ -17,6 +17,14 @@ export interface EngagementRecipientInput {
   email: string
 }
 
+export interface EngagementClauseSnapshot {
+  id?: string | null
+  title: string
+  text: string
+  source: 'library' | 'ai' | 'manual'
+  aiProvenance?: { mode: 'draft' | 'revise'; acceptedAt: string } | null
+}
+
 export interface EngagementInput {
   practiceArea: EngagementPracticeArea
   clientMode: EngagementClientMode
@@ -30,6 +38,8 @@ export interface EngagementInput {
   }
   scopeKey: string
   optionalClauseKeys: string[]
+  additionalClauses?: EngagementClauseSnapshot[]
+  scheduleAClauses?: EngagementClauseSnapshot[]
   emailMessage: string
   expirationHours: number
 }

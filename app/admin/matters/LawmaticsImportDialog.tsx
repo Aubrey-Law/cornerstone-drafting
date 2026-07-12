@@ -18,9 +18,10 @@ interface LawmaticsResult {
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  defaultTarget?: 'lead' | 'matter'
 }
 
-export default function LawmaticsImportDialog({ open, onOpenChange }: Props) {
+export default function LawmaticsImportDialog({ open, onOpenChange, defaultTarget = 'matter' }: Props) {
   const router = useRouter()
   const token = useAccessToken()
   const [query, setQuery] = useState('')
@@ -28,6 +29,7 @@ export default function LawmaticsImportDialog({ open, onOpenChange }: Props) {
   const [loading, setLoading] = useState(false)
   const [importingId, setImportingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [target, setTarget] = useState<'lead' | 'matter'>(defaultTarget)
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
 
@@ -77,7 +79,7 @@ export default function LawmaticsImportDialog({ open, onOpenChange }: Props) {
           ...authHeaders,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ lm_id: lmId }),
+        body: JSON.stringify({ lm_id: lmId, target }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -88,7 +90,10 @@ export default function LawmaticsImportDialog({ open, onOpenChange }: Props) {
       setQuery('')
       setResults([])
       setError(null)
-      if (typeof data.matterId === 'string') {
+      if (typeof data.leadId === 'string') {
+        toast.success(data.created ? 'Lead imported from Lawmatics' : 'Opened existing Lawmatics lead')
+        router.push(`/admin/leads/${data.leadId}`)
+      } else if (typeof data.matterId === 'string') {
         toast.success(data.created ? 'Matter imported from Lawmatics' : 'Opened existing Lawmatics matter')
         router.push(`/admin/matters/${data.matterId}`)
       } else {
@@ -118,6 +123,10 @@ export default function LawmaticsImportDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Import from Lawmatics</DialogTitle>
         </DialogHeader>
+        <div className="flex gap-2">
+          <Button type="button" variant={target === 'lead' ? 'default' : 'outline'} onClick={() => setTarget('lead')}>Lead</Button>
+          <Button type="button" variant={target === 'matter' ? 'default' : 'outline'} onClick={() => setTarget('matter')}>Hired matter</Button>
+        </div>
         <div className="space-y-4 py-2">
           <div className="flex gap-2">
             <Input

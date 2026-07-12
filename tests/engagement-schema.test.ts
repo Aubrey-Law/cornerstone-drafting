@@ -53,6 +53,8 @@ describe('validateEngagementInput', () => {
       ok: true,
       value: {
         ...base,
+        additionalClauses: [],
+        scheduleAClauses: [],
         primary: { name: 'Alex Client', email: 'alex@example.com' },
       },
     })

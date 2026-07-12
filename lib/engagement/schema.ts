@@ -5,6 +5,7 @@ import type {
   EngagementLegalPlan,
   EngagementPracticeArea,
   EngagementRecipientInput,
+  EngagementClauseSnapshot,
 } from './types'
 
 export type EngagementValidationResult =
@@ -31,6 +32,11 @@ function recipient(value: unknown): EngagementRecipientInput {
   return { name: text(candidate.name), email: text(candidate.email).toLowerCase() }
 }
 
+function clauses(value: unknown): EngagementClauseSnapshot[] {
+  if (!Array.isArray(value)) return []
+  return value.map(item => record(item)).map(item => ({ id: text(item.id) || null, title: text(item.title), text: text(item.text), source: ['library','ai','manual'].includes(text(item.source)) ? text(item.source) as EngagementClauseSnapshot['source'] : 'manual', aiProvenance: record(item.aiProvenance).mode ? { mode: text(record(item.aiProvenance).mode) === 'revise' ? 'revise' : 'draft', acceptedAt: text(record(item.aiProvenance).acceptedAt) } : null }))
+}
+
 export function normalizeEngagementInput(input: unknown): EngagementInput {
   const candidate = record(input)
   const fee = record(candidate.fee)
@@ -49,6 +55,8 @@ export function normalizeEngagementInput(input: unknown): EngagementInput {
     optionalClauseKeys: Array.isArray(candidate.optionalClauseKeys)
       ? candidate.optionalClauseKeys.map(text)
       : [],
+    additionalClauses: clauses(candidate.additionalClauses),
+    scheduleAClauses: clauses(candidate.scheduleAClauses),
     emailMessage: text(candidate.emailMessage),
     expirationHours: candidate.expirationHours as number,
   }
@@ -98,6 +106,7 @@ export function validateEngagementInput(input: unknown): EngagementValidationRes
   ) {
     errors.push('optionalClauseKeys')
   }
+  if ([...(value.additionalClauses ?? []), ...(value.scheduleAClauses ?? [])].some(clause => !clause.title || !clause.text)) errors.push('clauses')
 
   if (PRACTICE_AREAS.includes(value.practiceArea)) {
     const definition = agreementDefinitionFor(value.practiceArea, value.legalPlan)

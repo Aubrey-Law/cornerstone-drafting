@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { deleteLead } from '@/lib/leads/deleteLead'
+import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
 
 /**
  * PATCH /api/admin/leads/[id] — edit a lead (standalone client_intake row).
@@ -12,7 +13,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { err } = await requireAdmin(req)
+  const { err, userId } = await requireAdmin(req)
   if (err) return err
 
   const { id: intakeId } = await params
@@ -64,6 +65,11 @@ export async function PATCH(
     if (!['lead', 'hired', 'lost'].includes(body.leadStatus)) {
       return NextResponse.json({ error: 'Invalid lead status' }, { status: 400 })
     }
+    if (body.leadStatus === 'hired') {
+      const converted = await createMatterFromIntake(admin, intakeId, { actorId: userId ?? null })
+      if (!converted.ok) return NextResponse.json({ error: converted.error }, { status: 500 })
+      return NextResponse.json({ row: { ...lead, lead_status: 'hired', matter_id: converted.matterId }, matterId: converted.matterId })
+    }
     update.lead_status = body.leadStatus
   }
   if (Object.keys(update).length === 0) {
@@ -79,6 +85,8 @@ export async function PATCH(
     )
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await admin.from('lead_activity').insert({ lead_id: intakeId, event_type: body.leadStatus === 'lost' ? 'lost' : 'details_updated', title: body.leadStatus === 'lost' ? 'Lead marked lost' : 'Lead details updated', actor_id: userId })
 
   return NextResponse.json({ row })
 }
