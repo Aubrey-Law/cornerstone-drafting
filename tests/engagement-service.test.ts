@@ -4,11 +4,14 @@ import { createEngagementService } from '@/lib/engagement/service'
 const input = {
   practiceArea: 'EP' as const, clientMode: 'individual' as const, agreementDate: '2026-07-12',
   primary: { name: 'Ada Lovelace', email: 'ada@example.com' }, spouse: null, legalPlan: null,
-  fee: { amount: 1000, paymentTerms: 'Due now' }, scopeKey: 'revocable-trust', optionalClauseKeys: [],
+  fee: { amount: 1000, paymentTerms: 'Due now' }, scopeKey: 'standard', optionalClauseKeys: [],
   emailMessage: 'Please sign', expirationHours: 72,
 }
 
 describe('engagement service', () => {
+  const approval = { issue: vi.fn(), verify: vi.fn().mockReturnValue({ ok: true, claims: { agreementId: 'a1', revisionId: 'r1', sha256: 'hash', nonce: 'n' } }) }
+  const agreement = { id: 'a1', status: 'ready', inputSnapshot: input, activeRevision: { id: 'r1', renderSha256: 'hash', pdf: Buffer.from('%PDF') }, recipients: [{ key: 'primary', name: 'Ada Lovelace', email: 'ada@example.com', order: 1 }] }
+
   it('rejects stale approval before claiming or calling Firma', async () => {
     const repository = { getAgreement: vi.fn().mockResolvedValue({ id: 'a1', activeRevision: { id: 'r2', renderSha256: 'new' } }), claimSend: vi.fn() }
     const provider = { createDocumentRequest: vi.fn() }
@@ -19,13 +22,11 @@ describe('engagement service', () => {
   })
 
   it('sends one recipient, persists the external request, and returns duplicate sends', async () => {
-    const agreement = { id: 'a1', status: 'ready', inputSnapshot: input, activeRevision: { id: 'r1', renderSha256: 'hash', pdf: Buffer.from('%PDF') }, recipients: [{ key: 'primary', name: 'Ada Lovelace', email: 'ada@example.com', order: 1 }] }
     const repository = {
       getAgreement: vi.fn().mockResolvedValueOnce(agreement).mockResolvedValueOnce({ ...agreement, status: 'sent', externalRequestId: 'firma-1' }),
       claimSend: vi.fn().mockResolvedValue({ claimed: true }), recordRequest: vi.fn(), markSent: vi.fn(), releaseClaim: vi.fn(), recordRecipients: vi.fn(),
     }
     const provider = { createDocumentRequest: vi.fn().mockResolvedValue({ requestId: 'firma-1', recipients: [{ key: 'primary', externalId: 'recipient-1', signingLink: null }] }), sendDocumentRequest: vi.fn(), getDocumentRequestState: vi.fn() }
-    const approval = { issue: vi.fn(), verify: vi.fn().mockReturnValue({ ok: true, claims: { agreementId: 'a1', revisionId: 'r1', sha256: 'hash', nonce: 'n' } }) }
     const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
     expect(await service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).toEqual({ requestId: 'firma-1', duplicate: false })
     expect(provider.createDocumentRequest.mock.calls[0][0].recipients).toHaveLength(1)
@@ -33,5 +34,60 @@ describe('engagement service', () => {
     expect(repository.recordRecipients).toHaveBeenCalled()
     expect(await service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).toEqual({ requestId: 'firma-1', duplicate: true })
     expect(provider.createDocumentRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('never calls the provider after losing the atomic claim', async () => {
+    const repository = { getAgreement: vi.fn().mockResolvedValue(agreement), claimSend: vi.fn().mockResolvedValue({ claimed: false }) }
+    const provider = { createDocumentRequest: vi.fn() }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).rejects.toThrow(/claim/i)
+    expect(provider.createDocumentRequest).not.toHaveBeenCalled()
+  })
+
+  it('releases the claim when request creation fails', async () => {
+    const repository = { getAgreement: vi.fn().mockResolvedValue(agreement), claimSend: vi.fn().mockResolvedValue({ claimed: true }), releaseClaim: vi.fn() }
+    const provider = { createDocumentRequest: vi.fn().mockRejectedValue(new Error('create failed')) }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).rejects.toThrow('create failed')
+    expect(repository.releaseClaim).toHaveBeenCalledWith('a1', 'create failed')
+  })
+
+  it('resumes a persisted created request and marks it sent only after reconciliation', async () => {
+    const persisted = { ...agreement, status: 'sending', externalRequestId: 'firma-1' }
+    const repository = { getAgreement: vi.fn().mockResolvedValue(persisted), markSent: vi.fn(), claimSend: vi.fn() }
+    const provider = { getDocumentRequestState: vi.fn().mockResolvedValue({ status: 'created' }), sendDocumentRequest: vi.fn() }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    expect(await service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).toEqual({ requestId: 'firma-1', duplicate: false })
+    expect(provider.sendDocumentRequest).toHaveBeenCalledWith('firma-1', 'Please sign')
+    expect(repository.markSent).toHaveBeenCalledWith('a1')
+  })
+
+  it('reconciles an ambiguous send failure and does not report an unsent request as success', async () => {
+    const repository = { getAgreement: vi.fn().mockResolvedValue(agreement), claimSend: vi.fn().mockResolvedValue({ claimed: true }), recordRequest: vi.fn(), recordRecipients: vi.fn(), markSent: vi.fn(), releaseClaim: vi.fn() }
+    const provider = { createDocumentRequest: vi.fn().mockResolvedValue({ requestId: 'firma-1', recipients: [{ key: 'primary', externalId: 'recipient-1', signingLink: null }] }), sendDocumentRequest: vi.fn().mockRejectedValue(new Error('timeout')), getDocumentRequestState: vi.fn().mockResolvedValue({ status: 'created' }) }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    await expect(service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })).rejects.toThrow('timeout')
+    expect(repository.markSent).not.toHaveBeenCalled()
+  })
+
+  it('orders couple recipients and anchors deterministically', async () => {
+    const couple = { ...agreement, recipients: [{ key: 'spouse', name: 'Grace', email: 'g@example.com', order: 2 }, agreement.recipients[0]] }
+    const repository = { getAgreement: vi.fn().mockResolvedValue(couple), claimSend: vi.fn().mockResolvedValue({ claimed: true }), recordRequest: vi.fn(), recordRecipients: vi.fn(), markSent: vi.fn(), releaseClaim: vi.fn() }
+    const provider = { createDocumentRequest: vi.fn().mockResolvedValue({ requestId: 'firma-1', recipients: [] }), sendDocumentRequest: vi.fn(), getDocumentRequestState: vi.fn() }
+    const service = createEngagementService({ repository: repository as never, provider: provider as never, renderer: {} as never, approval })
+    await service.sendApprovedAgreement({ agreementId: 'a1', approvalToken: 'token', sentBy: 'u1' })
+    expect(provider.createDocumentRequest.mock.calls[0][0].recipients.map((r: { key: string }) => r.key)).toEqual(['primary', 'spouse'])
+    expect(provider.createDocumentRequest.mock.calls[0][0].anchors.map((a: { recipientKey: string }) => a.recipientKey)).toEqual(['primary', 'primary', 'spouse', 'spouse'])
+  })
+
+  it('prepare, preview, and approve use the current validated revision', async () => {
+    const repository = { createDraft: vi.fn().mockResolvedValue({ id: 'a1' }), createRevision: vi.fn().mockResolvedValue({ id: 'r2' }), getAgreement: vi.fn().mockResolvedValue({ ...agreement, activeRevision: { ...agreement.activeRevision, id: 'r2', renderSha256: 'new' } }) }
+    const renderer = { render: vi.fn().mockResolvedValue({ pdf: Buffer.from('%PDF new'), renderSha256: 'new', masterVersion: 'v1' }) }
+    const service = createEngagementService({ repository: repository as never, provider: {} as never, renderer, approval })
+    await service.prepareAgreement({ matterId: 'm1' }, input)
+    await service.previewAgreement('a1', input)
+    await service.approveAgreementRevision('a1')
+    expect(repository.createRevision).toHaveBeenCalledWith('a1', expect.objectContaining({ renderSha256: 'new' }))
+    expect(approval.issue).toHaveBeenCalledWith(expect.objectContaining({ revisionId: 'r2', sha256: 'new' }))
   })
 })

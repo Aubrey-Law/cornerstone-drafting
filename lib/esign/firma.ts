@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { FirmaClient } from '@firma-dev/sdk'
-import type { EsignDocumentRequestInput, EsignDocumentRequestResult, EsignEnvelopeState, EsignProvider, EsignSigner } from '@/lib/esign/types'
+import type { EsignDocumentRequestInput, EsignDocumentRequestResult, EsignDocumentRequestStatus, EsignEnvelopeState, EsignProvider, EsignSigner } from '@/lib/esign/types'
 
 /**
  * firma.dev e-signature provider.
@@ -80,9 +80,11 @@ class FirmaEsignProvider implements EsignProvider {
     const body = await response.json() as { id?: unknown; recipients?: Array<Record<string, unknown>>; message?: unknown }
     if (!response.ok) throw new Error(`firma.dev document request failed (${response.status})${typeof body.message === 'string' ? `: ${body.message}` : ''}`)
     if (typeof body.id !== 'string' || !body.id) throw new Error('firma.dev did not return a signing request id')
-    const mapped = input.recipients.map((recipient, index) => {
-      const external = body.recipients?.find(item => item.temporary_id === recipient.key || item.id === recipient.key) ?? body.recipients?.[index]
-      if (typeof external?.id !== 'string' || !external.id) throw new Error(`firma.dev did not return recipient id for ${recipient.key}`)
+    const mapped = input.recipients.map(recipient => {
+      const matches = body.recipients?.filter(item => item.temporary_id === recipient.key) ?? []
+      if (matches.length !== 1) throw new Error(`firma.dev could not stably correlate recipient ${recipient.key}`)
+      const external = matches[0]
+      if (typeof external.id !== 'string' || !external.id) throw new Error(`firma.dev did not return recipient id for ${recipient.key}`)
       return { key: recipient.key, externalId: external.id, signingLink: typeof external.signing_link === 'string' ? external.signing_link : null }
     })
     return { requestId: body.id, recipients: mapped }
@@ -94,6 +96,17 @@ class FirmaEsignProvider implements EsignProvider {
       body: JSON.stringify({ custom_message: customMessage }),
     })
     if (!response.ok) throw new Error(`firma.dev send failed (${response.status})`)
+  }
+
+  async getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus }> {
+    const response = await this.fetcher(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${encodeURIComponent(requestId)}`, {
+      method: 'GET', headers: { Authorization: this.apiKey() },
+    })
+    if (!response.ok) throw new Error(`firma.dev request reconciliation failed (${response.status})`)
+    const body = await response.json() as { status?: unknown }
+    const raw = typeof body.status === 'string' ? body.status.toLowerCase() : 'unknown'
+    const known: EsignDocumentRequestStatus[] = ['created', 'sent', 'viewed', 'partially_signed', 'completed', 'declined', 'cancelled', 'expired']
+    return { status: known.includes(raw as EsignDocumentRequestStatus) ? raw as EsignDocumentRequestStatus : 'unknown' }
   }
 
   private apiKey(): string {

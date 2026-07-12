@@ -77,17 +77,19 @@ export async function claimAgreementSend(client: SupabaseClient, input: {
     sha256: input.renderSha256,
   })
   if (!approval.ok) throw new Error(approval.error)
-  return one(client.rpc('claim_engagement_agreement_send', {
+  const { data, error } = await client.rpc('claim_engagement_agreement_send', {
     p_agreement_id: input.agreementId,
     p_revision_id: input.revisionId,
     p_render_sha256: input.renderSha256,
     p_approval_nonce: approval.claims.nonce,
     p_sent_by: input.sentBy,
-  }).single())
+  })
+  if (error) throw new Error(error.message)
+  return { claimed: Array.isArray(data) && data.length === 1 }
 }
 
 export async function recordFirmaRequest(client: SupabaseClient, agreementId: string, firmaRequestId: string) {
-  return one(client.from('engagement_agreements').update({ firma_request_id: firmaRequestId, status: 'sent', sent_at: new Date().toISOString() }).eq('id', agreementId).select().single())
+  return one(client.from('engagement_agreements').update({ firma_request_id: firmaRequestId }).eq('id', agreementId).eq('status', 'sending').select().single())
 }
 
 export async function recordRecipientState(client: SupabaseClient, input: {

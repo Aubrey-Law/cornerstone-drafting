@@ -1,4 +1,4 @@
-import type { EsignDocumentRequestInput, EsignDocumentRequestResult } from '@/lib/esign/types'
+import type { EsignDocumentRequestInput, EsignDocumentRequestResult, EsignDocumentRequestStatus } from '@/lib/esign/types'
 import { validateEngagementInput } from './schema'
 import type { EngagementInput } from './types'
 
@@ -15,7 +15,7 @@ export interface EngagementServiceRepository {
   createDraft(input: { matterId?: string; leadId?: string; preparedBy?: string | null; inputSnapshot: EngagementInput }): Promise<unknown>
   getAgreement(agreementId: string): Promise<EngagementServiceAgreement>
   createRevision(agreementId: string, rendered: EngagementRenderedRevision): Promise<unknown>
-  claimSend(input: { agreementId: string; revisionId: string; renderSha256: string; approvalToken: string; sentBy: string }): Promise<unknown>
+  claimSend(input: { agreementId: string; revisionId: string; renderSha256: string; approvalToken: string; sentBy: string }): Promise<{ claimed: boolean }>
   releaseClaim(agreementId: string, error: string): Promise<void>
   recordRequest(agreementId: string, requestId: string): Promise<void>
   recordRecipients(agreementId: string, recipients: EsignDocumentRequestResult['recipients']): Promise<void>
@@ -37,7 +37,7 @@ interface Dependencies {
   provider: {
     createDocumentRequest(input: EsignDocumentRequestInput): Promise<EsignDocumentRequestResult>
     sendDocumentRequest(requestId: string, customMessage: string): Promise<void>
-    getDocumentRequestState?(requestId: string): Promise<{ status: string }>
+    getDocumentRequestState(requestId: string): Promise<{ status: EsignDocumentRequestStatus }>
   }
   approval: {
     issue(input: { agreementId: string; revisionId: string; sha256: string; expiresInSeconds: number }): string
@@ -56,6 +56,21 @@ function anchorsFor(recipients: EngagementServiceAgreement['recipients']): Esign
 }
 
 export function createEngagementService(deps: Dependencies) {
+  const sentStatuses: EsignDocumentRequestStatus[] = ['sent', 'viewed', 'partially_signed', 'completed']
+
+  async function resumePersistedRequest(agreement: EngagementServiceAgreement) {
+    const requestId = agreement.externalRequestId as string
+    const state = await deps.provider.getDocumentRequestState(requestId)
+    if (sentStatuses.includes(state.status)) {
+      if (agreement.status !== 'sent') await deps.repository.markSent(agreement.id)
+      return { requestId, duplicate: true }
+    }
+    if (state.status !== 'created') throw new Error(`Cannot safely resume e-sign request in ${state.status} state`)
+    await deps.provider.sendDocumentRequest(requestId, agreement.inputSnapshot.emailMessage)
+    await deps.repository.markSent(agreement.id)
+    return { requestId, duplicate: false }
+  }
+
   return {
     async prepareAgreement(owner: { matterId?: string; leadId?: string; preparedBy?: string | null }, rawInput: unknown) {
       const validated = validateEngagementInput(rawInput)
@@ -78,10 +93,14 @@ export function createEngagementService(deps: Dependencies) {
 
     async sendApprovedAgreement(input: { agreementId: string; approvalToken: string; sentBy: string }) {
       const agreement = await deps.repository.getAgreement(input.agreementId)
-      if (agreement.externalRequestId) return { requestId: agreement.externalRequestId, duplicate: true }
+      if (agreement.externalRequestId && ['sent', 'viewed', 'partially_signed', 'completed'].includes(agreement.status)) {
+        return { requestId: agreement.externalRequestId, duplicate: true }
+      }
       const verified = deps.approval.verify(input.approvalToken, { agreementId: agreement.id, revisionId: agreement.activeRevision.id, sha256: agreement.activeRevision.renderSha256 })
       if (!verified.ok) throw new Error(verified.error)
-      await deps.repository.claimSend({ agreementId: agreement.id, revisionId: agreement.activeRevision.id, renderSha256: agreement.activeRevision.renderSha256, approvalToken: input.approvalToken, sentBy: input.sentBy })
+      if (agreement.externalRequestId) return resumePersistedRequest(agreement)
+      const claim = await deps.repository.claimSend({ agreementId: agreement.id, revisionId: agreement.activeRevision.id, renderSha256: agreement.activeRevision.renderSha256, approvalToken: input.approvalToken, sentBy: input.sentBy })
+      if (!claim.claimed) throw new Error('Engagement send claim was not acquired')
       let created: EsignDocumentRequestResult
       try {
         created = await deps.provider.createDocumentRequest({
@@ -101,8 +120,8 @@ export function createEngagementService(deps: Dependencies) {
       try {
         await deps.provider.sendDocumentRequest(created.requestId, agreement.inputSnapshot.emailMessage)
       } catch (error) {
-        const state = await deps.provider.getDocumentRequestState?.(created.requestId).catch(() => null)
-        if (!state || !['sent', 'viewed', 'partially_signed', 'completed'].includes(state.status)) throw error
+        const state = await deps.provider.getDocumentRequestState(created.requestId).catch(() => null)
+        if (!state || !sentStatuses.includes(state.status)) throw error
       }
       await deps.repository.markSent(agreement.id)
       return { requestId: created.requestId, duplicate: false }
