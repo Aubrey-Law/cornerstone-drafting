@@ -26,9 +26,13 @@ export function engagementService() {
       claimSend: input => repository.claimAgreementSend(client, input),
       claimResume: input => repository.claimAgreementResume(client, input),
       releaseClaim: (id, error) => repository.releaseAgreementClaim(client, id, error),
-      recordRequest: (id, requestId) => repository.recordFirmaRequest(client, id, requestId),
+      recordRequest: async (id, requestId) => {
+        await repository.recordFirmaRequest(client, id, requestId)
+      },
       recordRecipients: (id, recipients) => repository.recordFirmaRecipients(client, id, recipients),
-      markSent: id => repository.markAgreementSent(client, id),
+      markSent: async id => {
+        await repository.markAgreementSent(client, id)
+      },
     },
     renderer: { render: async input => {
       const rendered = await renderEngagementAgreement(input)
