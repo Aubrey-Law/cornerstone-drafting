@@ -28,6 +28,15 @@ Status: DONE
 - RED: focused handler suite failed 2 tests because the route performed success/failure status updates and cleanup.
 - GREEN: exact focused suite passed 5 files and 61 tests; scoped ESLint reported 0 errors and 15 existing `no-explicit-any` warnings; diff check passed.
 
+## Transactional conversion boundary
+
+- Added the service-role-only `convert_lead_to_matter` SECURITY DEFINER RPC to the pending migration. It locks the intake, idempotently finds or creates the matter, upserts required matter details, and links/marks the intake Hired in one PostgreSQL transaction.
+- The RPC accepts precomputed identity and matter-detail inputs and has no caller-supplied actor/provenance input. Execute is revoked from public, anon, and authenticated and granted only to service_role.
+- Refactored `createMatterFromIntake` to perform the core conversion through exactly one RPC while preserving its return contract; design-sheet seeding and activity remain best-effort after commit.
+- RED: `npx vitest run tests/create-matter-from-intake-rpc.test.ts tests/lead-details-persistence.test.ts` failed 4 expected tests because the helper used separate writes and the RPC was absent.
+- GREEN: `npx vitest run tests/lead-detail-interactions.test.tsx tests/lead-detail-route.test.ts tests/create-matter-from-intake-rpc.test.ts tests/lead-details-persistence.test.ts tests/leads.test.ts tests/lead-workflow.test.ts` passed 6 files and 65 tests.
+- Scoped ESLint: 0 errors, 19 `no-explicit-any` warnings in existing UI/test boundaries. `git diff --check` passed.
+
 ## Scope review
 
 - No drafting internals changed.

@@ -207,4 +207,86 @@ revoke execute on function public.update_lead_details(uuid, jsonb, jsonb, uuid) 
 grant execute on function public.update_lead_details(uuid, jsonb, jsonb, uuid) to authenticated;
 grant execute on function public.update_lead_details(uuid, jsonb, jsonb, uuid) to service_role;
 
+create or replace function public.convert_lead_to_matter(
+  p_lead_id uuid,
+  p_matter_number text,
+  p_matter_name text,
+  p_practice_area text,
+  p_client_id uuid,
+  p_fee numeric,
+  p_engagement_provider text,
+  p_engagement_envelope_id text,
+  p_engagement_status text,
+  p_engagement_sent_at timestamptz,
+  p_engagement_signed_at timestamptz,
+  p_engagement_signed boolean
+) returns table (matter_id uuid, matter_number text, created boolean)
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_lead public.client_intake;
+  v_matter public.matters;
+  v_created boolean := false;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'Service role required' using errcode = '42501';
+  end if;
+
+  select * into v_lead from public.client_intake where id = p_lead_id for update;
+  if not found then raise exception 'Lead not found' using errcode = 'P0002'; end if;
+
+  select * into v_matter
+  from public.matters
+  where client_intake_id = p_lead_id or id = v_lead.matter_id
+  order by (id = v_lead.matter_id) desc
+  limit 1;
+
+  if not found then
+    insert into public.matters (
+      client_intake_id, client_id, name, matter_number, stage, status,
+      stage_entered_at, track
+    ) values (
+      p_lead_id, p_client_id, p_matter_name, p_matter_number, 'intake', 'active',
+      now(), 'DEFAULT'
+    ) returning * into v_matter;
+    v_created := true;
+  end if;
+
+  insert into public.matter_details (
+    client_id, practice_area, plan_type, matter_status, client_status,
+    jurisdiction_state, matter_number, flat_fee_amount, engagement_provider,
+    engagement_envelope_id, engagement_status, engagement_sent_at,
+    engagement_signed_at, engagement_signed
+  ) values (
+    v_matter.id, p_practice_area, 'TBD', 'Active', 'active', 'MA',
+    v_matter.matter_number, p_fee, p_engagement_provider,
+    p_engagement_envelope_id, p_engagement_status, p_engagement_sent_at,
+    p_engagement_signed_at, p_engagement_signed
+  ) on conflict (client_id) do update set
+    practice_area = excluded.practice_area,
+    matter_number = excluded.matter_number,
+    flat_fee_amount = excluded.flat_fee_amount,
+    engagement_provider = excluded.engagement_provider,
+    engagement_envelope_id = excluded.engagement_envelope_id,
+    engagement_status = excluded.engagement_status,
+    engagement_sent_at = excluded.engagement_sent_at,
+    engagement_signed_at = excluded.engagement_signed_at,
+    engagement_signed = excluded.engagement_signed,
+    updated_at = now();
+
+  update public.client_intake
+  set matter_id = v_matter.id, lead_status = 'hired', updated_at = now()
+  where id = p_lead_id;
+
+  return query select v_matter.id, v_matter.matter_number, v_created;
+end;
+$$;
+
+revoke execute on function public.convert_lead_to_matter(uuid, text, text, text, uuid, numeric, text, text, text, timestamptz, timestamptz, boolean) from public;
+revoke execute on function public.convert_lead_to_matter(uuid, text, text, text, uuid, numeric, text, text, text, timestamptz, timestamptz, boolean) from anon;
+revoke execute on function public.convert_lead_to_matter(uuid, text, text, text, uuid, numeric, text, text, text, timestamptz, timestamptz, boolean) from authenticated;
+grant execute on function public.convert_lead_to_matter(uuid, text, text, text, uuid, numeric, text, text, text, timestamptz, timestamptz, boolean) to service_role;
+
 notify pgrst, 'reload schema';

@@ -45,16 +45,6 @@ export async function createMatterFromIntake(
   const intake = intakeData as LeadIntakeRow | null
   if (!intake) return { ok: false, error: 'Lead not found' }
 
-  // Idempotency: if a matter already references this intake, return it.
-  const { data: existing } = await admin
-    .from('matters')
-    .select('id, matter_number')
-    .eq('client_intake_id', intakeId)
-    .maybeSingle()
-  if (existing) {
-    return { ok: true, matterId: existing.id, matterNumber: existing.matter_number ?? '' }
-  }
-
   const clientName =
     intake.full_name?.trim() ||
     [intake.first_name, intake.last_name].filter(Boolean).join(' ').trim() ||
@@ -69,75 +59,40 @@ export async function createMatterFromIntake(
     clientLastName: intake.last_name ?? null,
     clientFirstName: intake.first_name ?? clientName,
   })
-  const now = new Date().toISOString()
-
-  const { data: matter, error: matterError } = await admin
-    .from('matters')
-    .insert({
-      client_intake_id: intakeId,
-      client_id: intake.client_user_id ?? intake.user_id ?? null,
-      name: `${clientName} — ${practiceAreaName}`,
-      matter_number: matterNumber,
-      stage: 'intake',
-      status: 'active',
-      stage_entered_at: now,
-      track: 'DEFAULT',
-    })
-    .select('id')
-    .single()
-  if (matterError || !matter) {
-    return { ok: false, error: `Failed to create matter: ${matterError?.message ?? 'unknown'}` }
-  }
-
   const feeQuoted =
     typeof intake.engagement_fee_quoted === 'number' && Number.isFinite(intake.engagement_fee_quoted)
       ? intake.engagement_fee_quoted
       : null
   const engagementSigned = intake.engagement_status === 'signed'
-
-  const { error: detailsError } = await admin.from('matter_details').upsert(
-    {
-      client_id: matter.id,
-      practice_area: practiceArea,
-      plan_type: 'TBD',
-      matter_status: 'Active',
-      client_status: 'active',
-      jurisdiction_state: 'MA',
-      matter_number: matterNumber,
-      ...(feeQuoted != null ? { flat_fee_amount: feeQuoted } : {}),
-      ...(intake.engagement_envelope_id
-        ? {
-            engagement_provider: intake.engagement_provider ?? null,
-            engagement_envelope_id: intake.engagement_envelope_id,
-            engagement_status: intake.engagement_status ?? null,
-            engagement_sent_at: intake.engagement_sent_at ?? null,
-            engagement_signed_at: intake.engagement_signed_at ?? null,
-          }
-        : {}),
-      ...(engagementSigned ? { engagement_signed: true } : {}),
-    },
-    { onConflict: 'client_id' },
-  )
-  if (detailsError) {
-    return { ok: false, error: `Failed to create matter details: ${detailsError.message}` }
-  }
-
-  // Publish the conversion only after the matter's required details exist.
-  // Until this succeeds the lead remains visible under its prior status.
-  await admin
-    .from('client_intake')
-    .update({ matter_id: matter.id, lead_status: intake.lead_status ? 'hired' : intake.lead_status })
-    .eq('id', intakeId)
+  const { data: conversionData, error: conversionError } = await admin.rpc('convert_lead_to_matter', {
+    p_lead_id: intakeId,
+    p_matter_number: matterNumber,
+    p_matter_name: `${clientName} — ${practiceAreaName}`,
+    p_practice_area: practiceArea,
+    p_client_id: intake.client_user_id ?? intake.user_id ?? null,
+    p_fee: feeQuoted,
+    p_engagement_provider: intake.engagement_provider ?? null,
+    p_engagement_envelope_id: intake.engagement_envelope_id ?? null,
+    p_engagement_status: intake.engagement_status ?? null,
+    p_engagement_sent_at: intake.engagement_sent_at ?? null,
+    p_engagement_signed_at: intake.engagement_signed_at ?? null,
+    p_engagement_signed: engagementSigned,
+  })
+  if (conversionError) return { ok: false, error: conversionError.message }
+  const conversion = Array.isArray(conversionData) ? conversionData[0] : conversionData
+  if (!conversion?.matter_id) return { ok: false, error: 'Conversion returned no matter' }
+  const matterId = conversion.matter_id as string
+  const resolvedMatterNumber = (conversion.matter_number as string | null) ?? matterNumber
 
   try {
-    await ensureDesignSheetSeededFromIntake(matter.id)
+    await ensureDesignSheetSeededFromIntake(matterId)
   } catch (e) {
     console.warn('design sheet seed on lead conversion skipped:', e)
   }
 
   try {
-    await admin.from('matter_activity').insert({
-      matter_id: matter.id,
+    if (conversion.created) await admin.from('matter_activity').insert({
+      matter_id: matterId,
       event_type: 'matter_created',
       title: 'Matter created from lead',
       detail: `${clientName} (${intake.email ?? 'no email'})`,
@@ -147,5 +102,5 @@ export async function createMatterFromIntake(
     console.warn('matter_activity skipped:', e)
   }
 
-  return { ok: true, matterId: matter.id, matterNumber }
+  return { ok: true, matterId, matterNumber: resolvedMatterNumber }
 }

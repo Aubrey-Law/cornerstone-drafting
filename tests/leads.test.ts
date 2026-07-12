@@ -36,9 +36,9 @@ describe('lead tracking source shape', () => {
 
   it('conversion is idempotent and carries fee + engagement state', () => {
     const source = read('lib/matters/createFromIntake.ts')
-    expect(source).toContain("eq('client_intake_id', intakeId)")
+    expect(source).toContain("rpc('convert_lead_to_matter'")
     expect(source).toContain('engagement_fee_quoted')
-    expect(source).toContain('flat_fee_amount')
+    expect(source).toContain('p_fee')
     expect(source).toContain('ensureDesignSheetSeededFromIntake')
   })
 
@@ -96,7 +96,7 @@ describe('lead status pipeline source shape', () => {
   })
 
   it('conversion flips a lead to hired', () => {
-    const source = read('lib/matters/createFromIntake.ts')
+    const source = read('supabase/migrations/20260730000000_lite_lead_details_notes.sql')
     expect(source).toContain("'hired'")
     expect(source).toContain('lead_status')
   })
