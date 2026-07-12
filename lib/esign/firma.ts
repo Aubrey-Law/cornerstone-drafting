@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { FirmaClient } from '@firma-dev/sdk'
-import type { EsignEnvelopeState, EsignProvider, EsignSigner } from '@/lib/esign/types'
+import type { EsignDocumentRequestInput, EsignDocumentRequestResult, EsignEnvelopeState, EsignProvider, EsignSigner } from '@/lib/esign/types'
 
 /**
  * firma.dev e-signature provider.
@@ -45,11 +45,59 @@ class FirmaEsignProvider implements EsignProvider {
   private readonly client: FirmaClient
   private readonly singleTemplateId: string
   private readonly jointTemplateId: string | null
+  private readonly fetcher: typeof fetch
+  private readonly apiKeyValue: string
 
-  constructor(apiKey: string, singleTemplateId: string, jointTemplateId: string | null) {
+  constructor(apiKey: string, singleTemplateId: string, jointTemplateId: string | null, fetcher: typeof fetch = fetch) {
     this.client = new FirmaClient({ apiKey })
     this.singleTemplateId = singleTemplateId
     this.jointTemplateId = jointTemplateId
+    this.fetcher = fetcher
+    this.apiKeyValue = apiKey
+  }
+
+  async createDocumentRequest(input: EsignDocumentRequestInput): Promise<EsignDocumentRequestResult> {
+    const keys = new Set(input.recipients.map(recipient => recipient.key))
+    if (keys.size !== input.recipients.length || input.anchors.some(anchor => !keys.has(anchor.recipientKey))) {
+      throw new Error('Every e-sign anchor must reference one unique recipient key')
+    }
+    const recipients = [...input.recipients].sort((a, b) => a.order - b.order).map(recipient => {
+      const { firstName, lastName } = splitName(recipient.name)
+      return { id: recipient.key, first_name: firstName, ...(lastName ? { last_name: lastName } : {}), email: recipient.email, designation: 'Signer', order: recipient.order }
+    })
+    const response = await this.fetcher('https://api.firma.dev/functions/v1/signing-request-api/signing-requests', {
+      method: 'POST', headers: { Authorization: this.apiKey(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: input.name, document: input.document.toString('base64'), recipients,
+        expiration_hours: input.expirationHours,
+        anchor_tags: input.anchors.map(anchor => ({
+          anchor_string: anchor.marker, type: anchor.type, recipient_id: anchor.recipientKey,
+          required: anchor.required, ...(anchor.dateSigningDefault === undefined ? {} : { date_signing_default: anchor.dateSigningDefault }),
+          remove_anchor_text: true,
+        })),
+      }),
+    })
+    const body = await response.json() as { id?: unknown; recipients?: Array<Record<string, unknown>>; message?: unknown }
+    if (!response.ok) throw new Error(`firma.dev document request failed (${response.status})${typeof body.message === 'string' ? `: ${body.message}` : ''}`)
+    if (typeof body.id !== 'string' || !body.id) throw new Error('firma.dev did not return a signing request id')
+    const mapped = input.recipients.map((recipient, index) => {
+      const external = body.recipients?.find(item => item.temporary_id === recipient.key || item.id === recipient.key) ?? body.recipients?.[index]
+      if (typeof external?.id !== 'string' || !external.id) throw new Error(`firma.dev did not return recipient id for ${recipient.key}`)
+      return { key: recipient.key, externalId: external.id, signingLink: typeof external.signing_link === 'string' ? external.signing_link : null }
+    })
+    return { requestId: body.id, recipients: mapped }
+  }
+
+  async sendDocumentRequest(requestId: string, customMessage: string): Promise<void> {
+    const response = await this.fetcher(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${encodeURIComponent(requestId)}/send`, {
+      method: 'POST', headers: { Authorization: this.apiKey(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_message: customMessage }),
+    })
+    if (!response.ok) throw new Error(`firma.dev send failed (${response.status})`)
+  }
+
+  private apiKey(): string {
+    return this.apiKeyValue
   }
 
   async createEngagementEnvelope(
@@ -113,6 +161,10 @@ class FirmaEsignProvider implements EsignProvider {
     }
     return { status: 'unknown', signedAt: null, finalDocumentUrl: null }
   }
+}
+
+export function createFirmaEsignProvider(input: { apiKey: string; singleTemplateId: string; jointTemplateId: string | null; fetcher?: typeof fetch }): EsignProvider {
+  return new FirmaEsignProvider(input.apiKey, input.singleTemplateId, input.jointTemplateId, input.fetcher)
 }
 
 /**

@@ -18,6 +18,20 @@ export interface EsignSigner {
   email: string
 }
 
+export interface EsignDocumentRequestInput {
+  name: string
+  document: Buffer
+  recipients: Array<{ key: string; name: string; email: string; order: number }>
+  anchors: Array<{ marker: string; type: 'signature' | 'date'; recipientKey: string; required: boolean; dateSigningDefault?: boolean }>
+  expirationHours: number
+  customMessage: string
+}
+
+export interface EsignDocumentRequestResult {
+  requestId: string
+  recipients: Array<{ key: string; externalId: string; signingLink: string | null }>
+}
+
 export interface EsignProvider {
   name: string
   /**
@@ -28,6 +42,8 @@ export interface EsignProvider {
   createEngagementEnvelope(
     input: { primary: EsignSigner; spouse?: EsignSigner },
   ): Promise<{ envelopeId: string; signingLink: string | null }>
+  createDocumentRequest(input: EsignDocumentRequestInput): Promise<EsignDocumentRequestResult>
+  sendDocumentRequest(requestId: string, customMessage: string): Promise<void>
   /** Best-effort: cancel a superseded envelope before re-sending. */
   cancelEnvelope(envelopeId: string): Promise<void>
   /** Authoritative state — webhooks are treated as hints and re-checked here. */
