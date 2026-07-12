@@ -146,24 +146,73 @@ Approval produces a short-lived confirmation bound to the exact rendered revisio
 
 ## Current-Build Audit and Decommissioning
 
-The active Lite branch currently contains no engagement-template editor route, UI component, or active Firma/DocuSeal/SignWell client. Its engagement-related active surface is limited to:
+The current `main` implementation already has a working Firma engagement flow. This project is therefore a refactor and extension of that integration, not a greenfield replacement.
 
-- The manual `matter_details.engagement_signed` override in the matter overview
-- The `engagement_agreement` label in the general drafting document map
-- Lead-stage labels such as `engagement_sent`
+The existing implementation includes:
 
-Archived portal migrations show earlier `engagement_agreements`, DocuSeal, and SignWell schemas, including a later removal and provider-realignment history. They are historical references, not an implementation to port wholesale.
+- `app/admin/settings/EsignTemplateEditor.tsx`, which embeds Firma's template editor
+- `POST /api/admin/esign/template-token`, which mints a short-lived editor JWT
+- `lib/esign/firma.ts`, which selects single- or joint-signer Firma templates and creates signing requests
+- Lead and matter engagement send routes
+- One- and two-client sending and direct **Sign now** links
+- A Firma webhook route that reconciles provider state
+- Lead-to-matter conversion when a pre-matter engagement is signed
+- Completed signed-PDF retrieval, R2 storage, and matter-document creation
+- Engagement state columns on `client_intake` and `matter_details`
 
-Before implementation, audit the deployed/current environment and any branch containing the reported template editor. Classify each piece as:
+### Retain and adapt
 
-- **Remove** — fixed-PDF template creation/replacement UI whose only purpose is maintaining page-compatible signing templates
-- **Replace** — send/status UI that should use the new agreement service and Firma records
-- **Retain** — reusable DOCX preview, matter activity, document storage, authorization, or webhook infrastructure that already meets requirements
-- **Migrate** — active agreement status/history or template content that must survive cutover
+Retain these business capabilities while moving them behind the new agreement service:
 
-The target design does not need a general template editor. The three version-controlled or administratively controlled DOCX masters are the legal source documents. Template updates should follow a deliberate upload/version/publish workflow with validation fixtures, not free-form edits to active signing templates.
+- Lead and matter send entry points
+- Client/spouse collection and validation
+- Direct signing links
+- Lead-to-matter conversion after signature
+- Provider state reconciliation
+- Completed-document download and R2 storage
+- Matter-document creation
+- Existing authorization and useful status presentation
 
-No current feature or schema is removed until the audit confirms it has no live callers, required records, or deployed dependency. Removal belongs in a separately reviewable implementation task after data migration and rollback requirements are known.
+The existing generic e-sign provider boundary may remain if document-based creation and per-recipient lifecycle data fit it cleanly. It should be reshaped rather than preserved artificially if its envelope-only contract prevents revision and recipient tracking.
+
+### Replace
+
+Replace these assumptions:
+
+- Template-based `createAndSendSigningRequest`
+- One fixed Firma template for individuals and one for couples
+- Immediate send without a rendered-document review revision
+- One envelope ID stored directly on `matter_details` or `client_intake`, where re-send overwrites history
+- The narrow `sent | signed | declined` state model
+- Fixed-position template fields that require page-compatible source documents
+
+The new service creates each request from a rendered DOCX, stores immutable revisions and recipients, and links the active/latest agreement back to the lead or matter without discarding prior requests.
+
+### Remove after cutover
+
+The target design does not need Firma's general template editor. After document-based sending is proven and deployed, remove:
+
+- `EsignTemplateEditor`
+- `/api/admin/esign/template-token`
+- `generateEngagementTemplateToken`
+- The embedded Firma editor script and admin-settings tab
+- `FIRMA_ENGAGEMENT_TEMPLATE_ID`
+- `FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT`
+- Tests and environment documentation that exist only for those pieces
+
+The three controlled DOCX masters become the legal source documents. Master updates follow a versioned upload/publish or repository-controlled process with rendering fixtures and legal review, not direct editing of a live Firma signing template.
+
+### Migrate
+
+Preserve active envelope identifiers and statuses long enough to finish or reconcile requests sent before cutover. Preserve already downloaded signed agreements and matter-document records. Define how existing lead and matter engagement columns map to the latest agreement record before retiring or demoting those columns.
+
+No editor, environment variable, route, or schema is removed until the document-based workflow passes end-to-end verification and active legacy envelopes have a documented reconciliation path.
+
+### Webhook security correction
+
+The current webhook uses a shared secret in the callback URL and treats the payload as a hint before re-fetching Firma state. Current Firma documentation describes raw-body HMAC SHA-256 verification through `X-Firma-Signature`, an old-signature header during rotation, and event IDs for deduplication.
+
+Retain authoritative provider re-fetching as defense in depth, but replace query-string authentication with the currently documented HMAC flow during this work. Store processed event IDs and support secret rotation. The Firma proof of concept must confirm the production workspace's actual webhook contract before cutover because the checked-in comments and current public documentation differ.
 
 ## Error Handling and Safety
 
@@ -202,15 +251,16 @@ A live Firma proof of concept must verify DOCX conversion, anchor placement, cli
 
 ## Delivery Sequence
 
-1. Audit the deployed template editor and legacy engagement surfaces; produce retain/replace/remove/migrate findings.
-2. Run a Firma sandbox proof of concept using generated DOCX files and anchors.
+1. Capture current lead send, matter send, direct-signing, conversion, webhook, and document-storage behavior in focused regression tests.
+2. Run a Firma sandbox proof of concept using generated DOCX files, anchors, completed-document retrieval, and the current webhook contract.
 3. Convert and reconcile the six Word agreements into three conditional masters, with legal review of every branch.
 4. Build deterministic rendering and fixture tests.
-5. Add agreement persistence, revisions, authorization, and preview.
-6. Add Firma create/send operations and webhook lifecycle tracking.
-7. Add the matter-page preparation and status workflow.
-8. Migrate required historical state and decommission confirmed obsolete template-editor pieces.
-9. Add the narrow Cornerstone MCP tools over the proven service.
+5. Add agreement persistence, revisions, recipients, authorization, and preview while preserving legacy-envelope reconciliation.
+6. Refactor the existing Firma provider to create document-based requests and track the expanded lifecycle.
+7. Upgrade webhook verification and adapt the existing lead conversion and signed-document storage behavior.
+8. Replace the current lead and matter send forms with the structured preparation, preview, approval, and status workflow.
+9. Migrate required historical state and remove the confirmed obsolete Firma template editor, token route, template IDs, and associated tests/configuration.
+10. Add the narrow Cornerstone MCP tools over the proven service.
 
 ## Success Criteria
 
