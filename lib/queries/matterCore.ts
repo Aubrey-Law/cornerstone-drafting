@@ -25,6 +25,82 @@ function normalizeFlags(m: PipelineMatter): PipelineMatter {
 export const PIPELINE_MATTER_COLUMNS =
   'matter_id, matter_name, stage, status, flags, matter_created, client_name, client_email, client_phone, client_dob, client_address, spouse_name, spouse_email, spouse_phone, spouse_dob, spouse_address, plan_type, marital_status, has_minor_children, taxable_estate, intake_status, intake_sent_at, design_status, intake_submitted_at, drafts_sent_at, signing_date, documents_executed_at, next_appointment, next_appointment_type, practice_area, referral_source, fee_amount, opened_at, client_status' as const
 
+function addressFromIntake(row: Record<string, unknown> | null | undefined): string | null {
+  if (!row) return null
+  const street = [row.address_line1, row.address_line2].filter(Boolean).join(' ').trim()
+  const locality = [row.city, [row.state, row.zip].filter(Boolean).join(' ').trim()].filter(Boolean).join(', ').trim()
+  const address = [street, locality].filter(Boolean).join(', ').trim()
+  return address || null
+}
+
+async function fetchMatterFallback(id: string): Promise<PipelineMatter | null> {
+  const supabase = getAdminClient()
+  const { data: matter, error: matterError } = await supabase
+    .from('matters')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (matterError) {
+    console.error('fetchMatter fallback matter error:', matterError)
+    return null
+  }
+  if (!matter) return null
+
+  const intakeId = (matter.client_intake_id ?? null) as string | null
+  const [{ data: intake, error: intakeError }, { data: spouse, error: spouseError }, { data: designSheet }, { data: details }] = await Promise.all([
+    intakeId ? supabase.from('client_intake').select('*').eq('id', intakeId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    intakeId
+      ? supabase.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').limit(1).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase.from('design_sheets').select('status').eq('matter_id', id).order('version', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
+  ])
+
+  if (intakeError) console.error('fetchMatter fallback intake error:', intakeError)
+  if (spouseError) console.error('fetchMatter fallback spouse error:', spouseError)
+
+  const clientName = [intake?.first_name, intake?.last_name].filter(Boolean).join(' ').trim()
+  const spouseName = [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' ').trim()
+  const fallback: PipelineMatter = {
+    matter_id: matter.id,
+    matter_name: matter.name || clientName || 'Untitled matter',
+    stage: matter.stage,
+    status: matter.status,
+    flags: matter.flags ?? null,
+    matter_created: matter.created_at,
+    client_name: clientName || intake?.full_name || matter.name || 'Unknown client',
+    client_email: intake?.email ?? '',
+    client_phone: formatPhoneDisplay(intake?.phone ?? ''),
+    client_dob: intake?.date_of_birth ?? null,
+    client_address: addressFromIntake(intake),
+    spouse_name: spouseName || null,
+    spouse_email: spouse?.email ?? null,
+    spouse_phone: formatPhoneDisplay(spouse?.phone ?? null),
+    spouse_dob: spouse?.date_of_birth ?? null,
+    spouse_address: addressFromIntake(spouse),
+    plan_type: intake?.plan_type ?? details?.plan_type ?? null,
+    marital_status: intake?.marital_status ?? null,
+    has_minor_children: intake?.has_minor_children ?? null,
+    taxable_estate: intake?.taxable_estate ?? null,
+    intake_status: intake?.status ?? null,
+    intake_sent_at: intake?.intake_sent_at ?? null,
+    design_status: designSheet?.status ?? null,
+    intake_submitted_at: matter.intake_submitted_at ?? null,
+    drafts_sent_at: matter.drafts_sent_at ?? null,
+    signing_date: matter.signing_date ?? null,
+    documents_executed_at: matter.documents_executed_at ?? null,
+    next_appointment: null,
+    next_appointment_type: null,
+    practice_area: details?.practice_area ?? intake?.practice_area ?? null,
+    referral_source: details?.referral_source ?? intake?.referral_source ?? null,
+    fee_amount: details?.flat_fee_amount ?? null,
+    opened_at: details?.open_date ?? null,
+    client_status: details?.client_status ?? null,
+  }
+  return normalizeFlags(fallback)
+}
+
 export async function fetchMatter(id: string): Promise<PipelineMatter | null> {
   const supabase = getAdminClient()
   const { data, error } = await supabase
@@ -35,7 +111,7 @@ export async function fetchMatter(id: string): Promise<PipelineMatter | null> {
 
   if (error) {
     console.error('fetchMatter error:', error)
-    return null
+    return fetchMatterFallback(id)
   }
   return data
     ? normalizeFlags({

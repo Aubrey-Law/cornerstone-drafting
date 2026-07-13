@@ -15,6 +15,7 @@ import type { MatterActivity } from '@/types/database'
 import MatterDetailClient from './MatterDetailClient'
 import { mapMatterNoteRows } from './tabs/notes'
 import { buildLinkedMatterActivity } from '@/lib/leads/activity'
+import type { IntakeSnapshot } from '@/lib/queries'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,9 +35,49 @@ type LeadActivityLoaderRow = {
   created_at: string
   source_matter_activity_id: string | null
 }
+type MatterShellRow = {
+  client_intake_id: string | null
+  matter_number?: string | null
+  matter_number_manual?: boolean | null
+  portal_uploads_reviewed_at?: string | null
+}
+type ClientIntakeShellRow = {
+  id: string
+  intake_sent_at: string | null
+  intake_completed_at: string | null
+  uploads_reviewed_at?: string | null
+  email: string | null
+  first_name: string | null
+  status?: string | null
+  user_id?: string | null
+  client_user_id?: string | null
+  unlock_requested_at?: string | null
+  unlock_request_note?: string | null
+}
 
 const MATTER_NOTE_COLUMNS_WITH_PROVENANCE = 'id, matter_id, note_type, body, author, created_at, source_lead_note_id'
 const MATTER_NOTE_COLUMNS_BASE = 'id, matter_id, note_type, body, author, created_at'
+const MATTER_SHELL_COLUMNS_FULL = 'client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at'
+const MATTER_SHELL_COLUMNS_BASE = 'client_intake_id, matter_number'
+const CLIENT_INTAKE_COLUMNS_FULL = 'id, intake_sent_at, intake_completed_at, uploads_reviewed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note'
+const CLIENT_INTAKE_COLUMNS_BASE = 'id, intake_sent_at, email, first_name, status, user_id, client_user_id'
+
+function normalizeClientIntakeShell(row: Partial<ClientIntakeShellRow> | null): ClientIntakeShellRow | null {
+  if (!row?.id) return null
+  return {
+    id: row.id,
+    intake_sent_at: row.intake_sent_at ?? null,
+    intake_completed_at: row.intake_completed_at ?? null,
+    uploads_reviewed_at: row.uploads_reviewed_at ?? null,
+    email: row.email ?? null,
+    first_name: row.first_name ?? null,
+    status: row.status ?? null,
+    user_id: row.user_id ?? null,
+    client_user_id: row.client_user_id ?? null,
+    unlock_requested_at: row.unlock_requested_at ?? null,
+    unlock_request_note: row.unlock_request_note ?? null,
+  }
+}
 
 function isOptionalHistorySchemaError(error: SupabaseMaybeError) {
   if (!error) return false
@@ -74,6 +115,71 @@ async function loadMatterNotes(admin: ReturnType<typeof getAdminClient>, matterI
   if (base.error) throw new Error(`Could not load matter history: ${base.error.message}`)
   return ((base.data ?? []) as Omit<MatterNoteLoaderRow, 'source_lead_note_id'>[])
     .map(row => ({ ...row, source_lead_note_id: null }))
+}
+
+async function loadMatterShell(admin: ReturnType<typeof getAdminClient>, matterId: string): Promise<MatterShellRow | null> {
+  const full = await admin
+    .from('matters')
+    .select(MATTER_SHELL_COLUMNS_FULL)
+    .eq('id', matterId)
+    .maybeSingle()
+
+  if (!full.error) return full.data as MatterShellRow | null
+  if (!isOptionalHistorySchemaError(full.error)) throw new Error(`Could not load matter history: ${full.error.message}`)
+
+  console.warn('Matter detail optional matter columns unavailable; loading base matter row only:', full.error.message)
+  const base = await admin
+    .from('matters')
+    .select(MATTER_SHELL_COLUMNS_BASE)
+    .eq('id', matterId)
+    .maybeSingle()
+
+  if (base.error) throw new Error(`Could not load matter history: ${base.error.message}`)
+  return base.data as MatterShellRow | null
+}
+
+async function loadMatterActivity(admin: ReturnType<typeof getAdminClient>, matterId: string): Promise<MatterActivity[]> {
+  const { data, error } = await admin
+    .from('matter_activity')
+    .select('*')
+    .eq('matter_id', matterId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (!error) return (data ?? []) as MatterActivity[]
+  console.warn('Matter activity unavailable; continuing without activity timeline:', error.message)
+  return []
+}
+
+async function loadClientIntakeShell(admin: ReturnType<typeof getAdminClient>, intakeId: string): Promise<ClientIntakeShellRow | null> {
+  const full = await admin
+    .from('client_intake')
+    .select(CLIENT_INTAKE_COLUMNS_FULL)
+    .eq('id', intakeId)
+    .maybeSingle()
+
+  if (!full.error) return normalizeClientIntakeShell(full.data as Partial<ClientIntakeShellRow> | null)
+  if (!isOptionalHistorySchemaError(full.error)) throw new Error(`Could not load client intake: ${full.error.message}`)
+
+  console.warn('Client intake optional columns unavailable; loading base intake row only:', full.error.message)
+  const base = await admin
+    .from('client_intake')
+    .select(CLIENT_INTAKE_COLUMNS_BASE)
+    .eq('id', intakeId)
+    .maybeSingle()
+
+  if (base.error) throw new Error(`Could not load client intake: ${base.error.message}`)
+  return normalizeClientIntakeShell(base.data as Partial<ClientIntakeShellRow> | null)
+}
+
+async function loadIntakeSnapshotOptional(matterId: string): Promise<IntakeSnapshot | null> {
+  try {
+    return await fetchIntakeForMatter(matterId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    console.warn('Matter intake snapshot unavailable; continuing without resync preview:', message)
+    return null
+  }
 }
 
 async function loadLinkedLeadHistory(admin: ReturnType<typeof getAdminClient>, intakeId: string | null) {
@@ -120,52 +226,34 @@ export default async function MatterDetailPage({ params }: Params) {
 
   const admin = getAdminClient()
   const [
-    { data: matterRow, error: matterRowError },
+    matterRow,
     { data: detailsRow, error: detailsError },
     notes,
     designSheet,
     intakeSnapshot,
-    { data: matterActivity, error: matterActivityError },
+    matterActivity,
   ] = await Promise.all([
-    admin.from('matters').select('client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at').eq('id', id).maybeSingle(),
+    loadMatterShell(admin, id),
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
     loadMatterNotes(admin, id),
     fetchDesignSheet(id),
-    fetchIntakeForMatter(id),
-    admin.from('matter_activity').select('*').eq('matter_id', id).order('created_at', { ascending: false }).limit(50),
+    loadIntakeSnapshotOptional(id),
+    loadMatterActivity(admin, id),
   ])
 
-  const coreLoadError = matterRowError ?? detailsError ?? matterActivityError
+  const coreLoadError = detailsError
   if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
-  let clientIntakeRow: {
-    id: string
-    intake_sent_at: string | null
-    intake_completed_at: string | null
-    uploads_reviewed_at?: string | null
-    email: string | null
-    first_name: string | null
-    status?: string | null
-    user_id?: string | null
-    client_user_id?: string | null
-    unlock_requested_at?: string | null
-    unlock_request_note?: string | null
-  } | null = null
+  let clientIntakeRow: ClientIntakeShellRow | null = null
 
   if (intakeId) {
-    const { data, error: clientIntakeError } = await admin
-      .from('client_intake')
-      .select('id, intake_sent_at, intake_completed_at, uploads_reviewed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note')
-      .eq('id', intakeId)
-      .maybeSingle()
-    if (clientIntakeError) throw new Error(`Could not load client intake: ${clientIntakeError.message}`)
-    clientIntakeRow = data
+    clientIntakeRow = await loadClientIntakeShell(admin, intakeId)
   }
 
   const { leadNotes, leadMeetingNotes, leadActivity } = await loadLinkedLeadHistory(admin, intakeId)
 
-  const initialActivity = buildLinkedMatterActivity(id, leadActivity, (matterActivity ?? []) as MatterActivity[])
+  const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
 
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
   const matterNumberManual = Boolean(matterRow?.matter_number_manual)
