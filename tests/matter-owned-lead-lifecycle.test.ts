@@ -58,14 +58,33 @@ describe('matter-owned lead lifecycle', () => {
 
   it('gates drafting initialization and portal matter lookup to hired matters', () => {
     expect(read('lib/designSheet/ensureDesignSheetSeeded.ts')).toContain("data.relationship_status !== 'hired'")
+    expect(read('lib/draftPayload/resolveMatterId.ts')).toContain(".eq('relationship_status', 'hired')")
+    expect(read('lib/draftPayload/assemble.ts')).toContain("matter.relationship_status !== 'hired'")
     expect(read('lib/portal/getMatterForUser.ts')).toContain(".eq('relationship_status', 'hired')")
     expect(read('lib/documentSecurity.ts')).toContain(".eq('relationship_status', 'hired')")
+  })
+
+  it('creates Lawmatics lead opportunities in the intake persistence statement', () => {
+    const importer = read('lib/lawmatics/importMatter.ts')
+    expect(importer).toContain("lead_status: existingOpportunity?.relationship_status === 'hired' ? 'hired' : 'lead'")
+    expect(importer).toContain('.insert(persistedIntakeRow)')
+    expect(importer).toContain('.update(persistedIntakeRow)')
+    expect(importer).toContain('Lawmatics lead import did not create its matter-owned opportunity')
   })
 
   it('uses matter-owned agreements from lead and matter routes', () => {
     expect(read('app/api/admin/leads/[id]/engagement-draft/route.ts')).toContain('.eq(\'matter_id\', opportunity.id)')
     expect(read('app/api/admin/leads/[id]/engagement-draft/route.ts')).toContain('matterId: opportunity.id')
     expect(read('app/api/admin/matters/[id]/engagement-draft/route.ts')).toContain('matterId,')
+  })
+
+  it('reconciles matter-owned Firma callbacks into the versioned agreement', () => {
+    const webhook = read('app/api/webhooks/esign/route.ts')
+    expect(webhook).toContain("from('engagement_agreements')")
+    expect(webhook).toContain("from('firma_webhook_events')")
+    expect(webhook).toContain('completed_r2_key: stored.r2Key')
+    expect(webhook).toContain("from('engagement_agreement_recipients')")
+    expect(webhook).toContain('engagement-agreement-${agreementId}.pdf')
   })
 
   it('limits permanent deletion to admins and protects hired or signed records', () => {

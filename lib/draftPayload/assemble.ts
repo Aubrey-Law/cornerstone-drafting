@@ -61,7 +61,7 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
   ] = await Promise.all([
     admin
       .from('matters')
-      .select('id, client_intake_id, matter_number, status, stage')
+      .select('id, client_intake_id, matter_number, relationship_status, status, stage')
       .eq('id', resolvedMatterId)
       .maybeSingle(),
 
@@ -91,6 +91,9 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
   }
 
   const matter = matterRaw as MatterRow
+  if (matter.relationship_status !== 'hired') {
+    throw new Error('Drafting is available only for hired matters: ' + matterId)
+  }
   let rawDesignSheet = designSheetRaw as DesignSheetRow | null
 
   if (rawDesignSheet && isDesignSheetUnseeded(rawDesignSheet) && matter.client_intake_id) {

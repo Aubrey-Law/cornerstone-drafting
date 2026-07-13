@@ -331,6 +331,7 @@ describe('draft payload generator gap wiring', () => {
             id: 'matter-gaps-2',
             client_intake_id: 'intake-gaps-2',
             matter_number: 'EP-GAPS-2',
+            relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
           },

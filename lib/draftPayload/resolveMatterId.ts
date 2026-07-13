@@ -25,7 +25,16 @@ export async function resolveMatterId(inputId: string, admin = getAdminClient())
     .eq('id', inputId)
     .maybeSingle()
 
-  if (sheet?.matter_id) return sheet.matter_id as string
+  if (sheet?.matter_id) {
+    const { data: sheetMatter } = await admin
+      .from('matters')
+      .select('id')
+      .eq('id', sheet.matter_id as string)
+      .eq('relationship_status', 'hired')
+      .maybeSingle()
+
+    if (sheetMatter?.id) return sheetMatter.id
+  }
 
   const { data: legacySheet } = await admin
     .from('design_sheets')

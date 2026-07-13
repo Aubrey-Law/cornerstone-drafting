@@ -113,14 +113,39 @@ export async function importMatterFromLawmaticsProspect(
     throw new Error(readIntakeError.message)
   }
 
+  const { data: existingOpportunity, error: existingOpportunityError } = target === 'lead' && existingIntake
+    ? await admin
+        .from('matters')
+        .select('id, relationship_status')
+        .eq('client_intake_id', existingIntake.id)
+        .maybeSingle()
+    : { data: null, error: null }
+  if (existingOpportunityError) throw new Error(existingOpportunityError.message)
+
+  const importedName = splitName((intakeRow.full_name as string | null) ?? null)
+  const persistedIntakeRow = target === 'lead'
+    ? {
+        ...intakeRow,
+        first_name: importedName.first,
+        last_name: importedName.last,
+        lead_status: existingOpportunity?.relationship_status === 'hired' ? 'hired' : 'lead',
+        lead_source: typeof campaign === 'string' ? campaign : null,
+        engagement_fee_quoted: typeof matter_fee === 'number' ? matter_fee : null,
+      }
+    : {
+        ...intakeRow,
+        first_name: importedName.first,
+        last_name: importedName.last,
+      }
+
   const intakeResult = existingIntake
     ? await admin
         .from('client_intake')
-        .update(intakeRow)
+        .update(persistedIntakeRow)
         .eq('id', existingIntake.id)
         .select('id, email, full_name')
         .single()
-    : await admin.from('client_intake').insert(intakeRow).select('id, email, full_name').single()
+    : await admin.from('client_intake').insert(persistedIntakeRow).select('id, email, full_name').single()
 
   const intake = intakeResult.data
   if (intakeResult.error || !intake) {
@@ -131,13 +156,24 @@ export async function importMatterFromLawmaticsProspect(
 
   const fullName = (intake.full_name as string | null) ?? 'Unknown'
   const nameParts = splitName(fullName)
-  await admin
-    .from('client_intake')
-    .update({ first_name: nameParts.first, last_name: nameParts.last, ...(target === 'lead' ? { lead_status: 'lead', lead_source: typeof campaign === 'string' ? campaign : null, engagement_fee_quoted: typeof matter_fee === 'number' ? matter_fee : null } : {}) })
-    .eq('id', intake.id)
 
   if (target === 'lead') {
-    await admin.from('lead_activity').insert({ lead_id: intake.id, event_type: 'imported', title: 'Imported from Lawmatics', detail: `Lawmatics prospect ${lmId}`, actor_id: actorId })
+    if (existingOpportunity?.relationship_status === 'hired') {
+      return { matterId: existingOpportunity.id, created: false }
+    }
+    const { data: opportunity, error: opportunityError } = await admin
+      .from('matters')
+      .select('id, relationship_status')
+      .eq('client_intake_id', intake.id)
+      .maybeSingle()
+    if (opportunityError) throw new Error(opportunityError.message)
+    if (!opportunity) throw new Error('Lawmatics lead import did not create its matter-owned opportunity')
+    if (opportunity.relationship_status === 'hired') {
+      return { matterId: opportunity.id, created: false }
+    }
+
+    const { error: activityError } = await admin.from('lead_activity').insert({ lead_id: intake.id, event_type: 'imported', title: 'Imported from Lawmatics', detail: `Lawmatics prospect ${lmId}`, actor_id: actorId })
+    if (activityError) throw new Error(activityError.message)
     return { leadId: intake.id, created: !existingIntake }
   }
 

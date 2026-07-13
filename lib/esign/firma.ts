@@ -163,22 +163,37 @@ class FirmaEsignProvider implements EsignProvider {
   }
 
   async getEnvelopeState(envelopeId: string): Promise<EsignEnvelopeState> {
-    const detail = await this.client.signingRequests.getSigningRequest({ id: envelopeId })
+    const [detail, users] = await Promise.all([
+      this.client.signingRequests.getSigningRequest({ id: envelopeId }),
+      this.client.signingRequests.listSigningRequestUsers({ id: envelopeId }),
+    ])
+    const recipients = users.results.map(user => ({
+      email: user.email.toLowerCase(),
+      status: user.declined_on ? 'declined' as const : user.finished_on ? 'signed' as const : 'sent' as const,
+      signedAt: user.finished_on ?? null,
+      declinedAt: user.declined_on ?? null,
+    }))
     const status = detail.status ?? {}
     if (status.finished) {
       return {
         status: 'signed',
         signedAt: detail.timestamps?.finished_on ?? null,
         finalDocumentUrl: detail.final_document_download_url ?? null,
+        recipients,
       }
     }
     if (status.declined || status.expired || status.cancelled) {
-      return { status: 'declined', signedAt: null, finalDocumentUrl: null }
+      return { status: 'declined', signedAt: null, finalDocumentUrl: null, recipients }
     }
     if (status.sent) {
-      return { status: 'sent', signedAt: null, finalDocumentUrl: null }
+      const envelopeStatus = recipients.some(recipient => recipient.status === 'signed')
+        ? 'partially_signed'
+        : detail.timestamps?.last_signing_action_on
+          ? 'viewed'
+          : 'sent'
+      return { status: envelopeStatus, signedAt: null, finalDocumentUrl: null, recipients }
     }
-    return { status: 'unknown', signedAt: null, finalDocumentUrl: null }
+    return { status: 'unknown', signedAt: null, finalDocumentUrl: null, recipients }
   }
 }
 

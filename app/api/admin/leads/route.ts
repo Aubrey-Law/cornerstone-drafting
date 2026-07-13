@@ -4,9 +4,9 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { parsePracticeArea } from '@/lib/practiceArea'
 
 /**
- * POST /api/admin/leads — create a lead: a standalone client_intake row with
- * no matter. The matter is created later (automatically when the engagement
- * agreement is signed, or manually from the Leads page).
+ * POST /api/admin/leads — create an intake-backed lead opportunity. The
+ * database creates its unnumbered matter in the same transaction; hiring later
+ * assigns the official number and enables drafting and client access.
  */
 export async function POST(req: Request) {
   const { err } = await requireAdmin(req)

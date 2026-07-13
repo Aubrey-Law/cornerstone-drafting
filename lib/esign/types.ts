@@ -4,13 +4,19 @@
  * future switch is a new client file plus webhook parsing — nothing else.
  */
 
-export type EsignEnvelopeStatus = 'sent' | 'signed' | 'declined' | 'unknown'
+export type EsignEnvelopeStatus = 'sent' | 'viewed' | 'partially_signed' | 'signed' | 'declined' | 'unknown'
 
 export interface EsignEnvelopeState {
   status: EsignEnvelopeStatus
   signedAt: string | null
   /** Combined signed document + audit certificate PDF (pre-signed, short-lived). */
   finalDocumentUrl: string | null
+  recipients?: Array<{
+    email: string
+    status: 'sent' | 'signed' | 'declined'
+    signedAt: string | null
+    declinedAt: string | null
+  }>
 }
 
 export interface EsignSigner {

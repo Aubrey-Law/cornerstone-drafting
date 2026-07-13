@@ -98,7 +98,23 @@ function replaceStaticMarkers(xml: string, context: NodeEstateContext): string {
 
 const CONTROL_TAG_RE = /\{%[\s\S]*?%\}/g
 const PARAGRAPH_RE = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/g
+const TABLE_ROW_RE = /<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g
 const TEXT_RUN_RE = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g
+const EXACT_TEXT_RUN_RE = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g
+
+// docxtpl's `{%tr ... %}` convention puts an opening/closing loop directive in
+// its own table row. That marker row is removed, and the normalized Nunjucks
+// directive governs the data row(s) between the two markers. Nunjucks itself
+// does not know the `tr` prefix and otherwise throws "unknown block tag: tr".
+// Only a row whose entire visible text is one `{%tr ... %}` directive is
+// transformed, so ordinary table content cannot be removed accidentally.
+export function hoistTableRowControls(xml: string): string {
+  return xml.replace(TABLE_ROW_RE, row => {
+    const text = [...row.matchAll(EXACT_TEXT_RUN_RE)].map(match => match[1]).join('').trim()
+    const directive = /^\{%\s*tr\s+([\s\S]*?)\s*%\}$/.exec(text)
+    return directive ? `{% ${directive[1].trim()} %}` : row
+  })
+}
 
 // Count of `<w:NAME>` opening tags that require a matching `</w:NAME>`, minus
 // the closing tags — i.e. zero when balanced. `\b` keeps `<w:p>` from matching
@@ -239,7 +255,9 @@ export function renderNodeEstateDocxTemplate({
     const rendered = replaceStaticMarkers(
       renderNodeEstateText(
         repairSplitNunjucksInXml(
-          stripControlOnlyParagraphs(hoistParagraphConditionals(file.asText())),
+          stripControlOnlyParagraphs(
+            hoistParagraphConditionals(hoistTableRowControls(file.asText())),
+          ),
         ),
         context,
         {

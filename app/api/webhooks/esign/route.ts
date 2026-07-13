@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
@@ -29,7 +30,8 @@ async function storeSignedEngagement(
   admin: SupabaseClient,
   matterId: string,
   state: EsignEnvelopeState,
-): Promise<NextResponse | null> {
+  agreementId?: string,
+): Promise<{ r2Key: string } | NextResponse> {
   // The combined signed-document + audit-certificate PDF may lag signing
   // while the certificate generates; 502 makes the provider retry.
   if (!state.finalDocumentUrl) {
@@ -48,20 +50,32 @@ async function storeSignedEngagement(
     .maybeSingle()
   const displayName = `Engagement Agreement - ${matter?.client_name ?? 'Client'} - signed.pdf`
   const filename = safeUploadFilename(displayName)
-  const r2Key = `matters/${matterId}/signed/${Date.now()}-${filename}`
+  const r2Key = agreementId
+    ? `matters/${matterId}/signed/engagement-agreement-${agreementId}.pdf`
+    : `matters/${matterId}/signed/${Date.now()}-${filename}`
   await putFileToR2(r2Key, buffer, 'application/pdf')
 
-  const { error: docError } = await admin.from('matter_documents').insert({
-    matter_id: matterId,
-    r2_key: r2Key,
-    name: displayName,
-    size: buffer.length,
-    content_type: 'application/pdf',
-    folder: 'signed',
-    folder_id: null,
-    uploaded_by: null,
-  })
-  if (docError) throw new Error(docError.message)
+  const { data: existingDocument, error: documentReadError } = await admin
+    .from('matter_documents')
+    .select('id')
+    .eq('matter_id', matterId)
+    .eq('r2_key', r2Key)
+    .maybeSingle()
+  if (documentReadError) throw new Error(documentReadError.message)
+  if (!existingDocument) {
+    const { error: docError } = await admin.from('matter_documents').insert({
+      ...(agreementId ? { id: agreementId } : {}),
+      matter_id: matterId,
+      r2_key: r2Key,
+      name: displayName,
+      size: buffer.length,
+      content_type: 'application/pdf',
+      folder: 'signed',
+      folder_id: null,
+      uploaded_by: null,
+    })
+    if (docError && !(agreementId && docError.code === '23505')) throw new Error(docError.message)
+  }
 
   // Status flip last: a retry after a partial failure redoes the work above
   // (worst case one orphaned R2 object) and a retry after success no-ops.
@@ -75,7 +89,7 @@ async function storeSignedEngagement(
     .eq('client_id', matterId)
   if (updateError) throw new Error(updateError.message)
 
-  return null
+  return { r2Key }
 }
 
 export async function POST(req: Request) {
@@ -107,12 +121,24 @@ export async function POST(req: Request) {
   }
 
   const admin = getAdminClient()
-  const { data: details } = await admin
-    .from('matter_details')
-    .select('client_id, engagement_status, engagement_signed')
-    .eq('engagement_envelope_id', envelopeId)
+  const { data: agreement, error: agreementError } = await admin
+    .from('engagement_agreements')
+    .select('id, matter_id, status')
+    .eq('firma_request_id', envelopeId)
     .maybeSingle()
-  const { data: lead } = details
+  if (agreementError) {
+    console.error('[esign webhook] agreement lookup failed', agreementError)
+    return NextResponse.json({ error: 'engagement lookup failed' }, { status: 500 })
+  }
+
+  const { data: details } = agreement
+    ? { data: null }
+    : await admin
+        .from('matter_details')
+        .select('client_id, engagement_status, engagement_signed')
+        .eq('engagement_envelope_id', envelopeId)
+        .maybeSingle()
+  const { data: lead } = agreement || details
     ? { data: null }
     : await admin
         .from('client_intake')
@@ -120,7 +146,7 @@ export async function POST(req: Request) {
         .eq('engagement_envelope_id', envelopeId)
         .maybeSingle()
   // Unknown (stale/cancelled/foreign) envelope: ack so the provider stops retrying.
-  if (!details && !lead) return NextResponse.json({ ok: true, ignored: 'unknown envelope' })
+  if (!agreement && !details && !lead) return NextResponse.json({ ok: true, ignored: 'unknown envelope' })
 
   const { data: opportunity } = details
     ? await admin
@@ -135,8 +161,111 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: resolved.error }, { status: 503 })
   }
 
+  let versionedEventId: string | null = null
   try {
     const state = await resolved.provider.getEnvelopeState(envelopeId)
+
+    if (agreement) {
+      if (!agreement.matter_id) {
+        return NextResponse.json({ error: 'engagement agreement has no matter owner' }, { status: 409 })
+      }
+
+      const eventId = [payload.event_id, payload.webhook_id, data.event_id]
+        .find((value): value is string => typeof value === 'string' && value.length > 0)
+        ?? createHash('sha256').update(rawBody).digest('hex')
+      versionedEventId = eventId
+      const eventType = [payload.event_type, payload.type, data.event_type, data.type]
+        .find((value): value is string => typeof value === 'string' && value.length > 0)
+        ?? 'signing_request.updated'
+      const { data: priorEvent, error: priorEventError } = await admin
+        .from('firma_webhook_events')
+        .select('id, processed_at')
+        .eq('event_id', eventId)
+        .maybeSingle()
+      if (priorEventError) throw new Error(priorEventError.message)
+      if (priorEvent?.processed_at) {
+        return NextResponse.json({ ok: true, duplicate: true })
+      }
+      if (!priorEvent) {
+        const { error: eventInsertError } = await admin.from('firma_webhook_events').insert({
+          event_id: eventId,
+          firma_request_id: envelopeId,
+          event_type: eventType,
+          payload,
+          agreement_id: agreement.id,
+        })
+        if (eventInsertError && eventInsertError.code !== '23505') throw new Error(eventInsertError.message)
+      }
+
+      const status = state.status === 'signed' ? 'completed' : state.status
+      const now = new Date().toISOString()
+
+      for (const recipient of state.recipients ?? []) {
+        const timestamps = recipient.status === 'signed'
+          ? { signed_at: recipient.signedAt ?? now }
+          : recipient.status === 'declined'
+            ? { declined_at: recipient.declinedAt ?? now }
+            : {}
+        const { error: recipientStateError } = await admin
+          .from('engagement_agreement_recipients')
+          .update({ status: recipient.status, ...timestamps })
+          .eq('agreement_id', agreement.id)
+          .eq('email', recipient.email.toLowerCase())
+        if (recipientStateError) throw new Error(recipientStateError.message)
+      }
+
+      if (status === 'declined') {
+        const { error: updateError } = await admin
+          .from('engagement_agreements')
+          .update({ status: 'cancelled', updated_at: now })
+          .eq('id', agreement.id)
+          .neq('status', 'completed')
+        if (updateError) throw new Error(updateError.message)
+      } else if (status === 'completed') {
+        if (agreement.status !== 'completed') {
+          const { data: matter, error: matterError } = await admin
+            .from('matters')
+            .select('id, client_intake_id, relationship_status')
+            .eq('id', agreement.matter_id as string)
+            .single()
+          if (matterError) throw new Error(matterError.message)
+          if (matter.relationship_status === 'lost') {
+            return NextResponse.json({ error: 'lost opportunity must be reactivated before hiring' }, { status: 409 })
+          }
+          if (matter.relationship_status !== 'hired') {
+            const promoted = await createMatterFromIntake(admin, matter.client_intake_id as string)
+            if (!promoted.ok) return NextResponse.json({ error: promoted.error }, { status: 500 })
+          }
+
+          const stored = await storeSignedEngagement(admin, agreement.matter_id as string, state, agreement.id as string)
+          if (stored instanceof NextResponse) return stored
+          const { error: completionError } = await admin
+            .from('engagement_agreements')
+            .update({
+              status: 'completed',
+              completed_r2_key: stored.r2Key,
+              completed_at: state.signedAt ?? now,
+              updated_at: now,
+            })
+            .eq('id', agreement.id)
+          if (completionError) throw new Error(completionError.message)
+        }
+      } else if (['sent', 'viewed', 'partially_signed'].includes(status)) {
+        const { error: updateError } = await admin
+          .from('engagement_agreements')
+          .update({ status, updated_at: now })
+          .eq('id', agreement.id)
+          .neq('status', 'completed')
+        if (updateError) throw new Error(updateError.message)
+      }
+
+      const { error: processedError } = await admin
+        .from('firma_webhook_events')
+        .update({ processed_at: now, error: null, agreement_id: agreement.id })
+        .eq('event_id', eventId)
+      if (processedError) throw new Error(processedError.message)
+      return NextResponse.json({ ok: true, agreementId: agreement.id })
+    }
 
     if (state.status === 'declined') {
       if (details && !details.engagement_signed && details.engagement_status !== 'signed') {
@@ -174,8 +303,8 @@ export async function POST(req: Request) {
         const promoted = await createMatterFromIntake(admin, opportunity.client_intake_id as string)
         if (!promoted.ok) return NextResponse.json({ error: promoted.error }, { status: 500 })
       }
-      const failure = await storeSignedEngagement(admin, details.client_id as string, state)
-      if (failure) return failure
+      const stored = await storeSignedEngagement(admin, details.client_id as string, state)
+      if (stored instanceof NextResponse) return stored
       return NextResponse.json({ ok: true })
     }
 
@@ -189,8 +318,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: converted.error }, { status: 500 })
     }
 
-    const failure = await storeSignedEngagement(admin, converted.matterId, state)
-    if (failure) return failure
+    const stored = await storeSignedEngagement(admin, converted.matterId, state)
+    if (stored instanceof NextResponse) return stored
 
     // Record the signed state on the lead row too (conversion history).
     await admin
@@ -204,6 +333,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, matterId: converted.matterId })
   } catch (e) {
     console.error('[esign webhook]', e)
+    if (versionedEventId) {
+      await admin
+        .from('firma_webhook_events')
+        .update({ error: e instanceof Error ? e.message : 'webhook processing failed' })
+        .eq('event_id', versionedEventId)
+    }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'webhook processing failed' },
       { status: 500 },

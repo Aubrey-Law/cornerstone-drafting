@@ -65,6 +65,7 @@ describe('API route auth coverage', () => {
           hasAny(source, [
             /requireAdmin\b/,
             /requireAdminRoute\b/,
+            /requireEngagementStaff\b/,
             /ENABLE_DEBUG_ROUTES/,
             /isAdmin\b/,
             /\['attorney', 'admin'\]/,

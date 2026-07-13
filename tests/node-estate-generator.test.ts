@@ -7,7 +7,7 @@ import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { defaultDraftPayloadTrustProvisions } from '@/lib/buildDraftPayload'
 import { defaultDraftPayloadDpoaProvisions } from '@/lib/draftPayload/defaults'
 import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
-import { hoistParagraphConditionals, repairSplitNunjucksInXml, renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
+import { hoistParagraphConditionals, hoistTableRowControls, repairSplitNunjucksInXml, renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
 import { loadNodeEstatePackage, loadNodeEstateStateRules } from '@/lib/estateGenerator/node/config'
 import { buildNodeEstateContext } from '@/lib/estateGenerator/node/context'
 import { generateEstatePlanDocumentsNode, generateNodeEstatePackage } from '@/lib/estateGenerator/node/generate'
@@ -684,6 +684,44 @@ describe('node estate generator text rendering', () => {
       const xml = '<w:body><w:p><w:r><w:t>{% if a %}A{% endif %}{% if b %}B{% endif %}</w:t></w:r></w:p></w:body>'
       expect(hoistParagraphConditionals(xml)).toBe(xml)
     })
+  })
+
+  describe('hoistTableRowControls', () => {
+    it('turns docxtpl tr marker rows into Nunjucks controls around the data row', () => {
+      const open = '<w:tr><w:tc><w:p><w:r><w:t>{%tr for asset in assets.items %}</w:t></w:r></w:p></w:tc></w:tr>'
+      const data = '<w:tr><w:tc><w:p><w:r><w:t>{{ asset.description }}</w:t></w:r></w:p></w:tc></w:tr>'
+      const close = '<w:tr><w:tc><w:p><w:r><w:t>{%tr endfor %}</w:t></w:r></w:p></w:tc></w:tr>'
+
+      expect(hoistTableRowControls(open + data + close)).toBe(
+        `{% for asset in assets.items %}${data}{% endfor %}`,
+      )
+    })
+
+    it('leaves a row containing ordinary text untouched', () => {
+      const xml = '<w:tr><w:tc><w:p><w:r><w:t>Assets {%tr endfor %}</w:t></w:r></w:p></w:tc></w:tr>'
+      expect(hoistTableRowControls(xml)).toBe(xml)
+    })
+  })
+
+  it('renders the trust funding plan table-row loops', async () => {
+    const data = JSON.parse(
+      fs.readFileSync(path.join(root, 'examples/client-ma-trust-funding-plan.json'), 'utf8'),
+    )
+    const result = await generateNodeEstatePackage({
+      data,
+      packageName: 'trust-funding-plan',
+      state: 'MA',
+      root,
+      allowDraft: true,
+    })
+    if (!result.ok) throw new Error(result.error)
+
+    const xml = xmlFromDocx(result.files[0].buffer)
+    expect(xml).toContain('Primary Residence — 106 Selwyn Rd, Newton')
+    expect(xml).toContain('Citizens Bank — Checking')
+    expect(xml).toContain('Record quitclaim deed')
+    expect(xml).toContain('Update beneficiary designations')
+    expect(xml).not.toContain('{%tr')
   })
 
   it('drops the whole paragraph (no blank line) when a conditional section is omitted', () => {
