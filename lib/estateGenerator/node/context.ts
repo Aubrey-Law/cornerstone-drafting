@@ -14,7 +14,7 @@ function arrayValue(value: unknown): Array<Record<string, unknown>> {
 }
 
 const DEFAULT_POUR_OVER_ALTERNATE_DISPOSITION_TEXT = 'If incorporation by reference fails for any reason, I direct my Personal Representative to distribute the remainder of my estate, excluding any property over which I have a power of appointment, to my spouse if my spouse survives me. If my spouse does not survive me I direct my Personal Representative to distribute the property to my descendants, per stirpes.'
-const BLANK_DOC_DATE = '________________, 20__'
+const BLANK_DOC_DATE = '________________, 20___'
 const BLANK_ORDINAL_DOC_DATE = '_____ day of _________________, 20___'
 const BLANK_SIGNING_COUNTY = '__________________________'
 // The notary supplies their commission expiration via their own seal/stamp at

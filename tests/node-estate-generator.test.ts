@@ -589,7 +589,7 @@ describe('node estate generator context', () => {
     expect(context.uses_revocable_trust).toBe(true)
     expect(context.has_excluded_guardians).toBe(true)
     expect(context.state.requires_self_proving_affidavit).toBe(true)
-    expect(context.execution.display_doc_date).toBe('________________, 20__')
+    expect(context.execution.display_doc_date).toBe('________________, 20___')
     expect(context.execution.display_ordinal_doc_date).toBe('_____ day of _________________, 20___')
     expect(context.execution.display_signing_county).toBe('__________________________')
     // Empty commission renders nothing (label kept, blank fill line dropped).
@@ -611,7 +611,7 @@ describe('node estate generator context', () => {
       root,
     })
 
-    expect(context.execution.display_doc_date).toBe('________________, 20__')
+    expect(context.execution.display_doc_date).toBe('________________, 20___')
     expect(context.execution.display_ordinal_doc_date).toBe('_____ day of _________________, 20___')
     expect(context.execution.display_signing_county).toBe('Suffolk')
     // Commission missing even though signing is scheduled -> empty (no fill line).

@@ -33,7 +33,7 @@ These issues affect multiple documents or the shared generator layer.
 | **DPOA basic power matrix** | DPOA | Payload ✅ / Template ❌ | 14 `dpoa.basic_powers.*` toggles + `all_basic_powers` in generator; Cornerstone POA has only 3 module toggles (`include_entity_powers`, `include_advanced_trust_gifting`, `include_extended_personal_care`) — **no per-statutory-power branches** |
 | **DPOA coagent field ambiguity** | DPOA | Both wired | `dpoa.coagent_serving` and `dpoa.coagent_manner` both in payload; template authoring should document which is authoritative |
 | **Asset schedule incompleteness** | Trust funding plan, future Schedule A | Partial | `assets.items[]` wired; `owner`, `gross_value`, `net_value` default to `—` / `estimated_value` |
-| **Execution blanks when signing TBD** | All Jinja packages | By design | `signing_scheduled: false` → `________________, 20__` date/county/notary blanks |
+| **Execution blanks when signing TBD** | All Jinja packages | By design | `signing_scheduled: false` → `________________, 20___` date/county/notary blanks |
 | **al-generator.py vs Node context** | Pour-over will (manual QA) | Divergence | `examples/client-ma-pourover.json` is minimal; `al-generator.py` does not flatten `family.*` flags the way Node does — manual CLI renders may differ from app |
 | **Two render engines** | Realty transfer vs estate packages | Architectural | Transfer docs use docxtemplater `{field}` flat merge; estate packages use Jinja + clause library — different authoring rules |
 | **Joint grantor wording** | Assignment, certificate of trust | Template gap | Single-assignor / single-grantor templates; no `has_spouse` joint-grantor branch |

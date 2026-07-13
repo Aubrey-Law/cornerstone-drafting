@@ -39,6 +39,13 @@ const CATEGORY_LABELS = {
   engagement: 'Engagement agreements',
 } as const
 
+function templateLastUpload(template: TemplateRow): TemplateVersion | null {
+  return template.versions.reduce<TemplateVersion | null>((latest, version) => {
+    if (!latest) return version
+    return new Date(version.createdAt).getTime() > new Date(latest.createdAt).getTime() ? version : latest
+  }, null)
+}
+
 export function DocumentTemplatesSection() {
   const token = useAccessToken()
   const [templates, setTemplates] = useState<TemplateRow[]>([])
@@ -188,7 +195,9 @@ export function DocumentTemplatesSection() {
             <p className="text-xs text-muted-foreground">Uploads remain staged until they pass a matter preview and are explicitly published.</p>
           </div>
           <div className="space-y-3">
-            {templates.filter(template => template.category === category).map(template => (
+            {templates.filter(template => template.category === category).map(template => {
+              const lastUpload = templateLastUpload(template)
+              return (
               <details key={template.id} className="rounded-lg border border-border bg-card" open={template.versions.length > 0}>
                 <summary className="cursor-pointer list-none p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -201,9 +210,21 @@ export function DocumentTemplatesSection() {
                       </div>
                       <p className="mt-1 font-mono text-[11px] text-muted-foreground">{template.bundledPath}</p>
                       <p className="mt-1 text-[11px] text-muted-foreground">Used by: {template.packageNames.join(', ')}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Last uploaded:{' '}
+                        {lastUpload ? (
+                          <time dateTime={lastUpload.createdAt} title={lastUpload.createdAt}>
+                            {new Date(lastUpload.createdAt).toLocaleString()} (v{lastUpload.versionNumber})
+                          </time>
+                        ) : 'Never — bundled baseline only'}
+                      </p>
                       {template.publishedAt && (
                         <p className="mt-1 text-[11px] text-muted-foreground">
-                          Published {new Date(template.publishedAt).toLocaleString()} by {template.publishedBy}
+                          Active version published{' '}
+                          <time dateTime={template.publishedAt} title={template.publishedAt}>
+                            {new Date(template.publishedAt).toLocaleString()}
+                          </time>{' '}
+                          by {template.publishedBy}
                         </p>
                       )}
                     </div>
@@ -274,7 +295,8 @@ export function DocumentTemplatesSection() {
                   ))}
                 </div>
               </details>
-            ))}
+              )
+            })}
           </div>
         </section>
       ))}

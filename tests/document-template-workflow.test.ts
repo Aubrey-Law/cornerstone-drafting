@@ -92,5 +92,15 @@ describe('document template workflow', () => {
     expect(center).toContain('<EsignTemplateEditor')
     expect(email).not.toContain('<EmailTemplatesSection')
   })
-})
 
+  it('shows upload and active-publication timestamps in the Template Center', () => {
+    const documentTemplates = fs.readFileSync(
+      path.join(root, 'app/admin/settings/DocumentTemplatesSection.tsx'),
+      'utf8',
+    )
+    expect(documentTemplates).toContain('Last uploaded:')
+    expect(documentTemplates).toContain('lastUpload.createdAt')
+    expect(documentTemplates).toContain('Active version published')
+    expect(documentTemplates).toContain('template.publishedAt')
+  })
+})
