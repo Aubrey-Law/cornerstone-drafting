@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, FilePenLine, FileText, ListChecks, Send } from 'lucide-react'
+import { CheckCircle2, FilePenLine, FileText, ListChecks, Pencil, Save, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -92,6 +92,7 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
   const [isGenerating, setIsGenerating] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [isReviewEditing, setIsReviewEditing] = useState(false)
   const [approvalToken, setApprovalToken] = useState('')
   const [confirmExactRevision, setConfirmExactRevision] = useState(false)
   const [message, setMessage] = useState('')
@@ -158,18 +159,25 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
       const body = await response.json()
       if (!response.ok) {
         setMessage(body.error ?? 'Engagement agreement generation failed.')
-        return
+        return false
       }
       setPreview(body)
       setApprovalToken('')
       setConfirmExactRevision(false)
       setMessage('Engagement agreement generated. Review the exact PDF before sending.')
       setStep('review')
+      return true
     } catch {
       setMessage('Engagement agreement generation failed.')
+      return false
     } finally {
       setIsGenerating(false)
     }
+  }
+
+  async function saveReviewRevision() {
+    const ok = await generate()
+    if (ok) setIsReviewEditing(false)
   }
 
   async function approve() {
@@ -283,6 +291,9 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
           {step === 'review' && (
             <ReviewStep
               agreement={agreement}
+              input={input}
+              locked={locked}
+              blockers={blockers}
               revision={revision}
               sha={sha}
               previewUrls={previewUrls}
@@ -290,13 +301,20 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
               approvalToken={approvalToken}
               confirmExactRevision={confirmExactRevision}
               canSend={canSend}
+              isEditing={isReviewEditing}
               isApproving={isApproving}
+              isGenerating={isGenerating}
               isSending={isSending}
               onApprove={approve}
               onDownload={download}
+              onEdit={edit}
+              onPrimary={patchPrimary}
+              onSpouse={patchSpouse}
               onConfirm={setConfirmExactRevision}
               onGenerate={() => setStep('generate')}
+              onSaveRevision={saveReviewRevision}
               onSend={send}
+              onToggleEdit={() => setIsReviewEditing(value => !value)}
             />
           )}
           {message && <p className="rounded-md border border-border bg-card p-3 text-sm">{message}</p>}
@@ -443,6 +461,9 @@ function GenerateStep({
 
 function ReviewStep({
   agreement,
+  input,
+  locked,
+  blockers,
   revision,
   sha,
   previewUrls,
@@ -450,15 +471,25 @@ function ReviewStep({
   approvalToken,
   confirmExactRevision,
   canSend,
+  isEditing,
   isApproving,
+  isGenerating,
   isSending,
   onApprove,
   onDownload,
+  onEdit,
+  onPrimary,
+  onSpouse,
   onConfirm,
   onGenerate,
+  onSaveRevision,
   onSend,
+  onToggleEdit,
 }: {
   agreement: Agreement
+  input: EngagementInput
+  locked: boolean
+  blockers: string[]
   revision: string
   sha: string
   previewUrls: PreviewUrls | null
@@ -466,13 +497,20 @@ function ReviewStep({
   approvalToken: string
   confirmExactRevision: boolean
   canSend: boolean
+  isEditing: boolean
   isApproving: boolean
+  isGenerating: boolean
   isSending: boolean
   onApprove: () => void
   onDownload: (url: string, name: string) => void
+  onEdit: (patch: Partial<EngagementInput>) => void
+  onPrimary: (patch: Partial<EngagementInput['primary']>) => void
+  onSpouse: (patch: Partial<NonNullable<EngagementInput['spouse']>>) => void
   onConfirm: (value: boolean) => void
   onGenerate: () => void
+  onSaveRevision: () => void
   onSend: () => void
+  onToggleEdit: () => void
 }) {
   return (
     <section className="rounded-lg border border-border bg-card">
@@ -488,10 +526,26 @@ function ReviewStep({
         )}
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={onGenerate}>{hasPreview ? 'Regenerate' : 'Go to Generate'}</Button>
+          <Button variant={isEditing ? 'secondary' : 'outline'} disabled={locked} onClick={onToggleEdit}>
+            <Pencil className="mr-2 h-4 w-4" />
+            {isEditing ? 'Close in-app editor' : 'Edit in app'}
+          </Button>
           <Button variant="outline" disabled={!previewUrls} onClick={() => previewUrls && onDownload(previewUrls.docx, 'engagement.docx')}>Download editable DOCX</Button>
           <Button variant="outline" disabled={!previewUrls} onClick={() => previewUrls && onDownload(previewUrls.pdf, 'engagement.pdf')}>Download signing PDF</Button>
           <Button disabled={!hasPreview || isApproving} onClick={onApprove}>{isApproving ? 'Approving...' : approvalToken ? 'Re-approve revision' : 'Approve revision'}</Button>
         </div>
+        {isEditing && (
+          <ReviewEditor
+            input={input}
+            locked={locked}
+            blockers={blockers}
+            isGenerating={isGenerating}
+            onEdit={onEdit}
+            onPrimary={onPrimary}
+            onSpouse={onSpouse}
+            onSaveRevision={onSaveRevision}
+          />
+        )}
         <p className="font-mono text-xs text-muted-foreground">Revision {revision} / PDF SHA-256 {sha}</p>
         {previewUrls && <iframe title="Engagement agreement PDF preview" src={previewUrls.pdf} className="h-[720px] w-full rounded-md border border-border bg-background" />}
         <div className="rounded-md border border-border bg-background p-4">
@@ -512,5 +566,89 @@ function ReviewStep({
         </div>
       </div>
     </section>
+  )
+}
+
+function ReviewEditor({
+  input,
+  locked,
+  blockers,
+  isGenerating,
+  onEdit,
+  onPrimary,
+  onSpouse,
+  onSaveRevision,
+}: {
+  input: EngagementInput
+  locked: boolean
+  blockers: string[]
+  isGenerating: boolean
+  onEdit: (patch: Partial<EngagementInput>) => void
+  onPrimary: (patch: Partial<EngagementInput['primary']>) => void
+  onSpouse: (patch: Partial<NonNullable<EngagementInput['spouse']>>) => void
+  onSaveRevision: () => void
+}) {
+  return (
+    <div className="rounded-md border border-accent/30 bg-accent/5 p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">In-app DOCX editor</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Edit the generated agreement sections, then save a new exact DOCX/PDF revision before approval.
+          </p>
+        </div>
+        <Button disabled={locked || blockers.length > 0 || isGenerating} onClick={onSaveRevision}>
+          <Save className="mr-2 h-4 w-4" />
+          {isGenerating ? 'Saving revised version...' : 'Save revised version'}
+        </Button>
+      </div>
+      {blockers.length > 0 && (
+        <div className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          Resolve required fields before saving: {blockers.join(', ')}
+        </div>
+      )}
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <label className="text-xs font-medium">
+          Agreement date
+          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="date" value={input.agreementDate} onChange={event => onEdit({ agreementDate: event.target.value })} />
+        </label>
+        <label className="text-xs font-medium">
+          Flat fee
+          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="number" value={input.fee.amount} onChange={event => onEdit({ fee: { ...input.fee, amount: Number(event.target.value) } })} />
+        </label>
+        <label className="text-xs font-medium">
+          Expiration hours
+          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="number" value={input.expirationHours} onChange={event => onEdit({ expirationHours: Number(event.target.value) })} />
+        </label>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <label className="text-xs font-medium">
+          Primary name
+          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.primary.name} onChange={event => onPrimary({ name: event.target.value })} />
+        </label>
+        <label className="text-xs font-medium">
+          Primary email
+          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.primary.email} onChange={event => onPrimary({ email: event.target.value })} />
+        </label>
+        <label className="text-xs font-medium">
+          Spouse name
+          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.spouse?.name ?? ''} onChange={event => onSpouse({ name: event.target.value })} />
+        </label>
+        <label className="text-xs font-medium">
+          Spouse email
+          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.spouse?.email ?? ''} onChange={event => onSpouse({ email: event.target.value })} />
+        </label>
+      </div>
+      <label className="mt-3 block text-xs font-medium">
+        Payment terms
+        <textarea disabled={locked} className="mt-1 min-h-28 w-full rounded-md border border-border bg-background p-2 text-sm" value={input.fee.paymentTerms} onChange={event => onEdit({ fee: { ...input.fee, paymentTerms: event.target.value } })} />
+      </label>
+      <label className="mt-3 block text-xs font-medium">
+        Email message
+        <textarea disabled={locked} className="mt-1 min-h-24 w-full rounded-md border border-border bg-background p-2 text-sm" value={input.emailMessage} onChange={event => onEdit({ emailMessage: event.target.value })} />
+      </label>
+      <EngagementClauseEditor label="Additional Clauses" category="additional_clause" value={input.additionalClauses ?? []} disabled={locked} onChange={additionalClauses => onEdit({ additionalClauses })} />
+      <EngagementClauseEditor label="Schedule A - Additional Scope Terms" category="schedule_a" value={input.scheduleAClauses ?? []} disabled={locked} onChange={scheduleAClauses => onEdit({ scheduleAClauses })} />
+    </div>
   )
 }
