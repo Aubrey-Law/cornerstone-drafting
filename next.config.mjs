@@ -34,6 +34,8 @@ const nextConfig = {
   // read at runtime via fs; keep them in the traced serverless function bundles.
   outputFileTracingIncludes: {
     '/api/admin/matters/[id]/draft': ['./tools/aubreylaw-docgeneration/**'],
+    '/api/admin/engagement-agreements/[id]': ['./node_modules/@napi-rs/canvas*/**'],
+    '/api/admin/engagement-agreements/[id]/preview': ['./node_modules/@napi-rs/canvas*/**'],
   },
   // Keep the production build as a type-safety gate by default. If a constrained
   // runner needs to skip Next's in-build checker, set NEXT_IGNORE_TYPE_ERRORS=1
@@ -44,6 +46,7 @@ const nextConfig = {
   // Keep heavy server-only packages out of the client bundle
   serverExternalPackages: [
     'pdf-parse',
+    '@napi-rs/canvas',
     'mammoth',
     'docx',
     'pizzip',

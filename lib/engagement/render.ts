@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import Docxtemplater from 'docxtemplater'
 import PizZip from 'pizzip'
@@ -9,6 +10,8 @@ import { validateEngagementInput } from './schema'
 const MASTER_KEY = 'ep-trust-couple' as const
 const MASTER_VERSION = '1' as const
 const ANCHORS = ['CLIENT_1_SIGNATURE', 'CLIENT_1_DATE', 'CLIENT_2_SIGNATURE', 'CLIENT_2_DATE'] as const
+const PDF_CANVAS_GLOBALS = ['DOMMatrix', 'ImageData', 'Path2D'] as const
+const requireCanvasRuntime = createRequire(import.meta.url)
 
 export interface EngagementRenderDependencies {
   convertDocx?: (docxBytes: Buffer, filename: string) => Promise<Buffer>
@@ -18,8 +21,22 @@ function formatFee(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 }
 
+async function ensurePdfCanvasRuntime(): Promise<void> {
+  const canvas = requireCanvasRuntime('@napi-rs/canvas') as Record<string, unknown>
+  for (const name of PDF_CANVAS_GLOBALS) {
+    if (!(name in globalThis) && typeof canvas[name] === 'function') {
+      Object.defineProperty(globalThis, name, {
+        configurable: true,
+        value: canvas[name],
+        writable: true,
+      })
+    }
+  }
+}
+
 async function validatePdf(pdfBytes: Buffer): Promise<void> {
   if (pdfBytes.length === 0) throw new Error('Engagement PDF conversion returned an empty PDF')
+  await ensurePdfCanvasRuntime()
   const { PDFParse } = await import('pdf-parse')
   const parser = new PDFParse({ data: new Uint8Array(pdfBytes) })
   try {
