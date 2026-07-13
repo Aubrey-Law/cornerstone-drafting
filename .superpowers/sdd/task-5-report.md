@@ -33,3 +33,11 @@ Not performed: the requested authenticated desktop/mobile matter state requires 
 - Selected and mapped the provenance field in the server loader.
 - Bounded linked lead activity to the newest 200 records, removed the duplicate client activity fetch, and made all matter/linked-history query errors fail explicitly.
 - Review verification: 11 focused files / 90 tests passed; scoped ESLint and `git diff --check` passed; `npm run build:next` passed. The direct `tsconfig.json` check continues to report only the documented pre-existing test typing errors.
+
+## Final activity provenance fix
+
+- Corrected exact-once activity merging to follow the persisted direction: `lead_activity.source_matter_activity_id` references `matter_activity.id`.
+- The production loader now maps that field through `buildLinkedMatterActivity`; it no longer relies on nonexistent `matter_activity.metadata.source_lead_activity_id` provenance.
+- Added a loader-shaped rendered timeline test proving mirrored activity renders once, lead-only activity retains `From lead`, and chronology remains correct.
+- TDD RED: the new builder was missing and the inverse merge retained the mirrored lead row. GREEN: 3 focused files / 12 tests passed.
+- Final verification: 11 focused files / 91 tests passed; scoped ESLint and `git diff --check` passed; `npm run build:next` passed.

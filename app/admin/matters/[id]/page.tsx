@@ -13,7 +13,7 @@ import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import MatterDetailClient from './MatterDetailClient'
 import { mapMatterNoteRows } from './tabs/notes'
-import { mergeLeadAndMatterActivity } from '@/lib/leads/activity'
+import { buildLinkedMatterActivity } from '@/lib/leads/activity'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,18 +89,7 @@ export default async function MatterDetailPage({ params }: Params) {
   const linkedHistoryError = leadNotesError ?? leadMeetingNotesError ?? leadActivityError
   if (linkedHistoryError) throw new Error(`Could not load linked lead history: ${linkedHistoryError.message}`)
 
-  const initialActivity = mergeLeadAndMatterActivity(
-    (leadActivity ?? []).map(row => ({
-      id: row.id, matter_id: id, event_type: row.event_type, actor_id: row.actor_id,
-      actor_email: null, actor_name: null, title: row.title, detail: row.detail,
-      metadata: { origin: 'lead', source_lead_activity_id: row.id }, created_at: row.created_at,
-      createdAt: row.created_at,
-    })),
-    (matterActivity ?? []).map(row => ({
-      ...row, createdAt: row.created_at,
-      sourceLeadActivityId: typeof row.metadata?.source_lead_activity_id === 'string' ? row.metadata.source_lead_activity_id : null,
-    })),
-  ).map(row => row.metadata?.origin === 'lead' ? { ...row, id: `lead:${row.id}` } : row)
+  const initialActivity = buildLinkedMatterActivity(id, leadActivity ?? [], matterActivity ?? [])
 
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
   const matterNumberManual = Boolean(matterRow?.matter_number_manual)

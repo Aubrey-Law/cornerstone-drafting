@@ -12,8 +12,8 @@ describe('lead activity', () => {
 
   it('merges linked lead and matter activity without duplicate source events', () => {
     const merged = mergeLeadAndMatterActivity(
-      [{ id: 'l1', createdAt: '2026-07-01T00:00:00Z' }],
-      [{ id: 'm1', sourceLeadActivityId: 'l1', createdAt: '2026-07-02T00:00:00Z' }, { id: 'm2', createdAt: '2026-07-03T00:00:00Z' }],
+      [{ id: 'l1', sourceMatterActivityId: 'm1', createdAt: '2026-07-01T00:00:00Z' }],
+      [{ id: 'm1', createdAt: '2026-07-02T00:00:00Z' }, { id: 'm2', createdAt: '2026-07-03T00:00:00Z' }],
     )
     expect(merged.map(row => row.id)).toEqual(['m2', 'm1'])
   })

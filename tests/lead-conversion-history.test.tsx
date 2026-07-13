@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Tabs } from '@/components/ui/tabs'
+import { buildLinkedMatterActivity } from '@/lib/leads/activity'
+import { MatterActivityTab } from '@/app/admin/matters/[id]/MatterActivityTab'
 import {
   MatterNotesTab,
   mapMatterNoteRows,
@@ -88,5 +90,21 @@ describe('converted matter history', () => {
     expect(source).toContain('clientIntakeError')
     expect(source).toContain('Could not load client intake')
     expect(source).toContain('Could not load linked lead history')
+  })
+
+  it('renders a loader-linked mirrored activity once in the correct order and origin', () => {
+    const activity = buildLinkedMatterActivity('matter-1', [
+      { id: 'lead-new', event_type: 'note_added', title: 'Lead-only event', detail: null, actor_id: null, created_at: '2026-07-04T00:00:00Z', source_matter_activity_id: null },
+      { id: 'lead-mirror', event_type: 'matter_created', title: 'Mirrored event', detail: null, actor_id: null, created_at: '2026-07-03T00:00:00Z', source_matter_activity_id: 'matter-mirror' },
+    ], [
+      { id: 'matter-mirror', matter_id: 'matter-1', event_type: 'matter_created', title: 'Matter event', detail: null, actor_id: null, actor_email: null, actor_name: null, metadata: null, created_at: '2026-07-03T00:00:00Z' },
+      { id: 'matter-old', matter_id: 'matter-1', event_type: 'stage_changed', title: 'Old matter event', detail: null, actor_id: null, actor_email: null, actor_name: null, metadata: null, created_at: '2026-07-01T00:00:00Z' },
+    ])
+    const { container } = render(<MatterActivityTab activity={activity} loading={false} />)
+
+    expect(activity.map(row => row.id)).toEqual(['lead:lead-new', 'matter-mirror', 'matter-old'])
+    expect(screen.getAllByText('From lead')).toHaveLength(1)
+    expect(screen.queryByText('Mirrored event')).toBeNull()
+    expect(container.textContent!.indexOf('Lead-only event')).toBeLessThan(container.textContent!.indexOf('Matter event'))
   })
 })
