@@ -12,6 +12,7 @@ import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import MatterDetailClient from './MatterDetailClient'
+import { mergeLeadAndMatterActivity } from '@/lib/leads/activity'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,7 @@ export default async function MatterDetailPage({ params }: Params) {
     { data: notes },
     designSheet,
     intakeSnapshot,
+    { data: matterActivity },
   ] = await Promise.all([
     admin.from('matters').select('client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at').eq('id', id).maybeSingle(),
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
@@ -44,6 +46,7 @@ export default async function MatterDetailPage({ params }: Params) {
       .order('created_at', { ascending: false }),
     fetchDesignSheet(id),
     fetchIntakeForMatter(id),
+    admin.from('matter_activity').select('*').eq('matter_id', id).order('created_at', { ascending: false }).limit(50),
   ])
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
@@ -69,6 +72,27 @@ export default async function MatterDetailPage({ params }: Params) {
       .maybeSingle()
     clientIntakeRow = data
   }
+
+  const [{ data: leadNotes }, { data: leadMeetingNotes }, { data: leadActivity }] = intakeId
+    ? await Promise.all([
+        admin.from('lead_notes').select('id, body, created_at').eq('lead_id', intakeId).order('created_at', { ascending: false }),
+        admin.from('lead_meeting_notes').select('id, title, body, meeting_date').eq('lead_id', intakeId).order('meeting_date', { ascending: false }),
+        admin.from('lead_activity').select('id, event_type, title, detail, actor_id, created_at, source_matter_activity_id').eq('lead_id', intakeId).order('created_at', { ascending: false }),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }]
+
+  const initialActivity = mergeLeadAndMatterActivity(
+    (leadActivity ?? []).map(row => ({
+      id: row.id, matter_id: id, event_type: row.event_type, actor_id: row.actor_id,
+      actor_email: null, actor_name: null, title: row.title, detail: row.detail,
+      metadata: { origin: 'lead', source_lead_activity_id: row.id }, created_at: row.created_at,
+      createdAt: row.created_at,
+    })),
+    (matterActivity ?? []).map(row => ({
+      ...row, createdAt: row.created_at,
+      sourceLeadActivityId: typeof row.metadata?.source_lead_activity_id === 'string' ? row.metadata.source_lead_activity_id : null,
+    })),
+  ).map(row => row.metadata?.origin === 'lead' ? { ...row, id: `lead:${row.id}` } : row)
 
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
   const matterNumberManual = Boolean(matterRow?.matter_number_manual)
@@ -104,6 +128,11 @@ export default async function MatterDetailPage({ params }: Params) {
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
       unreviewedUploadCounts={unreviewedUploadCounts}
       initialNotes={(notes ?? []) as MatterNoteRow[]}
+      initialLeadNotes={[
+        ...(leadNotes ?? []).map(row => ({ ...row, lead_id: intakeId!, note_type: 'internal' as const })),
+        ...(leadMeetingNotes ?? []).map(row => ({ id: row.id, lead_id: intakeId!, body: `${row.title}\n\n${row.body}`, created_at: row.meeting_date, note_type: 'system' as const })),
+      ]}
+      initialActivity={initialActivity}
       designSheetSeeded={designSheetSeeded}
       reviewFlags={reviewFlags}
       resyncPreviewCount={resyncPreviewCount}

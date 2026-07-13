@@ -54,6 +54,7 @@ export function MatterActivityTab({ activity, loading }: MatterActivityTabProps)
             </div>
             <div className="min-w-0 flex-1 pb-1">
               <p className="text-sm font-medium text-foreground">{item.title}</p>
+              {item.metadata?.origin === 'lead' && <span className="inline-flex rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">From lead</span>}
               {item.detail && <p className="text-xs text-muted-foreground">{item.detail}</p>}
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 {relativeTime(item.created_at)}

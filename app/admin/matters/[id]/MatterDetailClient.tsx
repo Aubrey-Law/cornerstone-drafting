@@ -86,7 +86,8 @@ import { MatterPeopleTab } from './MatterPeopleTab'
 import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { useMatterAssets } from './useMatterAssets'
-import { MatterNotesTab } from './tabs/notes'
+import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
+import { mergeLeadAndMatterActivity } from '@/lib/leads/activity'
 import { MatterCommunicationsTab } from './tabs/messages'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
@@ -115,6 +116,8 @@ interface MatterDetailClientProps {
   matterDetails?: MatterDetailsRow | null
   designSheetPlanType?: string | null
   initialNotes?: MatterNoteRow[]
+  initialLeadNotes?: Array<{ id: string; lead_id: string; body: string; created_at: string; note_type: 'internal' | 'system' }>
+  initialActivity?: MatterActivity[]
   designSheetSeeded?: boolean
   reviewFlags?: IntakeReadinessFlag[]
   resyncPreviewCount?: number
@@ -187,6 +190,8 @@ function MatterDetailClientInner({
   matterDetails: initialMatterDetails = null,
   designSheetPlanType = null,
   initialNotes = [],
+  initialLeadNotes = [],
+  initialActivity = [],
   designSheetSeeded = false,
   reviewFlags = [],
   resyncPreviewCount = 0,
@@ -247,7 +252,7 @@ function MatterDetailClientInner({
   const [emailBody, setEmailBody] = useState('')
   const [emailSending, setEmailSending] = useState(false)
 
-  const [activity, setActivity] = useState<MatterActivity[]>([])
+  const [activity, setActivity] = useState<MatterActivity[]>(initialActivity)
   const [activityLoading, setActivityLoading] = useState(false)
 
   useEffect(() => {
@@ -399,6 +404,38 @@ function MatterDetailClientInner({
     handleUpdateNote,
     startEditingNote,
   } = useMatterNotes({ initialNotes, matterId, onActivityLogged: prependActivity })
+
+  const [leadNotes, setLeadNotes] = useState(initialLeadNotes)
+  const linkedNotes = useMemo(() => mergeLinkedNotes(
+    leadNotes.map(note => ({ id: note.id, sourceId: note.id, origin: 'lead' as const, leadId: note.lead_id, body: note.body, created_at: note.created_at, note_type: note.note_type })),
+    notes.map(note => ({ id: note.id, sourceId: note.id, origin: 'matter' as const, body: note.body, created_at: note.created_at, note_type: note.note_type })),
+  ), [leadNotes, notes])
+
+  const handleUpdateLeadNote = async (note: LinkedMatterNote) => {
+    if (!note.leadId) return
+    const body = editingNoteText.trim()
+    const response = await fetch(`/api/admin/leads/${note.leadId}/notes/${note.sourceId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
+    })
+    if (!response.ok) {
+      toast.error('Could not update lead note')
+      return
+    }
+    setLeadNotes(current => current.map(item => item.id === note.sourceId ? { ...item, body } : item))
+    cancelEditingNote()
+    toast.success('Lead note updated')
+  }
+
+  const handleDeleteLeadNote = async (note: LinkedMatterNote) => {
+    if (!note.leadId || !window.confirm('Delete this note? This cannot be undone.')) return
+    const response = await fetch(`/api/admin/leads/${note.leadId}/notes/${note.sourceId}`, { method: 'DELETE' })
+    if (!response.ok) {
+      toast.error('Could not delete lead note')
+      return
+    }
+    setLeadNotes(current => current.filter(item => item.id !== note.sourceId))
+    toast.success('Lead note deleted')
+  }
 
   const {
     currentEngineStageTask,
@@ -595,11 +632,15 @@ function MatterDetailClientInner({
         .eq('matter_id', matter.matter_id)
         .order('created_at', { ascending: false })
         .limit(50)
-      if (!error) setActivity((data ?? []) as MatterActivity[])
+      if (!error) {
+        const lead = initialActivity.filter(row => row.metadata?.origin === 'lead').map(row => ({ ...row, id: String(row.metadata?.source_lead_activity_id ?? row.id.replace(/^lead:/, '')), createdAt: row.created_at }))
+        const matterRows = ((data ?? []) as MatterActivity[]).map(row => ({ ...row, createdAt: row.created_at, sourceLeadActivityId: typeof row.metadata?.source_lead_activity_id === 'string' ? row.metadata.source_lead_activity_id : null }))
+        setActivity(mergeLeadAndMatterActivity(lead, matterRows).map(row => row.metadata?.origin === 'lead' ? { ...row, id: `lead:${row.id}` } : row))
+      }
     } finally {
       setActivityLoading(false)
     }
-  }, [matter.matter_id])
+  }, [initialActivity, matter.matter_id])
 
   useEffect(() => {
     void loadActivity()
@@ -1169,7 +1210,7 @@ function MatterDetailClientInner({
             noteSaving={noteSaving}
             noteText={noteText}
             noteType={noteType}
-            notes={notes}
+            notes={linkedNotes}
             setEditingNoteText={setEditingNoteText}
             setEditingNoteType={setEditingNoteType}
             setNoteText={setNoteText}
@@ -1178,6 +1219,8 @@ function MatterDetailClientInner({
             handleAddNote={handleAddNote}
             handleDeleteNote={handleDeleteNote}
             handleUpdateNote={handleUpdateNote}
+            handleDeleteLeadNote={handleDeleteLeadNote}
+            handleUpdateLeadNote={handleUpdateLeadNote}
             startEditingNote={startEditingNote}
             meetingNotes={<MatterMeetingNotesCard matterId={matterId} defaultOpen />}
           />

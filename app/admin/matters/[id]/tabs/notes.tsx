@@ -10,7 +10,22 @@ import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import { AssistantNotePromptButton } from '@/app/admin/components/AssistantNotePromptButton'
 
 type EditableNoteType = 'Internal' | 'Client comm.'
-type MatterNoteListItem = Pick<MatterNoteRow, 'id' | 'body' | 'created_at' | 'note_type'>
+export type LinkedMatterNote = Pick<MatterNoteRow, 'body' | 'created_at' | 'note_type'> & {
+  id: string
+  sourceId: string
+  origin: 'lead' | 'matter'
+  leadId?: string
+  sourceLeadNoteId?: string | null
+}
+
+export function mergeLinkedNotes(lead: LinkedMatterNote[], matter: LinkedMatterNote[]): LinkedMatterNote[] {
+  const representedLeadIds = new Set(matter.map(note => note.sourceLeadNoteId).filter(Boolean))
+  return [...matter, ...lead.filter(note => !representedLeadIds.has(note.sourceId))]
+    .map(note => ({ ...note, id: `${note.origin}:${note.sourceId}` }))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+}
+
+type MatterNoteListItem = LinkedMatterNote
 
 interface MatterNotesTabProps {
   editingNoteId: string | null
@@ -32,6 +47,8 @@ interface MatterNotesTabProps {
   handleAddNote: () => Promise<void>
   handleDeleteNote: (noteId: string) => Promise<void>
   handleUpdateNote: () => Promise<void>
+  handleDeleteLeadNote?: (note: LinkedMatterNote) => Promise<void>
+  handleUpdateLeadNote?: (note: LinkedMatterNote) => Promise<void>
   startEditingNote: (note: MatterNoteListItem) => void
 }
 
@@ -55,6 +72,8 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
     handleAddNote,
     handleDeleteNote,
     handleUpdateNote,
+    handleDeleteLeadNote,
+    handleUpdateLeadNote,
     startEditingNote,
   } = props
 
@@ -71,11 +90,12 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
             const isSystem = note.note_type === 'system'
             const isInternal = note.note_type === 'internal'
             const isEditable = note.note_type === 'internal' || note.note_type === 'client_comm'
-            const isEditing = editingNoteId === note.id
-            const isMutating = noteMutatingId === note.id
+            const isLead = note.origin === 'lead'
+            const isEditing = editingNoteId === note.sourceId
+            const isMutating = noteMutatingId === note.sourceId
             const displayContent = note.body ?? ''
             return (
-              <div key={note.id} className={cn('rounded-lg border bg-card p-4', isSystem ? 'border-border/60 bg-surface-1' : 'border-border', note.id.startsWith('opt-') && 'opacity-60')}>
+              <div key={note.id} className={cn('rounded-lg border bg-card p-4', isSystem ? 'border-border/60 bg-surface-1' : 'border-border', note.sourceId.startsWith('opt-') && 'opacity-60')}>
                 <div className="mb-1.5 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {isSystem ? (
@@ -90,6 +110,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                     <span className="text-[11px] text-text-tertiary">
                       {new Date(note.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
+                    {isLead && <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">From lead</span>}
                   </div>
                   {isEditable && !note.id.startsWith('opt-') && (
                     <div className="flex shrink-0 items-center gap-1">
@@ -99,7 +120,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                             size="sm"
                             className="h-7 gap-1 px-2 text-[11px]"
                             disabled={!editingNoteText.trim() || isMutating}
-                            onClick={() => void handleUpdateNote()}
+                            onClick={() => void (isLead ? handleUpdateLeadNote?.(note) : handleUpdateNote())}
                           >
                             <Check className="h-3 w-3" />
                             Save
@@ -110,10 +131,10 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                         </>
                       ) : (
                         <>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled={isMutating} onClick={() => startEditingNote(note)} aria-label="Edit note">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled={isMutating} onClick={() => startEditingNote({ ...note, id: note.sourceId })} aria-label="Edit note">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" disabled={isMutating} onClick={() => void handleDeleteNote(note.id)} aria-label="Delete note">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" disabled={isMutating} onClick={() => void (isLead ? handleDeleteLeadNote?.(note) : handleDeleteNote(note.sourceId))} aria-label="Delete note">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </>
