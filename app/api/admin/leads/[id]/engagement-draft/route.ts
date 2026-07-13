@@ -35,8 +35,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .limit(1)
     .maybeSingle()
 
-  if (canOpenWorkspace(existing as ExistingAgreement | null)) {
-    return Response.json({ agreementId: existing.id })
+  const existingAgreement = existing as ExistingAgreement | null
+  if (canOpenWorkspace(existingAgreement)) {
+    return Response.json({ agreementId: existingAgreement.id })
   }
 
   const [{ data: lead }, { data: spouse }] = await Promise.all([
