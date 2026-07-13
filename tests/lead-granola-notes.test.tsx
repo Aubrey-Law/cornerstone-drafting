@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import React from 'react'
+import fs from 'node:fs'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { requireAdmin, fetchGranolaNote, isGranolaNoteId, from } = vi.hoisted(() => ({
+const { requireAdmin, fetchGranolaNote, isGranolaNoteId, rpc } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   fetchGranolaNote: vi.fn(),
   isGranolaNoteId: vi.fn(),
-  from: vi.fn(),
+  rpc: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
@@ -18,7 +19,7 @@ vi.mock('@/lib/granola', async importOriginal => ({
   fetchGranolaNote,
   isGranolaNoteId,
 }))
-vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ from }) }))
+vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc }) }))
 
 import { AddMeetingNotesDialog } from '@/components/meeting-notes/AddMeetingNotesDialog'
 import { LeadNotesCard } from '@/components/leads/LeadNotesCard'
@@ -84,6 +85,21 @@ describe('lead Granola notes', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
   })
 
+  it('does not duplicate an existing meeting in the rendered list after an idempotent import', async () => {
+    const meeting = { id: row.id, title: row.title, date: row.meeting_date, attendees: row.attendees, body: row.body, source: row.source, granolaNoteId: row.granola_note_id, actorId: row.actor_id, createdAt: row.created_at, updatedAt: row.updated_at }
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response({ notes: [{ id: granolaDoc.id, title: granolaDoc.title, createdAt: row.created_at }] }))
+      .mockResolvedValueOnce(response({ title: granolaDoc.title, meetingDate: granolaDoc.meetingDate, content: granolaDoc.notesMarkdown, attendees: granolaDoc.attendees }))
+      .mockResolvedValueOnce(response({ meetingNote: meeting, imported: false }))
+    const user = userEvent.setup()
+    render(<LeadNotesCard leadId="lead-1" initialNotes={[]} initialMeetingNotes={[meeting]} currentUser={{ id: 'user-1', role: 'attorney' }} />)
+    await user.click(screen.getByRole('button', { name: 'Import from Granola' }))
+    await user.click(await screen.findByRole('button', { name: new RegExp(granolaDoc.title) }))
+    await user.click(screen.getByRole('button', { name: 'Save notes' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByLabelText('Meeting notes list').querySelectorAll('article')).toHaveLength(1)
+  })
+
   it('keeps the existing matter endpoint and payload unchanged', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(response({ notes: [{ id: granolaDoc.id, title: granolaDoc.title, createdAt: '2026-07-10T12:00:00Z' }] }))
@@ -98,26 +114,36 @@ describe('lead Granola notes', () => {
     expect(payload).toMatchObject({ matterId: 'matter-1', title: granolaDoc.title, content: granolaDoc.notesMarkdown, source: 'granola' })
   })
 
-  it('validates, imports once, logs one activity, and returns the existing row on duplicate import', async () => {
-    const inserted = { select: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: row, error: null }) })) }
-    const activityInsert = vi.fn().mockResolvedValue({ error: null })
-    from.mockImplementation((table: string) => table === 'lead_meeting_notes'
-      ? { insert: vi.fn(() => inserted) }
-      : { insert: activityInsert })
+  it('delegates note and activity creation to one atomic, idempotent RPC', async () => {
+    rpc.mockResolvedValueOnce({ data: [{ meeting_note: row, imported: true }], error: null })
     const request = new Request('http://localhost', { method: 'POST', body: JSON.stringify({ noteId: granolaDoc.id }) })
     const created = await POST(request, { params: Promise.resolve({ id: 'lead-1' }) })
     expect(created.status).toBe(200)
     expect((await created.json()).imported).toBe(true)
-    expect(activityInsert).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith('import_lead_granola_note_with_activity', expect.objectContaining({
+      p_lead_id: 'lead-1', p_granola_note_id: granolaDoc.id, p_actor_id: 'user-1',
+    }))
 
-    const existingQuery = { eq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }) }
-    existingQuery.eq.mockReturnValue(existingQuery)
-    from.mockImplementation((table: string) => table === 'lead_meeting_notes'
-      ? { insert: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate' } }) })) })), select: vi.fn(() => existingQuery) }
-      : { insert: activityInsert })
+    rpc.mockResolvedValueOnce({ data: [{ meeting_note: row, imported: false }], error: null })
     const duplicate = await POST(new Request('http://localhost', { method: 'POST', body: JSON.stringify({ noteId: granolaDoc.id }) }), { params: Promise.resolve({ id: 'lead-1' }) })
     expect(await duplicate.json()).toMatchObject({ imported: false, meetingNote: { id: row.id } })
-    expect(activityInsert).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledTimes(2)
     expect(fetchGranolaNote).toHaveBeenCalledWith(granolaDoc.id)
+
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'XX000', message: 'activity insert failed' } })
+    const failed = await POST(new Request('http://localhost', { method: 'POST', body: JSON.stringify({ noteId: granolaDoc.id }) }), { params: Promise.resolve({ id: 'lead-1' }) })
+    expect(failed.status).toBe(500)
+    expect(await failed.json()).toEqual({ error: 'activity insert failed' })
+  })
+
+  it('defines the atomic import so activity failure rolls back the note and duplicates add no activity', () => {
+    const sql = fs.readFileSync('supabase/migrations/20260730010000_atomic_lead_notes.sql', 'utf8')
+    expect(sql).toContain('function public.import_lead_granola_note_with_activity')
+    expect(sql).toContain('on conflict (lead_id,granola_note_id)')
+    expect(sql).toContain('if v_imported then')
+    expect(sql).toContain("insert into public.lead_activity")
+    expect(sql).toContain('grant execute on function public.import_lead_granola_note_with_activity')
+    expect(sql).toContain('to service_role')
+    expect(sql).toContain('perform public.assert_lead_note_actor(p_actor_id)')
   })
 })

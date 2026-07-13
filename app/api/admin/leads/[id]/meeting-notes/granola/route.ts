@@ -34,28 +34,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const note = await fetchGranolaNote(noteId)
     const admin = getAdminClient()
-    const { data, error } = await admin.from('lead_meeting_notes').insert({
-      lead_id: id, title: note.title, meeting_date: note.meetingDate,
-      attendees: note.attendees, body: note.notesMarkdown, source: 'granola',
-      granola_note_id: noteId, actor_id: userId,
-    }).select().single()
-
-    if (error?.code === '23505') {
-      const { data: existing, error: existingError } = await admin.from('lead_meeting_notes')
-        .select('*').eq('lead_id', id).eq('granola_note_id', noteId).maybeSingle()
-      if (existingError || !existing) {
-        return Response.json({ error: existingError?.message ?? 'Imported note not found' }, { status: 500 })
-      }
-      return Response.json({ meetingNote: dto(existing), imported: false })
-    }
-    if (error) return Response.json({ error: error.message }, { status: 500 })
-
-    const { error: activityError } = await admin.from('lead_activity').insert({
-      lead_id: id, event_type: 'meeting_note_added', title: 'Granola meeting note imported',
-      detail: note.title, actor_id: userId,
+    const { data, error } = await admin.rpc('import_lead_granola_note_with_activity', {
+      p_lead_id: id, p_title: note.title, p_meeting_date: note.meetingDate,
+      p_attendees: note.attendees, p_body: note.notesMarkdown,
+      p_granola_note_id: noteId, p_actor_id: userId,
     })
-    if (activityError) return Response.json({ error: activityError.message }, { status: 500 })
-    return Response.json({ meetingNote: dto(data), imported: true })
+    if (error) {
+      const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500
+      return Response.json({ error: error.message }, { status })
+    }
+    const result = data?.[0]
+    if (!result?.meeting_note) return Response.json({ error: 'Granola import returned no note' }, { status: 500 })
+    return Response.json({ meetingNote: dto(result.meeting_note), imported: result.imported })
   } catch (error) {
     if (error instanceof GranolaError) {
       return Response.json({ error: error.message }, { status: error.status })
