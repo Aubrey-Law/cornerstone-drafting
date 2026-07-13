@@ -186,3 +186,8 @@ For incremental updates on the firm DB only, run specific SQL files manually in 
 ## Storage
 
 Create a Supabase Storage bucket named `templates` with DOCX estate-plan templates (Supabase template engine fallback). Document bytes live in Cloudflare R2, not Supabase Storage.
+
+The administrator Template Center uses the separate private `document-template-versions`
+bucket. Migration `20260713194628_document_template_workflow.sql` creates and locks that
+bucket automatically; template objects are accessed only through server-side service-role
+route handlers.

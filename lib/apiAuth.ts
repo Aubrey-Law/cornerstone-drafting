@@ -66,6 +66,22 @@ export async function requireAdmin(_req: Request) {
   return { err: null, userId: user.id, user }
 }
 
+/** Strict administrator gate for destructive firm-wide settings. */
+export async function requireAdministrator(req: Request) {
+  const auth = await requireAdmin(req)
+  if (auth.err || !auth.userId) return auth
+
+  const role = await resolveUserRole(auth.userId)
+  if (role !== 'admin') {
+    return {
+      err: NextResponse.json({ error: 'Administrator role required' }, { status: 403 }),
+      userId: null,
+      user: null,
+    }
+  }
+  return auth
+}
+
 /** Browser navigations — redirect to login instead of JSON 401. */
 export function redirectToLogin(req: Request, nextPath?: string) {
   const login = new URL('/auth/login', req.url)

@@ -22,8 +22,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
-import { EsignTemplateEditor } from './EsignTemplateEditor'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
+import { TemplateCenter } from './TemplateCenter'
 
 type Tab =
   | 'models'
@@ -33,7 +33,7 @@ type Tab =
   | 'email'
   | 'sla'
   | 'ai-usage'
-  | 'esign-template'
+  | 'templates'
 
 interface ApiKeyStatus {
   provider: string
@@ -52,7 +52,13 @@ interface ConnectorRow {
   hasAuthConfig: boolean
 }
 
-export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Tab }) {
+export function StaffSettingsClient({
+  initialTab = 'models',
+  isAdministrator = false,
+}: {
+  initialTab?: Tab
+  isAdministrator?: boolean
+}) {
   const token = useAccessToken()
   const [tab, setTab] = useState<Tab>(initialTab)
   const [prefs, setPrefs] = useState<UserPreferences>({})
@@ -85,7 +91,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       t === 'connectors' ||
       t === 'sla' ||
       t === 'ai-usage' ||
-      t === 'esign-template'
+      (t === 'templates' && isAdministrator)
     ) {
       setTab(t)
     }
@@ -94,7 +100,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
     }
     const err = sp.get('mscal_error')
     if (err) toast.error(err)
-  }, [])
+  }, [isAdministrator])
 
   useEffect(() => {
     if (!token) return
@@ -309,8 +315,8 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Model preferences, API keys, MCP connectors, Outlook, email settings, e-signature
-          template, AI usage, and matter stage SLA.
+          Model preferences, API keys, MCP connectors, Outlook, firm templates, AI usage,
+          and matter stage SLA.
         </p>
       </div>
 
@@ -322,7 +328,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
             ['connectors', 'Connectors'],
             ['outlook', 'Outlook'],
             ['email', 'Email'],
-            ['esign-template', 'E-signature'],
+            ...(isAdministrator ? [['templates', 'Templates'] as const] : []),
             ['ai-usage', 'AI Usage'],
             ['sla', 'Stage SLA'],
           ] as const
@@ -644,7 +650,7 @@ export function StaffSettingsClient({ initialTab = 'models' }: { initialTab?: Ta
 
       {tab === 'email' && <EmailSettingsSection />}
 
-      {tab === 'esign-template' && <EsignTemplateEditor />}
+      {tab === 'templates' && isAdministrator && <TemplateCenter />}
 
       {tab === 'ai-usage' && <AiUsagePanel />}
 

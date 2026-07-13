@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import type { EmailMode, EmailProvider, EmailCategoryMeta } from '@/lib/email/categories'
-import { EmailTemplatesSection } from './EmailTemplatesSection'
 
 interface CategoryRow extends EmailCategoryMeta {
   mode: EmailMode
@@ -502,8 +501,6 @@ export function EmailSettingsSection() {
           </tbody>
         </table>
       </div>
-      <EmailTemplatesSection authHeaders={authHeaders()} />
-
       <AlertDialog open={confirmOn !== null} onOpenChange={open => { if (!open) setConfirmOn(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>

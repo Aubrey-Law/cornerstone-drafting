@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
 import { buildEstateDraftPreflight } from '@/lib/estateGenerator/preflight'
+import { publishedTemplatePreflightError } from '@/lib/documentTemplates/preflight'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -29,6 +30,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     }
 
     const preflight = buildEstateDraftPreflight(payload)
+    const templateError = await publishedTemplatePreflightError(payload)
+    if (templateError) {
+      preflight.canGenerate = false
+      preflight.error = templateError
+    }
     return NextResponse.json(preflight)
   } catch (error) {
     console.error('[draft preflight route]', matterId, error)

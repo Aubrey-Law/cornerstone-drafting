@@ -226,7 +226,8 @@ export function hoistParagraphConditionals(xml: string): string {
 }
 
 export interface RenderNodeEstateDocxTemplateArgs {
-  templatePath: string
+  templatePath?: string
+  templateBuffer?: Buffer
   context: NodeEstateContext
   clauses: NodeClauseStore
 }
@@ -239,12 +240,15 @@ export interface RenderNodeEstateDocxTemplateResult {
 
 export function renderNodeEstateDocxTemplate({
   templatePath,
+  templateBuffer,
   context,
   clauses,
 }: RenderNodeEstateDocxTemplateArgs): RenderNodeEstateDocxTemplateResult {
-  if (!fs.existsSync(templatePath)) throw new Error(`Template not found: ${templatePath}`)
+  if (!templateBuffer && (!templatePath || !fs.existsSync(templatePath))) {
+    throw new Error(`Template not found: ${templatePath ?? '(no path provided)'}`)
+  }
 
-  const zip = new PizZip(fs.readFileSync(templatePath))
+  const zip = new PizZip(templateBuffer ?? fs.readFileSync(templatePath!))
   const unresolved = new Set<string>()
   const missingFields = new Set<string>()
 

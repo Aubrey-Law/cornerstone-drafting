@@ -64,6 +64,7 @@ describe('API route auth coverage', () => {
         expect(
           hasAny(source, [
             /requireAdmin\b/,
+            /requireAdministrator\b/,
             /requireAdminRoute\b/,
             /requireEngagementStaff\b/,
             /ENABLE_DEBUG_ROUTES/,

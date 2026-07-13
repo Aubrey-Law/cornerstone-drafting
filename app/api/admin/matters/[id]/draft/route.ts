@@ -332,14 +332,31 @@ export async function POST(req: NextRequest, { params }: Params) {
       buffer: Buffer
       title?: string
       owner?: string | null
+      templateId?: string
+      templateVersionId?: string | null
+      templateSource?: 'bundled' | 'published'
     }> = []
 
     if (generateResult.ok) {
       generatedFiles = generateResult.files.map(f => {
         // Node generator files carry friendly title + owner; the Python/Supabase
         // fallbacks return only name + buffer.
-        const meta = f as { title?: string; owner?: string | null }
-        return { filename: f.name, buffer: f.buffer, title: meta.title, owner: meta.owner }
+        const meta = f as {
+          title?: string
+          owner?: string | null
+          templateId?: string
+          templateVersionId?: string | null
+          templateSource?: 'bundled' | 'published'
+        }
+        return {
+          filename: f.name,
+          buffer: f.buffer,
+          title: meta.title,
+          owner: meta.owner,
+          templateId: meta.templateId,
+          templateVersionId: meta.templateVersionId,
+          templateSource: meta.templateSource,
+        }
       })
     } else {
       if (usingEstateGenerator && assetTransferDocTypes.length === 0) {
@@ -398,7 +415,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             .eq('client_intake_id', matterRow.client_intake_id)
           contacts = (contactsRaw ?? []) as MatterContact[]
         }
-        const assetFiles = generateAssetTransferFilesFromDesignSheet(
+        const assetFiles = await generateAssetTransferFilesFromDesignSheet(
           sheetRow as DesignSheet,
           {
             client_name: payload.client.full_name,
@@ -413,6 +430,9 @@ export async function POST(req: NextRequest, { params }: Params) {
             buffer: file.buffer,
             title: file.title,
             owner: null,
+            templateId: file.templateId,
+            templateVersionId: file.templateVersionId,
+            templateSource: file.templateSource,
           })),
         )
       }
@@ -553,6 +573,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         generation_engine: generationEngine,
         marker_count: scan.markerCount,
         missing_count: scan.missingFields.length,
+        template_id: file.templateId ?? null,
+        template_version_id: file.templateVersionId ?? null,
       }).select('id').single()
 
       if (insertErr) {

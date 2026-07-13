@@ -9,11 +9,6 @@
   --font-inter: var(--font-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* Safelist — FieldPrimitives arbitrary color tokens.
-   Static strings in .tsx files are normally scanned, but this guarantees
-   they survive any future dynamic-class refactoring. */
-@source inline("bg-[#EEF5E8] text-[#437A22] border-[#B8DDA0] bg-[#FDF3EC] text-[#964219] border-[#F5C9A0] bg-[#F4F3EF] text-[#71706B] border-[#E5E4E0] text-[#1A1916] text-[#B0AFA9] bg-[#FAFAF8] text-[#01696F]");
-
 @layer base {
   * {
     @apply border-border outline-ring/50;

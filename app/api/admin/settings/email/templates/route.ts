@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { requireAdmin } from '@/lib/apiAuth'
+import { requireAdmin, requireAdministrator } from '@/lib/apiAuth'
 import {
   EMAIL_CATEGORY_META,
   isEmailCategory,
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { err, userId } = await requireAdmin(req)
+  const { err, userId } = await requireAdministrator(req)
   if (err) return err
 
   const body = await req.json().catch(() => null) as TemplatePayload | null

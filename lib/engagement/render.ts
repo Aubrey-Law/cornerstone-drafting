@@ -6,6 +6,8 @@ import Docxtemplater from 'docxtemplater'
 import PizZip from 'pizzip'
 import { convertDocxToPdf } from '@/lib/docxPdfConvert'
 import { validateEngagementInput } from './schema'
+import { resolveDocumentTemplate } from '@/lib/documentTemplates/resolver'
+import type { ResolvedDocumentTemplate } from '@/lib/documentTemplates/types'
 
 const MASTER_KEY = 'ep-trust-couple' as const
 const MASTER_VERSION = '1' as const
@@ -15,6 +17,7 @@ const requireCanvasRuntime = createRequire(import.meta.url)
 
 export interface EngagementRenderDependencies {
   convertDocx?: (docxBytes: Buffer, filename: string) => Promise<Buffer>
+  template?: ResolvedDocumentTemplate
 }
 
 function formatFee(amount: number): string {
@@ -64,7 +67,12 @@ export async function renderEngagementAgreement(input: unknown, dependencies: En
   }
   if (!value.spouse) throw new Error('Engagement agreement template unavailable without a spouse')
 
-  const master = await readFile(path.join(process.cwd(), 'assets/engagement-agreements/ep-trust-couple-v1.docx'))
+  const resolvedTemplate = dependencies.template ?? (
+    process.env.NODE_ENV === 'test'
+      ? null
+      : await resolveDocumentTemplate('engagement-ep-trust-couple')
+  )
+  const master = resolvedTemplate?.buffer ?? await readFile(path.join(process.cwd(), 'assets/engagement-agreements/ep-trust-couple-v1.docx'))
   const doc = new Docxtemplater(new PizZip(master), { paragraphLoop: true, linebreaks: true })
   doc.render({
     agreement_date: value.agreementDate,
@@ -79,7 +87,8 @@ export async function renderEngagementAgreement(input: unknown, dependencies: En
   })
   const docxBytes = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' }) as Buffer
   const convert = dependencies.convertDocx ?? convertDocxToPdf
-  const pdfBytes = await convert(docxBytes, `${MASTER_KEY}-v${MASTER_VERSION}.docx`)
+  const resolvedVersion = resolvedTemplate?.versionId ?? MASTER_VERSION
+  const pdfBytes = await convert(docxBytes, `${MASTER_KEY}-v${resolvedVersion}.docx`)
   await validatePdf(pdfBytes)
 
   return {
@@ -87,6 +96,9 @@ export async function renderEngagementAgreement(input: unknown, dependencies: En
     pdfBytes,
     pdfSha256: createHash('sha256').update(pdfBytes).digest('hex'),
     masterKey: MASTER_KEY,
-    masterVersion: MASTER_VERSION,
+    masterVersion: resolvedVersion,
+    templateId: resolvedTemplate?.definition.id ?? 'engagement-ep-trust-couple',
+    templateVersionId: resolvedTemplate?.versionId ?? null,
+    templateSource: resolvedTemplate?.source ?? 'bundled',
   }
 }

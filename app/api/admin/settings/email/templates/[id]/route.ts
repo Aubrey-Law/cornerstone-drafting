@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { requireAdmin } from '@/lib/apiAuth'
+import { requireAdministrator } from '@/lib/apiAuth'
 import { isEmailCategory, type EmailCategory } from '@/lib/email/categories'
 import { isHtmlTemplateBody, sanitizeEmailHtml } from '@/lib/email/templateShared'
 
@@ -28,7 +28,7 @@ async function clearDefaultForCategory(category: EmailCategory, exceptId: string
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const { err, userId } = await requireAdmin(req)
+  const { err, userId } = await requireAdministrator(req)
   if (err) return err
 
   const { id } = await params
@@ -98,7 +98,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {
-  const { err } = await requireAdmin(req)
+  const { err } = await requireAdministrator(req)
   if (err) return err
 
   const { id } = await params

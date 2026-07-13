@@ -14,6 +14,8 @@ import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
 import { dataForNodeEstatePackage, youngAdultEstatePlanData } from '@/lib/estateGenerator/node/packageData'
 import { conditionalMissingFieldsForPackage } from '@/lib/estateGenerator/node/packageValidation'
 import { renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
+import { resolveDocumentTemplateForBundledPath } from '@/lib/documentTemplates/resolver'
+import type { ResolvedDocumentTemplate } from '@/lib/documentTemplates/types'
 import type {
   NodeEstateData,
   NodeEstateGeneratedFile,
@@ -29,6 +31,7 @@ export interface GenerateNodeEstatePackageArgs {
   state: string
   root?: string
   allowDraft?: boolean
+  templateResolver?: (bundledPath: string) => Promise<ResolvedDocumentTemplate>
 }
 
 function clientSlug(data: NodeEstateData): string {
@@ -82,6 +85,7 @@ export async function generateNodeEstatePackage({
   state,
   root = resolveNodeEstateGeneratorRoot(),
   allowDraft = false,
+  templateResolver,
 }: GenerateNodeEstatePackageArgs): Promise<NodeEstateGeneratorResult> {
   const config = loadNodeEstatePackage(packageName, root)
   const packageData = dataForNodeEstatePackage(data, packageName)
@@ -103,8 +107,16 @@ export async function generateNodeEstatePackage({
 
   try {
     for (const document of config.documents) {
+      const absoluteTemplatePath = path.join(root, document.template)
+      const bundledPath = path.relative(process.cwd(), absoluteTemplatePath).replaceAll('\\', '/')
+      const resolved = templateResolver
+        ? await templateResolver(bundledPath)
+        : process.env.NODE_ENV === 'test'
+          ? null
+          : await resolveDocumentTemplateForBundledPath(bundledPath)
       const rendered = renderNodeEstateDocxTemplate({
-        templatePath: path.join(root, document.template),
+        templatePath: resolved ? undefined : absoluteTemplatePath,
+        templateBuffer: resolved?.buffer,
         context,
         clauses,
       })
@@ -120,6 +132,9 @@ export async function generateNodeEstatePackage({
         owner,
         unresolvedMarkers: rendered.unresolvedMarkers,
         missingFields: rendered.missingFields,
+        templateId: resolved?.definition.id,
+        templateVersionId: resolved?.versionId ?? null,
+        templateSource: resolved?.source ?? 'bundled',
       })
     }
   } catch (error) {

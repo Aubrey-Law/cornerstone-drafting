@@ -49,6 +49,10 @@ export interface NodeEstateGeneratedFile {
   unresolvedMarkers?: string[]
   /** `[[ MISSING: path ]]` field holes in this document's render. */
   missingFields?: string[]
+  /** Published-template provenance; null means the repository-bundled master. */
+  templateId?: string
+  templateVersionId?: string | null
+  templateSource?: 'bundled' | 'published'
 }
 
 export type NodeEstateGeneratorResult =

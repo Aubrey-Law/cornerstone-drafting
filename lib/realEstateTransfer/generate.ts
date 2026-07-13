@@ -8,14 +8,16 @@ import {
   type RealEstateTransferFields,
 } from './fields'
 import { getRealEstateTransferTemplatePath } from './extract'
+import { resolveDocumentTemplateForBundledPath } from '@/lib/documentTemplates/resolver'
+import type { ResolvedDocumentTemplate } from '@/lib/documentTemplates/types'
 
-function renderTemplate(templateFile: string, fields: RealEstateTransferFields): Buffer {
+function renderTemplate(templateFile: string, fields: RealEstateTransferFields, templateBuffer?: Buffer): Buffer {
   const templatePath = getRealEstateTransferTemplatePath(templateFile)
-  if (!fs.existsSync(templatePath)) {
+  if (!templateBuffer && !fs.existsSync(templatePath)) {
     throw new Error(`Template not found: ${templateFile}`)
   }
 
-  const content = fs.readFileSync(templatePath)
+  const content = templateBuffer ?? fs.readFileSync(templatePath)
   const zip = new PizZip(content)
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
@@ -30,9 +32,26 @@ function renderTemplate(templateFile: string, fields: RealEstateTransferFields):
 export function renderRealEstateTransferDocx(
   docType: RealEstateTransferDocType,
   fields: RealEstateTransferFields,
+  templateBuffer?: Buffer,
 ): Buffer {
   const meta = DOCUMENT_TYPES[docType]
-  return renderTemplate(meta.templateFile, fields)
+  return renderTemplate(meta.templateFile, fields, templateBuffer)
+}
+
+export interface ResolvedRealEstateTransferDocx {
+  buffer: Buffer
+  template: ResolvedDocumentTemplate
+}
+
+export async function resolveAndRenderRealEstateTransferDocx(
+  docType: RealEstateTransferDocType,
+  fields: RealEstateTransferFields,
+): Promise<ResolvedRealEstateTransferDocx> {
+  const meta = DOCUMENT_TYPES[docType]
+  const template = await resolveDocumentTemplateForBundledPath(
+    `tools/aubreylaw-docgeneration/templates/${meta.templateFile}`,
+  )
+  return { buffer: renderRealEstateTransferDocx(docType, fields, template.buffer), template }
 }
 
 export function safeDownloadFilename(value: string): string {
@@ -80,6 +99,36 @@ export function renderRealEstateTransferPackage(
     zip.file(safeDownloadFilename(`${meta.downloadBaseName} - ${grantorSlug}.docx`), buffer)
   }
 
+  return {
+    buffer: Buffer.from(zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })),
+    contentType: 'application/zip',
+    filename: safeDownloadFilename(`Real-Estate-Transfer - ${grantorSlug}.zip`),
+  }
+}
+
+export async function resolveAndRenderRealEstateTransferPackage(
+  docTypes: RealEstateTransferDocType[],
+  fields: RealEstateTransferFields,
+): Promise<RealEstateTransferPackageResult> {
+  if (docTypes.length === 0) throw new Error('Select at least one document')
+  const unique = [...new Set(docTypes)]
+  const grantorSlug = safeDownloadFilename(fields.grantor ?? 'real-estate-transfer').replace(/\.docx$/i, '')
+  if (unique.length === 1) {
+    const docType = unique[0]
+    const meta = DOCUMENT_TYPES[docType]
+    const { buffer } = await resolveAndRenderRealEstateTransferDocx(docType, fields)
+    return {
+      buffer,
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      filename: safeDownloadFilename(`${meta.downloadBaseName} - ${grantorSlug}.docx`),
+    }
+  }
+  const zip = new PizZip()
+  for (const docType of unique) {
+    const meta = DOCUMENT_TYPES[docType]
+    const { buffer } = await resolveAndRenderRealEstateTransferDocx(docType, fields)
+    zip.file(safeDownloadFilename(`${meta.downloadBaseName} - ${grantorSlug}.docx`), buffer)
+  }
   return {
     buffer: Buffer.from(zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })),
     contentType: 'application/zip',

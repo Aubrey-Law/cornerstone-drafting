@@ -3,8 +3,7 @@
  * Supabase `Database` generic for `@supabase/supabase-js` clients.
  *
  * Uses a permissive table map so query builders stay usable without checking
- * in full generated types. For hand-maintained row shapes used in app code,
- * see `types/supabase-rows.ts` and `types/database.ts`.
+ * in full generated types. App-specific row shapes live in `types/database.ts`.
  */
 
 type AnyRow = { [column: string]: any }

@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/apiAuth'
+import { requireAdministrator } from '@/lib/apiAuth'
 import { generateEngagementTemplateToken } from '@/lib/esign/firma'
 
 export const runtime = 'nodejs'
@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
  * template. The firma API key never leaves the server; only this token does.
  */
 export async function POST(req: Request) {
-  const { user, err } = await requireAdmin(req)
+  const { user, err } = await requireAdministrator(req)
   if (err) return err
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 

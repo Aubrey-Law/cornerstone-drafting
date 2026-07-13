@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { RealEstateTransferGenerateRequestSchema } from '@/lib/realEstateTransfer/fields'
 import {
-  renderRealEstateTransferPackage,
+  resolveAndRenderRealEstateTransferPackage,
   safeDownloadFilename,
 } from '@/lib/realEstateTransfer/generate'
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { buffer, contentType, filename } = renderRealEstateTransferPackage(
+    const { buffer, contentType, filename } = await resolveAndRenderRealEstateTransferPackage(
       parsed.data.documents,
       parsed.data.fields,
     )
