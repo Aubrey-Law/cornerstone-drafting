@@ -4,7 +4,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }))
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }))
+vi.mock('next/navigation', () => ({ useRouter: () => router }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 
 import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
@@ -12,7 +13,7 @@ import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
 const lead = { id:'l1', first_name:'Jane', middle_name:null, last_name:'Doe', preferred_name:null, full_name:'Jane Doe', email:'jane@example.com', phone:'617', date_of_birth:null, address_line1:'1 Main', address_line2:null, city:'Boston', state:'MA', zip:'02108', county:'Suffolk', marital_status:'married', practice_area:'EP', lead_source:'Referral', lead_status:'lead', engagement_fee_quoted:4500 }
 const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred_name:null, email:'john@example.com', phone:null, date_of_birth:null }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset() })
 
 describe('lead detail page', () => {
   it('places actions first and cards in Details, Notes, Activity order', () => {
@@ -30,6 +31,23 @@ describe('lead detail page', () => {
     expect(screen.getByRole('option',{name:'Hired'})).toBeTruthy()
     expect(screen.getByRole('option',{name:'Lost'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'Resume engagement'})).toBeTruthy()
+    expect(screen.getByRole('button',{name:'Convert matter'})).toBeTruthy()
+  })
+
+  it('converts from the top row and navigates to the returned matter', async () => {
+    vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:true,json:async()=>({matterId:'m1'})} as Response)
+    const user=userEvent.setup();render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Convert matter'}))
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/admin/leads/l1/convert',expect.objectContaining({method:'POST'}))
+    expect(router.push).toHaveBeenCalledWith('/admin/matters/m1')
+  })
+
+  it('announces a conversion error and remains on the lead', async () => {
+    vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:false,json:async()=>({error:'Conversion failed'})} as Response)
+    const user=userEvent.setup();render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Convert matter'}))
+    expect((await screen.findByRole('alert')).textContent).toContain('Conversion failed')
+    expect(router.push).not.toHaveBeenCalled()
   })
 
   it('refreshes visible activity after a successful details mutation', async () => {

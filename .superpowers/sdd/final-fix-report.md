@@ -15,3 +15,9 @@
 - Lint: baseline failure, 8 errors and 57 warnings, all errors in pre-existing drafting files outside this change.
 - Production build command: passed (`TypeScript OK (incremental cache fresh)`).
 - `git diff --check`: passed.
+
+## Convert action follow-up
+
+- Restored the separate top-row Convert matter action alongside Intake, Draft/Resume, and the status selector.
+- The action calls the existing idempotent conversion endpoint, navigates to its returned matter, and announces conversion failures without leaving the lead.
+- Converted rows present View matter and disable lead-only status/intake/engagement actions.
