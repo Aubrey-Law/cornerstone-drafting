@@ -85,11 +85,12 @@ describe('converted matter history', () => {
     expect(sql).toContain('unique')
   })
 
-  it('surfaces core, intake, and linked-history loader query errors', () => {
+  it('surfaces core and intake loader query errors while treating linked history as optional', () => {
     const source = fs.readFileSync('app/admin/matters/[id]/page.tsx', 'utf8')
     expect(source).toContain('clientIntakeError')
     expect(source).toContain('Could not load client intake')
-    expect(source).toContain('Could not load linked lead history')
+    expect(source).toContain('Linked lead history schema unavailable')
+    expect(source).toContain('continuing without linked lead history')
   })
 
   it('renders a loader-linked mirrored activity once in the correct order and origin', () => {
