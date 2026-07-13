@@ -73,7 +73,7 @@ export async function notifyRetellCallAnalyzed(
 
 /** Narrow a DB/upsert row into notify input. */
 export function retellRowToNotifyInput(
-  row: RetellCallRowInsert & { matter_id?: string | null },
+  row: RetellCallRowInsert & { matter_id?: string | null; lead_id?: string | null },
 ): RetellNotifyInput {
   return {
     external_call_id: row.external_call_id,
@@ -85,5 +85,6 @@ export function retellRowToNotifyInput(
     duration_seconds: row.duration_seconds,
     summary: row.summary,
     matter_id: row.matter_id ?? null,
+    lead_id: row.lead_id ?? null,
   }
 }

@@ -4,6 +4,7 @@ import {
   formatRetellAlertSms,
   parseRetellSummaryEmails,
   parseRetellSummarySmsTo,
+  retellCallsAdminUrl,
   shouldNotifyRetellAnalyzed,
 } from '@/lib/retell/notifyFormat'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
@@ -73,5 +74,9 @@ describe('retell notify helpers', () => {
     expect(body.length).toBeLessThanOrEqual(MAX_SMS_BODY_LENGTH)
     expect(body.startsWith('Retell')).toBe(true)
     expect(body.endsWith('…')).toBe(true)
+  })
+
+  it('links lead-associated calls to the lead detail page', () => {
+    expect(retellCallsAdminUrl(null, 'lead-123')).toContain('/admin/leads/lead-123')
   })
 })

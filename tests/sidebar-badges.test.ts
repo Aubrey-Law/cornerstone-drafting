@@ -42,6 +42,7 @@ describe('sidebar badges', () => {
     expect(route).toContain('fetchSidebarCounts')
     expect(counts).toContain("eq('stage', 'intake_review')")
     expect(counts).toContain("is('matter_id', null)")
+    expect(counts).toContain("is('lead_id', null)")
     expect(counts).toContain('fetchMatterAgingTiles')
     expect(layout).toContain('/api/admin/sidebar-counts')
     expect(layout).toContain('getNavBadge(item.href, badgeCounts)')

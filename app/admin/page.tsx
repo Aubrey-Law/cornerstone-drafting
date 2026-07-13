@@ -214,8 +214,8 @@ export default async function AdminTodayPage() {
         <Link href="/admin/calls" className="inline-flex items-center gap-1.5 hover:text-foreground">
           <Phone className="h-3.5 w-3.5" aria-hidden />
           {today.unassignedCallCount === 0
-            ? 'All calls are linked to matters'
-            : `${today.unassignedCallCount} call${today.unassignedCallCount === 1 ? '' : 's'} not linked to a matter`}
+            ? 'All calls are linked to leads or matters'
+            : `${today.unassignedCallCount} call${today.unassignedCallCount === 1 ? '' : 's'} not linked to a lead or matter`}
         </Link>
         <Link href="/admin/matters" className="inline-flex items-center gap-1.5 hover:text-foreground">
           <Inbox className="h-3.5 w-3.5" aria-hidden />

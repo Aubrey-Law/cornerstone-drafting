@@ -5,7 +5,10 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 
 const Body = z.object({
-  matterId: z.string().min(1),
+  matterId: z.string().min(1).optional(),
+  leadId: z.string().min(1).optional(),
+}).refine((body) => Boolean(body.matterId) !== Boolean(body.leadId), {
+  message: 'Provide exactly one of matterId or leadId',
 })
 
 export async function POST(
@@ -19,25 +22,38 @@ export async function POST(
   const { id } = await params
   const parsed = Body.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: 'matterId is required' }, { status: 400 })
+    return NextResponse.json({ error: 'Provide exactly one of matterId or leadId' }, { status: 400 })
   }
 
   const admin = getAdminClient()
 
-  const { data: matter } = await admin
-    .from('matters')
-    .select('id')
-    .eq('id', parsed.data.matterId)
-    .maybeSingle()
+  if (parsed.data.matterId) {
+    const { data: matter } = await admin
+      .from('matters')
+      .select('id')
+      .eq('id', parsed.data.matterId)
+      .maybeSingle()
 
-  if (!matter) {
-    return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+    if (!matter) {
+      return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+    }
+  } else {
+    const { data: lead } = await admin
+      .from('client_intake')
+      .select('id, matter_id')
+      .eq('id', parsed.data.leadId!)
+      .maybeSingle()
+
+    if (!lead || lead.matter_id) {
+      return NextResponse.json({ error: 'Lead not found or already converted' }, { status: 404 })
+    }
   }
 
   const { error } = await admin
     .from('calls')
     .update({
-      matter_id: parsed.data.matterId,
+      matter_id: parsed.data.matterId ?? null,
+      lead_id: parsed.data.leadId ?? null,
       assigned_by: userId,
       assigned_at: new Date().toISOString(),
     })

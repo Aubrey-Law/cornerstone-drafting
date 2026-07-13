@@ -15,6 +15,7 @@ export interface RetellNotifyInput {
   duration_seconds: number | null
   summary: string | null
   matter_id?: string | null
+  lead_id?: string | null
 }
 
 export function parseRetellSummaryEmails(
@@ -58,9 +59,12 @@ function durationLabel(secs: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function retellCallsAdminUrl(matterId?: string | null): string {
+export function retellCallsAdminUrl(matterId?: string | null, leadId?: string | null): string {
   if (matterId?.trim()) {
     return appUrl(`/admin/matters/${matterId.trim()}?tab=calls`)
+  }
+  if (leadId?.trim()) {
+    return appUrl(`/admin/leads/${leadId.trim()}`)
   }
   return appUrl('/admin/calls')
 }
@@ -72,7 +76,7 @@ export function formatRetellAlertEmail(row: RetellNotifyInput): {
 } {
   const caller = formatPhoneDisplay(row.participant_number) || row.participant_number
   const summary = row.summary?.trim() || '(No summary)'
-  const link = retellCallsAdminUrl(row.matter_id)
+  const link = retellCallsAdminUrl(row.matter_id, row.lead_id)
   const subject = `Retell call: ${caller}`
 
   const text = [

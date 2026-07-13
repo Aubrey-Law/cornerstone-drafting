@@ -20,7 +20,7 @@ export interface TodayData {
   intakeReview: PipelineMatter[]
   /** Matters where the intake questionnaire still needs to be sent. */
   intakeToSend: PipelineMatter[]
-  /** Calls not yet linked to a matter. */
+  /** Calls not yet linked to a lead or matter. */
   unassignedCallCount: number
   activeMatterCount: number
 }
@@ -48,7 +48,8 @@ export async function fetchTodayData(): Promise<TodayData> {
     admin
       .from('calls')
       .select('id', { count: 'exact', head: true })
-      .is('matter_id', null),
+      .is('matter_id', null)
+      .is('lead_id', null),
   ])
 
   if (mattersRes.error) console.error('fetchTodayData matters error:', mattersRes.error)

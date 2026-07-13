@@ -4,25 +4,32 @@ import { useEffect, useState } from 'react'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { CallRow, type CallRowData } from './CallRow'
 
-interface Props {
+type Props = {
   matterId: string
+  leadId?: never
+  limit?: number
+} | {
+  leadId: string
+  matterId?: never
   limit?: number
 }
 
-export function CallList({ matterId, limit = 50 }: Props) {
+export function CallList({ matterId, leadId, limit = 50 }: Props) {
   const token = useAccessToken()
   const [calls, setCalls] = useState<CallRowData[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!token || !matterId) return
+    const recordId = matterId ?? leadId
+    if (!token || !recordId) return
     let cancelled = false
     void (async () => {
       setLoading(true)
       try {
+        const recordType = matterId ? 'matters' : 'leads'
         const res = await fetch(
-          `/api/admin/matters/${matterId}/calls?limit=${limit}`,
+          `/api/admin/${recordType}/${recordId}/calls?limit=${limit}`,
           { headers: { Authorization: `Bearer ${token}` } },
         )
         const body = await res.json().catch(() => ([]))
@@ -43,7 +50,7 @@ export function CallList({ matterId, limit = 50 }: Props) {
     return () => {
       cancelled = true
     }
-  }, [token, matterId, limit])
+  }, [token, matterId, leadId, limit])
 
   if (loading) {
     return <div className="px-3 py-6 text-sm text-muted-foreground">Loading calls…</div>

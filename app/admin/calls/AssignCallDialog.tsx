@@ -31,11 +31,13 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
   const token = useAccessToken()
   const [query, setQuery] = useState('')
   const [matters, setMatters] = useState<Option[]>([])
+  const [leads, setLeads] = useState<Option[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!query.trim() || !token) {
       setMatters([])
+      setLeads([])
       return
     }
     const handle = setTimeout(async () => {
@@ -45,11 +47,12 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
       if (!res.ok) return
       const json = await res.json()
       setMatters(json.matters ?? [])
+      setLeads(json.leads ?? [])
     }, 200)
     return () => clearTimeout(handle)
   }, [query, token])
 
-  async function assign(matterId: string) {
+  async function assign(target: { matterId: string } | { leadId: string }) {
     if (!token) return
     setSubmitting(true)
     const res = await fetch(`/api/admin/calls/${call.id}/assign`, {
@@ -58,14 +61,14 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
         'content-type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ matterId }),
+      body: JSON.stringify(target),
     })
     setSubmitting(false)
     if (!res.ok) {
       toast.error('Failed to assign call')
       return
     }
-    toast.success('Call assigned')
+    toast.success('Call linked')
     invalidateSidebarCountsClient()
     onAssigned()
   }
@@ -79,11 +82,11 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Link call from {call.participant_number} to a matter</DialogTitle>
+          <DialogTitle>Link call from {call.participant_number}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="assign-call-search">Search matters</Label>
+            <Label htmlFor="assign-call-search">Search leads and matters</Label>
             <Input
               id="assign-call-search"
               value={query}
@@ -101,14 +104,30 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
                   type="button"
                   disabled={submitting}
                   className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
-                  onClick={() => void assign(m.id)}
+                  onClick={() => void assign({ matterId: m.id })}
                 >
                   {m.label}
                 </button>
               ))}
             </div>
           ) : null}
-          {matters.length === 0 && query.trim() ? (
+          {leads.length > 0 ? (
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground">Leads</div>
+              {leads.map((lead) => (
+                <button
+                  key={lead.id}
+                  type="button"
+                  disabled={submitting}
+                  className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
+                  onClick={() => void assign({ leadId: lead.id })}
+                >
+                  {lead.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {matters.length === 0 && leads.length === 0 && query.trim() ? (
             <div className="text-sm text-muted-foreground">No matches.</div>
           ) : null}
         </div>

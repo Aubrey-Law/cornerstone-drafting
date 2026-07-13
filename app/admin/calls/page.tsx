@@ -15,13 +15,13 @@ export default async function CallsPage({
   let q = supabase
     .from('calls')
     .select(
-      'id, direction, status, participant_number, started_at, duration_seconds, recording_url, voicemail_url, summary, firm_user_email, matter_id',
+      'id, direction, status, participant_number, started_at, duration_seconds, recording_url, voicemail_url, summary, firm_user_email, matter_id, lead_id',
     )
     .order('started_at', { ascending: false })
     .limit(200)
 
   if (filter === 'unassigned') {
-    q = q.is('matter_id', null)
+    q = q.is('matter_id', null).is('lead_id', null)
   }
 
   const { data, error } = await q
@@ -41,7 +41,7 @@ export default async function CallsPage({
       <header>
         <h1 className="text-xl font-semibold">Calls</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Recent calls across Twilio and the AI receptionist. Link a call to its matter to keep the record together.
+          Recent calls across Twilio and the AI receptionist. Link each call to its lead or matter to keep the record together.
         </p>
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>

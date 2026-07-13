@@ -10,6 +10,7 @@ import { LeadDetailsCard, type LeadForm } from '@/components/leads/LeadDetailsCa
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { LeadNotesCard, type LeadMeetingNote, type LeadNote } from '@/components/leads/LeadNotesCard'
 import { LeadActivityCard } from '@/components/leads/LeadActivityCard'
+import { CallList } from '@/components/calls/CallList'
 
 type LeadRecord = {
   id: string
@@ -314,6 +315,13 @@ export function LeadDetailClient({
             currentUser={currentUser}
             onActivityChange={refreshActivity}
           />
+          <section className="space-y-2 rounded-lg border border-border bg-card p-4">
+            <div>
+              <h2 className="font-semibold">Calls</h2>
+              <p className="text-xs text-muted-foreground">Logged Twilio and Retell calls linked to this lead.</p>
+            </div>
+            <CallList leadId={lead.id} />
+          </section>
           <LeadActivityCard activity={activity} />
         </div>
       </main>

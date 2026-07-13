@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -21,6 +22,7 @@ import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
 
 export interface AdminCallRow extends CallRowData {
   matter_id: string | null
+  lead_id: string | null
 }
 
 interface Props {
@@ -57,7 +59,7 @@ export function CallsPageClient({ initialCalls, filter }: Props) {
   }
 
   const emptyLabel = useMemo(
-    () => (filter === 'unassigned' ? 'Every call is linked to a matter.' : 'No calls logged yet.'),
+    () => (filter === 'unassigned' ? 'Every call is linked to a lead or matter.' : 'No calls logged yet.'),
     [filter],
   )
 
@@ -92,11 +94,18 @@ export function CallsPageClient({ initialCalls, filter }: Props) {
                 <CallRow call={call} />
               </div>
               <div className="flex shrink-0 flex-col gap-1 py-2">
-                {!call.matter_id && (
-                  <Button size="sm" variant="outline" onClick={() => setAssigning(call)}>
-                    Link to matter
-                  </Button>
-                )}
+                {call.matter_id ? (
+                  <Link className="text-center text-xs text-primary underline" href={`/admin/matters/${call.matter_id}`}>
+                    View matter
+                  </Link>
+                ) : call.lead_id ? (
+                  <Link className="text-center text-xs text-primary underline" href={`/admin/leads/${call.lead_id}`}>
+                    View lead
+                  </Link>
+                ) : null}
+                <Button size="sm" variant="outline" onClick={() => setAssigning(call)}>
+                  {call.matter_id || call.lead_id ? 'Change link' : 'Link call'}
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
