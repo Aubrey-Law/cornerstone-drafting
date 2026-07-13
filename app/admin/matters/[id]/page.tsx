@@ -12,6 +12,7 @@ import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import MatterDetailClient from './MatterDetailClient'
+import { mapMatterNoteRows } from './tabs/notes'
 import { mergeLeadAndMatterActivity } from '@/lib/leads/activity'
 
 export const dynamic = 'force-dynamic'
@@ -30,24 +31,27 @@ export default async function MatterDetailPage({ params }: Params) {
 
   const admin = getAdminClient()
   const [
-    { data: matterRow },
-    { data: detailsRow },
-    { data: notes },
+    { data: matterRow, error: matterRowError },
+    { data: detailsRow, error: detailsError },
+    { data: notes, error: notesError },
     designSheet,
     intakeSnapshot,
-    { data: matterActivity },
+    { data: matterActivity, error: matterActivityError },
   ] = await Promise.all([
     admin.from('matters').select('client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at').eq('id', id).maybeSingle(),
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
     admin
       .from('matter_notes')
-      .select('id, matter_id, note_type, body, author, created_at')
+      .select('id, matter_id, note_type, body, author, created_at, source_lead_note_id')
       .eq('matter_id', id)
       .order('created_at', { ascending: false }),
     fetchDesignSheet(id),
     fetchIntakeForMatter(id),
     admin.from('matter_activity').select('*').eq('matter_id', id).order('created_at', { ascending: false }).limit(50),
   ])
+
+  const coreLoadError = matterRowError ?? detailsError ?? notesError ?? matterActivityError
+  if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
   let clientIntakeRow: {
@@ -65,21 +69,25 @@ export default async function MatterDetailPage({ params }: Params) {
   } | null = null
 
   if (intakeId) {
-    const { data } = await admin
+    const { data, error: clientIntakeError } = await admin
       .from('client_intake')
       .select('id, intake_sent_at, intake_completed_at, uploads_reviewed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note')
       .eq('id', intakeId)
       .maybeSingle()
+    if (clientIntakeError) throw new Error(`Could not load client intake: ${clientIntakeError.message}`)
     clientIntakeRow = data
   }
 
-  const [{ data: leadNotes }, { data: leadMeetingNotes }, { data: leadActivity }] = intakeId
+  const [{ data: leadNotes, error: leadNotesError }, { data: leadMeetingNotes, error: leadMeetingNotesError }, { data: leadActivity, error: leadActivityError }] = intakeId
     ? await Promise.all([
         admin.from('lead_notes').select('id, body, created_at').eq('lead_id', intakeId).order('created_at', { ascending: false }),
         admin.from('lead_meeting_notes').select('id, title, body, meeting_date').eq('lead_id', intakeId).order('meeting_date', { ascending: false }),
-        admin.from('lead_activity').select('id, event_type, title, detail, actor_id, created_at, source_matter_activity_id').eq('lead_id', intakeId).order('created_at', { ascending: false }),
+        admin.from('lead_activity').select('id, event_type, title, detail, actor_id, created_at, source_matter_activity_id').eq('lead_id', intakeId).order('created_at', { ascending: false }).limit(200),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }]
+
+  const linkedHistoryError = leadNotesError ?? leadMeetingNotesError ?? leadActivityError
+  if (linkedHistoryError) throw new Error(`Could not load linked lead history: ${linkedHistoryError.message}`)
 
   const initialActivity = mergeLeadAndMatterActivity(
     (leadActivity ?? []).map(row => ({
@@ -128,6 +136,7 @@ export default async function MatterDetailPage({ params }: Params) {
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
       unreviewedUploadCounts={unreviewedUploadCounts}
       initialNotes={(notes ?? []) as MatterNoteRow[]}
+      initialMatterLinkedNotes={mapMatterNoteRows(notes ?? [])}
       initialLeadNotes={[
         ...(leadNotes ?? []).map(row => ({ ...row, lead_id: intakeId!, note_type: 'internal' as const })),
         ...(leadMeetingNotes ?? []).map(row => ({ id: row.id, lead_id: intakeId!, body: `${row.title}\n\n${row.body}`, created_at: row.meeting_date, note_type: 'system' as const })),

@@ -25,6 +25,22 @@ export function mergeLinkedNotes(lead: LinkedMatterNote[], matter: LinkedMatterN
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
 }
 
+type MatterNoteLoaderRow = Pick<MatterNoteRow, 'id' | 'body' | 'created_at' | 'note_type'> & {
+  source_lead_note_id: string | null
+}
+
+export function mapMatterNoteRows(rows: MatterNoteLoaderRow[]): LinkedMatterNote[] {
+  return rows.map(note => ({
+    id: note.id,
+    sourceId: note.id,
+    origin: 'matter',
+    body: note.body,
+    created_at: note.created_at,
+    note_type: note.note_type,
+    sourceLeadNoteId: note.source_lead_note_id,
+  }))
+}
+
 type MatterNoteListItem = LinkedMatterNote
 
 interface MatterNotesTabProps {
@@ -163,6 +179,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                       ))}
                     </div>
                     <Textarea
+                      aria-label="Edit note body"
                       value={editingNoteText}
                       onChange={event => setEditingNoteText(event.target.value)}
                       rows={3}
@@ -170,7 +187,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                       onKeyDown={event => {
                         if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                           event.preventDefault()
-                          void handleUpdateNote()
+                          void (isLead ? handleUpdateLeadNote?.(note) : handleUpdateNote())
                         }
                       }}
                     />

@@ -30,7 +30,6 @@ import {
   type PipelineMatter,
 } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
-import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -87,7 +86,6 @@ import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { useMatterAssets } from './useMatterAssets'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
-import { mergeLeadAndMatterActivity } from '@/lib/leads/activity'
 import { MatterCommunicationsTab } from './tabs/messages'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
@@ -117,6 +115,7 @@ interface MatterDetailClientProps {
   designSheetPlanType?: string | null
   initialNotes?: MatterNoteRow[]
   initialLeadNotes?: Array<{ id: string; lead_id: string; body: string; created_at: string; note_type: 'internal' | 'system' }>
+  initialMatterLinkedNotes?: LinkedMatterNote[]
   initialActivity?: MatterActivity[]
   designSheetSeeded?: boolean
   reviewFlags?: IntakeReadinessFlag[]
@@ -191,6 +190,7 @@ function MatterDetailClientInner({
   designSheetPlanType = null,
   initialNotes = [],
   initialLeadNotes = [],
+  initialMatterLinkedNotes = [],
   initialActivity = [],
   designSheetSeeded = false,
   reviewFlags = [],
@@ -253,7 +253,7 @@ function MatterDetailClientInner({
   const [emailSending, setEmailSending] = useState(false)
 
   const [activity, setActivity] = useState<MatterActivity[]>(initialActivity)
-  const [activityLoading, setActivityLoading] = useState(false)
+  const activityLoading = false
 
   useEffect(() => {
     setUnreviewedUploadCounts(initialUnreviewedUploadCounts)
@@ -408,8 +408,8 @@ function MatterDetailClientInner({
   const [leadNotes, setLeadNotes] = useState(initialLeadNotes)
   const linkedNotes = useMemo(() => mergeLinkedNotes(
     leadNotes.map(note => ({ id: note.id, sourceId: note.id, origin: 'lead' as const, leadId: note.lead_id, body: note.body, created_at: note.created_at, note_type: note.note_type })),
-    notes.map(note => ({ id: note.id, sourceId: note.id, origin: 'matter' as const, body: note.body, created_at: note.created_at, note_type: note.note_type })),
-  ), [leadNotes, notes])
+    notes.map(note => initialMatterLinkedNotes.find(linked => linked.sourceId === note.id) ?? ({ id: note.id, sourceId: note.id, origin: 'matter' as const, body: note.body, created_at: note.created_at, note_type: note.note_type })),
+  ), [initialMatterLinkedNotes, leadNotes, notes])
 
   const handleUpdateLeadNote = async (note: LinkedMatterNote) => {
     if (!note.leadId) return
@@ -622,29 +622,6 @@ function MatterDetailClientInner({
   }, [])
 
   useMessagesRealtime(matter.matter_id, handlePortalMessageInsert)
-
-  const loadActivity = useCallback(async () => {
-    setActivityLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('matter_activity')
-        .select('*')
-        .eq('matter_id', matter.matter_id)
-        .order('created_at', { ascending: false })
-        .limit(50)
-      if (!error) {
-        const lead = initialActivity.filter(row => row.metadata?.origin === 'lead').map(row => ({ ...row, id: String(row.metadata?.source_lead_activity_id ?? row.id.replace(/^lead:/, '')), createdAt: row.created_at }))
-        const matterRows = ((data ?? []) as MatterActivity[]).map(row => ({ ...row, createdAt: row.created_at, sourceLeadActivityId: typeof row.metadata?.source_lead_activity_id === 'string' ? row.metadata.source_lead_activity_id : null }))
-        setActivity(mergeLeadAndMatterActivity(lead, matterRows).map(row => row.metadata?.origin === 'lead' ? { ...row, id: `lead:${row.id}` } : row))
-      }
-    } finally {
-      setActivityLoading(false)
-    }
-  }, [initialActivity, matter.matter_id])
-
-  useEffect(() => {
-    void loadActivity()
-  }, [loadActivity])
 
   const sendPortalMessage = async () => {
     if (!token || !portalDraft.trim()) return

@@ -24,3 +24,12 @@
 ## Visual verification
 
 Not performed: the requested authenticated desktop/mobile matter state requires a running seeded Supabase/auth environment. Automated component behavior, scoped lint, and the production build were used as the available verification gates.
+
+## Review fixes
+
+- Routed both Save clicks and Cmd/Ctrl+Enter lead-origin edits exclusively through the lead-note handler; matter routing remains unchanged.
+- Added rendered tests for lead/matter click and keyboard mutations, delete routing, origin labels, loader-shaped provenance, chronological order, and exact-once deduplication.
+- Added `matter_notes.source_lead_note_id` as an immutable, nullable, unique foreign-key provenance field in `20260730020000_link_lead_history.sql`; linked lead meeting notes remain direct read-only projections rather than copied matter rows.
+- Selected and mapped the provenance field in the server loader.
+- Bounded linked lead activity to the newest 200 records, removed the duplicate client activity fetch, and made all matter/linked-history query errors fail explicitly.
+- Review verification: 11 focused files / 90 tests passed; scoped ESLint and `git diff --check` passed; `npm run build:next` passed. The direct `tsconfig.json` check continues to report only the documented pre-existing test typing errors.
