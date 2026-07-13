@@ -118,7 +118,7 @@ describe('lead status pipeline source shape', () => {
   })
 
   it('conversion flips a lead to hired', () => {
-    const source = read('supabase/migrations/20260730000000_lite_lead_details_notes.sql')
+    const source = read('supabase/migrations/20260713020824_lite_lead_details_notes.sql')
     expect(source).toContain("'hired'")
     expect(source).toContain('lead_status')
   })

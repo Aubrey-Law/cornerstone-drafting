@@ -5,7 +5,7 @@ import { createAgreementRevision } from '@/lib/engagement/repository'
 
 const migrationPath = path.join(
   process.cwd(),
-  'supabase/migrations/20260728000000_lite_engagement_agreements.sql',
+  'supabase/migrations/20260712104210_lite_engagement_agreements.sql',
 )
 
 describe('engagement persistence migration', () => {

@@ -6,7 +6,7 @@ import { validateLeadDetails } from '@/lib/leads/details'
 
 const migrationPath = path.join(
   process.cwd(),
-  'supabase/migrations/20260730000000_lite_lead_details_notes.sql',
+  'supabase/migrations/20260713020824_lite_lead_details_notes.sql',
 )
 
 const completeInput = {

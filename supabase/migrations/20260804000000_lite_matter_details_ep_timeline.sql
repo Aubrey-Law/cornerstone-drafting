@@ -1,4 +1,8 @@
--- Cornerstone Lite — additional matter_details columns for the matter details editor
+-- Cornerstone Lite — additional matter_details columns for the matter details editor.
+--
+-- This migration originally shared version 20260718000000 with the remote
+-- messages-realtime migration. Keep the remote version canonical and apply
+-- these idempotent matter-details additions under a new unique version.
 
 ALTER TABLE public.matter_details
   ADD COLUMN IF NOT EXISTS billing_type text,

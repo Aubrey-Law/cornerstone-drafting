@@ -79,7 +79,7 @@ describe('converted matter history', () => {
   })
 
   it('adds immutable note provenance in the pending migration', () => {
-    const sql = fs.readFileSync('supabase/migrations/20260730020000_link_lead_history.sql', 'utf8')
+    const sql = fs.readFileSync('supabase/migrations/20260713020943_link_lead_history.sql', 'utf8')
     expect(sql).toContain('source_lead_note_id')
     expect(sql).toContain('references public.lead_notes(id)')
     expect(sql).toContain('unique')
@@ -87,7 +87,8 @@ describe('converted matter history', () => {
 
   it('surfaces core and intake loader query errors while treating linked history as optional', () => {
     const source = fs.readFileSync('app/admin/matters/[id]/page.tsx', 'utf8')
-    expect(source).toContain('clientIntakeError')
+    expect(source).toContain('loadClientIntakeShell')
+    expect(source).toContain('if (base.error) throw new Error(`Could not load client intake: ${base.error.message}`)')
     expect(source).toContain('Could not load client intake')
     expect(source).toContain('Linked lead history schema unavailable')
     expect(source).toContain('continuing without linked lead history')

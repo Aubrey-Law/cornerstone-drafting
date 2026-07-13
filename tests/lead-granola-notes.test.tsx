@@ -137,7 +137,7 @@ describe('lead Granola notes', () => {
   })
 
   it('defines the atomic import so activity failure rolls back the note and duplicates add no activity', () => {
-    const sql = fs.readFileSync('supabase/migrations/20260730010000_atomic_lead_notes.sql', 'utf8')
+    const sql = fs.readFileSync('supabase/migrations/20260713020923_atomic_lead_notes.sql', 'utf8')
     expect(sql).toContain('function public.import_lead_granola_note_with_activity')
     expect(sql).toContain('on conflict (lead_id,granola_note_id)')
     expect(sql).toContain('if v_imported then')
