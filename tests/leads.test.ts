@@ -98,7 +98,7 @@ describe('lead status pipeline source shape', () => {
   })
 
   it('keeps qualification fields on client_intake and in the transactional lead RPC', () => {
-    const migration = read('supabase/migrations/20260731000000_lite_lead_pipeline_insights.sql')
+    const migration = read('supabase/migrations/20260731000001_lite_lead_pipeline_insights.sql')
     expect(migration).toContain('alter table public.client_intake')
     expect(migration).toContain('lead_urgency')
     expect(migration).toContain('taxable_estate')

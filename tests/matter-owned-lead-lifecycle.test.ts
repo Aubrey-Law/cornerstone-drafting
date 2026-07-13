@@ -5,6 +5,15 @@ const read = (path: string) => fs.readFileSync(path, 'utf8')
 const migration = () => read('supabase/migrations/20260802000000_unify_leads_matters.sql')
 
 describe('matter-owned lead lifecycle', () => {
+  it('keeps migration versions unique and applies engagement hardening after function creation', () => {
+    const names = fs.readdirSync('supabase/migrations').filter(name => /^\d+_.*\.sql$/.test(name))
+    const versions = names.map(name => name.split('_', 1)[0])
+    expect(new Set(versions).size).toBe(versions.length)
+    expect(read('supabase/migrations/20260712104245_harden_engagement_agreement_rpc_privileges.sql')).toContain('to_regprocedure')
+    expect(read('supabase/migrations/20260803000000_harden_engagement_rpc_privileges_after_creation.sql')).toContain('from public, anon')
+    expect(read('supabase/seed.sql')).not.toContain('GRANT EXECUTE ON ALL FUNCTIONS')
+  })
+
   it('creates a canonical relationship status and immutable history', () => {
     const sql = migration()
     expect(sql).toContain('relationship_status text not null')
