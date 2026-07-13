@@ -38,11 +38,11 @@ export function LeadActivityCard({ activity }: { activity: ActivityRow[] }) {
   const hidden = Math.max(0, activity.length - PREVIEW_COUNT)
 
   return (
-    <section className="rounded-lg border p-5">
+    <section className="rounded-lg border border-border bg-card p-4 md:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold">Activity</h2>
-          <p className="text-xs text-muted-foreground">A single history of lead changes, notes, and meetings.</p>
+          <h2 className="text-sm font-semibold">Activity</h2>
+          <p className="text-[11px] text-muted-foreground">A single history of lead changes, notes, and meetings.</p>
         </div>
         {activity.length > 0 && <span className="text-xs text-muted-foreground">{activity.length} event{activity.length === 1 ? '' : 's'}</span>}
       </div>

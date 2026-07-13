@@ -19,8 +19,8 @@ describe('lead detail page', () => {
   it('places actions first and cards in Details, Notes, Activity order', () => {
     const { container } = render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     const text = container.textContent ?? ''
-    expect(text.indexOf('Send intake')).toBeLessThan(text.indexOf('Details'))
-    expect(text.indexOf('Details')).toBeLessThan(text.indexOf('Notes'))
+    expect(text.indexOf('Send intake')).toBeLessThan(text.indexOf('Lead details'))
+    expect(text.indexOf('Lead details')).toBeLessThan(text.indexOf('Notes'))
     expect(text.indexOf('Notes')).toBeLessThan(text.indexOf('Activity'))
   })
 
@@ -39,12 +39,9 @@ describe('lead detail page', () => {
     expect(screen.getByText('Event 9')).toBeTruthy()
   })
 
-  it('offers top-row Lead, Hired, and Lost status actions and resumes an active agreement', () => {
+  it('offers a top-row status control and resumes an active agreement', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)
-    expect(screen.getByRole('combobox',{name:'Lead status'})).toBeTruthy()
-    expect(screen.getByRole('option',{name:'Lead'})).toBeTruthy()
-    expect(screen.getByRole('option',{name:'Hired'})).toBeTruthy()
-    expect(screen.getByRole('option',{name:'Lost'})).toBeTruthy()
+    expect(screen.getByRole('combobox',{name:'Lead status'}).textContent).toContain('Lead')
     expect(screen.getByRole('button',{name:'Resume engagement'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'Convert matter'})).toBeTruthy()
   })

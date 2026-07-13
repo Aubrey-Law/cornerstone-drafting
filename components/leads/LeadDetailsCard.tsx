@@ -73,23 +73,23 @@ function FieldError({ field, errors }: { field: string; errors: Record<string, s
 
 export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldErrors = {}, busy, onEdit, onCancel, onSave, onChange, onRemoveSpouse }: Props) {
   return (
-    <section className="rounded-lg border p-5">
+    <section className="rounded-lg border border-border bg-card p-4 md:p-5">
       <div className="flex items-center justify-between">
-        <div><h2 className="font-semibold">Details</h2><p className="text-xs text-muted-foreground">Contact, household, and qualification details.</p></div>
-        {!editing && <Button variant="outline" onClick={onEdit}>Edit</Button>}
+        <div><h2 className="text-sm font-semibold">Lead details</h2><p className="text-[11px] text-muted-foreground">Contact, household, and qualification details.</p></div>
+        {!editing && <Button size="sm" variant="outline" onClick={onEdit}>Edit</Button>}
       </div>
       {editing ? (
         <form noValidate onSubmit={event => { event.preventDefault(); onSave() }}>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {fields.map(([key, label]) => (
-              <label key={key} htmlFor={`lead-${key}`} className="text-sm">
+              <label key={key} htmlFor={`lead-${key}`} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_input]:normal-case [&_input]:tracking-normal">
                 {label}
                 <Input id={`lead-${key}`} aria-invalid={!!fieldErrors[key]} aria-describedby={fieldErrors[key] ? `lead-${key}-error` : undefined} type={key.includes('date') || key === 'dateOfBirth' ? 'date' : key === 'email' ? 'email' : key === 'fee' ? 'number' : 'text'} value={form[key]} onChange={event => onChange(key, event.target.value)} />
                 <FieldError field={key} errors={fieldErrors} />
               </label>
             ))}
             {enumerations.map(([key, label, options]) => (
-              <div key={key} className="text-sm">
+              <div key={key} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 <label id={`lead-${key}-label`}>{label}</label>
                 <Select value={form[key]} onValueChange={value => onChange(key, value)}>
                   <SelectTrigger className="w-full" aria-labelledby={`lead-${key}-label`}><SelectValue /></SelectTrigger>
@@ -99,18 +99,18 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
             ))}
           </div>
 
-          <h3 className="mt-6 font-medium">Qualification</h3>
-          <p className="text-xs text-muted-foreground">Only the details that help prioritize and prepare the first conversation.</p>
+          <h3 className="mt-6 text-sm font-semibold">Qualification</h3>
+          <p className="text-[11px] text-muted-foreground">Only the details that help prioritize and prepare the first conversation.</p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             {qualificationFields.map(([key, label]) => (
-              <label key={key} htmlFor={`lead-${key}`} className="text-sm">
+              <label key={key} htmlFor={`lead-${key}`} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_input]:normal-case [&_input]:tracking-normal">
                 {label}
                 <Input id={`lead-${key}`} min={0} type="number" value={form[key]} aria-invalid={!!fieldErrors[key]} aria-describedby={fieldErrors[key] ? `lead-${key}-error` : undefined} onChange={event => onChange(key, event.target.value)} />
                 <FieldError field={key} errors={fieldErrors} />
               </label>
             ))}
             {qualificationEnumerations.map(([key, label, options]) => (
-              <div key={key} className="text-sm">
+              <div key={key} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 <label id={`lead-${key}-label`}>{label}</label>
                 <Select value={form[key] || 'unset'} onValueChange={value => onChange(key, value === 'unset' ? '' : value)}>
                   <SelectTrigger className="w-full" aria-labelledby={`lead-${key}-label`}><SelectValue placeholder="Not set" /></SelectTrigger>
@@ -118,18 +118,18 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
                 </Select>
               </div>
             ))}
-            <label htmlFor="lead-qualificationNotes" className="text-sm sm:col-span-2">
+            <label htmlFor="lead-qualificationNotes" className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:col-span-2">
               Qualification notes
               <Textarea id="lead-qualificationNotes" className="mt-1 min-h-24" value={form.qualificationNotes} onChange={event => onChange('qualificationNotes', event.target.value)} />
             </label>
           </div>
 
-          <h3 className="mt-6 font-medium">Spouse</h3>
+          <h3 className="mt-6 text-sm font-semibold">Spouse</h3>
           {form.spousePresent === 'yes' ? (
             <>
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 {spouseFields.map(([key, label]) => (
-                  <label key={key} htmlFor={`lead-${key}`} className="text-sm">
+                  <label key={key} htmlFor={`lead-${key}`} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_input]:normal-case [&_input]:tracking-normal">
                     {label}
                     <Input id={`lead-${key}`} aria-invalid={!!fieldErrors[key]} aria-describedby={fieldErrors[key] ? `lead-${key}-error` : undefined} type={key.includes('Date') ? 'date' : key.includes('Email') ? 'email' : 'text'} value={form[key]} onChange={event => onChange(key, event.target.value)} />
                     <FieldError field={key} errors={fieldErrors} />
@@ -143,7 +143,7 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
           <div className="mt-5 flex gap-2"><Button type="submit" disabled={busy}>Save</Button><Button type="button" variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button></div>
         </form>
       ) : (
-        <dl className="mt-4 grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-5 gap-y-3 text-sm">
+        <dl className="mt-4 grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-5 gap-y-3 text-sm [&_dd]:text-foreground [&_dt]:text-[11px] [&_dt]:font-medium [&_dt]:uppercase [&_dt]:tracking-wide [&_dt]:text-muted-foreground">
           <dt>Name</dt><dd>{lead.full_name}</dd>
           <dt>Email</dt><dd>{lead.email}</dd>
           <dt>Phone</dt><dd>{lead.phone || '—'}</dd>
