@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { canSendReviewedRevision, engagementStep, ENGAGEMENT_STEPS } from './workspaceState'
 import { EngagementClauseEditor } from './EngagementClauseEditor'
@@ -7,26 +7,81 @@ import { EngagementClauseEditor } from './EngagementClauseEditor'
 const steps = ENGAGEMENT_STEPS
 type Step = typeof steps[number]
 type Agreement = any
+type PreviewPayload = {
+  revision: { id: string }
+  sha256: string
+  docxBase64: string
+  pdfBase64: string
+}
+type PreviewUrls = { docx: string; pdf: string }
 
-function download(base64: string, name: string, type: string) { const a=document.createElement('a'); a.href=`data:${type};base64,${base64}`; a.download=name; a.click() }
+function dataUrl(base64: string, type: string) {
+  return `data:${type};base64,${base64}`
+}
+
+function base64ToBlob(base64: string, type: string) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return new Blob([bytes], { type })
+}
+
+function objectUrl(base64: string, type: string) {
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return dataUrl(base64, type)
+  try {
+    return URL.createObjectURL(base64ToBlob(base64, type))
+  } catch {
+    return dataUrl(base64, type)
+  }
+}
+
+function revokeObjectUrl(url: string) {
+  if (url.startsWith('blob:') && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url)
+}
+
+function download(url: string, name: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+}
 
 export default function EngagementWorkspace({ agreement }: { agreement: Agreement }) {
   const router=useRouter(), searchParams=useSearchParams()
   const step: Step=engagementStep(searchParams.get('step'))
   const initial=agreement.active_revision.input_snapshot
   const locked=['sending','sent','viewed','partially_signed','completed','cancelled','expired'].includes(agreement.status)
-  const [input,setInput]=useState(initial), [preview,setPreview]=useState<any>(null), [approvalToken,setApprovalToken]=useState(''), [confirmExactRevision,setConfirmExactRevision]=useState(false), [message,setMessage]=useState('')
+  const [input,setInput]=useState(initial), [preview,setPreview]=useState<PreviewPayload | null>(null), [previewUrls,setPreviewUrls]=useState<PreviewUrls | null>(null), [isGenerating,setIsGenerating]=useState(false), [approvalToken,setApprovalToken]=useState(''), [confirmExactRevision,setConfirmExactRevision]=useState(false), [message,setMessage]=useState('')
   const revision=preview?.revision?.id ?? agreement.active_revision.id
   const sha=preview?.sha256 ?? agreement.active_revision.render_sha256
   const blockers=useMemo(()=>[!input.primary?.name&&'Primary signer name',!input.primary?.email&&'Primary signer email',!input.spouse?.name&&'Spouse name',!input.spouse?.email&&'Spouse email',!input.agreementDate&&'Agreement date',!(input.fee?.amount>0)&&'Flat fee',!input.fee?.paymentTerms&&'Payment terms'].filter(Boolean),[input])
-  const edit=(patch:any)=>{if(locked)return;setInput((v:any)=>({...v,...patch}));setPreview(null);setApprovalToken('');setConfirmExactRevision(false)}
-  async function generate(){const r=await fetch(`/api/admin/engagement-agreements/${agreement.id}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});const j=await r.json();if(!r.ok)return setMessage(j.error);setPreview(j);setMessage('Preview generated; prior approval invalidated.')}
+  const edit=(patch:any)=>{if(locked)return;setInput((v:any)=>({...v,...patch}));setPreview(null);setPreviewUrls(null);setApprovalToken('');setConfirmExactRevision(false)}
+  useEffect(()=>()=>{if(previewUrls){revokeObjectUrl(previewUrls.docx);revokeObjectUrl(previewUrls.pdf)}},[previewUrls])
+  async function generate(){
+    setIsGenerating(true)
+    setMessage('')
+    try {
+      const r=await fetch(`/api/admin/engagement-agreements/${agreement.id}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)})
+      const j=await r.json()
+      if(!r.ok)return setMessage(j.error ?? 'Preview generation failed.')
+      setPreview(j)
+      setPreviewUrls({
+        docx: objectUrl(j.docxBase64,'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        pdf: objectUrl(j.pdfBase64,'application/pdf'),
+      })
+      setMessage('Preview generated; prior approval invalidated.')
+    } catch {
+      setMessage('Preview generation failed.')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
   async function approve(){const r=await fetch(`/api/admin/engagement-agreements/${agreement.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revisionId:revision,pdfSha256:sha})});const j=await r.json();if(!r.ok)return setMessage(j.error);setApprovalToken(j.approvalToken);setMessage('Exact revision approved.')}
   async function send(){const r=await fetch(`/api/admin/engagement-agreements/${agreement.id}/send`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approvalToken,confirmExactRevision,revisionId:revision,pdfSha256:sha})});const j=await r.json();setMessage(r.ok?`Sent request ${j.requestId}`:j.error)}
   return <div className="mx-auto max-w-6xl p-6"><header className="mb-6"><h1 className="text-2xl font-semibold">Engagement agreement</h1><p className="text-sm text-slate-600">Estate Planning / Couple</p></header><div className="grid gap-8 md:grid-cols-[220px_1fr]"><nav className="space-y-2" aria-label="Engagement steps">{steps.map(s=><button key={s} className={`block w-full rounded px-3 py-2 text-left capitalize ${s===step?'bg-slate-900 text-white':'bg-slate-100'}`} onClick={()=>router.replace(`?step=${s}`)}>{s}</button>)}</nav><main className="rounded border bg-white p-6">
   {step==='details'&&<section><h2 className="text-xl font-semibold">Details</h2><p className="my-3 rounded bg-slate-50 p-3">Supported definition: Estate Planning / Couple</p><label className="block">Agreement date<input disabled={locked} className="block w-full rounded border p-2" type="date" value={input.agreementDate} onChange={e=>edit({agreementDate:e.target.value})}/></label>{[['Primary', 'primary'],['Spouse','spouse']].map(([label,key])=><div className="mt-4 grid gap-3 sm:grid-cols-2" key={key}><label>{label} name<input disabled={locked} className="block w-full rounded border p-2" value={input[key].name} onChange={e=>edit({[key]:{...input[key],name:e.target.value}})}/></label><label>{label} email<input disabled={locked} className="block w-full rounded border p-2" value={input[key].email} onChange={e=>edit({[key]:{...input[key],email:e.target.value}})}/></label></div>)}</section>}
   {step==='terms'&&<section><h2 className="text-xl font-semibold">Terms</h2><label className="block mt-3">Flat fee<input disabled={locked} className="block w-full rounded border p-2" type="number" value={input.fee.amount} onChange={e=>edit({fee:{...input.fee,amount:Number(e.target.value)}})}/></label><label className="block mt-3">Payment terms<textarea disabled={locked} className="block w-full rounded border p-2" value={input.fee.paymentTerms} onChange={e=>edit({fee:{...input.fee,paymentTerms:e.target.value}})}/></label><p className="mt-4 text-sm">Scope: Standard trust estate plan.</p><EngagementClauseEditor label="Additional Clauses" category="additional_clause" value={input.additionalClauses??[]} disabled={locked} onChange={additionalClauses=>edit({additionalClauses})}/><EngagementClauseEditor label="Schedule A - Additional Scope Terms" category="schedule_a" value={input.scheduleAClauses??[]} disabled={locked} onChange={scheduleAClauses=>edit({scheduleAClauses})}/></section>}
-  {step==='review'&&<section><h2 className="text-xl font-semibold">Review</h2>{blockers.length?<div className="my-3 text-red-700">Validation blockers: {blockers.join(', ')}</div>:<button className="my-3 rounded bg-blue-700 px-4 py-2 text-white" onClick={generate}>Generate preview</button>}{preview&&<div className="space-x-3"><button onClick={()=>download(preview.docxBase64,'engagement.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document')}>Download editable DOCX</button><button onClick={()=>download(preview.pdfBase64,'engagement.pdf','application/pdf')}>Download signing PDF</button><button onClick={approve}>Approve revision</button></div>}<p className="mt-4 font-mono text-xs">Revision {revision} / PDF SHA-256 {sha}</p></section>}
+  {step==='review'&&<section><h2 className="text-xl font-semibold">Review</h2>{blockers.length?<div className="my-3 text-red-700">Validation blockers: {blockers.join(', ')}</div>:<button className="my-3 rounded bg-blue-700 px-4 py-2 text-white disabled:opacity-50" disabled={isGenerating} onClick={generate}>{isGenerating?'Generating preview...':'Generate preview'}</button>}{preview&&previewUrls&&<div className="space-y-4"><div className="space-x-3"><button onClick={()=>download(previewUrls.docx,'engagement.docx')}>Download editable DOCX</button><button onClick={()=>download(previewUrls.pdf,'engagement.pdf')}>Download signing PDF</button><button onClick={approve}>Approve revision</button></div><iframe title="Engagement agreement PDF preview" src={previewUrls.pdf} className="h-[720px] w-full rounded border" /></div>}<p className="mt-4 font-mono text-xs">Revision {revision} / PDF SHA-256 {sha}</p></section>}
   {step==='send'&&<section><h2 className="text-xl font-semibold">Send</h2><p>{input.primary.name} ({input.primary.email}); {input.spouse.name} ({input.spouse.email})</p><p className="my-3 font-mono text-xs">Revision {revision} / {sha}</p><label><input type="checkbox" checked={confirmExactRevision} onChange={e=>setConfirmExactRevision(e.target.checked)}/> I confirm this exact revision was reviewed.</label><button className="mt-4 block rounded bg-emerald-700 px-4 py-2 text-white disabled:opacity-40" disabled={!canSendReviewedRevision({approvalToken,confirmExactRevision,revisionId:revision,pdfSha256:sha})} onClick={send}>Send for signature</button></section>}
   {step==='status'&&<section><h2 className="text-xl font-semibold">Status</h2><p>Overall: {agreement.status}</p><ul>{agreement.recipients.map((r:any)=><li key={r.id}>{r.name}: {r.status}</li>)}</ul><p className="mt-4 text-sm text-slate-600">Completed document actions are unavailable until Firma reports and persists completion.</p></section>}{message&&<p className="mt-5 rounded bg-slate-100 p-3">{message}</p>}</main></div></div>
 }

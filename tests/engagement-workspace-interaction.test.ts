@@ -13,7 +13,10 @@ const snapshot={practiceArea:'EP',clientMode:'couple',agreementDate:'2026-07-12'
 const agreement={id:'a1',status:'draft',matter_id:'m1',active_revision:{id:'r1',render_sha256:'hash1',input_snapshot:snapshot},recipients:[]}
 
 describe('EngagementWorkspace interactions',()=>{
-  beforeEach(()=>{step='details';replace.mockClear();vi.stubGlobal('fetch',vi.fn())})
+  beforeEach(()=>{
+    step='details';replace.mockClear();vi.stubGlobal('fetch',vi.fn())
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(()=>'blob:preview'), revokeObjectURL: vi.fn() })
+  })
   afterEach(()=>{cleanup();vi.unstubAllGlobals()})
 
   it('edits structured identity and sends it in the preview request',async()=>{
@@ -25,6 +28,7 @@ describe('EngagementWorkspace interactions',()=>{
     const click=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{})
     await user.click(await screen.findByRole('button',{name:'Download editable DOCX'})); expect(click).toHaveBeenCalled()
     expect(screen.getByRole('button',{name:'Download signing PDF'})).toBeTruthy()
+    expect(screen.getByTitle('Engagement agreement PDF preview')).toHaveAttribute('src','blob:preview')
   })
 
   it('invalidates approval after an edit and gates send on explicit confirmation',async()=>{
