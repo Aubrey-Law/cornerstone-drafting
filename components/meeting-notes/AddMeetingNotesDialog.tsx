@@ -27,8 +27,8 @@ interface GranolaNoteSummary {
 interface AddMeetingNotesDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  matterId: string
-  onSaved?: () => void
+  target: { kind: 'lead' | 'matter'; id: string }
+  onImported?: (note: unknown) => void
 }
 
 function todayIso(): string {
@@ -42,8 +42,8 @@ function todayIso(): string {
 export function AddMeetingNotesDialog({
   open,
   onOpenChange,
-  matterId,
-  onSaved,
+  target,
+  onImported,
 }: AddMeetingNotesDialogProps) {
   const token = useAccessToken()
   const [title, setTitle] = useState('')
@@ -136,23 +136,27 @@ export function AddMeetingNotesDialog({
 
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/meeting-notes', {
+      const isLead = target.kind === 'lead'
+      if (isLead && !pickedNoteId) {
+        toast.error('Pick a Granola meeting')
+        return
+      }
+      const res = await fetch(
+        isLead
+          ? `/api/admin/leads/${target.id}/meeting-notes/granola`
+          : '/api/admin/meeting-notes', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({
-          matterId,
-          title: title.trim(),
-          meetingDate,
-          sourceUrl: sourceUrl.trim() || undefined,
-          source: 'granola',
-          content,
+        body: JSON.stringify(isLead ? { noteId: pickedNoteId } : {
+          matterId: target.id, title: title.trim(), meetingDate,
+          sourceUrl: sourceUrl.trim() || undefined, source: 'granola', content,
         }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error ?? `Save failed (${res.status})`)
 
       toast.success('Meeting notes saved')
-      onSaved?.()
+      onImported?.(json.meetingNote ?? json.document ?? json)
       onOpenChange(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save meeting notes')

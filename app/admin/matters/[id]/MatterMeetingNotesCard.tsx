@@ -160,8 +160,8 @@ export function MatterMeetingNotesCard({
         <AddMeetingNotesDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          matterId={matterId}
-          onSaved={() => {
+          target={{ kind: 'matter', id: matterId }}
+          onImported={() => {
             setOpen(true)
             void loadDocuments()
           }}
