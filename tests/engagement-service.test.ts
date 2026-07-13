@@ -114,7 +114,14 @@ describe('engagement service', () => {
     await service.prepareAgreement({ matterId: 'm1' }, input)
     await expect(service.previewAgreement('a1', input)).resolves.toEqual({ revision: { id: 'r2' }, rendered })
     await service.approveAgreementRevision({ agreementId: 'a1', revisionId: 'r2', renderSha256: 'new' })
-    expect(repository.createRevision).toHaveBeenCalledWith('a1', expect.objectContaining({ renderSha256: 'new' }))
+    expect(repository.createRevision).toHaveBeenCalledWith('a1', expect.objectContaining({
+      inputSnapshot: expect.objectContaining({
+        primary: input.primary,
+        additionalClauses: [],
+        scheduleAClauses: [],
+      }),
+      renderSha256: 'new',
+    }))
     expect(repository.markReady).toHaveBeenCalledWith({ agreementId: 'a1', revisionId: 'r2', renderSha256: 'new' })
     expect(approval.issue).toHaveBeenCalledWith(expect.objectContaining({ revisionId: 'r2', sha256: 'new' }))
   })

@@ -14,7 +14,7 @@ export interface EngagementServiceAgreement {
 export interface EngagementServiceRepository {
   createDraft(input: { matterId?: string; leadId?: string; preparedBy?: string | null; inputSnapshot: EngagementInput }): Promise<unknown>
   getAgreement(agreementId: string): Promise<EngagementServiceAgreement>
-  createRevision(agreementId: string, rendered: EngagementRenderedRevision): Promise<unknown>
+  createRevision(agreementId: string, rendered: EngagementRenderedRevision & { inputSnapshot: EngagementInput }): Promise<unknown>
   markReady(input: { agreementId: string; revisionId: string; renderSha256: string }): Promise<unknown>
   claimSend(input: { agreementId: string; revisionId: string; renderSha256: string; approvalToken: string; sentBy: string }): Promise<{ claimed: boolean }>
   claimResume(input: { agreementId: string; requestId: string; sentBy: string }): Promise<{ claimed: boolean }>
@@ -97,7 +97,7 @@ export function createEngagementService(deps: Dependencies) {
       if (!validated.ok) throw new Error(`Invalid engagement input: ${validated.errors.join(', ')}`)
       const rendered = await deps.renderer.render(validated.value)
       if (!rendered.pdf.subarray(0, 4).equals(Buffer.from('%PDF'))) throw new Error('Renderer did not produce a PDF')
-      const revision = await deps.repository.createRevision(agreementId, rendered)
+      const revision = await deps.repository.createRevision(agreementId, { ...rendered, inputSnapshot: validated.value })
       return { revision, rendered }
     },
 
