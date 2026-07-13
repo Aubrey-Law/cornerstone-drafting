@@ -91,13 +91,15 @@ declare
   v_lead public.client_intake;
   v_actor_id uuid;
 begin
-  -- A service-role caller has no end-user identity. It must not supply an
-  -- untrusted author; activity is intentionally system-authored (NULL).
+  -- Service-role is reachable only from authenticated server routes. Validate
+  -- the verified route actor against public.users before attributing activity.
   if auth.role() = 'service_role' then
-    if p_actor_id is not null then
-      raise exception 'Service-role calls cannot assign an actor' using errcode = '42501';
+    if p_actor_id is null or not exists (
+      select 1 from public.users u where u.id = p_actor_id and u.role in ('attorney', 'admin')
+    ) then
+      raise exception 'Attorney or admin access required' using errcode = '42501';
     end if;
-    v_actor_id := null;
+    v_actor_id := p_actor_id;
   else
     v_actor_id := auth.uid();
     if v_actor_id is null

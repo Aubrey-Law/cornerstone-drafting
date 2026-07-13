@@ -23,6 +23,25 @@ describe('lead detail page', () => {
     expect(text.indexOf('Notes')).toBeLessThan(text.indexOf('Activity'))
   })
 
+  it('offers top-row Lead, Hired, and Lost status actions and resumes an active agreement', () => {
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)
+    expect(screen.getByRole('combobox',{name:'Lead status'})).toBeTruthy()
+    expect(screen.getByRole('option',{name:'Lead'})).toBeTruthy()
+    expect(screen.getByRole('option',{name:'Hired'})).toBeTruthy()
+    expect(screen.getByRole('option',{name:'Lost'})).toBeTruthy()
+    expect(screen.getByRole('button',{name:'Resume engagement'})).toBeTruthy()
+  })
+
+  it('refreshes visible activity after a successful details mutation', async () => {
+    const user=userEvent.setup()
+    vi.spyOn(globalThis,'fetch')
+      .mockResolvedValueOnce({ok:true,json:async()=>({lead,spouse})} as Response)
+      .mockResolvedValueOnce({ok:true,json:async()=>({activity:[{id:'x',title:'Lead details updated',created_at:'2026-07-12T12:00:00Z'}]})} as Response)
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Edit'})); await user.click(screen.getByRole('button',{name:'Save'}))
+    expect(await screen.findByText('Lead details updated')).toBeTruthy()
+  })
+
   it('starts read-only and Edit reveals every editable field', async () => {
     const user = userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     expect(screen.queryByLabelText('First name')).toBeNull()
@@ -40,8 +59,9 @@ describe('lead detail page', () => {
   it('blocks Save for an invalid email', async () => {
     const fetchMock=vi.spyOn(globalThis,'fetch'); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     await user.click(screen.getByRole('button',{name:'Edit'})); const input=screen.getByLabelText('Email'); await user.clear(input); await user.type(input,'bad'); await user.click(screen.getByRole('button',{name:'Save'}))
-    expect(await screen.findByText('Invalid email')).toBeTruthy(); expect(fetchMock).not.toHaveBeenCalled()
+    expect((await screen.findAllByText('Invalid email')).length).toBeGreaterThan(0); expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('textbox',{name:/^Email/}).getAttribute('aria-describedby')).toBe('lead-email-error')
   })
 
   it('confirms removal of a newly entered spouse and preserves values when declined', async () => {

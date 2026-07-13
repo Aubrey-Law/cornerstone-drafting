@@ -22,7 +22,14 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}))
   let details
   try { details = validateLeadDetails(body) }
-  catch (error) { return NextResponse.json({ error: error instanceof ZodError ? error.issues[0]?.message ?? 'Invalid lead details' : 'Invalid lead details' }, { status: 400 }) }
+  catch (error) {
+    if (error instanceof ZodError) {
+      const fieldErrors: Record<string,string> = {}
+      for (const issue of error.issues) { const key=issue.path.join('.').replace(/^spouse\./,'spouse').replace(/\.([a-z])/g,(_,c)=>c.toUpperCase());if(key&&!fieldErrors[key])fieldErrors[key]=issue.message }
+      return NextResponse.json({ error:error.issues[0]?.message??'Invalid lead details',fieldErrors },{status:400})
+    }
+    return NextResponse.json({error:'Invalid lead details'},{status:400})
+  }
 
   const admin = getAdminClient()
   const { data: lead } = await admin
@@ -45,7 +52,7 @@ export async function PATCH(
   const requestedHired = details.status === 'hired'
   const persistedDetails = requestedHired ? { ...details, status: lead.lead_status === 'lost' ? 'lost' : 'lead' } : details
   const { data: savedLead, error } = await admin.rpc('update_lead_details', {
-    p_lead_id: intakeId, p_details: persistedDetails, p_spouse: details.spouse, p_actor_id: null,
+    p_lead_id: intakeId, p_details: persistedDetails, p_spouse: details.spouse, p_actor_id: userId,
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   let matterId: string | undefined

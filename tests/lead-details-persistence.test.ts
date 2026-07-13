@@ -77,6 +77,11 @@ describe('lead details validation', () => {
 })
 
 describe('lead details and notes migration', () => {
+  it('validates the verified service-route actor before audit attribution', () => {
+    const source = fs.readFileSync(migrationPath, 'utf8')
+    expect(source).toMatch(/auth\.role\(\) = 'service_role'[\s\S]*public\.users u where u\.id = p_actor_id[\s\S]*u\.role in \('attorney', 'admin'\)/)
+    expect(source).toContain('v_actor_id := p_actor_id')
+  })
   const sql = () => fs.readFileSync(migrationPath, 'utf8').toLowerCase()
 
   it('defines note tables, constraints, RLS, and staff policies', () => {
