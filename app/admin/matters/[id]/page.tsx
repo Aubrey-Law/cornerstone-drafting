@@ -7,6 +7,7 @@ import { isTwilioSmsConfigured } from '@/lib/twilio/config'
 import { isEsignConfigured } from '@/lib/esign/firma'
 import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
@@ -215,7 +216,9 @@ async function loadLinkedLeadHistory(admin: ReturnType<typeof getAdminClient>, i
 }
 
 export default async function MatterDetailPage({ params }: Params) {
-  const { id } = await params
+  const { id: rawId } = await params
+  const admin = getAdminClient()
+  const id = await resolveMatterId(rawId, admin)
   const [matter, contacts, agingHealth] = await Promise.all([
     fetchMatter(id),
     fetchMatterContacts(id),
@@ -224,7 +227,6 @@ export default async function MatterDetailPage({ params }: Params) {
 
   if (!matter) notFound()
 
-  const admin = getAdminClient()
   const [
     matterRow,
     { data: detailsRow, error: detailsError },

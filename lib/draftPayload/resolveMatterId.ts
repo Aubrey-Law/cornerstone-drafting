@@ -9,6 +9,14 @@ export async function resolveMatterId(inputId: string, admin = getAdminClient())
 
   if (matter?.id) return matter.id
 
+  const { data: numberedMatter } = await admin
+    .from('matters')
+    .select('id')
+    .eq('matter_number', inputId)
+    .maybeSingle()
+
+  if (numberedMatter?.id) return numberedMatter.id
+
   const { data: sheet } = await admin
     .from('design_sheets')
     .select('matter_id')
