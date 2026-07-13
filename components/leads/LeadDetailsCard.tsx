@@ -48,6 +48,7 @@ type Props = {
     zip?: string | null
     marital_status?: string | null
     practice_area?: string | null
+    lead_status?: string | null
     lead_source?: string | null
     engagement_fee_quoted?: number | null
     lead_urgency?: string | null
@@ -72,18 +73,31 @@ function FieldError({ field, errors }: { field: string; errors: Record<string, s
   return errors[field] ? <span id={`lead-${field}-error`} className="text-xs text-destructive">{errors[field]}</span> : null
 }
 
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</span>
+}
+
+function DetailCell({ label, children, className = '', valueClassName = '' }: { label: string; children: React.ReactNode; className?: string; valueClassName?: string }) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <FieldLabel>{label}</FieldLabel>
+      <div className={`mt-1 break-words text-sm font-medium text-foreground ${valueClassName}`}>{children || '—'}</div>
+    </div>
+  )
+}
+
 export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldErrors = {}, busy, onEdit, onCancel, onSave, onChange, onRemoveSpouse }: Props) {
   return (
     <section className="rounded-lg border border-border bg-card p-4 md:p-5">
       <div className="flex items-center justify-between">
-        <div><h2 className="text-sm font-semibold">Lead details</h2><p className="text-[11px] text-muted-foreground">Contact, household, and qualification details.</p></div>
+        <div><h2 className="text-sm font-semibold">Lead essentials</h2><p className="text-[11px] text-muted-foreground">Contact, household, and qualification details.</p></div>
         {!editing && <Button size="sm" variant="outline" onClick={onEdit}>Edit</Button>}
       </div>
       {editing ? (
         <form noValidate onSubmit={event => { event.preventDefault(); onSave() }}>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {fields.map(([key, label]) => (
-              <label key={key} htmlFor={`lead-${key}`} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_input]:normal-case [&_input]:tracking-normal">
+              <label key={key} htmlFor={`lead-${key}`} className={`${key === 'addressLine1' || key === 'addressLine2' ? 'lg:col-span-2' : ''} space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_input]:normal-case [&_input]:tracking-normal`}>
                 {label}
                 <Input id={`lead-${key}`} aria-invalid={!!fieldErrors[key]} aria-describedby={fieldErrors[key] ? `lead-${key}-error` : undefined} type={key.includes('date') || key === 'dateOfBirth' ? 'date' : key === 'email' ? 'email' : key === 'fee' ? 'number' : 'text'} value={form[key]} onChange={event => onChange(key, event.target.value)} />
                 <FieldError field={key} errors={fieldErrors} />
@@ -109,7 +123,7 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
 
           <h3 className="mt-6 text-sm font-semibold">Qualification</h3>
           <p className="text-[11px] text-muted-foreground">Only the details that help prioritize and prepare the first conversation.</p>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {qualificationFields.map(([key, label]) => (
               <label key={key} htmlFor={`lead-${key}`} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_input]:normal-case [&_input]:tracking-normal">
                 {label}
@@ -126,7 +140,7 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
                 </Select>
               </div>
             ))}
-            <label htmlFor="lead-qualificationNotes" className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:col-span-2">
+            <label htmlFor="lead-qualificationNotes" className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:col-span-2 lg:col-span-4">
               Qualification notes
               <Textarea id="lead-qualificationNotes" className="mt-1 min-h-24" value={form.qualificationNotes} onChange={event => onChange('qualificationNotes', event.target.value)} />
             </label>
@@ -135,7 +149,7 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
           <h3 className="mt-6 text-sm font-semibold">Spouse</h3>
           {form.spousePresent === 'yes' ? (
             <>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {spouseFields.map(([key, label]) => (
                   <label key={key} htmlFor={`lead-${key}`} className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground [&_input]:normal-case [&_input]:tracking-normal">
                     {label}
@@ -151,21 +165,29 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
           <div className="mt-5 flex gap-2"><Button type="submit" disabled={busy}>Save</Button><Button type="button" variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button></div>
         </form>
       ) : (
-        <dl className="mt-4 grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-5 gap-y-3 text-sm [&_dd]:text-foreground [&_dt]:text-[11px] [&_dt]:font-medium [&_dt]:uppercase [&_dt]:tracking-wide [&_dt]:text-muted-foreground">
-          <dt>Name</dt><dd>{lead.full_name}</dd>
-          <dt>Email</dt><dd>{lead.email}</dd>
-          <dt>Phone</dt><dd>{lead.phone || '—'}</dd>
-          <dt>Address</dt><dd>{[lead.address_line1, lead.city, lead.state, lead.zip].filter(Boolean).join(', ') || '—'}</dd>
-          <dt>Marital status</dt><dd>{lead.marital_status || '—'}</dd>
-          <dt>Practice area</dt><dd>{practiceAreaLabel(lead.practice_area)}</dd>
-          <dt>Spouse</dt><dd>{spouse ? [spouse.first_name, spouse.last_name].filter(Boolean).join(' ') : '—'}</dd>
-          <dt>Lead source</dt><dd>{lead.lead_source || '—'}</dd>
-          <dt>Fee</dt><dd>{lead.engagement_fee_quoted ? `$${Number(lead.engagement_fee_quoted).toLocaleString()}` : '—'}</dd>
-          <dt>Urgency</dt><dd className="capitalize">{lead.lead_urgency || '—'}</dd>
-          <dt>Estate value</dt><dd>{lead.taxable_estate ? `$${Number(lead.taxable_estate).toLocaleString()}` : '—'}</dd>
-          <dt>Minor children</dt><dd>{lead.has_minor_children == null ? '—' : lead.has_minor_children ? 'Yes' : 'No'}</dd>
-          <dt>Qualification notes</dt><dd className="whitespace-pre-wrap">{lead.qualification_notes || '—'}</dd>
-        </dl>
+        <div className="mt-4">
+          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+            <DetailCell label="Name">{lead.full_name}</DetailCell>
+            <DetailCell label="Email">{lead.email}</DetailCell>
+            <DetailCell label="Phone">{lead.phone}</DetailCell>
+            <DetailCell label="Matter status" valueClassName="capitalize">{lead.lead_status || form.status}</DetailCell>
+            <DetailCell label="Address" className="sm:col-span-2">{[lead.address_line1, lead.city, lead.state, lead.zip].filter(Boolean).join(', ')}</DetailCell>
+            <DetailCell label="Marital status" valueClassName="capitalize">{lead.marital_status}</DetailCell>
+            <DetailCell label="Spouse">{spouse ? [spouse.first_name, spouse.last_name].filter(Boolean).join(' ') : null}</DetailCell>
+            <DetailCell label="Practice area">{practiceAreaLabel(lead.practice_area)}</DetailCell>
+            <DetailCell label="Lead source">{lead.lead_source}</DetailCell>
+          </div>
+
+          <div className="mt-4 border-t border-border pt-4">
+            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+              <DetailCell label="Quoted fee">{lead.engagement_fee_quoted != null ? `$${Number(lead.engagement_fee_quoted).toLocaleString()}` : null}</DetailCell>
+              <DetailCell label="Urgency" valueClassName="capitalize">{lead.lead_urgency}</DetailCell>
+              <DetailCell label="Estimated estate value">{lead.taxable_estate != null ? `$${Number(lead.taxable_estate).toLocaleString()}` : null}</DetailCell>
+              <DetailCell label="Minor children">{lead.has_minor_children == null ? null : lead.has_minor_children ? 'Yes' : 'No'}</DetailCell>
+              <DetailCell label="Qualification notes" className="sm:col-span-2 lg:col-span-4" valueClassName="whitespace-pre-wrap font-normal">{lead.qualification_notes}</DetailCell>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   )

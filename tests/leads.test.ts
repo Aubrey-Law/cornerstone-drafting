@@ -51,6 +51,14 @@ describe('lead tracking source shape', () => {
 })
 
 describe('lead edit and delete source shape', () => {
+  it('renders lead essentials in a compact responsive grid', () => {
+    const source = read('components/leads/LeadDetailsCard.tsx')
+    expect(source).toContain('Lead essentials')
+    expect(source).toContain('lg:grid-cols-4')
+    expect(source).toContain('DetailCell label="Matter status"')
+    expect(source).toContain('DetailCell label="Qualification notes"')
+  })
+
   it('edit/delete route exports PATCH and DELETE with a converted guard', () => {
     const source = read('app/api/admin/leads/[id]/route.ts')
     expect(source).toContain('requireAdmin')
