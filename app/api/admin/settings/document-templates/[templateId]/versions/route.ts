@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdministrator } from '@/lib/apiAuth'
-import { DOCX_CONTENT_TYPE, validateDocxStructure } from '@/lib/documentTemplates/docx'
+import { validateDocxStructure } from '@/lib/documentTemplates/docx'
 import { getDocumentTemplateDefinition } from '@/lib/documentTemplates/registry'
 import { createDocumentTemplateVersion } from '@/lib/documentTemplates/repository'
 
@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: Params) {
   }
   const file = form.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'DOCX file is required' }, { status: 400 })
-  if (!file.name.toLowerCase().endsWith('.docx') || file.type !== DOCX_CONTENT_TYPE) {
+  if (!file.name.toLowerCase().endsWith('.docx')) {
     return NextResponse.json({ error: 'Only Microsoft Word DOCX templates are accepted' }, { status: 400 })
   }
   const buffer = Buffer.from(await file.arrayBuffer())
@@ -42,4 +42,3 @@ export async function POST(req: Request, { params }: Params) {
 }
 
 export const runtime = 'nodejs'
-

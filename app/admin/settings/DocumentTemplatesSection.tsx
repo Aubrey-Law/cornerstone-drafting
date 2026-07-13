@@ -228,7 +228,7 @@ export function DocumentTemplatesSection() {
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2" onClick={event => event.preventDefault()}>
+                    <div className="flex gap-2" onClick={event => event.stopPropagation()}>
                       <Button size="sm" variant="outline" onClick={() => void download(template, template.activeVersionId ?? 'bundled')}>
                         <Download className="h-4 w-4" /> Current
                       </Button>

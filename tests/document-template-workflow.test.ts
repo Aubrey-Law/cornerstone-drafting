@@ -103,4 +103,20 @@ describe('document template workflow', () => {
     expect(documentTemplates).toContain('Active version published')
     expect(documentTemplates).toContain('template.publishedAt')
   })
+
+  it('does not cancel the native DOCX file picker and validates uploads by extension and structure', () => {
+    const documentTemplates = fs.readFileSync(
+      path.join(root, 'app/admin/settings/DocumentTemplatesSection.tsx'),
+      'utf8',
+    )
+    const uploadRoute = fs.readFileSync(
+      path.join(root, 'app/api/admin/settings/document-templates/[templateId]/versions/route.ts'),
+      'utf8',
+    )
+    expect(documentTemplates).toContain('event.stopPropagation()')
+    expect(documentTemplates).not.toContain('event => event.preventDefault()')
+    expect(uploadRoute).toContain("file.name.toLowerCase().endsWith('.docx')")
+    expect(uploadRoute).not.toContain('file.type !==')
+    expect(uploadRoute).toContain('validateDocxStructure(buffer)')
+  })
 })
