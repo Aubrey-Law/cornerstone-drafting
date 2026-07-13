@@ -65,8 +65,12 @@ describe('lead detail page', () => {
   it('refreshes visible activity after a successful details mutation', async () => {
     const user=userEvent.setup()
     vi.spyOn(globalThis,'fetch')
-      .mockResolvedValueOnce({ok:true,json:async()=>({lead,spouse})} as Response)
-      .mockResolvedValueOnce({ok:true,json:async()=>({activity:[{id:'x',title:'Lead details updated',created_at:'2026-07-12T12:00:00Z'}]})} as Response)
+      .mockImplementation(async input => {
+        const url = String(input)
+        if (url.endsWith('/calls?limit=50')) return {ok:true,json:async()=>({calls:[]})} as Response
+        if (url.endsWith('/activity')) return {ok:true,json:async()=>({activity:[{id:'x',title:'Lead details updated',created_at:'2026-07-12T12:00:00Z'}]})} as Response
+        return {ok:true,json:async()=>({lead,spouse})} as Response
+      })
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     await user.click(screen.getByRole('button',{name:'Edit'})); await user.click(screen.getByRole('button',{name:'Save'}))
     expect(await screen.findByText('Lead details updated')).toBeTruthy()
@@ -89,7 +93,8 @@ describe('lead detail page', () => {
   it('blocks Save for an invalid email', async () => {
     const fetchMock=vi.spyOn(globalThis,'fetch'); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     await user.click(screen.getByRole('button',{name:'Edit'})); const input=screen.getByLabelText('Email'); await user.clear(input); await user.type(input,'bad'); await user.click(screen.getByRole('button',{name:'Save'}))
-    expect((await screen.findAllByText('Invalid email')).length).toBeGreaterThan(0); expect(fetchMock).not.toHaveBeenCalled()
+    expect((await screen.findAllByText('Invalid email')).length).toBeGreaterThan(0)
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/admin/leads/l1' && init?.method === 'PATCH')).toBe(false)
     expect(screen.getByRole('alert')).toBeTruthy()
     expect(screen.getByRole('textbox',{name:/^Email/}).getAttribute('aria-describedby')).toBe('lead-email-error')
   })

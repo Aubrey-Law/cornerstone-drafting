@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
+import { normalizePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
 import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { formatDate } from '@/lib/utils'
 import { SendEngagementDialog } from './SendEngagementDialog'
@@ -225,7 +225,7 @@ export function LeadsClient({
       name: leadName(lead) === lead.email ? '' : leadName(lead),
       email: lead.email ?? '',
       phone: lead.phone ?? '',
-      practiceArea: lead.practice_area ?? 'EP',
+      practiceArea: normalizePracticeArea(lead.practice_area),
       fee: lead.engagement_fee_quoted != null ? String(lead.engagement_fee_quoted) : '',
       status: lead.lead_status ?? 'lead',
     })

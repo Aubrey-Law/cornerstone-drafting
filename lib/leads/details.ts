@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parsePracticeArea } from '@/lib/practiceArea'
 
 const blankToNull = (value: unknown) => {
   if (value === undefined || value === null) return null
@@ -18,6 +19,13 @@ const optionalDate = z.preprocess(blankToNull, z.string().date().nullable())
 const optionalNumber = z.preprocess(
   blankToNull,
   z.number().finite('Invalid amount').nonnegative('Invalid amount').nullable(),
+)
+const optionalPracticeArea = z.preprocess(
+  value => {
+    const normalized = parsePracticeArea(blankToNull(value))
+    return normalized ?? blankToNull(value)
+  },
+  z.enum(['EP', 'EP-LP', 'Probate'], { message: 'Invalid practice area' }).nullable(),
 )
 
 const spouseSchema = z.object({
@@ -45,7 +53,7 @@ const leadDetailsSchema = z.object({
   zip: optionalText,
   county: optionalText,
   maritalStatus: optionalText,
-  practiceArea: z.preprocess(blankToNull, z.string().transform(value => value.toUpperCase()).nullable()),
+  practiceArea: optionalPracticeArea,
   source: optionalText,
   status: z.enum(['lead', 'hired', 'lost'], { message: 'Invalid lead status' }),
   fee: z.preprocess(blankToNull, z.number().finite('Invalid fee').nonnegative('Invalid fee').nullable()),

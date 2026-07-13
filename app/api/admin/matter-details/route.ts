@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
+import { parsePracticeArea } from '@/lib/practiceArea'
 
 // PATCH /api/admin/matter-details
 // Body: { matterId: string; field: string; value: unknown }
@@ -76,7 +77,13 @@ export async function PATCH(req: Request) {
   }
 
   const admin = getAdminClient()
-  const normalizedValue = value === '' ? null : value
+  let normalizedValue = value === '' ? null : value
+  if (field === 'practice_area' && normalizedValue !== null) {
+    normalizedValue = parsePracticeArea(normalizedValue)
+    if (!normalizedValue) {
+      return NextResponse.json({ error: 'Invalid practice area' }, { status: 400 })
+    }
+  }
 
   if (field === 'matter_number') {
     // matter_number lives on two tables; setMatterNumber keeps them in sync.

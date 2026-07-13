@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { normalizePracticeArea } from '@/lib/practiceArea'
+import { parsePracticeArea } from '@/lib/practiceArea'
 
 /**
  * POST /api/admin/leads — create a lead: a standalone client_intake row with
@@ -24,6 +24,10 @@ export async function POST(req: Request) {
   if (!clientName || !clientEmail) {
     return NextResponse.json({ error: 'clientName and clientEmail are required' }, { status: 400 })
   }
+  const practiceArea = parsePracticeArea(body.practiceArea ?? 'EP')
+  if (!practiceArea) {
+    return NextResponse.json({ error: 'Invalid practice area' }, { status: 400 })
+  }
   const feeQuoted =
     typeof body.feeQuoted === 'number' && Number.isFinite(body.feeQuoted) ? body.feeQuoted : null
 
@@ -37,7 +41,7 @@ export async function POST(req: Request) {
       last_name: nameParts.slice(1).join(' ') || null,
       full_name: clientName,
       phone: typeof body.clientPhone === 'string' ? body.clientPhone.trim() || null : null,
-      practice_area: normalizePracticeArea(body.practiceArea),
+      practice_area: practiceArea,
       status: 'in_progress',
       lead_status: 'lead',
       engagement_fee_quoted: feeQuoted,

@@ -76,6 +76,12 @@ describe('lead details validation', () => {
     expect(result).toMatchObject({ urgency: 'high', estimatedEstateValue: 2_500_000, hasMinorChildren: true, qualificationNotes: 'Needs a trust review.' })
   })
 
+  it('uses the same canonical practice-area values as matters', () => {
+    expect(validateLeadDetails({ ...completeInput, practiceArea: 'PROBATE' }).practiceArea).toBe('Probate')
+    expect(validateLeadDetails({ ...completeInput, practiceArea: 'Estate Planning - LP' }).practiceArea).toBe('EP-LP')
+    expect(() => validateLeadDetails({ ...completeInput, practiceArea: 'Elder Law' })).toThrow(/practice area/i)
+  })
+
   it.each(['prospect', 'converted', ''])('rejects invalid status %s', status => {
     expect(() => validateLeadDetails({ ...completeInput, status })).toThrow(/status/i)
   })

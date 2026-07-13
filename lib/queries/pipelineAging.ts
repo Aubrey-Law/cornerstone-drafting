@@ -3,7 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 export type MatterAgingHealth = 'green' | 'amber' | 'red'
 
 export interface MatterAgingRow {
-  entity: 'matter'
+  entity: 'matter' | 'lead'
   id: string
   client_name: string | null
   client_email: string | null
@@ -68,7 +68,7 @@ function buildTiles(rows: MatterAgingRow[]): MatterAgingTiles {
 function normalizeRow(row: Record<string, unknown>): MatterAgingRow {
   return {
     ...(row as unknown as MatterAgingRow),
-    entity: 'matter',
+    entity: row.entity === 'lead' ? 'lead' : 'matter',
     client_email: (row.client_email as string | null) ?? null,
     client_phone: (row.client_phone as string | null) ?? null,
     raw_health: (row.raw_health as MatterAgingHealth) ?? (row.health as MatterAgingHealth),
@@ -84,7 +84,7 @@ export async function fetchMatterAging(): Promise<{
   tiles: MatterAgingTiles
 }> {
   const admin = getAdminClient()
-  const { data, error } = await admin.from('v_matter_aging').select(AGING_SELECT)
+  const { data, error } = await admin.from('v_pipeline_aging').select(AGING_SELECT)
 
   if (error) {
     console.error('fetchMatterAging:', error.message)
@@ -103,7 +103,7 @@ export async function fetchMatterAgingTiles(): Promise<MatterAgingTiles> {
 export interface StageSlaRow {
   stage_key: string
   track: string
-  entity: 'matter'
+  entity: 'matter' | 'lead'
   owner: 'client' | 'attorney'
   sla_days: number | null
   escalation_offset: number | null
@@ -115,7 +115,7 @@ export async function fetchStageSlaRows(): Promise<StageSlaRow[]> {
   const { data, error } = await admin
     .from('stage_sla')
     .select('stage_key, track, entity, owner, sla_days, escalation_offset, stage_order')
-    .eq('entity', 'matter')
+    .order('entity', { ascending: true })
     .order('stage_order', { ascending: true })
     .order('track', { ascending: true })
 

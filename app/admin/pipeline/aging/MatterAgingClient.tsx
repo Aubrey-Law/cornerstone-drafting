@@ -159,7 +159,7 @@ function SnoozeDialog({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          entity: 'matter',
+          entity: target.entity,
           entity_id: target.id,
           stage_key: target.current_stage,
           snoozed_until: until.toISOString(),
@@ -184,7 +184,7 @@ function SnoozeDialog({
         <DialogHeader>
           <DialogTitle>Snooze aging alert</DialogTitle>
           <DialogDescription>
-            Hide {target.client_name ?? 'this matter'} from action queues until the snooze expires.
+            Hide {target.client_name ?? `this ${target.entity}`} from action queues until the snooze expires.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -298,7 +298,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
       if (healthFilter === 'on-track' && (r.health !== 'green' || r.is_snoozed)) return false
       if (healthFilter === 'snoozed' && !r.is_snoozed) return false
       if (!q) return true
-      const hay = [r.client_name, r.client_email, r.current_stage]
+      const hay = [r.client_name, r.client_email, r.current_stage, r.entity]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -310,9 +310,9 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Matter aging</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Pipeline aging</h1>
           <p className="text-sm text-muted-foreground">
-            {tiles.active} active matter{tiles.active === 1 ? '' : 's'}, oldest risk first. Snooze anything
+            {tiles.active} active pipeline record{tiles.active === 1 ? '' : 's'} across leads and matters, oldest risk first. Snooze anything
             that&apos;s waiting on something out of your hands.
           </p>
         </div>
@@ -361,7 +361,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder="Search matters…"
+          placeholder="Search leads and matters…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -370,8 +370,8 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
           {healthFilter === 'attention' && !search.trim()
-            ? 'Nothing needs attention — every active matter is on track.'
-            : 'No matters match your filters.'}
+            ? 'Nothing needs attention — every active lead and matter is on track.'
+            : 'No leads or matters match your filters.'}
         </p>
       ) : (
         <div className="rounded-lg border border-border">
@@ -380,6 +380,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
               <TableRow>
                 <TableHead className="w-8" />
                 <TableHead>Client</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Waiting on</TableHead>
                 <TableHead>Days in stage</TableHead>
@@ -388,7 +389,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
             </TableHeader>
             <TableBody>
               {filtered.map(row => (
-                <TableRow key={row.id} className={row.is_snoozed ? 'opacity-70' : undefined}>
+                <TableRow key={`${row.entity}:${row.id}`} className={row.is_snoozed ? 'opacity-70' : undefined}>
                   <TableCell>
                     <span
                       className={cn(
@@ -407,10 +408,11 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
                     />
                   </TableCell>
                   <TableCell className="font-medium">
-                    <Link href={`/admin/matters/${row.id}`} className="hover:underline">
+                    <Link href={row.entity === 'lead' ? `/admin/leads/${row.id}` : `/admin/matters/${row.id}`} className="hover:underline">
                       {row.client_name ?? '—'}
                     </Link>
                   </TableCell>
+                  <TableCell><Badge variant="outline" className="capitalize">{row.entity}</Badge></TableCell>
                   <TableCell>{engineStageLabel(row.current_stage)}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {row.owner === 'attorney' ? 'You' : 'Client'}

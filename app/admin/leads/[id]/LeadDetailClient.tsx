@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { practiceAreaLabel } from '@/lib/practiceArea'
+import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { LeadDetailsCard, type LeadForm } from '@/components/leads/LeadDetailsCard'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { LeadNotesCard, type LeadMeetingNote, type LeadNote } from '@/components/leads/LeadNotesCard'
@@ -85,7 +85,7 @@ function snapshot(lead: LeadRecord, spouse: LeadSpouse | null): LeadForm {
     zip: lead.zip ?? '',
     county: lead.county ?? '',
     maritalStatus: lead.marital_status ?? '',
-    practiceArea: lead.practice_area ?? '',
+    practiceArea: normalizePracticeArea(lead.practice_area),
     source: lead.lead_source ?? '',
     status: lead.lead_status ?? 'lead',
     fee: lead.engagement_fee_quoted == null ? '' : String(lead.engagement_fee_quoted),

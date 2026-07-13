@@ -98,16 +98,16 @@ function atRiskRow(row: MatterAgingRow) {
     : `${row.days_in_stage} day${row.days_in_stage === 1 ? '' : 's'} in stage`
   return (
     <RowLink
-      key={row.id}
-      href={`/admin/matters/${row.id}`}
-      primary={row.client_name ?? 'Unnamed matter'}
+      key={`${row.entity}:${row.id}`}
+      href={row.entity === 'lead' ? `/admin/leads/${row.id}` : `/admin/matters/${row.id}`}
+      primary={row.client_name ?? `Unnamed ${row.entity}`}
       secondary={`${engineStageLabel(row.current_stage)} · ${days} · ball in ${row.owner === 'client' ? "client's" : 'your'} court`}
       meta={
         <Badge variant="outline" className={cn('text-[10px] capitalize', AGING_TONE[row.health])}>
           {row.health}
         </Badge>
       }
-      cta="Open matter"
+      cta={`Open ${row.entity}`}
     />
   )
 }

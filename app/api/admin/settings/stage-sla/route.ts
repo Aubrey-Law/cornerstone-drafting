@@ -21,12 +21,13 @@ export async function PATCH(req: Request) {
   const {
     stage_key: stageKey,
     track = 'DEFAULT',
+    entity = 'matter',
     sla_days: slaDays,
     escalation_offset: escalationOffset,
   } = body ?? {}
 
-  if (!stageKey || !track) {
-    return NextResponse.json({ error: 'stage_key and track required' }, { status: 400 })
+  if (!stageKey || !track || (entity !== 'matter' && entity !== 'lead')) {
+    return NextResponse.json({ error: 'Valid stage_key, track, and entity required' }, { status: 400 })
   }
 
   const patch: Record<string, number | null> = {}
@@ -56,7 +57,7 @@ export async function PATCH(req: Request) {
     .update(patch)
     .eq('stage_key', stageKey)
     .eq('track', track)
-    .eq('entity', 'matter')
+    .eq('entity', entity)
     .select('stage_key, track, entity, owner, sla_days, escalation_offset, stage_order')
     .maybeSingle()
 

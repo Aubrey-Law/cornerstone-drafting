@@ -38,7 +38,7 @@ export function PipelineSlaSettings() {
       setDrafts(
         Object.fromEntries(
           loaded.map(r => [
-            `${r.stage_key}:${r.track}`,
+            `${r.entity}:${r.stage_key}:${r.track}`,
             {
               sla_days: r.sla_days == null ? '' : String(r.sla_days),
               escalation_offset: r.escalation_offset == null ? '' : String(r.escalation_offset),
@@ -59,7 +59,7 @@ export function PipelineSlaSettings() {
 
   async function saveRow(row: StageSlaRow) {
     if (!token) return
-    const key = `${row.stage_key}:${row.track}`
+    const key = `${row.entity}:${row.stage_key}:${row.track}`
     const draft = drafts[key]
     if (!draft) return
 
@@ -86,6 +86,7 @@ export function PipelineSlaSettings() {
         body: JSON.stringify({
           stage_key: row.stage_key,
           track: row.track,
+          entity: row.entity,
           sla_days: slaDays,
           escalation_offset: escalationOffset,
         }),
@@ -97,7 +98,7 @@ export function PipelineSlaSettings() {
       const body = await res.json()
       const updated = body.row as StageSlaRow
       setRows(prev =>
-        prev.map(r => (r.stage_key === updated.stage_key && r.track === updated.track ? updated : r)),
+        prev.map(r => (r.entity === updated.entity && r.stage_key === updated.stage_key && r.track === updated.track ? updated : r)),
       )
       toast.success('SLA updated')
     } catch (e) {
@@ -119,7 +120,7 @@ export function PipelineSlaSettings() {
   return (
     <section className="space-y-4 rounded-lg border border-border p-4">
       <div>
-        <h2 className="text-sm font-semibold">Matter stage SLA</h2>
+        <h2 className="text-sm font-semibold">Pipeline stage SLA</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Business-day thresholds for the DEFAULT track. Blank SLA means no deadline.
         </p>
@@ -129,6 +130,7 @@ export function PipelineSlaSettings() {
         <TableHeader>
           <TableRow>
             <TableHead>Stage</TableHead>
+            <TableHead>Type</TableHead>
             <TableHead>Owner</TableHead>
             <TableHead>SLA days</TableHead>
             <TableHead>Escalation</TableHead>
@@ -137,7 +139,7 @@ export function PipelineSlaSettings() {
         </TableHeader>
         <TableBody>
           {rows.map(row => {
-            const key = `${row.stage_key}:${row.track}`
+            const key = `${row.entity}:${row.stage_key}:${row.track}`
             const draft = drafts[key]
             const dirty =
               draft &&
@@ -148,6 +150,7 @@ export function PipelineSlaSettings() {
             return (
               <TableRow key={key}>
                 <TableCell className="font-medium">{engineStageLabel(row.stage_key)}</TableCell>
+                <TableCell className="capitalize text-muted-foreground">{row.entity}</TableCell>
                 <TableCell className="capitalize text-muted-foreground">{row.owner}</TableCell>
                 <TableCell>
                   <Input

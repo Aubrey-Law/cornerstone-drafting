@@ -23,8 +23,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  if (entity !== 'matter') {
-    return NextResponse.json({ error: 'Only matter snooze is supported' }, { status: 400 })
+  if (entity !== 'matter' && entity !== 'lead') {
+    return NextResponse.json({ error: 'Invalid aging entity' }, { status: 400 })
   }
 
   const until = new Date(snoozedUntil)
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     .from('pipeline_aging_snooze')
     .upsert(
       {
-        entity: 'matter',
+        entity,
         entity_id: String(entityId),
         stage_key: stageKey,
         snoozed_until: until.toISOString(),

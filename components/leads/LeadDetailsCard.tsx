@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
 
 export type LeadForm = Record<string, string> & { spousePresent: string }
 
@@ -28,7 +29,6 @@ const spouseFields = [
 
 const enumerations = [
   ['maritalStatus', 'Marital status', [['single', 'Single'], ['married', 'Married'], ['divorced', 'Divorced'], ['widowed', 'Widowed']]],
-  ['practiceArea', 'Practice area', [['EP', 'Estate planning'], ['PROBATE', 'Probate'], ['ELDER', 'Elder law']]],
   ['status', 'Status', [['lead', 'Lead'], ['hired', 'Hired'], ['lost', 'Lost']]],
 ] as const
 
@@ -47,6 +47,7 @@ type Props = {
     state?: string | null
     zip?: string | null
     marital_status?: string | null
+    practice_area?: string | null
     lead_source?: string | null
     engagement_fee_quoted?: number | null
     lead_urgency?: string | null
@@ -97,6 +98,13 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
                 </Select>
               </div>
             ))}
+            <div className="space-y-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <label id="lead-practiceArea-label">Practice area</label>
+              <Select value={form.practiceArea} onValueChange={value => onChange('practiceArea', value)}>
+                <SelectTrigger className="w-full" aria-labelledby="lead-practiceArea-label"><SelectValue /></SelectTrigger>
+                <SelectContent>{PRACTICE_AREA_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
 
           <h3 className="mt-6 text-sm font-semibold">Qualification</h3>
@@ -149,6 +157,7 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
           <dt>Phone</dt><dd>{lead.phone || '—'}</dd>
           <dt>Address</dt><dd>{[lead.address_line1, lead.city, lead.state, lead.zip].filter(Boolean).join(', ') || '—'}</dd>
           <dt>Marital status</dt><dd>{lead.marital_status || '—'}</dd>
+          <dt>Practice area</dt><dd>{practiceAreaLabel(lead.practice_area)}</dd>
           <dt>Spouse</dt><dd>{spouse ? [spouse.first_name, spouse.last_name].filter(Boolean).join(' ') : '—'}</dd>
           <dt>Lead source</dt><dd>{lead.lead_source || '—'}</dd>
           <dt>Fee</dt><dd>{lead.engagement_fee_quoted ? `$${Number(lead.engagement_fee_quoted).toLocaleString()}` : '—'}</dd>
