@@ -8,7 +8,7 @@ import { dataForNodeEstatePackage } from '@/lib/estateGenerator/node/packageData
 import { renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
 import type { NodeEstateData, NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
 import { renderRealEstateTransferDocx } from '@/lib/realEstateTransfer/generate'
-import { DOCUMENT_TYPES, type RealEstateTransferDocType } from '@/lib/realEstateTransfer/fields'
+import { DEED_TEMPLATE_VARIANTS, DOCUMENT_TYPES, type RealEstateTransferDocType } from '@/lib/realEstateTransfer/fields'
 import { buildFormStateFromDesignSheet } from '@/lib/designSheetRealEstateTransfer'
 import { buildTemplateFields } from '@/lib/realEstateTransfer/formState'
 import { renderEngagementAgreement } from '@/lib/engagement/render'
@@ -101,9 +101,13 @@ async function validateRealEstate(templateId: string, buffer: Buffer, matterId: 
     (contacts ?? []) as MatterContact[],
   )
   const fields = buildTemplateFields(form)
-  const entry = Object.entries(DOCUMENT_TYPES).find(([, meta]) => definition.bundledPath.endsWith(`/${meta.templateFile}`))
-  if (!entry) throw new Error('Real-estate template registry entry is invalid.')
-  const [docType, meta] = entry as [RealEstateTransferDocType, (typeof DOCUMENT_TYPES)[RealEstateTransferDocType]]
+  const deedVariant = Object.values(DEED_TEMPLATE_VARIANTS)
+    .find(meta => definition.bundledPath.endsWith(`/${meta.templateFile}`))
+  const entry = Object.entries(DOCUMENT_TYPES)
+    .find(([, meta]) => definition.bundledPath.endsWith(`/${meta.templateFile}`))
+  if (!deedVariant && !entry) throw new Error('Real-estate template registry entry is invalid.')
+  const docType = deedVariant ? 'deed' : entry![0] as RealEstateTransferDocType
+  const meta = deedVariant ?? entry![1]
   const preview = renderRealEstateTransferDocx(docType, fields, buffer)
   const filename = `${meta.downloadBaseName}.docx`
   return {

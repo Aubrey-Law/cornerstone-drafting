@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export const REAL_ESTATE_TRANSFER_FIELD_KEYS = [
   'grantor',
+  'grantor_2',
   'grantee',
   'trustees',
   'settlor',
@@ -13,6 +14,17 @@ export const REAL_ESTATE_TRANSFER_FIELD_KEYS = [
   'property_state',
   'property_county',
   'legal_description',
+  'property_description',
+  'description_2',
+  'description_type',
+  'recording_system',
+  'recording_date',
+  'registry_of_deeds',
+  'current_deed_book_number',
+  'current_deed_page',
+  'current_deed_document_number',
+  'current_certificate_number',
+  'grantee_mailing_address',
   'prior_deed_book',
   'prior_deed_page',
   'prior_deed_date',
@@ -38,13 +50,25 @@ export interface RealEstateTransferFieldMeta {
 }
 
 export const REAL_ESTATE_TRANSFER_FIELDS: RealEstateTransferFieldMeta[] = [
-  { key: 'grantor', label: 'Grantor(s)', section: 'deed', fromDeed: true },
+  { key: 'grantor', label: 'First grantor', section: 'deed', fromDeed: true },
+  { key: 'grantor_2', label: 'Second grantor (if any)', section: 'deed', fromDeed: true },
   { key: 'grantee', label: 'Grantee(s)', section: 'deed' },
   { key: 'property_address', label: 'Property street address', section: 'deed' },
   { key: 'property_city', label: 'City / town', section: 'deed' },
   { key: 'property_state', label: 'State', section: 'deed' },
   { key: 'property_county', label: 'County', section: 'deed' },
   { key: 'legal_description', label: 'Legal description', section: 'deed', multiline: true, fromDeed: true },
+  { key: 'property_description', label: 'Opening property description', section: 'deed', multiline: true, fromDeed: true },
+  { key: 'description_2', label: 'Additional description / easements', section: 'deed', multiline: true, fromDeed: true },
+  { key: 'description_type', label: 'Description type (metes_and_bounds or lot_plan)', section: 'deed', fromDeed: true },
+  { key: 'recording_system', label: 'Recording system (registry or land_court)', section: 'deed', fromDeed: true },
+  { key: 'recording_date', label: 'Current deed recording date', section: 'deed', fromDeed: true },
+  { key: 'registry_of_deeds', label: 'Full Registry of Deeds / Land Court name', section: 'deed', fromDeed: true },
+  { key: 'current_deed_book_number', label: 'Current deed book number', section: 'deed', fromDeed: true },
+  { key: 'current_deed_page', label: 'Current deed page', section: 'deed', fromDeed: true },
+  { key: 'current_deed_document_number', label: 'Current deed document number', section: 'deed', fromDeed: true },
+  { key: 'current_certificate_number', label: 'Current certificate of title number', section: 'deed', fromDeed: true },
+  { key: 'grantee_mailing_address', label: 'Grantee mailing address', section: 'deed', fromDeed: true },
   { key: 'prior_deed_book', label: 'Prior deed book', section: 'deed', fromDeed: true },
   { key: 'prior_deed_page', label: 'Prior deed page', section: 'deed', fromDeed: true },
   { key: 'prior_deed_date', label: 'Prior deed date', section: 'deed', fromDeed: true },
@@ -70,7 +94,17 @@ const fieldShape = Object.fromEntries(
   REAL_ESTATE_TRANSFER_FIELD_KEYS.map(key => [key, z.string().optional()]),
 ) as Record<RealEstateTransferFieldKey, z.ZodOptional<z.ZodString>>
 
-export const RealEstateTransferFieldsSchema = z.object(fieldShape)
+export const BoundaryCallSchema = z.object({
+  directional_call: z.string(),
+  bound_description: z.string(),
+})
+
+export type BoundaryCall = z.infer<typeof BoundaryCallSchema>
+
+export const RealEstateTransferFieldsSchema = z.object({
+  ...fieldShape,
+  boundary_calls: z.array(BoundaryCallSchema).optional(),
+})
 
 export type RealEstateTransferFields = z.infer<typeof RealEstateTransferFieldsSchema>
 
@@ -87,7 +121,7 @@ export const DOCUMENT_TYPES: Record<
   { label: string; templateFile: string; downloadBaseName: string }
 > = {
   deed: {
-    label: 'Deed',
+    label: 'Deed (Registry or Land Court)',
     templateFile: 'deed.docx',
     downloadBaseName: 'Deed',
   },
@@ -120,6 +154,18 @@ function coerceString(value: unknown): string | undefined {
   return trimmed || undefined
 }
 
+function coerceBoundaryCalls(value: unknown): BoundaryCall[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const calls = value.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const source = item as Record<string, unknown>
+    const directional_call = coerceString(source.directional_call)
+    const bound_description = coerceString(source.bound_description)
+    return directional_call && bound_description ? [{ directional_call, bound_description }] : []
+  })
+  return calls.length > 0 ? calls : undefined
+}
+
 export function emptyRealEstateTransferFields(): RealEstateTransferFields {
   return {}
 }
@@ -132,15 +178,74 @@ export function coerceRealEstateTransferFields(raw: unknown): RealEstateTransfer
     const value = coerceString(source[key])
     if (value !== undefined) result[key] = value
   }
+  const boundaryCalls = coerceBoundaryCalls(source.boundary_calls)
+  if (boundaryCalls) result.boundary_calls = boundaryCalls
   return RealEstateTransferFieldsSchema.parse(result)
 }
 
-export function fieldsToTemplateData(fields: RealEstateTransferFields): Record<string, string> {
-  const data: Record<string, string> = {}
+export function fieldsToTemplateData(fields: RealEstateTransferFields): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
   for (const key of REAL_ESTATE_TRANSFER_FIELD_KEYS) {
     data[key] = fields[key] ?? ''
   }
+  const grantor = (fields.grantor ?? '').trim().toUpperCase()
+  const grantor2 = (fields.grantor_2 ?? '').trim().toUpperCase()
+  const grantors = [grantor, grantor2].filter(Boolean).map(name => ({ name }))
+  const propertyAddress = [fields.property_address, fields.property_city, fields.property_state]
+    .map(value => value?.trim())
+    .filter(Boolean)
+    .join(', ')
+  const plural = grantors.length > 1
+  data.grantor = grantor
+  data.grantor_2 = grantor2
+  data.grantors = grantors
+  data.grantor_display = [grantor, grantor2].filter(Boolean).join(' and ')
+  data.grantor_defined_term = plural ? 'Grantors' : 'Grantor'
+  data.grantor_possessive = plural ? 'Grantors\u2019' : 'Grantor\u2019s'
+  data.grantor_person_phrase = plural ? 'the persons whose names are' : 'the person whose name is'
+  data.grantor_pronoun = plural ? 'they' : 'that person'
+  data.witness_phrase = plural ? 'our hands and seals' : 'my hand and seal'
+  data.trust_name_upper = (fields.trust_name ?? '').trim().toUpperCase()
+  data.trustee_title = /(?:\band\b|;|\n)/i.test(fields.trustees ?? '') ? 'Trustees' : 'Trustee'
+  data.property_description = fields.property_description ?? fields.legal_description ?? ''
+  data.description_2 = fields.description_2 ?? ''
+  data.boundary_calls = fields.description_type === 'lot_plan'
+    ? []
+    : (fields.boundary_calls ?? []).filter(call => call.directional_call.trim() && call.bound_description.trim())
+  data.recording_date = fields.recording_date ?? fields.prior_deed_date ?? ''
+  data.registry_of_deeds = fields.registry_of_deeds ?? fields.registry_district ?? ''
+  data.current_deed_book_number = fields.current_deed_book_number ?? fields.prior_deed_book ?? ''
+  data.current_deed_page = fields.current_deed_page ?? fields.prior_deed_page ?? ''
+  data.current_deed_document_number = fields.current_deed_document_number ?? ''
+  data.current_certificate_number = fields.current_certificate_number ?? fields.certificate_number ?? ''
+  data.grantee_mailing_address = fields.grantee_mailing_address ?? propertyAddress
+  data.property_address_line = propertyAddress
+  data.document_date_blank = '________________________'
+  data.signing_county = fields.certificate_execution_county ?? fields.property_county ?? ''
+  data.notary_commission_blank = '________________________'
   return data
+}
+
+export const DEED_TEMPLATE_VARIANTS = {
+  registry: {
+    id: 'real-estate-deed',
+    label: 'Deed — Registry',
+    templateFile: 'deed.docx',
+    downloadBaseName: 'Deed-Registry',
+  },
+  land_court: {
+    id: 'real-estate-deed-land-court',
+    label: 'Deed — Land Court',
+    templateFile: 'deed-landcourt.docx',
+    downloadBaseName: 'Deed-Land-Court',
+  },
+} as const
+
+export function deedTemplateVariant(fields: RealEstateTransferFields) {
+  return fields.recording_system === 'land_court'
+    || Boolean(fields.current_deed_document_number?.trim())
+    ? DEED_TEMPLATE_VARIANTS.land_court
+    : DEED_TEMPLATE_VARIANTS.registry
 }
 
 export const FIELD_SECTION_LABELS: Record<FieldSection, string> = {

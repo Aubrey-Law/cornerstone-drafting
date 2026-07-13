@@ -4,7 +4,7 @@ import { deriveEstateGeneratorPackages } from '@/lib/estateGenerator/toGenerator
 import { loadNodeEstatePackage, resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
 import type { NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
 import { selectedRealEstateTransferDocTypes } from '@/lib/realEstateTransfer/draftIntegration'
-import { DOCUMENT_TYPES } from '@/lib/realEstateTransfer/fields'
+import { DEED_TEMPLATE_VARIANTS, DOCUMENT_TYPES } from '@/lib/realEstateTransfer/fields'
 import { resolveDocumentTemplateForBundledPath } from './resolver'
 
 export async function publishedTemplatePreflightError(payload: DraftPayload): Promise<string | null> {
@@ -21,7 +21,13 @@ export async function publishedTemplatePreflightError(payload: DraftPayload): Pr
     }
   }
   for (const docType of selectedRealEstateTransferDocTypes(payload.documents)) {
-    paths.add(`tools/aubreylaw-docgeneration/templates/${DOCUMENT_TYPES[docType].templateFile}`)
+    if (docType === 'deed') {
+      for (const variant of Object.values(DEED_TEMPLATE_VARIANTS)) {
+        paths.add(`tools/aubreylaw-docgeneration/templates/${variant.templateFile}`)
+      }
+    } else {
+      paths.add(`tools/aubreylaw-docgeneration/templates/${DOCUMENT_TYPES[docType].templateFile}`)
+    }
   }
   try {
     await Promise.all([...paths].map(templatePath => resolveDocumentTemplateForBundledPath(templatePath)))

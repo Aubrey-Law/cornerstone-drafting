@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Download, FileCheck2, Loader2, RotateCcw, Upload } from 'lucide-react'
+import { Download, FileCheck2, Loader2, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,15 @@ interface TemplateVersion {
   validationReport: { error?: string; warnings?: string[]; missingFields?: string[] } | null
   createdAt: string
   isActive: boolean
+  canCancel: boolean
+}
+
+interface MatterSearchOption {
+  id: string
+  label: string
+  matterName: string | null
+  email: string | null
+  stage: string | null
 }
 
 interface TemplateRow {
@@ -44,6 +53,132 @@ function templateLastUpload(template: TemplateRow): TemplateVersion | null {
     if (!latest) return version
     return new Date(version.createdAt).getTime() > new Date(latest.createdAt).getTime() ? version : latest
   }, null)
+}
+
+function MatterSearchPicker({
+  templateId,
+  token,
+  value,
+  onChange,
+}: {
+  templateId: string
+  token: string | null
+  value: string
+  onChange: (matterId: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<MatterSearchOption[]>([])
+  const [selected, setSelected] = useState<MatterSearchOption | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!value) setSelected(null)
+  }, [value])
+
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!token || selected || trimmed.length < 2) {
+      setResults([])
+      setSearchError(null)
+      return
+    }
+    const handle = window.setTimeout(async () => {
+      setSearching(true)
+      setSearchError(null)
+      try {
+        const response = await fetch(
+          `/api/admin/settings/document-templates/matters?q=${encodeURIComponent(trimmed)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        const body = await response.json().catch(() => ({})) as {
+          error?: string
+          matters?: MatterSearchOption[]
+        }
+        if (!response.ok) throw new Error(body.error ?? 'Matter search failed')
+        setResults(body.matters ?? [])
+      } catch (error) {
+        setResults([])
+        setSearchError(error instanceof Error ? error.message : 'Matter search failed')
+      } finally {
+        setSearching(false)
+      }
+    }, 200)
+    return () => window.clearTimeout(handle)
+  }, [query, selected, token])
+
+  if (selected) {
+    return (
+      <div className="flex max-w-xl items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{selected.label}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {[selected.matterName, selected.email, selected.stage].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          aria-label="Choose a different matter"
+          onClick={() => {
+            setSelected(null)
+            setQuery('')
+            onChange('')
+          }}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative max-w-xl space-y-1.5">
+      <Label htmlFor={`matter-${templateId}`}>Validation matter</Label>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          id={`matter-${templateId}`}
+          className="pl-9"
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Search by client, matter name, or email"
+          autoComplete="off"
+        />
+      </div>
+      {query.trim().length >= 2 && (
+        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
+          {searching ? (
+            <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+            </p>
+          ) : searchError ? (
+            <p className="px-3 py-2 text-sm text-destructive">{searchError}</p>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">No matching matters.</p>
+          ) : results.map(matter => (
+            <button
+              key={matter.id}
+              type="button"
+              className="block w-full rounded-sm px-3 py-2 text-left hover:bg-accent"
+              onClick={() => {
+                setSelected(matter)
+                setQuery('')
+                setResults([])
+                onChange(matter.id)
+              }}
+            >
+              <span className="block truncate text-sm font-medium">{matter.label}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {[matter.matterName, matter.email, matter.stage].filter(Boolean).join(' · ')}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function DocumentTemplatesSection() {
@@ -95,7 +230,7 @@ export function DocumentTemplatesSection() {
 
   async function validate(template: TemplateRow, version: TemplateVersion) {
     const matterId = matterIds[template.id]?.trim()
-    if (!matterId) return toast.error('Enter a compatible matter ID first.')
+    if (!matterId) return toast.error('Choose a compatible validation matter first.')
     setBusy(version.id)
     try {
       const response = await fetch(
@@ -144,6 +279,32 @@ export function DocumentTemplatesSection() {
     }
   }
 
+  async function cancelUpload(template: TemplateRow, version: TemplateVersion) {
+    const confirmed = window.confirm(
+      `Discard v${version.versionNumber} (${version.originalFilename})? The staged DOCX will be removed and can be uploaded again later.`,
+    )
+    if (!confirmed) return
+    setBusy(version.id)
+    try {
+      const response = await fetch(
+        `/api/admin/settings/document-templates/${template.id}/versions/${version.id}`,
+        { method: 'DELETE', headers: headers() },
+      )
+      const body = await response.json().catch(() => ({})) as {
+        error?: string
+        cleanupWarning?: string | null
+      }
+      if (!response.ok) throw new Error(body.error ?? 'Could not discard upload')
+      if (body.cleanupWarning) toast.warning(body.cleanupWarning)
+      else toast.success('Staged template upload discarded.')
+      await load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not discard upload')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   function isRollbackTarget(template: TemplateRow, version: TemplateVersion) {
     const active = template.versions.find(candidate => candidate.isActive)
     return Boolean(active && version.versionNumber < active.versionNumber)
@@ -151,7 +312,7 @@ export function DocumentTemplatesSection() {
 
   async function download(template: TemplateRow, versionId: string, preview = false) {
     const matterId = matterIds[template.id]?.trim()
-    if (preview && !matterId) return toast.error('Enter a compatible matter ID first.')
+    if (preview && !matterId) return toast.error('Choose a compatible validation matter first.')
     setBusy(`${versionId}-download`)
     try {
       const query = preview ? `?matterId=${encodeURIComponent(matterId!)}` : ''
@@ -185,7 +346,7 @@ export function DocumentTemplatesSection() {
     <div className="space-y-6">
       {migrationRequired && (
         <div className="rounded-md border border-amber-border bg-amber-bg p-3 text-sm text-amber">
-          Apply migration <code>20260713194628_document_template_workflow.sql</code> to enable staged template versions.
+          Apply pending Supabase migrations, including <code>20260713222004_cancel_document_template_uploads.sql</code>, to enable the complete staged-template workflow.
         </div>
       )}
       {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map(category => (
@@ -239,22 +400,23 @@ export function DocumentTemplatesSection() {
                           accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                           className="hidden"
                           disabled={Boolean(busy) || migrationRequired}
-                          onChange={event => void upload(template, event.target.files?.[0])}
+                          onChange={event => {
+                            const file = event.target.files?.[0]
+                            event.target.value = ''
+                            void upload(template, file)
+                          }}
                         />
                       </Label>
                     </div>
                   </div>
                 </summary>
                 <div className="space-y-3 border-t border-border p-4">
-                  <div className="max-w-md">
-                    <Label htmlFor={`matter-${template.id}`}>Preview matter ID</Label>
-                    <Input
-                      id={`matter-${template.id}`}
-                      value={matterIds[template.id] ?? ''}
-                      onChange={event => setMatterIds(current => ({ ...current, [template.id]: event.target.value }))}
-                      placeholder="Paste a compatible matter UUID"
-                    />
-                  </div>
+                  <MatterSearchPicker
+                    templateId={template.id}
+                    token={token}
+                    value={matterIds[template.id] ?? ''}
+                    onChange={matterId => setMatterIds(current => ({ ...current, [template.id]: matterId }))}
+                  />
                   {template.versions.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No uploaded versions. The bundled repository template is active.</p>
                   ) : template.versions.map(version => (
@@ -287,6 +449,17 @@ export function DocumentTemplatesSection() {
                             <Button size="sm" disabled={Boolean(busy)} onClick={() => void publish(template, version, isRollbackTarget(template, version))}>
                               {isRollbackTarget(template, version) ? <RotateCcw className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
                               {isRollbackTarget(template, version) ? 'Roll back here' : 'Publish'}
+                            </Button>
+                          )}
+                          {version.canCancel && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={Boolean(busy)}
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => void cancelUpload(template, version)}
+                            >
+                              <Trash2 className="h-4 w-4" /> Discard upload
                             </Button>
                           )}
                         </div>

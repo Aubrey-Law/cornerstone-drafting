@@ -1,10 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getDocumentTemplateRegistry } from '@/lib/documentTemplates/registry'
 import { validateDocxStructure } from '@/lib/documentTemplates/docx'
 import { resolveDocumentTemplate } from '@/lib/documentTemplates/resolver'
+import { cancelDocumentTemplateVersion } from '@/lib/documentTemplates/repository'
 
 const root = process.cwd()
 
@@ -31,6 +32,9 @@ describe('document template workflow', () => {
     const registry = getDocumentTemplateRegistry()
     expect(new Set(registry.map(item => item.id)).size).toBe(registry.length)
     expect(new Set(registry.map(item => item.category))).toEqual(new Set(['estate', 'real_estate', 'engagement']))
+    expect(registry.find(item => item.id === 'real-estate-deed')?.bundledPath).toMatch(/\/deed\.docx$/)
+    expect(registry.find(item => item.id === 'real-estate-deed-land-court')?.bundledPath)
+      .toMatch(/\/deed-landcourt\.docx$/)
     for (const template of registry) {
       expect(template.bundledPath).toMatch(/\.docx$/)
       expect(fs.existsSync(path.join(root, template.bundledPath))).toBe(true)
@@ -118,5 +122,50 @@ describe('document template workflow', () => {
     expect(uploadRoute).toContain("file.name.toLowerCase().endsWith('.docx')")
     expect(uploadRoute).not.toContain('file.type !==')
     expect(uploadRoute).toContain('validateDocxStructure(buffer)')
+  })
+
+  it('searches for a validation matter instead of requiring a pasted UUID', () => {
+    const documentTemplates = fs.readFileSync(
+      path.join(root, 'app/admin/settings/DocumentTemplatesSection.tsx'),
+      'utf8',
+    )
+    const matterSearchRoute = fs.readFileSync(
+      path.join(root, 'app/api/admin/settings/document-templates/matters/route.ts'),
+      'utf8',
+    )
+    expect(documentTemplates).toContain('Search by client, matter name, or email')
+    expect(documentTemplates).not.toContain('Paste a compatible matter UUID')
+    expect(matterSearchRoute).toContain('requireAdministrator(req)')
+    expect(matterSearchRoute).toContain("from('v_matter_pipeline')")
+  })
+
+  it('cancels an unpublished upload and removes its private storage object', async () => {
+    const remove = vi.fn().mockResolvedValue({ data: [], error: null })
+    const client = {
+      rpc: vi.fn().mockResolvedValue({
+        data: { storagePath: 'estate-will/version.docx' },
+        error: null,
+      }),
+      storage: { from: vi.fn(() => ({ remove })) },
+    } as unknown as SupabaseClient
+
+    await expect(cancelDocumentTemplateVersion({
+      templateId: 'estate-will',
+      versionId: 'version-id',
+      actorId: 'admin-id',
+      client,
+    })).resolves.toEqual({ canceled: true, cleanupWarning: null })
+    expect(remove).toHaveBeenCalledWith(['estate-will/version.docx'])
+  })
+
+  it('protects active and previously published versions from cancellation', () => {
+    const migration = fs.readFileSync(
+      path.join(root, 'supabase/migrations/20260713222004_cancel_document_template_uploads.sql'),
+      'utf8',
+    )
+    expect(migration).toContain('The active template version cannot be canceled')
+    expect(migration).toContain('A previously published template version cannot be canceled')
+    expect(migration).toContain("'canceled'")
+    expect(migration).toContain("WHERE validation_status <> 'canceled'")
   })
 })

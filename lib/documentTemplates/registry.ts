@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { DOCUMENT_TYPES } from '@/lib/realEstateTransfer/fields'
+import { DEED_TEMPLATE_VARIANTS, DOCUMENT_TYPES } from '@/lib/realEstateTransfer/fields'
 import type { DocumentTemplateDefinition } from './types'
 
 const GENERATOR_ROOT = 'tools/aubreylaw-docgeneration'
@@ -46,14 +46,25 @@ function estateDefinitions(cwd: string): DocumentTemplateDefinition[] {
 }
 
 function realEstateDefinitions(): DocumentTemplateDefinition[] {
-  return Object.entries(DOCUMENT_TYPES).map(([docType, meta]) => ({
-    id: `real-estate-${docType.replaceAll('_', '-')}`,
+  const deedDefinitions = Object.values(DEED_TEMPLATE_VARIANTS).map(meta => ({
+    id: meta.id,
     label: meta.label,
     category: 'real_estate' as const,
     renderer: 'real_estate_docxtemplater' as const,
     bundledPath: `${GENERATOR_ROOT}/templates/${meta.templateFile}`,
     packageNames: ['real-estate-transfer'],
   }))
+  const otherDefinitions = Object.entries(DOCUMENT_TYPES)
+    .filter(([docType]) => docType !== 'deed')
+    .map(([docType, meta]) => ({
+      id: `real-estate-${docType.replaceAll('_', '-')}`,
+      label: meta.label,
+      category: 'real_estate' as const,
+      renderer: 'real_estate_docxtemplater' as const,
+      bundledPath: `${GENERATOR_ROOT}/templates/${meta.templateFile}`,
+      packageNames: ['real-estate-transfer'],
+    }))
+  return [...deedDefinitions, ...otherDefinitions]
 }
 
 export function getDocumentTemplateRegistry(cwd = process.cwd()): DocumentTemplateDefinition[] {
@@ -79,4 +90,3 @@ export function documentTemplateDefinitionForPath(bundledPath: string): Document
   const normalized = bundledPath.replaceAll('\\', '/')
   return getDocumentTemplateRegistry().find(template => template.bundledPath === normalized) ?? null
 }
-

@@ -19,18 +19,24 @@ You extract Massachusetts real-estate transfer data from an existing deed PDF (t
 
 Output ONLY one JSON object. Do not include markdown, explanation, comments, or additional text.
 
-Use only these known fields:
+Use only these known scalar fields, plus boundary_calls as described below:
 ${FIELD_LIST}
 
 Never invent facts. If a value is unknown, omitted, unclear, or only implied, omit that field entirely.
 Use ISO dates (YYYY-MM-DD) where possible.
 The uploaded document is the current deed, and the output will be used to prepare a new transfer deed.
-Set grantor to the current vested owner or owners shown as grantee(s) on the uploaded current deed. Do not copy the uploaded deed's historical grantor into grantor.
+Set grantor to the first current vested owner's full legal name and grantor_2 to the second current vested owner's full legal name, as shown as grantee(s) on the uploaded current deed. Use ALL CAPS. If there is only one current owner, omit grantor_2. Do not copy the uploaded deed's historical grantor into either field.
 Omit grantee. The proposed new grantee is selected separately by the attorney in the drafting form.
-Extract property_address, property_city, property_state, property_county, parcel_id, and legal_description from the uploaded current deed. Preserve the legal description faithfully; do not summarize or modernize it.
-Set prior_deed_book, prior_deed_page, prior_deed_date, certificate_number, and registry_district from the recording information for the uploaded deed itself when present.
-Do not use an older deed citation contained in the uploaded deed's title recital as prior_deed_book or prior_deed_page.
-registry_district is the Registry of Deeds district or Land Court district for the uploaded deed.
+Extract property_address, property_city, property_state, property_county, parcel_id, and grantee_mailing_address. The grantee mailing address is usually the property address, but use the deed's stated grantee mailing address when one is printed.
+Set property_description to the opening description paragraph. Preserve deed language faithfully; do not summarize, modernize, or silently correct it.
+For a metes-and-bounds description, set description_type to "metes_and_bounds" and output boundary_calls as an array of objects in deed order. Every object must have exactly directional_call and bound_description strings. Preserve every call; the array is not limited to six entries.
+Set description_2 to the second description paragraph, including easement or appurtenance language, when present. Omit it when there is no second paragraph.
+For a lot/plan description, set description_type to "lot_plan", place the complete legal description in property_description, and omit boundary_calls.
+Set recording_system to "registry" for recorded land or "land_court" for registered land.
+Set recording_date, registry_of_deeds, current_deed_book_number, and current_deed_page from the recording information for the uploaded deed itself when it is Registry-recorded land. registry_of_deeds must be the full printed registry name.
+For registered land, set recording_date, registry_of_deeds, current_deed_document_number, and current_certificate_number from the uploaded deed's Land Court recording information.
+Do not use an older deed citation contained in the uploaded deed's title recital as the uploaded current deed's recording information.
+The legacy fields legal_description, prior_deed_book, prior_deed_page, prior_deed_date, registry_district, and certificate_number are accepted for stored-data compatibility but should not be returned for a new extraction.
 property_state should be the two-letter state abbreviation when known.`
 
 function parseJsonFromModelText(raw: string): unknown {

@@ -261,7 +261,9 @@ export function hasRealEstateTransferData(form: RealEstateTransferFormState): bo
     form.realtyTrustName.trim()
     || form.grantees.length > 0
     || form.beneficialOwners.length > 0
-    || Object.values(form.deedFields).some(value => (value ?? '').trim()),
+    || Object.values(form.deedFields).some(value =>
+      Array.isArray(value) ? value.length > 0 : Boolean(value?.trim()),
+    ),
   )
 }
 

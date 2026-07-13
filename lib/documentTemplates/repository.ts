@@ -18,15 +18,32 @@ export function isTemplateMigrationMissing(message: string): boolean {
 }
 
 export async function listDocumentTemplates(client = documentTemplateAdminClient()) {
-  const [{ data: versions, error: versionsError }, { data: publications, error: publicationsError }] = await Promise.all([
-    client.from('document_template_versions').select('*').order('created_at', { ascending: false }),
+  const [
+    { data: versions, error: versionsError },
+    { data: publications, error: publicationsError },
+    { data: events, error: eventsError },
+  ] = await Promise.all([
+    client
+      .from('document_template_versions')
+      .select('*, canceled_at, canceled_by')
+      .neq('validation_status', 'canceled')
+      .order('created_at', { ascending: false }),
     client.from('document_template_publications').select('*'),
+    client
+      .from('document_template_events')
+      .select('version_id, event_type')
+      .in('event_type', ['published', 'rolled_back']),
   ])
-  const error = versionsError ?? publicationsError
+  const error = versionsError ?? publicationsError ?? eventsError
   if (error && !isTemplateMigrationMissing(error.message)) throw new Error(error.message)
   const migrationRequired = Boolean(error)
   const versionRows = (versions ?? []) as Array<Record<string, unknown>>
   const publicationRows = (publications ?? []) as Array<Record<string, unknown>>
+  const publishedVersionIds = new Set(
+    ((events ?? []) as Array<Record<string, unknown>>)
+      .map(row => row.version_id)
+      .filter((value): value is string => typeof value === 'string'),
+  )
 
   return {
     migrationRequired,
@@ -53,6 +70,7 @@ export async function listDocumentTemplates(client = documentTemplateAdminClient
           validatedAt: row.validated_at,
           createdAt: row.created_at,
           isActive: publication?.version_id === row.id,
+          canCancel: publication?.version_id !== row.id && !publishedVersionIds.has(String(row.id)),
         })),
       }
     }),
@@ -75,6 +93,7 @@ export async function createDocumentTemplateVersion(args: {
     .select('id')
     .eq('template_id', args.templateId)
     .eq('sha256', hash)
+    .neq('validation_status', 'canceled')
     .maybeSingle()
   if (duplicate) throw new Error('This exact template file has already been uploaded.')
 
@@ -157,3 +176,32 @@ export async function recordDocumentTemplateValidation(args: {
   })
 }
 
+export async function cancelDocumentTemplateVersion(args: {
+  templateId: string
+  versionId: string
+  actorId: string
+  client?: LooseClient
+}) {
+  const client = args.client ?? documentTemplateAdminClient()
+  const { data, error } = await client.rpc('cancel_document_template_version', {
+    p_template_id: args.templateId,
+    p_version_id: args.versionId,
+    p_actor_id: args.actorId,
+  })
+  if (error) throw new Error(error.message)
+
+  const result = data as { storagePath?: unknown } | null
+  const storagePath = typeof result?.storagePath === 'string' ? result.storagePath : ''
+  if (!storagePath) throw new Error('Canceled template version did not return its storage path')
+
+  const { error: removeError } = await client.storage
+    .from(DOCUMENT_TEMPLATE_BUCKET)
+    .remove([storagePath])
+
+  return {
+    canceled: true,
+    cleanupWarning: removeError
+      ? `The version was canceled, but its private storage object could not be removed: ${removeError.message}`
+      : null,
+  }
+}

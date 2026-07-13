@@ -175,7 +175,8 @@ export function buildTemplateFields(form: RealEstateTransferFormState): RealEsta
 
   return {
     ...deed,
-    grantor: deed.grantor?.trim() || '',
+    grantor: deed.grantor?.trim().toUpperCase() || '',
+    grantor_2: deed.grantor_2?.trim().toUpperCase() || '',
     grantee: formatGrantees(form) || deed.grantee?.trim() || '',
     trustees: resolveTrusteeName(form) || deed.trustees?.trim() || '',
     settlor: form.clientName.trim() || deed.settlor?.trim() || '',
@@ -186,6 +187,14 @@ export function buildTemplateFields(form: RealEstateTransferFormState): RealEsta
     property_city: propertyCity,
     property_state: propertyState,
     property_county: propertyCounty,
+    property_description: deed.property_description?.trim() || deed.legal_description?.trim() || '',
+    recording_date: deed.recording_date?.trim() || deed.prior_deed_date?.trim() || '',
+    registry_of_deeds: deed.registry_of_deeds?.trim() || deed.registry_district?.trim() || '',
+    current_deed_book_number: deed.current_deed_book_number?.trim() || deed.prior_deed_book?.trim() || '',
+    current_deed_page: deed.current_deed_page?.trim() || deed.prior_deed_page?.trim() || '',
+    current_certificate_number: deed.current_certificate_number?.trim() || deed.certificate_number?.trim() || '',
+    grantee_mailing_address: deed.grantee_mailing_address?.trim()
+      || [propertyAddress, propertyCity, propertyState].filter(Boolean).join(', '),
     trust_term_extension_years: deed.trust_term_extension_years?.trim() || '21',
   }
 }

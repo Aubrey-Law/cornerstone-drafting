@@ -31,13 +31,21 @@ describe('coerceRealEstateTransferFields', () => {
 
   it('coerces new deed fields', () => {
     expect(coerceRealEstateTransferFields({
-      prior_deed_date: '2020-05-01',
-      certificate_number: '123456',
+      recording_system: 'land_court',
+      recording_date: '2020-05-01',
+      current_certificate_number: '123456',
       beneficial_owners: 'Jane Doe (50%)',
+      boundary_calls: [
+        { directional_call: 'NORTHWESTERLY', bound_description: 'by land of Smith' },
+      ],
     })).toEqual({
-      prior_deed_date: '2020-05-01',
-      certificate_number: '123456',
+      recording_system: 'land_court',
+      recording_date: '2020-05-01',
+      current_certificate_number: '123456',
       beneficial_owners: 'Jane Doe (50%)',
+      boundary_calls: [
+        { directional_call: 'NORTHWESTERLY', bound_description: 'by land of Smith' },
+      ],
     })
   })
 })
@@ -45,7 +53,7 @@ describe('coerceRealEstateTransferFields', () => {
 describe('fieldsToTemplateData', () => {
   it('fills missing keys with empty strings for docxtemplater', () => {
     const data = fieldsToTemplateData({ grantor: 'Jane Doe' })
-    expect(data.grantor).toBe('Jane Doe')
+    expect(data.grantor).toBe('JANE DOE')
     expect(data.grantee).toBe('')
     expect(data.prior_deed_date).toBe('')
     expect(data.certificate_number).toBe('')
@@ -130,7 +138,7 @@ describe('buildTemplateFields', () => {
     }
 
     const fields = buildTemplateFields(form)
-    expect(fields.grantor).toBe('Prior Owner')
+    expect(fields.grantor).toBe('PRIOR OWNER')
     expect(fields.property_address).toBe('1 Main Street')
     expect(fields.property_city).toBe('Boston')
     expect(fields.trust_name).toBe('Doe Realty Trust')
@@ -186,8 +194,12 @@ describe('mergeExtractedDeedFields', () => {
 describe('deed extraction prompt', () => {
   it('maps current titleholders to proposed grantors and distinguishes recording references', () => {
     expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain(
-      'Set grantor to the current vested owner or owners shown as grantee(s)',
+      'Set grantor to the first current vested owner',
     )
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain('grantor_2')
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain('boundary_calls')
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain('array is not limited to six entries')
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain('recording_system')
     expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain('Omit grantee')
     expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain(
       'recording information for the uploaded deed itself',
@@ -236,7 +248,48 @@ describe('renderRealEstateTransferPackage', () => {
     expect(xml).toContain('12345')
     expect(xml).toContain('67')
     expect(xml).toContain('2018-03-15')
-    expect(xml).toContain('456789')
+    expect(xml).not.toContain('456789')
+    expect(xml).toContain('________________________')
+  })
+
+  it('uses the Land Court master and removes second-grantor residue when absent', () => {
+    const result = renderRealEstateTransferPackage(['deed'], {
+      ...sampleFields,
+      grantor: 'Jane Doe',
+      grantor_2: '',
+      recording_system: 'land_court',
+      registry_of_deeds: 'Middlesex South Registry District of the Land Court',
+      current_deed_document_number: '1234567',
+      current_certificate_number: '987654',
+    })
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(result.filename).toContain('Land-Court')
+    expect(xml).toContain('Document No. 1234567')
+    expect(xml).toContain('Certificate of Title No. 987654')
+    expect(xml.match(/JANE DOE/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(xml).not.toContain(' and ,')
+  })
+
+  it('renders two grantor signature blocks and every metes-and-bounds call', () => {
+    const result = renderRealEstateTransferPackage(['deed'], {
+      ...sampleFields,
+      grantor: 'Jane Doe',
+      grantor_2: 'John Doe',
+      recording_system: 'registry',
+      description_type: 'metes_and_bounds',
+      property_description: 'A certain parcel of land bounded and described as follows:',
+      description_2: 'Together with all rights and easements appurtenant thereto.',
+      boundary_calls: Array.from({ length: 7 }, (_, index) => ({
+        directional_call: `CALL ${index + 1}`,
+        bound_description: `BOUND ${index + 1}`,
+      })),
+    })
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(xml).toContain('JANE DOE and JOHN DOE')
+    expect(xml).toContain('CALL 7')
+    expect(xml).toContain('BOUND 7')
+    expect(xml).toContain('Together with all rights and easements')
+    expect(xml.match(/______________________________________/g)).toHaveLength(3)
   })
 
   it('renders a ZIP when multiple documents are selected', () => {

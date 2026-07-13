@@ -3,6 +3,7 @@ import Docxtemplater from 'docxtemplater'
 import PizZip from 'pizzip'
 import {
   DOCUMENT_TYPES,
+  deedTemplateVariant,
   fieldsToTemplateData,
   type RealEstateTransferDocType,
   type RealEstateTransferFields,
@@ -29,12 +30,19 @@ function renderTemplate(templateFile: string, fields: RealEstateTransferFields, 
   return Buffer.from(doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' }))
 }
 
+export function realEstateTransferTemplateMeta(
+  docType: RealEstateTransferDocType,
+  fields: RealEstateTransferFields,
+) {
+  return docType === 'deed' ? deedTemplateVariant(fields) : DOCUMENT_TYPES[docType]
+}
+
 export function renderRealEstateTransferDocx(
   docType: RealEstateTransferDocType,
   fields: RealEstateTransferFields,
   templateBuffer?: Buffer,
 ): Buffer {
-  const meta = DOCUMENT_TYPES[docType]
+  const meta = realEstateTransferTemplateMeta(docType, fields)
   return renderTemplate(meta.templateFile, fields, templateBuffer)
 }
 
@@ -47,7 +55,7 @@ export async function resolveAndRenderRealEstateTransferDocx(
   docType: RealEstateTransferDocType,
   fields: RealEstateTransferFields,
 ): Promise<ResolvedRealEstateTransferDocx> {
-  const meta = DOCUMENT_TYPES[docType]
+  const meta = realEstateTransferTemplateMeta(docType, fields)
   const template = await resolveDocumentTemplateForBundledPath(
     `tools/aubreylaw-docgeneration/templates/${meta.templateFile}`,
   )
@@ -83,7 +91,7 @@ export function renderRealEstateTransferPackage(
 
   if (unique.length === 1) {
     const docType = unique[0]
-    const meta = DOCUMENT_TYPES[docType]
+    const meta = realEstateTransferTemplateMeta(docType, fields)
     const buffer = renderRealEstateTransferDocx(docType, fields)
     return {
       buffer,
@@ -94,7 +102,7 @@ export function renderRealEstateTransferPackage(
 
   const zip = new PizZip()
   for (const docType of unique) {
-    const meta = DOCUMENT_TYPES[docType]
+    const meta = realEstateTransferTemplateMeta(docType, fields)
     const buffer = renderRealEstateTransferDocx(docType, fields)
     zip.file(safeDownloadFilename(`${meta.downloadBaseName} - ${grantorSlug}.docx`), buffer)
   }
@@ -115,7 +123,7 @@ export async function resolveAndRenderRealEstateTransferPackage(
   const grantorSlug = safeDownloadFilename(fields.grantor ?? 'real-estate-transfer').replace(/\.docx$/i, '')
   if (unique.length === 1) {
     const docType = unique[0]
-    const meta = DOCUMENT_TYPES[docType]
+    const meta = realEstateTransferTemplateMeta(docType, fields)
     const { buffer } = await resolveAndRenderRealEstateTransferDocx(docType, fields)
     return {
       buffer,
@@ -125,7 +133,7 @@ export async function resolveAndRenderRealEstateTransferPackage(
   }
   const zip = new PizZip()
   for (const docType of unique) {
-    const meta = DOCUMENT_TYPES[docType]
+    const meta = realEstateTransferTemplateMeta(docType, fields)
     const { buffer } = await resolveAndRenderRealEstateTransferDocx(docType, fields)
     zip.file(safeDownloadFilename(`${meta.downloadBaseName} - ${grantorSlug}.docx`), buffer)
   }

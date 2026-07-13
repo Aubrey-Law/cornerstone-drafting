@@ -24,6 +24,7 @@ import {
   REAL_ESTATE_TRANSFER_FIELDS,
   type RealEstateTransferDocType,
   type RealEstateTransferFieldKey,
+  type BoundaryCall,
 } from '@/lib/realEstateTransfer/fields'
 import {
   buildTemplateFields,
@@ -42,11 +43,31 @@ import ContactPicker, {
   type Contact as PickerContact,
 } from '@/app/admin/drafting/[matterId]/design/sections/ContactPicker'
 
+const LEGACY_DEED_FIELDS = new Set<RealEstateTransferFieldKey>([
+  'legal_description',
+  'prior_deed_book',
+  'prior_deed_page',
+  'prior_deed_date',
+  'registry_district',
+  'certificate_number',
+  'execution_date',
+])
+
+const PROPERTY_ADDRESS_FIELDS = new Set<RealEstateTransferFieldKey>([
+  'property_address',
+  'property_city',
+  'property_state',
+  'property_county',
+])
+
 const DEED_INPUT_FIELDS = REAL_ESTATE_TRANSFER_FIELDS.filter(
   field =>
     field.section === 'deed'
     && field.key !== 'grantee'
-    && !field.key.startsWith('property_'),
+    && !PROPERTY_ADDRESS_FIELDS.has(field.key)
+    && field.key !== 'recording_system'
+    && field.key !== 'description_type'
+    && !LEGACY_DEED_FIELDS.has(field.key),
 )
 
 export interface RealEstateTransferWorkflowOptions {
@@ -318,6 +339,19 @@ export function RealEstateTransferWorkflow({
       ...form,
       deedFields: { ...form.deedFields, [key]: value },
     })
+  }
+
+  const updateBoundaryCalls = (boundaryCalls: BoundaryCall[]) => {
+    onFormChange({
+      ...form,
+      deedFields: { ...form.deedFields, boundary_calls: boundaryCalls },
+    })
+  }
+
+  const updateBoundaryCall = (index: number, patch: Partial<BoundaryCall>) => {
+    updateBoundaryCalls((form.deedFields.boundary_calls ?? []).map((call, callIndex) =>
+      callIndex === index ? { ...call, ...patch } : call,
+    ))
   }
 
   const toggleDoc = (docType: RealEstateTransferDocType) => {
@@ -898,13 +932,23 @@ export function RealEstateTransferWorkflow({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-1.5">
-            <Label htmlFor="grantor">Grantor(s)</Label>
-            <Input
-              id="grantor"
-              value={form.deedFields.grantor ?? ''}
-              onChange={event => updateDeedField('grantor', event.target.value)}
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="grantor">First grantor</Label>
+              <Input
+                id="grantor"
+                value={form.deedFields.grantor ?? ''}
+                onChange={event => updateDeedField('grantor', event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="grantor_2">Second grantor (if any)</Label>
+              <Input
+                id="grantor_2"
+                value={form.deedFields.grantor_2 ?? ''}
+                onChange={event => updateDeedField('grantor_2', event.target.value)}
+              />
+            </div>
           </div>
 
           <PartyPicker
@@ -957,7 +1001,39 @@ export function RealEstateTransferWorkflow({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {DEED_INPUT_FIELDS.filter(field => field.key !== 'grantor').map(field => (
+            <div className="space-y-1.5">
+              <Label htmlFor="recording_system">Recording system</Label>
+              <Select
+                value={form.deedFields.recording_system ?? 'registry'}
+                onValueChange={value => updateDeedField('recording_system', value)}
+              >
+                <SelectTrigger id="recording_system"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="registry">Registry of Deeds</SelectItem>
+                  <SelectItem value="land_court">Land Court / registered land</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="description_type">Legal-description type</Label>
+              <Select
+                value={form.deedFields.description_type ?? 'lot_plan'}
+                onValueChange={value => updateDeedField('description_type', value)}
+              >
+                <SelectTrigger id="description_type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lot_plan">Lot / plan</SelectItem>
+                  <SelectItem value="metes_and_bounds">Metes and bounds</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {DEED_INPUT_FIELDS.filter(field => {
+              if (field.key === 'grantor' || field.key === 'grantor_2') return false
+              if (form.deedFields.recording_system === 'land_court') {
+                return field.key !== 'current_deed_book_number' && field.key !== 'current_deed_page'
+              }
+              return field.key !== 'current_deed_document_number' && field.key !== 'current_certificate_number'
+            }).map(field => (
               <div
                 key={field.key}
                 className={field.multiline ? 'space-y-1.5 sm:col-span-2' : 'space-y-1.5'}
@@ -980,6 +1056,52 @@ export function RealEstateTransferWorkflow({
                 )}
               </div>
             ))}
+            {form.deedFields.description_type === 'metes_and_bounds' && (
+              <div className="space-y-3 sm:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label>Directional calls and bounds</Label>
+                    <p className="text-xs text-muted-foreground">Rows render in deed order; add as many as the description requires.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => updateBoundaryCalls([
+                      ...(form.deedFields.boundary_calls ?? []),
+                      { directional_call: '', bound_description: '' },
+                    ])}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Add call
+                  </Button>
+                </div>
+                {(form.deedFields.boundary_calls ?? []).map((call, index) => (
+                  <div key={index} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_2fr_auto]">
+                    <Input
+                      aria-label={`Directional call ${index + 1}`}
+                      placeholder="NORTHWESTERLY"
+                      value={call.directional_call}
+                      onChange={event => updateBoundaryCall(index, { directional_call: event.target.value })}
+                    />
+                    <Input
+                      aria-label={`Bound description ${index + 1}`}
+                      placeholder="by land now or formerly of..."
+                      value={call.bound_description}
+                      onChange={event => updateBoundaryCall(index, { bound_description: event.target.value })}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Remove boundary call ${index + 1}`}
+                      onClick={() => updateBoundaryCalls((form.deedFields.boundary_calls ?? []).filter((_, callIndex) => callIndex !== index))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
             {showCertificateFields && (
               <div className="space-y-1.5">
                 <Label htmlFor="certificate_execution_county">Certificate execution county</Label>

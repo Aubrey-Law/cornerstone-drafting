@@ -626,7 +626,7 @@ Other legacy markers such as `[DocDate]` are not the authoring format for upload
 
 ## Real-estate transfer templates
 
-Real-estate templates use Docxtemplater single-brace fields. V1 supplies flat strings and does not expose estate condition flags or clauses.
+Real-estate templates use Docxtemplater single-brace fields. Deed templates also receive the `boundary_calls` loop and computed presentation fields described below.
 
 ```text
 {grantor}
@@ -639,10 +639,19 @@ All supported real-estate variables:
 | Variable | Meaning |
 | --- | --- |
 | `{grantor}` | Grantor name or names. |
+| `{grantor_2}` | Second grantor, or empty when there is only one. |
+| `{grantor_display}` | First grantor plus an optional second grantor joined with `and`; names are uppercase. |
+| `{grantor_defined_term}` | `Grantor` or `Grantors`. |
+| `{grantor_possessive}` | `Grantor’s` or `Grantors’`. |
+| `{grantor_person_phrase}` | Singular/plural notary phrase. |
+| `{grantor_pronoun}` | Singular/plural acknowledgement phrase. |
+| `{witness_phrase}` | `my hand and seal` or `our hands and seals`. |
 | `{grantee}` | Grantee name or names. |
 | `{trustees}` | Trustee name or names. |
+| `{trustee_title}` | `Trustee` or `Trustees`. |
 | `{settlor}` | Settlor name or names. |
 | `{trust_name}` | Realty trust name. |
+| `{trust_name_upper}` | Realty trust name in uppercase for the deed. |
 | `{trust_date}` | Realty trust date. |
 | `{beneficial_owners}` | Beneficial-owner names. |
 | `{property_address}` | Property street address. |
@@ -650,6 +659,21 @@ All supported real-estate variables:
 | `{property_state}` | State. |
 | `{property_county}` | County. |
 | `{legal_description}` | Legal description. |
+| `{property_description}` | Opening legal-description paragraph; falls back to `legal_description` for older saved matters. |
+| `{description_2}` | Optional second description/easement paragraph. |
+| `{description_type}` | `lot_plan` or `metes_and_bounds`. |
+| `{recording_system}` | `registry` or `land_court`; selects the deed master. |
+| `{recording_date}` | Date the uploaded current deed was recorded. |
+| `{registry_of_deeds}` | Full Registry of Deeds or Land Court district name. |
+| `{current_deed_book_number}` | Book number of the uploaded current Registry deed. |
+| `{current_deed_page}` | Page number of the uploaded current Registry deed. |
+| `{current_deed_document_number}` | Document number of the uploaded current registered-land deed. |
+| `{current_certificate_number}` | Certificate of Title number for the uploaded current registered-land deed. |
+| `{grantee_mailing_address}` | Grantee mailing address, defaulting to the property address. |
+| `{property_address_line}` | Street, city/town, and state combined as a single line. |
+| `{document_date_blank}` | Literal `________________________`; the signing date is never copied from the current deed. |
+| `{signing_county}` | Certificate execution county, falling back to the property county. |
+| `{notary_commission_blank}` | Literal fill-in line for the notary commission expiration. |
 | `{prior_deed_book}` | Prior deed book. |
 | `{prior_deed_page}` | Prior deed page. |
 | `{prior_deed_date}` | Prior deed date. |
@@ -662,6 +686,16 @@ All supported real-estate variables:
 | `{trust_term_extension_years}` | Successive trust-term length in years. |
 
 An absent value renders as an empty string. Matter validation reports missing matter data as warnings; unresolved template markers block publication.
+
+Metes-and-bounds rows use a Docxtemplater paragraph loop and are not limited to six calls:
+
+```text
+{#boundary_calls}
+{directional_call}        {bound_description}
+{/boundary_calls}
+```
+
+For a lot/plan deed, `boundary_calls` is an empty array and the complete description belongs in `{property_description}`. Grantor signatures use the same loop pattern with `{#grantors}` and `{name}` so the second signature block disappears completely when no second grantor exists.
 
 ## Engagement-agreement templates
 

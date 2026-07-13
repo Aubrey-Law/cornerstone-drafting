@@ -8,7 +8,10 @@ import {
   type RealEstateTransferDocType,
 } from '@/lib/realEstateTransfer/fields'
 import { buildTemplateFields } from '@/lib/realEstateTransfer/formState'
-import { resolveAndRenderRealEstateTransferDocx } from '@/lib/realEstateTransfer/generate'
+import {
+  realEstateTransferTemplateMeta,
+  resolveAndRenderRealEstateTransferDocx,
+} from '@/lib/realEstateTransfer/generate'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 
 export const REAL_ESTATE_TRANSFER_PACKAGE = 'real-estate-transfer' as const
@@ -60,7 +63,7 @@ export async function generateAssetTransferFilesFromDesignSheet(
   const fields = buildTemplateFields(form)
 
   return Promise.all(effectiveTypes.map(async docType => {
-    const meta = DOCUMENT_TYPES[docType]
+    const meta = realEstateTransferTemplateMeta(docType, fields)
     const resolved = await resolveAndRenderRealEstateTransferDocx(docType, fields)
     return {
       name: `${meta.downloadBaseName}.docx`,
