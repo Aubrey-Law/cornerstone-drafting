@@ -447,7 +447,7 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
   // If a matter already exists (lead was already converted), advance it.
   const { data: matter } = await admin
     .from('matters')
-    .select('id, stage')
+    .select('id, stage, relationship_status')
     .eq('client_intake_id', intakeId)
     .maybeSingle()
 
@@ -468,9 +468,10 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
       .eq('id', intakeId)
   }
 
-  await syncIntakeToDesignSheet(admin, intakeId, (matter?.id as string | undefined) ?? null, reviewFlags)
+  const hiredMatterId = matter?.relationship_status === 'hired' ? (matter.id as string) : null
+  await syncIntakeToDesignSheet(admin, intakeId, hiredMatterId, reviewFlags)
 
-  if (matter) {
+  if (matter?.relationship_status === 'hired') {
     const matterUpdate: Record<string, unknown> = {
       intake_submitted_at: new Date().toISOString(),
     }

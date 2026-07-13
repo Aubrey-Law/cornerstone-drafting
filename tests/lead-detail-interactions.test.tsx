@@ -41,15 +41,15 @@ describe('lead detail page', () => {
 
   it('offers a top-row status control and resumes an active agreement', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)
-    expect(screen.getByRole('combobox',{name:'Lead status'}).textContent).toContain('Lead')
+    expect(screen.getByRole('combobox',{name:'Matter status'}).textContent).toContain('Lead')
     expect(screen.getByRole('button',{name:'Resume engagement'})).toBeTruthy()
-    expect(screen.getByRole('button',{name:'Convert matter'})).toBeTruthy()
+    expect(screen.getByRole('button',{name:'Hire matter'})).toBeTruthy()
   })
 
   it('converts from the top row and navigates to the returned matter', async () => {
     vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:true,json:async()=>({matterId:'m1'})} as Response)
     const user=userEvent.setup();render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    await user.click(screen.getByRole('button',{name:'Convert matter'}))
+    await user.click(screen.getByRole('button',{name:'Hire matter'}))
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/admin/leads/l1/convert',expect.objectContaining({method:'POST'}))
     expect(router.push).toHaveBeenCalledWith('/admin/matters/m1')
   })
@@ -57,7 +57,7 @@ describe('lead detail page', () => {
   it('announces a conversion error and remains on the lead', async () => {
     vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:false,json:async()=>({error:'Conversion failed'})} as Response)
     const user=userEvent.setup();render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    await user.click(screen.getByRole('button',{name:'Convert matter'}))
+    await user.click(screen.getByRole('button',{name:'Hire matter'}))
     expect((await screen.findByRole('alert')).textContent).toContain('Conversion failed')
     expect(router.push).not.toHaveBeenCalled()
   })
@@ -80,7 +80,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     expect(screen.queryByLabelText('First name')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Edit' }))
-    for (const name of ['First name','Middle name','Last name','Preferred name','Email','Phone','Date of birth','Address line 1','Address line 2','City','State','ZIP','County','Marital status','Practice area','Lead source','Status','Fee','Estimated estate value','Urgency','Minor children','Qualification notes','Spouse first name','Spouse middle name','Spouse last name','Spouse preferred name','Spouse email','Spouse phone','Spouse date of birth']) expect(screen.getByLabelText(name)).toBeTruthy()
+    for (const name of ['First name','Middle name','Last name','Preferred name','Email','Phone','Date of birth','Address line 1','Address line 2','City','State','ZIP','County','Marital status','Practice area','Lead source','Matter Status','Fee','Estimated estate value','Urgency','Minor children','Qualification notes','Spouse first name','Spouse middle name','Spouse last name','Spouse preferred name','Spouse email','Spouse phone','Spouse date of birth']) expect(screen.getByLabelText(name)).toBeTruthy()
   })
 
   it('Cancel restores the server snapshot', async () => {
@@ -112,7 +112,7 @@ describe('lead detail page', () => {
 
   it('uses supported selects and retains fields after an announced server error', async () => {
     vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:false,json:async()=>({error:'Save failed'})} as Response); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    await user.click(screen.getByRole('button',{name:'Edit'})); expect(screen.getByRole('combobox',{name:'Status'})).toBeTruthy(); expect(screen.getByRole('combobox',{name:'Marital status'})).toBeTruthy(); expect(screen.getByRole('combobox',{name:'Practice area'})).toBeTruthy(); const first=screen.getByLabelText('First name'); await user.clear(first); await user.type(first,'Edited'); await user.click(screen.getByRole('button',{name:'Save'})); expect((await screen.findByRole('alert')).textContent).toContain('Save failed'); expect((first as HTMLInputElement).value).toBe('Edited')
+    await user.click(screen.getByRole('button',{name:'Edit'})); expect(screen.getByRole('combobox',{name:'Matter Status'})).toBeTruthy(); expect(screen.getByRole('combobox',{name:'Marital status'})).toBeTruthy(); expect(screen.getByRole('combobox',{name:'Practice area'})).toBeTruthy(); const first=screen.getByLabelText('First name'); await user.clear(first); await user.type(first,'Edited'); await user.click(screen.getByRole('button',{name:'Save'})); expect((await screen.findByRole('alert')).textContent).toContain('Save failed'); expect((first as HTMLInputElement).value).toBe('Edited')
   })
 
   it('submits the edit form from the keyboard', async () => {

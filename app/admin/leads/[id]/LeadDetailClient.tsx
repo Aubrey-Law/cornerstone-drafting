@@ -279,7 +279,7 @@ export function LeadDetailClient({
             actionError={editing ? null : error}
             onIntake={action('/api/admin/intake/send', { intakeId: lead.id })}
             onDraft={action(`/api/admin/leads/${lead.id}/engagement-draft`)}
-            onConvert={lead.matter_id ? () => router.push(`/admin/matters/${lead.matter_id}`) : action(`/api/admin/leads/${lead.id}/convert`)}
+            onConvert={lead.lead_status === 'hired' && lead.matter_id ? () => router.push(`/admin/matters/${lead.matter_id}`) : action(`/api/admin/leads/${lead.id}/convert`)}
             onStatusChange={status => void persist(status, false)}
           />
         </div>

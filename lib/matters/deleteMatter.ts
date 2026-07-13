@@ -5,12 +5,25 @@ import { deleteR2Key } from '@/lib/r2Delete'
 export async function deleteMatter(admin: SupabaseClient, matterId: string) {
   const { data: matter, error: fetchError } = await admin
     .from('matters')
-    .select('id, client_intake_id')
+    .select('id, client_intake_id, relationship_status')
     .eq('id', matterId)
     .maybeSingle()
 
   if (fetchError) throw new Error(fetchError.message)
   if (!matter) throw new Error('Matter not found')
+  if (matter.relationship_status === 'hired') {
+    throw new Error('Hired matters must be closed or archived, not permanently deleted')
+  }
+
+  const { data: signedAgreement, error: agreementError } = await admin
+    .from('engagement_agreements')
+    .select('id')
+    .eq('matter_id', matterId)
+    .eq('status', 'completed')
+    .limit(1)
+    .maybeSingle()
+  if (agreementError) throw new Error(agreementError.message)
+  if (signedAgreement) throw new Error('Matters with signed engagements cannot be permanently deleted')
 
   const intakeId = matter.client_intake_id as string
 

@@ -12,7 +12,7 @@ export interface EngagementServiceAgreement {
 }
 
 export interface EngagementServiceRepository {
-  createDraft(input: { matterId?: string; leadId?: string; preparedBy?: string | null; inputSnapshot: EngagementInput }): Promise<unknown>
+  createDraft(input: { matterId: string; preparedBy?: string | null; inputSnapshot: EngagementInput }): Promise<unknown>
   getAgreement(agreementId: string): Promise<EngagementServiceAgreement>
   createRevision(agreementId: string, rendered: EngagementRenderedRevision & { inputSnapshot: EngagementInput }): Promise<unknown>
   markReady(input: { agreementId: string; revisionId: string; renderSha256: string }): Promise<unknown>
@@ -86,7 +86,7 @@ export function createEngagementService(deps: Dependencies) {
   }
 
   return {
-    async prepareAgreement(owner: { matterId?: string; leadId?: string; preparedBy?: string | null }, rawInput: unknown) {
+    async prepareAgreement(owner: { matterId: string; preparedBy?: string | null }, rawInput: unknown) {
       const validated = validateEngagementInput(rawInput)
       if (!validated.ok) throw new Error(`Invalid engagement input: ${validated.errors.join(', ')}`)
       return deps.repository.createDraft({ ...owner, inputSnapshot: validated.value })

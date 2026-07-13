@@ -8,8 +8,7 @@ export const dynamic = 'force-dynamic'
 export default async function LeadsPage() {
   const admin = getAdminClient()
 
-  // A lead is any client_intake row that went through the lead flow
-  // (lead_status set). Open leads have no matter; hired leads carry matter_id.
+  // Lead URLs remain intake-based, while the linked matter owns lifecycle.
   const { data, error } = await admin
     .from('client_intake')
     .select(
@@ -30,7 +29,16 @@ export default async function LeadsPage() {
     )
   }
 
-  const leads = data ?? []
+  const candidateLeads = data ?? []
+  const matterIds = candidateLeads.map(lead => lead.matter_id).filter((id): id is string => Boolean(id))
+  const { data: opportunities } = matterIds.length
+    ? await admin.from('matters').select('id, relationship_status, status').in('id', matterIds)
+    : { data: [] as Array<{ id: string; relationship_status: string; status: string }> }
+  const opportunityById = new Map((opportunities ?? []).map(row => [row.id, row]))
+  const leads = candidateLeads
+    .map(lead => ({ ...lead, lead_status: opportunityById.get(lead.matter_id ?? '')?.relationship_status ?? lead.lead_status }))
+    .filter(lead => opportunityById.get(lead.matter_id ?? '')?.status !== 'archived')
+    .filter(lead => lead.lead_status === 'lead' || lead.lead_status === 'lost')
   const leadIds = leads.map(lead => lead.id)
   const latestActivity = new Map<string, string>()
   if (leadIds.length > 0) {
@@ -55,8 +63,8 @@ export default async function LeadsPage() {
       <header>
         <h1 className="text-xl font-semibold">Leads</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          New clients before the engagement is signed — send the intake and engagement agreement
-          from here. Signing the engagement creates the matter automatically.
+          Prospective matters before hiring — send the intake and engagement agreement from here.
+          Signing promotes the existing opportunity to a hired matter.
         </p>
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>

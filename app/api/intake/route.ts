@@ -358,11 +358,11 @@ export async function POST(req: Request) {
     if (body.status === 'submitted') {
       const { data: matter } = await admin
         .from('matters')
-        .select('id, stage')
+        .select('id, stage, relationship_status')
         .eq('client_intake_id', existingId)
         .maybeSingle()
 
-      if (matter && matter.stage === 'intake') {
+      if (matter?.relationship_status === 'hired' && matter.stage === 'intake') {
         const { data: advanced } = await admin
           .from('matters')
           .update({
@@ -761,11 +761,11 @@ export async function POST(req: Request) {
 
     const { data: existingMatter } = await admin
       .from('matters')
-      .select('id, stage')
+      .select('id, stage, relationship_status')
       .eq('client_intake_id', recordId)
       .maybeSingle()
 
-    if (existingMatter) {
+    if (existingMatter?.relationship_status === 'hired') {
       if (existingMatter.stage === 'intake') {
         const { data: advanced } = await admin
           .from('matters')
@@ -797,13 +797,13 @@ export async function POST(req: Request) {
 
     await seedDesignSheetAndJobs(admin, {
       intakeId: recordId,
-      matterId: (existingMatter?.id as string | undefined) ?? null,
+      matterId: existingMatter?.relationship_status === 'hired' ? (existingMatter.id as string) : null,
       reviewFlags,
     })
 
     const clientName = [body.first_name, body.last_name].filter(Boolean).join(' ') || 'Client'
     const clientEmail = body.email ?? user.email ?? ''
-    void notifyIntakeComplete(clientName, clientEmail, existingMatter?.id ?? null)
+    void notifyIntakeComplete(clientName, clientEmail, existingMatter?.relationship_status === 'hired' ? existingMatter.id : null)
       .catch((err) => console.error('[intake POST bearer] notify error:', err))
     try {
       revalidateSidebarCounts()

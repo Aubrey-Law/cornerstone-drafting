@@ -19,8 +19,8 @@ export async function POST(req: Request) {
   const { err, userId, user } = await requireAdmin(req)
   if (err) return err
 
-  // Accepts either a matterId (matter-attached intake) or an intakeId
-  // (standalone lead intake — the Leads page sends intake before a matter exists).
+  // Accepts either a hired matterId or an intakeId. Lead URLs remain
+  // intake-based even though every lead now owns an opportunity matter.
   const body = await req.json().catch(() => ({})) as { matterId?: string; intakeId?: string }
   const matterId = typeof body.matterId === 'string' ? body.matterId.trim() : ''
   const leadIntakeId = typeof body.intakeId === 'string' ? body.intakeId.trim() : ''

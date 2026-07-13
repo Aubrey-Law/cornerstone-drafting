@@ -14,11 +14,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const { data: matter, error: matterErr } = await admin
     .from('matters')
-    .select('client_intake_id')
+    .select('client_intake_id, relationship_status')
     .eq('id', matterId)
     .maybeSingle()
 
   if (matterErr) return NextResponse.json({ error: matterErr.message }, { status: 500 })
+  if (matter?.relationship_status !== 'hired') {
+    return NextResponse.json({ error: 'Drafting is available only for hired matters' }, { status: 409 })
+  }
   if (!matter?.client_intake_id) {
     return NextResponse.json({ error: 'No intake linked to this matter' }, { status: 404 })
   }

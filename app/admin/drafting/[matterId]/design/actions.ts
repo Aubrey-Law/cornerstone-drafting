@@ -6,9 +6,22 @@ import { requireAdminServerAction } from '@/lib/serverActionAuth'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
 
+async function assertDraftingEligible(matterId: string) {
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('matters')
+    .select('id')
+    .eq('id', matterId)
+    .eq('relationship_status', 'hired')
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Drafting is available only for hired matters')
+  return admin
+}
+
 export async function saveLiDesignSheet(matterId: string, data: Record<string, unknown>) {
   await requireAdminServerAction()
-  const admin = getAdminClient()
+  const admin = await assertDraftingEligible(matterId)
   const { error } = await admin
     .from('matters')
     .update({ li_design_sheet_data: data, updated_at: new Date().toISOString() })
@@ -22,7 +35,7 @@ export async function saveLiDesignSheet(matterId: string, data: Record<string, u
 
 export async function updatePlanCoverage(matterId: string, coverage: 'no_trust' | 'trust_included') {
   await requireAdminServerAction()
-  const admin = getAdminClient()
+  const admin = await assertDraftingEligible(matterId)
   const { error } = await admin
     .from('matters')
     .update({ li_plan_coverage: coverage, updated_at: new Date().toISOString() })
@@ -43,7 +56,7 @@ export async function addContact(data: {
   address?: string
 }) {
   await requireAdminServerAction()
-  const admin = getAdminClient()
+  const admin = await assertDraftingEligible(data.matterId)
   const { data: matter, error: matterError } = await admin
     .from('matters')
     .select('client_intake_id')
@@ -84,7 +97,7 @@ export async function addContact(data: {
 
 export async function searchContacts(matterId: string, query: string) {
   await requireAdminServerAction()
-  const admin = getAdminClient()
+  const admin = await assertDraftingEligible(matterId)
   const { data: matter, error: matterError } = await admin
     .from('matters')
     .select('client_intake_id')

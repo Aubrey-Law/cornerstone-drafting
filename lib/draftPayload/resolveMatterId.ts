@@ -5,6 +5,7 @@ export async function resolveMatterId(inputId: string, admin = getAdminClient())
     .from('matters')
     .select('id')
     .eq('id', inputId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (matter?.id) return matter.id
@@ -13,6 +14,7 @@ export async function resolveMatterId(inputId: string, admin = getAdminClient())
     .from('matters')
     .select('id')
     .eq('matter_number', inputId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (numberedMatter?.id) return numberedMatter.id
@@ -38,6 +40,7 @@ export async function resolveMatterId(inputId: string, admin = getAdminClient())
       .from('matters')
       .select('id')
       .eq('client_intake_id', legacySheet.client_intake_id)
+      .eq('relationship_status', 'hired')
       .maybeSingle()
 
     if (canonicalMatter?.id) return canonicalMatter.id
@@ -47,6 +50,7 @@ export async function resolveMatterId(inputId: string, admin = getAdminClient())
     .from('matters')
     .select('id')
     .eq('client_intake_id', inputId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (intakeMatter?.id) return intakeMatter.id
@@ -62,6 +66,7 @@ export async function resolveMatterId(inputId: string, admin = getAdminClient())
       .from('matters')
       .select('id')
       .eq('client_intake_id', legacyIntake.id)
+      .eq('relationship_status', 'hired')
       .maybeSingle()
 
     if (matterFromLegacyIntake?.id) return matterFromLegacyIntake.id

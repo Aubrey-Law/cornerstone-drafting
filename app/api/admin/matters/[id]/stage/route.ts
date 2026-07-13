@@ -28,8 +28,9 @@ export async function PATCH(req: Request, { params }: Params) {
 
     const { data: existing, error: fetchError } = await admin
       .from('matters')
-      .select('id, stage')
+      .select('id, stage, relationship_status')
       .eq('id', matterId)
+      .eq('relationship_status', 'hired')
       .maybeSingle()
 
     if (fetchError) throw new Error(fetchError.message)

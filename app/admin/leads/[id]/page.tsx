@@ -54,17 +54,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     { data: activity },
     { data: notes },
     { data: meetings },
-    { data: agreement },
   ] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
     admin.from('contacts').select('*').eq('client_intake_id', id).eq('relationship_type', 'spouse').maybeSingle(),
     admin.from('lead_activity').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
     admin.from('lead_notes').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
     admin.from('lead_meeting_notes').select('*').eq('lead_id', id).order('meeting_date', { ascending: false }),
-    admin.from('engagement_agreements').select('id').eq('lead_id', id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   if (!lead || !lead.lead_status) notFound()
+  const { data: agreement } = lead.matter_id
+    ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    : { data: null }
 
   return (
     <LeadDetailClient

@@ -235,6 +235,7 @@ export interface MatterRow {
   id: string
   client_intake_id: string
   matter_number: string | null
+  relationship_status: 'lead' | 'hired' | 'lost'
   status: string | null
   stage: string | null
 }

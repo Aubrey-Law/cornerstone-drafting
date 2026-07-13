@@ -24,6 +24,7 @@ interface MatterEssentialsCardProps {
   esignEnabled?: boolean
   engagementSending?: boolean
   onSendEngagement?: () => void
+  onDraftEngagement?: () => void
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -78,6 +79,7 @@ export function MatterEssentialsCard({
   esignEnabled = false,
   engagementSending = false,
   onSendEngagement,
+  onDraftEngagement,
 }: MatterEssentialsCardProps) {
 
   const matterPlanType = normalizePlanType(details?.plan_type ?? matter.plan_type ?? 'TBD')
@@ -288,6 +290,16 @@ export function MatterEssentialsCard({
                   : details?.engagement_sent_at || details?.engagement_status === 'declined'
                     ? 'Resend'
                     : 'Send engagement'}
+              </button>
+            )}
+            {!details?.engagement_signed && (
+              <button
+                type="button"
+                disabled={engagementSending}
+                onClick={onDraftEngagement}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Draft engagement
               </button>
             )}
           </div>

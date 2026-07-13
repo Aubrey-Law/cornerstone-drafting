@@ -75,7 +75,7 @@ export default async function IntakeAuthPage({
       })
       .eq('id', intake.id)
 
-    await admin.from('matters').update({ client_id: user.id }).eq('client_intake_id', intake.id)
+    await admin.from('matters').update({ client_id: user.id }).eq('client_intake_id', intake.id).eq('relationship_status', 'hired')
 
     redirect('/intake')
   }

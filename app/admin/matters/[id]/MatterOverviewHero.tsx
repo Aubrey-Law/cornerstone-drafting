@@ -85,6 +85,9 @@ export function MatterOverviewHero({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-green/40 bg-green-bg text-[10px] text-green">
+              Matter Status: Hired
+            </Badge>
             <Select
               value={matter.stage}
               onValueChange={v => onStageChange(v as MatterStage)}

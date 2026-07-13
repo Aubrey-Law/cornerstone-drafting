@@ -8,8 +8,7 @@ type AgreementRow = Record<string, unknown> & {
 }
 
 export interface AgreementDraftInput {
-  matterId?: string
-  leadId?: string
+  matterId: string
   preparedBy?: string | null
   inputSnapshot: EngagementInput
   renderSnapshot?: Json
@@ -28,8 +27,8 @@ async function one<T>(query: PromiseLike<{ data: T | null; error: { message: str
 
 export async function createAgreementDraft(client: SupabaseClient, input: AgreementDraftInput) {
   const agreement = await one<{ id: string }>(client.from('engagement_agreements').insert({
-    matter_id: input.matterId ?? null,
-    lead_id: input.leadId ?? null,
+    matter_id: input.matterId,
+    lead_id: null,
     prepared_by: input.preparedBy ?? null,
   }).select().single())
   const agreementId = agreement.id
@@ -47,7 +46,7 @@ export async function createAgreementDraft(client: SupabaseClient, input: Agreem
 export async function createAgreementRevision(
   client: SupabaseClient,
   agreementId: string,
-  input: Omit<AgreementDraftInput, 'matterId' | 'leadId' | 'preparedBy'>,
+  input: Omit<AgreementDraftInput, 'matterId' | 'preparedBy'>,
 ) {
   const revision = await one<{ id: string }>(client.rpc('create_engagement_agreement_revision', {
     p_agreement_id: agreementId,

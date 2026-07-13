@@ -20,6 +20,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     .from('matters')
     .select('id, created_at, matter_number_manual, client_intake_id')
     .eq('id', matterId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
   if (matterErr) return NextResponse.json({ error: matterErr.message }, { status: 500 })
   if (!matter) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })

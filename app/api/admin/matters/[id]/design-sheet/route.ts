@@ -13,6 +13,17 @@ import type { Database } from '@/types/supabase'
 type Params = { params: Promise<{ id: string }> }
 type AdminClient = SupabaseClient<Database>
 
+async function isHiredMatter(admin: AdminClient, matterId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from('matters')
+    .select('id')
+    .eq('id', matterId)
+    .eq('relationship_status', 'hired')
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return Boolean(data)
+}
+
 export async function GET(req: Request, { params }: Params) {
   const { err } = await requireAdmin(req)
   if (err) return err
@@ -21,6 +32,9 @@ export async function GET(req: Request, { params }: Params) {
   const admin = getAdminClient()
 
   try {
+    if (!(await isHiredMatter(admin, matterId))) {
+      return NextResponse.json({ error: 'Drafting is available only for hired matters' }, { status: 409 })
+    }
     const row = await fetchDesignSheetRow(admin, matterId)
     if (!row) {
       return NextResponse.json({ sheet: null })
@@ -39,6 +53,7 @@ async function getMatterClientIntakeId(matterId: string) {
     .from('matters')
     .select('client_intake_id')
     .eq('id', matterId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (error) throw new Error(error.message)

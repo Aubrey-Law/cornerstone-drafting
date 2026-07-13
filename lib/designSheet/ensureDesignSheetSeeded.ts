@@ -14,6 +14,19 @@ export interface EnsureDesignSheetSeedContext {
   intake?: IntakeSnapshot | null
 }
 
+async function assertHiredMatter(matterId: string): Promise<void> {
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('matters')
+    .select('relationship_status')
+    .eq('id', matterId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data || data.relationship_status !== 'hired') {
+    throw new Error('Drafting is available only for hired matters.')
+  }
+}
+
 async function ensureBlankDesignSheet(
   matterId: string,
   existingSheet: DesignSheet | null | undefined,
@@ -54,6 +67,7 @@ export async function ensureDesignSheetSeededFromIntake(
   matterId: string,
   context: EnsureDesignSheetSeedContext = {},
 ): Promise<boolean> {
+  await assertHiredMatter(matterId)
   const admin = getAdminClient()
   const [sheet, intake] = await Promise.all([
     context.sheet !== undefined ? Promise.resolve(context.sheet) : fetchDesignSheet(matterId),

@@ -27,12 +27,17 @@ import {
 // that resolves to whatever the table-response map provides.
 
 type Response<T> = { data: T | null; error: { message: string } | null }
-type TableResponses = Record<string, Response<unknown>>
+type TableResponses = Record<string, Response<unknown> | Response<unknown>[]>
 
 function stubAdmin(responses: TableResponses) {
+  const calls = new Map<string, number>()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const builder = (table: string): any => {
-    const result = responses[table] ?? { data: null, error: null }
+    const configured = responses[table]
+    const call = calls.get(table) ?? 0
+    calls.set(table, call + 1)
+    const result = (Array.isArray(configured) ? configured[Math.min(call, configured.length - 1)] : configured)
+      ?? { data: null, error: null }
     const thenable = Promise.resolve(result)
     const chain = {
       select: () => chain,
@@ -144,7 +149,10 @@ describe('userCanAccessMatter', () => {
   it('grants access via client_intake when matters row not linked', async () => {
     const sb = stubAdmin({
       users: { data: { role: 'client' }, error: null },
-      matters: { data: null, error: null },
+      matters: [
+        { data: { id: 'matter-1' }, error: null },
+        { data: null, error: null },
+      ],
       client_intake: { data: { matter_id: 'matter-1' }, error: null },
       v_matter_pipeline: { data: null, error: null },
     })
@@ -156,7 +164,10 @@ describe('userCanAccessMatter', () => {
     // matter that hasn't yet been linked to an auth user.
     const sb = stubAdmin({
       users: { data: { role: 'client' }, error: null },
-      matters: { data: null, error: null },
+      matters: [
+        { data: { id: 'matter-1' }, error: null },
+        { data: null, error: null },
+      ],
       client_intake: { data: null, error: null },
       v_matter_pipeline: { data: { matter_id: 'matter-1', client_email: 'client@example.com' }, error: null },
     })
@@ -167,7 +178,10 @@ describe('userCanAccessMatter', () => {
   it('grants access via v_matter_pipeline when email IS confirmed', async () => {
     const sb = stubAdmin({
       users: { data: { role: 'client' }, error: null },
-      matters: { data: null, error: null },
+      matters: [
+        { data: { id: 'matter-1' }, error: null },
+        { data: null, error: null },
+      ],
       client_intake: { data: null, error: null },
       v_matter_pipeline: { data: { matter_id: 'matter-1', client_email: 'client@example.com' }, error: null },
     })
@@ -177,9 +191,22 @@ describe('userCanAccessMatter', () => {
   it('denies access when no path matches', async () => {
     const sb = stubAdmin({
       users: { data: { role: 'client' }, error: null },
-      matters: { data: null, error: null },
+      matters: [
+        { data: { id: 'matter-1' }, error: null },
+        { data: null, error: null },
+      ],
       client_intake: { data: null, error: null },
       v_matter_pipeline: { data: null, error: null },
+    })
+    expect(await userCanAccessMatter(sb, user, 'matter-1')).toBe(false)
+  })
+
+  it('denies every client access path before the opportunity is hired', async () => {
+    const sb = stubAdmin({
+      users: { data: { role: 'client' }, error: null },
+      matters: { data: null, error: null },
+      client_intake: { data: { matter_id: 'matter-1' }, error: null },
+      v_matter_pipeline: { data: { matter_id: 'matter-1', client_email: user.email }, error: null },
     })
     expect(await userCanAccessMatter(sb, user, 'matter-1')).toBe(false)
   })

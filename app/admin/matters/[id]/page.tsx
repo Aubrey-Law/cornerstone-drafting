@@ -123,6 +123,7 @@ async function loadMatterShell(admin: ReturnType<typeof getAdminClient>, matterI
     .from('matters')
     .select(MATTER_SHELL_COLUMNS_FULL)
     .eq('id', matterId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (!full.error) return full.data as MatterShellRow | null
@@ -133,6 +134,7 @@ async function loadMatterShell(admin: ReturnType<typeof getAdminClient>, matterI
     .from('matters')
     .select(MATTER_SHELL_COLUMNS_BASE)
     .eq('id', matterId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (base.error) throw new Error(`Could not load matter history: ${base.error.message}`)

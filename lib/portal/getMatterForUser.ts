@@ -33,6 +33,7 @@ export async function getMatterForUser(
     .from('matters')
     .select('id, status, stage')
     .eq('client_intake_id', intake.id)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (!matter) return null

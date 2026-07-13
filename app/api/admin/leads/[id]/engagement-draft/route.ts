@@ -27,10 +27,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { id } = await params
   const admin = getAdminClient()
+  const { data: lead } = await admin
+    .from('client_intake')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (!lead) return Response.json({ error: 'Lead not found' }, { status: 404 })
+  if (!lead.matter_id) return Response.json({ error: 'Lead opportunity is not initialized' }, { status: 409 })
+
+  const { data: opportunity } = await admin
+    .from('matters')
+    .select('id, relationship_status')
+    .eq('id', lead.matter_id)
+    .maybeSingle()
+  if (!opportunity || opportunity.relationship_status === 'hired') {
+    return Response.json({ error: 'Engagement drafting for this record belongs on the hired matter.' }, { status: 409 })
+  }
+  if (opportunity.relationship_status === 'lost') {
+    return Response.json({ error: 'Reactivate the opportunity before drafting an engagement.' }, { status: 409 })
+  }
+
   const { data: existing } = await admin
     .from('engagement_agreements')
     .select('id, matter_id, lead_id, active_revision_id')
-    .eq('lead_id', id)
+    .eq('matter_id', opportunity.id)
     .in('status', ['draft', 'ready', 'failed'])
     .order('created_at', { ascending: false })
     .limit(1)
@@ -51,18 +71,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return Response.json({ agreementId: existingAgreement.id })
   }
 
-  const [{ data: lead }, { data: spouse }] = await Promise.all([
-    admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
-    admin.from('contacts').select('*').eq('client_intake_id', id).eq('relationship_type', 'spouse').maybeSingle(),
-  ])
-
-  if (!lead) return Response.json({ error: 'Lead not found' }, { status: 404 })
+  const { data: spouse } = await admin
+    .from('contacts')
+    .select('*')
+    .eq('client_intake_id', id)
+    .eq('relationship_type', 'spouse')
+    .maybeSingle()
   if (normalizePracticeArea(lead.practice_area) !== 'EP' || !spouse?.email) {
     return Response.json({ error: 'The reviewed workspace currently supports estate-planning couples only; use the legacy engagement flow.' }, { status: 400 })
   }
 
   const result = await createAgreementDraft(admin, {
-    leadId: id,
+    matterId: opportunity.id,
     preparedBy: userId,
     inputSnapshot: {
       practiceArea: 'EP',

@@ -4,8 +4,8 @@ import { resolveEsignProvider } from '@/lib/esign/firma'
 
 /**
  * POST /api/admin/leads/[id]/engagement — send (or re-send) the engagement
- * agreement to a lead (a client_intake row with no matter yet). On signing,
- * the /api/webhooks/esign handler converts the lead into a matter.
+ * agreement to a lead's matter-owned opportunity. On signing, the webhook
+ * promotes that existing opportunity to Hired.
  */
 export async function POST(
   req: Request,
@@ -33,10 +33,19 @@ export async function POST(
 
   const { data: lead } = await admin
     .from('client_intake')
-    .select('id, email, first_name, last_name, full_name, engagement_status, engagement_envelope_id')
+    .select('id, matter_id, email, first_name, last_name, full_name, engagement_status, engagement_envelope_id')
     .eq('id', intakeId)
     .maybeSingle()
   if (!lead) return Response.json({ error: 'Lead not found' }, { status: 404 })
+  if (!lead.matter_id) return Response.json({ error: 'Lead opportunity is not initialized' }, { status: 409 })
+  const { data: opportunity } = await admin
+    .from('matters')
+    .select('id, relationship_status')
+    .eq('id', lead.matter_id)
+    .maybeSingle()
+  if (!opportunity || opportunity.relationship_status !== 'lead') {
+    return Response.json({ error: opportunity?.relationship_status === 'lost' ? 'Reactivate the opportunity before sending an engagement.' : 'Engagement already belongs to the hired matter.' }, { status: 409 })
+  }
 
   const primaryName =
     body.primaryName?.trim() ||
@@ -54,18 +63,6 @@ export async function POST(
   if (lead.engagement_status === 'signed') {
     return Response.json({ error: 'Engagement already signed.' }, { status: 409 })
   }
-  const { data: existingMatter } = await admin
-    .from('matters')
-    .select('id')
-    .eq('client_intake_id', intakeId)
-    .maybeSingle()
-  if (existingMatter) {
-    return Response.json(
-      { error: 'Lead already converted — send the engagement from the matter page.' },
-      { status: 409 },
-    )
-  }
-
   try {
     if (lead.engagement_envelope_id) {
       await provider.cancelEnvelope(lead.engagement_envelope_id)
@@ -128,6 +125,20 @@ export async function POST(
       .select('id, engagement_status, engagement_sent_at')
       .single()
     if (error) throw new Error(error.message)
+
+    const { error: detailsError } = await admin.from('matter_details').upsert(
+      {
+        client_id: opportunity.id,
+        engagement_provider: provider.name,
+        engagement_envelope_id: envelopeId,
+        engagement_status: 'sent',
+        engagement_sent_at: new Date().toISOString(),
+        engagement_signed_at: null,
+        flat_fee_amount: primaryUpdate.engagement_fee_quoted ?? undefined,
+      },
+      { onConflict: 'client_id' },
+    )
+    if (detailsError) throw new Error(detailsError.message)
 
     return Response.json({ row, signingLink })
   } catch (e) {

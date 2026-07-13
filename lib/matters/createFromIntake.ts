@@ -6,11 +6,10 @@ import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesig
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 
 /**
- * Convert a standalone lead (a client_intake row with no matter) into a
- * matter, carrying over the intake, quoted fee, and engagement state. Used
- * by the e-sign webhook (auto-convert on signing) and the Leads page's
- * manual Create matter action. Mirrors app/api/admin/matters/create but
- * attaches the EXISTING intake instead of inserting a fresh one.
+ * Hire the opportunity matter linked to an intake, carrying over the quoted
+ * fee and engagement state. Used by the e-sign webhook and the Leads page's
+ * manual hire action. The database operation is idempotent and assigns the
+ * official matter number only on the first successful hire transition.
  */
 export async function createMatterFromIntake(
   admin: SupabaseClient,
@@ -77,6 +76,7 @@ export async function createMatterFromIntake(
     p_engagement_sent_at: intake.engagement_sent_at ?? null,
     p_engagement_signed_at: intake.engagement_signed_at ?? null,
     p_engagement_signed: engagementSigned,
+    p_actor_id: options.actorId ?? null,
   })
   if (conversionError) return { ok: false, error: conversionError.message }
   const conversion = Array.isArray(conversionData) ? conversionData[0] : conversionData

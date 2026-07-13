@@ -26,6 +26,10 @@ export interface MatterRow {
   id: string
   client_intake_id: string | null
   matter_number: string | null
+  relationship_status: 'lead' | 'hired' | 'lost'
+  hired_at: string | null
+  lost_at: string | null
+  lost_reason: string | null
   li_plan_coverage: string | null
   li_design_sheet_data: Json | null
   li_design_sheet_approved: boolean | null

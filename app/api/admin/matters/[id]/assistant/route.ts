@@ -21,6 +21,7 @@ async function buildMatterContext(
     .from('matters')
     .select('id, name, stage')
     .eq('id', matterId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
   if (!matter) return null
 

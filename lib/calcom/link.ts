@@ -22,6 +22,7 @@ export async function findMatterIdByEmail(
     .from('matters')
     .select('id')
     .in('client_intake_id', intakeIds)
+    .eq('relationship_status', 'hired')
     .neq('status', 'archived')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -33,8 +34,9 @@ export async function findMatterIdByEmail(
 export async function matterExists(admin: AdminClient, matterId: string): Promise<boolean> {
   const { data, error } = await admin
     .from('matters')
-    .select('id')
+    .select('id, relationship_status')
     .eq('id', matterId)
+    .eq('relationship_status', 'hired')
     .maybeSingle()
   if (error) throw error
   return Boolean(data)

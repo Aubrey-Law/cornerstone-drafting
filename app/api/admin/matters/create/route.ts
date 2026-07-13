@@ -75,6 +75,8 @@ export async function POST(req: Request) {
       status: 'active',
       stage_entered_at: now,
       track: 'DEFAULT',
+      relationship_status: 'hired',
+      hired_at: now,
     })
     .select('id')
     .single()

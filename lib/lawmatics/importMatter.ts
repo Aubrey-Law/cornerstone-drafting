@@ -7,6 +7,7 @@ import {
 } from '@/lib/lawmatics'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
 
 function splitName(full: string | null): { first: string; last: string | null } {
   const name = (full ?? '').trim()
@@ -142,12 +143,24 @@ export async function importMatterFromLawmaticsProspect(
 
   const { data: existingMatter } = await admin
     .from('matters')
-    .select('id')
+    .select('id, relationship_status')
     .eq('client_intake_id', intake.id)
     .maybeSingle()
 
-  if (existingMatter) {
+  if (existingMatter?.relationship_status === 'hired') {
     return { matterId: existingMatter.id, created: false }
+  }
+
+  if (existingMatter) {
+    const promoted = await createMatterFromIntake(admin, intake.id, { actorId })
+    if (!promoted.ok) throw new Error(promoted.error)
+    await admin.from('matter_details').update({
+      lawmatics_id: lmId,
+      legal_plan: typeof legal_plan === 'string' ? legal_plan : null,
+      referral_source: typeof campaign === 'string' ? campaign : null,
+      matter_status_notes: typeof case_number === 'string' ? `Lawmatics case #: ${case_number}` : null,
+    }).eq('client_id', promoted.matterId)
+    return { matterId: promoted.matterId, created: false }
   }
 
   const practiceArea = normalizePracticeArea(legal_plan ?? intakeRow.practice_area)
@@ -177,6 +190,8 @@ export async function importMatterFromLawmaticsProspect(
       status: 'active',
       stage_entered_at: now,
       track: 'DEFAULT',
+      relationship_status: 'hired',
+      hired_at: now,
     })
     .select('id')
     .single()

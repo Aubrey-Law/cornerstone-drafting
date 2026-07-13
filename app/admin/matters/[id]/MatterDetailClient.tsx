@@ -811,6 +811,27 @@ function MatterDetailClientInner({
     }
   }
 
+  const handleDraftEngagement = async () => {
+    if (!token) {
+      toast.error('Not signed in')
+      return
+    }
+    setSendingEngagement(true)
+    try {
+      const res = await fetch(`/api/admin/matters/${matter.matter_id}/engagement-draft`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not open engagement draft')
+      router.push(`/admin/engagements/${body.agreementId}?step=design`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not open engagement draft')
+    } finally {
+      setSendingEngagement(false)
+    }
+  }
+
   const copyIntakeUrl = async () => {
     if (!intakeUrl) return
     try {
@@ -1079,6 +1100,7 @@ function MatterDetailClientInner({
               esignEnabled={esignEnabled}
               engagementSending={sendingEngagement}
               onSendEngagement={() => void handleSendEngagement()}
+              onDraftEngagement={() => void handleDraftEngagement()}
             />
             {showLegalPlan && (
               <MatterLegalPlanCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />

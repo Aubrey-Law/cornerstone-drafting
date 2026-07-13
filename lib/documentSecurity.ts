@@ -39,6 +39,13 @@ export async function userCanAccessMatter(
   user: AuthUser,
   matterId: string,
 ) {
+  const { data: eligibleMatter } = await admin
+    .from('matters')
+    .select('id')
+    .eq('id', matterId)
+    .eq('relationship_status', 'hired')
+    .maybeSingle()
+  if (!eligibleMatter) return false
   if (await isAdminUser(admin, user)) return true
 
   const [{ data: matter }, { data: intake }] = await Promise.all([

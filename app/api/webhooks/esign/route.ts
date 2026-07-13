@@ -20,8 +20,8 @@ export const dynamic = 'force-dynamic'
  * id, then fetches authoritative state from the provider API before writing
  * anything — a spoofed webhook can at most trigger a state re-check.
  *
- * Envelopes are sent from two places: the Leads page (pre-matter — signing
- * converts the lead into a matter) and the matter page (post-creation).
+ * Envelopes are sent from two places: the Leads page (matter-owned opportunity)
+ * and the hired matter page. Signing promotes a lead opportunity in place.
  */
 
 /** Download the combined signed PDF + audit certificate into the matter's Signed documents. */
@@ -122,6 +122,14 @@ export async function POST(req: Request) {
   // Unknown (stale/cancelled/foreign) envelope: ack so the provider stops retrying.
   if (!details && !lead) return NextResponse.json({ ok: true, ignored: 'unknown envelope' })
 
+  const { data: opportunity } = details
+    ? await admin
+        .from('matters')
+        .select('id, client_intake_id, relationship_status')
+        .eq('id', details.client_id as string)
+        .maybeSingle()
+    : { data: null }
+
   const resolved = resolveEsignProvider()
   if (!resolved.ok) {
     return NextResponse.json({ error: resolved.error }, { status: 503 })
@@ -155,6 +163,16 @@ export async function POST(req: Request) {
       // Duplicate deliveries after full success are pure no-ops.
       if (details.engagement_status === 'signed') {
         return NextResponse.json({ ok: true, duplicate: true })
+      }
+      if (!opportunity) {
+        return NextResponse.json({ error: 'engagement opportunity not found' }, { status: 409 })
+      }
+      if (opportunity?.relationship_status !== 'hired') {
+        if (opportunity?.relationship_status === 'lost') {
+          return NextResponse.json({ error: 'lost opportunity must be reactivated before hiring' }, { status: 409 })
+        }
+        const promoted = await createMatterFromIntake(admin, opportunity.client_intake_id as string)
+        if (!promoted.ok) return NextResponse.json({ error: promoted.error }, { status: 500 })
       }
       const failure = await storeSignedEngagement(admin, details.client_id as string, state)
       if (failure) return failure

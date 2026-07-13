@@ -67,12 +67,13 @@ describe('lead edit and delete source shape', () => {
     expect(source).toContain('results')
   })
 
-  it('deleteLead refuses converted leads and cleans up the envelope + R2', () => {
+  it('deleteLead rejects hired matters, cancels pending envelopes, and archives the opportunity', () => {
     const source = read('lib/leads/deleteLead.ts')
-    expect(source).toContain('already converted')
+    expect(source).toContain('Hired matters cannot be removed from Leads')
     expect(source).toContain('cancelEnvelope')
-    expect(source).toContain('r2_key')
-    expect(source).toContain("from('client_intake').delete()")
+    expect(source).toContain("relationship_status: 'lost'")
+    expect(source).toContain("status: 'archived'")
+    expect(source).not.toContain("from('client_intake').delete()")
   })
 
   it('leads client has selection, bulk delete, and an edit dialog', () => {

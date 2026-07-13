@@ -4,8 +4,14 @@ import { deleteMatter } from '@/lib/matters/deleteMatter'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export async function POST(req: Request) {
-  const { err } = await requireAdmin(req)
+  const { err, userId } = await requireAdmin(req)
   if (err) return err
+
+  const admin = getAdminClient()
+  const { data: profile } = await admin.from('users').select('role').eq('id', userId).maybeSingle()
+  if (profile?.role !== 'admin') {
+    return NextResponse.json({ error: 'Permanent deletion requires an administrator' }, { status: 403 })
+  }
 
   let body: { ids?: unknown }
   try {
@@ -22,7 +28,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No matter ids provided' }, { status: 400 })
   }
 
-  const admin = getAdminClient()
   const results: { id: string; ok: boolean; error?: string }[] = []
 
   for (const id of ids) {

@@ -46,6 +46,7 @@ async function fetchMatterFallback(id: string): Promise<PipelineMatter | null> {
     return null
   }
   if (!matter) return null
+  if (matter.relationship_status !== 'hired') return null
 
   const intakeId = (matter.client_intake_id ?? null) as string | null
   const [{ data: intake, error: intakeError }, { data: spouse, error: spouseError }, { data: designSheet }, { data: details }] = await Promise.all([

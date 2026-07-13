@@ -8,7 +8,7 @@ import { ZodError } from 'zod'
 
 /**
  * PATCH /api/admin/leads/[id] — edit a lead (standalone client_intake row).
- * DELETE — delete a lead (guards converted leads; cleans up the envelope + R2).
+ * DELETE — archive a prospective matter while retaining its history.
  */
 export async function PATCH(
   req: Request,
@@ -38,11 +38,14 @@ export async function PATCH(
     .eq('id', intakeId)
     .maybeSingle()
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
-  if (lead.matter_id && details.status === 'hired') {
+  const { data: opportunity } = lead.matter_id
+    ? await admin.from('matters').select('id, relationship_status').eq('id', lead.matter_id).maybeSingle()
+    : { data: null }
+  if (opportunity?.relationship_status === 'hired' && details.status === 'hired') {
     const { data: spouse } = await admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle()
     return NextResponse.json({ lead, spouse: spouse ?? null, matterId: lead.matter_id })
   }
-  if (lead.matter_id) {
+  if (opportunity?.relationship_status === 'hired') {
     return NextResponse.json(
       { error: 'Lead already converted — edit it from the matter page.' },
       { status: 409 },
@@ -50,8 +53,14 @@ export async function PATCH(
   }
 
   const requestedHired = details.status === 'hired'
+  if (requestedHired && opportunity?.relationship_status === 'lost') {
+    return NextResponse.json(
+      { error: 'Reactivate the lost opportunity as Lead before hiring it.' },
+      { status: 409 },
+    )
+  }
   const persistedDetails = requestedHired ? { ...details, status: lead.lead_status === 'lost' ? 'lost' : 'lead' } : details
-  const { data: savedLead, error } = await admin.rpc('update_lead_details', {
+  const { data: savedLead, error } = await admin.rpc('update_lead_opportunity_details', {
     p_lead_id: intakeId, p_details: persistedDetails, p_spouse: details.spouse, p_actor_id: userId,
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

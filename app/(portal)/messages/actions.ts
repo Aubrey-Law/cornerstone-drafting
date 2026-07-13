@@ -24,9 +24,12 @@ export async function sendMessage(matterId: string, body: string): Promise<Messa
 
   const { data: matterStatus } = await supabase
     .from('matters')
-    .select('status')
+    .select('status, relationship_status')
     .eq('id', matterId)
     .maybeSingle()
+  if (!matterStatus || matterStatus.relationship_status !== 'hired') {
+    throw new Error('This matter is not available for portal messaging.')
+  }
   if (matterStatus?.status === 'closed') {
     throw new Error('This matter is closed and no longer accepts new messages.')
   }

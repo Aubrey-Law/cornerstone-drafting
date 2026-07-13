@@ -115,6 +115,7 @@ export async function POST(req: Request) {
     .from('matters')
     .update({ client_id: userId })
     .eq('client_intake_id', intake.id)
+    .eq('relationship_status', 'hired')
 
   return NextResponse.json({ ok: true })
 }

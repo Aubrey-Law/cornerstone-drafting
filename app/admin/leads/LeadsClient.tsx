@@ -64,17 +64,15 @@ export interface LeadRow {
   last_activity_at: string | null
 }
 
-type LeadFilter = 'open' | 'hired' | 'lost' | 'all'
+type LeadFilter = 'open' | 'lost' | 'all'
 
 const LEAD_STATUS_OPTIONS = [
   { value: 'lead', label: 'Lead' },
-  { value: 'hired', label: 'Hired' },
   { value: 'lost', label: 'Lost' },
 ] as const
 
 const FILTER_TABS: { value: LeadFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
-  { value: 'hired', label: 'Hired' },
   { value: 'lost', label: 'Lost' },
   { value: 'all', label: 'All' },
 ]
@@ -164,11 +162,10 @@ export function LeadsClient({
     [initialLeads, filter],
   )
   const counts = useMemo(() => {
-    const c: Record<LeadFilter, number> = { open: 0, hired: 0, lost: 0, all: initialLeads.length }
+    const c: Record<LeadFilter, number> = { open: 0, lost: 0, all: initialLeads.length }
     for (const l of initialLeads) {
       const s = l.lead_status ?? 'lead'
       if (s === 'lead') c.open += 1
-      else if (s === 'hired') c.hired += 1
       else if (s === 'lost') c.lost += 1
     }
     return c
@@ -426,7 +423,7 @@ export function LeadsClient({
                   />
                 </TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Matter Status</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Practice</TableHead>
                 <TableHead>Fee quoted</TableHead>
@@ -465,7 +462,7 @@ export function LeadsClient({
                     <TableCell><EngagementStatusBadge lead={lead} /></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap justify-end gap-1.5">
-                        {lead.matter_id ? (
+                        {lead.lead_status === 'hired' && lead.matter_id ? (
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" asChild>
                             <Link href={`/admin/matters/${lead.matter_id}`}>View matter</Link>
                           </Button>
@@ -498,7 +495,7 @@ export function LeadsClient({
                               disabled={busy}
                               onClick={() => void handleConvert(lead)}
                             >
-                              Create matter
+                              Hire matter
                             </Button>
                           </>
                         )}
@@ -512,7 +509,7 @@ export function LeadsClient({
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        {!lead.matter_id && (
+                        {lead.lead_status !== 'hired' && (
                           <Button
                             size="icon"
                             variant="ghost"
@@ -539,7 +536,7 @@ export function LeadsClient({
           <DialogHeader>
             <DialogTitle>{editingLead ? 'Edit lead' : 'New lead'}</DialogTitle>
             <DialogDescription>
-              A lead becomes a matter when the engagement agreement is signed.
+              A prospective matter becomes Hired when the engagement agreement is signed.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -579,7 +576,7 @@ export function LeadsClient({
                 value={form.status}
                 onValueChange={value => setForm(f => ({ ...f, status: value }))}
               >
-                <SelectTrigger aria-label="Lead status">
+                <SelectTrigger aria-label="Matter status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -615,10 +612,10 @@ export function LeadsClient({
       <Dialog open={deleteTarget !== null} onOpenChange={open => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete lead?</DialogTitle>
+            <DialogTitle>Archive lead?</DialogTitle>
             <DialogDescription>
-              This permanently deletes {deleteTarget ? leadName(deleteTarget) : 'this lead'} and any
-              intake started. A pending engagement signature request is cancelled.
+              This removes {deleteTarget ? leadName(deleteTarget) : 'this lead'} from active lead work while retaining
+              its intake and history. A pending engagement signature request is cancelled.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -626,7 +623,7 @@ export function LeadsClient({
               Cancel
             </Button>
             <Button variant="destructive" onClick={() => void handleDeleteLead()} disabled={deleting}>
-              {deleting ? 'Deleting…' : 'Delete lead'}
+              {deleting ? 'Archiving…' : 'Archive lead'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -636,11 +633,11 @@ export function LeadsClient({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Delete {selectedIds.length} lead{selectedIds.length === 1 ? '' : 's'}?
+              Archive {selectedIds.length} lead{selectedIds.length === 1 ? '' : 's'}?
             </DialogTitle>
             <DialogDescription>
-              This permanently deletes the selected leads and any intake started. Pending engagement
-              signature requests are cancelled.
+              This removes the selected leads from active work while retaining their intake and history.
+              Pending engagement signature requests are cancelled.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -648,7 +645,7 @@ export function LeadsClient({
               Cancel
             </Button>
             <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={deleting}>
-              {deleting ? 'Deleting…' : `Delete ${selectedIds.length} lead${selectedIds.length === 1 ? '' : 's'}`}
+              {deleting ? 'Archiving…' : `Archive ${selectedIds.length} lead${selectedIds.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>

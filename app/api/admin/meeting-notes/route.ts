@@ -75,11 +75,17 @@ export async function POST(req: Request) {
 
   const { data: matter, error: matterError } = await admin
     .from('matters')
-    .select('id, status')
+    .select('id, status, relationship_status')
     .eq('id', matterId)
     .maybeSingle()
   if (matterError) return NextResponse.json({ error: matterError.message }, { status: 500 })
   if (!matter) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+  if (matter.relationship_status !== 'hired') {
+    return NextResponse.json(
+      { error: 'Meeting notes are available only for hired matters', code: 'matter_not_hired' },
+      { status: 409 },
+    )
+  }
   if (matter.status === 'closed') {
     return NextResponse.json(
       { error: 'Matter is closed; uploads are not permitted', code: 'matter_closed' },

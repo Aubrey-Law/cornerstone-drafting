@@ -1,0 +1,65 @@
+import fs from 'node:fs'
+import { describe, expect, it } from 'vitest'
+
+const read = (path: string) => fs.readFileSync(path, 'utf8')
+const migration = () => read('supabase/migrations/20260802000000_unify_leads_matters.sql')
+
+describe('matter-owned lead lifecycle', () => {
+  it('creates a canonical relationship status and immutable history', () => {
+    const sql = migration()
+    expect(sql).toContain('relationship_status text not null')
+    expect(sql).toContain("check (relationship_status in ('lead', 'hired', 'lost'))")
+    expect(sql).toContain('create table public.matter_relationship_status_history')
+    expect(sql).toContain('record_matter_relationship_status_change')
+    expect(sql).toContain('validate_matter_relationship_status_change')
+    expect(sql).toContain("old.relationship_status = 'lost' and new.relationship_status = 'lead'")
+    expect(sql).toContain('Reactivate the lost opportunity before hiring it')
+    expect(sql).not.toContain('on public.matter_relationship_status_history for update')
+    expect(sql).not.toContain('on public.matter_relationship_status_history for delete')
+  })
+
+  it('creates lead matters transactionally and leaves them unnumbered', () => {
+    const sql = migration()
+    expect(sql).toContain('create or replace function public.ensure_lead_matter()')
+    expect(sql).toContain('after insert or update of lead_status, intake_sent_at, intake_completed_at, engagement_sent_at')
+    expect(sql).toMatch(/null, v_stage, 'active', v_stage_entered_at, 'DEFAULT'/)
+    expect(sql).toContain("relationship_status = 'hired'")
+    expect(sql).toContain("set_config('app.actor_id', p_actor_id::text, true)")
+  })
+
+  it('keeps shared matter and aging views hired-only', () => {
+    const sql = migration()
+    expect(sql.match(/m\.relationship_status = 'hired'/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(sql).toContain("where m.status = 'active' and m.relationship_status = 'lead'")
+  })
+
+  it('backfills engagement agreements to matter ownership', () => {
+    const sql = migration()
+    expect(sql).toContain('set matter_id = ci.matter_id')
+    expect(sql).toContain('lead_id = null')
+    expect(sql).toContain('engagement_agreements_matter_owner_check check (matter_id is not null)')
+    const repository = read('lib/engagement/repository.ts')
+    expect(repository).toContain('matterId: string')
+    expect(repository).toContain('lead_id: null')
+    expect(repository).not.toContain('input.leadId')
+  })
+
+  it('gates drafting initialization and portal matter lookup to hired matters', () => {
+    expect(read('lib/designSheet/ensureDesignSheetSeeded.ts')).toContain("data.relationship_status !== 'hired'")
+    expect(read('lib/portal/getMatterForUser.ts')).toContain(".eq('relationship_status', 'hired')")
+    expect(read('lib/documentSecurity.ts')).toContain(".eq('relationship_status', 'hired')")
+  })
+
+  it('uses matter-owned agreements from lead and matter routes', () => {
+    expect(read('app/api/admin/leads/[id]/engagement-draft/route.ts')).toContain('.eq(\'matter_id\', opportunity.id)')
+    expect(read('app/api/admin/leads/[id]/engagement-draft/route.ts')).toContain('matterId: opportunity.id')
+    expect(read('app/api/admin/matters/[id]/engagement-draft/route.ts')).toContain('matterId,')
+  })
+
+  it('limits permanent deletion to admins and protects hired or signed records', () => {
+    const deletion = read('lib/matters/deleteMatter.ts')
+    expect(deletion).toContain("matter.relationship_status === 'hired'")
+    expect(deletion).toContain(".eq('status', 'completed')")
+    expect(read('app/api/admin/matters/[id]/route.ts')).toContain("profile?.role !== 'admin'")
+  })
+})

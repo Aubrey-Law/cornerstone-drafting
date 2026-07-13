@@ -38,12 +38,12 @@ export async function requestIntakeUnlock(note?: string): Promise<RequestUnlockR
 
   const { data: matter } = await admin
     .from('matters')
-    .select('id')
+    .select('id, relationship_status')
     .eq('client_intake_id', intake.id)
     .maybeSingle()
-  const adminLink = matter?.id
+  const adminLink = matter?.id && matter.relationship_status === 'hired'
     ? appUrl(`/admin/matters/${matter.id}?tab=communications&channel=portal`)
-    : appUrl('/admin/matters')
+    : appUrl(`/admin/leads/${intake.id}`)
 
   const clientName =
     [intake.first_name, intake.last_name].filter(Boolean).join(' ') || 'A client'

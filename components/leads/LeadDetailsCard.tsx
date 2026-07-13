@@ -29,7 +29,7 @@ const spouseFields = [
 
 const enumerations = [
   ['maritalStatus', 'Marital status', [['single', 'Single'], ['married', 'Married'], ['divorced', 'Divorced'], ['widowed', 'Widowed']]],
-  ['status', 'Status', [['lead', 'Lead'], ['hired', 'Hired'], ['lost', 'Lost']]],
+  ['status', 'Matter Status', [['lead', 'Lead'], ['hired', 'Hired'], ['lost', 'Lost']]],
 ] as const
 
 const qualificationEnumerations = [

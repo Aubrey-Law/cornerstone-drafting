@@ -1,15 +1,11 @@
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { deleteR2Key } from '@/lib/r2Delete'
 import { resolveEsignProvider } from '@/lib/esign/firma'
 
 /**
- * Permanently delete a lead (a client_intake row with no matter). Refuses
- * converted leads (delete the matter instead), best-effort cancels a live
- * engagement envelope, and cleans up intake-document R2 blobs (their DB rows
- * cascade). contacts / contact_roles / asset_intake cascade; design_sheets /
- * intake_invite_audit are set null.
+ * Archive a prospective matter. Lost/prospect history and intake documents are
+ * retained; hired matters must use the matter close/archive workflow.
  */
 export async function deleteLead(admin: SupabaseClient, intakeId: string) {
   const { data: lead, error } = await admin
@@ -19,7 +15,16 @@ export async function deleteLead(admin: SupabaseClient, intakeId: string) {
     .maybeSingle()
   if (error) throw new Error(error.message)
   if (!lead) throw new Error('Lead not found')
-  if (lead.matter_id) throw new Error('Lead already converted to a matter')
+  if (!lead.matter_id) throw new Error('Lead opportunity is not initialized')
+
+  const { data: matter, error: matterError } = await admin
+    .from('matters')
+    .select('id, relationship_status')
+    .eq('id', lead.matter_id)
+    .maybeSingle()
+  if (matterError) throw new Error(matterError.message)
+  if (!matter) throw new Error('Lead opportunity is not initialized')
+  if (matter.relationship_status === 'hired') throw new Error('Hired matters cannot be removed from Leads')
 
   const envelopeId = lead.engagement_envelope_id as string | null
   if (envelopeId && lead.engagement_status !== 'signed') {
@@ -29,14 +34,15 @@ export async function deleteLead(admin: SupabaseClient, intakeId: string) {
     }
   }
 
-  const { data: docs } = await admin
-    .from('intake_documents')
-    .select('r2_key')
-    .eq('client_intake_id', intakeId)
-  for (const doc of docs ?? []) {
-    await deleteR2Key(doc.r2_key as string | null)
-  }
+  const { error: archiveError } = await admin
+    .from('matters')
+    .update({ status: 'archived', relationship_status: 'lost', lost_at: new Date().toISOString() })
+    .eq('id', matter.id)
+  if (archiveError) throw new Error(archiveError.message)
 
-  const { error: deleteError } = await admin.from('client_intake').delete().eq('id', intakeId)
-  if (deleteError) throw new Error(deleteError.message)
+  const { error: mirrorError } = await admin
+    .from('client_intake')
+    .update({ lead_status: 'lost', updated_at: new Date().toISOString() })
+    .eq('id', intakeId)
+  if (mirrorError) throw new Error(mirrorError.message)
 }

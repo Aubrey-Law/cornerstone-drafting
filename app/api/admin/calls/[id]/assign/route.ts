@@ -32,6 +32,7 @@ export async function POST(
       .from('matters')
       .select('id')
       .eq('id', parsed.data.matterId)
+      .eq('relationship_status', 'hired')
       .maybeSingle()
 
     if (!matter) {
@@ -44,8 +45,16 @@ export async function POST(
       .eq('id', parsed.data.leadId!)
       .maybeSingle()
 
-    if (!lead || lead.matter_id) {
-      return NextResponse.json({ error: 'Lead not found or already converted' }, { status: 404 })
+    const { data: opportunity } = lead?.matter_id
+      ? await admin
+          .from('matters')
+          .select('relationship_status')
+          .eq('id', lead.matter_id)
+          .maybeSingle()
+      : { data: null }
+
+    if (!lead || !opportunity || opportunity.relationship_status === 'hired') {
+      return NextResponse.json({ error: 'Lead not found or already hired' }, { status: 404 })
     }
   }
 
