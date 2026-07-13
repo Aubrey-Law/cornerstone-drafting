@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { canSendReviewedRevision, engagementStep, isSupportedWorkspaceDefinition } from '@/components/engagement/workspaceState'
 
 describe('engagement workspace interaction state', () => {
-  it('keeps each supported URL step stable and defaults unknown values to details', () => {
-    for (const step of ['details','terms','review','send','status']) expect(engagementStep(step)).toBe(step)
-    expect(engagementStep('unknown')).toBe('details')
+  it('keeps drafting-style URL steps stable and maps legacy steps safely', () => {
+    for (const step of ['design','generate','review']) expect(engagementStep(step)).toBe(step)
+    expect(engagementStep('details')).toBe('design')
+    expect(engagementStep('terms')).toBe('design')
+    expect(engagementStep('send')).toBe('review')
+    expect(engagementStep('status')).toBe('review')
+    expect(engagementStep('unknown')).toBe('design')
   })
   it('enables send only after explicit confirmation of a complete reviewed identity', () => {
     const valid={approvalToken:'token',confirmExactRevision:true,revisionId:'r1',pdfSha256:'hash'}

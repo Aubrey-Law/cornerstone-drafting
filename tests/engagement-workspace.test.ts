@@ -5,11 +5,20 @@ import { describe, expect, it } from 'vitest'
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8')
 
 describe('engagement workspace slice', () => {
-  it('has stable URL-backed five-step navigation', () => {
+  it('has stable URL-backed drafting-style navigation', () => {
     const source = read('components/engagement/EngagementWorkspace.tsx')
-    for (const step of ['details', 'terms', 'review', 'send', 'status']) expect(source).toContain(`'${step}'`)
+    for (const step of ['design', 'generate', 'review']) expect(source).toContain(`'${step}'`)
     expect(source).toContain('searchParams')
     expect(source).toContain('router.replace')
+  })
+
+  it('maps legacy engagement step URLs into the drafting-style flow', () => {
+    const source = read('components/engagement/workspaceState.ts')
+
+    expect(source).toContain("value === 'details' || value === 'terms'")
+    expect(source).toContain("return 'design'")
+    expect(source).toContain("value === 'send' || value === 'status'")
+    expect(source).toContain("return 'review'")
   })
 
   it('keeps editing structured and requires exact send confirmation', () => {
@@ -18,6 +27,8 @@ describe('engagement workspace slice', () => {
     expect(source).toContain('Couple')
     expect(source).toContain('approvalToken')
     expect(source).toContain('confirmExactRevision')
+    expect(source).toContain('GenerateStep')
+    expect(source).toContain('ReviewStep')
     expect(source).not.toContain('contentEditable')
   })
 

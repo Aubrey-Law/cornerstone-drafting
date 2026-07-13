@@ -1,8 +1,10 @@
-export const ENGAGEMENT_STEPS = ['details', 'terms', 'review', 'send', 'status'] as const
+export const ENGAGEMENT_STEPS = ['design', 'generate', 'review'] as const
 export type EngagementStep = typeof ENGAGEMENT_STEPS[number]
 
 export function engagementStep(value: string | null): EngagementStep {
-  return ENGAGEMENT_STEPS.includes(value as EngagementStep) ? value as EngagementStep : 'details'
+  if (value === 'details' || value === 'terms') return 'design'
+  if (value === 'send' || value === 'status') return 'review'
+  return ENGAGEMENT_STEPS.includes(value as EngagementStep) ? value as EngagementStep : 'design'
 }
 
 export function canSendReviewedRevision(input: { approvalToken: string; confirmExactRevision: boolean; revisionId: string; pdfSha256: string }): boolean {
