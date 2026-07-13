@@ -1,0 +1,22 @@
+'use client'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+
+export type LeadNote = { id:string; body:string; actorId:string; createdAt:string; updatedAt:string }
+export type LeadMeetingNote = LeadNote & { title:string; meetingDate:string; attendees:string[]; source:string; granolaNoteId:string|null }
+
+export function LeadNotesCard({leadId,initialNotes,initialMeetingNotes,currentUser}:{leadId:string;initialNotes:LeadNote[];initialMeetingNotes:LeadMeetingNote[];currentUser:{id:string;role:string}}){
+ const token=useAccessToken(),[notes,setNotes]=useState(initialNotes),[meetings,setMeetings]=useState(initialMeetingNotes),[expanded,setExpanded]=useState<string|null>(null),[body,setBody]=useState(''),[editing,setEditing]=useState<string|null>(null),[editBody,setEditBody]=useState(''),[meetingOpen,setMeetingOpen]=useState(false),[meeting,setMeeting]=useState({title:'',date:'',attendees:'',body:''})
+ async function call(url:string,method:string,payload?:unknown){const r=await fetch(url,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:payload?JSON.stringify(payload):undefined});const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j}
+ async function add(){const j=await call(`/api/admin/leads/${leadId}/notes`,'POST',{body});setNotes(n=>[j.note,...n]);setBody('')}
+ async function save(id:string){const j=await call(`/api/admin/leads/${leadId}/notes/${id}`,'PATCH',{body:editBody});setNotes(n=>n.map(x=>x.id===id?j.note:x));setEditing(null)}
+ async function remove(id:string){await call(`/api/admin/leads/${leadId}/notes/${id}`,'DELETE');setNotes(n=>n.filter(x=>x.id!==id))}
+ async function addMeeting(){const j=await call(`/api/admin/leads/${leadId}/meeting-notes`,'POST',{title:meeting.title,meetingDate:meeting.date,attendees:meeting.attendees.split(',').map(x=>x.trim()).filter(Boolean),body:meeting.body});setMeetings(m=>[j.meetingNote,...m]);setMeetingOpen(false)}
+ return <section className="rounded-lg border p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Notes</h2><p className="text-xs text-muted-foreground">Internal only</p></div><Button type="button" variant="outline" onClick={()=>setMeetingOpen(true)}>Add meeting note</Button></div>
+ <div className="mt-4 flex gap-2"><Input aria-label="New note" value={body} onChange={e=>setBody(e.target.value)} placeholder="Add an internal note"/><Button type="button" disabled={!body.trim()} onClick={add}>Add note</Button></div>
+ {meetingOpen&&<div role="dialog" aria-label="Add meeting note" className="mt-4 space-y-2 rounded-md border p-3"><Input aria-label="Meeting title" value={meeting.title} onChange={e=>setMeeting({...meeting,title:e.target.value})}/><Input aria-label="Meeting date" type="date" value={meeting.date} onChange={e=>setMeeting({...meeting,date:e.target.value})}/><Input aria-label="Attendees" value={meeting.attendees} onChange={e=>setMeeting({...meeting,attendees:e.target.value})}/><textarea aria-label="Meeting notes" className="w-full rounded-md border p-2" value={meeting.body} onChange={e=>setMeeting({...meeting,body:e.target.value})}/><Button type="button" onClick={addMeeting}>Save meeting note</Button></div>}
+ <div className="mt-5 space-y-3">{meetings.map(m=><article key={m.id} className="rounded-md border p-3"><button type="button" className="font-medium" aria-expanded={expanded===m.id} onClick={()=>setExpanded(expanded===m.id?null:m.id)}>{m.title} · {new Date(m.meetingDate).toLocaleDateString()}</button>{expanded===m.id&&<><p className="mt-2 text-sm">{m.body}</p><p className="text-xs text-muted-foreground">{m.attendees.join(', ')}</p></>}</article>)}
+ {notes.map(n=><article key={n.id} className="border-l-2 pl-3 text-sm">{editing===n.id?<><Input aria-label="Edit note body" value={editBody} onChange={e=>setEditBody(e.target.value)}/><Button type="button" onClick={()=>save(n.id)}>Save note</Button></>:<p>{n.body}</p>}<div className="mt-1 flex gap-2"><Button type="button" variant="ghost" size="sm" aria-label="Edit note" onClick={()=>{setEditing(n.id);setEditBody(n.body)}}>Edit</Button>{(currentUser.id===n.actorId||currentUser.role==='admin')&&<Button type="button" variant="ghost" size="sm" aria-label="Delete note" onClick={()=>remove(n.id)}>Delete</Button>}</div></article>)}</div></section>
+}

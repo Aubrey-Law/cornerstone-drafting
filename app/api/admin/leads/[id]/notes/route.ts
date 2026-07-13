@@ -1,0 +1,4 @@
+import { requireAdmin } from '@/lib/apiAuth'
+import { getAdminClient } from '@/lib/supabaseAdmin'
+const dto=(r:any)=>({id:r.id,body:r.body,actorId:r.actor_id,createdAt:r.created_at,updatedAt:r.updated_at})
+export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){const {err,userId}=await requireAdmin(req);if(err)return err;const {id}=await params;const input=await req.json().catch(()=>({}));const body=typeof input.body==='string'?input.body.trim():'';if(!body)return Response.json({error:'Note is required'},{status:400});const db=getAdminClient();const {data,error}=await db.from('lead_notes').insert({lead_id:id,body,actor_id:userId}).select().single();if(error)return Response.json({error:error.message},{status:500});await db.from('lead_activity').insert({lead_id:id,event_type:'note_added',title:'Note added',detail:body,actor_id:userId});return Response.json({note:dto(data)})}
