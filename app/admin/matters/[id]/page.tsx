@@ -14,7 +14,7 @@ import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterActivity } from '@/types/database'
 import MatterDetailClient from './MatterDetailClient'
-import { mapMatterNoteRows } from './tabs/notes'
+import { mapMatterNoteRows } from './tabs/noteLinks'
 import { buildLinkedMatterActivity } from '@/lib/leads/activity'
 import type { IntakeSnapshot } from '@/lib/queries'
 
