@@ -8,41 +8,10 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { canSendReviewedRevision, engagementStep, ENGAGEMENT_STEPS } from './workspaceState'
 import { EngagementClauseEditor } from './EngagementClauseEditor'
+import type { EngagementWorkspaceAgreement as Agreement } from '@/lib/engagement/http'
+import type { EngagementInput } from '@/lib/engagement/types'
 
 type Step = typeof ENGAGEMENT_STEPS[number]
-type Clause = {
-  id?: string | null
-  title: string
-  text: string
-  source: 'library' | 'ai' | 'manual'
-  aiProvenance?: { mode: 'draft' | 'revise'; acceptedAt: string } | null
-}
-type EngagementInput = {
-  practiceArea: string
-  clientMode: 'individual' | 'couple'
-  agreementDate: string
-  primary: { name: string; email: string }
-  spouse: { name: string; email: string } | null
-  legalPlan: string | null
-  fee: { amount: number; paymentTerms: string }
-  scopeKey: string
-  optionalClauseKeys: string[]
-  additionalClauses?: Clause[]
-  scheduleAClauses?: Clause[]
-  emailMessage: string
-  expirationHours: number
-}
-type Agreement = {
-  id: string
-  status: string
-  active_revision: {
-    id: string
-    render_sha256: string
-    input_snapshot: EngagementInput
-    render_snapshot?: { docxBase64?: string; pdfBase64?: string } | null
-  }
-  recipients: Array<{ id: string; name: string; status: string }>
-}
 type PreviewPayload = {
   revision: { id: string }
   sha256: string
@@ -258,7 +227,11 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
             const meta = STEP_META[id]
             const Icon = meta.icon
             const active = id === step
-            const complete = id === 'design' ? blockers.length === 0 : id === 'generate' ? Boolean(preview) : approvalToken || ['sent', 'viewed', 'partially_signed', 'completed'].includes(agreement.status)
+            const complete = id === 'design'
+              ? blockers.length === 0
+              : id === 'generate'
+                ? Boolean(preview)
+                : Boolean(approvalToken) || ['sent', 'viewed', 'partially_signed', 'completed'].includes(agreement.status)
             return (
               <button
                 key={id}
