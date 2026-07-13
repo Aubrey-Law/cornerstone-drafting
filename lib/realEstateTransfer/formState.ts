@@ -166,10 +166,12 @@ export function formatGrantees(form: RealEstateTransferFormState): string {
 
 export function buildTemplateFields(form: RealEstateTransferFormState): RealEstateTransferFields {
   const deed = form.deedFields
-  const propertyAddress = form.clientPropertyAddress.trim() || deed.property_address?.trim() || ''
-  const propertyCity = form.clientPropertyCity.trim() || deed.property_city?.trim() || ''
-  const propertyState = form.clientPropertyState.trim() || deed.property_state?.trim() || ''
-  const propertyCounty = form.clientPropertyCounty.trim() || deed.property_county?.trim() || ''
+  // The uploaded deed describes the property being transferred. Client contact
+  // information is only a fallback when the deed does not identify the property.
+  const propertyAddress = deed.property_address?.trim() || form.clientPropertyAddress.trim() || ''
+  const propertyCity = deed.property_city?.trim() || form.clientPropertyCity.trim() || ''
+  const propertyState = deed.property_state?.trim() || form.clientPropertyState.trim() || ''
+  const propertyCounty = deed.property_county?.trim() || form.clientPropertyCounty.trim() || ''
 
   return {
     ...deed,
@@ -198,10 +200,6 @@ export function mergeExtractedDeedFields(
       ...form.deedFields,
       ...extracted,
     },
-    clientPropertyAddress: form.clientPropertyAddress || extracted.property_address || '',
-    clientPropertyCity: form.clientPropertyCity || extracted.property_city || '',
-    clientPropertyState: form.clientPropertyState || extracted.property_state || 'MA',
-    clientPropertyCounty: form.clientPropertyCounty || extracted.property_county || '',
   }
 }
 

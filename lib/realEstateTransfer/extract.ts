@@ -24,10 +24,13 @@ ${FIELD_LIST}
 
 Never invent facts. If a value is unknown, omitted, unclear, or only implied, omit that field entirely.
 Use ISO dates (YYYY-MM-DD) where possible.
-Extract grantor from the deed as recorded.
-Extract prior_deed_book, prior_deed_page, prior_deed_date, certificate_number, and registry_district from recording references when present.
-registry_district is the Registry of Deeds district or Land Court reference.
-For grantee on a trust transfer, include the trustee name(s) and trust name when present.
+The uploaded document is the current deed, and the output will be used to prepare a new transfer deed.
+Set grantor to the current vested owner or owners shown as grantee(s) on the uploaded current deed. Do not copy the uploaded deed's historical grantor into grantor.
+Omit grantee. The proposed new grantee is selected separately by the attorney in the drafting form.
+Extract property_address, property_city, property_state, property_county, parcel_id, and legal_description from the uploaded current deed. Preserve the legal description faithfully; do not summarize or modernize it.
+Set prior_deed_book, prior_deed_page, prior_deed_date, certificate_number, and registry_district from the recording information for the uploaded deed itself when present.
+Do not use an older deed citation contained in the uploaded deed's title recital as prior_deed_book or prior_deed_page.
+registry_district is the Registry of Deeds district or Land Court district for the uploaded deed.
 property_state should be the two-letter state abbreviation when known.`
 
 function parseJsonFromModelText(raw: string): unknown {

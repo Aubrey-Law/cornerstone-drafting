@@ -229,4 +229,56 @@ describe('commitRealEstateTransferToSheet', () => {
     const inclusions = getDocumentInclusions({ ...sheet, decisions })
     expect(inclusions.deed).toBe(false)
   })
+
+  it('preserves upload metadata when committing newly extracted deed fields', () => {
+    const sheet = {
+      ...baseSheet(),
+      decisions: setPersistedRealEstateTransfer(baseSheet(), {
+        selectedDocs: ['deed'],
+        uploadName: 'current-deed.pdf',
+        hasExtracted: true,
+      }),
+    }
+    const form = buildFormStateFromDesignSheet(sheet as DesignSheet, matter, contacts)
+    form.deedFields = {
+      grantor: 'Jane Doe',
+      property_address: '99 Transferred Property Lane',
+      legal_description: 'Lot 1 on Plan 20.',
+    }
+
+    const decisions = commitRealEstateTransferToSheet(sheet, form)
+    const persisted = getPersistedRealEstateTransfer({ decisions })
+
+    expect(persisted.uploadName).toBe('current-deed.pdf')
+    expect(persisted.hasExtracted).toBe(true)
+    expect(persisted.selectedDocs).toEqual(['deed'])
+    expect(persisted.deedFields).toMatchObject({
+      grantor: 'Jane Doe',
+      property_address: '99 Transferred Property Lane',
+      legal_description: 'Lot 1 on Plan 20.',
+    })
+  })
+
+  it('updates extraction metadata without replacing persisted deed fields', () => {
+    const withFields = setPersistedRealEstateTransfer(baseSheet(), {
+      deedFields: {
+        grantor: 'Jane Doe',
+        prior_deed_book: '12345',
+        prior_deed_page: '67',
+      },
+      uploadName: 'current-deed.pdf',
+    })
+    const decisions = setPersistedRealEstateTransfer({ decisions: withFields }, {
+      hasExtracted: true,
+    })
+    const persisted = getPersistedRealEstateTransfer({ decisions })
+
+    expect(persisted.hasExtracted).toBe(true)
+    expect(persisted.uploadName).toBe('current-deed.pdf')
+    expect(persisted.deedFields).toEqual({
+      grantor: 'Jane Doe',
+      prior_deed_book: '12345',
+      prior_deed_page: '67',
+    })
+  })
 })

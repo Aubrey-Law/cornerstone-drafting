@@ -270,6 +270,10 @@ export function RealEstateTransferWorkflow({
   const [newTrustName, setNewTrustName] = useState('')
 
   const trustNameSuggestions = useMemo(() => suggestRealtyTrustNames(form), [form])
+  const deedPropertyAddress = form.deedFields.property_address ?? form.clientPropertyAddress
+  const deedPropertyCity = form.deedFields.property_city ?? form.clientPropertyCity
+  const deedPropertyState = form.deedFields.property_state ?? form.clientPropertyState
+  const deedPropertyCounty = form.deedFields.property_county ?? form.clientPropertyCounty
 
   const pickerContacts = useMemo(() => {
     if (!trusteePicker) return [] as PickerContact[]
@@ -914,24 +918,40 @@ export function RealEstateTransferWorkflow({
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Property address</h3>
             <p className="text-xs text-muted-foreground">
-              Pulled from client information in the realty trust card.
+              Extracted from the uploaded deed. Client information is used only as a fallback and can be corrected here.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>Street address</Label>
-                <Input value={form.clientPropertyAddress} readOnly className="bg-muted/40" />
+                <Label htmlFor="property_address">Street address</Label>
+                <Input
+                  id="property_address"
+                  value={deedPropertyAddress}
+                  onChange={event => updateDeedField('property_address', event.target.value)}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>City / town</Label>
-                <Input value={form.clientPropertyCity} readOnly className="bg-muted/40" />
+                <Label htmlFor="property_city">City / town</Label>
+                <Input
+                  id="property_city"
+                  value={deedPropertyCity}
+                  onChange={event => updateDeedField('property_city', event.target.value)}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>State</Label>
-                <Input value={form.clientPropertyState} readOnly className="bg-muted/40" />
+                <Label htmlFor="property_state">State</Label>
+                <Input
+                  id="property_state"
+                  value={deedPropertyState}
+                  onChange={event => updateDeedField('property_state', event.target.value)}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>County</Label>
-                <Input value={form.clientPropertyCounty} readOnly className="bg-muted/40" />
+                <Label htmlFor="property_county">County</Label>
+                <Input
+                  id="property_county"
+                  value={deedPropertyCounty}
+                  onChange={event => updateDeedField('property_county', event.target.value)}
+                />
               </div>
             </div>
           </div>

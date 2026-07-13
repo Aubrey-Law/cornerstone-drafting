@@ -5,6 +5,7 @@ import {
   buildFormStateFromDesignSheet,
   commitRealEstateTransferToSheet,
   getPersistedRealEstateTransfer,
+  setPersistedRealEstateTransfer,
 } from '@/lib/designSheetRealEstateTransfer'
 import { type RealEstateTransferDocType } from '@/lib/realEstateTransfer/fields'
 import { RealEstateTransferWorkflow } from '@/lib/realEstateTransfer/RealEstateTransferWorkflow'
@@ -34,7 +35,7 @@ export function TransfersAssignmentsSection({
   onAddContact,
   onUpdateContact,
 }: TransfersAssignmentsSectionProps) {
-  const persisted = useMemo(() => getPersistedRealEstateTransfer(sheet), [sheet.decisions])
+  const persisted = useMemo(() => getPersistedRealEstateTransfer(sheet), [sheet])
 
   const [form, setForm] = useState<RealEstateTransferFormState>(() =>
     buildFormStateFromDesignSheet(sheet, matter, contacts),
@@ -82,11 +83,13 @@ export function TransfersAssignmentsSection({
   ) => {
     setForm(nextForm)
     onChange('decisions', prevSheet => commitRealEstateTransferToSheet(prevSheet, nextForm, {
-      selectedDocs: Array.from(meta?.selectedDocs ?? selectedDocs),
-      uploadName: meta?.uploadName !== undefined ? meta.uploadName : uploadName,
-      hasExtracted: meta?.hasExtracted !== undefined ? meta.hasExtracted : hasExtracted,
+      ...(meta?.selectedDocs !== undefined
+        ? { selectedDocs: Array.from(meta.selectedDocs) }
+        : {}),
+      ...(meta?.uploadName !== undefined ? { uploadName: meta.uploadName } : {}),
+      ...(meta?.hasExtracted !== undefined ? { hasExtracted: meta.hasExtracted } : {}),
     }))
-  }, [onChange, selectedDocs, uploadName, hasExtracted])
+  }, [onChange])
 
   const handleFormChange = (nextForm: RealEstateTransferFormState) => {
     commit(nextForm)
@@ -99,12 +102,16 @@ export function TransfersAssignmentsSection({
 
   const handleUploadNameChange = (name: string | null) => {
     setUploadName(name)
-    commit(form, { uploadName: name })
+    onChange('decisions', prevSheet => setPersistedRealEstateTransfer(prevSheet, {
+      uploadName: name,
+    }))
   }
 
   const handleHasExtractedChange = (value: boolean) => {
     setHasExtracted(value)
-    commit(form, { hasExtracted: value })
+    onChange('decisions', prevSheet => setPersistedRealEstateTransfer(prevSheet, {
+      hasExtracted: value,
+    }))
   }
 
   const adaptAdd = async (data: Omit<PickerContact, 'id'>): Promise<PickerContact> => {

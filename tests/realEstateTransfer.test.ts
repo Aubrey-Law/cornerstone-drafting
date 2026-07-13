@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import PizZip from 'pizzip'
 import {
   coerceRealEstateTransferFields,
   fieldsToTemplateData,
@@ -9,8 +10,10 @@ import {
   emptyRealEstateTransferFormState,
   formatBeneficialOwners,
   formatGrantees,
+  mergeExtractedDeedFields,
   suggestRealtyTrustNames,
 } from '@/lib/realEstateTransfer/formState'
+import { REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT } from '@/lib/realEstateTransfer/extract'
 import { renderRealEstateTransferPackage } from '@/lib/realEstateTransfer/generate'
 
 describe('coerceRealEstateTransferFields', () => {
@@ -136,6 +139,63 @@ describe('buildTemplateFields', () => {
     expect(fields.prior_deed_date).toBe('2015-01-01')
     expect(fields.certificate_number).toBe('999')
   })
+
+  it('prefers the uploaded deed property over the client contact address', () => {
+    const form = {
+      ...emptyRealEstateTransferFormState(),
+      clientPropertyAddress: '1 Client Home Road',
+      clientPropertyCity: 'Boston',
+      clientPropertyState: 'MA',
+      clientPropertyCounty: 'Suffolk',
+      deedFields: {
+        property_address: '99 Transferred Property Lane',
+        property_city: 'Newton',
+        property_state: 'MA',
+        property_county: 'Middlesex',
+      },
+    }
+
+    const fields = buildTemplateFields(form)
+    expect(fields.property_address).toBe('99 Transferred Property Lane')
+    expect(fields.property_city).toBe('Newton')
+    expect(fields.property_county).toBe('Middlesex')
+  })
+})
+
+describe('mergeExtractedDeedFields', () => {
+  it('keeps client contact address separate while retaining extracted deed property data', () => {
+    const form = {
+      ...emptyRealEstateTransferFormState(),
+      clientPropertyAddress: '1 Client Home Road',
+      clientPropertyCity: 'Boston',
+    }
+
+    const merged = mergeExtractedDeedFields(form, {
+      grantor: 'Jane Doe',
+      property_address: '99 Transferred Property Lane',
+      property_city: 'Newton',
+    })
+
+    expect(merged.clientPropertyAddress).toBe('1 Client Home Road')
+    expect(merged.clientPropertyCity).toBe('Boston')
+    expect(merged.deedFields.property_address).toBe('99 Transferred Property Lane')
+    expect(merged.deedFields.property_city).toBe('Newton')
+  })
+})
+
+describe('deed extraction prompt', () => {
+  it('maps current titleholders to proposed grantors and distinguishes recording references', () => {
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain(
+      'Set grantor to the current vested owner or owners shown as grantee(s)',
+    )
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain('Omit grantee')
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain(
+      'recording information for the uploaded deed itself',
+    )
+    expect(REAL_ESTATE_TRANSFER_EXTRACT_SYSTEM_PROMPT).toContain(
+      'Do not use an older deed citation',
+    )
+  })
 })
 
 describe('renderRealEstateTransferPackage', () => {
@@ -168,6 +228,15 @@ describe('renderRealEstateTransferPackage', () => {
     expect(result.contentType).toContain('wordprocessingml')
     expect(result.filename).toMatch(/Deed/)
     expect(result.buffer.byteLength).toBeGreaterThan(1000)
+
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(xml).toContain('Jane Doe')
+    expect(xml).toContain('1 Main Street')
+    expect(xml).toContain('Lot 1 on Plan Book 10 Page 5.')
+    expect(xml).toContain('12345')
+    expect(xml).toContain('67')
+    expect(xml).toContain('2018-03-15')
+    expect(xml).toContain('456789')
   })
 
   it('renders a ZIP when multiple documents are selected', () => {
