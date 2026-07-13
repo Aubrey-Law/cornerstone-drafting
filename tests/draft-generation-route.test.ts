@@ -31,8 +31,11 @@ describe('matter draft generation route', () => {
       source.indexOf('type Params'),
     )
 
-    expect(fallbackSection).toContain('Authorization: `Bearer ${token}`')
-    expect(fallbackSection.match(/Authorization: `Bearer \$\{token\}`/g)).toHaveLength(2)
+    expect(fallbackSection).toContain('function fallbackAuthHeaders')
+    expect(fallbackSection).toContain('if (token) return { Authorization: `Bearer ${token}` }')
+    expect(fallbackSection).toContain("const cookie = req.headers.get('cookie')")
+    expect(fallbackSection).toContain('return cookie ? { Cookie: cookie } : {}')
+    expect(fallbackSection.match(/\.\.\.authHeaders/g)).toHaveLength(2)
   })
 
   it('validates R2 settings before upload attempts', () => {

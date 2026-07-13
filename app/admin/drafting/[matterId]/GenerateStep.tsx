@@ -214,6 +214,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
   const canGenerate =
     hasDesignSheet &&
     hubMatter.includedDocumentLabels.length > 0
+  const authReady = Boolean(accessToken)
   const preflightReady = preflight?.matterId === matterId
   const selectedCount = preflight
     ? preflight.documentsToGenerate.filter(d => selectedDocs.has(d.filename)).length
@@ -543,19 +544,19 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           <div className="mt-4 flex flex-wrap gap-2">
             <Button
               onClick={() => handlePreflight()}
-              disabled={!canGenerate || busy !== null}
+              disabled={!authReady || !canGenerate || busy !== null}
               variant="outline"
               className="gap-1.5 text-xs"
-              title={!canGenerate ? 'Complete design sheet and document selections first' : 'Check source data before generating drafts'}
+              title={!authReady ? 'Signing in...' : !canGenerate ? 'Complete design sheet and document selections first' : 'Check source data before generating drafts'}
             >
               {busy === 'preflight' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-              {busy === 'preflight' ? 'Checking…' : preflightReady ? 'Re-run preflight' : 'Run Preflight'}
+              {busy === 'preflight' ? 'Checking…' : !authReady ? 'Signing in…' : preflightReady ? 'Re-run preflight' : 'Run Preflight'}
             </Button>
             <Button
               onClick={handleGenerate}
-              disabled={!preflightReady || !preflight?.canGenerate || selectedCount === 0 || busy !== null}
+              disabled={!authReady || !preflightReady || !preflight?.canGenerate || selectedCount === 0 || busy !== null}
               className="gap-1.5 bg-brand-navy text-xs text-white hover:bg-brand-navy/90"
-              title={preflightReady && selectedCount === 0 ? 'Select at least one document to generate' : undefined}
+              title={!authReady ? 'Signing in...' : preflightReady && selectedCount === 0 ? 'Select at least one document to generate' : undefined}
             >
               {busy === 'generate' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

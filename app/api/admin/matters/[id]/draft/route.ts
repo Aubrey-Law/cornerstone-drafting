@@ -167,7 +167,7 @@ function mergeDraftWarnings(...groups: string[][]): string[] {
 async function generateFallbackFiles(
   req: NextRequest,
   matterRef: string,
-  token: string,
+  authHeaders: Record<string, string>,
   payload: DraftPayload,
 ): Promise<Array<{ filename: string; buffer: Buffer }>> {
   const baseUrl = getBaseUrl(req)
@@ -179,7 +179,7 @@ async function generateFallbackFiles(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        ...authHeaders,
       },
       body: JSON.stringify({ matter_id: matterRef, doc_type: docType }),
     })
@@ -194,7 +194,7 @@ async function generateFallbackFiles(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        ...authHeaders,
       },
       body: JSON.stringify({
         text: draftBody.text,
@@ -221,6 +221,12 @@ async function generateFallbackFiles(
   }
 
   return files
+}
+
+function fallbackAuthHeaders(req: NextRequest, token: string | null): Record<string, string> {
+  if (token) return { Authorization: `Bearer ${token}` }
+  const cookie = req.headers.get('cookie')
+  return cookie ? { Cookie: cookie } : {}
 }
 
 function tryParseJson<T extends object>(raw: string): Partial<T> {
@@ -351,14 +357,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       // payload itself has docs to draft. Otherwise propagate the error.
       const derivedDocTypes = deriveDocTypes(payload)
       if (derivedDocTypes.length > 0) {
-        if (!token) {
+        const authHeaders = fallbackAuthHeaders(req, token)
+        if (!authHeaders.Authorization && !authHeaders.Cookie) {
           return NextResponse.json(
             { error: 'Draft fallback requires an active admin session. Refresh and try again.' },
             { status: 401 }
           )
         }
         generationEngine = pythonFallbackEngineLabel()
-        generatedFiles = await generateFallbackFiles(req, canonicalMatterId, token, payload)
+        generatedFiles = await generateFallbackFiles(req, canonicalMatterId, authHeaders, payload)
       } else if (assetTransferDocTypes.length === 0) {
         return NextResponse.json(
           {
