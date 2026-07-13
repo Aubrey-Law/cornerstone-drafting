@@ -202,7 +202,23 @@ Optional: **Settings → Environment Variables** → **Enable access to System E
 
 ## Not used in this app
 
-- Lawmatics, Cal.com, DocuSeal / SignWell
+- Lawmatics, DocuSeal / SignWell
 - Leads CRM / unified admin inbox / AI email triage
 - Portal hostname split (`NEXT_PUBLIC_PORTAL_HOST`) — single host, role-based routing
 - Full 12-category email settings matrix from aubrey-law-app
+
+## Cal.com webhooks
+
+| Variable | Purpose |
+|----------|---------|
+| `CALCOM_WEBHOOK_SECRET` | HMAC secret for `X-Cal-Signature-256` verification on `/api/webhooks/calcom` |
+
+**Cal.com dashboard setup:**
+
+1. Settings → Developer → Webhooks → Add webhook
+2. Subscriber URL: `https://<production-host>/api/webhooks/calcom`
+3. Triggers: `BOOKING_CREATED`, `BOOKING_RESCHEDULED`, `BOOKING_CANCELLED`
+4. Secret: same value as `CALCOM_WEBHOOK_SECRET`
+5. Local dev: tunnel to `http://localhost:3002` (e.g. ngrok or cloudflared)
+
+Booking metadata from Cal.com embeds (`metadata.leadId`, `metadata.matterId`) improves linking; without it, matching falls back to attendee email and auto-creates leads for discovery/PMPS event types.
