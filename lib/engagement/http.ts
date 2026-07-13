@@ -1,6 +1,20 @@
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isSupportedWorkspaceDefinition } from '@/components/engagement/workspaceState'
+import { getAgreement } from './repository'
+
+type EngagementSnapshot = {
+  practiceArea?: string
+  clientMode?: string
+  scopeKey?: string
+  legalPlan?: unknown
+}
+
+type ScopedAgreement = {
+  matter_id?: string | null
+  lead_id?: string | null
+  active_revision?: { input_snapshot?: EngagementSnapshot | null } | null
+}
 
 export async function requireEngagementStaff() {
   const auth = await getCachedClaims()
@@ -11,10 +25,10 @@ export async function requireEngagementStaff() {
 }
 
 export async function getScopedAgreement(id: string) {
-  const { data } = await getAdminClient().from('engagement_agreements').select('*, active_revision:engagement_agreement_revisions!active_revision_id(*), recipients:engagement_agreement_recipients(*)').eq('id', id).maybeSingle()
-  const snapshot = (data as any)?.active_revision?.input_snapshot
+  const data = await getAgreement(getAdminClient(), id) as ScopedAgreement
+  const snapshot = data.active_revision?.input_snapshot
   if (!data || !snapshot || !isSupportedWorkspaceDefinition({ matterId:data.matter_id, leadId:data.lead_id, ...snapshot })) throw new Error('Engagement agreement not found or unavailable')
-  return data as any
+  return data
 }
 
 export function engagementHttpError(error: unknown) {

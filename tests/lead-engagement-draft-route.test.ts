@@ -10,7 +10,8 @@ const source = fs.readFileSync(
 describe('lead engagement draft route', () => {
   it('only resumes workspace-loadable draft agreements', () => {
     expect(source).toContain('isSupportedWorkspaceDefinition')
-    expect(source).toContain('active_revision:engagement_agreement_revisions!active_revision_id(input_snapshot)')
+    expect(source).toContain('active_revision_id')
+    expect(source).toContain("from('engagement_agreement_revisions')")
     expect(source).toContain('canOpenWorkspace(existing')
     expect(source).toContain('createAgreementDraft')
   })

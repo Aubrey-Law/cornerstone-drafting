@@ -3,6 +3,9 @@ import type { EngagementInput } from './types'
 import { verifyRevisionApproval } from './approval'
 
 type Json = Record<string, unknown> | unknown[]
+type AgreementRow = Record<string, unknown> & {
+  active_revision_id: string | null
+}
 
 export interface AgreementDraftInput {
   matterId?: string
@@ -59,9 +62,33 @@ export async function createAgreementRevision(
 }
 
 export async function getAgreement(client: SupabaseClient, agreementId: string) {
-  return one(client.from('engagement_agreements').select(
-    '*, active_revision:engagement_agreement_revisions!active_revision_id(*), recipients:engagement_agreement_recipients(*)',
-  ).eq('id', agreementId).single())
+  const agreement = await one<AgreementRow>(client
+    .from('engagement_agreements')
+    .select('*')
+    .eq('id', agreementId)
+    .single())
+
+  const activeRevision = agreement.active_revision_id
+    ? await one(client
+      .from('engagement_agreement_revisions')
+      .select('*')
+      .eq('agreement_id', agreementId)
+      .eq('id', agreement.active_revision_id)
+      .single())
+    : null
+
+  const { data: recipients, error: recipientsError } = await client
+    .from('engagement_agreement_recipients')
+    .select('*')
+    .eq('agreement_id', agreementId)
+    .order('recipient_order', { ascending: true })
+  if (recipientsError) throw new Error(recipientsError.message)
+
+  return {
+    ...agreement,
+    active_revision: activeRevision,
+    recipients: recipients ?? [],
+  }
 }
 
 export async function claimAgreementSend(client: SupabaseClient, input: {

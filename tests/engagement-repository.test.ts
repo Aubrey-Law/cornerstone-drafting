@@ -93,6 +93,7 @@ describe('engagement repository source shape', () => {
     expect(source).toContain("client.rpc('claim_engagement_agreement_send'")
     expect(source).toContain("client.rpc('create_engagement_agreement_revision'")
     expect(source).not.toContain("client.from('engagement_agreement_revisions').insert")
+    expect(source).not.toContain('engagement_agreement_revisions!active_revision_id')
     expect(source).toContain('verifyRevisionApproval(input.approvalToken')
     expect(source).toContain('p_approval_nonce: approval.claims.nonce')
     expect(source).not.toContain('approvalNonce: string')

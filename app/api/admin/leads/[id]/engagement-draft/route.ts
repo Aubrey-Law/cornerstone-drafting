@@ -8,6 +8,7 @@ type ExistingAgreement = {
   id: string
   matter_id: string | null
   lead_id: string | null
+  active_revision_id: string | null
   active_revision?: { input_snapshot?: Record<string, unknown> | null } | null
 }
 
@@ -28,7 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const admin = getAdminClient()
   const { data: existing } = await admin
     .from('engagement_agreements')
-    .select('id, matter_id, lead_id, active_revision:engagement_agreement_revisions!active_revision_id(input_snapshot)')
+    .select('id, matter_id, lead_id, active_revision_id')
     .eq('lead_id', id)
     .in('status', ['draft', 'ready', 'failed'])
     .order('created_at', { ascending: false })
@@ -36,6 +37,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .maybeSingle()
 
   const existingAgreement = existing as ExistingAgreement | null
+  if (existingAgreement?.active_revision_id) {
+    const { data: activeRevision } = await admin
+      .from('engagement_agreement_revisions')
+      .select('input_snapshot')
+      .eq('agreement_id', existingAgreement.id)
+      .eq('id', existingAgreement.active_revision_id)
+      .maybeSingle()
+    existingAgreement.active_revision = activeRevision
+  }
+
   if (canOpenWorkspace(existingAgreement)) {
     return Response.json({ agreementId: existingAgreement.id })
   }
