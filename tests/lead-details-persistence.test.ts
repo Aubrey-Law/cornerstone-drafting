@@ -46,7 +46,8 @@ describe('lead details validation', () => {
       email: 'jane@example.com', phone: '617-555-0100', dateOfBirth: '1980-04-03',
       addressLine1: '10 Main St', addressLine2: null, city: 'Boston', state: 'MA',
       zip: '02108', county: null, maritalStatus: 'married', practiceArea: 'EP',
-      source: 'Referral', status: 'lead', fee: 4500,
+      source: 'Referral', status: 'lead', fee: 4500, urgency: null,
+      estimatedEstateValue: null, hasMinorChildren: null, qualificationNotes: null,
       spouse: { firstName: 'John', middleName: null, lastName: 'Doe', preferredName: null,
         email: 'john@example.com', phone: null, dateOfBirth: null },
     })
@@ -62,6 +63,17 @@ describe('lead details validation', () => {
 
   it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid fee %s', fee => {
     expect(() => validateLeadDetails({ ...completeInput, fee })).toThrow(/fee/i)
+  })
+
+  it('accepts the lean qualification fields', () => {
+    const result = validateLeadDetails({
+      ...completeInput,
+      urgency: 'high',
+      estimatedEstateValue: 2_500_000,
+      hasMinorChildren: true,
+      qualificationNotes: 'Needs a trust review.',
+    })
+    expect(result).toMatchObject({ urgency: 'high', estimatedEstateValue: 2_500_000, hasMinorChildren: true, qualificationNotes: 'Needs a trust review.' })
   })
 
   it.each(['prospect', 'converted', ''])('rejects invalid status %s', status => {

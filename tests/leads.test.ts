@@ -85,6 +85,27 @@ describe('lead edit and delete source shape', () => {
 })
 
 describe('lead status pipeline source shape', () => {
+  it('shows compact pipeline insights based on existing lead and activity data', () => {
+    const page = read('app/admin/leads/page.tsx')
+    const client = read('app/admin/leads/LeadsClient.tsx')
+    const insights = read('components/leads/LeadPipelineInsights.tsx')
+    expect(page).toContain("from('lead_activity')")
+    expect(page).toContain('last_activity_at')
+    expect(client).toContain('LeadPipelineInsights')
+    expect(insights).toContain('Needs attention')
+    expect(insights).toContain('Quoted pipeline')
+  })
+
+  it('keeps qualification fields on client_intake and in the transactional lead RPC', () => {
+    const migration = read('supabase/migrations/20260731000000_lite_lead_pipeline_insights.sql')
+    expect(migration).toContain('alter table public.client_intake')
+    expect(migration).toContain('lead_urgency')
+    expect(migration).toContain('taxable_estate')
+    expect(migration).toContain('has_minor_children')
+    expect(migration).toContain('qualification_notes')
+    expect(migration).toContain('create or replace function public.update_lead_details')
+  })
+
   it('leads page filters to lead-flow rows only', () => {
     const source = read('app/admin/leads/page.tsx')
     expect(source).toContain("not('lead_status', 'is', null)")

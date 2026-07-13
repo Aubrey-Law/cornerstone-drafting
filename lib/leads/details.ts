@@ -15,6 +15,10 @@ const optionalEmail = z.preprocess(
   z.string().email('Invalid email').transform(value => value.toLowerCase()).nullable(),
 )
 const optionalDate = z.preprocess(blankToNull, z.string().date().nullable())
+const optionalNumber = z.preprocess(
+  blankToNull,
+  z.number().finite('Invalid amount').nonnegative('Invalid amount').nullable(),
+)
 
 const spouseSchema = z.object({
   firstName: z.string().trim().min(1, 'Spouse first name is required'),
@@ -45,6 +49,10 @@ const leadDetailsSchema = z.object({
   source: optionalText,
   status: z.enum(['lead', 'hired', 'lost'], { message: 'Invalid lead status' }),
   fee: z.preprocess(blankToNull, z.number().finite('Invalid fee').nonnegative('Invalid fee').nullable()),
+  urgency: z.preprocess(blankToNull, z.enum(['low', 'normal', 'high']).nullable()),
+  estimatedEstateValue: optionalNumber,
+  hasMinorChildren: z.preprocess(value => value ?? null, z.boolean().nullable()),
+  qualificationNotes: optionalText,
   spouse: z.preprocess(value => value ?? null, spouseSchema.nullable()),
 })
 

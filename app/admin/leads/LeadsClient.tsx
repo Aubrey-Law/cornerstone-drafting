@@ -11,6 +11,7 @@ import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { formatDate } from '@/lib/utils'
 import { SendEngagementDialog } from './SendEngagementDialog'
 import LawmaticsImportDialog from '../matters/LawmaticsImportDialog'
+import { LeadPipelineInsights } from '@/components/leads/LeadPipelineInsights'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -57,6 +58,10 @@ export interface LeadRow {
   engagement_signed_at: string | null
   engagement_fee_quoted: number | null
   created_at: string | null
+  updated_at: string | null
+  lead_urgency: string | null
+  taxable_estate: number | null
+  last_activity_at: string | null
 }
 
 type LeadFilter = 'open' | 'hired' | 'lost' | 'all'
@@ -357,6 +362,7 @@ export function LeadsClient({
 
   return (
     <div className="space-y-3">
+      <LeadPipelineInsights leads={initialLeads} />
       <div className="flex items-center justify-between gap-2">
         {selectedIds.length > 0 ? (
           <div className="flex items-center gap-2">

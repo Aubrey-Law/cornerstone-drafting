@@ -13,7 +13,7 @@ export default async function LeadsPage() {
   const { data, error } = await admin
     .from('client_intake')
     .select(
-      'id, full_name, first_name, last_name, email, phone, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, created_at',
+      'id, full_name, first_name, last_name, email, phone, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_urgency, taxable_estate, created_at, updated_at',
     )
     .not('lead_status', 'is', null)
     .order('created_at', { ascending: false })
@@ -30,6 +30,26 @@ export default async function LeadsPage() {
     )
   }
 
+  const leads = data ?? []
+  const leadIds = leads.map(lead => lead.id)
+  const latestActivity = new Map<string, string>()
+  if (leadIds.length > 0) {
+    const { data: activity } = await admin
+      .from('lead_activity')
+      .select('lead_id, created_at')
+      .in('lead_id', leadIds)
+      .order('created_at', { ascending: false })
+      .limit(2000)
+    for (const row of activity ?? []) {
+      if (!latestActivity.has(row.lead_id)) latestActivity.set(row.lead_id, row.created_at)
+    }
+  }
+
+  const leadsWithActivity = leads.map(lead => ({
+    ...lead,
+    last_activity_at: latestActivity.get(lead.id) ?? null,
+  }))
+
   return (
     <div className="space-y-4">
       <header>
@@ -40,7 +60,7 @@ export default async function LeadsPage() {
         </p>
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-        <LeadsClient initialLeads={(data ?? []) as LeadRow[]} esignEnabled={isEsignConfigured()} />
+        <LeadsClient initialLeads={leadsWithActivity as LeadRow[]} esignEnabled={isEsignConfigured()} />
       </Suspense>
     </div>
   )

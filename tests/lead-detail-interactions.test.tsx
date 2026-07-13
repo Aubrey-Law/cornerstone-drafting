@@ -24,6 +24,21 @@ describe('lead detail page', () => {
     expect(text.indexOf('Notes')).toBeLessThan(text.indexOf('Activity'))
   })
 
+  it('keeps the activity timeline compact until older events are requested', async () => {
+    const rows = Array.from({ length: 9 }, (_, index) => ({
+      id: `a${index}`,
+      event_type: 'details_updated',
+      title: `Event ${index + 1}`,
+      detail: null,
+      created_at: `2026-07-${String(13 - index).padStart(2, '0')}T12:00:00Z`,
+    }))
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={rows} />)
+    expect(screen.queryByText('Event 9')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Show 1 more' }))
+    expect(screen.getByText('Event 9')).toBeTruthy()
+  })
+
   it('offers top-row Lead, Hired, and Lost status actions and resumes an active agreement', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)
     expect(screen.getByRole('combobox',{name:'Lead status'})).toBeTruthy()
@@ -64,7 +79,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     expect(screen.queryByLabelText('First name')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Edit' }))
-    for (const name of ['First name','Middle name','Last name','Preferred name','Email','Phone','Date of birth','Address line 1','Address line 2','City','State','ZIP','County','Marital status','Practice area','Lead source','Status','Fee','Spouse first name','Spouse middle name','Spouse last name','Spouse preferred name','Spouse email','Spouse phone','Spouse date of birth']) expect(screen.getByLabelText(name)).toBeTruthy()
+    for (const name of ['First name','Middle name','Last name','Preferred name','Email','Phone','Date of birth','Address line 1','Address line 2','City','State','ZIP','County','Marital status','Practice area','Lead source','Status','Fee','Estimated estate value','Urgency','Minor children','Qualification notes','Spouse first name','Spouse middle name','Spouse last name','Spouse preferred name','Spouse email','Spouse phone','Spouse date of birth']) expect(screen.getByLabelText(name)).toBeTruthy()
   })
 
   it('Cancel restores the server snapshot', async () => {
