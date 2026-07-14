@@ -16,6 +16,26 @@ const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred
 afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset() })
 
 describe('lead detail page', () => {
+  it('renders the lead-stage intake workspace', () => {
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    expect(screen.getByRole('region', { name: 'Lead intake' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Update intake' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Import intake' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Send intake' }).length).toBeGreaterThan(0)
+  })
+
+  it('keeps the returned intake link available to copy after sending', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      if (String(input).includes('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response
+      return { ok: true, json: async () => ({ url: 'https://example.test/intake?invite=abc' }) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getAllByRole('button', { name: 'Send intake' })[0])
+    expect(await screen.findByRole('button', { name: 'Copy intake link' })).toBeTruthy()
+    expect(screen.getByText('https://example.test/intake?invite=abc')).toBeTruthy()
+  })
+
   it('places actions first and cards in Details, Notes, Activity order', () => {
     const { container } = render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     const text = container.textContent ?? ''

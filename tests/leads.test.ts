@@ -34,6 +34,14 @@ describe('lead tracking source shape', () => {
     expect(source).toContain('matterId or intakeId is required')
   })
 
+  it('exposes lead-stage text and Word intake import routes', () => {
+    const textRoute = read('app/api/admin/leads/[id]/parse-intake/route.ts')
+    const docxRoute = read('app/api/admin/leads/[id]/parse-intake-docx/route.ts')
+    expect(textRoute).toContain('parseAndSaveLeadIntakeDraft')
+    expect(docxRoute).toContain('parseAndSaveLeadIntakeDraft')
+    expect(docxRoute).toContain('extractDocxText')
+  })
+
   it('conversion is idempotent and carries fee + engagement state', () => {
     const source = read('lib/matters/createFromIntake.ts')
     expect(source).toContain("rpc('convert_lead_to_matter'")

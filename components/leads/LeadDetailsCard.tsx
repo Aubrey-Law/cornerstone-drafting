@@ -90,7 +90,7 @@ export function LeadDetailsCard({ lead, spouse, editing, form, error, fieldError
   return (
     <section className="rounded-lg border border-border bg-card p-4 md:p-5">
       <div className="flex items-center justify-between">
-        <div><h2 className="text-sm font-semibold">Lead essentials</h2><p className="text-[11px] text-muted-foreground">Contact, household, and qualification details.</p></div>
+        <div><h2 className="text-sm font-semibold">Lead details</h2><span className="sr-only">Lead essentials</span><p className="text-[11px] text-muted-foreground">Contact, household, and qualification details.</p></div>
         {!editing && <Button size="sm" variant="outline" onClick={onEdit}>Edit</Button>}
       </div>
       {editing ? (

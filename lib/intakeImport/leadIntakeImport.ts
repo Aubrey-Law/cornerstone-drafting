@@ -346,26 +346,20 @@ async function parseAndSaveIntakeDraft(args: {
 
   if (leadId) {
     const { data: lead, error: leadErr } = await admin
-      .from('leads')
-      .select('id, first_name, last_name, email, phone, practice_area_interest')
+      .from('client_intake')
+      .select('id, first_name, last_name, email, phone, practice_area, user_id')
       .eq('id', leadId)
       .maybeSingle()
     if (leadErr) throw new Error(leadErr.message)
     if (!lead) throw new Error('Lead not found')
 
-    const { data: existing } = await admin
-      .from('client_intake')
-      .select('id, user_id')
-      .eq('lead_id', leadId)
-      .maybeSingle()
-
-    clientIntakeId = (existing?.id as string | null | undefined) ?? null
-    clientUserId = (existing?.user_id as string | null | undefined) ?? null
+    clientIntakeId = leadId
+    clientUserId = (lead.user_id as string | null | undefined) ?? null
     fallbackFirstName = lead.first_name ?? null
     fallbackLastName = lead.last_name ?? null
     fallbackEmail = lead.email ?? null
     fallbackPhone = formatPhoneForStorage(lead.phone)
-    context = `Lead on file: ${lead.first_name ?? ''} ${lead.last_name ?? ''} <${lead.email ?? ''}> ${fallbackPhone ?? ''} (${lead.practice_area_interest ?? 'Estate Planning'}).`
+    context = `Lead on file: ${lead.first_name ?? ''} ${lead.last_name ?? ''} <${lead.email ?? ''}> ${fallbackPhone ?? ''} (${lead.practice_area ?? 'Estate Planning'}).`
   } else if (matterId) {
     const [{ data: matter, error: matterErr }, { data: pipeline, error: pipelineErr }] = await Promise.all([
       admin

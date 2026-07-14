@@ -15,4 +15,11 @@ describe('create and send intake wizard', () => {
     const detail = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailClient.tsx'), 'utf8')
     expect(detail).not.toContain('Intake send is not available yet')
   })
+
+  it('keeps matter import and update controls after lead intake moves upstream', () => {
+    const detail = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailClient.tsx'), 'utf8')
+    expect(detail).toContain('Import intake — paste text or upload Word')
+    expect(detail).toContain('Update intake')
+    expect(detail).toContain('ImportIntakeDialog')
+  })
 })

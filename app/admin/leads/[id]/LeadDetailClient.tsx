@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -11,6 +12,10 @@ import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { LeadNotesCard, type LeadMeetingNote, type LeadNote } from '@/components/leads/LeadNotesCard'
 import { LeadActivityCard } from '@/components/leads/LeadActivityCard'
 import { CallList } from '@/components/calls/CallList'
+import { LeadIntakeCard } from './LeadIntakeCard'
+
+const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
+const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
 
 type LeadRecord = {
   id: string
@@ -38,6 +43,10 @@ type LeadRecord = {
   has_minor_children?: boolean | null
   qualification_notes?: string | null
   intake_sent_at?: string | null
+  intake_completed_at?: string | null
+  intake_status?: string | null
+  user_id?: string | null
+  client_user_id?: string | null
   matter_id?: string | null
 }
 
@@ -123,6 +132,11 @@ export function LeadDetailClient({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [activity, setActivity] = useState(initialActivity)
   const [busy, setBusy] = useState(false)
+  const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
+  const [importIntakeOpen, setImportIntakeOpen] = useState(false)
+  const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
+  const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
+  const [sendingIntake, setSendingIntake] = useState(false)
 
   async function call<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
     const response = await fetch(path, {
@@ -140,6 +154,35 @@ export function LeadDetailClient({
   async function refreshActivity() {
     const json = await call<{ activity?: LeadActivityRow[] }>(`/api/admin/leads/${lead.id}/activity`, undefined, 'GET')
     setActivity(Array.isArray(json.activity) ? json.activity : [])
+  }
+
+  async function sendIntake() {
+    setSendingIntake(true)
+    setError(null)
+    try {
+      const json = await call<{ url?: string }>('/api/admin/intake/send', { intakeId: lead.id })
+      if (typeof json.url === 'string') setIntakeUrl(json.url)
+      setLead(current => ({
+        ...current,
+        intake_sent_at: new Date().toISOString(),
+        intake_status: current.intake_status === 'completed' ? current.intake_status : 'sent',
+      }))
+      await refreshActivity()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not send intake')
+    } finally {
+      setSendingIntake(false)
+    }
+  }
+
+  async function copyIntakeUrl() {
+    if (!intakeUrl) return
+    try {
+      await navigator.clipboard.writeText(intakeUrl)
+      setError(null)
+    } catch {
+      setError('Could not copy intake link')
+    }
   }
 
   function cancel() {
@@ -271,13 +314,13 @@ export function LeadDetailClient({
             <p className="mt-0.5 text-xs text-muted-foreground">{subtitle || 'Prospective client'}</p>
           </div>
           <LeadTopActions
-            busy={busy}
+            busy={busy || sendingIntake}
             intakeSent={Boolean(lead.intake_sent_at)}
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
             matterId={lead.matter_id}
             actionError={editing ? null : error}
-            onIntake={action('/api/admin/intake/send', { intakeId: lead.id })}
+            onIntake={() => void sendIntake()}
             onDraft={action(`/api/admin/leads/${lead.id}/engagement-draft`)}
             onConvert={lead.lead_status === 'hired' && lead.matter_id ? () => router.push(`/admin/matters/${lead.matter_id}`) : action(`/api/admin/leads/${lead.id}/convert`)}
             onStatusChange={status => void persist(status, false)}
@@ -287,6 +330,16 @@ export function LeadDetailClient({
 
       <main className="flex-1 overflow-auto px-4 py-4 md:px-6">
         <div className="mx-auto w-full max-w-6xl space-y-4">
+          <LeadIntakeCard
+            intakeCompleted={Boolean(lead.intake_completed_at || lead.intake_status === 'completed')}
+            intakeId={liveIntakeId ?? lead.id}
+            intakeUrl={intakeUrl}
+            sending={sendingIntake}
+            onOpen={() => setIntakeSheetOpen(true)}
+            onImport={() => setImportIntakeOpen(true)}
+            onSend={() => void sendIntake()}
+            onCopy={() => void copyIntakeUrl()}
+          />
           <LeadDetailsCard
             lead={lead}
             spouse={spouse}
@@ -325,6 +378,38 @@ export function LeadDetailClient({
           <LeadActivityCard activity={activity} />
         </div>
       </main>
+
+      <ImportIntakeDialog
+        open={importIntakeOpen}
+        onOpenChange={setImportIntakeOpen}
+        leadId={lead.id}
+        accessToken={token}
+        parseTextUrl={`/api/admin/leads/${lead.id}/parse-intake`}
+        parseDocxUrl={`/api/admin/leads/${lead.id}/parse-intake-docx`}
+        onParsed={(parsedIntakeId) => {
+          setLiveIntakeId(parsedIntakeId)
+          setImportIntakeOpen(false)
+          setIntakeSheetOpen(true)
+          router.refresh()
+        }}
+      />
+
+      {intakeSheetOpen && (
+        <AdminIntakeSheet
+          leadId={lead.id}
+          clientIntakeId={liveIntakeId}
+          clientUserId={lead.client_user_id ?? lead.user_id ?? null}
+          practiceArea={practiceAreaLabel(lead.practice_area)}
+          clientName={clientName}
+          open={intakeSheetOpen}
+          onClose={() => setIntakeSheetOpen(false)}
+          onIntakeIdChange={setLiveIntakeId}
+          onSubmitted={() => {
+            setIntakeSheetOpen(false)
+            router.refresh()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -3,6 +3,18 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('lite intake import compatibility', () => {
+  it('resolves lead imports against the intake-backed lead row', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'lib/intakeImport/leadIntakeImport.ts'),
+      'utf8',
+    )
+    const leadBranch = source.slice(source.indexOf('if (leadId)'), source.indexOf("} else if (matterId)"))
+    expect(source).toContain(".from('client_intake')")
+    expect(leadBranch).toContain(".from('client_intake')")
+    expect(leadBranch).toContain("clientIntakeId = leadId")
+    expect(leadBranch).not.toContain(".from('leads')")
+  })
+
   it('does not select matters.lead_id during matter intake import', () => {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'lib/intakeImport/leadIntakeImport.ts'),
