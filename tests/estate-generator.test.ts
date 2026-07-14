@@ -321,6 +321,30 @@ describe('estate generator mapping', () => {
     })
   })
 
+  it('projects design-summary identity, marriage, ZIP, and asset fields', () => {
+    const data = toEstateGeneratorData(payload({
+      client: { zip: '02108' },
+      spouse: {
+        first_name: 'John',
+        last_name: 'Example',
+        full_name: 'John Example',
+        aka: 'Johnny Example',
+        preferred_pronoun: null,
+        dob: '1972-02-02',
+      },
+      marriage: { date: '2001-06-15' },
+      assets: [
+        { category: 'financial', description: 'Checking', institution: null, estimated_value: 125000, notes: null, from_intake: true },
+        { category: 'real_property', description: 'Home', institution: null, estimated_value: 875000, notes: null, from_intake: true },
+      ],
+    }))
+
+    expect(data.client.zip).toBe('02108')
+    expect(data.spouse?.aka).toBe('Johnny Example')
+    expect(data.marriage?.date).toBe('June 15, 2001')
+    expect(data.assets.total_gross_value).toBe('$1,000,000')
+  })
+
   it('builds will personal representative and administration data from the draft payload', () => {
     const data = toEstateGeneratorData(payload({
       fiduciaries: {

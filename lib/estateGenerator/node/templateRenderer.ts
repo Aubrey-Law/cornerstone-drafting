@@ -191,6 +191,9 @@ function isStructurallyBalanced(xml: string): boolean {
   return tagImbalance(xml, 'p') === 0
     && tagImbalance(xml, 'r') === 0
     && tagImbalance(xml, 't') === 0
+    && tagImbalance(xml, 'tbl') === 0
+    && tagImbalance(xml, 'tr') === 0
+    && tagImbalance(xml, 'tc') === 0
 }
 
 // A standalone {% if %}/{% endif %}/{% for %} tag authored in its own Word

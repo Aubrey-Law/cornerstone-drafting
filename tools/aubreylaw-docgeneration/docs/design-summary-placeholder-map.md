@@ -35,6 +35,16 @@ detailed uses a `{% for child in children %}` loop), `trust.*`,
 `healthcare.agent/spouse_agent.*`, `guardians.*` (incl. `short_term_*`),
 `specific_gifts[]`, and the derived flags below.
 
+Additional design-summary fields:
+
+| Template field | Source |
+| --- | --- |
+| `spouse.aka` | Design sheet spouse AKA / prior name |
+| `marriage.date` | Design sheet marriage date, formatted for display |
+| `client.zip` | Design sheet client ZIP code |
+| `assets.total_gross_value` | Sum of populated design-sheet asset values |
+| `trust.residual_beneficiary` | Stored residuary-beneficiary selection |
+
 ## Conditional logic
 
 | Condition | Affected content |
@@ -54,7 +64,6 @@ detailed uses a `{% for child in children %}` loop), `trust.*`,
 - The worksheet caps the children grid at three rows (`children[0..2]`); a fourth
   child renders no extra row. Switch to the detailed doc's loop pattern if an
   unbounded list is required.
-- Worksheet fields with no generator source are left as manual blanks: design
-  meeting date, spouse AKA / date of marriage, "responsible for funding,"
-  trustee/guardian relationship columns, primary beneficiaries, and the MA
-  estate-tax estimate/approach.
+- Fiduciary tables conditionally render each supported successor row only when
+  that fiduciary is populated. The design meeting date, "responsible for
+  funding," and MA estate-tax planning approach remain manual entries.

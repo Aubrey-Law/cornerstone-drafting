@@ -4,13 +4,19 @@
     "aka": "Jordy",
     "date_of_birth": "January 1, 1970",
     "street_address": "12 Oak Street, Boston, MA 02118",
+    "city": "Boston",
     "county": "Suffolk",
-    "state": "MA"
+    "state": "MA",
+    "zip": "02118"
   },
   "spouse": {
     "exists": true,
     "full_name": "Riley Coupleton",
+    "aka": "Riley Former",
     "date_of_birth": "February 2, 1972"
+  },
+  "marriage": {
+    "date": "June 15, 2001"
   },
   "children": [
     { "full_name": "Sam Coupleton", "relationship": "Child", "date_of_birth": "March 3, 2010", "minor": true },
@@ -29,6 +35,7 @@
   "trust": {
     "name": "The Coupleton Family Trust",
     "display_date": "June 1, 2026",
+    "residual_beneficiary": "Descendants, per stirpes",
     "descendants_distribution": { "method": "staged", "stage_1_age": 25, "stage_2_age": 30, "stage_3_age": 35 },
     "contingent_beneficiary": { "full_name": "Pat Coupleton" },
     "tangible_personal_property": { "distribution_method": "equally among my children" }
@@ -57,12 +64,15 @@
     "primary": { "full_name": "Alex Friend" },
     "successor": { "full_name": "Jamie Friend" },
     "second_successor": { "full_name": "Pat Coupleton" },
-    "short_term_primary": { "full_name": "Nina Neighbor" },
-    "short_term_successor": { "full_name": "Owen Neighbor" }
+    "temporary": { "full_name": "Nina Neighbor" },
+    "temporary_successor": { "full_name": "Owen Neighbor" }
   },
   "specific_gifts": [
     { "beneficiary_name": "Local Animal Shelter", "description": "$5,000", "trigger": "upon my death", "notes": "in memory of our family dog" }
   ],
   "owns_real_property": true,
+  "assets": {
+    "total_gross_value": "$1,000,000"
+  },
   "execution": {}
 }

@@ -56,6 +56,12 @@ describe('design-summary package', () => {
       expect(text).toContain('Jordan Coupleton')
       expect(text).toContain('Riley Coupleton')
     }
+    const worksheet = visibleText(result.files[1].buffer)
+    expect(worksheet).toContain('Riley Former')
+    expect(worksheet).toContain('June 15, 2001')
+    expect(worksheet).toContain('02118')
+    expect(worksheet).toContain('$1,000,000')
+    expect(worksheet).toContain('Descendants, per stirpes')
   })
 
   it('omits spouse, trust, and guardian sections for a single will-only client', async () => {

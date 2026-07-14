@@ -49,6 +49,9 @@ export interface DraftPayload {
     preferred_pronoun: string | null
     dob: string | null
   } | null
+  marriage?: {
+    date: string | null
+  }
   children: Array<{
     full_name: string
     dob: string | null

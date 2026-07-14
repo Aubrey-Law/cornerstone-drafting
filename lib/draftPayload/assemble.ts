@@ -425,6 +425,9 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
       ),
     },
     spouse,
+    marriage: {
+      date: designSheet.marriage_date ?? null,
+    },
     children: designChildren,
     family_provisions: draftPayloadFamilyProvisions(designSheet),
     trust,
