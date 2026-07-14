@@ -373,7 +373,10 @@ function ExpressDesignSheetImpl({
               {orderedSections.map(item => {
                 const summary = sectionSummaries[item.id]
                 const complete = summary?.status === 'complete'
-                const collapsed = complete && !expandAll && !expandedCompleted.has(item.id)
+                const collapsed = complete
+                  && !expandAll
+                  && !expandedCompleted.has(item.id)
+                  && activeSection !== item.id
                 const hidden = complete && !showCompleted && collapsed
                 return (
                 <section
