@@ -55,7 +55,7 @@ export interface DraftingHubMatter {
   selectedTemplates: string[]
   /** Count of current (non-superseded) drafts. */
   draftCount: number
-  /** Current drafts (most recent first), capped for display. */
+  /** Current drafts, most recent first. Hub previews may cap this collection. */
   recentDrafts: DraftingHubDocument[]
   /** Drafts replaced by a later generation run; hidden unless explicitly shown. */
   supersededDrafts: DraftingHubDocument[]
@@ -469,7 +469,9 @@ export async function fetchDraftingHubMatter(matterId: string): Promise<{
       matterNumber: (matterNumbersRes.data as { matter_number: string | null } | null)?.matter_number ?? null,
       selectedTemplates,
       currentDraftCount: currentDrafts.length,
-      recentDrafts: currentDrafts.slice(0, 5),
+      // The matter workspace is the review surface, so it must receive every
+      // current draft. Only the multi-matter hub preview is capped at five.
+      recentDrafts: currentDrafts,
       supersededDrafts,
       supersededDraftCount: supersededDrafts.length,
     }),

@@ -17,10 +17,7 @@ const DEFAULT_POUR_OVER_ALTERNATE_DISPOSITION_TEXT = 'If incorporation by refere
 const BLANK_DOC_DATE = '________________, 20___'
 const BLANK_ORDINAL_DOC_DATE = '_____ day of _________________, 20___'
 const BLANK_SIGNING_COUNTY = '__________________________'
-// The notary supplies their commission expiration via their own seal/stamp at
-// signing, so when no value is provided we render nothing after the
-// "My Commission Expires:" label rather than an empty fill line.
-const BLANK_NOTARY_COMMISSION = ''
+const BLANK_NOTARY_COMMISSION = '__________________________'
 
 export interface BuildNodeEstateContextArgs {
   data: NodeEstateData
@@ -112,10 +109,15 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   execution.display_doc_date = signingScheduled && isPresent(execution.doc_date)
     ? execution.doc_date
     : BLANK_DOC_DATE
-  execution.display_ordinal_doc_date = signingScheduled
+  const ordinalDocDate = signingScheduled
     && isPresent(execution.ordinal_doc_date)
     ? execution.ordinal_doc_date
     : BLANK_ORDINAL_DOC_DATE
+  // Some legacy templates still reference ordinal_doc_date directly. Keep the
+  // raw and display aliases aligned so an unscheduled signing renders a usable
+  // fill-in date instead of a visible [[ MISSING ]] marker.
+  execution.ordinal_doc_date = ordinalDocDate
+  execution.display_ordinal_doc_date = ordinalDocDate
   execution.display_signing_county = signingScheduled && isPresent(executionSigningCounty)
     ? executionSigningCounty
     : BLANK_SIGNING_COUNTY

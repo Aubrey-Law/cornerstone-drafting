@@ -67,6 +67,14 @@ describe('drafting hub and workspace', () => {
     expect(review).toContain('<Trash2 className="h-3.5 w-3.5" />')
   })
 
+  it('loads every current draft into the matter review workspace', () => {
+    const query = fs.readFileSync(path.join(process.cwd(), 'lib/queries/drafting.ts'), 'utf8')
+    const matterQuery = query.slice(query.indexOf('export async function fetchDraftingHubMatter('))
+
+    expect(matterQuery).toContain('recentDrafts: currentDrafts,')
+    expect(matterQuery).not.toContain('recentDrafts: currentDrafts.slice(0, 5)')
+  })
+
   it('lets admins approve one recent draft into client review through the audited document API', () => {
     const review = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/ReviewStep.tsx'), 'utf8')
 
