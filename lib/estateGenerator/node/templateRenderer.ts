@@ -45,37 +45,98 @@ export function repairSplitNunjucksInXml(xml: string): string {
   let i = 0
 
   while (i < xml.length) {
-    const openBlock = xml.indexOf('{%', i)
-    const openVar = xml.indexOf('{{', i)
-    let next = -1
-    let isBlock = false
-
-    if (openBlock === -1 && openVar === -1) {
+    const opening = findVisibleOpening(xml, i)
+    if (!opening) {
       result += xml.slice(i)
       break
     }
-    if (openBlock !== -1 && (openVar === -1 || openBlock < openVar)) {
-      next = openBlock
-      isBlock = true
-    } else {
-      next = openVar
+
+    result += xml.slice(i, opening.start)
+    const closeToken = opening.kind === 'block' ? '%}' : '}}'
+    const paragraphEnd = xml.indexOf('</w:p>', opening.end)
+    const scanEnd = paragraphEnd === -1 ? xml.length : paragraphEnd
+    const end = findVisibleTokenEnd(xml, opening.end, closeToken, scanEnd)
+    if (end === -1) {
+      if (paragraphEnd === -1) {
+        result += xml.slice(opening.start)
+        break
+      }
+      result += xml.slice(opening.start, paragraphEnd + '</w:p>'.length)
+      i = paragraphEnd + '</w:p>'.length
+      continue
     }
 
-    result += xml.slice(i, next)
-    const closeToken = isBlock ? '%}' : '}}'
-    const close = xml.indexOf(closeToken, next + 2)
-    if (close === -1) {
-      result += xml.slice(next)
-      break
-    }
-
-    const end = close + closeToken.length
-    const segment = xml.slice(next, end)
+    const segment = xml.slice(opening.start, end)
     result += segment.includes('<') ? segment.replace(/<[^>]+>/g, '') : segment
     i = end
   }
 
   return result
+}
+
+function findVisibleOpening(
+  xml: string,
+  from: number,
+): { start: number; end: number; kind: 'block' | 'variable' } | null {
+  let openingBrace = -1
+
+  for (let i = from; i < xml.length; i += 1) {
+    if (xml[i] === '<') {
+      const tagEnd = xml.indexOf('>', i + 1)
+      if (tagEnd === -1) return null
+      i = tagEnd
+      continue
+    }
+
+    if (openingBrace !== -1) {
+      if (xml[i] === '%') return { start: openingBrace, end: i + 1, kind: 'block' }
+      if (xml[i] === '{') return { start: openingBrace, end: i + 1, kind: 'variable' }
+      openingBrace = xml[i] === '{' ? i : -1
+      continue
+    }
+
+    if (xml[i] === '{') openingBrace = i
+  }
+
+  return null
+}
+
+/**
+ * Locate a token in the text Word displays while ignoring OOXML tags. Word can
+ * put the first and second closing braces in different runs, for example
+ * `}</w:t>...<w:t>}`. A raw `indexOf('}}')` cannot see that valid delimiter.
+ */
+function findVisibleTokenEnd(
+  xml: string,
+  from: number,
+  token: string,
+  limit: number,
+): number {
+  let matched = 0
+
+  for (let i = from; i < limit; i += 1) {
+    if (xml[i] === '<') {
+      const tagEnd = xml.indexOf('>', i + 1)
+      if (tagEnd === -1 || tagEnd >= limit) return -1
+      i = tagEnd
+      continue
+    }
+
+    if (xml[i] === token[matched]) {
+      matched += 1
+      if (matched === token.length) return i + 1
+    } else {
+      matched = xml[i] === token[0] ? 1 : 0
+    }
+  }
+
+  return -1
+}
+
+function templatePartError(fileName: string, error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error)
+  const locatedMessage = message.replace('(unknown path)', fileName)
+  return new Error(`Template rendering failed in ${locatedMessage}`, { cause: error })
 }
 
 function clientFooterName(context: NodeEstateContext): string {
@@ -256,21 +317,26 @@ export function renderNodeEstateDocxTemplate({
     const file = zip.files[fileName]
     if (file.dir || !fileName.startsWith('word/') || !fileName.endsWith('.xml')) continue
 
-    const rendered = replaceStaticMarkers(
-      renderNodeEstateText(
-        repairSplitNunjucksInXml(
-          stripControlOnlyParagraphs(
-            hoistParagraphConditionals(hoistTableRowControls(file.asText())),
+    let rendered: string
+    try {
+      rendered = replaceStaticMarkers(
+        renderNodeEstateText(
+          repairSplitNunjucksInXml(
+            stripControlOnlyParagraphs(
+              hoistParagraphConditionals(hoistTableRowControls(file.asText())),
+            ),
           ),
+          context,
+          {
+            include_clause: (clauseId: string, state?: string) => clauses.include(clauseId, context, state),
+          },
+          { autoescape: true },
         ),
         context,
-        {
-          include_clause: (clauseId: string, state?: string) => clauses.include(clauseId, context, state),
-        },
-        { autoescape: true },
-      ),
-      context,
-    )
+      )
+    } catch (error) {
+      throw templatePartError(fileName, error)
+    }
 
     // Collect the loud `[[ MISSING: field ]]` holes left for empty values so the
     // caller can report them, then strip the brackets from the regex below so

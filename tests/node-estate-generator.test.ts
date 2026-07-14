@@ -633,6 +633,13 @@ describe('node estate generator text rendering', () => {
     expect(rendered).toBe('I am JANE EXAMPLE. Children: ALEX EXAMPLE; BLAKE EXAMPLE.')
   })
 
+  it('renders the legacy uppercase client-name footer marker', () => {
+    expect(renderNodeEstateText(
+      '{{ CLIENT.FULL_NAME | NAME }}',
+      { client: { full_name: 'Jane Example' } },
+    )).toBe('JANE EXAMPLE')
+  })
+
   it('renders a [[ MISSING: field ]] marker for an empty bare placeholder instead of throwing', () => {
     const zip = new PizZip()
     zip.file(
@@ -664,6 +671,25 @@ describe('node estate generator text rendering', () => {
       expect(repairSplitNunjucksInXml(xml)).toBe(
         '<w:p><w:r><w:t>{% if client.aka %}shown{% endif %}</w:t></w:r></w:p>',
       )
+    })
+
+    it('joins a closing delimiter split across Word proofing runs', () => {
+      const xml = '<w:p><w:r><w:t xml:space="preserve">{{ </w:t></w:r><w:proofErr w:type="spellStart"/><w:r><w:t>execution.display_notary_commission</w:t></w:r><w:r><w:t xml:space="preserve"> }</w:t></w:r><w:proofErr w:type="gramEnd"/><w:r><w:t>}</w:t></w:r></w:p>'
+      expect(repairSplitNunjucksInXml(xml)).toBe(
+        '<w:p><w:r><w:t xml:space="preserve">{{ execution.display_notary_commission }}</w:t></w:r></w:p>',
+      )
+    })
+
+    it('joins an opening control delimiter split across Word proofing runs', () => {
+      const xml = '<w:p><w:r><w:t>{{ healthcare.agent.second_alternate.phone }}{</w:t></w:r><w:proofErr w:type="gramEnd"/><w:r><w:t>% endif %}</w:t></w:r></w:p>'
+      expect(repairSplitNunjucksInXml(xml)).toBe(
+        '<w:p><w:r><w:t>{{ healthcare.agent.second_alternate.phone }}{% endif %}</w:t></w:r></w:p>',
+      )
+    })
+
+    it('does not consume a later paragraph when a delimiter is incomplete', () => {
+      const xml = '<w:p><w:r><w:t>{{ incomplete }</w:t></w:r></w:p><w:p><w:r><w:t>{{ client.full_name }}</w:t></w:r></w:p>'
+      expect(repairSplitNunjucksInXml(xml)).toBe(xml)
     })
   })
 

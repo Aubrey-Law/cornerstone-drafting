@@ -52,7 +52,11 @@ function createEnvironment({ autoescape = false }: RenderNodeEstateTextOptions =
   // markers via the orMissing filter so a draft always renders with its holes
   // visible, rather than crashing on the first empty placeholder.
   const env = new nunjucks.Environment(undefined, { autoescape })
-  env.addFilter('name', value => value == null ? '' : String(value).toUpperCase())
+  const nameFilter = (value: unknown) => value == null ? '' : String(value).toUpperCase()
+  env.addFilter('name', nameFilter)
+  // Older firm templates used an uppercase NAME filter. Keep that narrow alias
+  // so an otherwise valid uploaded master can be reviewed and migrated in place.
+  env.addFilter('NAME', nameFilter)
   env.addFilter('orMissing', (value, label) => isEmptyValue(value) ? missingMarker(String(label)) : value)
   // `optional` renders an empty value as nothing (no MISSING marker) — for fields
   // a draft may legitimately leave blank, e.g. a notary commission supplied by
@@ -71,5 +75,13 @@ export function renderNodeEstateText(
   for (const [key, value] of Object.entries(globals)) {
     env.addGlobal(key, value)
   }
-  return env.renderString(annotateMissing(source), context)
+  const client = context.client
+  const legacyClient = client && typeof client === 'object'
+    ? { ...(client as Record<string, unknown>), FULL_NAME: (client as Record<string, unknown>).full_name }
+    : client
+  return env.renderString(annotateMissing(source), {
+    ...context,
+    // Compatibility for the legacy `{{ CLIENT.FULL_NAME | NAME }}` footer.
+    CLIENT: context.CLIENT ?? legacyClient,
+  })
 }
