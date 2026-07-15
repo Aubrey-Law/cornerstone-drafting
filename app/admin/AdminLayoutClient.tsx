@@ -15,6 +15,7 @@ import {
   PanelLeft,
   Phone,
   Settings,
+  Sparkles,
   Sun,
   UserPlus,
 } from 'lucide-react'
@@ -62,7 +63,8 @@ const navItems: { href: string; label: string; icon: React.ElementType; exact?: 
   { href: '/admin/leads', label: 'Leads', icon: UserPlus },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
-  { href: '/admin/works', label: 'Works', icon: BookOpen },
+  { href: '/admin/assistant', label: 'Assistant', icon: Sparkles },
+  { href: '/admin/works', label: 'Library', icon: BookOpen },
   { href: '/admin/pipeline/aging', label: 'Aging', icon: Clock },
   { href: '/admin/calls', label: 'Calls', icon: Phone },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
