@@ -1,4 +1,4 @@
-import type { DesignSheet } from '@/types/database'
+import type { DesignSheet, StaggeredTier } from '@/types/database'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -289,4 +289,38 @@ export function buildTrustNameSuggestions(
     `The ${clientFirst} Revocable Trust`,
     `The ${familyLast} Family Trust`,
   ]
+}
+
+export interface StaggeredDistributionPreset {
+  label: string
+  tiers: Array<Pick<StaggeredTier, 'age' | 'amount'>>
+}
+
+export const STAGGERED_DISTRIBUTION_PRESETS: StaggeredDistributionPreset[] = [
+  {
+    label: 'All at 30',
+    tiers: [{ amount: 'All', age: 30 }],
+  },
+  {
+    label: '1/2 at 25 and 30',
+    tiers: [
+      { amount: '1/2', age: 25 },
+      { amount: '1/2', age: 30 },
+    ],
+  },
+  {
+    label: '1/3 at 25, 30, 35',
+    tiers: [
+      { amount: '1/3', age: 25 },
+      { amount: '1/3', age: 30 },
+      { amount: '1/3', age: 35 },
+    ],
+  },
+]
+
+export function buildStaggeredTiersFromPreset(
+  preset: StaggeredDistributionPreset,
+  makeId: () => string,
+): StaggeredTier[] {
+  return preset.tiers.map(tier => ({ id: makeId(), ...tier }))
 }

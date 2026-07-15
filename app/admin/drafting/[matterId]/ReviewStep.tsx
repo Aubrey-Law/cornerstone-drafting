@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   CheckCircle2,
+  Combine,
   Download,
   Eye,
   FileText,
@@ -58,6 +59,11 @@ const PromoteDocumentDialog = dynamic(
 
 const DocxViewerPanel = dynamic(
   () => import('@/components/documents/DocxViewerPanel').then(m => ({ default: m.DocxViewerPanel })),
+  { ssr: false },
+)
+
+const CombineWordDraftsDialog = dynamic(
+  () => import('@/components/drafting/CombineWordDraftsDialog').then(m => ({ default: m.CombineWordDraftsDialog })),
   { ssr: false },
 )
 
@@ -146,6 +152,11 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const hidden = (hubMatter?.recentDrafts ?? []).filter(d => deletedIds.has(d.id) || promotedIds.has(d.id)).length
   const draftCount = hubMatter ? Math.max(0, hubMatter.draftCount - hidden) : 0
   const supersededDrafts = (hubMatter?.supersededDrafts ?? []).filter(d => !deletedIds.has(d.id))
+
+  // Combining only works for .docx drafts — the merge embeds each file as an
+  // OOXML altChunk, which legacy .doc binaries don't support.
+  const [combineOpen, setCombineOpen] = useState(false)
+  const combinableDrafts = recentDrafts.filter(d => d.name.toLowerCase().endsWith('.docx'))
 
   // Bulk actions: a full plan is many documents; reviewing and sharing them
   // one at a time is needless clicking.
@@ -360,6 +371,17 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               >
                 {bulkBusy === 'share' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 Share all {bulkShareables.length} ready
+              </Button>
+            )}
+            {combinableDrafts.length > 1 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-[11px]"
+                onClick={() => setCombineOpen(true)}
+              >
+                <Combine className="h-3.5 w-3.5" />
+                Combine into one file
               </Button>
             )}
             <input
@@ -616,6 +638,17 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         onCancel={() => setPendingPromotion(null)}
         onConfirm={confirmPromotion}
       />
+
+      {combineOpen && (
+        <CombineWordDraftsDialog
+          open={combineOpen}
+          onOpenChange={setCombineOpen}
+          documents={combinableDrafts.map(doc => ({ id: doc.id, name: doc.name }))}
+          defaultFilename={hubMatter?.matter.matter_name
+            ? `${hubMatter.matter.matter_name} - Combined Drafts`
+            : undefined}
+        />
+      )}
 
       <AlertDialog open={pendingBulkShare !== null} onOpenChange={open => { if (!open) setPendingBulkShare(null) }}>
         <AlertDialogContent>
