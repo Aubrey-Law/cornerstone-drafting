@@ -145,8 +145,17 @@ export async function combineWordDocuments(docIds: string[], filename?: string):
   }
 
   const disposition = res.headers.get('content-disposition') ?? ''
+  // Prefer the RFC 5987 filename* (exact name, UTF-8) over the ASCII fallback.
+  const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i)
   const filenameMatch = disposition.match(/filename="([^"]+)"/)
-  const downloadName = filenameMatch?.[1] ?? 'combined-documents.docx'
+  let downloadName = filenameMatch?.[1] ?? 'combined-documents.docx'
+  if (encodedMatch) {
+    try {
+      downloadName = decodeURIComponent(encodedMatch[1])
+    } catch {
+      // keep the ASCII fallback
+    }
+  }
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   try {
