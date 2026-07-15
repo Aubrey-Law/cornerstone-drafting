@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react'
 import {
   Briefcase,
   BookOpen,
-  Clock,
   FilePenLine,
   LogOut,
   Menu,
@@ -65,7 +64,6 @@ const navItems: { href: string; label: string; icon: React.ElementType; exact?: 
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
   { href: '/admin/assistant', label: 'Assistant', icon: Sparkles },
   { href: '/admin/works', label: 'Library', icon: BookOpen },
-  { href: '/admin/pipeline/aging', label: 'Aging', icon: Clock },
   { href: '/admin/calls', label: 'Calls', icon: Phone },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
@@ -234,12 +232,12 @@ export default function AdminLayoutClient({
           )}
         >
           {!collapsed ? (
-            <Link href="/admin/matters" className="flex min-w-0 items-center gap-2">
+            <Link href="/admin" className="flex min-w-0 items-center gap-2">
               <Image src="/favicon.svg" alt="" width={28} height={28} />
               <span className="truncate text-sm font-semibold">Cornerstone</span>
             </Link>
           ) : (
-            <Link href="/admin/matters" className="flex items-center justify-center" title="Cornerstone">
+            <Link href="/admin" className="flex items-center justify-center" title="Cornerstone">
               <Image src="/favicon.svg" alt="" width={24} height={24} />
             </Link>
           )}

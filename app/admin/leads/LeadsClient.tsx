@@ -12,6 +12,16 @@ import { formatDate } from '@/lib/utils'
 import { SendEngagementDialog } from './SendEngagementDialog'
 import LawmaticsImportDialog from '../matters/LawmaticsImportDialog'
 import { LeadPipelineInsights } from '@/components/leads/LeadPipelineInsights'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -340,8 +350,9 @@ export function LeadsClient({
     router.refresh()
   }
 
+  const [convertTarget, setConvertTarget] = useState<LeadRow | null>(null)
+
   const handleConvert = async (lead: LeadRow) => {
-    if (!window.confirm(`Create a matter for ${leadName(lead)} now?`)) return
     setBusyLeadId(lead.id)
     try {
       const result = await authedPost(`/api/admin/leads/${lead.id}/convert`)
@@ -493,7 +504,7 @@ export function LeadsClient({
                               variant="ghost"
                               className="h-7 px-2 text-xs"
                               disabled={busy}
-                              onClick={() => void handleConvert(lead)}
+                              onClick={() => setConvertTarget(lead)}
                             >
                               Hire matter
                             </Button>
@@ -677,6 +688,30 @@ export function LeadsClient({
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={convertTarget !== null} onOpenChange={open => !open && setConvertTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hire this client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Create a matter for {convertTarget ? leadName(convertTarget) : 'this lead'} now. The lead
+              becomes an active matter and moves into the drafting pipeline.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const lead = convertTarget
+                setConvertTarget(null)
+                if (lead) void handleConvert(lead)
+              }}
+            >
+              Create matter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

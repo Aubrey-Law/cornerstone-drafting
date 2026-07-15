@@ -25,11 +25,10 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
   if (href === '/admin/matters' && counts.intakeReviewCount > 0) {
     return { value: counts.intakeReviewCount, tone: 'destructive' }
   }
-  if (href === '/admin/drafting' && counts.draftingNeedsDesignCount > 0) {
-    return { value: counts.draftingNeedsDesignCount, tone: 'accent' }
-  }
-  if (href === '/admin/pipeline/aging') {
+  if (href === '/admin/drafting') {
+    // Aging folded into the Drafting hub: overdue matters take badge priority.
     if (counts.agingRedCount > 0) return { value: counts.agingRedCount, tone: 'destructive' }
+    if (counts.draftingNeedsDesignCount > 0) return { value: counts.draftingNeedsDesignCount, tone: 'accent' }
     if (counts.agingAmberCount > 0) return { value: counts.agingAmberCount, tone: 'accent' }
   }
   if (href === '/admin/calls' && counts.unassignedCallsCount > 0) {

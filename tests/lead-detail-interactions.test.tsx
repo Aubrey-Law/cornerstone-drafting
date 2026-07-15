@@ -122,14 +122,18 @@ describe('lead detail page', () => {
   })
 
   it('confirms removal of a newly entered spouse and preserves values when declined', async () => {
-    const confirm=vi.spyOn(window,'confirm').mockReturnValue(false); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
+    const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
     await user.click(screen.getByRole('button',{name:'Edit'})); await user.click(screen.getByRole('button',{name:'Add spouse'})); await user.type(screen.getByLabelText('Spouse first name'),'John'); await user.click(screen.getByRole('button',{name:'Remove spouse'}))
-    expect(confirm).toHaveBeenCalled(); expect((screen.getByLabelText('Spouse first name') as HTMLInputElement).value).toBe('John')
+    // Confirmation now uses an AlertDialog instead of window.confirm.
+    expect(await screen.findByRole('alertdialog')).toBeTruthy()
+    await user.click(screen.getByRole('button',{name:'Cancel'}))
+    expect((screen.getByLabelText('Spouse first name') as HTMLInputElement).value).toBe('John')
   })
 
   it('removes an entirely blank new spouse without confirmation', async () => {
-    const confirm=vi.spyOn(window,'confirm'); const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
-    await user.click(screen.getByRole('button',{name:'Edit'})); await user.click(screen.getByRole('button',{name:'Add spouse'})); await user.click(screen.getByRole('button',{name:'Remove spouse'})); expect(confirm).not.toHaveBeenCalled(); expect(screen.getByRole('button',{name:'Add spouse'})).toBeTruthy()
+    const user=userEvent.setup(); render(<LeadDetailClient lead={lead} spouse={null} initialActivity={[]} />)
+    await user.click(screen.getByRole('button',{name:'Edit'})); await user.click(screen.getByRole('button',{name:'Add spouse'})); await user.click(screen.getByRole('button',{name:'Remove spouse'}))
+    expect(screen.queryByRole('alertdialog')).toBeNull(); expect(screen.getByRole('button',{name:'Add spouse'})).toBeTruthy()
   })
 
   it('uses supported selects and retains fields after an announced server error', async () => {
