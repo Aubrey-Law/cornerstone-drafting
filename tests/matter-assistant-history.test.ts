@@ -20,7 +20,7 @@ describe('matter assistant history', () => {
   })
 
   it('caches the admin chat system prompt', () => {
-    const source = read('app/api/admin/chat/route.ts')
+    const source = read('lib/adminChat/engine.ts')
     expect(source).toContain('cache_control')
   })
 })

@@ -1,8 +1,10 @@
 # AGENTS.md
 
-## Drafting no-touch policy
+## Drafting policy
 
-Cornerstone **drafting** (design sheet, generate, review, draft payload, estate generator) is the product center. Do **not** port or merge drafting code from `aubrey-law-app` unless the user explicitly approves an exception. New lite features (matters, intake, portal, aging, communications) may **link into** drafting (`/admin/drafting/[matterId]`, `ensureDesignSheetSeededFromIntake`, stage PATCH) but must not rewrite drafting internals.
+Cornerstone **drafting** (design sheet, generate, review, draft payload, estate generator) is the product center. Do **not** port or merge drafting code from `aubrey-law-app` unless the user explicitly approves an exception. New features may **link into** drafting (`/admin/drafting/[matterId]`, `ensureDesignSheetSeededFromIntake`, stage PATCH) and may **read** drafting data (`buildDraftPayload`, `listDocumentTemplates`); changes to drafting internals themselves need a good reason and careful test coverage rather than a blanket ban (owner-approved exception, July 2026 — the Mike-OSS integration consolidated the chat drafting prompts into system skills under `tools/workflows/system/`).
+
+The assistant's drafting interview prompts (trust intake, incapacity design sheet, drafting summary) live in `tools/workflows/system/assistant/*/SKILL.md` — synced into `work_skills` (see `scripts/syncSystemWorkflows.ts`) and loaded by `lib/adminChat/prompts.ts`. Edit the SKILL.md files, not route code, to change those prompts.
 
 ## Cursor Cloud specific instructions
 

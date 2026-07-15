@@ -7,6 +7,16 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { LeadDetailsCard, type LeadForm } from '@/components/leads/LeadDetailsCard'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { LeadNotesCard, type LeadMeetingNote, type LeadNote } from '@/components/leads/LeadNotesCard'
@@ -288,11 +298,15 @@ export function LeadDetailClient({
     }
   }
 
+  const [removeSpouseConfirmOpen, setRemoveSpouseConfirmOpen] = useState(false)
+
   function removeSpouse() {
     const populated = ['spouseFirstName', 'spouseMiddleName', 'spouseLastName', 'spousePreferredName', 'spouseEmail', 'spousePhone', 'spouseDateOfBirth']
       .some(key => form[key].trim())
-    if (!populated || window.confirm('Remove this spouse?')) {
+    if (!populated) {
       setForm(current => ({ ...current, spousePresent: 'no' }))
+    } else {
+      setRemoveSpouseConfirmOpen(true)
     }
   }
 
@@ -410,6 +424,28 @@ export function LeadDetailClient({
           }}
         />
       )}
+
+      <AlertDialog open={removeSpouseConfirmOpen} onOpenChange={setRemoveSpouseConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this spouse?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The spouse&apos;s details entered on this lead will no longer be shown.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setRemoveSpouseConfirmOpen(false)
+                setForm(current => ({ ...current, spousePresent: 'no' }))
+              }}
+            >
+              Remove spouse
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

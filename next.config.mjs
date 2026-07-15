@@ -34,6 +34,11 @@ const nextConfig = {
   // read at runtime via fs; keep them in the traced serverless function bundles.
   outputFileTracingIncludes: {
     '/api/admin/matters/[id]/draft': ['./tools/aubreylaw-docgeneration/**'],
+    // Bundled system-workflow SKILL.md tree: synced into work_skills on demand
+    // and read as the fallback prompt source by the chat/assistant routes.
+    '/api/admin/works/sync-system': ['./tools/workflows/**'],
+    '/api/admin/chat': ['./tools/workflows/**'],
+    '/api/admin/assistant/chats/[chatId]/messages': ['./tools/workflows/**'],
     '/api/admin/engagement-agreements/[id]': [
       './node_modules/@napi-rs/canvas*/**',
       './node_modules/pdfjs-dist/**',

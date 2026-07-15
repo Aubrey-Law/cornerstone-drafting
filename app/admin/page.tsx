@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DailyBriefCard } from '@/app/admin/components/DailyBriefCard'
 import { fetchTodayData, type TodayUnreadThread } from '@/lib/queries/today'
 import { engineStageLabel } from '@/lib/stage-engine/labels'
 import { stageLabel, type MatterStage, type PipelineMatter } from '@/types/database'
@@ -161,6 +162,8 @@ export default async function AdminTodayPage() {
             : ` · ${needsMe} item${needsMe === 1 ? '' : 's'} waiting on you`}
         </p>
       </header>
+
+      <DailyBriefCard />
 
       <SectionCard
         title="Overdue & at risk"
