@@ -21,6 +21,8 @@ describe('lead detail page', () => {
     expect(screen.getByRole('region', { name: 'Lead intake' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Update intake' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Import intake' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Summarize intake' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Analyze MA estate tax' })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Send intake' }).length).toBeGreaterThan(0)
   })
 

@@ -2,6 +2,7 @@
 
 import { CheckCircle2, ClipboardList, Copy, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 
 interface LeadIntakeCardProps {
   intakeCompleted: boolean
@@ -60,6 +61,13 @@ export function LeadIntakeCard({
         )}
       </div>
       {intakeUrl && <p className="mt-3 break-all text-[11px] text-muted-foreground">{intakeUrl}</p>}
+      <MatterAssistantQuickPrompts
+        className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3"
+        prompts={[
+          { label: 'Summarize intake', prompt: "Summarize this client's situation" },
+          { label: 'Analyze MA estate tax', prompt: 'Analyze MA estate tax exposure' },
+        ]}
+      />
     </section>
   )
 }
