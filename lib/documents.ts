@@ -139,7 +139,9 @@ export async function combineWordDocuments(docIds: string[], filename?: string):
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? 'Failed to combine selected documents')
+    // Include the status when the body isn't our JSON error — a platform-level
+    // failure (timeout, crash page) is otherwise indistinguishable.
+    throw new Error(body?.error ?? `Failed to combine selected documents (HTTP ${res.status})`)
   }
 
   const disposition = res.headers.get('content-disposition') ?? ''
