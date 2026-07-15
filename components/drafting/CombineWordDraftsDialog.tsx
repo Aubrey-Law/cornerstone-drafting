@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ArrowDown, ArrowUp, Combine, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Combine, GripVertical, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -28,9 +28,9 @@ interface CombineWordDraftsDialogProps {
 }
 
 /**
- * Pick which Word drafts to merge into a single .docx and set their order.
- * Every document keeps its own formatting in the combined file; each one
- * starts on a new page.
+ * Pick which Word drafts to merge into a single .docx and drag rows to set
+ * their order. Every document keeps its own formatting in the combined file;
+ * each one starts on a new page.
  */
 export function CombineWordDraftsDialog({
   open,
@@ -50,12 +50,19 @@ export function CombineWordDraftsDialog({
     setSelectedIds(new Set(documents.map(d => d.id)))
   }, [documents, open])
 
-  const move = (index: number, delta: -1 | 1) => {
-    const target = index + delta
-    if (target < 0 || target >= ordered.length) return
+  // Native HTML5 drag-and-drop (same approach as the pipeline kanban): the
+  // list reorders live as the dragged row passes over its siblings.
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const dragIndexRef = useRef<number | null>(null)
+
+  const handleRowDragOver = (overIndex: number) => {
+    const from = dragIndexRef.current
+    if (from === null || from === overIndex) return
+    dragIndexRef.current = overIndex
     setOrdered(prev => {
       const next = [...prev]
-      ;[next[index], next[target]] = [next[target], next[index]]
+      const [moved] = next.splice(from, 1)
+      next.splice(overIndex, 0, moved)
       return next
     })
   }
@@ -91,8 +98,8 @@ export function CombineWordDraftsDialog({
         <DialogHeader>
           <DialogTitle>Combine Word documents</DialogTitle>
           <DialogDescription>
-            Choose which drafts to include and arrange their order. Each document keeps its own
-            formatting and starts on a new page in the combined file.
+            Choose which drafts to include and drag rows to arrange their order. Each document
+            keeps its own formatting and starts on a new page in the combined file.
           </DialogDescription>
         </DialogHeader>
 
@@ -100,11 +107,40 @@ export function CombineWordDraftsDialog({
           {ordered.map((doc, index) => {
             const included = selectedIds.has(doc.id)
             const position = included ? selectedInOrder.findIndex(d => d.id === doc.id) + 1 : null
+            const isDragging = draggingId === doc.id
             return (
               <div
                 key={doc.id}
-                className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2"
+                draggable
+                onDragStart={event => {
+                  event.dataTransfer.effectAllowed = 'move'
+                  // Some browsers cancel the drag without payload data.
+                  event.dataTransfer.setData('text/plain', doc.id)
+                  dragIndexRef.current = index
+                  setDraggingId(doc.id)
+                }}
+                onDragEnd={() => {
+                  dragIndexRef.current = null
+                  setDraggingId(null)
+                }}
+                onDragOver={event => {
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                  handleRowDragOver(index)
+                }}
+                onDrop={event => event.preventDefault()}
+                className={`flex items-center gap-3 rounded-md border px-3 py-2 ${
+                  isDragging
+                    ? 'border-accent bg-accent/10 opacity-60'
+                    : 'border-border bg-muted/30'
+                }`}
               >
+                <span
+                  className="shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
+                  aria-hidden="true"
+                >
+                  <GripVertical className="h-4 w-4" />
+                </span>
                 <Checkbox
                   checked={included}
                   onCheckedChange={checked => toggle(doc.id, checked === true)}
@@ -116,30 +152,6 @@ export function CombineWordDraftsDialog({
                 <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={doc.name}>
                   {doc.name}
                 </span>
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    disabled={index === 0}
-                    onClick={() => move(index, -1)}
-                    aria-label={`Move ${doc.name} up`}
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    disabled={index === ordered.length - 1}
-                    onClick={() => move(index, 1)}
-                    aria-label={`Move ${doc.name} down`}
-                  >
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
               </div>
             )
           })}
