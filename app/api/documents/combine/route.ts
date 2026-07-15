@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { combineDocxFiles } from '@/lib/docx/combineDocx'
+import { docxAttachmentDisposition } from '@/lib/docx/contentDisposition'
 import {
   getDocumentApiUser,
   isDocxDocument,
@@ -131,7 +132,7 @@ async function combineSelectedDocuments(req: Request) {
     status: 200,
     headers: {
       'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'content-disposition': `attachment; filename="${requestedName}.docx"`,
+      'content-disposition': docxAttachmentDisposition(requestedName),
       'cache-control': 'no-store',
     },
   })

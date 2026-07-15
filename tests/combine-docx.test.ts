@@ -1,6 +1,7 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 import { combineDocxFiles } from '@/lib/docx/combineDocx'
+import { docxAttachmentDisposition } from '@/lib/docx/contentDisposition'
 
 const CONTENT_TYPES_XML =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -111,5 +112,31 @@ describe('combineDocxFiles', () => {
     const notDocx = await new JSZip().file('hello.txt', 'hi').generateAsync({ type: 'nodebuffer' })
     await expect(combineDocxFiles([await makeDocx('Host'), notDocx]))
       .rejects.toThrow('Document 2 is not a valid .docx file')
+  })
+})
+
+describe('docxAttachmentDisposition', () => {
+  it('keeps plain ASCII names intact', () => {
+    expect(docxAttachmentDisposition('Cheng Zhang - Combined Drafts')).toBe(
+      'attachment; filename="Cheng Zhang - Combined Drafts.docx"; filename*=UTF-8\'\'Cheng%20Zhang%20-%20Combined%20Drafts.docx',
+    )
+  })
+
+  it('produces a ByteString-safe header for names with em dashes and accents', () => {
+    const header = docxAttachmentDisposition('Cheng — Zhang – Décès')
+    // Every code point must fit in Latin-1 or the Response constructor throws.
+    for (const ch of header) expect(ch.codePointAt(0)!).toBeLessThan(256)
+    expect(header).toContain('filename="Cheng - Zhang - D_c_s.docx"')
+    expect(header).toContain("filename*=UTF-8''Cheng%20%E2%80%94%20Zhang%20%E2%80%93%20D%C3%A9c%C3%A8s.docx")
+  })
+
+  it('escapes quotes and RFC 5987 special characters', () => {
+    const header = docxAttachmentDisposition(`Smith "Family" Plan's (v2)`)
+    expect(header).toContain('filename="Smith _Family_ Plan\'s (v2).docx"')
+    expect(header).toContain("filename*=UTF-8''Smith%20%22Family%22%20Plan%27s%20%28v2%29.docx")
+  })
+
+  it('falls back to a generic name when empty', () => {
+    expect(docxAttachmentDisposition('  ')).toContain('filename="document.docx"')
   })
 })
