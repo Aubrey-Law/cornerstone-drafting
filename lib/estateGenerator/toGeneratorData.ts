@@ -50,6 +50,7 @@ export type EstateGeneratorPackage =
 export interface EstateGeneratorData {
   client: Record<string, unknown>
   spouse?: Record<string, unknown>
+  marriage?: Record<string, unknown>
   children: Array<Record<string, unknown>>
   planning: Record<string, unknown>
   will: Record<string, unknown>
@@ -494,6 +495,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         street_address: payload.client.address,
         city: payload.client.city,
         state: normalizeJurisdictionStateCode(payload.client.state),
+        zip: payload.client.zip,
         county: payload.client.county ?? payload.execution.signing_county,
         signing_county: payload.execution.signing_county,
         email: payload.client.email,
@@ -508,12 +510,16 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       ? compactObject({
           exists: true,
           full_name: payload.spouse.full_name,
+          aka: payload.spouse.aka,
           date_of_birth: formatLongDate(payload.spouse.dob) ?? payload.spouse.dob,
           pronoun_subject: spousePronouns.subject,
           pronoun_object: spousePronouns.object,
           pronoun_possessive: spousePronouns.possessive,
         })
       : { exists: false },
+    marriage: {
+      date: formatLongDate(payload.marriage?.date) ?? payload.marriage?.date ?? '',
+    },
     children,
     planning: {
       uses_revocable_trust: Boolean(payload.trust),

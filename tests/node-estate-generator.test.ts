@@ -590,10 +590,10 @@ describe('node estate generator context', () => {
     expect(context.has_excluded_guardians).toBe(true)
     expect(context.state.requires_self_proving_affidavit).toBe(true)
     expect(context.execution.display_doc_date).toBe('________________, 20___')
+    expect(context.execution.ordinal_doc_date).toBe('_____ day of _________________, 20___')
     expect(context.execution.display_ordinal_doc_date).toBe('_____ day of _________________, 20___')
     expect(context.execution.display_signing_county).toBe('__________________________')
-    // Empty commission renders nothing (label kept, blank fill line dropped).
-    expect(context.execution.display_notary_commission).toBe('')
+    expect(context.execution.display_notary_commission).toBe('__________________________')
   })
 
   it('keeps blank execution display values for missing scheduled signing details', () => {
@@ -612,10 +612,10 @@ describe('node estate generator context', () => {
     })
 
     expect(context.execution.display_doc_date).toBe('________________, 20___')
+    expect(context.execution.ordinal_doc_date).toBe('_____ day of _________________, 20___')
     expect(context.execution.display_ordinal_doc_date).toBe('_____ day of _________________, 20___')
     expect(context.execution.display_signing_county).toBe('Suffolk')
-    // Commission missing even though signing is scheduled -> empty (no fill line).
-    expect(context.execution.display_notary_commission).toBe('')
+    expect(context.execution.display_notary_commission).toBe('__________________________')
   })
 })
 
@@ -783,7 +783,7 @@ describe('node estate generator text rendering', () => {
     }
   })
 
-  it('renders an empty notary commission as nothing (no MISSING marker, label kept)', () => {
+  it('renders an empty notary commission as a fill-in line without a MISSING marker', () => {
     const zip = new PizZip()
     zip.file(
       'word/document.xml',
@@ -793,7 +793,7 @@ describe('node estate generator text rendering', () => {
     fs.writeFileSync(templatePath, Buffer.from(zip.generate({ type: 'uint8array' })))
 
     const context = buildNodeEstateContext({
-      // No execution.notary_commission provided -> display value is empty.
+      // No execution.notary_commission provided -> display a signing fill-in line.
       data: { client: { full_name: 'Jane Example', state: 'MA' }, children: [], execution: {} },
       state: 'MA',
       root,
@@ -805,8 +805,7 @@ describe('node estate generator text rendering', () => {
       const xml = xmlFromDocx(rendered.buffer)
       expect(rendered.missingFields).not.toContain('execution.display_notary_commission')
       expect(xml).not.toContain('[[ MISSING')
-      expect(xml).not.toContain('_________________________')
-      expect(xml).toContain('My Commission Expires:')
+      expect(xml).toContain('My Commission Expires: __________________________')
     } finally {
       fs.rmSync(templatePath, { force: true })
     }

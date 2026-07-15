@@ -49,6 +49,9 @@ export interface DraftPayload {
     preferred_pronoun: string | null
     dob: string | null
   } | null
+  marriage?: {
+    date: string | null
+  }
   children: Array<{
     full_name: string
     dob: string | null
@@ -315,6 +318,7 @@ export interface DesignSheetRow {
   state?: string | null
   zip?: string | null
   marital_status?: string | null
+  marriage_date?: string | null
   spouse_name?: string | null
   spouse_dob?: string | null
   spouse_phone?: string | null

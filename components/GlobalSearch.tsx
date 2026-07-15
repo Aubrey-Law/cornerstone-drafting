@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Briefcase,
+  BookOpen,
   Clock,
   FilePenLine,
   Phone,
@@ -31,6 +32,7 @@ interface MatterResult {
 const NAV_ITEMS = [
   { label: 'Matters', href: '/admin/matters', icon: Briefcase },
   { label: 'Drafting', href: '/admin/drafting', icon: FilePenLine },
+  { label: 'Works', href: '/admin/works', icon: BookOpen },
   { label: 'Aging', href: '/admin/pipeline/aging', icon: Clock },
   { label: 'Calls', href: '/admin/calls', icon: Phone },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
