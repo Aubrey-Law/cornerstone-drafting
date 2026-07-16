@@ -112,7 +112,7 @@ export function EstateClauseEditor({
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ workingDraftId: clause.workingDraft.id }),
       })
-      setNotice('Revision submitted for independent review.')
+      setNotice('Revision submitted for deliberate attorney review.')
       await onRefresh()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to submit draft')

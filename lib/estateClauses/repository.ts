@@ -519,7 +519,7 @@ export async function importBundledEstateClauses(args: {
           nested_clause_keys: entry.content.nestedClauseKeys,
           condition_field: entry.content.conditionField ?? null,
           content_hash: entry.contentHash,
-          change_summary: 'Import bundled estate clause for independent review.',
+          change_summary: 'Import bundled estate clause for deliberate attorney review.',
           validation_status: entry.validationErrors.length === 0 ? 'valid' : 'invalid',
           validation_report: validationReport,
           updated_at: new Date().toISOString(),

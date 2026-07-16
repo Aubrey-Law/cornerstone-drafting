@@ -9,6 +9,40 @@ const soloPublicationSql = fs.readFileSync(
 )
 const persistenceSql = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION public.persist_generated_estate_document'))
 
+function functionDefinition(source: string, name: string) {
+  const start = source.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`)
+  const end = source.indexOf('\n$$;', start)
+  if (start < 0 || end < 0) throw new Error(`Missing SQL function definition: ${name}`)
+  return source.slice(start, end + '\n$$;'.length)
+}
+
+function approvedSoloAttorneyDefinition(name: string) {
+  let definition = functionDefinition(sql, name)
+  const replacements: Record<string, Array<[string, string]>> = {
+    request_estate_clause_changes: [[
+      "  IF v_revision.author_id = p_actor_id THEN\n    RAISE EXCEPTION 'A different attorney or administrator must review this revision';\n  END IF;\n\n",
+      '',
+    ]],
+    publish_estate_clause_revision: [
+      ['  v_author_id uuid;\n', ''],
+      ['SELECT r.clause_id, r.author_id, r.validation_status', 'SELECT r.clause_id, r.validation_status'],
+      ['INTO v_clause_id, v_author_id, v_validation_status', 'INTO v_clause_id, v_validation_status'],
+      ["  IF v_author_id = p_actor_id THEN\n    RAISE EXCEPTION 'A different attorney or administrator must publish this revision';\n  END IF;\n", ''],
+    ],
+    revert_estate_clause_publication: [
+      ['  v_target_author_id uuid;\n', ''],
+      ['SELECT r.author_id, r.nested_clause_keys, c.clause_key', 'SELECT r.nested_clause_keys, c.clause_key'],
+      ['INTO v_target_author_id, v_nested_clause_keys, v_clause_key', 'INTO v_nested_clause_keys, v_clause_key'],
+      ["  IF v_target_author_id = p_actor_id THEN RAISE EXCEPTION 'A different attorney or administrator must revert this revision'; END IF;\n\n", ''],
+    ],
+  }
+  for (const [before, after] of replacements[name] ?? []) {
+    if (!definition.includes(before)) throw new Error(`Historical guard shape changed for ${name}`)
+    definition = definition.replace(before, after)
+  }
+  return definition
+}
+
 describe('estate clause schema', () => {
   it('creates immutable revisions, two-person publication, overrides, and normalized provenance', () => {
     for (const table of ['estate_clauses', 'estate_clause_working_drafts', 'estate_clause_revisions', 'estate_clause_review_events', 'estate_clause_publications', 'estate_clause_preview_evidence', 'matter_estate_clause_overrides', 'generated_document_clause_revisions']) {
@@ -110,5 +144,17 @@ describe('estate clause schema', () => {
     expect(soloPublicationSql).toContain("'changes_requested'")
     expect(soloPublicationSql).toContain("'published'")
     expect(soloPublicationSql).toContain("'publication_reverted'")
+  })
+
+  it('changes only the approved author-inequality guards in the three workflow functions', () => {
+    for (const functionName of [
+      'request_estate_clause_changes',
+      'publish_estate_clause_revision',
+      'revert_estate_clause_publication',
+    ]) {
+      expect(functionDefinition(soloPublicationSql, functionName)).toBe(
+        approvedSoloAttorneyDefinition(functionName),
+      )
+    }
   })
 })

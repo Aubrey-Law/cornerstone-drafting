@@ -298,6 +298,16 @@ describe('estate clause repository workflow', () => {
       p_actor_id: 'author-1',
     })
     expect(client.rpc).not.toHaveBeenCalledWith('publish_estate_clause_revision', expect.anything())
+    const draftCall = client.tableCalls.find(call => (
+      call.table === 'estate_clause_working_drafts'
+      && call.calls.some(queryCall => queryCall.method === 'upsert')
+    ))
+    expect(draftCall?.calls).toContainEqual(expect.objectContaining({
+      method: 'upsert',
+      args: [expect.objectContaining({
+        change_summary: 'Import bundled estate clause for deliberate attorney review.',
+      }), expect.anything()],
+    }))
     expect(result).toMatchObject({ created: 1, unchanged: 0, requiresReview: 1 })
   })
 

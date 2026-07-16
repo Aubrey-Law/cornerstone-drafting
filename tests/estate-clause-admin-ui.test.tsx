@@ -196,6 +196,23 @@ describe('estate clause administrator UI', () => {
     expect(submit.disabled).toBe(true)
   })
 
+  it('describes submission as deliberate attorney review', async () => {
+    const validFixture = structuredClone(fixture)
+    validFixture.clauses[2].workingDraft!.validationStatus = 'valid'
+    validFixture.clauses[2].workingDraft!.validationReport = []
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(validFixture))
+      .mockResolvedValueOnce(response({ revisionId: 'submitted-revision' }))
+      .mockResolvedValueOnce(response(validFixture))
+    const user = userEvent.setup()
+    render(<EstateClauseLibrarySection currentUserId="reviewer" />)
+    await user.click(await screen.findByRole('button', { name: 'Edit Tangible Property' }))
+    await user.click(screen.getByRole('button', { name: 'Submit for review' }))
+
+    expect(await screen.findByText('Revision submitted for deliberate attorney review.')).toBeTruthy()
+    expect(screen.queryByText(/independent review/i)).toBeNull()
+  })
+
   it('preserves unsaved edits across an unrelated clause-list refresh', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock
