@@ -7,6 +7,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import '@/app/intake/guided.css'
 import { designFieldTargetId, type DesignSectionSummary } from '@/lib/designSheetReadiness'
+import { shouldApplyDesignInitialFocus, type DesignInitialFocus } from '@/lib/designFocusNavigation'
 import { cn } from '@/lib/utils'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import {
@@ -141,6 +142,7 @@ function DesignSheetShellImpl({
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
   const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
   const attorneyPresetVersionRef = useRef(0)
+  const appliedInitialFocusRef = useRef<DesignInitialFocus | null>(null)
   const pageScrollContainerRef = useRef<HTMLElement>(null)
   const pageScrollTopRef = useRef(0)
   const previousPageSectionIdRef = useRef<string | null>(null)
@@ -295,7 +297,8 @@ function DesignSheetShellImpl({
 
   useEffect(() => {
     if (!initialFocus || !activeSection) return
-    if (initialFocus.sectionId !== activeSection.id) return
+    if (!shouldApplyDesignInitialFocus(initialFocus, activeSection.id, appliedInitialFocusRef.current)) return
+    appliedInitialFocusRef.current = initialFocus
     const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
     requestAnimationFrame(() => {
       const target = targetId ? document.getElementById(targetId) : document.getElementById(`design-section-${activeSection.id}`)

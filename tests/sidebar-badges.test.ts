@@ -15,19 +15,22 @@ describe('sidebar badges', () => {
     }
 
     expect(getNavBadge('/admin/matters', counts)).toEqual({ value: 2, tone: 'destructive' })
-    expect(getNavBadge('/admin/drafting', counts)).toEqual({ value: 4, tone: 'accent' })
-    expect(getNavBadge('/admin/pipeline/aging', counts)).toEqual({ value: 1, tone: 'destructive' })
+    // Aging is folded into Drafting: overdue (red) takes priority on that badge.
+    expect(getNavBadge('/admin/drafting', counts)).toEqual({ value: 1, tone: 'destructive' })
     expect(getNavBadge('/admin/calls', counts)).toEqual({ value: 5, tone: 'accent' })
     expect(getNavBadge('/admin/settings', counts)).toBeNull()
   })
 
-  it('prefers aging red over amber', () => {
-    const counts = {
+  it('falls back from aging red to needs-design, then aging amber on the drafting badge', () => {
+    expect(getNavBadge('/admin/drafting', {
       ...EMPTY_SIDEBAR_COUNTS,
-      agingRedCount: 0,
+      draftingNeedsDesignCount: 4,
       agingAmberCount: 2,
-    }
-    expect(getNavBadge('/admin/pipeline/aging', counts)).toEqual({ value: 2, tone: 'accent' })
+    })).toEqual({ value: 4, tone: 'accent' })
+    expect(getNavBadge('/admin/drafting', {
+      ...EMPTY_SIDEBAR_COUNTS,
+      agingAmberCount: 2,
+    })).toEqual({ value: 2, tone: 'accent' })
   })
 
   it('exposes a cached sidebar counts API for the admin shell', () => {

@@ -124,6 +124,50 @@ export async function downloadDocumentsZip(docIds: string[]): Promise<void> {
   }
 }
 
+/**
+ * Combine Word documents — in the given order — into a single .docx and
+ * download it. Each document keeps its own formatting in the combined file.
+ */
+export async function combineWordDocuments(docIds: string[], filename?: string): Promise<void> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch('/api/documents/combine', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ docIds, filename }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    // Include the status when the body isn't our JSON error — a platform-level
+    // failure (timeout, crash page) is otherwise indistinguishable.
+    throw new Error(body?.error ?? `Failed to combine selected documents (HTTP ${res.status})`)
+  }
+
+  const disposition = res.headers.get('content-disposition') ?? ''
+  // Prefer the RFC 5987 filename* (exact name, UTF-8) over the ASCII fallback.
+  const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const filenameMatch = disposition.match(/filename="([^"]+)"/)
+  let downloadName = filenameMatch?.[1] ?? 'combined-documents.docx'
+  if (encodedMatch) {
+    try {
+      downloadName = decodeURIComponent(encodedMatch[1])
+    } catch {
+      // keep the ASCII fallback
+    }
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = downloadName
+    anchor.click()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 /** Get a URL suitable for a browser preview. Word files use Microsoft's renderer. */
 export async function getDocumentViewerUrl(
   docId: string,

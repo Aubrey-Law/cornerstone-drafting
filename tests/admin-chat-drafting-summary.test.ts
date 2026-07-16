@@ -33,38 +33,55 @@ describe('admin chat drafting summary prompt', () => {
   })
 
   it('handles drafting-summary requests directly from the normalized payload', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/chat/route.ts'), 'utf8')
+    const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/chat/route.ts'), 'utf8')
+    const prompts = fs.readFileSync(path.join(process.cwd(), 'lib/adminChat/prompts.ts'), 'utf8')
 
-    expect(source).toContain("import { buildDraftPayload, type DraftPayload } from '@/lib/buildDraftPayload'")
-    expect(source).toContain('isDraftingSummaryRequest')
-    expect(source).toContain('formatClaudeDraftingSkillInput')
-    expect(source).toContain('const payload = await buildDraftPayload(body.context_id)')
-    expect(source).toContain('return new Response(`${sse({ text: textOutput })}data: [DONE]')
+    expect(route).toContain("import { buildDraftPayload } from '@/lib/buildDraftPayload'")
+    expect(prompts).toContain("import type { DraftPayload } from '@/lib/buildDraftPayload'")
+    expect(route).toContain('isDraftingSummaryRequest')
+    expect(route).toContain('formatClaudeDraftingSkillInput')
+    expect(route).toContain('const payload = await buildDraftPayload(body.context_id)')
+    expect(route).toContain('return new Response(`${sse({ text: textOutput })}data: [DONE]')
   })
 
   it('includes trust and incapacity interview blocks in matter context', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/chat/route.ts'), 'utf8')
+    const engine = fs.readFileSync(path.join(process.cwd(), 'lib/adminChat/engine.ts'), 'utf8')
 
-    expect(source).toContain('trustDraftingIntakeInstructions')
-    expect(source).toContain('incapacityDesignSheetInstructions')
-    expect(source).toContain("from('asset_intake')")
+    expect(engine).toContain('trustDraftingIntakeInstructions')
+    expect(engine).toContain('incapacityDesignSheetInstructions')
+    expect(engine).toContain("from('asset_intake')")
+  })
+
+  it('sources the drafting interview prompts from system skills, not inline copies', () => {
+    const prompts = fs.readFileSync(path.join(process.cwd(), 'lib/adminChat/prompts.ts'), 'utf8')
+    const trustSkill = fs.readFileSync(
+      path.join(process.cwd(), 'tools/workflows/system/assistant/trust-drafting-intake/SKILL.md'), 'utf8')
+    const incapacitySkill = fs.readFileSync(
+      path.join(process.cwd(), 'tools/workflows/system/assistant/incapacity-design-sheet/SKILL.md'), 'utf8')
+
+    expect(prompts).toContain('loadSystemSkillBody')
+    // The instruction bodies live only in the SKILL.md tree.
+    expect(prompts).not.toContain('TRUST DRAFTING INTAKE:')
+    expect(prompts).not.toContain('INCAPACITY DESIGN SHEET:')
+    expect(trustSkill).toContain('=== TRUST DRAFTING SKILL INPUT ===')
+    expect(incapacitySkill).toContain('=== INCAPACITY DRAFTING SKILL INPUT ===')
   })
 
   it('keeps lightweight system instructions for normal matter chats', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/chat/route.ts'), 'utf8')
+    const engine = fs.readFileSync(path.join(process.cwd(), 'lib/adminChat/engine.ts'), 'utf8')
 
-    expect(source).toContain('draftingSkillSummaryInstructions')
-    expect(source).not.toContain('NORMALIZED DRAFTING PAYLOAD:')
-    expect(source).not.toContain('JSON.stringify(await buildDraftPayload(contextId), null, 2)')
+    expect(engine).toContain('draftingSkillSummaryInstructions')
+    expect(engine).not.toContain('NORMALIZED DRAFTING PAYLOAD:')
+    expect(engine).not.toContain('JSON.stringify(await buildDraftPayload(contextId), null, 2)')
   })
 
   it('instructs the assistant to produce Claude-skill-ready drafting input', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/chat/route.ts'), 'utf8')
+    const prompts = fs.readFileSync(path.join(process.cwd(), 'lib/adminChat/prompts.ts'), 'utf8')
 
-    expect(source).toContain('Claude Drafting Skill Input')
-    expect(source).toContain('Non-invention rule')
-    expect(source).toContain('Documents to draft')
-    expect(source).toContain('Missing or attorney-review items')
-    expect(source).toContain('Do not invent names, dates, relationships, assets, tax conclusions, or fiduciary roles')
+    expect(prompts).toContain('Claude Drafting Skill Input')
+    expect(prompts).toContain('Non-invention rule')
+    expect(prompts).toContain('Documents to draft')
+    expect(prompts).toContain('Missing or attorney-review items')
+    expect(prompts).toContain('Do not invent names, dates, relationships, assets, tax conclusions, or fiduciary roles')
   })
 })
