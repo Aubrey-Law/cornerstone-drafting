@@ -576,10 +576,12 @@ describe('estate clause admin route contracts', () => {
       expect(list).toContain(`.from('${table}')`)
     }
     expect(list).toContain('workingDraft:')
+    expect(list).toContain('basePublishedRevisionId: draft.base_published_revision_id')
     expect(list).toContain('submittedRevisions:')
     expect(list).toContain('currentPublication:')
     expect(list).toContain('validationReport:')
     expect(list).toContain('changeSummary:')
+    expect(list).toContain(".order('id', { ascending: false })")
   })
 
   it('keeps AI drafting rate-limited, quoted, and outside workflow authority', () => {

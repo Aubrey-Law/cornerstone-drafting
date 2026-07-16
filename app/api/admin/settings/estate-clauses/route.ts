@@ -42,7 +42,8 @@ export async function GET(req: Request) {
       client
         .from('estate_clause_review_events')
         .select('id,clause_id,revision_id,event_type,actor_id,comment,validation_report,created_at')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false }),
       client
         .from('estate_clause_publications')
         .select('clause_id,current_revision_id,published_by,published_at,updated_at'),
@@ -97,13 +98,28 @@ export async function GET(req: Request) {
 
     return Response.json({
       clauses: clauses.map(clause => {
+        const draft = drafts.find(row => row.clause_id === clause.id) ?? null
         const publication = publications.find(row => row.clause_id === clause.id) ?? null
         const currentRevision = publication
           ? revisions.find(row => row.id === publication.current_revision_id) ?? null
           : null
         return {
           ...clause,
-          workingDraft: drafts.find(row => row.clause_id === clause.id) ?? null,
+          workingDraft: draft ? {
+            id: draft.id,
+            clauseId: draft.clause_id,
+            authorId: draft.author_id,
+            basePublishedRevisionId: draft.base_published_revision_id,
+            text: draft.clause_text,
+            requiredFields: draft.required_fields,
+            nestedClauseKeys: draft.nested_clause_keys,
+            conditionField: draft.condition_field,
+            changeSummary: draft.change_summary,
+            contentHash: draft.content_hash,
+            validationStatus: draft.validation_status,
+            validationReport: draft.validation_report,
+            updatedAt: draft.updated_at,
+          } : null,
           submittedRevisions: revisions
             .filter(row => row.clause_id === clause.id && latestEventByRevision.get(row.id)?.event_type === 'submitted')
             .map(revisionDto),

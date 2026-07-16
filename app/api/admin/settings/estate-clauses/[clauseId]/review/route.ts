@@ -61,9 +61,10 @@ export async function POST(
     const revisionRows = (revisions ?? []) as Array<{ id: string; author_id: string; validation_status: string }>
     const { data: events, error: eventError } = await client
       .from('estate_clause_review_events')
-      .select('revision_id,event_type,created_at')
+      .select('id,revision_id,event_type,created_at')
       .eq('clause_id', clauseId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
     if (eventError) throw new Error(eventError.message)
     const latestEventByRevision = new Map<string, string>()
     for (const event of (events ?? []) as Array<{ revision_id: string; event_type: string }>) {
