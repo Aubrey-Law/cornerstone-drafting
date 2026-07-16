@@ -80,7 +80,7 @@ CREATE TABLE public.estate_clause_review_events (
     REFERENCES public.estate_clause_revisions(id, clause_id) ON DELETE RESTRICT,
   CHECK (
     event_type NOT IN ('changes_requested', 'retired', 'publication_reverted')
-    OR length(btrim(comment)) > 0
+    OR (comment IS NOT NULL AND length(btrim(comment)) > 0)
   )
 );
 
@@ -313,6 +313,7 @@ DECLARE
   v_author_id uuid;
   v_validation_status text;
   v_validation_report jsonb;
+  v_base_published_revision_id uuid;
   v_current_revision_id uuid;
   v_latest_event text;
 BEGIN
@@ -323,8 +324,10 @@ BEGIN
     RAISE EXCEPTION 'Attorney or administrator role required';
   END IF;
 
-  SELECT r.clause_id, r.author_id, r.validation_status, r.validation_report
-  INTO v_clause_id, v_author_id, v_validation_status, v_validation_report
+  SELECT r.clause_id, r.author_id, r.validation_status, r.validation_report,
+         r.base_published_revision_id
+  INTO v_clause_id, v_author_id, v_validation_status, v_validation_report,
+       v_base_published_revision_id
   FROM public.estate_clause_revisions r
   WHERE r.id = p_revision_id;
 
@@ -353,8 +356,14 @@ BEGIN
   WHERE p.clause_id = v_clause_id
   FOR UPDATE;
 
+  IF v_base_published_revision_id IS DISTINCT FROM p_expected_current_revision_id THEN
+    RAISE EXCEPTION 'Estate clause revision was drafted from a different publication';
+  END IF;
   IF v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id THEN
     RAISE EXCEPTION 'Current estate clause revision changed; refresh and try again';
+  END IF;
+  IF v_base_published_revision_id IS DISTINCT FROM v_current_revision_id THEN
+    RAISE EXCEPTION 'Estate clause revision base is no longer current';
   END IF;
 
   INSERT INTO public.estate_clause_publications (
@@ -467,23 +476,30 @@ BEGIN
     v_override_id := NULLIF(v_manifest_entry->>'overrideId', '')::uuid;
     v_selection_reason := v_manifest_entry->>'selectionReason';
 
+    PERFORM 1
+    FROM public.estate_clause_publications p
+    JOIN public.estate_clauses c ON c.id = p.clause_id
+    WHERE p.clause_id = v_clause_id
+      AND p.current_revision_id = v_revision_id
+      AND c.is_active
+    FOR SHARE OF p, c;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Clause manifest does not reference the current active publication';
+    END IF;
+
     IF NOT EXISTS (
       SELECT 1
       FROM public.estate_clause_revisions r
       JOIN public.estate_clauses c ON c.id = r.clause_id
+      JOIN public.estate_clause_publications p ON p.clause_id = r.clause_id
       WHERE r.id = v_revision_id
         AND r.clause_id = v_clause_id
         AND r.content_hash = v_manifest_entry->>'contentHash'
         AND c.clause_key = v_manifest_entry->>'clauseKey'
+        AND c.is_active
+        AND p.current_revision_id = r.id
     ) THEN
-      RAISE EXCEPTION 'Clause manifest revision, key, or content hash is invalid';
-    END IF;
-
-    IF NOT EXISTS (
-      SELECT 1 FROM public.estate_clause_review_events e
-      WHERE e.revision_id = v_revision_id AND e.event_type = 'published'
-    ) THEN
-      RAISE EXCEPTION 'Clause manifest revision has no publication history';
+      RAISE EXCEPTION 'Clause manifest does not reference the current active publication';
     END IF;
 
     IF v_selection_reason = 'template_rule' AND v_override_id IS NOT NULL THEN
