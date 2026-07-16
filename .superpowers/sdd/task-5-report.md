@@ -49,4 +49,6 @@ The fresh independent review of `9f60811` found no Critical issues and four Impo
 
 Post-fix verification: 55/55 focused schema, workflow, UI, and Template Center tests passed; scoped ESLint and `git diff --check` passed.
 
-The first exact re-review confirmed all original findings fixed and found one new Important provenance issue plus one Minor busy-state issue. The follow-up adds `source_review_revision_id` to restored drafts so a reviewer comment can only appear with the exact draft created from that reviewed revision; later unrelated drafts cannot inherit stale legal guidance. Matter-input changes now cancel preview state without clearing an in-flight publish/request-changes lock. Focused tests remain 55/55 green and scoped ESLint/diff checks pass. Final exact re-review is pending.
+The first exact re-review confirmed all original findings fixed and found one new Important provenance issue plus one Minor busy-state issue. The follow-up adds `source_review_revision_id` to restored drafts so a reviewer comment can only appear with the exact draft created from that reviewed revision; later unrelated drafts cannot inherit stale legal guidance. Matter-input changes now cancel preview state without clearing an in-flight publish/request-changes lock. Focused tests remain 55/55 green and scoped ESLint/diff checks pass.
+
+Final exact re-review of `ed06aa4`: **Ready, no findings**. The reviewer independently reran the 55 focused tests and `git diff --check` successfully.
