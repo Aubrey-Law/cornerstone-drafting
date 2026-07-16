@@ -13,7 +13,7 @@ import {
   overrideMutationErrorResponse,
   parseDeleteOverrideRequest,
   parseOverrideRequest,
-} from '@/app/api/admin/matters/[id]/estate-clause-overrides/route'
+} from '@/lib/estateClauses/overrideRoute'
 import {
   compatibleEstateDocumentTypesForTemplate,
   estateDocumentTypeForTemplate,
@@ -98,6 +98,11 @@ describe('estate clause template references', () => {
 })
 
 describe('estate clause override request contracts', () => {
+  it('keeps non-handler helpers outside the Next.js route module', () => {
+    const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/estate-clause-overrides/route.ts'), 'utf8')
+    expect(route).not.toMatch(/^export (?:interface|type|const|function) (?:OverrideRequest|parseOverrideRequest|parseDeleteOverrideRequest|overrideMutationErrorResponse|isPublishedClauseOverrideEligible)\b/m)
+  })
+
   it('admits only active current conditional publications with a referenced compatible document type', () => {
     const row = {
       clause_id: 'clause-id',
