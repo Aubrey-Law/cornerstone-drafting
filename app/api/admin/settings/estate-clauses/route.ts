@@ -23,14 +23,97 @@ function validDocumentTypes(value: unknown): value is EstateDocumentType[] {
 }
 
 export async function GET(req: Request) {
-  const { err } = await requireAdmin(req)
+  const { err, userId } = await requireAdmin(req)
   if (err) return err
+  if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const clauses = await listEstateClauses({
-      client: getAdminClient() as unknown as EstateClauseClient,
+    const client = getAdminClient() as unknown as EstateClauseClient
+    const clauses = await listEstateClauses({ client })
+    const [draftsResult, revisionsResult, eventsResult, publicationsResult] = await Promise.all([
+      client
+        .from('estate_clause_working_drafts')
+        .select('id,clause_id,author_id,base_published_revision_id,clause_text,required_fields,nested_clause_keys,condition_field,change_summary,content_hash,validation_status,validation_report,updated_at')
+        .eq('author_id', userId),
+      client
+        .from('estate_clause_revisions')
+        .select('id,clause_id,revision_number,author_id,base_published_revision_id,clause_text,required_fields,nested_clause_keys,condition_field,change_summary,content_hash,validation_status,validation_report,submitted_at')
+        .order('revision_number', { ascending: false }),
+      client
+        .from('estate_clause_review_events')
+        .select('id,clause_id,revision_id,event_type,actor_id,comment,validation_report,created_at')
+        .order('created_at', { ascending: false }),
+      client
+        .from('estate_clause_publications')
+        .select('clause_id,current_revision_id,published_by,published_at,updated_at'),
+    ])
+    for (const result of [draftsResult, revisionsResult, eventsResult, publicationsResult]) {
+      if (result.error) throw new Error(result.error.message)
+    }
+
+    type DraftRow = {
+      id: string; clause_id: string; author_id: string; base_published_revision_id: string | null
+      clause_text: string; required_fields: string[]; nested_clause_keys: string[]; condition_field: string | null
+      change_summary: string; content_hash: string; validation_status: string; validation_report: unknown; updated_at: string
+    }
+    type RevisionRow = {
+      id: string; clause_id: string; revision_number: number; author_id: string; base_published_revision_id: string | null
+      clause_text: string; required_fields: string[]; nested_clause_keys: string[]; condition_field: string | null
+      change_summary: string; content_hash: string; validation_status: string; validation_report: unknown; submitted_at: string
+    }
+    type EventRow = {
+      id: string; clause_id: string; revision_id: string; event_type: string; actor_id: string
+      comment: string | null; validation_report: unknown; created_at: string
+    }
+    type PublicationRow = {
+      clause_id: string; current_revision_id: string; published_by: string; published_at: string; updated_at: string
+    }
+    const drafts = (draftsResult.data ?? []) as DraftRow[]
+    const revisions = (revisionsResult.data ?? []) as RevisionRow[]
+    const events = (eventsResult.data ?? []) as EventRow[]
+    const publications = (publicationsResult.data ?? []) as PublicationRow[]
+    const latestEventByRevision = new Map<string, EventRow>()
+    for (const event of events) {
+      if (!latestEventByRevision.has(event.revision_id)) latestEventByRevision.set(event.revision_id, event)
+    }
+
+    const revisionDto = (revision: RevisionRow) => ({
+      id: revision.id,
+      clauseId: revision.clause_id,
+      revisionNumber: revision.revision_number,
+      authorId: revision.author_id,
+      basePublishedRevisionId: revision.base_published_revision_id,
+      text: revision.clause_text,
+      requiredFields: revision.required_fields,
+      nestedClauseKeys: revision.nested_clause_keys,
+      conditionField: revision.condition_field,
+      changeSummary: revision.change_summary,
+      contentHash: revision.content_hash,
+      validationStatus: revision.validation_status,
+      validationReport: revision.validation_report,
+      submittedAt: revision.submitted_at,
+      latestReviewEvent: latestEventByRevision.get(revision.id) ?? null,
     })
-    return Response.json({ clauses })
+
+    return Response.json({
+      clauses: clauses.map(clause => {
+        const publication = publications.find(row => row.clause_id === clause.id) ?? null
+        const currentRevision = publication
+          ? revisions.find(row => row.id === publication.current_revision_id) ?? null
+          : null
+        return {
+          ...clause,
+          workingDraft: drafts.find(row => row.clause_id === clause.id) ?? null,
+          submittedRevisions: revisions
+            .filter(row => row.clause_id === clause.id && latestEventByRevision.get(row.id)?.event_type === 'submitted')
+            .map(revisionDto),
+          currentPublication: publication && currentRevision
+            ? { ...publication, revision: revisionDto(currentRevision) }
+            : null,
+          reviewEvents: events.filter(row => row.clause_id === clause.id),
+        }
+      }),
+    })
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to list estate clauses' }, { status: 500 })
   }

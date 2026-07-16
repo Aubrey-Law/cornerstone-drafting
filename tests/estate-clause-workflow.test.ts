@@ -542,7 +542,7 @@ describe('estate clause admin route contracts', () => {
     expect(review).toContain(".from('estate_clause_revisions')")
     expect(review).toContain(".from('estate_clause_review_events')")
     expect(review).toContain(".from('estate_clause_publications')")
-    expect(review).toContain(".order('revision_number', { ascending: false })")
+    expect(review).toContain('pendingRevisions.length > 1')
     expect(review).not.toContain('body.authorId')
     expect(review).not.toContain('body.currentRevisionId')
     expect(review).not.toContain('body.revisionId')
@@ -560,7 +560,26 @@ describe('estate clause admin route contracts', () => {
     expect(preview).toContain('candidateRevision.id')
     expect(preview).toContain('base64: file.buffer.toString(\'base64\')')
     expect(preview).toContain('validationReport')
+    expect(preview).toContain('hashEstateClauseContent(')
+    expect(preview).toContain('Candidate revision failed its integrity check')
     expect(preview).not.toMatch(/\.insert\(|\.upsert\(|persistGenerated/)
+  })
+
+  it('returns enough server state to populate the Task 5 editor and review panel', () => {
+    const list = routeSource('route.ts')
+    for (const table of [
+      'estate_clause_working_drafts',
+      'estate_clause_revisions',
+      'estate_clause_review_events',
+      'estate_clause_publications',
+    ]) {
+      expect(list).toContain(`.from('${table}')`)
+    }
+    expect(list).toContain('workingDraft:')
+    expect(list).toContain('submittedRevisions:')
+    expect(list).toContain('currentPublication:')
+    expect(list).toContain('validationReport:')
+    expect(list).toContain('changeSummary:')
   })
 
   it('keeps AI drafting rate-limited, quoted, and outside workflow authority', () => {
@@ -573,5 +592,260 @@ describe('estate clause admin route contracts', () => {
     expect(ai).toContain('must not invent client facts')
     expect(ai).toContain('return Response.json({ proposal: { text } })')
     expect(ai).not.toMatch(/submitEstateClause|requestEstateClauseChanges|publishEstateClause/)
+  })
+})
+
+describe.sequential('estate clause admin route runtime behavior', () => {
+  const clauseId = '11111111-1111-4111-8111-111111111111'
+  const revisionId = '22222222-2222-4222-8222-222222222222'
+  const matterId = '33333333-3333-4333-8333-333333333333'
+
+  it('short-circuits every handler when authentication fails', async () => {
+    vi.resetModules()
+    const requireAdmin = vi.fn().mockResolvedValue({
+      err: Response.json({ error: 'Unauthorized' }, { status: 401 }),
+      userId: null,
+      user: null,
+    })
+    const getAdminClient = vi.fn()
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient }))
+    vi.doMock('@/lib/anthropic', () => ({ callAnthropic: vi.fn(), PROMPT_INJECTION_GUARDRAIL: 'guardrail', quoteUserContent: vi.fn() }))
+    vi.doMock('@/lib/firmModels', () => ({ resolveFirmModel: vi.fn() }))
+    vi.doMock('@/lib/rateLimit', () => ({ consumeRateLimit: vi.fn() }))
+
+    const [root, draft, submit, review, preview, ai] = await Promise.all([
+      import('@/app/api/admin/settings/estate-clauses/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/draft/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/submit/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/preview/route'),
+      import('@/app/api/admin/settings/estate-clauses/draft-ai/route'),
+    ])
+    const req = () => new Request('http://localhost/api', { method: 'POST', body: '{}' })
+    const context = { params: Promise.resolve({ clauseId }) }
+    const responses = await Promise.all([
+      root.GET(req()), root.POST(req()), draft.PUT(req(), context), submit.POST(req(), context),
+      review.POST(req(), context), preview.POST(req(), context), ai.POST(req()),
+    ])
+
+    expect(responses.map(response => response.status)).toEqual([401, 401, 401, 401, 401, 401, 401])
+    expect(requireAdmin).toHaveBeenCalledTimes(7)
+    expect(getAdminClient).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 for malformed route identifiers and bodies before database access', async () => {
+    vi.resetModules()
+    const requireAdmin = vi.fn().mockResolvedValue({ err: null, userId: 'reviewer-1', user: { id: 'reviewer-1' } })
+    const getAdminClient = vi.fn()
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient }))
+    vi.doMock('@/lib/anthropic', () => ({ callAnthropic: vi.fn(), PROMPT_INJECTION_GUARDRAIL: 'guardrail', quoteUserContent: vi.fn() }))
+    vi.doMock('@/lib/firmModels', () => ({ resolveFirmModel: vi.fn() }))
+    vi.doMock('@/lib/rateLimit', () => ({ consumeRateLimit: vi.fn() }))
+
+    const [root, draft, submit, review, preview, ai] = await Promise.all([
+      import('@/app/api/admin/settings/estate-clauses/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/draft/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/submit/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route'),
+      import('@/app/api/admin/settings/estate-clauses/[clauseId]/preview/route'),
+      import('@/app/api/admin/settings/estate-clauses/draft-ai/route'),
+    ])
+    const invalidContext = { params: Promise.resolve({ clauseId: 'not-a-uuid' }) }
+    const json = (body: unknown) => new Request('http://localhost/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    })
+    const responses = await Promise.all([
+      root.POST(json({})),
+      draft.PUT(json({}), invalidContext),
+      submit.POST(json({}), invalidContext),
+      review.POST(json({ action: 'publish', expectedCurrentRevisionId: null, unexpected: true }), invalidContext),
+      preview.POST(json({ revisionId, matterId }), invalidContext),
+      ai.POST(json({})),
+    ])
+
+    expect(responses.map(response => response.status)).toEqual([400, 400, 400, 400, 400, 400])
+    expect(getAdminClient).not.toHaveBeenCalled()
+  })
+
+  it('rejects ambiguous submitted revisions before any review RPC', async () => {
+    vi.resetModules()
+    const client = fakeClient({
+      estate_clause_revisions: { data: [
+        { id: revisionId, author_id: 'author-1', validation_status: 'valid' },
+        { id: '44444444-4444-4444-8444-444444444444', author_id: 'author-2', validation_status: 'valid' },
+      ], error: null },
+      estate_clause_review_events: { data: [
+        { revision_id: revisionId, event_type: 'submitted' },
+        { revision_id: '44444444-4444-4444-8444-444444444444', event_type: 'submitted' },
+      ], error: null },
+    })
+    const publish = vi.fn()
+    const requestChanges = vi.fn()
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'reviewer-1' }) }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+    vi.doMock('@/lib/estateClauses/repository', () => ({
+      publishEstateClauseRevision: publish,
+      requestEstateClauseChanges: requestChanges,
+    }))
+    const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route')
+
+    const response = await POST(new Request('http://localhost/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: null }),
+    }), { params: Promise.resolve({ clauseId }) })
+
+    expect(response.status).toBe(409)
+    expect(publish).not.toHaveBeenCalled()
+    expect(requestChanges).not.toHaveBeenCalled()
+  })
+
+  it('maps stale workflow RPC failures to 409', async () => {
+    vi.resetModules()
+    const client = fakeClient({
+      estate_clause_revisions: { data: [{ id: revisionId, author_id: 'author-1', validation_status: 'valid' }], error: null },
+      estate_clause_review_events: { data: [{ revision_id: revisionId, event_type: 'submitted' }], error: null },
+      estate_clause_publications: { data: null, error: null },
+    })
+    const publish = vi.fn().mockRejectedValue(new Error('Revision is not awaiting review after a different publication'))
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'reviewer-1' }) }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+    vi.doMock('@/lib/estateClauses/repository', () => ({
+      publishEstateClauseRevision: publish,
+      requestEstateClauseChanges: vi.fn(),
+    }))
+    const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route')
+
+    const response = await POST(new Request('http://localhost/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: null }),
+    }), { params: Promise.resolve({ clauseId }) })
+
+    expect(response.status).toBe(409)
+    expect(publish).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns 403 for self-review and 404 when no submitted revision exists', async () => {
+    const invoke = async (client: ReturnType<typeof fakeClient>, userId: string) => {
+      vi.resetModules()
+      const publish = vi.fn()
+      vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId }) }))
+      vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+      vi.doMock('@/lib/estateClauses/repository', () => ({
+        publishEstateClauseRevision: publish,
+        requestEstateClauseChanges: vi.fn(),
+      }))
+      const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route')
+      const response = await POST(new Request('http://localhost/api', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: null }),
+      }), { params: Promise.resolve({ clauseId }) })
+      return { response, publish }
+    }
+
+    const selfReview = await invoke(fakeClient({
+      estate_clause_revisions: { data: [{ id: revisionId, author_id: 'author-1', validation_status: 'valid' }], error: null },
+      estate_clause_review_events: { data: [{ revision_id: revisionId, event_type: 'submitted' }], error: null },
+    }), 'author-1')
+    expect(selfReview.response.status).toBe(403)
+    expect(selfReview.publish).not.toHaveBeenCalled()
+
+    const missing = await invoke(fakeClient({
+      estate_clause_revisions: { data: [], error: null },
+      estate_clause_review_events: { data: [], error: null },
+    }), 'reviewer-1')
+    expect(missing.response.status).toBe(404)
+    expect(missing.publish).not.toHaveBeenCalled()
+  })
+
+  it('rejects a candidate hash mismatch before snapshot loading or generation', async () => {
+    vi.resetModules()
+    const client = fakeClient({
+      estate_clause_revisions: { data: {
+        id: revisionId,
+        clause_id: clauseId,
+        revision_number: 2,
+        clause_text: 'Candidate text.',
+        required_fields: [],
+        nested_clause_keys: [],
+        condition_field: null,
+        content_hash: '0'.repeat(64),
+        validation_status: 'valid',
+        validation_report: { errors: [] },
+        estate_clauses: { clause_key: 'will.candidate', title: 'Candidate', jurisdiction: 'MA', document_types: ['will'], is_active: true },
+      }, error: null },
+    })
+    const loadSnapshot = vi.fn()
+    const buildDraftPayload = vi.fn()
+    const generate = vi.fn()
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'reviewer-1' }) }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+    vi.doMock('@/lib/buildDraftPayload', () => ({ buildDraftPayload }))
+    vi.doMock('@/lib/estateGenerator/node/generate', () => ({ generateEstatePlanDocumentsNode: generate }))
+    vi.doMock('@/lib/estateClauses/repository', async () => {
+      const actual = await vi.importActual<typeof import('@/lib/estateClauses/repository')>('@/lib/estateClauses/repository')
+      return { ...actual, loadPublishedEstateClauseSnapshot: loadSnapshot }
+    })
+    const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/preview/route')
+
+    const response = await POST(new Request('http://localhost/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ revisionId, matterId }),
+    }), { params: Promise.resolve({ clauseId }) })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ error: 'Candidate revision failed its integrity check' })
+    expect(loadSnapshot).not.toHaveBeenCalled()
+    expect(buildDraftPayload).not.toHaveBeenCalled()
+    expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a preview whose generated manifests omit the candidate without persistence', async () => {
+    vi.resetModules()
+    const content = { text: 'Candidate text.', requiredFields: [], nestedClauseKeys: [], conditionField: null }
+    const client = fakeClient({
+      estate_clause_revisions: { data: {
+        id: revisionId,
+        clause_id: clauseId,
+        revision_number: 2,
+        clause_text: content.text,
+        required_fields: content.requiredFields,
+        nested_clause_keys: content.nestedClauseKeys,
+        condition_field: content.conditionField,
+        content_hash: hashEstateClauseContent(content),
+        validation_status: 'valid',
+        validation_report: { errors: [] },
+        estate_clauses: { clause_key: 'will.candidate', title: 'Candidate', jurisdiction: 'MA', document_types: ['will'], is_active: true },
+      }, error: null },
+    })
+    const loadSnapshot = vi.fn().mockResolvedValue({ jurisdiction: 'MA', clauses: new Map(), overrides: new Map(), source: 'database' })
+    const buildDraftPayload = vi.fn().mockResolvedValue({ client: { state: 'MA' } })
+    const generate = vi.fn().mockResolvedValue({
+      ok: true,
+      files: [{ name: 'will.docx', buffer: Buffer.from('docx'), clauseManifest: [], unresolvedMarkers: [] }],
+      missing: [], warnings: [], packageName: 'simple-will', packageNames: ['simple-will'], clientSlug: 'client',
+    })
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'reviewer-1' }) }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+    vi.doMock('@/lib/buildDraftPayload', () => ({ buildDraftPayload }))
+    vi.doMock('@/lib/estateGenerator/node/generate', () => ({ generateEstatePlanDocumentsNode: generate }))
+    vi.doMock('@/lib/estateClauses/repository', async () => {
+      const actual = await vi.importActual<typeof import('@/lib/estateClauses/repository')>('@/lib/estateClauses/repository')
+      return { ...actual, loadPublishedEstateClauseSnapshot: loadSnapshot }
+    })
+    const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/preview/route')
+
+    const response = await POST(new Request('http://localhost/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ revisionId, matterId }),
+    }), { params: Promise.resolve({ clauseId }) })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ error: 'Candidate revision did not appear in any generated document' })
+    expect(loadSnapshot).toHaveBeenCalledTimes(1)
+    expect(buildDraftPayload).toHaveBeenCalledTimes(1)
+    expect(generate).toHaveBeenCalledTimes(1)
+    expect(routeSource('[clauseId]/preview/route.ts')).not.toMatch(/\.insert\(|\.upsert\(|persistGenerated/)
   })
 })

@@ -6,6 +6,7 @@ import {
   type EstateClauseClient,
 } from '@/lib/estateClauses/repository'
 import type { EstateClauseSnapshot, EstateDocumentType, PublishedEstateClause } from '@/lib/estateClauses/types'
+import { hashEstateClauseContent } from '@/lib/estateClauses/validation'
 import { generateEstatePlanDocumentsNode } from '@/lib/estateGenerator/node/generate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -71,8 +72,6 @@ export async function POST(
     const identity = relation(candidateRevision.estate_clauses)
     if (!identity?.is_active) return Response.json({ error: 'Estate clause not found' }, { status: 404 })
 
-    const currentSnapshot = await loadPublishedEstateClauseSnapshot({ client, matterId })
-    const clauses = new Map(currentSnapshot.clauses)
     const candidate: PublishedEstateClause = {
       clauseId,
       clauseKey: identity.clause_key,
@@ -88,6 +87,12 @@ export async function POST(
       contentHash: candidateRevision.content_hash,
       reviewStatus: 'submitted',
     }
+    if (hashEstateClauseContent(candidate) !== candidateRevision.content_hash) {
+      return Response.json({ error: 'Candidate revision failed its integrity check' }, { status: 409 })
+    }
+
+    const currentSnapshot = await loadPublishedEstateClauseSnapshot({ client, matterId })
+    const clauses = new Map(currentSnapshot.clauses)
     clauses.set(candidate.clauseKey, candidate)
     const candidateSnapshot: EstateClauseSnapshot = {
       ...currentSnapshot,

@@ -34,7 +34,7 @@ function parseReviewBody(value: unknown): ReviewBody | null {
 function workflowStatus(message: string) {
   if (/different attorney|different administrator/i.test(message)) return 403
   if (/not found|no row/i.test(message)) return 404
-  if (/valid|stale|current revision|conflict|changed/i.test(message)) return 409
+  if (/valid|stale|current revision|conflict|changed|awaiting review|different publication|base publication/i.test(message)) return 409
   return 500
 }
 
@@ -52,27 +52,29 @@ export async function POST(
 
   try {
     const client = getAdminClient() as unknown as EstateClauseClient
-    const { data: revision, error: revisionError } = await client
+    const { data: revisions, error: revisionError } = await client
       .from('estate_clause_revisions')
       .select('id,clause_id,author_id,validation_status')
       .eq('clause_id', clauseId)
       .order('revision_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
     if (revisionError) throw new Error(revisionError.message)
-    if (!revision) return Response.json({ error: 'Submitted estate clause revision not found' }, { status: 404 })
-    const revisionRow = revision as { id: string; author_id: string; validation_status: string }
-    const { data: latestEvent, error: eventError } = await client
+    const revisionRows = (revisions ?? []) as Array<{ id: string; author_id: string; validation_status: string }>
+    const { data: events, error: eventError } = await client
       .from('estate_clause_review_events')
-      .select('event_type')
-      .eq('revision_id', revisionRow.id)
+      .select('revision_id,event_type,created_at')
+      .eq('clause_id', clauseId)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
     if (eventError) throw new Error(eventError.message)
-    if (!latestEvent || (latestEvent as { event_type: string }).event_type !== 'submitted') {
-      return Response.json({ error: 'Submitted estate clause revision not found' }, { status: 404 })
+    const latestEventByRevision = new Map<string, string>()
+    for (const event of (events ?? []) as Array<{ revision_id: string; event_type: string }>) {
+      if (!latestEventByRevision.has(event.revision_id)) latestEventByRevision.set(event.revision_id, event.event_type)
     }
+    const pendingRevisions = revisionRows.filter(row => latestEventByRevision.get(row.id) === 'submitted')
+    if (pendingRevisions.length === 0) return Response.json({ error: 'Submitted estate clause revision not found' }, { status: 404 })
+    if (pendingRevisions.length > 1) {
+      return Response.json({ error: 'Multiple submitted revisions require explicit resolution before review' }, { status: 409 })
+    }
+    const revisionRow = pendingRevisions[0]
     if (revisionRow.author_id === userId) {
       return Response.json({ error: 'A different attorney or administrator must review this revision.' }, { status: 403 })
     }
