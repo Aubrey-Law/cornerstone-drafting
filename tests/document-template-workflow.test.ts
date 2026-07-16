@@ -72,17 +72,22 @@ describe('document template workflow', () => {
     )).rejects.toThrow(/published template.*unavailable/i)
   })
 
-  it('locks publication behind admin auth, validation, confirmation, and optimistic concurrency', () => {
+  it('locks publication behind admin auth, confirmation, and optimistic concurrency without requiring validation', () => {
     const auth = fs.readFileSync(path.join(root, 'lib/apiAuth.ts'), 'utf8')
     const route = fs.readFileSync(path.join(root, 'app/api/admin/settings/document-templates/[templateId]/publish/route.ts'), 'utf8')
     const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260713194628_document_template_workflow.sql'), 'utf8')
+    const relaxedMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20260716193000_relax_template_clause_validation_publication.sql'), 'utf8')
+    const templates = fs.readFileSync(path.join(root, 'app/admin/settings/DocumentTemplatesSection.tsx'), 'utf8')
 
     expect(auth).toContain('export async function requireAdministrator')
     expect(auth).toContain("role !== 'admin'")
     expect(route).toContain('requireAdministrator(req)')
-    expect(route).toContain("version.validation_status !== 'valid'")
+    expect(route).not.toContain("version.validation_status !== 'valid'")
+    expect(templates).not.toContain("!version.isActive && version.validationStatus === 'valid'")
     expect(migration).toContain('p_confirmation IS DISTINCT FROM p_template_id')
     expect(migration).toContain('v_current IS DISTINCT FROM p_expected_active_version_id')
+    expect(relaxedMigration).toContain('CREATE OR REPLACE FUNCTION public.publish_document_template_version')
+    expect(relaxedMigration).not.toContain("v_status <> 'valid'")
     expect(migration).toContain('ENABLE ROW LEVEL SECURITY')
     expect(migration).toContain('TO service_role')
   })
@@ -134,12 +139,17 @@ describe('document template workflow', () => {
       path.join(root, 'app/admin/settings/DocumentTemplatesSection.tsx'),
       'utf8',
     )
+    const matterSearchPicker = fs.readFileSync(
+      path.join(root, 'app/admin/settings/MatterSearchPicker.tsx'),
+      'utf8',
+    )
     const matterSearchRoute = fs.readFileSync(
       path.join(root, 'app/api/admin/settings/document-templates/matters/route.ts'),
       'utf8',
     )
-    expect(documentTemplates).toContain('Search by client, matter name, or email')
-    expect(documentTemplates).not.toContain('Paste a compatible matter UUID')
+    expect(documentTemplates).toContain('MatterSearchPicker')
+    expect(matterSearchPicker).toContain('Search by client, matter name, or email')
+    expect(matterSearchPicker).not.toContain('Paste a compatible matter UUID')
     expect(matterSearchRoute).toContain('requireAdministrator(req)')
     expect(matterSearchRoute).toContain("from('v_matter_pipeline')")
   })

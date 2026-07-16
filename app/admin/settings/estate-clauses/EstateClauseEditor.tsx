@@ -53,7 +53,7 @@ export function EstateClauseEditor({
   const patch = (key: keyof EditorDraft, value: string) => setDraft(current => ({ ...current, [key]: value }))
   const complete = Boolean(draft.text.trim() && draft.changeSummary.trim())
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
-  const maySubmit = Boolean(clause.workingDraft?.id && clause.workingDraft.validationStatus === 'valid' && !dirty)
+  const maySubmit = Boolean(clause.workingDraft?.id && !dirty)
 
   async function request(url: string, options: RequestInit) {
     const response = await fetch(url, options)
@@ -79,7 +79,7 @@ export function EstateClauseEditor({
           changeSummary: draft.changeSummary,
         }),
       })
-      setNotice('Working draft saved and validated.')
+      setNotice('Working draft saved.')
       await onRefresh()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save draft')

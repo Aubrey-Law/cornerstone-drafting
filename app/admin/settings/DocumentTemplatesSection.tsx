@@ -1,13 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { Download, FileCheck2, Loader2, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Download, FileCheck2, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MatterSearchPicker } from './MatterSearchPicker'
 
 interface TemplateVersion {
   id: string
@@ -19,14 +20,6 @@ interface TemplateVersion {
   createdAt: string
   isActive: boolean
   canCancel: boolean
-}
-
-interface MatterSearchOption {
-  id: string
-  label: string
-  matterName: string | null
-  email: string | null
-  stage: string | null
 }
 
 interface TemplateRow {
@@ -55,132 +48,6 @@ function templateLastUpload(template: TemplateRow): TemplateVersion | null {
   }, null)
 }
 
-function MatterSearchPicker({
-  templateId,
-  token,
-  value,
-  onChange,
-}: {
-  templateId: string
-  token: string | null
-  value: string
-  onChange: (matterId: string) => void
-}) {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<MatterSearchOption[]>([])
-  const [selected, setSelected] = useState<MatterSearchOption | null>(null)
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!value) setSelected(null)
-  }, [value])
-
-  useEffect(() => {
-    const trimmed = query.trim()
-    if (!token || selected || trimmed.length < 2) {
-      setResults([])
-      setSearchError(null)
-      return
-    }
-    const handle = window.setTimeout(async () => {
-      setSearching(true)
-      setSearchError(null)
-      try {
-        const response = await fetch(
-          `/api/admin/settings/document-templates/matters?q=${encodeURIComponent(trimmed)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-        const body = await response.json().catch(() => ({})) as {
-          error?: string
-          matters?: MatterSearchOption[]
-        }
-        if (!response.ok) throw new Error(body.error ?? 'Matter search failed')
-        setResults(body.matters ?? [])
-      } catch (error) {
-        setResults([])
-        setSearchError(error instanceof Error ? error.message : 'Matter search failed')
-      } finally {
-        setSearching(false)
-      }
-    }, 200)
-    return () => window.clearTimeout(handle)
-  }, [query, selected, token])
-
-  if (selected) {
-    return (
-      <div className="flex max-w-xl items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{selected.label}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {[selected.matterName, selected.email, selected.stage].filter(Boolean).join(' · ')}
-          </p>
-        </div>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          aria-label="Choose a different matter"
-          onClick={() => {
-            setSelected(null)
-            setQuery('')
-            onChange('')
-          }}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative max-w-xl space-y-1.5">
-      <Label htmlFor={`matter-${templateId}`}>Validation matter</Label>
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          id={`matter-${templateId}`}
-          className="pl-9"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          placeholder="Search by client, matter name, or email"
-          autoComplete="off"
-        />
-      </div>
-      {query.trim().length >= 2 && (
-        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
-          {searching ? (
-            <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Searching…
-            </p>
-          ) : searchError ? (
-            <p className="px-3 py-2 text-sm text-destructive">{searchError}</p>
-          ) : results.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-muted-foreground">No matching matters.</p>
-          ) : results.map(matter => (
-            <button
-              key={matter.id}
-              type="button"
-              className="block w-full rounded-sm px-3 py-2 text-left hover:bg-accent"
-              onClick={() => {
-                setSelected(matter)
-                setQuery('')
-                setResults([])
-                onChange(matter.id)
-              }}
-            >
-              <span className="block truncate text-sm font-medium">{matter.label}</span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {[matter.matterName, matter.email, matter.stage].filter(Boolean).join(' · ')}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function DocumentTemplatesSection() {
   const token = useAccessToken()
   const [templates, setTemplates] = useState<TemplateRow[]>([])
@@ -189,7 +56,11 @@ export function DocumentTemplatesSection() {
   const [busy, setBusy] = useState<string | null>(null)
   const [matterIds, setMatterIds] = useState<Record<string, string>>({})
 
-  const headers = useCallback(() => ({ Authorization: `Bearer ${token}` }), [token])
+  const authHeaders = useMemo<Record<string, string>>(() => {
+    if (!token) return {}
+    return { Authorization: `Bearer ${token}` }
+  }, [token])
+  const headers = useCallback(() => authHeaders, [authHeaders])
   const load = useCallback(async () => {
     if (!token) return
     setLoading(true)
@@ -219,7 +90,7 @@ export function DocumentTemplatesSection() {
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error ?? 'Upload failed')
-      toast.success('Template staged. Validate it against a matter before publishing.')
+      toast.success('Template staged. You can validate it against a matter or publish it directly.')
       await load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Upload failed')
@@ -353,7 +224,7 @@ export function DocumentTemplatesSection() {
         <section key={category} className="space-y-3">
           <div>
             <h3 className="text-sm font-semibold">{CATEGORY_LABELS[category]}</h3>
-            <p className="text-xs text-muted-foreground">Uploads remain staged until they pass a matter preview and are explicitly published.</p>
+            <p className="text-xs text-muted-foreground">Uploads remain staged until they are explicitly published. Validation and preview are available but optional.</p>
           </div>
           <div className="space-y-3">
             {templates.filter(template => template.category === category).map(template => {
@@ -412,8 +283,9 @@ export function DocumentTemplatesSection() {
                 </summary>
                 <div className="space-y-3 border-t border-border p-4">
                   <MatterSearchPicker
-                    templateId={template.id}
-                    token={token}
+                    id={`matter-${template.id}`}
+                    label="Validation matter"
+                    headers={authHeaders}
                     value={matterIds[template.id] ?? ''}
                     onChange={matterId => setMatterIds(current => ({ ...current, [template.id]: matterId }))}
                   />
@@ -445,7 +317,7 @@ export function DocumentTemplatesSection() {
                           <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={() => void download(template, version.id)}>
                             <Download className="h-4 w-4" /> Source
                           </Button>
-                          {!version.isActive && version.validationStatus === 'valid' && (
+                          {!version.isActive && (
                             <Button size="sm" disabled={Boolean(busy)} onClick={() => void publish(template, version, isRollbackTarget(template, version))}>
                               {isRollbackTarget(template, version) ? <RotateCcw className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
                               {isRollbackTarget(template, version) ? 'Roll back here' : 'Publish'}

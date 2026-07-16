@@ -24,10 +24,7 @@ export async function POST(req: Request, { params }: Params) {
   const action = body?.action === 'rollback' ? 'rolled_back' : 'published'
   if (!versionId) return NextResponse.json({ error: 'versionId is required' }, { status: 400 })
   try {
-    const version = await getDocumentTemplateVersion(templateId, versionId)
-    if (version.validation_status !== 'valid') {
-      return NextResponse.json({ error: 'Template version has not passed validation' }, { status: 409 })
-    }
+    await getDocumentTemplateVersion(templateId, versionId)
     const client = documentTemplateAdminClient()
     const { data, error: publishError } = await client.rpc('publish_document_template_version', {
       p_template_id: templateId,
@@ -47,4 +44,3 @@ export async function POST(req: Request, { params }: Params) {
 }
 
 export const runtime = 'nodejs'
-

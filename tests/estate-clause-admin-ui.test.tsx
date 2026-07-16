@@ -129,6 +129,16 @@ function response(body: unknown, ok = true, status = ok ? 200 : 409) {
   return { ok, status, json: async () => body } as Response
 }
 
+const matterSearchResponse = {
+  matters: [{
+    id: '99999999-9999-4999-8999-999999999999',
+    label: 'Jane Q. Client',
+    matterName: 'Client Revocable Trust',
+    email: 'jane@example.com',
+    stage: 'design',
+  }],
+}
+
 describe('estate clause administrator UI', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(fixture)))
@@ -170,15 +180,17 @@ describe('estate clause administrator UI', () => {
     expect((text as HTMLTextAreaElement).value).toBe('Keep this unsaved attorney draft exactly.')
   })
 
-  it('requires a change summary and valid saved draft before submission', async () => {
+  it('requires a change summary but not validation before submission', async () => {
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
     await user.click(await screen.findByRole('button', { name: 'Edit Tangible Property' }))
     const editor = screen.getByRole('region', { name: 'Clause editor' })
     const summary = within(editor).getByLabelText('Change summary')
+    const submit = within(editor).getByRole('button', { name: 'Submit for review' }) as HTMLButtonElement
+    expect(submit.disabled).toBe(false)
     await user.clear(summary)
     expect((within(editor).getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((within(editor).getByRole('button', { name: 'Submit for review' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(submit.disabled).toBe(true)
   })
 
   it('blocks submission when a valid saved draft has unsaved local edits', async () => {
@@ -291,7 +303,7 @@ describe('estate clause administrator UI', () => {
     expect(screen.queryByRole('button', { name: 'Accept draft' })).toBeNull()
   })
 
-  it('shows published and proposed text side-by-side and requires the exact clause key', async () => {
+  it('shows published and proposed text side-by-side and requires only the exact clause key', async () => {
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
     await user.click(await screen.findByRole('button', { name: 'Review No Contest' }))
@@ -302,8 +314,8 @@ describe('estate clause administrator UI', () => {
     const publish = within(panel).getByRole('button', { name: 'Approve and publish' })
     expect((publish as HTMLButtonElement).disabled).toBe(true)
     await user.type(within(panel).getByLabelText('Type trust.no_contest to confirm'), 'trust.no_contest')
-    expect((publish as HTMLButtonElement).disabled).toBe(true)
-    expect(within(panel).getByText(/successful current representative-matter preview is required/i)).toBeTruthy()
+    expect((publish as HTMLButtonElement).disabled).toBe(false)
+    expect(within(panel).queryByText(/successful current representative-matter preview is required/i)).toBeNull()
   })
 
   it('offers an exact review control for every concurrently submitted revision', async () => {
@@ -367,15 +379,19 @@ describe('estate clause administrator UI', () => {
 
   it('generates downloadable in-memory preview files for the selected revision', async () => {
     const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(response(fixture)).mockResolvedValueOnce(response({
-      files: [{ filename: 'Trust Preview.docx', base64: 'cHJldmlldw==' }],
-      validationReport: { warnings: [] },
-      evidenceId: 'evidence-1',
-    }))
+    fetchMock
+      .mockResolvedValueOnce(response(fixture))
+      .mockResolvedValueOnce(response(matterSearchResponse))
+      .mockResolvedValueOnce(response({
+        files: [{ filename: 'Trust Preview.docx', base64: 'cHJldmlldw==' }],
+        validationReport: { warnings: [] },
+        evidenceId: 'evidence-1',
+      }))
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
     await user.click(await screen.findByRole('button', { name: 'Review No Contest' }))
-    await user.type(screen.getByLabelText('Representative matter ID for preview'), '99999999-9999-4999-8999-999999999999')
+    await user.type(screen.getByLabelText('Representative matter for preview'), 'Client Revocable')
+    await user.click(await screen.findByText('Jane Q. Client'))
     await user.click(screen.getByRole('button', { name: 'Preview' }))
     const download = await screen.findByRole('link', { name: 'Trust Preview.docx' })
     expect(download.getAttribute('download')).toBe('Trust Preview.docx')
@@ -387,7 +403,7 @@ describe('estate clause administrator UI', () => {
         body: JSON.stringify({ revisionId: proposedRevision.id, matterId: '99999999-9999-4999-8999-999999999999' }),
       }),
     )
-    await user.type(screen.getByLabelText('Representative matter ID for preview'), '0')
+    await user.click(screen.getByRole('button', { name: 'Choose a different matter' }))
     expect(screen.queryByRole('link', { name: 'Trust Preview.docx' })).toBeNull()
     expect(screen.queryByText(/"warnings"/)).toBeNull()
   })
@@ -395,31 +411,68 @@ describe('estate clause administrator UI', () => {
   it('ignores an obsolete preview response after the representative matter changes', async () => {
     let finishPreview!: (value: Response) => void
     const pendingPreview = new Promise<Response>(resolve => { finishPreview = resolve })
-    vi.mocked(fetch).mockResolvedValueOnce(response(fixture)).mockReturnValueOnce(pendingPreview)
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(fixture))
+      .mockResolvedValueOnce(response(matterSearchResponse))
+      .mockReturnValueOnce(pendingPreview)
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
     await user.click(await screen.findByRole('button', { name: 'Review No Contest' }))
-    const matter = screen.getByLabelText('Representative matter ID for preview')
-    await user.type(matter, '99999999-9999-4999-8999-999999999999')
+    await user.type(screen.getByLabelText('Representative matter for preview'), 'Client Revocable')
+    await user.click(await screen.findByText('Jane Q. Client'))
     await user.click(screen.getByRole('button', { name: 'Preview' }))
-    await user.clear(matter)
-    await user.type(matter, '88888888-8888-4888-8888-888888888888')
+    await user.click(screen.getByRole('button', { name: 'Choose a different matter' }))
     finishPreview(response({ files: [{ filename: 'Wrong Matter.docx', base64: 'YmFk' }], validationReport: { warnings: ['stale'] } }))
     await waitFor(() => expect(screen.queryByRole('link', { name: 'Wrong Matter.docx' })).toBeNull())
     expect(screen.queryByText(/stale/)).toBeNull()
     expect(screen.queryByText('Preview generated in memory. No document was saved.')).toBeNull()
   })
 
+  it('lets reviewers choose a representative matter by name before previewing', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock
+      .mockResolvedValueOnce(response(fixture))
+      .mockResolvedValueOnce(response(matterSearchResponse))
+      .mockResolvedValueOnce(response({
+        files: [{ filename: 'Trust Preview.docx', base64: 'cHJldmlldw==' }],
+        validationReport: { warnings: [] },
+        evidenceId: 'evidence-1',
+      }))
+    const user = userEvent.setup()
+    render(<EstateClauseLibrarySection currentUserId="reviewer" />)
+    await user.click(await screen.findByRole('button', { name: 'Review No Contest' }))
+
+    await user.type(screen.getByLabelText('Representative matter for preview'), 'Client Revocable')
+    await user.click(await screen.findByText('Jane Q. Client'))
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+
+    expect(await screen.findByRole('link', { name: 'Trust Preview.docx' })).toBeTruthy()
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/settings/document-templates/matters?q=Client%20Revocable',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer test-token' }) }),
+    )
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/admin/settings/estate-clauses/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/preview',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ revisionId: proposedRevision.id, matterId: '99999999-9999-4999-8999-999999999999' }),
+      }),
+    )
+  })
+
   it('surfaces optimistic publication conflicts without clearing confirmation', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(response(fixture))
+      .mockResolvedValueOnce(response(matterSearchResponse))
       .mockResolvedValueOnce(response({ files: [], validationReport: {}, evidenceId: 'evidence-1' }))
       .mockResolvedValueOnce(response({ error: 'The current publication changed; reload before publishing' }, false))
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
     await user.click(await screen.findByRole('button', { name: 'Review No Contest' }))
     const panel = screen.getByRole('region', { name: 'Clause review' })
-    await user.type(within(panel).getByLabelText('Representative matter ID for preview'), '99999999-9999-4999-8999-999999999999')
+    await user.type(within(panel).getByLabelText('Representative matter for preview'), 'Client Revocable')
+    await user.click(await within(panel).findByText('Jane Q. Client'))
     await user.click(within(panel).getByRole('button', { name: 'Preview' }))
     await within(panel).findByText(/Immutable validation evidence was recorded/i)
     const confirmation = within(panel).getByLabelText('Type trust.no_contest to confirm')
@@ -437,14 +490,14 @@ describe('estate clause administrator UI', () => {
     ))
   })
 
-  it('keeps publication disabled until a blocker-free preview records evidence', async () => {
+  it('does not require representative preview evidence before publication', async () => {
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
     await user.click(await screen.findByRole('button', { name: 'Review No Contest' }))
     const panel = screen.getByRole('region', { name: 'Clause review' })
     await user.type(within(panel).getByLabelText('Type trust.no_contest to confirm'), 'trust.no_contest')
-    expect((within(panel).getByRole('button', { name: 'Approve and publish' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(within(panel).getByText(/successful current representative-matter preview is required/i)).toBeTruthy()
+    expect((within(panel).getByRole('button', { name: 'Approve and publish' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(within(panel).queryByText(/successful current representative-matter preview is required/i)).toBeNull()
   })
 
   it('clears exact-key confirmation when switching review candidates', async () => {

@@ -39,7 +39,6 @@ export async function POST(
     if (!draft) return Response.json({ error: 'Estate clause draft not found' }, { status: 404 })
     const row = draft as { author_id: string; validation_status: string }
     if (row.author_id !== userId) return Response.json({ error: 'Only the draft author may submit it' }, { status: 403 })
-    if (row.validation_status !== 'valid') return Response.json({ error: 'Estate clause draft failed validation' }, { status: 409 })
 
     const revisionId = await submitEstateClauseDraft({ client, workingDraftId, actorId: userId })
     return Response.json({ revisionId })

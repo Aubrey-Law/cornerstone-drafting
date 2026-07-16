@@ -7,6 +7,10 @@ const soloPublicationSql = fs.readFileSync(
   path.join(process.cwd(), 'supabase/migrations/20260716130000_solo_attorney_estate_clause_publication.sql'),
   'utf8',
 )
+const relaxedPublicationSql = fs.readFileSync(
+  path.join(process.cwd(), 'supabase/migrations/20260716193000_relax_template_clause_validation_publication.sql'),
+  'utf8',
+)
 const persistenceSql = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION public.persist_generated_estate_document'))
 
 function functionDefinition(source: string, name: string) {
@@ -144,6 +148,16 @@ describe('estate clause schema', () => {
     expect(soloPublicationSql).toContain("'changes_requested'")
     expect(soloPublicationSql).toContain("'published'")
     expect(soloPublicationSql).toContain("'publication_reverted'")
+  })
+
+  it('relaxes validation and preview as publication prerequisites in the final policy migration', () => {
+    expect(relaxedPublicationSql).toContain('CREATE OR REPLACE FUNCTION public.submit_estate_clause_revision')
+    expect(relaxedPublicationSql).toContain('CREATE OR REPLACE FUNCTION public.publish_estate_clause_revision')
+    expect(relaxedPublicationSql).not.toContain("v_draft.validation_status <> 'valid'")
+    expect(relaxedPublicationSql).not.toContain("v_validation_status <> 'valid'")
+    expect(relaxedPublicationSql).not.toContain('v_preview_document_types')
+    expect(relaxedPublicationSql).toContain("v_latest_event IS DISTINCT FROM 'submitted'")
+    expect(relaxedPublicationSql).toContain('v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id')
   })
 
   it('changes only the approved author-inequality guards in the three workflow functions', () => {

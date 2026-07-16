@@ -722,6 +722,34 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     expect(getAdminClient).not.toHaveBeenCalled()
   })
 
+  it('submits clause drafts without requiring validation status', async () => {
+    vi.resetModules()
+    const workingDraftId = '33333333-3333-4333-8333-333333333333'
+    const client = fakeClient({
+      estate_clause_working_drafts: {
+        data: { id: workingDraftId, clause_id: clauseId, author_id: 'author-1', validation_status: 'invalid' },
+        error: null,
+      },
+    })
+    const submit = vi.fn().mockResolvedValue(revisionId)
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'author-1' }) }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+    vi.doMock('@/lib/estateClauses/repository', () => ({
+      submitEstateClauseDraft: submit,
+    }))
+    const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/submit/route')
+
+    const response = await POST(new Request('http://localhost/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workingDraftId }),
+    }), { params: Promise.resolve({ clauseId }) })
+
+    expect(response.status).toBe(200)
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+      workingDraftId,
+      actorId: 'author-1',
+    }))
+  })
+
   it('targets one exact submitted revision when multiple revisions await review', async () => {
     vi.resetModules()
     const client = fakeClient({
@@ -756,6 +784,31 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     }))
     expect(publish.mock.calls[0][0]).not.toHaveProperty('authorId')
     expect(requestChanges).not.toHaveBeenCalled()
+  })
+
+  it('publishes submitted clause revisions without requiring validation status', async () => {
+    vi.resetModules()
+    const client = fakeClient({
+      estate_clause_revisions: { data: [{ id: revisionId, author_id: 'author-1', validation_status: 'invalid' }], error: null },
+      estate_clause_review_events: { data: [{ revision_id: revisionId, event_type: 'submitted' }], error: null },
+      estate_clause_publications: { data: null, error: null },
+    })
+    const publish = vi.fn().mockResolvedValue('publication-1')
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'reviewer-1' }) }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+    vi.doMock('@/lib/estateClauses/repository', () => ({
+      publishEstateClauseRevision: publish,
+      requestEstateClauseChanges: vi.fn(),
+    }))
+    const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route')
+
+    const response = await POST(new Request(`http://localhost/api?revisionId=${revisionId}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: null }),
+    }), { params: Promise.resolve({ clauseId }) })
+
+    expect(response.status).toBe(200)
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({ revisionId, actorId: 'reviewer-1' }))
   })
 
   it('maps stale workflow RPC failures to 409', async () => {

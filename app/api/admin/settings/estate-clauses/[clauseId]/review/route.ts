@@ -86,9 +86,6 @@ export async function POST(
       return Response.json({ eventId })
     }
 
-    if (revisionRow.validation_status !== 'valid') {
-      return Response.json({ error: 'Estate clause revision failed validation' }, { status: 409 })
-    }
     const { data: publication, error: publicationError } = await client
       .from('estate_clause_publications')
       .select('current_revision_id')
