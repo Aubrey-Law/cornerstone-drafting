@@ -335,12 +335,17 @@ describe('estate clause administrator UI', () => {
     expect((screen.getByLabelText('Structured clause text') as HTMLTextAreaElement).value).toBe(proposedRevision.text)
   })
 
-  it('suppresses self-publication and explains the independent review rule', async () => {
+  it('allows deliberate publication of a self-authored revision', async () => {
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
+
     await user.click(await screen.findByRole('button', { name: 'Review Self Authored' }))
-    expect(screen.getByText('A different attorney or administrator must publish this revision.')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Approve and publish' })).toBeNull()
+
+    expect(screen.getByText('Self-authored revision')).toBeTruthy()
+    expect(screen.getByLabelText('Reviewer comments')).toBeTruthy()
+    expect(screen.getByLabelText(/Type .* to confirm/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Approve and publish' })).toBeTruthy()
+    expect(screen.queryByText(/different attorney or administrator/i)).toBeNull()
   })
 
   it('generates downloadable in-memory preview files for the selected revision', async () => {

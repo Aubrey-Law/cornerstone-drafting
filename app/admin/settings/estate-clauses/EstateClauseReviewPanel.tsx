@@ -97,7 +97,7 @@ export function EstateClauseReviewPanel({
     <section aria-label="Clause review" className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Independent review</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Attorney review</p>
           <h3 className="font-serif text-xl font-semibold">{clause.title}</h3>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{clause.clauseKey} · revision {revision.revisionNumber}</p>
         </div>
@@ -121,6 +121,13 @@ export function EstateClauseReviewPanel({
         <div className="sm:col-span-2"><dt className="text-muted-foreground">Mandatory change summary</dt><dd className="mt-1 font-medium">{revision.changeSummary}</dd></div>
       </dl>
 
+      {selfAuthored && (
+        <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground">
+          <span className="font-semibold">Self-authored revision</span>.{' '}
+          A successful preview and exact stable-key confirmation are still required before publication.
+        </p>
+      )}
+
       <div className="rounded-md border border-border p-3 text-xs">
         <div className="flex items-center gap-2 font-medium"><ShieldCheck className="size-4 text-primary" /> Validation report</div>
         {validation.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{validation.map(item => <li key={item}>{item}</li>)}</ul> : <p className="mt-2 text-muted-foreground">No validation findings.</p>}
@@ -139,24 +146,20 @@ export function EstateClauseReviewPanel({
       {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
       {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
 
-      {selfAuthored ? (
-        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-foreground">A different attorney or administrator must publish this revision.</p>
-      ) : (
-        <div className="grid gap-4 border-t border-border pt-4 lg:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor={`comment-${revision.id}`}>Reviewer comments</Label>
-            <Textarea id={`comment-${revision.id}`} value={comment} onChange={event => setComment(event.target.value)} placeholder="Required when requesting changes" />
-            <Button variant="outline" disabled={!comment.trim() || busy !== null} onClick={() => void requestChanges()}>{busy === 'changes' && <Loader2 className="animate-spin" />} Request changes</Button>
-          </div>
-          <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
-            <Label htmlFor={`confirm-${revision.id}`}>Type {clause.clauseKey} to confirm</Label>
-            <Input id={`confirm-${revision.id}`} className="font-mono text-xs" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" />
-            <p className="text-[11px] text-muted-foreground">Publication is immediate and this revision becomes the current immutable clause.</p>
-            {!previewApproved && <p className="text-[11px] text-amber-700">A successful current representative-matter preview is required before publication.</p>}
-            <Button disabled={!previewApproved || confirmation !== clause.clauseKey || revision.validationStatus !== 'valid' || busy !== null} onClick={() => void publish()}>{busy === 'publish' ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Approve and publish</Button>
-          </div>
+      <div className="grid gap-4 border-t border-border pt-4 lg:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`comment-${revision.id}`}>Reviewer comments</Label>
+          <Textarea id={`comment-${revision.id}`} value={comment} onChange={event => setComment(event.target.value)} placeholder="Required when requesting changes" />
+          <Button variant="outline" disabled={!comment.trim() || busy !== null} onClick={() => void requestChanges()}>{busy === 'changes' && <Loader2 className="animate-spin" />} Request changes</Button>
         </div>
-      )}
+        <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+          <Label htmlFor={`confirm-${revision.id}`}>Type {clause.clauseKey} to confirm</Label>
+          <Input id={`confirm-${revision.id}`} className="font-mono text-xs" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" />
+          <p className="text-[11px] text-muted-foreground">Publication is immediate and this revision becomes the current immutable clause.</p>
+          {!previewApproved && <p className="text-[11px] text-amber-700">A successful current representative-matter preview is required before publication.</p>}
+          <Button disabled={!previewApproved || confirmation !== clause.clauseKey || revision.validationStatus !== 'valid' || busy !== null} onClick={() => void publish()}>{busy === 'publish' ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Approve and publish</Button>
+        </div>
+      </div>
     </section>
   )
 }
