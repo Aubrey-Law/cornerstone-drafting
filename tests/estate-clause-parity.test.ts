@@ -87,7 +87,42 @@ function databaseClient(results: Record<string, { data: unknown; error: { messag
       }
       return query
     },
-    rpc: () => Promise.resolve({ data: null, error: null }),
+    rpc(name: string) {
+      const direct = results[name]
+      if (direct) return Promise.resolve(direct)
+      if (name === 'load_estate_clause_generation_snapshot') {
+        const publicationsResult = results.estate_clause_publications ?? { data: [], error: null }
+        if (publicationsResult.error) return Promise.resolve(publicationsResult)
+        const publications = (publicationsResult.data as Array<{
+          clause_id: string
+          current_revision_id: string
+          estate_clauses: { clause_key: string; title: string; jurisdiction: string; document_types: string[] }
+          estate_clause_revisions: {
+            revision_number: number
+            clause_text: string
+            required_fields: string[]
+            nested_clause_keys: string[]
+            condition_field: string | null
+            content_hash: string
+          }
+        }>).map(row => ({
+          clause_id: row.clause_id,
+          current_revision_id: row.current_revision_id,
+          clause_key: row.estate_clauses.clause_key,
+          title: row.estate_clauses.title,
+          jurisdiction: row.estate_clauses.jurisdiction,
+          document_types: row.estate_clauses.document_types,
+          revision_number: row.estate_clause_revisions.revision_number,
+          clause_text: row.estate_clause_revisions.clause_text,
+          required_fields: row.estate_clause_revisions.required_fields,
+          nested_clause_keys: row.estate_clause_revisions.nested_clause_keys,
+          condition_field: row.estate_clause_revisions.condition_field,
+          content_hash: row.estate_clause_revisions.content_hash,
+        }))
+        return Promise.resolve({ data: { publications, overrides: [] }, error: null })
+      }
+      return Promise.resolve({ data: null, error: null })
+    },
   } as EstateClauseClient
 }
 
@@ -404,6 +439,7 @@ describe('estate clause release gate', () => {
       estate_clause_revisions: 'estate_clause_revisions_authorized_read',
       estate_clause_review_events: 'estate_clause_review_events_attorney_read',
       estate_clause_publications: 'estate_clause_publications_staff_read',
+      estate_clause_preview_evidence: 'estate_clause_preview_evidence_attorney_read',
       matter_estate_clause_overrides: 'matter_estate_clause_overrides_attorney_read',
       generated_document_clause_revisions: 'generated_document_clause_revisions_staff_read',
     }
@@ -411,7 +447,12 @@ describe('estate clause release gate', () => {
       'submit_estate_clause_revision(uuid, uuid)',
       'request_estate_clause_changes(uuid, uuid, text)',
       'publish_estate_clause_revision(uuid, uuid, uuid)',
+      'record_estate_clause_preview(uuid, text, text[], uuid, jsonb, uuid)',
+      'retire_estate_clause_publication(uuid, uuid, text, uuid)',
+      'revert_estate_clause_publication(uuid, uuid, uuid, text, uuid)',
       'upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid)',
+      'retire_matter_estate_clause_override(uuid, uuid, text, uuid)',
+      'load_estate_clause_generation_snapshot(uuid)',
       'persist_generated_estate_document(jsonb, jsonb)',
     ]
 
@@ -422,7 +463,7 @@ describe('estate clause release gate', () => {
       expect(migration).toContain(`GRANT ALL ON public.${table} TO service_role`)
       expect(migration).toContain(`CREATE POLICY ${policy}\n  ON public.${table} FOR SELECT TO authenticated`)
     }
-    expect(migration.match(/SECURITY DEFINER\nSET search_path = ''/g)).toHaveLength(rpcs.length)
+    expect(migration.match(/SECURITY DEFINER(?:\n| )SET search_path = ''/g)).toHaveLength(rpcs.length)
     for (const signature of rpcs) {
       expect(migration).toContain(`REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC, anon, authenticated`)
       expect(migration).toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO service_role`)
