@@ -57,7 +57,7 @@ export function DocumentTemplatesSection() {
   const [matterIds, setMatterIds] = useState<Record<string, string>>({})
 
   const authHeaders = useMemo<Record<string, string>>(() => {
-    if (!token) return {}
+    if (!token) return {} as Record<string, string>
     return { Authorization: `Bearer ${token}` }
   }, [token])
   const headers = useCallback(() => authHeaders, [authHeaders])
