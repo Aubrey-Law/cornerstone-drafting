@@ -225,6 +225,40 @@ export async function publishEstateClauseRevision(args: {
   return requireData(result, 'Estate clause publication returned no result')
 }
 
+export async function retireEstateClausePublication(args: {
+  client: EstateClauseClient
+  clauseId: string
+  actorId: string
+  expectedCurrentRevisionId: string
+  reason: string
+}) {
+  const result = await args.client.rpc('retire_estate_clause_publication', {
+    p_clause_id: args.clauseId,
+    p_expected_current_revision_id: args.expectedCurrentRevisionId,
+    p_reason: args.reason,
+    p_actor_id: args.actorId,
+  })
+  return requireData(result, 'Estate clause retirement returned no event')
+}
+
+export async function revertEstateClausePublication(args: {
+  client: EstateClauseClient
+  clauseId: string
+  targetRevisionId: string
+  actorId: string
+  expectedCurrentRevisionId: string | null
+  reason: string
+}) {
+  const result = await args.client.rpc('revert_estate_clause_publication', {
+    p_clause_id: args.clauseId,
+    p_target_revision_id: args.targetRevisionId,
+    p_expected_current_revision_id: args.expectedCurrentRevisionId,
+    p_reason: args.reason,
+    p_actor_id: args.actorId,
+  })
+  return requireData(result, 'Estate clause reversion returned no event')
+}
+
 export async function loadPublishedEstateClauseSnapshot(args: {
   client: EstateClauseClient
   matterId: string

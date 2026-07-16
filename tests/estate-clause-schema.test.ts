@@ -54,5 +54,16 @@ describe('estate clause schema', () => {
     expect(sql).toContain('CREATE TRIGGER estate_clause_preview_evidence_immutable')
     expect(sql).toContain('cardinality(v_preview_document_types)')
     expect(sql).toContain('v_preview_document_types @> v_document_types')
+    expect(sql).toContain('WITH RECURSIVE dependency_graph')
+    expect(sql).toContain('Estate clause dependency has no current publication')
+    expect(sql).toContain('Estate clause dependency graph contains a cycle')
+  })
+
+  it('supports transactional audited retirement and reversion without erasing history', () => {
+    expect(sql).toContain('CREATE OR REPLACE FUNCTION public.retire_estate_clause_publication')
+    expect(sql).toContain('CREATE OR REPLACE FUNCTION public.revert_estate_clause_publication')
+    expect(sql).toContain("'retired'")
+    expect(sql).toContain("'publication_reverted'")
+    expect(sql).toContain('p_expected_current_revision_id')
   })
 })

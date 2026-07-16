@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   importBundledEstateClauses,
   loadPublishedEstateClauseSnapshot,
+  retireEstateClausePublication,
+  revertEstateClausePublication,
   publishEstateClauseRevision,
   requestEstateClauseChanges,
   saveEstateClauseDraft,
@@ -130,6 +132,24 @@ describe('estate clause repository workflow', () => {
       p_actor_id: 'reviewer-1',
       p_expected_current_revision_id: 'revision-1',
     })
+  })
+
+  it('retires and reverts publications through audited transactional RPCs', async () => {
+    const client = fakeClient()
+    await retireEstateClausePublication({
+      client: asRepositoryClient(client), clauseId: 'clause-1', actorId: 'reviewer-1',
+      expectedCurrentRevisionId: 'revision-2', reason: 'Retire pending legal review.',
+    })
+    await revertEstateClausePublication({
+      client: asRepositoryClient(client), clauseId: 'clause-1', targetRevisionId: 'revision-1',
+      actorId: 'reviewer-1', expectedCurrentRevisionId: 'revision-2', reason: 'Restore the prior approved language.',
+    })
+    expect(client.rpc).toHaveBeenNthCalledWith(1, 'retire_estate_clause_publication', expect.objectContaining({
+      p_expected_current_revision_id: 'revision-2', p_reason: 'Retire pending legal review.',
+    }))
+    expect(client.rpc).toHaveBeenNthCalledWith(2, 'revert_estate_clause_publication', expect.objectContaining({
+      p_target_revision_id: 'revision-1', p_expected_current_revision_id: 'revision-2',
+    }))
   })
 
   it('rejects a published revision whose canonical content hash does not match', async () => {

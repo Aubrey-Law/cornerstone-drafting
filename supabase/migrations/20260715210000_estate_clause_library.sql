@@ -220,6 +220,9 @@ DECLARE
   v_draft public.estate_clause_working_drafts%ROWTYPE;
   v_revision_id uuid;
   v_revision_number integer;
+  v_clause_key text;
+  v_dependency_missing boolean;
+  v_dependency_cycle boolean;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.users u
@@ -241,6 +244,33 @@ BEGIN
   END IF;
   IF v_draft.validation_status <> 'valid' THEN
     RAISE EXCEPTION 'Estate clause working draft has not passed validation';
+  END IF;
+
+  SELECT c.clause_key INTO v_clause_key FROM public.estate_clauses c WHERE c.id = v_draft.clause_id;
+  WITH RECURSIVE dependency_graph(clause_key, nested_keys, path, cycle, available) AS (
+    SELECT v_clause_key, v_draft.nested_clause_keys, ARRAY[v_clause_key]::text[], false, true
+    UNION ALL
+    SELECT child.clause_key,
+           COALESCE(r.nested_clause_keys, '{}'::text[]),
+           graph.path || child.clause_key,
+           child.clause_key = ANY(graph.path),
+           c.id IS NOT NULL AND p.current_revision_id IS NOT NULL
+    FROM dependency_graph graph
+    CROSS JOIN LATERAL unnest(graph.nested_keys) child(clause_key)
+    LEFT JOIN public.estate_clauses c ON c.clause_key = child.clause_key AND c.is_active
+    LEFT JOIN public.estate_clause_publications p ON p.clause_id = c.id
+    LEFT JOIN public.estate_clause_revisions r
+      ON r.id = p.current_revision_id AND r.clause_id = c.id
+    WHERE NOT graph.cycle AND graph.available
+  )
+  SELECT COALESCE(bool_or(NOT available), false), COALESCE(bool_or(cycle), false)
+  INTO v_dependency_missing, v_dependency_cycle
+  FROM dependency_graph;
+  IF v_dependency_missing THEN
+    RAISE EXCEPTION 'Estate clause dependency has no current publication';
+  END IF;
+  IF v_dependency_cycle THEN
+    RAISE EXCEPTION 'Estate clause dependency graph contains a cycle';
   END IF;
 
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_draft.clause_id::text, 0));
@@ -506,6 +536,85 @@ BEGIN
     p_document_types, p_representative_matter_id, p_validation_report, p_actor_id
   ) RETURNING id INTO v_evidence_id;
   RETURN v_evidence_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.retire_estate_clause_publication(
+  p_clause_id uuid,
+  p_expected_current_revision_id uuid,
+  p_reason text,
+  p_actor_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_current_revision_id uuid;
+  v_event_id uuid;
+BEGIN
+  IF length(pg_catalog.btrim(COALESCE(p_reason, ''))) = 0 THEN RAISE EXCEPTION 'Retirement reason is required'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')) THEN
+    RAISE EXCEPTION 'Attorney or administrator role required';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_clause_id::text, 0));
+  SELECT p.current_revision_id INTO v_current_revision_id
+  FROM public.estate_clause_publications p WHERE p.clause_id = p_clause_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Current estate clause publication not found'; END IF;
+  IF v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id THEN
+    RAISE EXCEPTION 'Current estate clause revision changed; refresh and try again';
+  END IF;
+  INSERT INTO public.estate_clause_review_events (
+    clause_id, revision_id, event_type, actor_id, comment, metadata
+  ) VALUES (
+    p_clause_id, v_current_revision_id, 'retired', p_actor_id, pg_catalog.btrim(p_reason),
+    jsonb_build_object('expectedCurrentRevisionId', p_expected_current_revision_id)
+  ) RETURNING id INTO v_event_id;
+  DELETE FROM public.estate_clause_publications p WHERE p.clause_id = p_clause_id;
+  RETURN v_event_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.revert_estate_clause_publication(
+  p_clause_id uuid,
+  p_target_revision_id uuid,
+  p_expected_current_revision_id uuid,
+  p_reason text,
+  p_actor_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_current_revision_id uuid;
+  v_target_author_id uuid;
+  v_event_id uuid;
+BEGIN
+  IF length(pg_catalog.btrim(COALESCE(p_reason, ''))) = 0 THEN RAISE EXCEPTION 'Reversion reason is required'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')) THEN
+    RAISE EXCEPTION 'Attorney or administrator role required';
+  END IF;
+  SELECT r.author_id INTO v_target_author_id FROM public.estate_clause_revisions r
+  WHERE r.id = p_target_revision_id AND r.clause_id = p_clause_id AND r.validation_status = 'valid';
+  IF NOT FOUND OR NOT EXISTS (
+    SELECT 1 FROM public.estate_clause_review_events e
+    WHERE e.clause_id = p_clause_id AND e.revision_id = p_target_revision_id AND e.event_type = 'published'
+  ) THEN RAISE EXCEPTION 'Target revision has no approved publication history'; END IF;
+  IF v_target_author_id = p_actor_id THEN RAISE EXCEPTION 'A different attorney or administrator must revert this revision'; END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_clause_id::text, 0));
+  SELECT p.current_revision_id INTO v_current_revision_id
+  FROM public.estate_clause_publications p WHERE p.clause_id = p_clause_id FOR UPDATE;
+  IF v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id THEN
+    RAISE EXCEPTION 'Current estate clause revision changed; refresh and try again';
+  END IF;
+  INSERT INTO public.estate_clause_publications (clause_id, current_revision_id, published_by, published_at, updated_at)
+  VALUES (p_clause_id, p_target_revision_id, p_actor_id, now(), now())
+  ON CONFLICT (clause_id) DO UPDATE SET current_revision_id = EXCLUDED.current_revision_id,
+    published_by = EXCLUDED.published_by, published_at = EXCLUDED.published_at, updated_at = EXCLUDED.updated_at;
+  INSERT INTO public.estate_clause_review_events (
+    clause_id, revision_id, event_type, actor_id, comment, metadata
+  ) VALUES (
+    p_clause_id, p_target_revision_id, 'publication_reverted', p_actor_id, pg_catalog.btrim(p_reason),
+    jsonb_build_object('expectedCurrentRevisionId', p_expected_current_revision_id, 'previousRevisionId', v_current_revision_id)
+  ) RETURNING id INTO v_event_id;
+  RETURN v_event_id;
 END;
 $$;
 
@@ -922,6 +1031,8 @@ REVOKE ALL ON FUNCTION public.submit_estate_clause_revision(uuid, uuid) FROM PUB
 REVOKE ALL ON FUNCTION public.request_estate_clause_changes(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.publish_estate_clause_revision(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_estate_clause_preview(uuid, text, text[], uuid, jsonb, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.retire_estate_clause_publication(uuid, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.revert_estate_clause_publication(uuid, uuid, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.retire_matter_estate_clause_override(uuid, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.load_estate_clause_generation_snapshot(uuid) FROM PUBLIC, anon, authenticated;
@@ -931,6 +1042,8 @@ GRANT EXECUTE ON FUNCTION public.submit_estate_clause_revision(uuid, uuid) TO se
 GRANT EXECUTE ON FUNCTION public.request_estate_clause_changes(uuid, uuid, text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.publish_estate_clause_revision(uuid, uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.record_estate_clause_preview(uuid, text, text[], uuid, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.retire_estate_clause_publication(uuid, uuid, text, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.revert_estate_clause_publication(uuid, uuid, uuid, text, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.retire_matter_estate_clause_override(uuid, uuid, text, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.load_estate_clause_generation_snapshot(uuid) TO service_role;
