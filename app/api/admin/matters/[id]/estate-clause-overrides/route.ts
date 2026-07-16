@@ -59,6 +59,12 @@ export function parseDeleteOverrideRequest(value: unknown): { clauseKey: string 
   return { clauseKey }
 }
 
+export function overrideMutationErrorResponse(error: unknown): Response {
+  const message = error instanceof Error ? error.message : 'Unable to save clause override'
+  const conflict = /current estate clause revision changed|not a current active conditional publication/i.test(message)
+  return Response.json({ error: message }, { status: conflict ? 409 : 500 })
+}
+
 type PublishedRow = {
   clause_id: string
   current_revision_id: string
@@ -268,7 +274,7 @@ export async function PUT(req: Request, params: Params) {
     if (error) throw new Error(error.message)
     return Response.json({ override: data })
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Unable to save clause override' }, { status: 500 })
+    return overrideMutationErrorResponse(error)
   }
 }
 

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClauseOverridesPanel } from '@/app/admin/drafting/[matterId]/ClauseOverridesPanel'
 import {
   isPublishedClauseOverrideEligible,
+  overrideMutationErrorResponse,
   parseDeleteOverrideRequest,
   parseOverrideRequest,
 } from '@/app/api/admin/matters/[id]/estate-clause-overrides/route'
@@ -155,6 +156,13 @@ describe('estate clause override request contracts', () => {
     expect(migration).toContain('v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id')
     expect(route).toContain(".rpc('upsert_matter_estate_clause_override'")
     expect(route).toContain('p_expected_current_revision_id: clause.currentRevisionId')
+  })
+
+  it('returns publication races as refreshable eligibility conflicts', async () => {
+    const conflict = overrideMutationErrorResponse(new Error('Current estate clause revision changed; refresh and try again'))
+    expect(conflict.status).toBe(409)
+    await expect(conflict.json()).resolves.toEqual({ error: 'Current estate clause revision changed; refresh and try again' })
+    expect(overrideMutationErrorResponse(new Error('database unavailable')).status).toBe(500)
   })
 })
 
