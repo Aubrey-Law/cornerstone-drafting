@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EstateClauseLibrarySection } from '@/app/admin/settings/estate-clauses/EstateClauseLibrarySection'
+import type { EstateClauseListResponse } from '@/app/admin/settings/estate-clauses/types'
 
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'test-token' }))
 
@@ -38,7 +39,7 @@ const proposedRevision = {
   latestReviewEvent: { event_type: 'submitted' },
 }
 
-const fixture = {
+const fixture: EstateClauseListResponse = {
   clauses: [
     {
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -50,6 +51,7 @@ const fixture = {
       createdAt: '2026-07-14T12:00:00Z',
       updatedAt: '2026-07-15T12:00:00Z',
       workingDraft: null,
+      latestChangeRequest: null,
       submittedRevisions: [proposedRevision],
       currentPublication: {
         clause_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -71,6 +73,7 @@ const fixture = {
       createdAt: '2026-07-14T12:00:00Z',
       updatedAt: '2026-07-15T12:00:00Z',
       workingDraft: null,
+      latestChangeRequest: null,
       submittedRevisions: [],
       currentPublication: null,
       reviewEvents: [],
@@ -99,6 +102,7 @@ const fixture = {
         validationReport: ['Unsupported field: client.full_name'],
         updatedAt: '2026-07-15T12:00:00Z',
       },
+      latestChangeRequest: null,
       submittedRevisions: [],
       currentPublication: null,
       reviewEvents: [],
@@ -113,6 +117,7 @@ const fixture = {
       createdAt: '2026-07-14T12:00:00Z',
       updatedAt: '2026-07-15T12:00:00Z',
       workingDraft: null,
+      latestChangeRequest: null,
       submittedRevisions: [{ ...proposedRevision, id: '44444444-4444-4444-8444-444444444444', clauseId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', authorId: 'reviewer' }],
       currentPublication: null,
       reviewEvents: [],
@@ -191,6 +196,45 @@ describe('estate clause administrator UI', () => {
     expect(submit.disabled).toBe(true)
   })
 
+  it('preserves unsaved edits across an unrelated clause-list refresh', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock
+      .mockResolvedValueOnce(response(fixture))
+      .mockResolvedValueOnce(response({ clause: { id: 'new-clause' } }, true, 201))
+      .mockResolvedValueOnce(response(structuredClone(fixture)))
+    const user = userEvent.setup()
+    render(<EstateClauseLibrarySection currentUserId="reviewer" />)
+    await user.click(await screen.findByRole('button', { name: 'Edit Tangible Property' }))
+    const text = screen.getByLabelText('Structured clause text') as HTMLTextAreaElement
+    await user.type(text, ' Unsaved and preserved.')
+    await user.click(screen.getByRole('button', { name: 'New clause' }))
+    await user.type(screen.getByLabelText('Stable clause key'), 'trust.second_clause')
+    await user.type(screen.getByLabelText('Clause title'), 'Second Clause')
+    await user.click(screen.getByLabelText('Trust'))
+    await user.click(screen.getByRole('button', { name: 'Create working clause' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    expect(text.value).toContain('Unsaved and preserved.')
+    expect((screen.getByRole('button', { name: 'Submit for review' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('locks editor inputs while a save request is in flight', async () => {
+    let finishSave!: (value: Response) => void
+    const pendingSave = new Promise<Response>(resolve => { finishSave = resolve })
+    vi.mocked(fetch).mockResolvedValueOnce(response(fixture)).mockReturnValueOnce(pendingSave)
+    const user = userEvent.setup()
+    render(<EstateClauseLibrarySection currentUserId="reviewer" />)
+    await user.click(await screen.findByRole('button', { name: 'Edit Tangible Property' }))
+    const text = screen.getByLabelText('Structured clause text') as HTMLTextAreaElement
+    await user.type(text, ' Save this version.')
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    expect(text.disabled).toBe(true)
+    expect((screen.getByLabelText('Change summary') as HTMLInputElement).disabled).toBe(true)
+    finishSave(response({ error: 'Draft save conflict' }, false))
+    expect((await screen.findByRole('alert')).textContent).toContain('Draft save conflict')
+    expect(text.disabled).toBe(false)
+    expect(text.value).toContain('Save this version.')
+  })
+
   it('creates a stable clause identity through the Task 4 POST contract', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock
@@ -244,6 +288,52 @@ describe('estate clause administrator UI', () => {
     expect((publish as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('offers an exact review control for every concurrently submitted revision', async () => {
+    const concurrent = structuredClone(fixture)
+    concurrent.clauses[0].submittedRevisions.push({
+      ...proposedRevision,
+      id: '55555555-5555-4555-8555-555555555555',
+      revisionNumber: 3,
+      authorId: 'second-author',
+    })
+    vi.mocked(fetch).mockResolvedValue(response(concurrent))
+    render(<EstateClauseLibrarySection currentUserId="reviewer" />)
+    expect(await screen.findByRole('button', { name: 'Review No Contest revision 2' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Review No Contest revision 3' })).toBeTruthy()
+  })
+
+  it('shows reviewer comments with the restored author working draft', async () => {
+    const continuation = structuredClone(fixture)
+    continuation.clauses[0].submittedRevisions = []
+    continuation.clauses[0].workingDraft = {
+      ...continuation.clauses[2].workingDraft!,
+      id: '66666666-6666-4666-8666-666666666666',
+      clauseId: continuation.clauses[0].id,
+      authorId: 'author-other',
+      basePublishedRevisionId: publishedRevision.id,
+      text: proposedRevision.text,
+      changeSummary: proposedRevision.changeSummary,
+      validationStatus: 'valid',
+      validationReport: [],
+    }
+    Object.assign(continuation.clauses[0], {
+      latestChangeRequest: {
+        revisionId: proposedRevision.id,
+        revisionNumber: 2,
+        comment: 'Narrow the probable-cause exception and explain the Massachusetts rationale.',
+        reviewerId: 'reviewer',
+        createdAt: '2026-07-16T12:00:00Z',
+      },
+    })
+    vi.mocked(fetch).mockResolvedValue(response(continuation))
+    const user = userEvent.setup()
+    render(<EstateClauseLibrarySection currentUserId="author-other" />)
+    await user.click(await screen.findByRole('button', { name: 'Edit No Contest' }))
+    expect(screen.getByText('Changes requested on revision 2')).toBeTruthy()
+    expect(screen.getByText(/Narrow the probable-cause exception/)).toBeTruthy()
+    expect((screen.getByLabelText('Structured clause text') as HTMLTextAreaElement).value).toBe(proposedRevision.text)
+  })
+
   it('suppresses self-publication and explains the independent review rule', async () => {
     const user = userEvent.setup()
     render(<EstateClauseLibrarySection currentUserId="reviewer" />)
@@ -278,6 +368,24 @@ describe('estate clause administrator UI', () => {
     expect(screen.queryByText(/"warnings"/)).toBeNull()
   })
 
+  it('ignores an obsolete preview response after the representative matter changes', async () => {
+    let finishPreview!: (value: Response) => void
+    const pendingPreview = new Promise<Response>(resolve => { finishPreview = resolve })
+    vi.mocked(fetch).mockResolvedValueOnce(response(fixture)).mockReturnValueOnce(pendingPreview)
+    const user = userEvent.setup()
+    render(<EstateClauseLibrarySection currentUserId="reviewer" />)
+    await user.click(await screen.findByRole('button', { name: 'Review No Contest' }))
+    const matter = screen.getByLabelText('Representative matter ID for preview')
+    await user.type(matter, '99999999-9999-4999-8999-999999999999')
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    await user.clear(matter)
+    await user.type(matter, '88888888-8888-4888-8888-888888888888')
+    finishPreview(response({ files: [{ filename: 'Wrong Matter.docx', base64: 'YmFk' }], validationReport: { warnings: ['stale'] } }))
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Wrong Matter.docx' })).toBeNull())
+    expect(screen.queryByText(/stale/)).toBeNull()
+    expect(screen.queryByText('Preview generated in memory. No document was saved.')).toBeNull()
+  })
+
   it('surfaces optimistic publication conflicts without clearing confirmation', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(response(fixture)).mockResolvedValueOnce(response({ error: 'The current publication changed; reload before publishing' }, false))
@@ -292,7 +400,7 @@ describe('estate clause administrator UI', () => {
     expect((await within(panel).findByRole('alert')).textContent).toContain('current publication changed')
     expect((confirmation as HTMLInputElement).value).toBe('trust.no_contest')
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith(
-      '/api/admin/settings/estate-clauses/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/review',
+      `/api/admin/settings/estate-clauses/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/review?revisionId=${proposedRevision.id}`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: publishedRevision.id }),

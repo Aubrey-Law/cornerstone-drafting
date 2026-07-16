@@ -99,6 +99,14 @@ export async function GET(req: Request) {
     return Response.json({
       clauses: clauses.map(clause => {
         const draft = drafts.find(row => row.clause_id === clause.id) ?? null
+        const changedRevision = draft
+          ? revisions.find(row => (
+            row.clause_id === clause.id
+            && row.author_id === draft.author_id
+            && latestEventByRevision.get(row.id)?.event_type === 'changes_requested'
+          )) ?? null
+          : null
+        const changeRequest = changedRevision ? latestEventByRevision.get(changedRevision.id) ?? null : null
         const publication = publications.find(row => row.clause_id === clause.id) ?? null
         const currentRevision = publication
           ? revisions.find(row => row.id === publication.current_revision_id) ?? null
@@ -119,6 +127,13 @@ export async function GET(req: Request) {
             validationStatus: draft.validation_status,
             validationReport: draft.validation_report,
             updatedAt: draft.updated_at,
+          } : null,
+          latestChangeRequest: changedRevision && changeRequest ? {
+            revisionId: changedRevision.id,
+            revisionNumber: changedRevision.revision_number,
+            comment: changeRequest.comment,
+            reviewerId: changeRequest.actor_id,
+            createdAt: changeRequest.created_at,
           } : null,
           submittedRevisions: revisions
             .filter(row => row.clause_id === clause.id && latestEventByRevision.get(row.id)?.event_type === 'submitted')

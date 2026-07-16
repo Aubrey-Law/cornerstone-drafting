@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpenText, Loader2, Plus, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,7 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [newClause, setNewClause] = useState<{ clauseKey: string; title: string; documentTypes: EstateDocumentType[] }>({ clauseKey: '', title: '', documentTypes: [] })
+  const loadRequest = useRef(0)
   const authHeaders = useMemo<Record<string, string>>(() => {
     if (!token) return {} as Record<string, string>
     return { Authorization: `Bearer ${token}` }
@@ -48,15 +49,38 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
 
   const load = useCallback(async () => {
     if (!token) return
+    const requestId = ++loadRequest.current
     setError(null)
     try {
       const response = await fetch('/api/admin/settings/estate-clauses', { headers: authHeaders })
       const body = await response.json().catch(() => ({})) as Partial<EstateClauseListResponse> & { error?: string }
       if (!response.ok) throw new Error(body.error ?? 'Unable to load estate clauses')
-      setClauses(body.clauses ?? [])
+      if (requestId !== loadRequest.current) return
+      const nextClauses = body.clauses ?? []
+      setClauses(nextClauses)
+      setSelection(current => {
+        if (!current) return null
+        const selected = nextClauses.find(clause => clause.id === current.clauseId)
+        if (!selected) return null
+        if (current.mode === 'review') {
+          if (selected.submittedRevisions.some(revision => revision.id === current.revisionId)) return current
+          const nextRevision = selected.submittedRevisions[0]
+          return nextRevision
+            ? { mode: 'review', clauseId: selected.id, revisionId: nextRevision.id }
+            : { mode: 'edit', clauseId: selected.id }
+        }
+        const nextRevision = selected.submittedRevisions[0]
+        if (!selected.workingDraft && nextRevision) {
+          return { mode: 'review', clauseId: selected.id, revisionId: nextRevision.id }
+        }
+        return current
+      })
     } catch (cause) {
+      if (requestId !== loadRequest.current) return
       setError(cause instanceof Error ? cause.message : 'Unable to load estate clauses')
-    } finally { setLoading(false) }
+    } finally {
+      if (requestId === loadRequest.current) setLoading(false)
+    }
   }, [authHeaders, token])
 
   useEffect(() => { void load() }, [load])
@@ -127,17 +151,22 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
               {visible.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No clauses match these filters.</p>}
               {visible.map(clause => {
                 const status = statusOf(clause)
-                const revision = clause.submittedRevisions[0]
-                const review = Boolean(revision)
+                const review = clause.submittedRevisions.length > 0
                 return <article key={clause.id} className="space-y-2 p-3 hover:bg-muted/30">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0"><h4 className="truncate text-sm font-semibold">{clause.title}</h4><p className="truncate font-mono text-[10px] text-muted-foreground">{clause.clauseKey}</p></div>
                     <Badge variant={status === 'awaiting_review' ? 'default' : 'outline'} className="text-[10px]">{statusLabel[status]}</Badge>
                   </div>
                   <p className="truncate text-[11px] text-muted-foreground">{clause.documentTypes.map(type => documentTypeLabels[type]).join(' · ')}</p>
-                  <Button size="sm" variant={selection?.clauseId === clause.id ? 'default' : 'outline'} className="h-7 w-full text-xs" onClick={() => setSelection(review ? { mode: 'review', clauseId: clause.id, revisionId: revision.id } : { mode: 'edit', clauseId: clause.id })}>
-                    {review ? `Review ${clause.title}` : `Edit ${clause.title}`}
-                  </Button>
+                  {review ? <div className="space-y-1.5">{clause.submittedRevisions.map(revision => (
+                    <Button key={revision.id} size="sm" variant={selection?.mode === 'review' && selection.revisionId === revision.id ? 'default' : 'outline'} className="h-7 w-full text-xs" onClick={() => setSelection({ mode: 'review', clauseId: clause.id, revisionId: revision.id })}>
+                      Review {clause.title}{clause.submittedRevisions.length > 1 ? ` revision ${revision.revisionNumber}` : ''}
+                    </Button>
+                  ))}</div> : (
+                    <Button size="sm" variant={selection?.clauseId === clause.id ? 'default' : 'outline'} className="h-7 w-full text-xs" onClick={() => setSelection({ mode: 'edit', clauseId: clause.id })}>
+                      Edit {clause.title}
+                    </Button>
+                  )}
                 </article>
               })}
             </div>

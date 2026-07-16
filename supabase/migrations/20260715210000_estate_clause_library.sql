@@ -250,8 +250,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_clause_id uuid;
-  v_author_id uuid;
+  v_revision public.estate_clause_revisions%ROWTYPE;
   v_event_id uuid;
   v_latest_event text;
 BEGIN
@@ -265,19 +264,19 @@ BEGIN
     RAISE EXCEPTION 'Attorney or administrator role required';
   END IF;
 
-  SELECT r.clause_id, r.author_id
-  INTO v_clause_id, v_author_id
+  SELECT r.*
+  INTO v_revision
   FROM public.estate_clause_revisions r
   WHERE r.id = p_revision_id;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Estate clause revision not found';
   END IF;
-  IF v_author_id = p_actor_id THEN
+  IF v_revision.author_id = p_actor_id THEN
     RAISE EXCEPTION 'A different attorney or administrator must review this revision';
   END IF;
 
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_clause_id::text, 0));
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_revision.clause_id::text, 0));
   SELECT e.event_type INTO v_latest_event
   FROM public.estate_clause_review_events e
   WHERE e.revision_id = p_revision_id
@@ -290,9 +289,26 @@ BEGIN
   INSERT INTO public.estate_clause_review_events (
     clause_id, revision_id, event_type, actor_id, comment
   ) VALUES (
-    v_clause_id, p_revision_id, 'changes_requested', p_actor_id, p_comment
+    v_revision.clause_id, p_revision_id, 'changes_requested', p_actor_id, p_comment
   )
   RETURNING id INTO v_event_id;
+
+  -- Restore the immutable submitted text into an author-owned working draft.
+  -- The author can continue from the reviewed proposal. Never overwrite a
+  -- newer draft the author may already have started while review was pending.
+  INSERT INTO public.estate_clause_working_drafts (
+    clause_id, base_published_revision_id, clause_text, required_fields,
+    nested_clause_keys, condition_field, change_summary, content_hash,
+    validation_status, validation_report, author_id
+  ) VALUES (
+    v_revision.clause_id, v_revision.base_published_revision_id,
+    v_revision.clause_text, v_revision.required_fields,
+    v_revision.nested_clause_keys, v_revision.condition_field,
+    v_revision.change_summary, v_revision.content_hash,
+    v_revision.validation_status, v_revision.validation_report,
+    v_revision.author_id
+  )
+  ON CONFLICT (clause_id, author_id) DO NOTHING;
 
   RETURN v_event_id;
 END;

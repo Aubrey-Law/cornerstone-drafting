@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Download, Eye, Loader2, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,12 +33,13 @@ export function EstateClauseReviewPanel({
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const previewRequest = useRef(0)
   const selfAuthored = revision.authorId === currentUserId
   const published = clause.currentPublication?.revision ?? null
   const validation = validationMessages(revision.validationReport)
 
   async function call(body: Record<string, unknown>) {
-    const response = await fetch(`/api/admin/settings/estate-clauses/${clause.id}/review`, {
+    const response = await fetch(`/api/admin/settings/estate-clauses/${clause.id}/review?revisionId=${encodeURIComponent(revision.id)}`, {
       method: 'POST',
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -68,20 +69,26 @@ export function EstateClauseReviewPanel({
   }
 
   const preview = async () => {
+    const requestId = ++previewRequest.current
+    const requestedMatterId = matterId.trim()
     setBusy('preview'); setError(null); setNotice(null); setPreviewFiles([]); setPreviewReport(null)
     try {
       const response = await fetch(`/api/admin/settings/estate-clauses/${clause.id}/preview`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revisionId: revision.id, matterId }),
+        body: JSON.stringify({ revisionId: revision.id, matterId: requestedMatterId }),
       })
       const data = await response.json().catch(() => ({})) as { error?: string; files?: PreviewFile[]; validationReport?: unknown }
       if (!response.ok) throw new Error(data.error ?? 'Unable to preview revision')
+      if (requestId !== previewRequest.current) return
       setPreviewFiles(data.files ?? [])
       setPreviewReport(data.validationReport ?? null)
       setNotice('Preview generated in memory. No document was saved.')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to preview revision') }
-    finally { setBusy(null) }
+    } catch (cause) {
+      if (requestId === previewRequest.current) setError(cause instanceof Error ? cause.message : 'Unable to preview revision')
+    } finally {
+      if (requestId === previewRequest.current) setBusy(null)
+    }
   }
 
   return (
@@ -120,7 +127,7 @@ export function EstateClauseReviewPanel({
       <div className="rounded-md border border-border bg-muted/20 p-3">
         <Label htmlFor={`matter-${revision.id}`}>Representative matter ID for preview</Label>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <Input id={`matter-${revision.id}`} className="font-mono text-xs" value={matterId} onChange={event => { setMatterId(event.target.value); setPreviewFiles([]); setPreviewReport(null); setNotice(null) }} placeholder="UUID" />
+          <Input id={`matter-${revision.id}`} className="font-mono text-xs" value={matterId} onChange={event => { previewRequest.current += 1; setBusy(null); setMatterId(event.target.value); setPreviewFiles([]); setPreviewReport(null); setNotice(null); setError(null) }} placeholder="UUID" />
           <Button variant="outline" disabled={!matterId.trim() || busy !== null} onClick={() => void preview()}>{busy === 'preview' ? <Loader2 className="animate-spin" /> : <Eye />} Preview</Button>
         </div>
         {previewFiles.length > 0 && <ul className="mt-3 space-y-1">{previewFiles.map(file => <li key={file.filename}><a className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline" download={file.filename} href={`data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${file.base64}`}><Download className="size-3.5" />{file.filename}</a></li>)}</ul>}

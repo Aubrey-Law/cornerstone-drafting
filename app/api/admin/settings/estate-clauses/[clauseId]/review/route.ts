@@ -45,8 +45,9 @@ export async function POST(
   const { err, userId } = await requireAdmin(req)
   if (err) return err
   const { clauseId } = await params
+  const revisionId = new URL(req.url).searchParams.get('revisionId')
   const body = parseReviewBody(await req.json().catch(() => null))
-  if (!userId || !isUuid(clauseId) || !body) {
+  if (!userId || !isUuid(clauseId) || !isUuid(revisionId) || !body) {
     return Response.json({ error: 'A valid review action is required' }, { status: 400 })
   }
 
@@ -70,11 +71,8 @@ export async function POST(
     for (const event of (events ?? []) as Array<{ revision_id: string; event_type: string }>) {
       if (!latestEventByRevision.has(event.revision_id)) latestEventByRevision.set(event.revision_id, event.event_type)
     }
-    const pendingRevisions = revisionRows.filter(row => latestEventByRevision.get(row.id) === 'submitted')
+    const pendingRevisions = revisionRows.filter(row => row.id === revisionId && latestEventByRevision.get(row.id) === 'submitted')
     if (pendingRevisions.length === 0) return Response.json({ error: 'Submitted estate clause revision not found' }, { status: 404 })
-    if (pendingRevisions.length > 1) {
-      return Response.json({ error: 'Multiple submitted revisions require explicit resolution before review' }, { status: 409 })
-    }
     const revisionRow = pendingRevisions[0]
     if (revisionRow.author_id === userId) {
       return Response.json({ error: 'A different attorney or administrator must review this revision.' }, { status: 403 })

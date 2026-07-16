@@ -46,10 +46,20 @@ export interface EstateClauseAdminDto {
   createdAt: string
   updatedAt: string
   workingDraft: ClauseWorkingDraftDto | null
+  latestChangeRequest: {
+    revisionId: string
+    revisionNumber: number
+    comment: string | null
+    reviewerId: string
+    createdAt: string
+  } | null
   submittedRevisions: ClauseRevisionDto[]
   currentPublication: {
+    clause_id: string
     current_revision_id: string
+    published_by: string
     published_at: string
+    updated_at: string
     revision: ClauseRevisionDto
   } | null
   reviewEvents: Array<Record<string, unknown>>

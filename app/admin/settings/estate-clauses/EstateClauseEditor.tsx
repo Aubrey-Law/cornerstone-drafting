@@ -29,13 +29,18 @@ export function EstateClauseEditor({
   authHeaders: HeadersInit
   onRefresh: () => Promise<void>
 }) {
+  const sourceText = clause.workingDraft?.text ?? clause.currentPublication?.revision.text ?? ''
+  const sourceRequiredFields = (clause.workingDraft?.requiredFields ?? clause.currentPublication?.revision.requiredFields ?? []).join('\n')
+  const sourceNestedClauseKeys = (clause.workingDraft?.nestedClauseKeys ?? clause.currentPublication?.revision.nestedClauseKeys ?? []).join('\n')
+  const sourceConditionField = clause.workingDraft?.conditionField ?? clause.currentPublication?.revision.conditionField ?? ''
+  const sourceChangeSummary = clause.workingDraft?.changeSummary ?? ''
   const initial = useMemo<EditorDraft>(() => ({
-    text: clause.workingDraft?.text ?? clause.currentPublication?.revision.text ?? '',
-    requiredFields: (clause.workingDraft?.requiredFields ?? clause.currentPublication?.revision.requiredFields ?? []).join('\n'),
-    nestedClauseKeys: (clause.workingDraft?.nestedClauseKeys ?? clause.currentPublication?.revision.nestedClauseKeys ?? []).join('\n'),
-    conditionField: clause.workingDraft?.conditionField ?? clause.currentPublication?.revision.conditionField ?? '',
-    changeSummary: clause.workingDraft?.changeSummary ?? '',
-  }), [clause])
+    text: sourceText,
+    requiredFields: sourceRequiredFields,
+    nestedClauseKeys: sourceNestedClauseKeys,
+    conditionField: sourceConditionField,
+    changeSummary: sourceChangeSummary,
+  }), [sourceChangeSummary, sourceConditionField, sourceNestedClauseKeys, sourceRequiredFields, sourceText])
   const [draft, setDraft] = useState(initial)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -130,37 +135,45 @@ export function EstateClauseEditor({
         </div>
       </div>
 
+      {clause.latestChangeRequest && (
+        <aside className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          <p className="font-medium">Changes requested on revision {clause.latestChangeRequest.revisionNumber}</p>
+          <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{clause.latestChangeRequest.comment}</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">Continue in this working draft, then save and submit a new immutable revision.</p>
+        </aside>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
         <div className="space-y-2">
           <Label htmlFor={`clause-text-${clause.id}`}>Structured clause text</Label>
-          <Textarea id={`clause-text-${clause.id}`} className="min-h-72 resize-y font-mono text-xs leading-5" value={draft.text} onChange={event => patch('text', event.target.value)} />
+          <Textarea id={`clause-text-${clause.id}`} className="min-h-72 resize-y font-mono text-xs leading-5" value={draft.text} disabled={busy !== null} onChange={event => patch('text', event.target.value)} />
           <p className="text-[11px] text-muted-foreground">Structured text only. Word styles, numbering, and sections remain template-owned.</p>
         </div>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor={`required-${clause.id}`}>Required fields</Label>
-            <Textarea id={`required-${clause.id}`} className="min-h-24 font-mono text-xs" value={draft.requiredFields} onChange={event => patch('requiredFields', event.target.value)} placeholder="One field per line" />
+            <Textarea id={`required-${clause.id}`} className="min-h-24 font-mono text-xs" value={draft.requiredFields} disabled={busy !== null} onChange={event => patch('requiredFields', event.target.value)} placeholder="One field per line" />
           </div>
           <div className="space-y-2">
             <Label htmlFor={`nested-${clause.id}`}>Nested clause keys</Label>
-            <Textarea id={`nested-${clause.id}`} className="min-h-20 font-mono text-xs" value={draft.nestedClauseKeys} onChange={event => patch('nestedClauseKeys', event.target.value)} placeholder="One stable key per line" />
+            <Textarea id={`nested-${clause.id}`} className="min-h-20 font-mono text-xs" value={draft.nestedClauseKeys} disabled={busy !== null} onChange={event => patch('nestedClauseKeys', event.target.value)} placeholder="One stable key per line" />
           </div>
           <div className="space-y-2">
             <Label htmlFor={`condition-${clause.id}`}>Condition field</Label>
-            <Input id={`condition-${clause.id}`} className="font-mono text-xs" value={draft.conditionField} onChange={event => patch('conditionField', event.target.value)} placeholder="Optional" />
+            <Input id={`condition-${clause.id}`} className="font-mono text-xs" value={draft.conditionField} disabled={busy !== null} onChange={event => patch('conditionField', event.target.value)} placeholder="Optional" />
           </div>
         </div>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor={`summary-${clause.id}`}>Change summary</Label>
-        <Input id={`summary-${clause.id}`} value={draft.changeSummary} onChange={event => patch('changeSummary', event.target.value)} placeholder="Required: explain the legal or drafting change" />
+        <Input id={`summary-${clause.id}`} value={draft.changeSummary} disabled={busy !== null} onChange={event => patch('changeSummary', event.target.value)} placeholder="Required: explain the legal or drafting change" />
       </div>
 
       <div className="rounded-md border border-border bg-muted/30 p-3">
         <div className="flex items-center gap-2"><Bot className="size-4 text-primary" /><Label htmlFor={`ai-${clause.id}`}>AI drafting instructions</Label></div>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <Input id={`ai-${clause.id}`} value={aiInstructions} onChange={event => setAiInstructions(event.target.value)} placeholder="Describe a narrow revision; do not include client facts" />
+          <Input id={`ai-${clause.id}`} value={aiInstructions} disabled={busy !== null} onChange={event => setAiInstructions(event.target.value)} placeholder="Describe a narrow revision; do not include client facts" />
           <Button type="button" variant="outline" disabled={!aiInstructions.trim() || busy !== null} onClick={() => void draftWithAi()}>
             {busy === 'ai' ? <Loader2 className="animate-spin" /> : <Bot />} Draft with AI
           </Button>
@@ -168,8 +181,8 @@ export function EstateClauseEditor({
         {aiProposal !== null && (
           <div className="mt-3 space-y-2 border-t border-border pt-3">
             <Label htmlFor={`proposal-${clause.id}`}>AI proposal — attorney review required</Label>
-            <Textarea id={`proposal-${clause.id}`} className="min-h-32 font-mono text-xs" value={aiProposal} onChange={event => setAiProposal(event.target.value)} />
-            <Button type="button" size="sm" onClick={() => { patch('text', aiProposal); setAiProposal(null); setNotice('AI proposal accepted into the unsaved working draft.') }}>
+            <Textarea id={`proposal-${clause.id}`} className="min-h-32 font-mono text-xs" value={aiProposal} disabled={busy !== null} onChange={event => setAiProposal(event.target.value)} />
+            <Button type="button" size="sm" disabled={busy !== null} onClick={() => { patch('text', aiProposal); setAiProposal(null); setNotice('AI proposal accepted into the unsaved working draft.') }}>
               Accept draft
             </Button>
           </div>

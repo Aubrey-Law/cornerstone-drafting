@@ -37,4 +37,14 @@
 
 ## Review-fix status
 
-The inherited implementation addressed every prior Not Ready finding before this report: new-clause creation, dirty-edit submission gating, keyed transient-state resets, responsive Template Center tabs, and explicit AI plus preview/download/switching tests. A fresh independent re-review is required after the Task 5 commit.
+The inherited implementation addressed the prior Not Ready findings around new-clause creation, dirty-edit submission gating, keyed transient-state resets, responsive Template Center tabs, and explicit AI plus preview/download/switching tests.
+
+The fresh independent review of `9f60811` found no Critical issues and four Important issues. The fix commit:
+
+- Preserves unsaved edits across unrelated list refreshes, locks editor inputs during mutations, and rejects stale list responses.
+- Invalidates obsolete preview responses when the representative matter changes.
+- Uses a UUID-validated query locator to target an exact pending revision while keeping the review JSON body limited to the original action union; the UI exposes every concurrently submitted revision.
+- Makes request-changes atomic: the RPC appends immutable history and creates an author-owned continuation draft from the rejected revision without overwriting a newer author draft. The author UI shows the reviewer comment and reviewed revision number.
+- Reconciles review/edit selection after submit, publish, or request-changes instead of leaving a blank pane.
+
+Post-fix verification: 55/55 focused schema, workflow, UI, and Template Center tests passed; scoped ESLint and `git diff --check` passed. Exact independent re-review is pending.

@@ -542,7 +542,8 @@ describe('estate clause admin route contracts', () => {
     expect(review).toContain(".from('estate_clause_revisions')")
     expect(review).toContain(".from('estate_clause_review_events')")
     expect(review).toContain(".from('estate_clause_publications')")
-    expect(review).toContain('pendingRevisions.length > 1')
+    expect(review).toContain("searchParams.get('revisionId')")
+    expect(review).toContain('row.id === revisionId')
     expect(review).not.toContain('body.authorId')
     expect(review).not.toContain('body.currentRevisionId')
     expect(review).not.toContain('body.revisionId')
@@ -671,7 +672,7 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     expect(getAdminClient).not.toHaveBeenCalled()
   })
 
-  it('rejects ambiguous submitted revisions before any review RPC', async () => {
+  it('targets one exact submitted revision when multiple revisions await review', async () => {
     vi.resetModules()
     const client = fakeClient({
       estate_clause_revisions: { data: [
@@ -693,13 +694,13 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     }))
     const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route')
 
-    const response = await POST(new Request('http://localhost/api', {
+    const response = await POST(new Request(`http://localhost/api?revisionId=${revisionId}`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: null }),
     }), { params: Promise.resolve({ clauseId }) })
 
-    expect(response.status).toBe(409)
-    expect(publish).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({ revisionId, authorId: 'author-1' }))
     expect(requestChanges).not.toHaveBeenCalled()
   })
 
@@ -719,7 +720,7 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     }))
     const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route')
 
-    const response = await POST(new Request('http://localhost/api', {
+    const response = await POST(new Request(`http://localhost/api?revisionId=${revisionId}`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: null }),
     }), { params: Promise.resolve({ clauseId }) })
@@ -739,7 +740,7 @@ describe.sequential('estate clause admin route runtime behavior', () => {
         requestEstateClauseChanges: vi.fn(),
       }))
       const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/review/route')
-      const response = await POST(new Request('http://localhost/api', {
+      const response = await POST(new Request(`http://localhost/api?revisionId=${revisionId}`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'publish', expectedCurrentRevisionId: null }),
       }), { params: Promise.resolve({ clauseId }) })
