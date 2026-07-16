@@ -8,6 +8,7 @@ import {
   submitEstateClauseDraft,
   type EstateClauseClient,
 } from '@/lib/estateClauses/repository'
+import { hashEstateClauseContent } from '@/lib/estateClauses/validation'
 
 type QueryResult = { data: unknown; error: { message: string } | null }
 
@@ -154,6 +155,56 @@ describe('estate clause repository workflow', () => {
       .rejects.toThrow('Published clause will.residuary failed its integrity check')
   })
 
+  it('returns runtime-immutable clause and override maps', async () => {
+    const content = {
+      text: 'All the rest to my descendants.',
+      requiredFields: [],
+      nestedClauseKeys: [],
+      conditionField: null,
+    }
+    const client = fakeClient({
+      estate_clause_publications: {
+        data: [{
+          clause_id: 'clause-1',
+          current_revision_id: 'revision-1',
+          estate_clauses: { clause_key: 'will.residuary', title: 'Residuary', jurisdiction: 'MA', document_types: ['will'] },
+          estate_clause_revisions: {
+            revision_number: 1,
+            clause_text: content.text,
+            required_fields: content.requiredFields,
+            nested_clause_keys: content.nestedClauseKeys,
+            condition_field: content.conditionField,
+            content_hash: hashEstateClauseContent(content),
+          },
+        }],
+        error: null,
+      },
+      matter_estate_clause_overrides: {
+        data: [{
+          id: 'override-1',
+          clause_id: 'clause-1',
+          action: 'force_include',
+          reason: 'Attorney approved this matter-specific inclusion.',
+          created_by: 'attorney-1',
+          estate_clauses: { clause_key: 'will.residuary' },
+        }],
+        error: null,
+      },
+    })
+
+    const snapshot = await loadPublishedEstateClauseSnapshot({
+      client: asRepositoryClient(client),
+      matterId: 'matter-1',
+    })
+
+    expect(snapshot.clauses.size).toBe(1)
+    expect([...snapshot.clauses.keys()]).toEqual(['will.residuary'])
+    expect(snapshot.overrides.get('will.residuary')?.id).toBe('override-1')
+    expect(() => (snapshot.clauses as Map<string, unknown>).set('other', {})).toThrow('ReadonlyMap cannot be mutated')
+    expect(() => (snapshot.overrides as Map<string, unknown>).delete('will.residuary')).toThrow('ReadonlyMap cannot be mutated')
+    expect(() => (snapshot.overrides as Map<string, unknown>).clear()).toThrow('ReadonlyMap cannot be mutated')
+  })
+
   it('preserves bundled JSON metadata and maps condition to conditionField during import', async () => {
     const source = {
       id: 'execution.affidavit',
@@ -186,7 +237,10 @@ describe('estate clause repository workflow', () => {
     const client = fakeClient({
       estate_clauses: { data: { id: 'clause-1', clause_key: 'execution.affidavit' }, error: null },
       estate_clause_revisions: { data: null, error: null },
-      estate_clause_working_drafts: { data: { id: 'draft-1' }, error: null },
+      estate_clause_working_drafts: [
+        { data: null, error: null },
+        { data: { id: 'draft-1' }, error: null },
+      ],
     })
     const source = {
       id: 'execution.affidavit',
@@ -216,7 +270,10 @@ describe('estate clause repository workflow', () => {
     const client = fakeClient({
       estate_clauses: { data: { id: 'clause-1', clause_key: 'will.conditional' }, error: null },
       estate_clause_revisions: { data: null, error: null },
-      estate_clause_working_drafts: { data: { id: 'draft-1' }, error: null },
+      estate_clause_working_drafts: [
+        { data: null, error: null },
+        { data: { id: 'draft-1' }, error: null },
+      ],
     })
     const source = {
       id: 'will.conditional',
@@ -234,10 +291,16 @@ describe('estate clause repository workflow', () => {
       bundledClauses: [source],
     })
 
-    const draftCall = client.tableCalls.find(call => call.table === 'estate_clause_working_drafts')
+    const draftCall = client.tableCalls.find(call => (
+      call.table === 'estate_clause_working_drafts'
+      && call.calls.some(queryCall => queryCall.method === 'upsert')
+    ))
     expect(draftCall?.calls).toContainEqual(expect.objectContaining({
       method: 'upsert',
-      args: [expect.objectContaining({ validation_status: 'invalid' }), { onConflict: 'clause_id,author_id' }],
+      args: [expect.objectContaining({ validation_status: 'invalid' }), {
+        onConflict: 'clause_id,author_id',
+        ignoreDuplicates: true,
+      }],
     }))
     expect(client.from).not.toHaveBeenCalledWith('estate_clause_review_events')
     expect(client.rpc).not.toHaveBeenCalled()
@@ -255,7 +318,9 @@ describe('estate clause repository workflow', () => {
         { data: null, error: null },
       ],
       estate_clause_working_drafts: [
+        { data: null, error: null },
         { data: { id: 'draft-1' }, error: null },
+        { data: null, error: null },
         { data: { id: 'draft-1' }, error: null },
       ],
     })
@@ -281,13 +346,157 @@ describe('estate clause repository workflow', () => {
     await expect(importBundledEstateClauses(args)).resolves.toMatchObject({ created: 1 })
 
     expect(client.rpc).toHaveBeenCalledTimes(2)
-    expect(client.tableCalls.filter(call => call.table === 'estate_clause_working_drafts'))
-      .toHaveLength(2)
-    for (const call of client.tableCalls.filter(call => call.table === 'estate_clause_working_drafts')) {
+    const upsertCalls = client.tableCalls.filter(call => (
+      call.table === 'estate_clause_working_drafts'
+      && call.calls.some(queryCall => queryCall.method === 'upsert')
+    ))
+    expect(upsertCalls).toHaveLength(2)
+    for (const call of upsertCalls) {
       expect(call.calls).toContainEqual(expect.objectContaining({
         method: 'upsert',
-        args: [expect.anything(), { onConflict: 'clause_id,author_id' }],
+        args: [expect.anything(), { onConflict: 'clause_id,author_id', ignoreDuplicates: true }],
       }))
     }
+  })
+
+  it('preserves a different attorney working draft and reports an import conflict', async () => {
+    const client = fakeClient({
+      estate_clauses: { data: { id: 'clause-1', clause_key: 'execution.affidavit' }, error: null },
+      estate_clause_revisions: { data: null, error: null },
+      estate_clause_publications: { data: null, error: null },
+      estate_clause_working_drafts: { data: { id: 'draft-1', content_hash: 'attorney-edited-hash' }, error: null },
+    })
+    const source = {
+      id: 'execution.affidavit',
+      title: 'Bundled title',
+      document_type: 'ancillary' as const,
+      jurisdiction: 'MA',
+      condition: null,
+      required_fields: [],
+      text: 'Bundled clause text.',
+    }
+
+    const result = await importBundledEstateClauses({
+      client: asRepositoryClient(client),
+      actorId: 'author-1',
+      bundledClauses: [source],
+    })
+
+    const draftCalls = client.tableCalls.filter(call => call.table === 'estate_clause_working_drafts')
+    expect(draftCalls).toHaveLength(1)
+    expect(draftCalls[0].calls.some(call => call.method === 'upsert' || call.method === 'insert')).toBe(false)
+    expect(client.rpc).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ created: 0, unchanged: 0, requiresReview: 1, conflicts: 1 })
+    expect(result.messages[0]).toContain('execution.affidavit')
+  })
+
+  it('preserves existing stable identity metadata and creation provenance', async () => {
+    const client = fakeClient({
+      estate_clauses: { data: { id: 'clause-1', clause_key: 'execution.affidavit' }, error: null },
+      estate_clause_revisions: { data: { id: 'revision-1', revision_number: 1 }, error: null },
+      estate_clause_publications: { data: { current_revision_id: 'revision-1' }, error: null },
+    })
+    const source = {
+      id: 'execution.affidavit',
+      title: 'A changed bundled title that must not overwrite metadata',
+      document_type: 'ancillary' as const,
+      jurisdiction: 'MA',
+      condition: null,
+      required_fields: [],
+      text: 'Signed and sworn.',
+    }
+
+    await importBundledEstateClauses({
+      client: asRepositoryClient(client),
+      actorId: 'different-author',
+      bundledClauses: [source],
+    })
+
+    const identityCalls = client.tableCalls.filter(call => call.table === 'estate_clauses')
+    expect(identityCalls).toHaveLength(1)
+    expect(identityCalls[0].calls.some(call => call.method === 'upsert' || call.method === 'insert')).toBe(false)
+  })
+
+  it('reselects the stable identity after a concurrent insert wins the race', async () => {
+    const client = fakeClient({
+      estate_clauses: [
+        { data: null, error: null },
+        { data: null, error: { message: 'duplicate key value violates unique constraint' } },
+        { data: { id: 'clause-race-winner', clause_key: 'execution.affidavit' }, error: null },
+      ],
+      estate_clause_revisions: { data: { id: 'revision-1', revision_number: 1 }, error: null },
+      estate_clause_publications: { data: { current_revision_id: 'revision-1' }, error: null },
+    })
+    const source = {
+      id: 'execution.affidavit',
+      title: 'Affidavit',
+      document_type: 'ancillary' as const,
+      jurisdiction: 'MA',
+      condition: null,
+      required_fields: [],
+      text: 'Signed and sworn.',
+    }
+
+    await expect(importBundledEstateClauses({
+      client: asRepositoryClient(client),
+      actorId: 'author-1',
+      bundledClauses: [source],
+    })).resolves.toMatchObject({ unchanged: 1 })
+
+    expect(client.from).toHaveBeenCalledWith('estate_clauses')
+    expect(client.tableCalls.filter(call => call.table === 'estate_clauses')).toHaveLength(3)
+  })
+
+  it('selects the latest duplicate same-hash revision deterministically', async () => {
+    const client = fakeClient({
+      estate_clauses: { data: { id: 'clause-1', clause_key: 'execution.affidavit' }, error: null },
+      estate_clause_revisions: { data: { id: 'revision-3', revision_number: 3 }, error: null },
+      estate_clause_publications: { data: { current_revision_id: 'revision-3' }, error: null },
+    })
+    const source = {
+      id: 'execution.affidavit', title: 'Affidavit', document_type: 'ancillary' as const,
+      jurisdiction: 'MA', condition: null, required_fields: [], text: 'Signed and sworn.',
+    }
+
+    await importBundledEstateClauses({ client: asRepositoryClient(client), actorId: 'author-1', bundledClauses: [source] })
+
+    const revisionCall = client.tableCalls.find(call => call.table === 'estate_clause_revisions')
+    expect(revisionCall?.calls).toContainEqual({ method: 'order', args: ['revision_number', { ascending: false }] })
+    expect(revisionCall?.calls).toContainEqual({ method: 'limit', args: [1] })
+  })
+
+  it('counts submitted-unpublished reruns as requiring review but excludes current publications', async () => {
+    const source = {
+      id: 'execution.affidavit', title: 'Affidavit', document_type: 'ancillary' as const,
+      jurisdiction: 'MA', condition: null, required_fields: [], text: 'Signed and sworn.',
+    }
+    const publishedClient = fakeClient({
+      estate_clauses: { data: { id: 'clause-1', clause_key: source.id }, error: null },
+      estate_clause_revisions: { data: { id: 'revision-1', revision_number: 1 }, error: null },
+      estate_clause_publications: { data: { current_revision_id: 'revision-1' }, error: null },
+      estate_clause_review_events: { data: { event_type: 'published' }, error: null },
+    })
+    const unpublishedClient = fakeClient({
+      estate_clauses: { data: { id: 'clause-1', clause_key: source.id }, error: null },
+      estate_clause_revisions: { data: { id: 'revision-2', revision_number: 2 }, error: null },
+      estate_clause_publications: { data: { current_revision_id: 'revision-1' }, error: null },
+      estate_clause_review_events: { data: { event_type: 'submitted' }, error: null },
+    })
+    const historicalClient = fakeClient({
+      estate_clauses: { data: { id: 'clause-1', clause_key: source.id }, error: null },
+      estate_clause_revisions: { data: { id: 'revision-1', revision_number: 1 }, error: null },
+      estate_clause_publications: { data: { current_revision_id: 'revision-3' }, error: null },
+      estate_clause_review_events: { data: { event_type: 'published' }, error: null },
+    })
+
+    await expect(importBundledEstateClauses({
+      client: asRepositoryClient(publishedClient), actorId: 'author-1', bundledClauses: [source],
+    })).resolves.toMatchObject({ unchanged: 1, requiresReview: 0 })
+    await expect(importBundledEstateClauses({
+      client: asRepositoryClient(unpublishedClient), actorId: 'author-1', bundledClauses: [source],
+    })).resolves.toMatchObject({ unchanged: 1, requiresReview: 1 })
+    await expect(importBundledEstateClauses({
+      client: asRepositoryClient(historicalClient), actorId: 'author-1', bundledClauses: [source],
+    })).resolves.toMatchObject({ unchanged: 1, requiresReview: 0 })
   })
 })

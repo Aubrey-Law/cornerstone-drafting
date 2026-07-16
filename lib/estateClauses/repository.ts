@@ -15,7 +15,7 @@ interface QueryBuilder<T = unknown> extends PromiseLike<DatabaseResult<T[]>> {
   eq(column: string, value: unknown): QueryBuilder<T>
   order(column: string, options?: { ascending?: boolean }): QueryBuilder<T>
   limit(count: number): QueryBuilder<T>
-  upsert(values: unknown, options?: { onConflict?: string }): QueryBuilder<T>
+  upsert(values: unknown, options?: { onConflict?: string; ignoreDuplicates?: boolean }): QueryBuilder<T>
   insert(values: unknown): QueryBuilder<T>
   single(): PromiseLike<DatabaseResult<T>>
   maybeSingle(): PromiseLike<DatabaseResult<T | null>>
@@ -34,6 +34,38 @@ function requireData<T>(result: DatabaseResult<T>, message: string): T {
 
 function relation<T>(value: T | T[]): T {
   return Array.isArray(value) ? value[0] : value
+}
+
+class RuntimeReadonlyMap<K, V> implements ReadonlyMap<K, V> {
+  constructor(private readonly map: Map<K, V>) {}
+
+  get size() { return this.map.size }
+  get(key: K) { return this.map.get(key) }
+  has(key: K) { return this.map.has(key) }
+  entries() { return this.map.entries() }
+  keys() { return this.map.keys() }
+  values() { return this.map.values() }
+  [Symbol.iterator]() { return this.map[Symbol.iterator]() }
+
+  forEach(callbackfn: (value: V, key: K, map: ReadonlyMap<K, V>) => void, thisArg?: unknown) {
+    for (const [key, value] of this.map) callbackfn.call(thisArg, value, key, this)
+  }
+
+  set(): never {
+    throw new TypeError('ReadonlyMap cannot be mutated')
+  }
+
+  delete(): never {
+    throw new TypeError('ReadonlyMap cannot be mutated')
+  }
+
+  clear(): never {
+    throw new TypeError('ReadonlyMap cannot be mutated')
+  }
+}
+
+function runtimeReadonlyMap<K, V>(map: Map<K, V>): ReadonlyMap<K, V> {
+  return new RuntimeReadonlyMap(map)
 }
 
 type PublishedRow = {
@@ -240,8 +272,8 @@ export async function loadPublishedEstateClauseSnapshot(args: {
 
   return {
     jurisdiction: 'MA',
-    clauses: Object.freeze(clauses),
-    overrides: Object.freeze(overrides),
+    clauses: runtimeReadonlyMap(clauses),
+    overrides: runtimeReadonlyMap(overrides),
     source: 'database',
   }
 }
@@ -299,7 +331,8 @@ export async function importBundledEstateClauses(args: {
 }) {
   const catalog = new Set(args.bundledClauses.map(clause => clause.id))
   const entries = args.bundledClauses.map(clause => normalizeBundledClause(clause, catalog))
-  const counts = { created: 0, unchanged: 0, requiresReview: 0 }
+  const counts = { created: 0, unchanged: 0, requiresReview: 0, conflicts: 0 }
+  const messages: string[] = []
 
   for (const entry of entries) {
     if (args.dryRun) {
@@ -309,20 +342,43 @@ export async function importBundledEstateClauses(args: {
     }
     if (!args.client) throw new Error('Estate clause import requires a service-role client')
 
-    const identityResult = await args.client
+    const identityLookup = () => args.client!
       .from('estate_clauses')
-      .upsert({
-        clause_key: entry.clauseKey,
-        title: entry.title,
-        jurisdiction: entry.jurisdiction,
-        document_types: entry.documentTypes,
-        created_by: args.actorId,
-      }, { onConflict: 'clause_key' })
       .select('id,clause_key')
-      .single()
-    const identity = requireData(identityResult, `Estate clause ${entry.clauseKey} identity returned no row`) as {
+      .eq('clause_key', entry.clauseKey)
+      .maybeSingle()
+    const initialIdentityResult = await identityLookup()
+    if (initialIdentityResult.error) throw new Error(initialIdentityResult.error.message)
+    let identity = initialIdentityResult.data as {
       id: string
       clause_key: string
+    } | null
+
+    if (!identity) {
+      const identityInsertResult = await args.client
+        .from('estate_clauses')
+        .insert({
+          clause_key: entry.clauseKey,
+          title: entry.title,
+          jurisdiction: entry.jurisdiction,
+          document_types: entry.documentTypes,
+          created_by: args.actorId,
+        })
+        .select('id,clause_key')
+        .single()
+      if (!identityInsertResult.error && identityInsertResult.data) {
+        identity = identityInsertResult.data as { id: string; clause_key: string }
+      } else {
+        const raceWinnerResult = await identityLookup()
+        if (raceWinnerResult.error) throw new Error(raceWinnerResult.error.message)
+        identity = raceWinnerResult.data as { id: string; clause_key: string } | null
+        if (!identity) {
+          throw new Error(
+            identityInsertResult.error?.message
+              ?? `Estate clause ${entry.clauseKey} identity returned no row`,
+          )
+        }
+      }
     }
 
     const existingResult = await args.client
@@ -330,12 +386,10 @@ export async function importBundledEstateClauses(args: {
       .select('id,revision_number')
       .eq('clause_id', identity.id)
       .eq('content_hash', entry.contentHash)
+      .order('revision_number', { ascending: false })
+      .limit(1)
       .maybeSingle()
     if (existingResult.error) throw new Error(existingResult.error.message)
-    if (existingResult.data) {
-      counts.unchanged += 1
-      continue
-    }
 
     const publicationResult = await args.client
       .from('estate_clause_publications')
@@ -344,26 +398,102 @@ export async function importBundledEstateClauses(args: {
       .maybeSingle()
     if (publicationResult.error) throw new Error(publicationResult.error.message)
     const publication = publicationResult.data as { current_revision_id: string } | null
+    const existingRevision = existingResult.data as { id: string; revision_number: number } | null
+    if (existingRevision) {
+      counts.unchanged += 1
+      if (publication?.current_revision_id !== existingRevision.id) {
+        const latestEventResult = await args.client
+          .from('estate_clause_review_events')
+          .select('event_type')
+          .eq('revision_id', existingRevision.id)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (latestEventResult.error) throw new Error(latestEventResult.error.message)
+        const latestEvent = latestEventResult.data as { event_type: string } | null
+        if (latestEvent?.event_type === 'submitted') counts.requiresReview += 1
+      }
+      continue
+    }
+
     const validationReport = { errors: entry.validationErrors, source: entry.source, imported: true }
-    const draftResult = await args.client
+    const draftLookup = () => args.client!
       .from('estate_clause_working_drafts')
-      .upsert({
-        clause_id: identity.id,
-        author_id: args.actorId,
-        base_published_revision_id: publication?.current_revision_id ?? null,
-        clause_text: entry.content.text,
-        required_fields: entry.content.requiredFields,
-        nested_clause_keys: entry.content.nestedClauseKeys,
-        condition_field: entry.content.conditionField ?? null,
-        content_hash: entry.contentHash,
-        change_summary: 'Import bundled estate clause for independent review.',
-        validation_status: entry.validationErrors.length === 0 ? 'valid' : 'invalid',
-        validation_report: validationReport,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'clause_id,author_id' })
-      .select('id,validation_status,validation_report')
-      .single()
-    const draft = requireData(draftResult, `Estate clause ${entry.clauseKey} working draft returned no row`) as { id: string }
+      .select('id,content_hash,validation_status')
+      .eq('clause_id', identity.id)
+      .eq('author_id', args.actorId)
+      .maybeSingle()
+    const existingDraftResult = await draftLookup()
+    if (existingDraftResult.error) throw new Error(existingDraftResult.error.message)
+    const existingDraft = existingDraftResult.data as {
+      id: string
+      content_hash: string
+      validation_status: 'valid' | 'invalid'
+    } | null
+
+    if (existingDraft && existingDraft.content_hash !== entry.contentHash) {
+      counts.conflicts += 1
+      counts.requiresReview += 1
+      messages.push(`Preserved existing attorney draft for ${entry.clauseKey}; bundled content was not imported.`)
+      continue
+    }
+
+    if (existingDraft && entry.validationErrors.length > 0) {
+      counts.unchanged += 1
+      counts.requiresReview += 1
+      continue
+    }
+
+    let draft = existingDraft
+    if (!draft) {
+      const draftResult = await args.client
+        .from('estate_clause_working_drafts')
+        .upsert({
+          clause_id: identity.id,
+          author_id: args.actorId,
+          base_published_revision_id: publication?.current_revision_id ?? null,
+          clause_text: entry.content.text,
+          required_fields: entry.content.requiredFields,
+          nested_clause_keys: entry.content.nestedClauseKeys,
+          condition_field: entry.content.conditionField ?? null,
+          content_hash: entry.contentHash,
+          change_summary: 'Import bundled estate clause for independent review.',
+          validation_status: entry.validationErrors.length === 0 ? 'valid' : 'invalid',
+          validation_report: validationReport,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'clause_id,author_id', ignoreDuplicates: true })
+        .select('id,content_hash,validation_status')
+        .single()
+      if (!draftResult.error && draftResult.data) {
+        draft = draftResult.data as {
+          id: string
+          content_hash: string
+          validation_status: 'valid' | 'invalid'
+        }
+      } else {
+        const raceDraftResult = await draftLookup()
+        if (raceDraftResult.error) throw new Error(raceDraftResult.error.message)
+        const raceDraft = raceDraftResult.data as {
+          id: string
+          content_hash: string
+          validation_status: 'valid' | 'invalid'
+        } | null
+        if (!raceDraft) {
+          throw new Error(
+            draftResult.error?.message
+              ?? `Estate clause ${entry.clauseKey} working draft returned no row`,
+          )
+        }
+        if (raceDraft.content_hash !== entry.contentHash) {
+          counts.conflicts += 1
+          counts.requiresReview += 1
+          messages.push(`Preserved existing attorney draft for ${entry.clauseKey}; bundled content was not imported.`)
+          continue
+        }
+        draft = raceDraft
+      }
+    }
 
     counts.requiresReview += 1
     if (entry.validationErrors.length > 0) continue
@@ -379,5 +509,5 @@ export async function importBundledEstateClauses(args: {
     counts.created += 1
   }
 
-  return { ...counts, entries }
+  return { ...counts, messages, entries }
 }

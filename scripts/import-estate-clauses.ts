@@ -74,6 +74,8 @@ async function main() {
   console.log(`created=${result.created}`)
   console.log(`unchanged=${result.unchanged}`)
   console.log(`requiresReview=${result.requiresReview}`)
+  console.log(`conflicts=${result.conflicts}`)
+  for (const message of result.messages) console.log(`conflict=${message}`)
   console.log('publications=0')
 }
 
