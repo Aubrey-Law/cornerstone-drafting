@@ -3,6 +3,7 @@ import { buildDraftDocumentName, titleFromOutputSlug } from '@/lib/estateGenerat
 import { scanDocxBufferForMarkers } from '@/lib/drafting/markerScan'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import type { DraftDocumentReport, DraftDownloadMeta } from '@/lib/drafting/draftDownloadMeta'
+import type { EstateClauseManifestEntry } from '@/lib/estateClauses/types'
 
 export type { DraftDocumentReport, DraftDownloadMeta } from '@/lib/drafting/draftDownloadMeta'
 export {
@@ -15,6 +16,8 @@ export type DraftGeneratedFile = {
   buffer: Buffer
   title?: string
   owner?: string | null
+  clauseSource?: 'database' | 'file'
+  clauseManifest?: EstateClauseManifestEntry[]
 }
 
 function generationDateEastern(): string {
@@ -29,6 +32,12 @@ export function buildDraftDownloadArtifacts(
   const zip = new PizZip()
   const documentReports: DraftDocumentReport[] = []
   const documents: string[] = []
+  const clauseManifestDocuments: Array<{
+    sourceFilename: string
+    documentName: string
+    clauseSource: 'database' | 'file' | null
+    clauses: EstateClauseManifestEntry[]
+  }> = []
 
   for (const file of files) {
     const documentName = buildDraftDocumentName({
@@ -46,7 +55,19 @@ export function buildDraftDownloadArtifacts(
     })
     documents.push(documentName)
     zip.file(documentName, file.buffer)
+    clauseManifestDocuments.push({
+      sourceFilename: file.filename,
+      documentName,
+      clauseSource: file.clauseSource ?? null,
+      clauses: file.clauseManifest ?? [],
+    })
   }
+
+  zip.file('clause-manifest.json', JSON.stringify({
+    version: 1,
+    jurisdiction: 'MA',
+    documents: clauseManifestDocuments,
+  }, null, 2))
 
   const meta: DraftDownloadMeta = {
     documents,

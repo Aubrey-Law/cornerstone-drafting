@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import PizZip from 'pizzip'
 import {
   buildDraftDownloadArtifacts,
   decodeDraftDownloadMeta,
@@ -44,5 +45,35 @@ describe('buildDraftDownloadZip', () => {
 
   it('builds a safe zip filename from the client name', () => {
     expect(draftDownloadZipFilename('Jane & John Doe')).toMatch(/^drafts-Jane-John-Doe-\d{4}-\d{2}-\d{2}\.zip$/)
+  })
+
+  it('includes the exact per-document clause manifest in download-only ZIPs', () => {
+    const clauseManifest = [{
+      clauseId: 'clause-1',
+      clauseKey: 'will.executor_appointment',
+      revisionId: 'revision-1',
+      contentHash: 'a'.repeat(64),
+      inclusionPosition: 0,
+      selectionReason: 'template_rule' as const,
+      overrideId: null,
+    }]
+    const { zipBuffer } = buildDraftDownloadArtifacts([{
+      filename: 'will.docx',
+      buffer: Buffer.from('docx'),
+      title: 'Last Will and Testament',
+      owner: 'Jane Doe',
+      clauseSource: 'database',
+      clauseManifest,
+    }], payload)
+    const zip = new PizZip(zipBuffer)
+    const metadata = JSON.parse(zip.file('clause-manifest.json')!.asText())
+
+    expect(metadata).toMatchObject({ version: 1, jurisdiction: 'MA' })
+    expect(metadata.documents).toHaveLength(1)
+    expect(metadata.documents[0]).toMatchObject({
+      sourceFilename: 'will.docx',
+      clauseSource: 'database',
+      clauses: clauseManifest,
+    })
   })
 })

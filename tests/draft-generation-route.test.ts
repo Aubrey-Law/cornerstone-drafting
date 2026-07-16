@@ -150,6 +150,23 @@ describe('matter draft generation route', () => {
     expect(source).toContain('warnings: draftWarnings')
   })
 
+  it('atomically registers database-backed Node files and rolls back R2 on persistence failure', () => {
+    const source = fs.readFileSync(routePath, 'utf8')
+
+    expect(source).toContain("import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'")
+    expect(source).toContain("import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'")
+    expect(source).toContain('clauseSource: meta.clauseSource')
+    expect(source).toContain('clauseManifest: meta.clauseManifest')
+    expect(source).toContain("if (file.clauseSource === 'database')")
+    expect(source).toContain('await persistGeneratedEstateDocument({')
+    expect(source).toContain('new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: r2Key })')
+
+    const branchStart = source.indexOf("if (file.clauseSource === 'database')")
+    const databaseBranch = source.slice(branchStart, source.indexOf('} else {', branchStart))
+    expect(databaseBranch).not.toContain('ensureInitialVersion')
+    expect(source.slice(branchStart, source.indexOf('uploadedFilenames.push(documentName)'))).toContain('} else {')
+  })
+
   it('routes legacy testamentary-trust fallback drafts through dedicated doc types', () => {
     const source = fs.readFileSync(routePath, 'utf8')
     const textRoute = fs.readFileSync(path.join(process.cwd(), 'app/api/drafting/route.ts'), 'utf8')

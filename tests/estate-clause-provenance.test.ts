@@ -55,6 +55,7 @@ import {
   generateEstatePlanDocumentsNode,
   generateNodeEstatePackage,
 } from '@/lib/estateGenerator/node/generate'
+import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 
@@ -257,5 +258,92 @@ describe('estate clause generation provenance', () => {
     } finally {
       fs.rmSync(temporaryRoot, { recursive: true, force: true })
     }
+  })
+})
+
+describe('estate clause provenance persistence', () => {
+  it('sends the document metadata and exact manifest through one RPC', async () => {
+    const manifest = [{
+      clauseId: '11111111-1111-4111-8111-111111111111',
+      clauseKey: 'will.executor_appointment',
+      revisionId: '22222222-2222-4222-8222-222222222222',
+      contentHash: 'a'.repeat(64),
+      inclusionPosition: 0,
+      selectionReason: 'template_rule' as const,
+      overrideId: null,
+    }]
+    const document = {
+      matter_id: '33333333-3333-4333-8333-333333333333',
+      r2_key: 'matters/333/draft/will.docx',
+      name: 'Will.docx',
+      size: 1234,
+      content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      folder: 'draft' as const,
+      actor_id: '44444444-4444-4444-8444-444444444444',
+      generation_id: '55555555-5555-4555-8555-555555555555',
+      generation_engine: 'node' as const,
+      marker_count: 0,
+      missing_count: 0,
+      template_id: 'testamentary-trust-will',
+      template_version_id: null,
+    }
+    const rpc = vi.fn().mockResolvedValue({
+      data: { documentId: 'document-1', documentVersionId: 'version-1' },
+      error: null,
+    })
+
+    await expect(persistGeneratedEstateDocument({ admin: { rpc }, document, manifest }))
+      .resolves.toEqual({ documentId: 'document-1', documentVersionId: 'version-1' })
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith('persist_generated_estate_document', {
+      p_document: document,
+      p_manifest: manifest,
+    })
+    expect(rpc.mock.calls[0]?.[1]?.p_manifest).toBe(manifest)
+  })
+
+  it('fails closed on RPC errors or missing identifiers', async () => {
+    const base = {
+      document: {
+        matter_id: '33333333-3333-4333-8333-333333333333',
+        r2_key: 'matter.docx',
+        name: 'Matter.docx',
+        size: 1,
+        content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        folder: 'draft' as const,
+        actor_id: '44444444-4444-4444-8444-444444444444',
+        generation_id: '55555555-5555-4555-8555-555555555555',
+        generation_engine: 'node' as const,
+        marker_count: 0,
+        missing_count: 0,
+        template_id: null,
+        template_version_id: null,
+      },
+      manifest: [],
+    }
+
+    await expect(persistGeneratedEstateDocument({
+      ...base,
+      admin: { rpc: vi.fn().mockResolvedValue({ data: null, error: { message: 'transaction rolled back' } }) },
+    })).rejects.toThrow('transaction rolled back')
+    await expect(persistGeneratedEstateDocument({
+      ...base,
+      admin: { rpc: vi.fn().mockResolvedValue({ data: {}, error: null }) },
+    })).rejects.toThrow('returned no identifiers')
+  })
+
+  it('defines one transactional RPC for document, version, manifest, and current pointer', () => {
+    const sql = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/20260715210000_estate_clause_library.sql'), 'utf8')
+    const rpc = sql.slice(
+      sql.indexOf('CREATE OR REPLACE FUNCTION public.persist_generated_estate_document'),
+      sql.indexOf('ALTER TABLE public.estate_clauses ENABLE ROW LEVEL SECURITY'),
+    )
+
+    expect(rpc).toContain('INSERT INTO public.matter_documents')
+    expect(rpc).toContain('INSERT INTO public.document_versions')
+    expect(rpc).toContain('INSERT INTO public.generated_document_clause_revisions')
+    expect(rpc).toContain('SET current_version_id = v_document_version_id')
+    expect(rpc).toContain("e.event_type = 'published'")
+    expect(rpc).not.toContain('p.current_revision_id = v_revision_id')
   })
 })

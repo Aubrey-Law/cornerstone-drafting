@@ -502,6 +502,18 @@ BEGIN
   IF jsonb_typeof(p_manifest) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'Clause manifest must be a JSON array';
   END IF;
+  IF length(pg_catalog.btrim(COALESCE(p_document->>'r2_key', ''))) = 0
+     OR length(pg_catalog.btrim(COALESCE(p_document->>'name', ''))) = 0 THEN
+    RAISE EXCEPTION 'Document R2 key and name are required';
+  END IF;
+  IF COALESCE(p_document->>'generation_engine', '') <> 'node' THEN
+    RAISE EXCEPTION 'Database estate clause provenance requires the Node generation engine';
+  END IF;
+  IF COALESCE((p_document->>'size')::bigint, -1) < 0
+     OR COALESCE((p_document->>'marker_count')::integer, -1) < 0
+     OR COALESCE((p_document->>'missing_count')::integer, -1) < 0 THEN
+    RAISE EXCEPTION 'Document size and marker counts must be non-negative';
+  END IF;
 
   v_matter_id := (p_document->>'matter_id')::uuid;
   IF NOT EXISTS (SELECT 1 FROM public.matters m WHERE m.id = v_matter_id) THEN
@@ -562,30 +574,30 @@ BEGIN
     v_override_id := NULLIF(v_manifest_entry->>'overrideId', '')::uuid;
     v_selection_reason := v_manifest_entry->>'selectionReason';
 
-    PERFORM 1
-    FROM public.estate_clause_publications p
-    JOIN public.estate_clauses c ON c.id = p.clause_id
-    WHERE p.clause_id = v_clause_id
-      AND p.current_revision_id = v_revision_id
-      AND c.is_active
-    FOR SHARE OF p, c;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'Clause manifest does not reference the current active publication';
-    END IF;
-
     IF NOT EXISTS (
       SELECT 1
       FROM public.estate_clause_revisions r
       JOIN public.estate_clauses c ON c.id = r.clause_id
-      JOIN public.estate_clause_publications p ON p.clause_id = r.clause_id
       WHERE r.id = v_revision_id
         AND r.clause_id = v_clause_id
         AND r.content_hash = v_manifest_entry->>'contentHash'
         AND c.clause_key = v_manifest_entry->>'clauseKey'
-        AND c.is_active
-        AND p.current_revision_id = r.id
     ) THEN
-      RAISE EXCEPTION 'Clause manifest does not reference the current active publication';
+      RAISE EXCEPTION 'Clause manifest revision, clause key, or content hash is invalid';
+    END IF;
+
+    -- The immutable revision only needs to have been published when the frozen
+    -- generation snapshot was loaded. A newer publication may become current
+    -- while a DOCX is rendering; that race must not make the exact generated
+    -- artifact impossible to register.
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.estate_clause_review_events e
+      WHERE e.clause_id = v_clause_id
+        AND e.revision_id = v_revision_id
+        AND e.event_type = 'published'
+    ) THEN
+      RAISE EXCEPTION 'Clause manifest revision has no publication history';
     END IF;
 
     IF v_selection_reason = 'template_rule' AND v_override_id IS NOT NULL THEN
