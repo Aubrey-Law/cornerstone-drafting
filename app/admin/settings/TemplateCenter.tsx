@@ -28,8 +28,6 @@ export function TemplateCenter({ currentUserId }: { currentUserId: string }) {
       </div>
       <Tabs value={section} onValueChange={setSection}>
         <TabsList className="max-w-full justify-start overflow-x-auto">
-          <TabsTrigger value="documents">Document masters</TabsTrigger>
-        <TabsList>
           <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="esign">E-signature layout</TabsTrigger>
           <TabsTrigger value="clauses">Clause library</TabsTrigger>

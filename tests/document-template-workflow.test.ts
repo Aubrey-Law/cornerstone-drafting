@@ -96,6 +96,9 @@ describe('document template workflow', () => {
     expect(center).toContain('<EsignTemplateEditor')
     expect(center).toContain('<EstateClauseLibrarySection currentUserId={currentUserId}')
     expect(center).toContain('Clause library')
+    expect(center).not.toContain('<TabsTrigger value="documents">')
+    expect(center.match(/<TabsList(?:\s|>)/g)).toHaveLength(1)
+    expect(center.match(/<\/TabsList>/g)).toHaveLength(1)
     expect(email).not.toContain('<EmailTemplatesSection')
   })
 
