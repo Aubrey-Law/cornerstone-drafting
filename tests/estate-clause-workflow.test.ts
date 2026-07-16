@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   importBundledEstateClauses,
@@ -498,5 +500,78 @@ describe('estate clause repository workflow', () => {
     await expect(importBundledEstateClauses({
       client: asRepositoryClient(historicalClient), actorId: 'author-1', bundledClauses: [source],
     })).resolves.toMatchObject({ unchanged: 1, requiresReview: 0 })
+  })
+})
+
+const routeRoot = path.join(process.cwd(), 'app/api/admin/settings/estate-clauses')
+
+function routeSource(relativePath: string) {
+  return fs.readFileSync(path.join(routeRoot, relativePath), 'utf8')
+}
+
+describe('estate clause admin route contracts', () => {
+  it('authenticates every handler and validates route UUIDs and request bodies', () => {
+    const routeFiles = [
+      'route.ts',
+      '[clauseId]/draft/route.ts',
+      '[clauseId]/submit/route.ts',
+      '[clauseId]/review/route.ts',
+      '[clauseId]/preview/route.ts',
+      'draft-ai/route.ts',
+    ]
+
+    for (const relativePath of routeFiles) {
+      const source = routeSource(relativePath)
+      expect(source, relativePath).toContain("import { requireAdmin } from '@/lib/apiAuth'")
+      expect(source, relativePath).toContain('await requireAdmin(req)')
+      expect(source, relativePath).toContain('status: 400')
+    }
+
+    for (const relativePath of routeFiles.filter(file => file.startsWith('[clauseId]'))) {
+      expect(routeSource(relativePath), relativePath).toContain('isUuid(clauseId)')
+    }
+  })
+
+  it('delegates draft, submission, and review transitions to the repository', () => {
+    expect(routeSource('[clauseId]/draft/route.ts')).toContain('saveEstateClauseDraft({')
+    expect(routeSource('[clauseId]/submit/route.ts')).toContain('submitEstateClauseDraft({')
+
+    const review = routeSource('[clauseId]/review/route.ts')
+    expect(review).toContain('requestEstateClauseChanges({')
+    expect(review).toContain('publishEstateClauseRevision({')
+    expect(review).toContain(".from('estate_clause_revisions')")
+    expect(review).toContain(".from('estate_clause_review_events')")
+    expect(review).toContain(".from('estate_clause_publications')")
+    expect(review).toContain(".order('revision_number', { ascending: false })")
+    expect(review).not.toContain('body.authorId')
+    expect(review).not.toContain('body.currentRevisionId')
+    expect(review).not.toContain('body.revisionId')
+    expect(review).toContain('status: 403')
+    expect(review).toContain('status: 404')
+    expect(review).toContain('status: 409')
+  })
+
+  it('previews an injected candidate snapshot without persisting generated artifacts', () => {
+    const preview = routeSource('[clauseId]/preview/route.ts')
+    expect(preview).toContain('buildDraftPayload(')
+    expect(preview).toContain('loadPublishedEstateClauseSnapshot({')
+    expect(preview).toContain('clauseSnapshot: candidateSnapshot')
+    expect(preview).toContain('file.clauseManifest.some')
+    expect(preview).toContain('candidateRevision.id')
+    expect(preview).toContain('base64: file.buffer.toString(\'base64\')')
+    expect(preview).toContain('validationReport')
+    expect(preview).not.toMatch(/\.insert\(|\.upsert\(|persistGenerated/)
+  })
+
+  it('keeps AI drafting rate-limited, quoted, and outside workflow authority', () => {
+    const ai = routeSource('draft-ai/route.ts')
+    expect(ai).toContain('consumeRateLimit(')
+    expect(ai).toContain("resolveFirmModel('drafting')")
+    expect(ai).toContain('PROMPT_INJECTION_GUARDRAIL')
+    expect(ai).toContain('quoteUserContent(')
+    expect(ai).toContain('attorney-review draft')
+    expect(ai).toContain('must not invent client facts')
+    expect(ai).toContain('return Response.json({ proposal: { text } })')
+    expect(ai).not.toMatch(/submitEstateClause|requestEstateClauseChanges|publishEstateClause/)
   })
 })
