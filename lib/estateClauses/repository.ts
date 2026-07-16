@@ -36,7 +36,7 @@ function relation<T>(value: T | T[]): T {
   return Array.isArray(value) ? value[0] : value
 }
 
-class RuntimeReadonlyMap<K, V> implements ReadonlyMap<K, V> {
+export class RuntimeReadonlyMap<K, V> implements ReadonlyMap<K, V> {
   constructor(private readonly map: Map<K, V>) {}
 
   get size() { return this.map.size }
@@ -64,7 +64,7 @@ class RuntimeReadonlyMap<K, V> implements ReadonlyMap<K, V> {
   }
 }
 
-function runtimeReadonlyMap<K, V>(map: Map<K, V>): ReadonlyMap<K, V> {
+export function runtimeReadonlyMap<K, V>(map: Map<K, V>): ReadonlyMap<K, V> {
   return new RuntimeReadonlyMap(map)
 }
 
@@ -115,6 +115,7 @@ function mapPublishedClause(row: PublishedRow): PublishedEstateClause {
     nestedClauseKeys: revision.nested_clause_keys,
     conditionField: revision.condition_field,
     contentHash: revision.content_hash,
+    reviewStatus: 'approved',
   }
 }
 

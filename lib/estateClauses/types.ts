@@ -24,6 +24,9 @@ export interface PublishedEstateClause extends EstateClauseContent {
   revisionId: string
   revisionNumber: number
   contentHash: string
+  reviewStatus: string
+  sourceFile?: string
+  sourceJurisdiction?: string
 }
 
 export interface EstateClauseOverride {
