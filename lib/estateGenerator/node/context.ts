@@ -113,17 +113,20 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     && isPresent(execution.ordinal_doc_date)
     ? execution.ordinal_doc_date
     : BLANK_ORDINAL_DOC_DATE
-  // Some legacy templates still reference ordinal_doc_date directly. Keep the
-  // raw and display aliases aligned so an unscheduled signing renders a usable
-  // fill-in date instead of a visible [[ MISSING ]] marker.
+  // Some legacy templates still reference the raw execution fields directly.
+  // Keep the raw and display aliases aligned so missing signing information
+  // renders a usable fill-in line instead of a visible [[ MISSING ]] marker.
   execution.ordinal_doc_date = ordinalDocDate
   execution.display_ordinal_doc_date = ordinalDocDate
+  execution.doc_date = execution.display_doc_date
   execution.display_signing_county = signingScheduled && isPresent(executionSigningCounty)
     ? executionSigningCounty
     : BLANK_SIGNING_COUNTY
+  execution.signing_county = execution.display_signing_county
   execution.display_notary_commission = signingScheduled && isPresent(execution.notary_commission)
     ? execution.notary_commission
     : BLANK_NOTARY_COMMISSION
+  execution.notary_commission = execution.display_notary_commission
 
   const hasMinorChildren = childRecords.some(child => Boolean(child.minor)) || Boolean(planning.has_minor_children)
   const minorChildren = children.filter(child => Boolean(child.minor))

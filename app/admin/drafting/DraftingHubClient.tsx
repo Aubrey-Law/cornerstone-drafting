@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDownAZ, Columns3, RefreshCw, Search, Table2, X } from 'lucide-react'
+import { ArrowDownAZ, Clock, Columns3, RefreshCw, Search, Table2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import MatterPipelineKanban from '@/app/admin/drafting/MatterPipelineKanban'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
@@ -148,6 +148,12 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               </button>
             )}
           </div>
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
+            <Link href="/admin/pipeline/aging">
+              <Clock className="h-3.5 w-3.5" aria-hidden />
+              SLA aging
+            </Link>
+          </Button>
           <div className="inline-flex rounded-md border border-border bg-background p-0.5" role="group" aria-label="View mode">
             <button
               type="button"

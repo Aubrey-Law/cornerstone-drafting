@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SetupBanner } from '@/components/SetupBanner'
+import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
 import { CallsSection } from './calls'
@@ -64,6 +65,7 @@ export interface MatterMessagesSectionsProps {
 }
 
 export function PortalMessagesSection({
+  matterId,
   portalMessages,
   portalLoading,
   portalDraft,
@@ -73,7 +75,7 @@ export function PortalMessagesSection({
 }: Pick<
   MatterMessagesSectionsProps,
   'portalMessages' | 'portalLoading' | 'portalDraft' | 'portalSending' | 'setPortalDraft' | 'onSendPortal'
->) {
+> & { matterId?: string }) {
   return (
     <section className="space-y-3">
       <div>
@@ -108,22 +110,27 @@ export function PortalMessagesSection({
           rows={2}
           className="min-h-[60px]"
         />
-        <Button
-          type="button"
-          size="sm"
-          className="shrink-0 self-end"
-          disabled={portalSending || !portalDraft.trim()}
-          onClick={onSendPortal}
-        >
-          <Send className="h-3.5 w-3.5" />
-          Send
-        </Button>
+        <div className="flex shrink-0 flex-col justify-end gap-2">
+          {matterId && (
+            <DraftWithAiButton matterId={matterId} channel="portal" notes={portalDraft} onDraft={setPortalDraft} />
+          )}
+          <Button
+            type="button"
+            size="sm"
+            disabled={portalSending || !portalDraft.trim()}
+            onClick={onSendPortal}
+          >
+            <Send className="h-3.5 w-3.5" />
+            Send
+          </Button>
+        </div>
       </div>
     </section>
   )
 }
 
 export function SmsMessagesSection({
+  matterId,
   smsMessages,
   smsLoading,
   smsDraft,
@@ -144,7 +151,7 @@ export function SmsMessagesSection({
   | 'setSmsDraft'
   | 'setSmsRecipient'
   | 'onSendSms'
->) {
+> & { matterId?: string }) {
   return (
     <section className="space-y-3">
       <div>
@@ -199,6 +206,14 @@ export function SmsMessagesSection({
               rows={2}
               className="min-h-[60px] flex-1"
             />
+            {matterId && (
+              <DraftWithAiButton
+                matterId={matterId}
+                channel="sms"
+                notes={smsDraft}
+                onDraft={draft => setSmsDraft(draft.slice(0, MAX_SMS_BODY_LENGTH))}
+              />
+            )}
             <Button type="button" size="sm" className="shrink-0" disabled={smsSending || !smsDraft.trim()} onClick={onSendSms}>
               Send SMS
             </Button>
@@ -210,6 +225,7 @@ export function SmsMessagesSection({
 }
 
 export function EmailMessagesSection({
+  matterId,
   emailTo,
   emailSubject,
   emailBody,
@@ -230,7 +246,17 @@ export function EmailMessagesSection({
   | 'setEmailSubject'
   | 'setEmailBody'
   | 'onSendEmail'
->) {
+> & { matterId?: string }) {
+  // "Subject: ..." first line from the AI draft fills the subject field.
+  function applyEmailDraft(draft: string) {
+    const match = draft.match(/^Subject:\s*(.+)\n+([\s\S]*)$/)
+    if (match) {
+      setEmailSubject(match[1].trim())
+      setEmailBody(match[2].trim())
+    } else {
+      setEmailBody(draft.trim())
+    }
+  }
   return (
     <section className="space-y-3">
       <div>
@@ -252,14 +278,19 @@ export function EmailMessagesSection({
             </div>
           </div>
           <Textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} placeholder="Plain-text email body…" rows={5} />
-          <Button
-            type="button"
-            size="sm"
-            disabled={emailSending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}
-            onClick={onSendEmail}
-          >
-            {emailSending ? 'Sending…' : 'Send email'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {matterId && (
+              <DraftWithAiButton matterId={matterId} channel="email" notes={emailBody} onDraft={applyEmailDraft} />
+            )}
+            <Button
+              type="button"
+              size="sm"
+              disabled={emailSending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}
+              onClick={onSendEmail}
+            >
+              {emailSending ? 'Sending…' : 'Send email'}
+            </Button>
+          </div>
         </div>
       )}
     </section>
@@ -294,31 +325,18 @@ export function MatterCommunicationsTab({
           <TabsTrigger value="calls">Calls</TabsTrigger>
         </TabsList>
         <TabsContent value="portal">
-          <PortalMessagesSection {...messageProps} />
+          <PortalMessagesSection matterId={matterId} {...messageProps} />
         </TabsContent>
         <TabsContent value="sms">
-          <SmsMessagesSection {...messageProps} />
+          <SmsMessagesSection matterId={matterId} {...messageProps} />
         </TabsContent>
         <TabsContent value="email">
-          <EmailMessagesSection {...messageProps} />
+          <EmailMessagesSection matterId={matterId} {...messageProps} />
         </TabsContent>
         <TabsContent value="calls">
           <CallsSection matterId={matterId} />
         </TabsContent>
       </Tabs>
     </TabsContent>
-  )
-}
-
-// Legacy export kept for any external references
-export type MatterMessagesTabProps = MatterMessagesSectionsProps
-
-export function MatterMessagesTab(props: MatterMessagesSectionsProps) {
-  return (
-    <div className="space-y-8">
-      <PortalMessagesSection {...props} />
-      <SmsMessagesSection {...props} />
-      <EmailMessagesSection {...props} />
-    </div>
   )
 }

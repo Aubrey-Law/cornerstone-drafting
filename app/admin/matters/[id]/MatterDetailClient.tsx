@@ -32,6 +32,16 @@ import {
 import type { MatterDetailsRow } from '@/types/matter-details'
 import { Button } from '@/components/ui/button'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -426,8 +436,16 @@ function MatterDetailClientInner({
     toast.success('Lead note updated')
   }
 
+  const [deleteNoteTarget, setDeleteNoteTarget] = useState<LinkedMatterNote | null>(null)
+  const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false)
+
   const handleDeleteLeadNote = async (note: LinkedMatterNote) => {
-    if (!note.leadId || !window.confirm('Delete this note? This cannot be undone.')) return
+    if (!note.leadId) return
+    setDeleteNoteTarget(note)
+  }
+
+  const confirmDeleteLeadNote = async (note: LinkedMatterNote) => {
+    if (!note.leadId) return
     const response = await fetch(`/api/admin/leads/${note.leadId}/notes/${note.sourceId}`, { method: 'DELETE' })
     if (!response.ok) {
       toast.error('Could not delete lead note')
@@ -455,9 +473,14 @@ function MatterDetailClientInner({
 
   const assetAggregates = useMemo(() => computeAssetAggregates(assets), [assets])
 
-  const handleUnlockIntake = useCallback(async () => {
+  const handleUnlockIntake = useCallback(() => {
     if (!liveIntakeId || unlocking) return
-    if (!window.confirm('Re-open the submitted intake for client editing?')) return
+    setUnlockConfirmOpen(true)
+  }, [liveIntakeId, unlocking])
+
+  const confirmUnlockIntake = useCallback(async () => {
+    if (!liveIntakeId || unlocking) return
+    setUnlockConfirmOpen(false)
     setUnlocking(true)
     try {
       await unlockIntake({ intakeId: liveIntakeId, matterId })
@@ -1288,6 +1311,42 @@ function MatterDetailClientInner({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteNoteTarget !== null} onOpenChange={open => !open && setDeleteNoteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const note = deleteNoteTarget
+                setDeleteNoteTarget(null)
+                if (note) void confirmDeleteLeadNote(note)
+              }}
+            >
+              Delete note
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={unlockConfirmOpen} onOpenChange={setUnlockConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-open the submitted intake?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The client will be able to edit and resubmit their intake questionnaire.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmUnlockIntake()}>Unlock intake</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

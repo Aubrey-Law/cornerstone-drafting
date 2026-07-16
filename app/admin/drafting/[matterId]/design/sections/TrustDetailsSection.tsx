@@ -13,11 +13,13 @@ import {
   type TrustPlanningType,
 } from '@/lib/designSheetDocumentInclusions'
 import {
+  buildStaggeredTiersFromPreset,
   buildTrustNameSuggestions,
   getTrustDetails,
   getTrustNameFormat,
   setTrustDetails,
   setTrustNameFormat,
+  STAGGERED_DISTRIBUTION_PRESETS,
   type InitialTrusteeNomination,
   type RepresentationType,
   type ResidualBeneficiaryMethod,
@@ -855,6 +857,21 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
         {residualMethod === 'staggered' && (
           <div className="mt-4">
             <FieldLabel>Staggered Distributions</FieldLabel>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-muted-foreground">Quick fill:</span>
+              {STAGGERED_DISTRIBUTION_PRESETS.map(preset => (
+                <Button
+                  key={preset.label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => setStaggers(buildStaggeredTiersFromPreset(preset, () => crypto.randomUUID()))}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
             {staggers.length > 0 && (
               <div className="space-y-2">
                 {staggers.map((t, i) => (

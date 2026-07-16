@@ -811,6 +811,45 @@ describe('node estate generator text rendering', () => {
     }
   })
 
+  it('renders raw execution signing references as fill-in lines when signing info is missing', () => {
+    // Legacy templates (certificate of trust, assignment of personal property,
+    // homestead) reference the raw execution fields instead of the display_
+    // aliases. Missing signing info must still render blank fill-in lines, not
+    // [[ MISSING ]] markers.
+    const zip = new PizZip()
+    zip.file(
+      'word/document.xml',
+      '<w:document><w:body>' +
+      '<w:p><w:r><w:t>Signing County: {{ execution.signing_county | name }}</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>Notary Commission Expiration: {{ execution.notary_commission }}</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>Dated: {{ execution.doc_date }}</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>Executed this {{ execution.ordinal_doc_date }}</w:t></w:r></w:p>' +
+      '</w:body></w:document>',
+    )
+    const templatePath = path.join(os.tmpdir(), `empty-signing-${process.pid}.docx`)
+    fs.writeFileSync(templatePath, Buffer.from(zip.generate({ type: 'uint8array' })))
+
+    const context = buildNodeEstateContext({
+      data: { client: { full_name: 'Jane Example', state: 'MA' }, children: [], execution: {} },
+      state: 'MA',
+      root,
+    })
+    const clauses = createNodeClauseStore({ root, state: 'MA', allowDraft: true })
+
+    try {
+      const rendered = renderNodeEstateDocxTemplate({ templatePath, context, clauses })
+      const xml = xmlFromDocx(rendered.buffer)
+      expect(rendered.missingFields).toEqual([])
+      expect(xml).not.toContain('[[ MISSING')
+      expect(xml).toContain('Signing County: __________________________')
+      expect(xml).toContain('Notary Commission Expiration: __________________________')
+      expect(xml).toContain('Dated: ________________, 20___')
+      expect(xml).toContain('Executed this _____ day of _________________, 20___')
+    } finally {
+      fs.rmSync(templatePath, { force: true })
+    }
+  })
+
   it('generates tag-balanced (openable) DPOA output for every co-agent arrangement', async () => {
     // The DPOA template nests paragraphs inside a run (invalid OOXML, but Word
     // tolerates it). The conditional-paragraph strip used to unwrap those wrong
