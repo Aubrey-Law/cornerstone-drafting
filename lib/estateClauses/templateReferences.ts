@@ -10,6 +10,44 @@ import type { EstateDocumentType } from '@/lib/estateClauses/types'
 
 const LITERAL_CALL_RE = /include_clause\s*\(\s*(["'])([a-z0-9]+(?:[._-][a-z0-9]+)+)\1(?:\s*,[^)]*)?\s*\)/gi
 const ANY_CALL_RE = /include_clause\s*\(/i
+const WORD_PARAGRAPH_RE = /<w:p\b[\s\S]*?<\/w:p>/g
+
+const DOCUMENT_TYPES_BY_ID: Readonly<Record<string, readonly EstateDocumentType[]>> = {
+  'will': ['will', 'ancillary'],
+  'simple-will': ['will', 'ancillary'],
+  'pourover-will': ['will', 'ancillary'],
+  'spouse-pourover-will': ['will', 'ancillary'],
+  'testamentary-trust-will': ['will', 'ancillary'],
+  'spouse-testamentary-trust-will': ['will', 'ancillary'],
+  'revocable-trust': ['trust', 'ancillary'],
+  'indv-disclaimer-trust': ['trust', 'ancillary'],
+  'joint-trust': ['trust', 'ancillary'],
+  'joint-trust-simplified': ['trust', 'ancillary'],
+  'trust-individual-single': ['trust', 'ancillary'],
+  'durable-poa': ['durable_power_of_attorney', 'ancillary'],
+  'durable-power-of-attorney': ['durable_power_of_attorney', 'ancillary'],
+  'spouse-durable-power-of-attorney': ['durable_power_of_attorney', 'ancillary'],
+  'health-directive': ['health_care_directive', 'ancillary'],
+  'health-care-proxy': ['health_care_directive', 'ancillary'],
+  'living-will': ['health_care_directive', 'ancillary'],
+  'spouse-health-care-proxy': ['health_care_directive', 'ancillary'],
+  'spouse-living-will': ['health_care_directive', 'ancillary'],
+  'hipaa': ['hipaa_authorization', 'ancillary'],
+  'spouse-hipaa': ['hipaa_authorization', 'ancillary'],
+  'young-adult-estate-plan': ['ancillary', 'durable_power_of_attorney', 'health_care_directive', 'hipaa_authorization'],
+  'ancillary': ['ancillary'],
+  'assignment-of-personal-property': ['ancillary'],
+  'certificate-of-trust': ['ancillary'],
+  'estate-plan-design-summary': ['ancillary'],
+  'estate-plan-design-worksheet': ['ancillary'],
+  'estate-plan-summary': ['ancillary'],
+  'funding-instructions': ['ancillary'],
+  'homestead-trustee': ['ancillary'],
+  'parental-guardian-appointment': ['ancillary'],
+  'personal-property-memorandum': ['ancillary'],
+  'temporary-delegation-parental-powers': ['ancillary'],
+  'trust-funding-plan': ['ancillary'],
+}
 
 function decodeXmlText(value: string): string {
   return value
@@ -29,15 +67,17 @@ export function referencedClauseKeys(template: Buffer): string[] {
     const file = zip.files[fileName]
     if (file.dir || !fileName.startsWith('word/') || !fileName.endsWith('.xml')) continue
 
-    const visibleText = decodeXmlText(
-      repairSplitNunjucksInXml(file.asText()).replace(/<[^>]+>/g, ''),
-    )
-    const unmatched = visibleText.replace(LITERAL_CALL_RE, (_call, _quote, key: string) => {
-      keys.add(key)
-      return ''
-    })
-    if (ANY_CALL_RE.test(unmatched)) {
-      throw new Error(`${fileName} contains include_clause(...) without a literal stable clause key.`)
+    for (const paragraph of file.asText().match(WORD_PARAGRAPH_RE) ?? []) {
+      const visibleText = decodeXmlText(
+        repairSplitNunjucksInXml(paragraph).replace(/<[^>]+>/g, ''),
+      )
+      const unmatched = visibleText.replace(LITERAL_CALL_RE, (_call, _quote, key: string) => {
+        keys.add(key)
+        return ''
+      })
+      if (ANY_CALL_RE.test(unmatched)) {
+        throw new Error(`${fileName} contains include_clause(...) without a literal stable clause key.`)
+      }
     }
   }
 
@@ -45,20 +85,15 @@ export function referencedClauseKeys(template: Buffer): string[] {
 }
 
 export function estateDocumentTypeForTemplate(document: NodeEstatePackageDocument): EstateDocumentType {
-  const value = `${document.id} ${document.title} ${document.template}`.toLowerCase()
-  if (value.includes('hipaa')) return 'hipaa_authorization'
-  if (value.includes('power-of-attorney') || value.includes('power of attorney')) return 'durable_power_of_attorney'
-  if (value.includes('health-care') || value.includes('health care') || value.includes('living-will') || value.includes('living will') || value.includes('advance-directive')) {
-    return 'health_care_directive'
-  }
-  if (value.includes('will')) return 'will'
-  if (value.includes('trust')) return 'trust'
-  return 'ancillary'
+  const types = DOCUMENT_TYPES_BY_ID[document.id]
+  if (!types) throw new Error(`Document ${document.id} has no estate clause compatibility classification.`)
+  return types[0]
 }
 
 export function compatibleEstateDocumentTypesForTemplate(document: NodeEstatePackageDocument): EstateDocumentType[] {
-  const primary = estateDocumentTypeForTemplate(document)
-  return primary === 'ancillary' ? [primary] : [primary, 'ancillary']
+  const types = DOCUMENT_TYPES_BY_ID[document.id]
+  if (!types) throw new Error(`Document ${document.id} has no estate clause compatibility classification.`)
+  return [...types]
 }
 
 export interface SelectedEstateTemplateReference {

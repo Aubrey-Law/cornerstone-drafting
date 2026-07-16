@@ -410,6 +410,73 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.upsert_matter_estate_clause_override(
+  p_matter_id uuid,
+  p_clause_id uuid,
+  p_expected_current_revision_id uuid,
+  p_action text,
+  p_reason text,
+  p_actor_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_current_revision_id uuid;
+  v_condition_field text;
+  v_override public.matter_estate_clause_overrides%ROWTYPE;
+BEGIN
+  IF p_action NOT IN ('force_include', 'force_omit') THEN
+    RAISE EXCEPTION 'Invalid estate clause override action';
+  END IF;
+  IF length(pg_catalog.btrim(COALESCE(p_reason, ''))) < 10 THEN
+    RAISE EXCEPTION 'Estate clause override reason must be at least 10 characters';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')
+  ) THEN
+    RAISE EXCEPTION 'Attorney or administrator role required';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.matters m WHERE m.id = p_matter_id) THEN
+    RAISE EXCEPTION 'Matter not found';
+  END IF;
+
+  SELECT p.current_revision_id, r.condition_field
+  INTO v_current_revision_id, v_condition_field
+  FROM public.estate_clause_publications p
+  JOIN public.estate_clause_revisions r
+    ON r.id = p.current_revision_id AND r.clause_id = p.clause_id
+  JOIN public.estate_clauses c ON c.id = p.clause_id
+  WHERE p.clause_id = p_clause_id
+    AND c.is_active
+  FOR UPDATE OF p;
+
+  IF NOT FOUND OR v_condition_field IS NULL OR length(pg_catalog.btrim(v_condition_field)) = 0 THEN
+    RAISE EXCEPTION 'Estate clause is not a current active conditional publication';
+  END IF;
+  IF v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id THEN
+    RAISE EXCEPTION 'Current estate clause revision changed; refresh and try again';
+  END IF;
+
+  INSERT INTO public.matter_estate_clause_overrides (
+    matter_id, clause_id, action, reason, created_by, updated_at
+  ) VALUES (
+    p_matter_id, p_clause_id, p_action, pg_catalog.btrim(p_reason), p_actor_id, now()
+  )
+  ON CONFLICT (matter_id, clause_id) DO UPDATE SET
+    action = EXCLUDED.action,
+    reason = EXCLUDED.reason,
+    created_by = EXCLUDED.created_by,
+    updated_at = EXCLUDED.updated_at
+  RETURNING * INTO v_override;
+
+  RETURN pg_catalog.to_jsonb(v_override);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.persist_generated_estate_document(
   p_document jsonb,
   p_manifest jsonb
@@ -651,9 +718,11 @@ CREATE POLICY generated_document_clause_revisions_staff_read
 REVOKE ALL ON FUNCTION public.submit_estate_clause_revision(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.request_estate_clause_changes(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.publish_estate_clause_revision(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.persist_generated_estate_document(jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.submit_estate_clause_revision(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.request_estate_clause_changes(uuid, uuid, text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.publish_estate_clause_revision(uuid, uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.persist_generated_estate_document(jsonb, jsonb) TO service_role;

@@ -36,9 +36,9 @@ function response(body: unknown, ok = true, status = ok ? 200 : 409) {
 describe('estate clause template references', () => {
   it('joins split Word text runs across every Word XML part and returns sorted literal keys', () => {
     const template = docx({
-      'word/document.xml': '<w:document><w:t>{{ include_</w:t><w:t>clause(&quot;will.pet_care&quot;) }}</w:t></w:document>',
-      'word/header1.xml': '<w:hdr><w:t>{{ include_clause(&apos;will.guardian_nomination&apos;) }}</w:t></w:hdr>',
-      'word/footer1.xml': '<w:ftr><w:t>{{ include_clause("will.pet_care") }}</w:t></w:ftr>',
+      'word/document.xml': '<w:document><w:p><w:t>{{ include_</w:t><w:t>clause(&quot;will.pet_care&quot;) }}</w:t></w:p></w:document>',
+      'word/header1.xml': '<w:hdr><w:p><w:t>{{ include_clause(&apos;will.guardian_nomination&apos;) }}</w:t></w:p></w:hdr>',
+      'word/footer1.xml': '<w:ftr><w:p><w:t>{{ include_clause("will.pet_care") }}</w:t></w:p></w:ftr>',
       'custom.xml': '<x>{{ include_clause("ignored.custom_part") }}</x>',
     })
 
@@ -50,10 +50,17 @@ describe('estate clause template references', () => {
 
   it('rejects dynamic clause-key expressions instead of treating them as auditable references', () => {
     const template = docx({
-      'word/document.xml': '<w:document><w:t>{{ include_clause(clause_key) }}</w:t></w:document>',
+      'word/document.xml': '<w:document><w:p><w:t>{{ include_clause(clause_key) }}</w:t></w:p></w:document>',
     })
 
     expect(() => referencedClauseKeys(template)).toThrow(/literal stable clause key/i)
+  })
+
+  it('does not invent a literal reference by joining fragments from separate Word paragraphs', () => {
+    const template = docx({
+      'word/document.xml': '<w:document><w:body><w:p><w:r><w:t>{{ include_</w:t></w:r></w:p><w:p><w:r><w:t>clause(&quot;will.pet_care&quot;) }}</w:t></w:r></w:p></w:body></w:document>',
+    })
+    expect(referencedClauseKeys(template)).toEqual([])
   })
 
   it('classifies testamentary trust wills as wills while preserving incapacity document types', () => {
@@ -73,6 +80,19 @@ describe('estate clause template references', () => {
     }
     expect(references).toContain('will.pet_care')
     expect(references).toContain('execution.self_proving_affidavit')
+  })
+
+  it('classifies every package document by explicit id and keeps funding/support documents ancillary', () => {
+    const documents = new Map<string, Parameters<typeof estateDocumentTypeForTemplate>[0]>()
+    const packages = path.join(process.cwd(), 'tools/aubreylaw-docgeneration/packages')
+    for (const filename of fs.readdirSync(packages).filter(name => name.endsWith('.json'))) {
+      const config = JSON.parse(fs.readFileSync(path.join(packages, filename), 'utf8')) as { documents?: Parameters<typeof estateDocumentTypeForTemplate>[0][] }
+      for (const document of config.documents ?? []) documents.set(document.id, document)
+    }
+    expect([...documents.values()].map(estateDocumentTypeForTemplate)).toHaveLength(documents.size)
+    for (const id of ['homestead-trustee', 'funding-instructions', 'trust-funding-plan']) {
+      expect(estateDocumentTypeForTemplate(documents.get(id)!)).toBe('ancillary')
+    }
   })
 })
 
@@ -125,6 +145,16 @@ describe('estate clause override request contracts', () => {
       revisionId: 'historical-revision',
     })).toThrow(/exactly/i)
     expect(() => parseDeleteOverrideRequest({ clauseKey: 'will.pet_care', revisionId: 'old' })).toThrow(/exactly/i)
+  })
+
+  it('locks the expected current publication while persisting an eligible override', () => {
+    const migration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/20260715210000_estate_clause_library.sql'), 'utf8')
+    const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/estate-clause-overrides/route.ts'), 'utf8')
+    expect(migration).toContain('upsert_matter_estate_clause_override')
+    expect(migration).toContain('FOR UPDATE')
+    expect(migration).toContain('v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id')
+    expect(route).toContain(".rpc('upsert_matter_estate_clause_override'")
+    expect(route).toContain('p_expected_current_revision_id: clause.currentRevisionId')
   })
 })
 
@@ -227,6 +257,38 @@ describe('matter clause override panel', () => {
       '/api/admin/matters/matter-number/estate-clause-overrides',
       expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ clauseKey: 'will.pet_care' }) }),
     )
+  })
+
+  it('surfaces and removes a stale override that is no longer PUT-eligible', async () => {
+    const stale = {
+      matterId: 'canonical-matter',
+      clauses: [],
+      staleOverrides: [{
+        id: 'stale-id', clauseId: 'clause-id', clauseKey: 'will.retired_clause', title: 'Retired Clause',
+        action: 'force_omit', reason: 'Prior attorney exception is obsolete.', actorId: 'attorney',
+      }],
+    }
+    const fetchMock = vi.mocked(fetch)
+    fetchMock
+      .mockResolvedValueOnce(response(stale))
+      .mockResolvedValueOnce(response({ deleted: true, clauseKey: 'will.retired_clause' }))
+      .mockResolvedValueOnce(response({ ...stale, staleOverrides: [] }))
+    const onMutated = vi.fn()
+    const user = userEvent.setup()
+    render(<ClauseOverridesPanel matterId="matter-number" onMutated={onMutated} />)
+
+    expect(await screen.findByText('Retired Clause')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Remove stale Retired Clause override' }))
+    await waitFor(() => expect(onMutated).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenNthCalledWith(2,
+      '/api/admin/matters/matter-number/estate-clause-overrides',
+      expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ clauseKey: 'will.retired_clause' }) }),
+    )
+
+    const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/estate-clause-overrides/route.ts'), 'utf8')
+    const deleteHandler = route.slice(route.indexOf('export async function DELETE'))
+    expect(deleteHandler).not.toContain('loaded.eligible.get')
+    expect(deleteHandler).toContain(".eq('id', override.id)")
   })
 
   it('wires successful mutations to clear the GenerateStep preflight and derived readiness', () => {

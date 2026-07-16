@@ -86,6 +86,7 @@ type OverrideRow = {
   action: EstateClauseOverrideAction
   reason: string
   created_by: string
+  estate_clauses?: { clause_key: string; title: string } | Array<{ clause_key: string; title: string }>
 }
 
 export function isPublishedClauseOverrideEligible(
@@ -175,27 +176,29 @@ async function loadEligibleClauses(canonicalMatterId: string) {
   return { admin, eligible }
 }
 
-async function context(req: Request, params: Params) {
+async function authorizedMatter(req: Request, params: Params) {
   const auth = await requireAdmin(req)
   if (auth.err || !auth.userId) return { response: auth.err ?? Response.json({ error: 'Unauthorized' }, { status: 401 }) }
   const { id } = await params.params
   const canonicalMatterId = await resolveMatterId(id)
-  const loaded = await loadEligibleClauses(canonicalMatterId)
-  return { ...loaded, canonicalMatterId, actorId: auth.userId }
+  return { canonicalMatterId, actorId: auth.userId }
 }
 
 export async function GET(req: Request, params: Params) {
   try {
-    const loaded = await context(req, params)
-    if ('response' in loaded) return loaded.response
+    const authorized = await authorizedMatter(req, params)
+    if ('response' in authorized) return authorized.response
+    const loaded = await loadEligibleClauses(authorized.canonicalMatterId)
     const { data, error } = await loaded.admin
       .from('matter_estate_clause_overrides')
-      .select('id,clause_id,action,reason,created_by')
-      .eq('matter_id', loaded.canonicalMatterId)
+      .select('id,clause_id,action,reason,created_by,estate_clauses!inner(clause_key,title)')
+      .eq('matter_id', authorized.canonicalMatterId)
     if (error) throw new Error(error.message)
-    const overrides = new Map((data ?? []).map(row => [row.clause_id, row as OverrideRow]))
+    const overrideRows = (data ?? []) as unknown as OverrideRow[]
+    const overrides = new Map(overrideRows.map(row => [row.clause_id, row]))
+    const eligibleClauseIds = new Set([...loaded.eligible.values()].map(clause => clause.clauseId))
     return Response.json({
-      matterId: loaded.canonicalMatterId,
+      matterId: authorized.canonicalMatterId,
       clauses: [...loaded.eligible.values()]
         .sort((a, b) => a.clauseKey.localeCompare(b.clauseKey))
         .map(clause => {
@@ -210,6 +213,21 @@ export async function GET(req: Request, params: Params) {
             } : null,
           }
         }),
+      staleOverrides: overrideRows
+        .filter(override => !eligibleClauseIds.has(override.clause_id))
+        .map(override => {
+          const clause = one(override.estate_clauses!)
+          return {
+            id: override.id,
+            clauseId: override.clause_id,
+            clauseKey: clause.clause_key,
+            title: clause.title,
+            action: override.action,
+            reason: override.reason,
+            actorId: override.created_by,
+          }
+        })
+        .sort((a, b) => a.clauseKey.localeCompare(b.clauseKey)),
     })
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to load clause overrides' }, { status: 500 })
@@ -217,6 +235,13 @@ export async function GET(req: Request, params: Params) {
 }
 
 export async function PUT(req: Request, params: Params) {
+  let authorized
+  try {
+    authorized = await authorizedMatter(req, params)
+    if ('response' in authorized) return authorized.response
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : 'Unable to resolve matter' }, { status: 500 })
+  }
   let body: OverrideRequest
   try {
     body = parseOverrideRequest(await req.json())
@@ -224,24 +249,22 @@ export async function PUT(req: Request, params: Params) {
     return Response.json({ error: error instanceof Error ? error.message : 'Invalid override request' }, { status: 400 })
   }
   try {
-    const loaded = await context(req, params)
-    if ('response' in loaded) return loaded.response
+    const loaded = await loadEligibleClauses(authorized.canonicalMatterId)
     const clause = loaded.eligible.get(body.clauseKey)
     if (!clause) {
       return Response.json({ error: 'Clause is not a current conditional publication referenced by a selected template.' }, { status: 409 })
     }
-    const { data, error } = await loaded.admin
-      .from('matter_estate_clause_overrides')
-      .upsert({
-        matter_id: loaded.canonicalMatterId,
-        clause_id: clause.clauseId,
-        action: body.action,
-        reason: body.reason,
-        created_by: loaded.actorId,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'matter_id,clause_id' })
-      .select('id,clause_id,action,reason,created_by')
-      .single()
+    const rpcClient = loaded.admin as unknown as {
+      rpc: (name: string, params: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>
+    }
+    const { data, error } = await rpcClient.rpc('upsert_matter_estate_clause_override', {
+      p_matter_id: authorized.canonicalMatterId,
+      p_clause_id: clause.clauseId,
+      p_expected_current_revision_id: clause.currentRevisionId,
+      p_action: body.action,
+      p_reason: body.reason,
+      p_actor_id: authorized.actorId,
+    })
     if (error) throw new Error(error.message)
     return Response.json({ override: data })
   } catch (error) {
@@ -250,6 +273,13 @@ export async function PUT(req: Request, params: Params) {
 }
 
 export async function DELETE(req: Request, params: Params) {
+  let authorized
+  try {
+    authorized = await authorizedMatter(req, params)
+    if ('response' in authorized) return authorized.response
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : 'Unable to resolve matter' }, { status: 500 })
+  }
   let body: { clauseKey: string }
   try {
     body = parseDeleteOverrideRequest(await req.json())
@@ -257,17 +287,20 @@ export async function DELETE(req: Request, params: Params) {
     return Response.json({ error: error instanceof Error ? error.message : 'Invalid override request' }, { status: 400 })
   }
   try {
-    const loaded = await context(req, params)
-    if ('response' in loaded) return loaded.response
-    const clause = loaded.eligible.get(body.clauseKey)
-    if (!clause) {
-      return Response.json({ error: 'Clause is not a current conditional publication referenced by a selected template.' }, { status: 409 })
-    }
-    const { error } = await loaded.admin
+    const admin = getAdminClient()
+    const { data: override, error: lookupError } = await admin
+      .from('matter_estate_clause_overrides')
+      .select('id,estate_clauses!inner(clause_key)')
+      .eq('matter_id', authorized.canonicalMatterId)
+      .eq('estate_clauses.clause_key', body.clauseKey)
+      .maybeSingle()
+    if (lookupError) throw new Error(lookupError.message)
+    if (!override) return Response.json({ error: 'Clause override not found.' }, { status: 404 })
+    const { error } = await admin
       .from('matter_estate_clause_overrides')
       .delete()
-      .eq('matter_id', loaded.canonicalMatterId)
-      .eq('clause_id', clause.clauseId)
+      .eq('matter_id', authorized.canonicalMatterId)
+      .eq('id', override.id)
     if (error) throw new Error(error.message)
     return Response.json({ deleted: true, clauseKey: body.clauseKey })
   } catch (error) {
