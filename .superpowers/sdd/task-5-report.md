@@ -2,42 +2,39 @@
 
 ## Result
 
-- Converted matters load linked lead notes, lead meeting notes, and lead activity from `client_intake_id` without inserting or copying rows.
-- Notes and activity use stable source identities, suppress represented lead activity, and remain reverse chronological.
-- Lead-origin history is labeled `From lead`.
-- Lead note edits and deletes continue to use `/api/admin/leads/[leadId]/notes/[noteId]`; matter notes continue to use matter-note actions.
-- Drafting internals and the unrelated `LeadDetailClient 2.tsx` were not touched.
+- Added an administrator-only `Clause library` surface to Template Center with responsive horizontal tab navigation.
+- Added dense Massachusetts clause search and workflow filtering, stable-key clause creation through the Task 4 POST endpoint, draft editing, server validation, explicit submission, and independent publication review.
+- AI language remains a proposal until an attorney explicitly selects `Accept draft`; AI cannot save, submit, approve, or publish.
+- Submission is disabled unless the server-saved working draft is valid and the editor has no unsaved local changes.
+- Review shows published and proposed text side-by-side, author and mandatory change summary, validation results, in-memory preview generation and DOCX downloads, independent-review suppression, exact-key publication confirmation, and visible optimistic conflicts.
+- Clause and revision panels are keyed by stable identities so switching clears transient editor/review state, including AI proposals, comments, matter IDs, preview files/reports, notices, errors, confirmations, and busy state.
 
-## TDD
+## AIDesigner adoption
 
-- RED: `npx vitest run tests/lead-conversion-history.test.tsx` failed with `mergeLinkedNotes is not a function`.
-- GREEN: the same suite passed 2/2 after implementing linked display DTO merging and routing.
+- Followed the existing settings and shadcn/Radix component language after inspecting the target surface and frontend rubric.
+- Reused repository primitives and tokens; no AIDesigner credits were spent, as required.
+- Kept the content-dense legal workflow responsive with a stacked mobile layout, horizontal Template Center tab overflow, and a desktop clause-list/editor split.
+
+## Behavioral coverage
+
+- Search and workflow-status filtering.
+- Failed-save draft preservation and visible errors.
+- Mandatory summaries, server-valid submission, and dirty-local-edit submission suppression.
+- Stable clause creation through `POST /api/admin/settings/estate-clauses`.
+- Explicit AI acceptance and AI-state clearing when changing clauses.
+- Side-by-side review, exact-key confirmation, and author self-publication suppression.
+- Candidate preview generation, downloadable DOCX data URLs, and preview/report clearing after matter changes.
+- Optimistic publication conflicts and exact-key confirmation clearing when switching revisions.
 
 ## Verification
 
-- Lead/notes/Granola/activity/conversion suites: 11 files, 86 tests passed.
-- Scoped ESLint: passed.
+- `npx vitest run tests/estate-clause-admin-ui.test.tsx tests/document-template-workflow.test.ts`: 22/22 passed.
+- `npx vitest run tests/estate-clause-admin-ui.test.tsx tests/document-template-workflow.test.ts tests/estate-clause-workflow.test.ts`: 49/49 passed.
+- Scoped ESLint for all Task 5 production and test files: passed.
 - `git diff --check`: passed.
-- `npm run build:next`: passed, including Next.js TypeScript and all 53 static pages.
-- `npx tsc --noEmit -p tsconfig.json`: reports only pre-existing errors in `tests/*.test.ts` (`firma-engagement-poc`, `lead-detail-route`, and `lead-details-persistence`), consistent with the documented baseline; no production-file error was reported.
+- `npm run typecheck`: no Task 5 errors; it reports existing production errors in `lib/estateClauses/fileRepository.ts` and `lib/estateClauses/validation.ts` plus documented test-suite errors.
+- `npm test`: the same five documented branch-baseline failures remained (`tests/node-estate-generator.test.ts` x4 and `tests/drafting-hub.test.ts` x1); Task 5 focused suites passed.
 
-## Visual verification
+## Review-fix status
 
-Not performed: the requested authenticated desktop/mobile matter state requires a running seeded Supabase/auth environment. Automated component behavior, scoped lint, and the production build were used as the available verification gates.
-
-## Review fixes
-
-- Routed both Save clicks and Cmd/Ctrl+Enter lead-origin edits exclusively through the lead-note handler; matter routing remains unchanged.
-- Added rendered tests for lead/matter click and keyboard mutations, delete routing, origin labels, loader-shaped provenance, chronological order, and exact-once deduplication.
-- Added `matter_notes.source_lead_note_id` as an immutable, nullable, unique foreign-key provenance field in `20260730020000_link_lead_history.sql`; linked lead meeting notes remain direct read-only projections rather than copied matter rows.
-- Selected and mapped the provenance field in the server loader.
-- Bounded linked lead activity to the newest 200 records, removed the duplicate client activity fetch, and made all matter/linked-history query errors fail explicitly.
-- Review verification: 11 focused files / 90 tests passed; scoped ESLint and `git diff --check` passed; `npm run build:next` passed. The direct `tsconfig.json` check continues to report only the documented pre-existing test typing errors.
-
-## Final activity provenance fix
-
-- Corrected exact-once activity merging to follow the persisted direction: `lead_activity.source_matter_activity_id` references `matter_activity.id`.
-- The production loader now maps that field through `buildLinkedMatterActivity`; it no longer relies on nonexistent `matter_activity.metadata.source_lead_activity_id` provenance.
-- Added a loader-shaped rendered timeline test proving mirrored activity renders once, lead-only activity retains `From lead`, and chronology remains correct.
-- TDD RED: the new builder was missing and the inverse merge retained the mirrored lead row. GREEN: 3 focused files / 12 tests passed.
-- Final verification: 11 focused files / 91 tests passed; scoped ESLint and `git diff --check` passed; `npm run build:next` passed.
+The inherited implementation addressed every prior Not Ready finding before this report: new-clause creation, dirty-edit submission gating, keyed transient-state resets, responsive Template Center tabs, and explicit AI plus preview/download/switching tests. A fresh independent re-review is required after the Task 5 commit.

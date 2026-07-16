@@ -55,9 +55,11 @@ interface ConnectorRow {
 export function StaffSettingsClient({
   initialTab = 'models',
   isAdministrator = false,
+  currentUserId = '',
 }: {
   initialTab?: Tab
   isAdministrator?: boolean
+  currentUserId?: string
 }) {
   const token = useAccessToken()
   const [tab, setTab] = useState<Tab>(initialTab)
@@ -650,7 +652,7 @@ export function StaffSettingsClient({
 
       {tab === 'email' && <EmailSettingsSection />}
 
-      {tab === 'templates' && isAdministrator && <TemplateCenter />}
+      {tab === 'templates' && isAdministrator && <TemplateCenter currentUserId={currentUserId} />}
 
       {tab === 'ai-usage' && <AiUsagePanel />}
 
