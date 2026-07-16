@@ -303,7 +303,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // engine supports every package the design sheet can derive.)
     let generationEngine: EstateGeneratorEngine | 'python_fallback' = engine
     if (engine === 'node') {
-      const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload))
+      const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId }))
       if (
         !nodeGenerateResult.ok
         && assetTransferDocTypes.length > 0

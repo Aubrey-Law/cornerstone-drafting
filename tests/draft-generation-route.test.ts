@@ -59,7 +59,7 @@ describe('matter draft generation route', () => {
     expect(engineSource).toContain("if (raw === 'supabase' || raw === 'typescript') return 'supabase'")
     expect(engineSource).not.toContain("return 'python'")
     expect(engineSource).toContain("return 'node'")
-    expect(source).toContain("await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload))")
+    expect(source).toContain("await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId }))")
     expect(source).not.toContain('runEstateGenerator')
     expect(source).not.toContain("} else if (engine === 'python') {")
     expect(source).not.toContain('function shouldUsePythonEstateGenerator')

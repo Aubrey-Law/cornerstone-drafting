@@ -7,6 +7,10 @@ import { isPresent, missingRequiredFields } from '@/lib/estateGenerator/node/val
 
 interface IncludedClause {
   id: string
+  clause_id: string
+  clause_key: string
+  revision_id: string
+  content_hash: string
   title?: string
   jurisdiction?: string
   source?: string
@@ -119,6 +123,10 @@ export function createNodeClauseStore({
 
     report.included_clauses.push({
       id: clauseId,
+      clause_id: clause.clauseId,
+      clause_key: clause.clauseKey,
+      revision_id: clause.revisionId,
+      content_hash: clause.contentHash,
       title: clause.title,
       jurisdiction: clause.sourceJurisdiction ?? clause.jurisdiction,
       source: clause.sourceFile,

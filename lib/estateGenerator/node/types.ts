@@ -1,3 +1,5 @@
+import type { EstateClauseManifestEntry } from '@/lib/estateClauses/types'
+
 export type NodeEstatePackageName =
   | 'core-estate'
   | 'design-summary'
@@ -45,6 +47,9 @@ export interface NodeEstateGeneratedFile {
   title: string
   /** Full name(s) of the person this document belongs to; null when unknown. */
   owner: string | null
+  /** Frozen clause source and exact published revisions rendered into this file. */
+  clauseSource: 'database' | 'file'
+  clauseManifest: EstateClauseManifestEntry[]
   /** Leftover `{{ }}` / `{% %}` / `[ALL-CAPS]` markers in this document's render. */
   unresolvedMarkers?: string[]
   /** `[[ MISSING: path ]]` field holes in this document's render. */

@@ -1,6 +1,14 @@
 import path from 'node:path'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
+import { loadBundledEstateClauseSnapshot } from '@/lib/estateClauses/fileRepository'
+import type { EstateClauseClient } from '@/lib/estateClauses/repository'
+import { loadEstateClauseSnapshot } from '@/lib/estateClauses/source'
+import type {
+  EstateClauseManifestEntry,
+  EstateClauseSnapshot,
+} from '@/lib/estateClauses/types'
 import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
+import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
   clientSlugFromPayload,
   deriveEstateGeneratorPackages,
@@ -31,7 +39,27 @@ export interface GenerateNodeEstatePackageArgs {
   state: string
   root?: string
   allowDraft?: boolean
+  clauseSnapshot?: EstateClauseSnapshot
   templateResolver?: (bundledPath: string) => Promise<ResolvedDocumentTemplate>
+}
+
+export interface GenerateEstatePlanDocumentsNodeOptions {
+  matterId?: string
+  clauseSnapshot?: EstateClauseSnapshot
+}
+
+function clauseManifest(
+  includedClauses: ReturnType<typeof createNodeClauseStore>['report']['included_clauses'],
+): EstateClauseManifestEntry[] {
+  return includedClauses.map((clause, inclusionPosition) => ({
+    clauseId: clause.clause_id,
+    clauseKey: clause.clause_key,
+    revisionId: clause.revision_id,
+    contentHash: clause.content_hash,
+    inclusionPosition,
+    selectionReason: clause.selection_reason,
+    overrideId: clause.override_id,
+  }))
 }
 
 function clientSlug(data: NodeEstateData): string {
@@ -85,6 +113,7 @@ export async function generateNodeEstatePackage({
   state,
   root = resolveNodeEstateGeneratorRoot(),
   allowDraft = false,
+  clauseSnapshot,
   templateResolver,
 }: GenerateNodeEstatePackageArgs): Promise<NodeEstateGeneratorResult> {
   const config = loadNodeEstatePackage(packageName, root)
@@ -99,14 +128,20 @@ export async function generateNodeEstatePackage({
     ...conditionalMissingFieldsForPackage(packageName, context),
   ]))
 
-  const clauses = createNodeClauseStore({ root, state, allowDraft })
+  const snapshot = clauseSnapshot ?? loadBundledEstateClauseSnapshot({
+    root,
+    jurisdiction: state,
+    allowDraft,
+  })
   const owner = documentOwnerName(packageData, packageName)
   const files: NodeEstateGeneratedFile[] = []
   const unresolvedMarkers = new Set<string>()
   const missingFields = new Set<string>(declaredMissing)
+  const clauseWarnings = new Set<string>(snapshot.warnings ?? [])
 
   try {
     for (const document of config.documents) {
+      const clauses = createNodeClauseStore({ root, state, allowDraft, snapshot })
       const absoluteTemplatePath = path.join(root, document.template)
       const bundledPath = path.relative(process.cwd(), absoluteTemplatePath).replaceAll('\\', '/')
       const resolved = templateResolver
@@ -123,6 +158,8 @@ export async function generateNodeEstatePackage({
 
       for (const marker of rendered.unresolvedMarkers) unresolvedMarkers.add(marker)
       for (const field of rendered.missingFields) missingFields.add(field)
+      for (const field of clauses.report.missing_fields) missingFields.add(field)
+      for (const warning of clauses.report.warnings) clauseWarnings.add(warning)
       // Keep this document's own markers alongside the package-level aggregate so
       // a caller can attribute markers to a specific file without re-rendering.
       files.push({
@@ -130,6 +167,8 @@ export async function generateNodeEstatePackage({
         buffer: rendered.buffer,
         title: document.title,
         owner,
+        clauseSource: snapshot.source,
+        clauseManifest: clauseManifest(clauses.report.included_clauses),
         unresolvedMarkers: rendered.unresolvedMarkers,
         missingFields: rendered.missingFields,
         templateId: resolved?.definition.id,
@@ -143,11 +182,9 @@ export async function generateNodeEstatePackage({
       error: error instanceof Error ? error.message : String(error),
       status: 500,
       missing: Array.from(missingFields).sort(),
-      warnings: clauses.report.warnings,
+      warnings: Array.from(clauseWarnings),
     }
   }
-
-  for (const field of clauses.report.missing_fields) missingFields.add(field)
 
   if (files.length === 0) {
     return {
@@ -155,11 +192,11 @@ export async function generateNodeEstatePackage({
       error: 'Node estate generator completed but did not produce any DOCX files',
       status: 422,
       missing: Array.from(missingFields).sort(),
-      warnings: clauses.report.warnings,
+      warnings: Array.from(clauseWarnings),
     }
   }
 
-  const warnings = [...clauses.report.warnings]
+  const warnings = Array.from(clauseWarnings)
   if (unresolvedMarkers.size > 0) {
     warnings.push(`Unresolved template markers: ${Array.from(unresolvedMarkers).sort().join(', ')}`)
   }
@@ -175,7 +212,10 @@ export async function generateNodeEstatePackage({
   }
 }
 
-export async function generateEstatePlanDocumentsNode(payload: DraftPayload): Promise<NodeEstateGeneratorResult> {
+export async function generateEstatePlanDocumentsNode(
+  payload: DraftPayload,
+  options: GenerateEstatePlanDocumentsNodeOptions = {},
+): Promise<NodeEstateGeneratorResult> {
   const packageNames = deriveEstateGeneratorPackages(payload) as NodeEstatePackageName[]
   const unsupported = packageNames.filter(packageName => !isNodeEstatePackageSupported(packageName))
   const coverageWarnings = estateGeneratorCoverageWarnings(payload)
@@ -210,6 +250,17 @@ export async function generateEstatePlanDocumentsNode(payload: DraftPayload): Pr
 
   const data = toEstateGeneratorData(payload) as unknown as NodeEstateData
   const state = normalizeJurisdictionStateCode(payload.client.state)
+  const clauseSnapshot = options.clauseSnapshot ?? (options.matterId
+    ? await loadEstateClauseSnapshot({
+        matterId: options.matterId,
+        jurisdiction: state,
+        client: getAdminClient() as unknown as EstateClauseClient,
+        allowDraft: true,
+      })
+    : loadBundledEstateClauseSnapshot({
+        jurisdiction: state,
+        allowDraft: true,
+      }))
   const files: NodeEstateGeneratedFile[] = []
   const missing: string[] = []
   const warnings: string[] = [...coverageWarnings]
@@ -228,6 +279,7 @@ export async function generateEstatePlanDocumentsNode(payload: DraftPayload): Pr
           packageName,
           state,
           allowDraft: true,
+          clauseSnapshot,
         })
 
         if (!result.ok) return result
@@ -241,6 +293,7 @@ export async function generateEstatePlanDocumentsNode(payload: DraftPayload): Pr
         packageName,
         state,
         allowDraft: true,
+        clauseSnapshot,
       })
 
       if (!result.ok) return result
