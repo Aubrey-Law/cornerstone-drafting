@@ -94,6 +94,8 @@ describe('document template workflow', () => {
     expect(settings).toContain("isAdministrator ? [['templates', 'Templates']")
     expect(center).toContain('<EmailTemplatesSection')
     expect(center).toContain('<EsignTemplateEditor')
+    expect(center).toContain('<EstateClauseLibrarySection currentUserId={currentUserId}')
+    expect(center).toContain('Clause library')
     expect(email).not.toContain('<EmailTemplatesSection')
   })
 

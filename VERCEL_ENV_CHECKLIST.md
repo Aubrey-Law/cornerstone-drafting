@@ -17,6 +17,7 @@
 | Variable | Purpose |
 |----------|---------|
 | `ESTATE_GENERATOR_ENGINE` | `node` (default). `supabase` uses Storage templates. `python` is reserved for subprocess tooling; bulk runs use node → supabase → per-doc fallback. |
+| `ESTATE_CLAUSE_SOURCE` | `file` (default and rollback setting) or `database`. Keep production on `file` until the estate-clause release gate in `OPERATIONS_RUNBOOK.md` is green in preview. This is server-only; never prefix it with `NEXT_PUBLIC_`. |
 
 Python fallback uses the venv created by `npm run estate-generator:setup` during build.
 

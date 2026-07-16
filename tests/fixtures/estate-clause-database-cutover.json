@@ -1,0 +1,28 @@
+{
+  "capturedFrom": "local Supabase import rehearsal before independent attorney publication",
+  "stagedClauseKeys": [
+    "execution.self_proving_affidavit",
+    "execution.signing_block",
+    "healthcare.agent_appointment",
+    "hipaa.authorization",
+    "poa.agent_appointment",
+    "testamentary_will.residuary_testamentary_trust",
+    "testamentary_will.trust_protector",
+    "testamentary_will.trustee_nomination",
+    "trust.spendthrift",
+    "trust.trustee_appointment",
+    "will.bond_supervision",
+    "will.disclaimer",
+    "will.executor_appointment",
+    "will.family_declaration",
+    "will.guardian_nomination",
+    "will.no_contest",
+    "will.pet_care",
+    "will.residuary_outright",
+    "will.simultaneous_death",
+    "will.specific_gifts",
+    "will.tangible_personal_property",
+    "will.utma"
+  ],
+  "activePublications": []
+}
