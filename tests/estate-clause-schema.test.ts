@@ -3,6 +3,10 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const sql = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/20260715210000_estate_clause_library.sql'), 'utf8')
+const soloPublicationSql = fs.readFileSync(
+  path.join(process.cwd(), 'supabase/migrations/20260716130000_solo_attorney_estate_clause_publication.sql'),
+  'utf8',
+)
 const persistenceSql = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION public.persist_generated_estate_document'))
 
 describe('estate clause schema', () => {
@@ -78,5 +82,33 @@ describe('estate clause schema', () => {
     expect(sql).toContain("'retired'")
     expect(sql).toContain("'publication_reverted'")
     expect(sql).toContain('p_expected_current_revision_id')
+  })
+
+  it('allows an authorized solo attorney while preserving every non-personnel publication gate', () => {
+    for (const functionName of [
+      'request_estate_clause_changes',
+      'publish_estate_clause_revision',
+      'revert_estate_clause_publication',
+    ]) {
+      expect(soloPublicationSql).toContain(`CREATE OR REPLACE FUNCTION public.${functionName}`)
+      expect(soloPublicationSql).toContain(`REVOKE ALL ON FUNCTION public.${functionName}`)
+      expect(soloPublicationSql).toContain(`GRANT EXECUTE ON FUNCTION public.${functionName}`)
+    }
+
+    expect(soloPublicationSql).not.toMatch(/different attorney|different administrator/i)
+    expect(soloPublicationSql).not.toContain('v_revision.author_id = p_actor_id')
+    expect(soloPublicationSql).not.toContain('v_author_id = p_actor_id')
+    expect(soloPublicationSql).not.toContain('v_target_author_id = p_actor_id')
+
+    expect(soloPublicationSql).toContain("u.role IN ('attorney', 'admin')")
+    expect(soloPublicationSql).toContain("v_latest_event IS DISTINCT FROM 'submitted'")
+    expect(soloPublicationSql).toContain("v_validation_status <> 'valid'")
+    expect(soloPublicationSql).toContain('pe.template_snapshot_hash = p_current_template_snapshot_hash')
+    expect(soloPublicationSql).toContain('pe.dependency_revision_ids = v_dependency_revision_ids')
+    expect(soloPublicationSql).toContain('v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id')
+    expect(soloPublicationSql).toContain("hashtextextended('estate-clause-publications', 0)")
+    expect(soloPublicationSql).toContain("'changes_requested'")
+    expect(soloPublicationSql).toContain("'published'")
+    expect(soloPublicationSql).toContain("'publication_reverted'")
   })
 })
