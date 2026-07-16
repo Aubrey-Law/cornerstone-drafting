@@ -578,6 +578,7 @@ describe('estate clause admin route contracts', () => {
     }
     expect(list).toContain('workingDraft:')
     expect(list).toContain('basePublishedRevisionId: draft.base_published_revision_id')
+    expect(list).toContain('row.id === draft.source_review_revision_id')
     expect(list).toContain('submittedRevisions:')
     expect(list).toContain('currentPublication:')
     expect(list).toContain('validationReport:')

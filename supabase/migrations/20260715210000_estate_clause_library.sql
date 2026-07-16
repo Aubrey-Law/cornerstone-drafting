@@ -57,10 +57,13 @@ CREATE TABLE public.estate_clause_working_drafts (
   validation_status text NOT NULL DEFAULT 'invalid' CHECK (validation_status IN ('valid', 'invalid')),
   validation_report jsonb NOT NULL DEFAULT '{}'::jsonb,
   author_id uuid NOT NULL REFERENCES public.users(id),
+  source_review_revision_id uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (clause_id, author_id),
   FOREIGN KEY (base_published_revision_id, clause_id)
+    REFERENCES public.estate_clause_revisions(id, clause_id) ON DELETE RESTRICT,
+  FOREIGN KEY (source_review_revision_id, clause_id)
     REFERENCES public.estate_clause_revisions(id, clause_id) ON DELETE RESTRICT
 );
 
@@ -299,14 +302,14 @@ BEGIN
   INSERT INTO public.estate_clause_working_drafts (
     clause_id, base_published_revision_id, clause_text, required_fields,
     nested_clause_keys, condition_field, change_summary, content_hash,
-    validation_status, validation_report, author_id
+    validation_status, validation_report, author_id, source_review_revision_id
   ) VALUES (
     v_revision.clause_id, v_revision.base_published_revision_id,
     v_revision.clause_text, v_revision.required_fields,
     v_revision.nested_clause_keys, v_revision.condition_field,
     v_revision.change_summary, v_revision.content_hash,
     v_revision.validation_status, v_revision.validation_report,
-    v_revision.author_id
+    v_revision.author_id, v_revision.id
   )
   ON CONFLICT (clause_id, author_id) DO NOTHING;
 

@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     const [draftsResult, revisionsResult, eventsResult, publicationsResult] = await Promise.all([
       client
         .from('estate_clause_working_drafts')
-        .select('id,clause_id,author_id,base_published_revision_id,clause_text,required_fields,nested_clause_keys,condition_field,change_summary,content_hash,validation_status,validation_report,updated_at')
+        .select('id,clause_id,author_id,base_published_revision_id,source_review_revision_id,clause_text,required_fields,nested_clause_keys,condition_field,change_summary,content_hash,validation_status,validation_report,updated_at')
         .eq('author_id', userId),
       client
         .from('estate_clause_revisions')
@@ -53,7 +53,7 @@ export async function GET(req: Request) {
     }
 
     type DraftRow = {
-      id: string; clause_id: string; author_id: string; base_published_revision_id: string | null
+      id: string; clause_id: string; author_id: string; base_published_revision_id: string | null; source_review_revision_id: string | null
       clause_text: string; required_fields: string[]; nested_clause_keys: string[]; condition_field: string | null
       change_summary: string; content_hash: string; validation_status: string; validation_report: unknown; updated_at: string
     }
@@ -101,7 +101,8 @@ export async function GET(req: Request) {
         const draft = drafts.find(row => row.clause_id === clause.id) ?? null
         const changedRevision = draft
           ? revisions.find(row => (
-            row.clause_id === clause.id
+            row.id === draft.source_review_revision_id
+            && row.clause_id === clause.id
             && row.author_id === draft.author_id
             && latestEventByRevision.get(row.id)?.event_type === 'changes_requested'
           )) ?? null

@@ -127,7 +127,7 @@ export function EstateClauseReviewPanel({
       <div className="rounded-md border border-border bg-muted/20 p-3">
         <Label htmlFor={`matter-${revision.id}`}>Representative matter ID for preview</Label>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <Input id={`matter-${revision.id}`} className="font-mono text-xs" value={matterId} onChange={event => { previewRequest.current += 1; setBusy(null); setMatterId(event.target.value); setPreviewFiles([]); setPreviewReport(null); setNotice(null); setError(null) }} placeholder="UUID" />
+          <Input id={`matter-${revision.id}`} className="font-mono text-xs" value={matterId} onChange={event => { previewRequest.current += 1; setBusy(current => current === 'preview' ? null : current); setMatterId(event.target.value); setPreviewFiles([]); setPreviewReport(null); setNotice(null); setError(null) }} placeholder="UUID" />
           <Button variant="outline" disabled={!matterId.trim() || busy !== null} onClick={() => void preview()}>{busy === 'preview' ? <Loader2 className="animate-spin" /> : <Eye />} Preview</Button>
         </div>
         {previewFiles.length > 0 && <ul className="mt-3 space-y-1">{previewFiles.map(file => <li key={file.filename}><a className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline" download={file.filename} href={`data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${file.base64}`}><Download className="size-3.5" />{file.filename}</a></li>)}</ul>}

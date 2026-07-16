@@ -22,6 +22,8 @@ describe('estate clause schema', () => {
     expect(sql).toContain('comment IS NOT NULL')
     expect(sql).toContain('The author can continue from the reviewed proposal')
     expect(sql).toContain('ON CONFLICT (clause_id, author_id) DO NOTHING')
+    expect(sql).toContain('source_review_revision_id uuid')
+    expect(sql).toContain('v_revision.author_id, v_revision.id')
     expect(sql).toContain('prevent_estate_clause_revision_mutation')
     expect(sql).toContain('UNIQUE (document_version_id, inclusion_position)')
     expect(sql).toContain('ENABLE ROW LEVEL SECURITY')
