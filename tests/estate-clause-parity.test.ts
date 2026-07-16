@@ -446,10 +446,10 @@ describe('estate clause release gate', () => {
     const rpcs = [
       'submit_estate_clause_revision(uuid, uuid)',
       'request_estate_clause_changes(uuid, uuid, text)',
-      'publish_estate_clause_revision(uuid, uuid, uuid)',
-      'record_estate_clause_preview(uuid, text, text[], uuid, jsonb, uuid)',
+      'publish_estate_clause_revision(uuid, uuid, uuid, text)',
+      'record_estate_clause_preview(uuid, text, text[], jsonb, uuid, jsonb, uuid)',
       'retire_estate_clause_publication(uuid, uuid, text, uuid)',
-      'revert_estate_clause_publication(uuid, uuid, uuid, text, uuid)',
+      'revert_estate_clause_publication(uuid, uuid, uuid, text, text, uuid)',
       'upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid)',
       'retire_matter_estate_clause_override(uuid, uuid, text, uuid)',
       'load_estate_clause_generation_snapshot(uuid)',

@@ -213,6 +213,7 @@ export async function publishEstateClauseRevision(args: {
   actorId: string
   authorId: string
   expectedCurrentRevisionId: string | null
+  currentTemplateSnapshotHash: string
 }) {
   if (args.actorId === args.authorId) {
     throw new Error('A different attorney or administrator must publish this revision.')
@@ -221,6 +222,7 @@ export async function publishEstateClauseRevision(args: {
     p_revision_id: args.revisionId,
     p_actor_id: args.actorId,
     p_expected_current_revision_id: args.expectedCurrentRevisionId,
+    p_current_template_snapshot_hash: args.currentTemplateSnapshotHash,
   })
   return requireData(result, 'Estate clause publication returned no result')
 }
@@ -247,12 +249,14 @@ export async function revertEstateClausePublication(args: {
   targetRevisionId: string
   actorId: string
   expectedCurrentRevisionId: string | null
+  currentTemplateSnapshotHash: string
   reason: string
 }) {
   const result = await args.client.rpc('revert_estate_clause_publication', {
     p_clause_id: args.clauseId,
     p_target_revision_id: args.targetRevisionId,
     p_expected_current_revision_id: args.expectedCurrentRevisionId,
+    p_current_template_snapshot_hash: args.currentTemplateSnapshotHash,
     p_reason: args.reason,
     p_actor_id: args.actorId,
   })

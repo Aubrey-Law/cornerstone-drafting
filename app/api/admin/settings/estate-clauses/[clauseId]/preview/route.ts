@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/apiAuth'
-import { createHash } from 'node:crypto'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildDraftPayload } from '@/lib/buildDraftPayload'
 import {
   loadPublishedEstateClauseSnapshot,
@@ -8,6 +8,7 @@ import {
 } from '@/lib/estateClauses/repository'
 import type { EstateClauseSnapshot, EstateDocumentType, PublishedEstateClause } from '@/lib/estateClauses/types'
 import { assertNoClauseCycles, hashEstateClauseContent } from '@/lib/estateClauses/validation'
+import { currentEstateTemplateSnapshotHash } from '@/lib/estateClauses/templateSnapshot'
 import { generateEstatePlanDocumentsNode } from '@/lib/estateGenerator/node/generate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -95,10 +96,15 @@ export async function POST(
     const currentSnapshot = await loadPublishedEstateClauseSnapshot({ client, matterId })
     const clauses = new Map(currentSnapshot.clauses)
     clauses.set(candidate.clauseKey, candidate)
+    // A matter override is authorized against one exact published revision.
+    // Candidate preview must show the post-publication default, not reuse an
+    // override bound to the publication it would replace.
+    const overrides = new Map(currentSnapshot.overrides)
+    overrides.delete(candidate.clauseKey)
     const candidateSnapshot: EstateClauseSnapshot = {
       ...currentSnapshot,
       clauses: runtimeReadonlyMap(clauses),
-      overrides: currentSnapshot.overrides,
+      overrides: runtimeReadonlyMap(overrides),
       source: 'database',
     }
     const reachable = new Map<string, readonly string[]>()
@@ -142,9 +148,12 @@ export async function POST(
       }, { status: 409 })
     }
 
-    const templateSnapshotHash = createHash('sha256')
-      .update(generated.files.map(file => `${file.name}:${file.templateSha256}`).sort().join('\n'))
-      .digest('hex')
+    const templateSnapshotHash = await currentEstateTemplateSnapshotHash(client as unknown as SupabaseClient)
+    const dependencyRevisionIds = Object.fromEntries(
+      [...reachable.keys()]
+        .filter(key => key !== candidate.clauseKey)
+        .map(key => [key, candidateSnapshot.clauses.get(key)!.revisionId]),
+    )
     const previewReport = {
       status: 'passed',
       missingCount: 0,
@@ -155,6 +164,7 @@ export async function POST(
       p_revision_id: candidateRevision.id,
       p_template_snapshot_hash: templateSnapshotHash,
       p_document_types: [...coveredDocumentTypes].sort(),
+      p_dependency_revision_ids: dependencyRevisionIds,
       p_representative_matter_id: matterId,
       p_validation_report: previewReport,
       p_actor_id: userId,

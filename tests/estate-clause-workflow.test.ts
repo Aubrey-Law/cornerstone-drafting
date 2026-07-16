@@ -115,6 +115,7 @@ describe('estate clause repository workflow', () => {
       actorId: 'author-1',
       authorId: 'author-1',
       expectedCurrentRevisionId: 'revision-1',
+      currentTemplateSnapshotHash: 'a'.repeat(64),
       client: asRepositoryClient(selfReviewClient),
     })).rejects.toThrow('A different attorney or administrator must publish this revision.')
     expect(selfReviewClient.rpc).not.toHaveBeenCalled()
@@ -125,12 +126,14 @@ describe('estate clause repository workflow', () => {
       actorId: 'reviewer-1',
       authorId: 'author-1',
       expectedCurrentRevisionId: 'revision-1',
+      currentTemplateSnapshotHash: 'a'.repeat(64),
       client: asRepositoryClient(client),
     })
     expect(client.rpc).toHaveBeenCalledWith('publish_estate_clause_revision', {
       p_revision_id: 'revision-2',
       p_actor_id: 'reviewer-1',
       p_expected_current_revision_id: 'revision-1',
+      p_current_template_snapshot_hash: 'a'.repeat(64),
     })
   })
 
@@ -142,13 +145,15 @@ describe('estate clause repository workflow', () => {
     })
     await revertEstateClausePublication({
       client: asRepositoryClient(client), clauseId: 'clause-1', targetRevisionId: 'revision-1',
-      actorId: 'reviewer-1', expectedCurrentRevisionId: 'revision-2', reason: 'Restore the prior approved language.',
+      actorId: 'reviewer-1', expectedCurrentRevisionId: 'revision-2',
+      currentTemplateSnapshotHash: 'b'.repeat(64), reason: 'Restore the prior approved language.',
     })
     expect(client.rpc).toHaveBeenNthCalledWith(1, 'retire_estate_clause_publication', expect.objectContaining({
       p_expected_current_revision_id: 'revision-2', p_reason: 'Retire pending legal review.',
     }))
     expect(client.rpc).toHaveBeenNthCalledWith(2, 'revert_estate_clause_publication', expect.objectContaining({
       p_target_revision_id: 'revision-1', p_expected_current_revision_id: 'revision-2',
+      p_current_template_snapshot_hash: 'b'.repeat(64),
     }))
   })
 
@@ -590,6 +595,7 @@ describe('estate clause admin route contracts', () => {
     const preview = routeSource('[clauseId]/preview/route.ts')
     expect(preview).toContain('buildDraftPayload(')
     expect(preview).toContain('loadPublishedEstateClauseSnapshot({')
+    expect(preview).toContain('overrides.delete(candidate.clauseKey)')
     expect(preview).toContain('clauseSnapshot: candidateSnapshot')
     expect(preview).toContain('file.clauseManifest.some')
     expect(preview).toContain('candidateRevision.id')
@@ -600,6 +606,7 @@ describe('estate clause admin route contracts', () => {
     expect(preview).toContain("client.rpc('record_estate_clause_preview'")
     expect(preview).toContain('missingDocumentTypes')
     expect(preview).toContain('templateSnapshotHash')
+    expect(preview).toContain('dependencyRevisionIds')
     expect(preview).not.toMatch(/\.insert\(|\.upsert\(|persistGenerated/)
   })
 

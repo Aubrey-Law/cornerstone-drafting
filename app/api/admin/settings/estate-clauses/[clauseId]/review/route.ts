@@ -1,9 +1,11 @@
 import { requireAdmin } from '@/lib/apiAuth'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   publishEstateClauseRevision,
   requestEstateClauseChanges,
   type EstateClauseClient,
 } from '@/lib/estateClauses/repository'
+import { currentEstateTemplateSnapshotHash } from '@/lib/estateClauses/templateSnapshot'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -105,12 +107,14 @@ export async function POST(
       return Response.json({ error: 'The current publication changed; reload before publishing' }, { status: 409 })
     }
 
+    const currentTemplateSnapshotHash = await currentEstateTemplateSnapshotHash(client as unknown as SupabaseClient)
     const publicationId = await publishEstateClauseRevision({
       client,
       revisionId: revisionRow.id,
       actorId: userId,
       authorId: revisionRow.author_id,
       expectedCurrentRevisionId: currentRevisionId,
+      currentTemplateSnapshotHash,
     })
     return Response.json({ publicationId })
   } catch (error) {

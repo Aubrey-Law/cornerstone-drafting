@@ -122,7 +122,7 @@ different attorney or administrator independently publishes the revision.
    existing objects instead of replaying non-idempotent DDL.
 
    Using the project's Supabase SQL editor or another established read-only
-   connection, verify the seven tables, all five service-role RPCs, RLS,
+   connection, verify all eight tables, all ten service-role RPCs, RLS,
    immutable-history triggers, publication pointer, and manifest indexes:
 
    ```sql
@@ -133,7 +133,8 @@ different attorney or administrator independently publishes the revision.
      and c.relname = any (array[
        'estate_clauses', 'estate_clause_working_drafts',
        'estate_clause_revisions', 'estate_clause_review_events',
-       'estate_clause_publications', 'matter_estate_clause_overrides',
+       'estate_clause_publications', 'estate_clause_preview_evidence',
+       'matter_estate_clause_overrides',
        'generated_document_clause_revisions'
      ])
    order by c.relname;
@@ -147,7 +148,10 @@ different attorney or administrator independently publishes the revision.
    where n.nspname = 'public'
      and p.proname = any (array[
        'submit_estate_clause_revision', 'request_estate_clause_changes',
-       'publish_estate_clause_revision', 'upsert_matter_estate_clause_override',
+       'publish_estate_clause_revision', 'record_estate_clause_preview',
+       'retire_estate_clause_publication', 'revert_estate_clause_publication',
+       'upsert_matter_estate_clause_override', 'retire_matter_estate_clause_override',
+       'load_estate_clause_generation_snapshot',
        'persist_generated_estate_document'
      ])
    order by p.proname;
@@ -158,6 +162,9 @@ different attorney or administrator independently publishes the revision.
      and trigger_name = any (array[
        'estate_clause_revisions_immutable',
        'estate_clause_review_events_immutable',
+       'estate_clause_preview_evidence_immutable',
+       'matter_estate_clause_overrides_immutable',
+       'generated_document_clause_revisions_immutable',
        'estate_clause_key_stable_after_use'
      ])
    order by trigger_name;
@@ -168,7 +175,8 @@ different attorney or administrator independently publishes the revision.
      and tablename = any (array[
        'estate_clauses', 'estate_clause_working_drafts',
        'estate_clause_revisions', 'estate_clause_review_events',
-       'estate_clause_publications', 'matter_estate_clause_overrides',
+       'estate_clause_publications', 'estate_clause_preview_evidence',
+       'matter_estate_clause_overrides',
        'generated_document_clause_revisions'
      ])
    order by tablename, policyname;
@@ -186,17 +194,18 @@ different attorney or administrator independently publishes the revision.
        'estate_clause_review_events_revision_idx',
        'matter_estate_clause_overrides_matter_idx',
        'generated_document_clause_revisions_revision_idx',
-       'generated_document_clause_revisions_document_idx'
+       'generated_document_clause_revisions_document_idx',
+       'generated_document_clause_revisions_position_idx'
      ])
    order by indexname;
    ```
 
-   Pass criteria: seven RLS-enabled tables; five `SECURITY DEFINER` RPCs with
+   Pass criteria: eight RLS-enabled tables; ten `SECURITY DEFINER` RPCs with
    `search_path` fixed to an empty value; `anon_execute=false`,
    `authenticated_execute=false`, and `service_role_execute=true` for each RPC;
-   three triggers, a composite publication pointer from
-   `(current_revision_id, clause_id)` to the same immutable revision, seven
-   read policies, and five named indexes. Table grants and RLS policies are
+   six immutable/stability triggers, a composite publication pointer from
+   `(current_revision_id, clause_id)` to the same immutable revision, eight
+   read policies, and six named indexes. Table grants and RLS policies are
    separate controls and both must remain present.
 
 2. **Stage the bundled baseline without publishing.** First verify the import
@@ -276,7 +285,9 @@ different attorney or administrator independently publishes the revision.
    plan. Set `ESTATE_CLAUSE_SOURCE=database` only in a preview deployment, then
    generate and inspect representative Massachusetts Will, Trust, durable POA,
    Health Care Proxy/directive, and HIPAA packages. Confirm each included clause
-   has one manifest row, skipped clauses have none, regeneration preserves the
+   has one ordered manifest row, each attorney force-omit has one immutable
+   `included=false` manifest row, condition-false clauses have no manifest row,
+   and regeneration preserves the
    earlier document version and manifest, and a newly published revision affects
    only later generations. Missing or corrupt publications must block generation
    without falling back to bundled JSON.
