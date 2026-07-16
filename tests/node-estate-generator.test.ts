@@ -1012,6 +1012,9 @@ describe('node estate generator package generation', () => {
 
     expect(result.packageName).toBe('pourover-will')
     expect(result.files.map(file => file.name)).toEqual(['01-pourover-will.docx'])
+    expect(result.files[0].clauseSource).toBe('file')
+    expect(result.files[0].clauseManifest.map(entry => entry.inclusionPosition)).toEqual([0, 1, 2, 3, 4])
+    expect(result.files[0].clauseManifest.every(entry => entry.revisionId.startsWith('file:'))).toBe(true)
     expect(result.warnings).toEqual([])
     expect(result.missing).toEqual([])
     expect(result.files[0].buffer.length).toBeGreaterThan(1000)

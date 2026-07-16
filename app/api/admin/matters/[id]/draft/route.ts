@@ -5,7 +5,7 @@ import { getBearerToken, requireAdmin } from '@/lib/apiAuth'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { generateDocuments } from '@/lib/drafting/generateDocuments'
 import { getRequestOrigin } from '@/lib/requestOrigin'
@@ -27,6 +27,8 @@ import {
   selectedRealEstateTransferDocTypes,
 } from '@/lib/realEstateTransfer/draftIntegration'
 import type { DesignSheet, MatterContact } from '@/types/database'
+import type { EstateClauseManifestEntry } from '@/lib/estateClauses/types'
+import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'
 
 // Per-document marker report returned to the drafting UI. A non-zero markerCount
 // means the document still contains `[TODO:`, `[[ MISSING ]]`, or leftover
@@ -303,7 +305,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // engine supports every package the design sheet can derive.)
     let generationEngine: EstateGeneratorEngine | 'python_fallback' = engine
     if (engine === 'node') {
-      const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload))
+      const nodeGenerateResult = await import('@/lib/estateGenerator/node/generate').then(mod => mod.generateEstatePlanDocumentsNode(payload, { matterId: canonicalMatterId }))
       if (
         !nodeGenerateResult.ok
         && assetTransferDocTypes.length > 0
@@ -335,6 +337,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       templateId?: string
       templateVersionId?: string | null
       templateSource?: 'bundled' | 'published'
+      clauseSource?: 'database' | 'file'
+      clauseManifest?: EstateClauseManifestEntry[]
     }> = []
 
     if (generateResult.ok) {
@@ -347,6 +351,8 @@ export async function POST(req: NextRequest, { params }: Params) {
           templateId?: string
           templateVersionId?: string | null
           templateSource?: 'bundled' | 'published'
+          clauseSource?: 'database' | 'file'
+          clauseManifest?: EstateClauseManifestEntry[]
         }
         return {
           filename: f.name,
@@ -356,6 +362,8 @@ export async function POST(req: NextRequest, { params }: Params) {
           templateId: meta.templateId,
           templateVersionId: meta.templateVersionId,
           templateSource: meta.templateSource,
+          clauseSource: meta.clauseSource,
+          clauseManifest: meta.clauseManifest,
         }
       })
     } else {
@@ -559,45 +567,81 @@ export async function POST(req: NextRequest, { params }: Params) {
         )
       }
 
-      // 5c: Register in matter_documents
-      const { data: insertedDoc, error: insertErr } = await admin.from('matter_documents').insert({
-        matter_id: canonicalMatterId,
-        r2_key: r2Key,
-        name: documentName,
-        size: file.buffer.length,
-        content_type: DOCX_CONTENT_TYPE,
-        folder: 'draft',
-        folder_id: null,
-        uploaded_by: user.id,
-        generation_id: generationId,
-        generation_engine: generationEngine,
-        marker_count: scan.markerCount,
-        missing_count: scan.missingFields.length,
-        template_id: file.templateId ?? null,
-        template_version_id: file.templateVersionId ?? null,
-      }).select('id').single()
-
-      if (insertErr) {
-        console.error('[draft route] matter_documents insert error', canonicalMatterId, insertErr)
-        throw new Error(`Failed to register document "${documentName}": ${insertErr.message}`)
-      }
-
-      if (insertedDoc?.id) {
+      // 5c: Database-backed Node estate documents must register their document,
+      // initial version, and exact clause manifest in one database transaction.
+      // Other generators do not carry database revision IDs and retain the
+      // legacy registration path so synthetic file IDs never reach provenance FKs.
+      if (file.clauseSource === 'database') {
         try {
-          const { ensureInitialVersion } = await import('@/lib/documentVersions')
-          await ensureInitialVersion({
+          await persistGeneratedEstateDocument({
             admin,
-            documentId: insertedDoc.id,
-            r2Key,
-            filename: documentName,
-            contentType: DOCX_CONTENT_TYPE,
-            sizeBytes: file.buffer.length,
-            source: 'generated',
-            createdBy: user.id,
+            document: {
+              matter_id: canonicalMatterId,
+              r2_key: r2Key,
+              name: documentName,
+              size: file.buffer.length,
+              content_type: DOCX_CONTENT_TYPE,
+              folder: 'draft',
+              actor_id: user.id,
+              generation_id: generationId,
+              generation_engine: 'node',
+              marker_count: scan.markerCount,
+              missing_count: scan.missingFields.length,
+              template_id: file.templateId ?? null,
+              template_version_id: file.templateVersionId ?? null,
+            },
+            manifest: file.clauseManifest ?? [],
           })
-        } catch (versionErr) {
-          // Versions table may not exist yet on firm DB — non-fatal.
-          console.warn('[draft route] ensureInitialVersion skipped', versionErr)
+        } catch (persistenceError) {
+          try {
+            await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: r2Key }))
+          } catch (cleanupError) {
+            console.error('[draft route] failed to clean up unregistered R2 object', r2Key, cleanupError)
+          }
+          throw new Error(
+            `Failed to register document "${documentName}" with clause provenance: ${persistenceError instanceof Error ? persistenceError.message : 'unknown persistence error'}`,
+          )
+        }
+      } else {
+        const { data: insertedDoc, error: insertErr } = await admin.from('matter_documents').insert({
+          matter_id: canonicalMatterId,
+          r2_key: r2Key,
+          name: documentName,
+          size: file.buffer.length,
+          content_type: DOCX_CONTENT_TYPE,
+          folder: 'draft',
+          folder_id: null,
+          uploaded_by: user.id,
+          generation_id: generationId,
+          generation_engine: generationEngine,
+          marker_count: scan.markerCount,
+          missing_count: scan.missingFields.length,
+          template_id: file.templateId ?? null,
+          template_version_id: file.templateVersionId ?? null,
+        }).select('id').single()
+
+        if (insertErr) {
+          console.error('[draft route] matter_documents insert error', canonicalMatterId, insertErr)
+          throw new Error(`Failed to register document "${documentName}": ${insertErr.message}`)
+        }
+
+        if (insertedDoc?.id) {
+          try {
+            const { ensureInitialVersion } = await import('@/lib/documentVersions')
+            await ensureInitialVersion({
+              admin,
+              documentId: insertedDoc.id,
+              r2Key,
+              filename: documentName,
+              contentType: DOCX_CONTENT_TYPE,
+              sizeBytes: file.buffer.length,
+              source: 'generated',
+              createdBy: user.id,
+            })
+          } catch (versionErr) {
+            // Versions table may not exist yet on firm DB — non-fatal.
+            console.warn('[draft route] ensureInitialVersion skipped', versionErr)
+          }
         }
       }
 

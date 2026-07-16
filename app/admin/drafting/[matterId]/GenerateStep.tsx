@@ -35,6 +35,7 @@ import { cn, formatDate } from '@/lib/utils'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
+import { ClauseOverridesPanel } from './ClauseOverridesPanel'
 
 type DocumentReport = {
   name: string
@@ -232,6 +233,14 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     if (!preflight) return
     const all = preflight.documentsToGenerate.map(d => d.filename)
     setSelectedDocs(selectedCount === all.length ? new Set() : new Set(all))
+  }
+
+  const handleClauseOverridesMutated = () => {
+    // preflightReady is derived from preflight, so clearing this object
+    // invalidates both states and prevents generation from using stale results.
+    setPreflight(null)
+    setSelectedDocs(new Set())
+    setResult(null)
   }
 
   const handlePreflight = (options?: { quiet?: boolean }) => {
@@ -504,6 +513,8 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           </div>
         </div>
       </section>
+
+      <ClauseOverridesPanel matterId={matterId} onMutated={handleClauseOverridesMutated} />
 
       <section style={guidedCardStyle}>
         <div className="flex flex-wrap items-start justify-between gap-3">
