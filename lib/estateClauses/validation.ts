@@ -7,7 +7,84 @@ const BLOCK_TAG_RE = /{%([\s\S]*?)%}/g
 const COMMENT_TAG_RE = /{#([\s\S]*?)#}/g
 const INCLUDE_CLAUSE_RE = /^include_clause\(\s*(['"])([A-Za-z0-9._-]+)\1\s*\)$/
 const SIMPLE_FILTER_RE = /^(?:name|NAME|optional)$/
-const OR_MISSING_FILTER_RE = /^orMissing(?:\(\s*(['"])(.*?)\1\s*\))?$/
+
+type FilterChainResult =
+  | { parts: string[]; error?: never }
+  | { parts?: never; error: string }
+
+function splitFilterChain(expression: string): FilterChainResult {
+  const parts: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+
+  for (let index = 0; index < expression.length; index += 1) {
+    const character = expression[index]
+    if (quote) {
+      current += character
+      if (character === '\\') {
+        index += 1
+        if (index >= expression.length) {
+          return { error: 'Unclosed quote in template expression' }
+        }
+        current += expression[index]
+      } else if (character === quote) {
+        quote = null
+      }
+      continue
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character
+      current += character
+    } else if (character === '|') {
+      parts.push(current)
+      current = ''
+    } else {
+      current += character
+    }
+  }
+
+  if (quote) return { error: 'Unclosed quote in template expression' }
+  parts.push(current)
+  return { parts }
+}
+
+function isValidOrMissingFilter(filter: string): boolean {
+  if (filter === 'orMissing') return true
+  if (!filter.startsWith('orMissing')) return false
+
+  let index = 'orMissing'.length
+  while (/\s/.test(filter[index] ?? '')) index += 1
+  if (filter[index] !== '(') return false
+  index += 1
+  while (/\s/.test(filter[index] ?? '')) index += 1
+
+  const quote = filter[index]
+  if (quote !== '"' && quote !== "'") return false
+  index += 1
+
+  let closed = false
+  while (index < filter.length) {
+    const character = filter[index]
+    if (character === '\\') {
+      index += 2
+      continue
+    }
+    if (character === quote) {
+      index += 1
+      closed = true
+      break
+    }
+    index += 1
+  }
+  if (!closed) return false
+
+  while (/\s/.test(filter[index] ?? '')) index += 1
+  if (filter[index] !== ')') return false
+  index += 1
+  while (/\s/.test(filter[index] ?? '')) index += 1
+  return index === filter.length
+}
 
 function duplicateValues(values: readonly string[]): string[] {
   const seen = new Set<string>()
@@ -22,7 +99,10 @@ function duplicateValues(values: readonly string[]): string[] {
 }
 
 function validateVariableExpression(expression: string, declaredFields: ReadonlySet<string>): string[] {
-  const [rawField, ...rawFilters] = expression.split('|')
+  const filterChain = splitFilterChain(expression)
+  if (filterChain.error) return [filterChain.error]
+
+  const [rawField, ...rawFilters] = filterChain.parts
   const field = rawField.trim()
   const errors: string[] = []
 
@@ -35,7 +115,7 @@ function validateVariableExpression(expression: string, declaredFields: Readonly
 
   for (const rawFilter of rawFilters) {
     const filter = rawFilter.trim()
-    if (!SIMPLE_FILTER_RE.test(filter) && !OR_MISSING_FILTER_RE.test(filter)) {
+    if (!SIMPLE_FILTER_RE.test(filter) && !isValidOrMissingFilter(filter)) {
       errors.push(`Unsupported template filter: ${filter || '(empty)'}`)
     }
   }

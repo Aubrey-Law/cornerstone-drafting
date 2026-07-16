@@ -25,6 +25,43 @@ describe('estate clause validation', () => {
     }, new Set())).toEqual([])
   })
 
+  it('keeps filter separators inside a quoted orMissing label', () => {
+    expect(validateEstateClauseContent({
+      ...clause,
+      text: '{{ fiduciaries.agent.primary.full_name | orMissing("primary | alternate") }}',
+    }, new Set())).toEqual([])
+  })
+
+  it('accepts escaped quotes and backslashes in an orMissing label', () => {
+    expect(validateEstateClauseContent({
+      ...clause,
+      text: String.raw`{{ fiduciaries.agent.primary.full_name | orMissing("primary \"agent\" \\ alternate") }}`,
+    }, new Set())).toEqual([])
+  })
+
+  it('rejects trailing junk and unsupported filter calls', () => {
+    for (const filter of [
+      'orMissing("a" junk")',
+      'orMissing("primary") junk',
+      'orMissing(fiduciaries.agent.primary.full_name)',
+      'name("primary")',
+    ]) {
+      const errors = validateEstateClauseContent({
+        ...clause,
+        text: `{{ fiduciaries.agent.primary.full_name | ${filter} }}`,
+      }, new Set())
+      expect(errors).not.toEqual([])
+      expect(errors.join(' ')).toMatch(/filter|quote/i)
+    }
+  })
+
+  it('rejects an unclosed orMissing quote', () => {
+    expect(validateEstateClauseContent({
+      ...clause,
+      text: '{{ fiduciaries.agent.primary.full_name | orMissing("primary agent) }}',
+    }, new Set())).toContain('Unclosed quote in template expression')
+  })
+
   it('produces a stable canonical hash', () => {
     const reordered: EstateClauseContent = {
       text: `${clause.text}\r\nSecond paragraph.`,
