@@ -1,5 +1,10 @@
 # Massachusetts Estate Clause Library Design
 
+> **Solo-attorney policy update (2026-07-16):** The different-user publication
+> requirement in this historical design is superseded by
+> `2026-07-16-solo-attorney-clause-publication-design.md`. All other validation,
+> preview, audit, immutability, provenance, and cutover requirements remain in force.
+
 **Date:** July 15, 2026
 
 **Status:** Approved design

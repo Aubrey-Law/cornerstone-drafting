@@ -105,8 +105,9 @@ Re-verify quarterly.
 
 `ESTATE_CLAUSE_SOURCE=file` is the safe default and rollback path. Do not set
 the production value to `database` until every step below is complete. The
-import is intentionally non-publishing: legal text becomes usable only after a
-different attorney or administrator independently publishes the revision.
+import is intentionally non-publishing: legal text becomes usable only after
+an attorney deliberately previews and publishes the submitted revision. In
+this solo-attorney deployment, the revision author may complete that review.
 
 1. **Apply and inspect the schema.** In a local or preview-linked environment,
    inspect the pending migration before applying it:
@@ -223,11 +224,14 @@ different attorney or administrator independently publishes the revision.
    Expected: `bundled=22`, `requiresReview=22`, and `publications=0`. A repeat
    must not create duplicates or overwrite an attorney-modified working draft.
 
-3. **Independently review.** Sign in to the clause-library UI as the importing
-   attorney, correct any validation failures, and submit. Sign in as a distinct
-   attorney/admin to preview and publish each approved revision. The author
-   must not publish their own revision. Bundled clauses marked `draft` remain
-   unpublished until their language receives affirmative attorney approval.
+3. **Attorney review and publication.** Sign in to the clause-library UI as the
+   attorney/admin. Correct validation failures and submit each working draft.
+   For each submitted revision, compare the proposed and published language,
+   generate and inspect the representative preview, type the exact stable key,
+   and explicitly publish the approved revision. Self-authored publication is
+   permitted, but submission and publication remain separate audited actions.
+   Bundled clauses marked `draft` remain unpublished until their language
+   receives affirmative attorney approval.
 
 4. **Refresh and run the release gate.** Export a read-only local snapshot into
    `tests/fixtures/estate-clause-database-cutover.json`. It must contain sorted
@@ -254,7 +258,7 @@ different attorney or administrator independently publishes the revision.
      where c.is_active and c.jurisdiction = 'MA'
    )
    select pg_catalog.jsonb_pretty(pg_catalog.jsonb_build_object(
-     'capturedFrom', 'local Supabase after independent attorney review',
+     'capturedFrom', 'local Supabase after deliberate attorney review',
      'stagedClauseKeys', coalesce((
        select pg_catalog.jsonb_agg(c.clause_key order by c.clause_key)
        from public.estate_clauses c where c.jurisdiction = 'MA'
