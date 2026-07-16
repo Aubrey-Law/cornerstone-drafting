@@ -16,7 +16,7 @@ type Params = { params: Promise<{ id: string }> }
 
 const STABLE_KEY_RE = /^[a-z0-9]+(?:[._-][a-z0-9]+)+$/
 const PUT_KEYS = ['action', 'clauseKey', 'reason']
-const DELETE_KEYS = ['clauseKey']
+const DELETE_KEYS = ['clauseKey', 'reason']
 
 export interface OverrideRequest {
   clauseKey: string
@@ -51,12 +51,14 @@ export function parseOverrideRequest(value: unknown): OverrideRequest {
   return { clauseKey, action: body.action, reason }
 }
 
-export function parseDeleteOverrideRequest(value: unknown): { clauseKey: string } {
+export function parseDeleteOverrideRequest(value: unknown): { clauseKey: string; reason: string } {
   const body = record(value)
-  if (!exactKeys(body, DELETE_KEYS)) throw new Error('Delete body must contain exactly clauseKey.')
+  if (!exactKeys(body, DELETE_KEYS)) throw new Error('Delete body must contain exactly clauseKey and reason.')
   const clauseKey = typeof body.clauseKey === 'string' ? body.clauseKey.trim() : ''
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
   if (!STABLE_KEY_RE.test(clauseKey)) throw new Error('A valid stable clause key is required.')
-  return { clauseKey }
+  if (reason.length < 10) throw new Error('Retirement reason must be at least 10 characters.')
+  return { clauseKey, reason }
 }
 
 export function overrideMutationErrorResponse(error: unknown): Response {
@@ -92,6 +94,8 @@ type OverrideRow = {
   action: EstateClauseOverrideAction
   reason: string
   created_by: string
+  event_type: 'applied' | 'retired'
+  created_at: string
   estate_clauses?: { clause_key: string; title: string } | Array<{ clause_key: string; title: string }>
 }
 
@@ -197,10 +201,15 @@ export async function GET(req: Request, params: Params) {
     const loaded = await loadEligibleClauses(authorized.canonicalMatterId)
     const { data, error } = await loaded.admin
       .from('matter_estate_clause_overrides')
-      .select('id,clause_id,action,reason,created_by,estate_clauses!inner(clause_key,title)')
+      .select('id,clause_id,event_type,action,reason,created_by,created_at,estate_clauses!inner(clause_key,title)')
       .eq('matter_id', authorized.canonicalMatterId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
     if (error) throw new Error(error.message)
-    const overrideRows = (data ?? []) as unknown as OverrideRow[]
+    const historyRows = (data ?? []) as unknown as OverrideRow[]
+    const latest = new Map<string, OverrideRow>()
+    for (const row of historyRows) if (!latest.has(row.clause_id)) latest.set(row.clause_id, row)
+    const overrideRows = [...latest.values()].filter(row => row.event_type === 'applied')
     const overrides = new Map(overrideRows.map(row => [row.clause_id, row]))
     const eligibleClauseIds = new Set([...loaded.eligible.values()].map(clause => clause.clauseId))
     return Response.json({
@@ -286,7 +295,7 @@ export async function DELETE(req: Request, params: Params) {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to resolve matter' }, { status: 500 })
   }
-  let body: { clauseKey: string }
+  let body: { clauseKey: string; reason: string }
   try {
     body = parseDeleteOverrideRequest(await req.json())
   } catch (error) {
@@ -294,21 +303,21 @@ export async function DELETE(req: Request, params: Params) {
   }
   try {
     const admin = getAdminClient()
-    const { data: override, error: lookupError } = await admin
-      .from('matter_estate_clause_overrides')
-      .select('id,estate_clauses!inner(clause_key)')
-      .eq('matter_id', authorized.canonicalMatterId)
-      .eq('estate_clauses.clause_key', body.clauseKey)
+    const { data: identity, error: identityError } = await admin
+      .from('estate_clauses')
+      .select('id')
+      .eq('clause_key', body.clauseKey)
       .maybeSingle()
-    if (lookupError) throw new Error(lookupError.message)
-    if (!override) return Response.json({ error: 'Clause override not found.' }, { status: 404 })
-    const { error } = await admin
-      .from('matter_estate_clause_overrides')
-      .delete()
-      .eq('matter_id', authorized.canonicalMatterId)
-      .eq('id', override.id)
+    if (identityError) throw new Error(identityError.message)
+    if (!identity) return Response.json({ error: 'Clause override not found.' }, { status: 404 })
+    const { error } = await admin.rpc('retire_matter_estate_clause_override', {
+      p_matter_id: authorized.canonicalMatterId,
+      p_clause_id: (identity as { id: string }).id,
+      p_reason: body.reason,
+      p_actor_id: authorized.actorId,
+    })
     if (error) throw new Error(error.message)
-    return Response.json({ deleted: true, clauseKey: body.clauseKey })
+    return Response.json({ retired: true, clauseKey: body.clauseKey })
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to delete clause override' }, { status: 500 })
   }

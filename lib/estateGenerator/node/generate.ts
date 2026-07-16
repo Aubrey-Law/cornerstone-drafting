@@ -19,6 +19,7 @@ import {
 import { loadNodeEstatePackage, resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
 import { buildNodeEstateContext } from '@/lib/estateGenerator/node/context'
 import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
+import { compatibleEstateDocumentTypesForTemplate } from '@/lib/estateClauses/templateReferences'
 import { dataForNodeEstatePackage, youngAdultEstatePlanData } from '@/lib/estateGenerator/node/packageData'
 import { conditionalMissingFieldsForPackage } from '@/lib/estateGenerator/node/packageValidation'
 import { renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
@@ -49,17 +50,30 @@ export interface GenerateEstatePlanDocumentsNodeOptions {
 }
 
 function clauseManifest(
-  includedClauses: ReturnType<typeof createNodeClauseStore>['report']['included_clauses'],
+  report: ReturnType<typeof createNodeClauseStore>['report'],
 ): EstateClauseManifestEntry[] {
-  return includedClauses.map((clause, inclusionPosition) => ({
+  const included = report.included_clauses.map((clause, inclusionPosition) => ({
     clauseId: clause.clause_id,
     clauseKey: clause.clause_key,
     revisionId: clause.revision_id,
     contentHash: clause.content_hash,
     inclusionPosition,
+    included: true,
     selectionReason: clause.selection_reason,
     overrideId: clause.override_id,
+    overrideAction: clause.override_id ? 'force_include' as const : null,
   }))
+  const omitted = report.skipped_clauses.flatMap(clause => (
+    clause.override_action && clause.clause_id && clause.clause_key && clause.revision_id && clause.content_hash && clause.override_id
+      ? [{
+          clauseId: clause.clause_id, clauseKey: clause.clause_key,
+          revisionId: clause.revision_id, contentHash: clause.content_hash,
+          inclusionPosition: null, included: false, selectionReason: 'attorney_override' as const,
+          overrideId: clause.override_id, overrideAction: clause.override_action,
+        }]
+      : []
+  ))
+  return [...included, ...omitted]
 }
 
 function clientSlug(data: NodeEstateData): string {
@@ -141,7 +155,10 @@ export async function generateNodeEstatePackage({
 
   try {
     for (const document of config.documents) {
-      const clauses = createNodeClauseStore({ root, state, allowDraft, snapshot })
+      const clauses = createNodeClauseStore({
+        root, state, allowDraft, snapshot,
+        documentTypes: compatibleEstateDocumentTypesForTemplate(document),
+      })
       const absoluteTemplatePath = path.join(root, document.template)
       const bundledPath = path.relative(process.cwd(), absoluteTemplatePath).replaceAll('\\', '/')
       const resolved = templateResolver
@@ -168,7 +185,7 @@ export async function generateNodeEstatePackage({
         title: document.title,
         owner,
         clauseSource: snapshot.source,
-        clauseManifest: clauseManifest(clauses.report.included_clauses),
+        clauseManifest: clauseManifest(clauses.report),
         unresolvedMarkers: rendered.unresolvedMarkers,
         missingFields: rendered.missingFields,
         templateId: resolved?.definition.id,

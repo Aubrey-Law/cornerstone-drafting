@@ -1,5 +1,5 @@
 import { loadBundledEstateClauseSnapshot } from '@/lib/estateClauses/fileRepository'
-import type { EstateClauseSnapshot, PublishedEstateClause } from '@/lib/estateClauses/types'
+import type { EstateClauseSnapshot, EstateDocumentType, PublishedEstateClause } from '@/lib/estateClauses/types'
 import { resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
 import type { NodeEstateContext } from '@/lib/estateGenerator/node/types'
 import { renderNodeEstateText } from '@/lib/estateGenerator/node/renderText'
@@ -25,6 +25,11 @@ interface SkippedClause {
   source?: string
   selection_reason?: 'attorney_override'
   override_id?: string
+  clause_id?: string
+  clause_key?: string
+  revision_id?: string
+  content_hash?: string
+  override_action?: 'force_omit'
 }
 
 export interface NodeClauseReport {
@@ -44,6 +49,7 @@ interface CreateNodeClauseStoreOptions {
   state: string
   allowDraft?: boolean
   snapshot?: EstateClauseSnapshot
+  documentTypes?: readonly EstateDocumentType[]
 }
 
 export function createNodeClauseStore({
@@ -51,6 +57,7 @@ export function createNodeClauseStore({
   state,
   allowDraft = false,
   snapshot = loadBundledEstateClauseSnapshot({ root, jurisdiction: state, allowDraft }),
+  documentTypes,
 }: CreateNodeClauseStoreOptions): NodeClauseStore {
   const report: NodeClauseReport = {
     included_clauses: [],
@@ -86,6 +93,9 @@ export function createNodeClauseStore({
     }
 
     const clause = getClause(clauseId)
+    if (documentTypes && !clause.documentTypes.some(type => documentTypes.includes(type))) {
+      throw new Error(`Published clause ${clauseId} is incompatible with target document type(s): ${documentTypes.join(', ')}`)
+    }
     const override = snapshot.overrides.get(clauseId)
     if (override?.action === 'force_omit') {
       report.skipped_clauses.push({
@@ -94,6 +104,11 @@ export function createNodeClauseStore({
         source: clause.sourceFile,
         selection_reason: 'attorney_override',
         override_id: override.id,
+        clause_id: clause.clauseId,
+        clause_key: clause.clauseKey,
+        revision_id: clause.revisionId,
+        content_hash: clause.contentHash,
+        override_action: 'force_omit',
       })
       return ''
     }

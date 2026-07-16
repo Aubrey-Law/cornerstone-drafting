@@ -229,24 +229,48 @@ export async function loadPublishedEstateClauseSnapshot(args: {
   client: EstateClauseClient
   matterId: string
 }): Promise<EstateClauseSnapshot> {
-  const publicationsResult = await args.client
-    .from('estate_clause_publications')
-    .select('clause_id,current_revision_id,estate_clauses!inner(clause_key,title,jurisdiction,document_types,is_active),estate_clause_revisions!inner(revision_number,clause_text,required_fields,nested_clause_keys,condition_field,content_hash)')
-    .eq('estate_clauses.is_active', true)
-  const publicationRows = requireData(publicationsResult, 'Published estate clause query returned no rows') as PublishedRow[]
-
-  const overridesResult = await args.client
-    .from('matter_estate_clause_overrides')
-    .select('id,clause_id,action,reason,created_by,estate_clauses!inner(clause_key)')
-    .eq('matter_id', args.matterId)
-  const overrideRows = requireData(overridesResult, 'Matter estate clause override query returned no rows') as Array<{
+  const snapshotResult = await args.client.rpc('load_estate_clause_generation_snapshot', {
+    p_matter_id: args.matterId,
+  })
+  const snapshot = requireData(snapshotResult, 'Published estate clause snapshot returned no result') as {
+    publications: Array<{
+      clause_id: string
+      current_revision_id: string
+      clause_key: string
+      title: string
+      jurisdiction: 'MA'
+      document_types: EstateDocumentType[]
+      revision_number: number
+      clause_text: string
+      required_fields: string[]
+      nested_clause_keys: string[]
+      condition_field: string | null
+      content_hash: string
+    }>
+    overrides: Array<{
     id: string
     clause_id: string
+    clause_key: string
+    publication_revision_id: string
     action: EstateClauseOverride['action']
     reason: string
     created_by: string
-    estate_clauses: { clause_key: string } | Array<{ clause_key: string }>
-  }>
+    created_at: string
+    }>
+  }
+  const publicationRows: PublishedRow[] = snapshot.publications.map(row => ({
+    clause_id: row.clause_id,
+    current_revision_id: row.current_revision_id,
+    estate_clauses: {
+      clause_key: row.clause_key, title: row.title, jurisdiction: row.jurisdiction,
+      document_types: row.document_types,
+    },
+    estate_clause_revisions: {
+      revision_number: row.revision_number, clause_text: row.clause_text,
+      required_fields: row.required_fields, nested_clause_keys: row.nested_clause_keys,
+      condition_field: row.condition_field, content_hash: row.content_hash,
+    },
+  }))
 
   const clauses = new Map<string, PublishedEstateClause>()
   for (const row of publicationRows) {
@@ -259,8 +283,12 @@ export async function loadPublishedEstateClauseSnapshot(args: {
   }
 
   const overrides = new Map<string, EstateClauseOverride>()
-  for (const row of overrideRows) {
-    const clauseKey = relation(row.estate_clauses).clause_key
+  for (const row of snapshot.overrides) {
+    const clauseKey = row.clause_key
+    const publication = clauses.get(clauseKey)
+    if (!publication || publication.revisionId !== row.publication_revision_id) {
+      throw new Error(`Estate clause override ${row.id} was loaded against a mixed publication revision`)
+    }
     overrides.set(clauseKey, {
       id: row.id,
       clauseId: row.clause_id,
@@ -268,6 +296,8 @@ export async function loadPublishedEstateClauseSnapshot(args: {
       action: row.action,
       reason: row.reason,
       actorId: row.created_by,
+      publicationRevisionId: row.publication_revision_id,
+      createdAt: row.created_at,
     })
   }
 

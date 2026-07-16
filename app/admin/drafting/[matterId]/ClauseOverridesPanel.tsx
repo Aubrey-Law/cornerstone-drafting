@@ -78,7 +78,7 @@ export function ClauseOverridesPanel({ matterId, onMutated }: { matterId: string
     setError(null)
     try {
       const body = method === 'DELETE'
-        ? { clauseKey: clause.clauseKey }
+        ? { clauseKey: clause.clauseKey, reason: 'Return to the template default.' }
         : { clauseKey: clause.clauseKey, action: draft.action, reason: draft.reason.trim() }
       const response = await fetch(`/api/admin/matters/${matterId}/estate-clause-overrides`, {
         method,

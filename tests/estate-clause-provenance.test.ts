@@ -8,6 +8,7 @@ import type {
   EstateClauseOverride,
   EstateClauseSnapshot,
   PublishedEstateClause,
+  EstateDocumentType,
 } from '@/lib/estateClauses/types'
 
 const mocks = vi.hoisted(() => ({
@@ -70,13 +71,14 @@ function publication(args: {
   text: string
   conditionField?: string | null
   nestedClauseKeys?: string[]
+  documentTypes?: EstateDocumentType[]
 }): PublishedEstateClause {
   return {
     clauseId: args.clauseKey,
     clauseKey: args.clauseKey,
     title: args.clauseKey,
     jurisdiction: 'MA',
-    documentTypes: ['trust'],
+    documentTypes: args.documentTypes ?? ['will'],
     revisionId: args.revisionId,
     revisionNumber: 1,
     contentHash: args.contentHash,
@@ -208,8 +210,8 @@ describe('estate clause generation provenance', () => {
       name: 'incapacity-documents',
       required_fields: [],
       documents: [
-        { id: 'with-clause', title: 'With Clause', template: 'templates/with-clause.docx', output: '01-with-clause.docx' },
-        { id: 'without-clause', title: 'Without Clause', template: 'templates/without-clause.docx', output: '02-without-clause.docx' },
+        { id: 'durable-power-of-attorney', title: 'With Clause', template: 'templates/with-clause.docx', output: '01-with-clause.docx' },
+        { id: 'hipaa', title: 'Without Clause', template: 'templates/without-clause.docx', output: '02-without-clause.docx' },
       ],
     }))
 
@@ -232,6 +234,7 @@ describe('estate clause generation provenance', () => {
       revisionId: 'revision-nested-a',
       contentHash: 'a'.repeat(64),
       text: 'Nested publication A',
+      documentTypes: ['durable_power_of_attorney'],
     })
     const snapshot: EstateClauseSnapshot = {
       jurisdiction: 'MA',
@@ -271,6 +274,8 @@ describe('estate clause provenance persistence', () => {
       inclusionPosition: 0,
       selectionReason: 'template_rule' as const,
       overrideId: null,
+      included: true,
+      overrideAction: null,
     }]
     const document = {
       matter_id: '33333333-3333-4333-8333-333333333333',
@@ -300,6 +305,26 @@ describe('estate clause provenance persistence', () => {
       p_manifest: manifest,
     })
     expect(rpc.mock.calls[0]?.[1]?.p_manifest).toBe(manifest)
+  })
+
+  it('persists a durable force-omit decision with its immutable override event', async () => {
+    const manifest = [{
+      clauseId: '11111111-1111-4111-8111-111111111111', clauseKey: 'will.pet_care',
+      revisionId: '22222222-2222-4222-8222-222222222222', contentHash: 'b'.repeat(64),
+      inclusionPosition: null, selectionReason: 'attorney_override' as const,
+      overrideId: '33333333-3333-4333-8333-333333333333', included: false,
+      overrideAction: 'force_omit' as const,
+    }]
+    const document = {
+      matter_id: '44444444-4444-4444-8444-444444444444', r2_key: 'draft/will.docx', name: 'Will.docx',
+      size: 1, content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      folder: 'draft' as const, actor_id: '55555555-5555-4555-8555-555555555555',
+      generation_id: '66666666-6666-4666-8666-666666666666', generation_engine: 'node' as const,
+      marker_count: 0, missing_count: 0, template_id: null, template_version_id: null,
+    }
+    const rpc = vi.fn().mockResolvedValue({ data: { documentId: 'd', documentVersionId: 'v' }, error: null })
+    await persistGeneratedEstateDocument({ admin: { rpc }, document, manifest })
+    expect(rpc).toHaveBeenCalledWith('persist_generated_estate_document', { p_document: document, p_manifest: manifest })
   })
 
   it('fails closed on RPC errors or missing identifiers', async () => {

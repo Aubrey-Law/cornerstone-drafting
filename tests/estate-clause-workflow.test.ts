@@ -133,28 +133,50 @@ describe('estate clause repository workflow', () => {
   })
 
   it('rejects a published revision whose canonical content hash does not match', async () => {
-    const client = fakeClient({
-      estate_clause_publications: {
-        data: [{
+    const client = fakeClient()
+    client.rpc.mockResolvedValueOnce({ data: { publications: [{
           clause_id: 'clause-1',
           current_revision_id: 'revision-1',
-          estate_clauses: { clause_key: 'will.residuary', title: 'Residuary', jurisdiction: 'MA', document_types: ['will'] },
-          estate_clause_revisions: {
+          clause_key: 'will.residuary', title: 'Residuary', jurisdiction: 'MA', document_types: ['will'],
             revision_number: 1,
             clause_text: 'All the rest to my descendants.',
             required_fields: [],
             nested_clause_keys: [],
             condition_field: null,
             content_hash: '0'.repeat(64),
-          },
-        }],
-        error: null,
-      },
-      matter_estate_clause_overrides: { data: [], error: null },
-    })
+        }], overrides: [] }, error: null })
 
     await expect(loadPublishedEstateClauseSnapshot({ client: asRepositoryClient(client), matterId: 'matter-1' }))
       .rejects.toThrow('Published clause will.residuary failed its integrity check')
+  })
+
+  it('loads publications and active immutable overrides through one revision-bound snapshot RPC', async () => {
+    const content = { text: 'Conditional text.', requiredFields: [], nestedClauseKeys: [], conditionField: 'has_condition' }
+    const client = fakeClient()
+    client.rpc.mockResolvedValueOnce({
+      data: {
+        publications: [{
+          clause_id: 'clause-1', current_revision_id: 'revision-1',
+          clause_key: 'will.conditional', title: 'Conditional', jurisdiction: 'MA', document_types: ['will'],
+          revision_number: 1, clause_text: content.text, required_fields: [], nested_clause_keys: [],
+          condition_field: content.conditionField, content_hash: hashEstateClauseContent(content),
+        }],
+        overrides: [{
+          id: 'override-event-1', clause_id: 'clause-1', clause_key: 'will.conditional',
+          publication_revision_id: 'revision-1', action: 'force_include', reason: 'Matter requires this clause.',
+          created_by: 'attorney-1', created_at: '2026-07-16T00:00:00Z',
+        }],
+      },
+      error: null,
+    })
+
+    const snapshot = await loadPublishedEstateClauseSnapshot({ client: asRepositoryClient(client), matterId: 'matter-1' })
+
+    expect(client.from).not.toHaveBeenCalled()
+    expect(client.rpc).toHaveBeenCalledWith('load_estate_clause_generation_snapshot', { p_matter_id: 'matter-1' })
+    expect(snapshot.overrides.get('will.conditional')).toMatchObject({
+      id: 'override-event-1', publicationRevisionId: 'revision-1', action: 'force_include',
+    })
   })
 
   it('returns runtime-immutable clause and override maps', async () => {
@@ -164,35 +186,27 @@ describe('estate clause repository workflow', () => {
       nestedClauseKeys: [],
       conditionField: null,
     }
-    const client = fakeClient({
-      estate_clause_publications: {
-        data: [{
+    const client = fakeClient()
+    client.rpc.mockResolvedValueOnce({ data: { publications: [{
           clause_id: 'clause-1',
           current_revision_id: 'revision-1',
-          estate_clauses: { clause_key: 'will.residuary', title: 'Residuary', jurisdiction: 'MA', document_types: ['will'] },
-          estate_clause_revisions: {
+          clause_key: 'will.residuary', title: 'Residuary', jurisdiction: 'MA', document_types: ['will'],
             revision_number: 1,
             clause_text: content.text,
             required_fields: content.requiredFields,
             nested_clause_keys: content.nestedClauseKeys,
             condition_field: content.conditionField,
             content_hash: hashEstateClauseContent(content),
-          },
-        }],
-        error: null,
-      },
-      matter_estate_clause_overrides: {
-        data: [{
+        }], overrides: [{
           id: 'override-1',
           clause_id: 'clause-1',
+          clause_key: 'will.residuary',
+          publication_revision_id: 'revision-1',
           action: 'force_include',
           reason: 'Attorney approved this matter-specific inclusion.',
           created_by: 'attorney-1',
-          estate_clauses: { clause_key: 'will.residuary' },
-        }],
-        error: null,
-      },
-    })
+          created_at: '2026-07-16T00:00:00Z',
+        }] }, error: null })
 
     const snapshot = await loadPublishedEstateClauseSnapshot({
       client: asRepositoryClient(client),

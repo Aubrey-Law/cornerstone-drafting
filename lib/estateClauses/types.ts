@@ -36,6 +36,8 @@ export interface EstateClauseOverride {
   action: EstateClauseOverrideAction
   reason: string
   actorId: string
+  publicationRevisionId?: string
+  createdAt?: string
 }
 
 export interface EstateClauseManifestEntry {
@@ -43,9 +45,11 @@ export interface EstateClauseManifestEntry {
   clauseKey: string
   revisionId: string
   contentHash: string
-  inclusionPosition: number
+  included: boolean
+  inclusionPosition: number | null
   selectionReason: 'template_rule' | 'attorney_override'
   overrideId: string | null
+  overrideAction: EstateClauseOverrideAction | null
 }
 
 export interface UnavailableEstateClause {

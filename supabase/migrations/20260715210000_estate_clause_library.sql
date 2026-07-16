@@ -97,16 +97,38 @@ CREATE TABLE public.estate_clause_publications (
     REFERENCES public.estate_clause_revisions(id, clause_id) ON DELETE RESTRICT
 );
 
+CREATE TABLE public.estate_clause_preview_evidence (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  clause_id uuid NOT NULL REFERENCES public.estate_clauses(id) ON DELETE RESTRICT,
+  revision_id uuid NOT NULL,
+  revision_content_hash text NOT NULL CHECK (revision_content_hash ~ '^[0-9a-f]{64}$'),
+  template_snapshot_hash text NOT NULL CHECK (template_snapshot_hash ~ '^[0-9a-f]{64}$'),
+  document_types text[] NOT NULL CHECK (cardinality(document_types) > 0),
+  representative_matter_id uuid NOT NULL REFERENCES public.matters(id) ON DELETE RESTRICT,
+  validation_report jsonb NOT NULL,
+  created_by uuid NOT NULL REFERENCES public.users(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (revision_id, clause_id, revision_content_hash)
+    REFERENCES public.estate_clause_revisions(id, clause_id, content_hash) ON DELETE RESTRICT
+);
+
 CREATE TABLE public.matter_estate_clause_overrides (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   matter_id uuid NOT NULL REFERENCES public.matters(id) ON DELETE CASCADE,
   clause_id uuid NOT NULL REFERENCES public.estate_clauses(id) ON DELETE RESTRICT,
-  action text NOT NULL CHECK (action IN ('force_include', 'force_omit')),
+  publication_revision_id uuid NOT NULL,
+  event_type text NOT NULL CHECK (event_type IN ('applied', 'retired')),
+  action text CHECK (action IN ('force_include', 'force_omit')),
   reason text NOT NULL CHECK (length(btrim(reason)) >= 10),
   created_by uuid NOT NULL REFERENCES public.users(id),
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (matter_id, clause_id)
+  supersedes_override_id uuid REFERENCES public.matter_estate_clause_overrides(id) ON DELETE RESTRICT,
+  FOREIGN KEY (publication_revision_id, clause_id)
+    REFERENCES public.estate_clause_revisions(id, clause_id) ON DELETE RESTRICT,
+  CHECK (
+    (event_type = 'applied' AND action IS NOT NULL)
+    OR (event_type = 'retired' AND action IS NULL)
+  )
 );
 
 CREATE TABLE public.generated_document_clause_revisions (
@@ -116,18 +138,20 @@ CREATE TABLE public.generated_document_clause_revisions (
   revision_id uuid NOT NULL REFERENCES public.estate_clause_revisions(id) ON DELETE RESTRICT,
   clause_key text NOT NULL,
   content_hash text NOT NULL CHECK (content_hash ~ '^[0-9a-f]{64}$'),
-  inclusion_position integer NOT NULL CHECK (inclusion_position >= 0),
+  included boolean NOT NULL,
+  inclusion_position integer CHECK (inclusion_position >= 0),
   selection_reason text NOT NULL CHECK (selection_reason IN ('template_rule', 'attorney_override')),
   override_id uuid REFERENCES public.matter_estate_clause_overrides(id) ON DELETE RESTRICT,
+  override_action text CHECK (override_action IN ('force_include', 'force_omit')),
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (document_version_id, inclusion_position),
+  UNIQUE NULLS NOT DISTINCT (document_version_id, clause_key, included, inclusion_position),
   FOREIGN KEY (clause_id, clause_key)
     REFERENCES public.estate_clauses(id, clause_key) ON DELETE RESTRICT,
   FOREIGN KEY (revision_id, clause_id, content_hash)
     REFERENCES public.estate_clause_revisions(id, clause_id, content_hash) ON DELETE RESTRICT,
   CHECK (
-    (selection_reason = 'template_rule' AND override_id IS NULL)
-    OR (selection_reason = 'attorney_override' AND override_id IS NOT NULL)
+    (selection_reason = 'template_rule' AND override_id IS NULL AND override_action IS NULL AND included)
+    OR (selection_reason = 'attorney_override' AND override_id IS NOT NULL AND override_action IS NOT NULL)
   )
 );
 
@@ -155,6 +179,14 @@ FOR EACH ROW EXECUTE FUNCTION public.prevent_estate_clause_revision_mutation();
 
 CREATE TRIGGER estate_clause_review_events_immutable
 BEFORE UPDATE OR DELETE ON public.estate_clause_review_events
+FOR EACH ROW EXECUTE FUNCTION public.prevent_estate_clause_revision_mutation();
+
+CREATE TRIGGER estate_clause_preview_evidence_immutable
+BEFORE UPDATE OR DELETE ON public.estate_clause_preview_evidence
+FOR EACH ROW EXECUTE FUNCTION public.prevent_estate_clause_revision_mutation();
+
+CREATE TRIGGER matter_estate_clause_overrides_immutable
+BEFORE UPDATE OR DELETE ON public.matter_estate_clause_overrides
 FOR EACH ROW EXECUTE FUNCTION public.prevent_estate_clause_revision_mutation();
 
 CREATE OR REPLACE FUNCTION public.prevent_used_estate_clause_key_change()
@@ -335,6 +367,8 @@ DECLARE
   v_base_published_revision_id uuid;
   v_current_revision_id uuid;
   v_latest_event text;
+  v_document_types text[];
+  v_preview_document_types text[];
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.users u
@@ -344,10 +378,11 @@ BEGIN
   END IF;
 
   SELECT r.clause_id, r.author_id, r.validation_status, r.validation_report,
-         r.base_published_revision_id
+         r.base_published_revision_id, c.document_types
   INTO v_clause_id, v_author_id, v_validation_status, v_validation_report,
-       v_base_published_revision_id
+       v_base_published_revision_id, v_document_types
   FROM public.estate_clause_revisions r
+  JOIN public.estate_clauses c ON c.id = r.clause_id
   WHERE r.id = p_revision_id;
 
   IF NOT FOUND THEN
@@ -358,6 +393,24 @@ BEGIN
   END IF;
   IF v_validation_status <> 'valid' THEN
     RAISE EXCEPTION 'Estate clause revision has not passed validation';
+  END IF;
+
+  SELECT pe.document_types INTO v_preview_document_types
+  FROM public.estate_clause_preview_evidence pe
+  WHERE pe.revision_id = p_revision_id
+    AND pe.clause_id = v_clause_id
+    AND pe.revision_content_hash = (
+      SELECT r.content_hash FROM public.estate_clause_revisions r WHERE r.id = p_revision_id
+    )
+    AND pe.validation_report->>'status' = 'passed'
+    AND COALESCE((pe.validation_report->>'missingCount')::integer, 1) = 0
+    AND COALESCE((pe.validation_report->>'warningCount')::integer, 1) = 0
+    AND COALESCE((pe.validation_report->>'unresolvedMarkerCount')::integer, 1) = 0
+  ORDER BY pe.created_at DESC, pe.id DESC
+  LIMIT 1;
+  IF cardinality(v_preview_document_types) IS NULL
+     OR NOT (v_preview_document_types @> v_document_types) THEN
+    RAISE EXCEPTION 'Current candidate preview evidence is missing or incomplete';
   END IF;
 
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_clause_id::text, 0));
@@ -407,6 +460,52 @@ BEGIN
     'revisionId', p_revision_id,
     'previousRevisionId', v_current_revision_id
   );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.record_estate_clause_preview(
+  p_revision_id uuid,
+  p_template_snapshot_hash text,
+  p_document_types text[],
+  p_representative_matter_id uuid,
+  p_validation_report jsonb,
+  p_actor_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_evidence_id uuid;
+  v_clause_id uuid;
+  v_content_hash text;
+  v_declared_types text[];
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')) THEN
+    RAISE EXCEPTION 'Attorney or administrator role required';
+  END IF;
+  SELECT r.clause_id, r.content_hash, c.document_types
+  INTO v_clause_id, v_content_hash, v_declared_types
+  FROM public.estate_clause_revisions r
+  JOIN public.estate_clauses c ON c.id = r.clause_id
+  WHERE r.id = p_revision_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Estate clause revision not found'; END IF;
+  IF p_validation_report->>'status' <> 'passed'
+     OR COALESCE((p_validation_report->>'missingCount')::integer, 1) <> 0
+     OR COALESCE((p_validation_report->>'warningCount')::integer, 1) <> 0
+     OR COALESCE((p_validation_report->>'unresolvedMarkerCount')::integer, 1) <> 0
+     OR NOT (p_document_types @> v_declared_types) THEN
+    RAISE EXCEPTION 'Candidate preview has blockers or incomplete document-type coverage';
+  END IF;
+  INSERT INTO public.estate_clause_preview_evidence (
+    clause_id, revision_id, revision_content_hash, template_snapshot_hash,
+    document_types, representative_matter_id, validation_report, created_by
+  ) VALUES (
+    v_clause_id, p_revision_id, v_content_hash, p_template_snapshot_hash,
+    p_document_types, p_representative_matter_id, p_validation_report, p_actor_id
+  ) RETURNING id INTO v_evidence_id;
+  RETURN v_evidence_id;
 END;
 $$;
 
@@ -462,19 +561,93 @@ BEGIN
   END IF;
 
   INSERT INTO public.matter_estate_clause_overrides (
-    matter_id, clause_id, action, reason, created_by, updated_at
+    matter_id, clause_id, publication_revision_id, event_type, action,
+    reason, created_by, supersedes_override_id
   ) VALUES (
-    p_matter_id, p_clause_id, p_action, pg_catalog.btrim(p_reason), p_actor_id, now()
+    p_matter_id, p_clause_id, v_current_revision_id, 'applied', p_action,
+    pg_catalog.btrim(p_reason), p_actor_id,
+    (SELECT o.id FROM public.matter_estate_clause_overrides o
+     WHERE o.matter_id = p_matter_id AND o.clause_id = p_clause_id
+     ORDER BY o.created_at DESC, o.id DESC LIMIT 1)
   )
-  ON CONFLICT (matter_id, clause_id) DO UPDATE SET
-    action = EXCLUDED.action,
-    reason = EXCLUDED.reason,
-    created_by = EXCLUDED.created_by,
-    updated_at = EXCLUDED.updated_at
   RETURNING * INTO v_override;
 
   RETURN pg_catalog.to_jsonb(v_override);
 END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.retire_matter_estate_clause_override(
+  p_matter_id uuid,
+  p_clause_id uuid,
+  p_reason text,
+  p_actor_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_current public.matter_estate_clause_overrides%ROWTYPE;
+  v_retirement public.matter_estate_clause_overrides%ROWTYPE;
+BEGIN
+  IF length(pg_catalog.btrim(COALESCE(p_reason, ''))) < 10 THEN
+    RAISE EXCEPTION 'Estate clause override retirement reason must be at least 10 characters';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')) THEN
+    RAISE EXCEPTION 'Attorney or administrator role required';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_matter_id::text || ':' || p_clause_id::text, 0));
+  SELECT o.* INTO v_current
+  FROM public.matter_estate_clause_overrides o
+  WHERE o.matter_id = p_matter_id AND o.clause_id = p_clause_id
+  ORDER BY o.created_at DESC, o.id DESC LIMIT 1;
+  IF NOT FOUND OR v_current.event_type <> 'applied' THEN
+    RAISE EXCEPTION 'Active estate clause override not found';
+  END IF;
+  INSERT INTO public.matter_estate_clause_overrides (
+    matter_id, clause_id, publication_revision_id, event_type, action,
+    reason, created_by, supersedes_override_id
+  ) VALUES (
+    p_matter_id, p_clause_id, v_current.publication_revision_id, 'retired', NULL,
+    pg_catalog.btrim(p_reason), p_actor_id, v_current.id
+  ) RETURNING * INTO v_retirement;
+  RETURN pg_catalog.to_jsonb(v_retirement);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.load_estate_clause_generation_snapshot(p_matter_id uuid)
+RETURNS jsonb
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  WITH publications AS MATERIALIZED (
+    SELECT p.clause_id, p.current_revision_id, c.clause_key, c.title,
+           c.jurisdiction, c.document_types, r.revision_number, r.clause_text,
+           r.required_fields, r.nested_clause_keys, r.condition_field, r.content_hash
+    FROM public.estate_clause_publications p
+    JOIN public.estate_clauses c ON c.id = p.clause_id AND c.is_active
+    JOIN public.estate_clause_revisions r
+      ON r.id = p.current_revision_id AND r.clause_id = p.clause_id
+  ), latest_override AS MATERIALIZED (
+    SELECT DISTINCT ON (o.clause_id) o.*
+    FROM public.matter_estate_clause_overrides o
+    WHERE o.matter_id = p_matter_id
+    ORDER BY o.clause_id, o.created_at DESC, o.id DESC
+  )
+  SELECT jsonb_build_object(
+    'publications', COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.clause_key) FROM publications p), '[]'::jsonb),
+    'overrides', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', o.id, 'clause_id', o.clause_id, 'clause_key', p.clause_key,
+        'publication_revision_id', o.publication_revision_id, 'action', o.action,
+        'reason', o.reason, 'created_by', o.created_by, 'created_at', o.created_at
+      ) ORDER BY p.clause_key)
+      FROM latest_override o JOIN publications p ON p.clause_id = o.clause_id
+      WHERE o.event_type = 'applied' AND o.publication_revision_id = p.current_revision_id
+    ), '[]'::jsonb)
+  );
 $$;
 
 CREATE OR REPLACE FUNCTION public.persist_generated_estate_document(
@@ -495,6 +668,8 @@ DECLARE
   v_revision_id uuid;
   v_override_id uuid;
   v_selection_reason text;
+  v_included boolean;
+  v_override_action text;
 BEGIN
   IF jsonb_typeof(p_document) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'Document metadata must be a JSON object';
@@ -573,6 +748,8 @@ BEGIN
     v_revision_id := (v_manifest_entry->>'revisionId')::uuid;
     v_override_id := NULLIF(v_manifest_entry->>'overrideId', '')::uuid;
     v_selection_reason := v_manifest_entry->>'selectionReason';
+    v_included := COALESCE((v_manifest_entry->>'included')::boolean, true);
+    v_override_action := NULLIF(v_manifest_entry->>'overrideAction', '');
 
     IF NOT EXISTS (
       SELECT 1
@@ -600,7 +777,7 @@ BEGIN
       RAISE EXCEPTION 'Clause manifest revision has no publication history';
     END IF;
 
-    IF v_selection_reason = 'template_rule' AND v_override_id IS NOT NULL THEN
+    IF v_selection_reason = 'template_rule' AND (v_override_id IS NOT NULL OR NOT v_included) THEN
       RAISE EXCEPTION 'Template-rule selections cannot reference an override';
     ELSIF v_selection_reason = 'attorney_override' THEN
       IF v_override_id IS NULL OR NOT EXISTS (
@@ -608,7 +785,10 @@ BEGIN
         WHERE o.id = v_override_id
           AND o.matter_id = v_matter_id
           AND o.clause_id = v_clause_id
-          AND o.action = 'force_include'
+          AND o.event_type = 'applied'
+          AND o.publication_revision_id = v_revision_id
+          AND o.action = v_override_action
+          AND o.action = CASE WHEN v_included THEN 'force_include' ELSE 'force_omit' END
       ) THEN
         RAISE EXCEPTION 'Attorney override does not belong to the matter and clause';
       END IF;
@@ -618,12 +798,12 @@ BEGIN
 
     INSERT INTO public.generated_document_clause_revisions (
       document_version_id, clause_id, revision_id, clause_key, content_hash,
-      inclusion_position, selection_reason, override_id
+      included, inclusion_position, selection_reason, override_id, override_action
     ) VALUES (
       v_document_version_id, v_clause_id, v_revision_id,
       v_manifest_entry->>'clauseKey', v_manifest_entry->>'contentHash',
-      (v_manifest_entry->>'inclusionPosition')::integer,
-      v_selection_reason, v_override_id
+      v_included, NULLIF(v_manifest_entry->>'inclusionPosition', '')::integer,
+      v_selection_reason, v_override_id, v_override_action
     );
   END LOOP;
 
@@ -643,6 +823,7 @@ ALTER TABLE public.estate_clause_working_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.estate_clause_revisions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.estate_clause_review_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.estate_clause_publications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.estate_clause_preview_evidence ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matter_estate_clause_overrides ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.generated_document_clause_revisions ENABLE ROW LEVEL SECURITY;
 
@@ -651,6 +832,7 @@ REVOKE ALL ON public.estate_clause_working_drafts FROM PUBLIC, anon, authenticat
 REVOKE ALL ON public.estate_clause_revisions FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON public.estate_clause_review_events FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON public.estate_clause_publications FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.estate_clause_preview_evidence FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON public.matter_estate_clause_overrides FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON public.generated_document_clause_revisions FROM PUBLIC, anon, authenticated;
 
@@ -659,6 +841,7 @@ GRANT SELECT ON public.estate_clause_working_drafts TO authenticated;
 GRANT SELECT ON public.estate_clause_revisions TO authenticated;
 GRANT SELECT ON public.estate_clause_review_events TO authenticated;
 GRANT SELECT ON public.estate_clause_publications TO authenticated;
+GRANT SELECT ON public.estate_clause_preview_evidence TO authenticated;
 GRANT SELECT ON public.matter_estate_clause_overrides TO authenticated;
 GRANT SELECT ON public.generated_document_clause_revisions TO authenticated;
 
@@ -667,6 +850,7 @@ GRANT ALL ON public.estate_clause_working_drafts TO service_role;
 GRANT ALL ON public.estate_clause_revisions TO service_role;
 GRANT ALL ON public.estate_clause_review_events TO service_role;
 GRANT ALL ON public.estate_clause_publications TO service_role;
+GRANT ALL ON public.estate_clause_preview_evidence TO service_role;
 GRANT ALL ON public.matter_estate_clause_overrides TO service_role;
 GRANT ALL ON public.generated_document_clause_revisions TO service_role;
 
@@ -713,6 +897,13 @@ CREATE POLICY estate_clause_review_events_attorney_read
     WHERE u.id = auth.uid() AND u.role IN ('attorney', 'admin')
   ));
 
+CREATE POLICY estate_clause_preview_evidence_attorney_read
+  ON public.estate_clause_preview_evidence FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.id = auth.uid() AND u.role IN ('attorney', 'admin')
+  ));
+
 CREATE POLICY matter_estate_clause_overrides_attorney_read
   ON public.matter_estate_clause_overrides FOR SELECT TO authenticated
   USING (EXISTS (
@@ -730,11 +921,17 @@ CREATE POLICY generated_document_clause_revisions_staff_read
 REVOKE ALL ON FUNCTION public.submit_estate_clause_revision(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.request_estate_clause_changes(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.publish_estate_clause_revision(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.record_estate_clause_preview(uuid, text, text[], uuid, jsonb, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.retire_matter_estate_clause_override(uuid, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.load_estate_clause_generation_snapshot(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.persist_generated_estate_document(jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.submit_estate_clause_revision(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.request_estate_clause_changes(uuid, uuid, text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.publish_estate_clause_revision(uuid, uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.record_estate_clause_preview(uuid, text, text[], uuid, jsonb, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.retire_matter_estate_clause_override(uuid, uuid, text, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.load_estate_clause_generation_snapshot(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.persist_generated_estate_document(jsonb, jsonb) TO service_role;
