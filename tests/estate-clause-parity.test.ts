@@ -398,15 +398,15 @@ describe('estate clause release gate', () => {
       path.join(process.cwd(), 'supabase/migrations/20260715210000_estate_clause_library.sql'),
       'utf8',
     )
-    const tables = [
-      'estate_clauses',
-      'estate_clause_working_drafts',
-      'estate_clause_revisions',
-      'estate_clause_review_events',
-      'estate_clause_publications',
-      'matter_estate_clause_overrides',
-      'generated_document_clause_revisions',
-    ]
+    const tablePolicies: Readonly<Record<string, string>> = {
+      estate_clauses: 'estate_clauses_staff_read',
+      estate_clause_working_drafts: 'estate_clause_drafts_attorney_read',
+      estate_clause_revisions: 'estate_clause_revisions_authorized_read',
+      estate_clause_review_events: 'estate_clause_review_events_attorney_read',
+      estate_clause_publications: 'estate_clause_publications_staff_read',
+      matter_estate_clause_overrides: 'matter_estate_clause_overrides_attorney_read',
+      generated_document_clause_revisions: 'generated_document_clause_revisions_staff_read',
+    }
     const rpcs = [
       'submit_estate_clause_revision(uuid, uuid)',
       'request_estate_clause_changes(uuid, uuid, text)',
@@ -415,14 +415,18 @@ describe('estate clause release gate', () => {
       'persist_generated_estate_document(jsonb, jsonb)',
     ]
 
-    for (const table of tables) {
+    for (const [table, policy] of Object.entries(tablePolicies)) {
       expect(migration).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`)
       expect(migration).toContain(`REVOKE ALL ON public.${table} FROM PUBLIC, anon, authenticated`)
+      expect(migration).toContain(`GRANT SELECT ON public.${table} TO authenticated`)
+      expect(migration).toContain(`GRANT ALL ON public.${table} TO service_role`)
+      expect(migration).toContain(`CREATE POLICY ${policy}\n  ON public.${table} FOR SELECT TO authenticated`)
     }
     expect(migration.match(/SECURITY DEFINER\nSET search_path = ''/g)).toHaveLength(rpcs.length)
     for (const signature of rpcs) {
       expect(migration).toContain(`REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC, anon, authenticated`)
       expect(migration).toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO service_role`)
+      expect(migration).not.toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO PUBLIC`)
       expect(migration).not.toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO authenticated`)
       expect(migration).not.toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO anon`)
     }

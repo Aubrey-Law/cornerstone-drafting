@@ -205,7 +205,8 @@ different attorney or administrator independently publishes the revision.
 
    ```bash
    npm run clauses:import -- --dry-run
-   ESTATE_CLAUSE_IMPORT_ACTOR_ID=<attorney-user-uuid> npm run clauses:import
+   ATTORNEY_USER_UUID="paste-attorney-user-uuid-here"
+   ESTATE_CLAUSE_IMPORT_ACTOR_ID="$ATTORNEY_USER_UUID" npm run clauses:import
    ```
 
    Expected: `bundled=22`, `requiresReview=22`, and `publications=0`. A repeat
