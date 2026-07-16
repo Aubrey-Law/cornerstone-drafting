@@ -1,4 +1,5 @@
 import type { EstateClauseManifestEntry } from '@/lib/estateClauses/types'
+import type { EstateDocumentType } from '@/lib/estateClauses/types'
 
 export type NodeEstatePackageName =
   | 'core-estate'
@@ -50,6 +51,8 @@ export interface NodeEstateGeneratedFile {
   /** Frozen clause source and exact published revisions rendered into this file. */
   clauseSource: 'database' | 'file'
   clauseManifest: EstateClauseManifestEntry[]
+  estateDocumentTypes: EstateDocumentType[]
+  templateSha256: string
   /** Leftover `{{ }}` / `{% %}` / `[ALL-CAPS]` markers in this document's render. */
   unresolvedMarkers?: string[]
   /** `[[ MISSING: path ]]` field holes in this document's render. */

@@ -57,6 +57,7 @@ import {
   generateNodeEstatePackage,
 } from '@/lib/estateGenerator/node/generate'
 import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'
+import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
 
@@ -132,6 +133,24 @@ function databaseSnapshot(revisionSuffix: 'a' | 'b'): EstateClauseSnapshot {
 describe('estate clause generation provenance', () => {
   beforeEach(() => {
     mocks.loadEstateClauseSnapshot.mockReset()
+  })
+
+  it('fails closed when a nested include is incompatible with the target document type', () => {
+    const rootClause = publication({
+      clauseKey: 'will.root', revisionId: 'root-revision', contentHash: 'a'.repeat(64),
+      text: '{{ include_clause("trust.child") }}', nestedClauseKeys: ['trust.child'], documentTypes: ['will'],
+    })
+    const childClause = publication({
+      clauseKey: 'trust.child', revisionId: 'child-revision', contentHash: 'b'.repeat(64),
+      text: 'Trust-only text.', documentTypes: ['trust'],
+    })
+    const store = createNodeClauseStore({
+      state: 'MA', documentTypes: ['will'],
+      snapshot: { jurisdiction: 'MA', clauses: new Map([[rootClause.clauseKey, rootClause], [childClause.clauseKey, childClause]]), overrides: new Map(), source: 'database' },
+    })
+    expect(() => store.include('will.root', {} as never)).toThrow(
+      'Published clause trust.child is incompatible with target document type(s): will',
+    )
   })
 
   it('freezes one publication snapshot and records isolated per-document manifests', async () => {

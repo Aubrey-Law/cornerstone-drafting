@@ -263,7 +263,7 @@ describe('matter clause override panel', () => {
     await waitFor(() => expect(onMutated).toHaveBeenCalledTimes(1))
     expect(fetchMock).toHaveBeenNthCalledWith(2,
       '/api/admin/matters/matter-number/estate-clause-overrides',
-      expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ clauseKey: 'will.pet_care' }) }),
+      expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ clauseKey: 'will.pet_care', reason: 'Return to the template default.' }) }),
     )
   })
 
@@ -290,13 +290,14 @@ describe('matter clause override panel', () => {
     await waitFor(() => expect(onMutated).toHaveBeenCalledTimes(1))
     expect(fetchMock).toHaveBeenNthCalledWith(2,
       '/api/admin/matters/matter-number/estate-clause-overrides',
-      expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ clauseKey: 'will.retired_clause' }) }),
+      expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ clauseKey: 'will.retired_clause', reason: 'Return to the template default.' }) }),
     )
 
     const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/estate-clause-overrides/route.ts'), 'utf8')
     const deleteHandler = route.slice(route.indexOf('export async function DELETE'))
     expect(deleteHandler).not.toContain('loaded.eligible.get')
-    expect(deleteHandler).toContain(".eq('id', override.id)")
+    expect(deleteHandler).toContain(".rpc('retire_matter_estate_clause_override'")
+    expect(deleteHandler).not.toContain('.delete()')
   })
 
   it('wires successful mutations to clear the GenerateStep preflight and derived readiness', () => {

@@ -1,4 +1,6 @@
 import path from 'node:path'
+import fs from 'node:fs'
+import { createHash } from 'node:crypto'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import { loadBundledEstateClauseSnapshot } from '@/lib/estateClauses/fileRepository'
 import type { EstateClauseClient } from '@/lib/estateClauses/repository'
@@ -186,6 +188,8 @@ export async function generateNodeEstatePackage({
         owner,
         clauseSource: snapshot.source,
         clauseManifest: clauseManifest(clauses.report),
+        estateDocumentTypes: compatibleEstateDocumentTypesForTemplate(document),
+        templateSha256: resolved?.sha256 ?? createHash('sha256').update(fs.readFileSync(absoluteTemplatePath)).digest('hex'),
         unresolvedMarkers: rendered.unresolvedMarkers,
         missingFields: rendered.missingFields,
         templateId: resolved?.definition.id,

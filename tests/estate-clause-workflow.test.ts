@@ -566,7 +566,7 @@ describe('estate clause admin route contracts', () => {
     expect(review).toContain('status: 409')
   })
 
-  it('previews an injected candidate snapshot without persisting generated artifacts', () => {
+  it('previews an injected candidate snapshot and persists only immutable validation evidence', () => {
     const preview = routeSource('[clauseId]/preview/route.ts')
     expect(preview).toContain('buildDraftPayload(')
     expect(preview).toContain('loadPublishedEstateClauseSnapshot({')
@@ -577,6 +577,9 @@ describe('estate clause admin route contracts', () => {
     expect(preview).toContain('validationReport')
     expect(preview).toContain('hashEstateClauseContent(')
     expect(preview).toContain('Candidate revision failed its integrity check')
+    expect(preview).toContain("client.rpc('record_estate_clause_preview'")
+    expect(preview).toContain('missingDocumentTypes')
+    expect(preview).toContain('templateSnapshotHash')
     expect(preview).not.toMatch(/\.insert\(|\.upsert\(|persistGenerated/)
   })
 
@@ -865,5 +868,44 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     expect(buildDraftPayload).toHaveBeenCalledTimes(1)
     expect(generate).toHaveBeenCalledTimes(1)
     expect(routeSource('[clauseId]/preview/route.ts')).not.toMatch(/\.insert\(|\.upsert\(|persistGenerated/)
+  })
+
+  it('records immutable evidence only after blocker-free all-document-type preview coverage', async () => {
+    vi.resetModules()
+    const content = { text: 'Candidate text.', requiredFields: [], nestedClauseKeys: [], conditionField: null }
+    const client = fakeClient({ estate_clause_revisions: { data: {
+      id: revisionId, clause_id: clauseId, revision_number: 2, clause_text: content.text,
+      required_fields: [], nested_clause_keys: [], condition_field: null,
+      content_hash: hashEstateClauseContent(content), validation_status: 'valid', validation_report: { errors: [] },
+      estate_clauses: { clause_key: 'will.candidate', title: 'Candidate', jurisdiction: 'MA', document_types: ['will'], is_active: true },
+    }, error: null } })
+    client.rpc.mockResolvedValueOnce({ data: 'evidence-1', error: null })
+    const loadSnapshot = vi.fn().mockResolvedValue({ jurisdiction: 'MA', clauses: new Map(), overrides: new Map(), source: 'database' })
+    const generate = vi.fn().mockResolvedValue({
+      ok: true,
+      files: [{
+        name: 'will.docx', buffer: Buffer.from('docx'), unresolvedMarkers: [], missingFields: [],
+        estateDocumentTypes: ['will', 'ancillary'], templateSha256: 'a'.repeat(64),
+        clauseManifest: [{ revisionId, included: true }],
+      }],
+      missing: [], warnings: [], packageName: 'simple-will', packageNames: ['simple-will'], clientSlug: 'client',
+    })
+    vi.doMock('@/lib/apiAuth', () => ({ requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'reviewer-1' }) }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => client }))
+    vi.doMock('@/lib/buildDraftPayload', () => ({ buildDraftPayload: vi.fn().mockResolvedValue({ client: { state: 'MA' } }) }))
+    vi.doMock('@/lib/estateGenerator/node/generate', () => ({ generateEstatePlanDocumentsNode: generate }))
+    vi.doMock('@/lib/estateClauses/repository', async () => {
+      const actual = await vi.importActual<typeof import('@/lib/estateClauses/repository')>('@/lib/estateClauses/repository')
+      return { ...actual, loadPublishedEstateClauseSnapshot: loadSnapshot }
+    })
+    const { POST } = await import('@/app/api/admin/settings/estate-clauses/[clauseId]/preview/route')
+    const response = await POST(new Request('http://localhost/api', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ revisionId, matterId }),
+    }), { params: Promise.resolve({ clauseId }) })
+    expect(response.status).toBe(200)
+    expect(client.rpc).toHaveBeenCalledWith('record_estate_clause_preview', expect.objectContaining({
+      p_revision_id: revisionId, p_document_types: ['ancillary', 'will'], p_actor_id: 'reviewer-1',
+    }))
+    expect(await response.json()).toMatchObject({ validationReport: { evidenceId: 'evidence-1' } })
   })
 })

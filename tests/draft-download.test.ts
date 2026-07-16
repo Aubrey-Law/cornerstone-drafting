@@ -54,8 +54,10 @@ describe('buildDraftDownloadZip', () => {
       revisionId: 'revision-1',
       contentHash: 'a'.repeat(64),
       inclusionPosition: 0,
+      included: true,
       selectionReason: 'template_rule' as const,
       overrideId: null,
+      overrideAction: null,
     }]
     const { zipBuffer } = buildDraftDownloadArtifacts([{
       filename: 'will.docx',

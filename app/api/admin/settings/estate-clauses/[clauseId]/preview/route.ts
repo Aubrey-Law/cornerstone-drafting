@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/apiAuth'
+import { createHash } from 'node:crypto'
 import { buildDraftPayload } from '@/lib/buildDraftPayload'
 import {
   loadPublishedEstateClauseSnapshot,
@@ -6,7 +7,7 @@ import {
   type EstateClauseClient,
 } from '@/lib/estateClauses/repository'
 import type { EstateClauseSnapshot, EstateDocumentType, PublishedEstateClause } from '@/lib/estateClauses/types'
-import { hashEstateClauseContent } from '@/lib/estateClauses/validation'
+import { assertNoClauseCycles, hashEstateClauseContent } from '@/lib/estateClauses/validation'
 import { generateEstatePlanDocumentsNode } from '@/lib/estateGenerator/node/generate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -21,13 +22,13 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ clauseId: string }> },
 ) {
-  const { err } = await requireAdmin(req)
+  const { err, userId } = await requireAdmin(req)
   if (err) return err
   const { clauseId } = await params
   const body = await req.json().catch(() => null) as Record<string, unknown> | null
   const revisionId = body?.revisionId
   const matterId = body?.matterId
-  if (!isUuid(clauseId) || !isUuid(revisionId) || !isUuid(matterId)) {
+  if (!userId || !isUuid(clauseId) || !isUuid(revisionId) || !isUuid(matterId)) {
     return Response.json({ error: 'Valid clause, revision, and representative matter identifiers are required' }, { status: 400 })
   }
 
@@ -100,30 +101,79 @@ export async function POST(
       overrides: currentSnapshot.overrides,
       source: 'database',
     }
+    const reachable = new Map<string, readonly string[]>()
+    const pending = [candidate.clauseKey]
+    while (pending.length) {
+      const key = pending.pop()!
+      if (reachable.has(key)) continue
+      const publication = candidateSnapshot.clauses.get(key)
+      if (!publication) {
+        return Response.json({ error: `Candidate dependency ${key} has no current publication` }, { status: 409 })
+      }
+      reachable.set(key, publication.nestedClauseKeys)
+      pending.push(...publication.nestedClauseKeys)
+    }
+    try {
+      assertNoClauseCycles(reachable)
+    } catch (validationError) {
+      return Response.json({ error: validationError instanceof Error ? validationError.message : 'Candidate dependency cycle' }, { status: 409 })
+    }
 
     const payload = await buildDraftPayload(matterId)
     const generated = await generateEstatePlanDocumentsNode(payload, { clauseSnapshot: candidateSnapshot })
     if (!generated.ok) {
       return Response.json({ error: generated.error, validationReport: candidateRevision.validation_report }, { status: 409 })
     }
-    const candidateAppears = generated.files.some(file => (
-      file.clauseManifest.some(entry => entry.revisionId === candidateRevision.id)
+    const candidateFiles = generated.files.filter(file => (
+      file.clauseManifest.some(entry => entry.revisionId === candidateRevision.id && entry.included !== false)
     ))
-    if (!candidateAppears) {
+    if (candidateFiles.length === 0) {
       return Response.json({ error: 'Candidate revision did not appear in any generated document' }, { status: 409 })
     }
 
+    const coveredDocumentTypes = new Set(candidateFiles.flatMap(file => file.estateDocumentTypes ?? []))
+    const missingDocumentTypes = identity.document_types.filter(type => !coveredDocumentTypes.has(type))
+    const unresolvedMarkers = generated.files.flatMap(file => file.unresolvedMarkers ?? [])
+    const missingFields = [...generated.missing, ...generated.files.flatMap(file => file.missingFields ?? [])]
+    if (missingDocumentTypes.length || missingFields.length || generated.warnings.length || unresolvedMarkers.length) {
+      return Response.json({
+        error: 'Candidate preview has blockers or incomplete document-type coverage',
+        validationReport: { missingDocumentTypes, missingFields, warnings: generated.warnings, unresolvedMarkers },
+      }, { status: 409 })
+    }
+
+    const templateSnapshotHash = createHash('sha256')
+      .update(generated.files.map(file => `${file.name}:${file.templateSha256}`).sort().join('\n'))
+      .digest('hex')
+    const previewReport = {
+      status: 'passed',
+      missingCount: 0,
+      warningCount: 0,
+      unresolvedMarkerCount: 0,
+    }
+    const previewResult = await client.rpc('record_estate_clause_preview', {
+      p_revision_id: candidateRevision.id,
+      p_template_snapshot_hash: templateSnapshotHash,
+      p_document_types: [...coveredDocumentTypes].sort(),
+      p_representative_matter_id: matterId,
+      p_validation_report: previewReport,
+      p_actor_id: userId,
+    })
+    if (previewResult.error) throw new Error(previewResult.error.message)
+
     const validationReport = {
       candidate: candidateRevision.validation_report,
-      missingFields: generated.missing,
+      missingFields,
       warnings: generated.warnings,
-      unresolvedMarkers: generated.files.flatMap(file => file.unresolvedMarkers ?? []),
+      unresolvedMarkers,
+      evidenceId: previewResult.data,
+      templateSnapshotHash,
     }
     const files = generated.files.map(file => ({
       filename: file.name,
       base64: file.buffer.toString('base64'),
     }))
-    return Response.json({ files, validationReport })
+    return Response.json({ files, validationReport, evidenceId: previewResult.data })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to preview estate clause revision'
     const status = /matter not found|revision not found|clause not found/i.test(message) ? 404 : 500
