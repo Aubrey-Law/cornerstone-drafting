@@ -106,6 +106,8 @@ CREATE TABLE public.estate_clause_preview_evidence (
   document_types text[] NOT NULL CHECK (cardinality(document_types) > 0),
   dependency_revision_ids jsonb NOT NULL DEFAULT '{}'::jsonb
     CHECK (jsonb_typeof(dependency_revision_ids) = 'object'),
+  template_publication_revision_ids jsonb NOT NULL DEFAULT '{}'::jsonb
+    CHECK (jsonb_typeof(template_publication_revision_ids) = 'object'),
   representative_matter_id uuid NOT NULL REFERENCES public.matters(id) ON DELETE RESTRICT,
   validation_report jsonb NOT NULL,
   created_by uuid NOT NULL REFERENCES public.users(id),
@@ -201,6 +203,34 @@ FOR EACH ROW EXECUTE FUNCTION public.prevent_estate_clause_revision_mutation();
 CREATE TRIGGER generated_document_clause_revisions_immutable
 BEFORE UPDATE OR DELETE ON public.generated_document_clause_revisions
 FOR EACH ROW EXECUTE FUNCTION public.prevent_estate_clause_revision_mutation();
+
+CREATE OR REPLACE FUNCTION public.lock_estate_clause_publication_changes()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-clause-publications', 0)
+  );
+  RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER estate_clause_publications_serialized
+BEFORE INSERT OR UPDATE OR DELETE ON public.estate_clause_publications
+FOR EACH STATEMENT EXECUTE FUNCTION public.lock_estate_clause_publication_changes();
+
+CREATE OR REPLACE FUNCTION public.lock_estate_template_publication_changes()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-template-publications', 0)
+  );
+  RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER estate_template_publications_serialized
+BEFORE INSERT OR UPDATE OR DELETE ON public.document_template_publications
+FOR EACH STATEMENT EXECUTE FUNCTION public.lock_estate_template_publication_changes();
 
 CREATE OR REPLACE FUNCTION public.prevent_used_estate_clause_key_change()
 RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
@@ -405,6 +435,7 @@ SET search_path = ''
 AS $$
 DECLARE
   v_clause_id uuid;
+  v_clause_key text;
   v_author_id uuid;
   v_validation_status text;
   v_validation_report jsonb;
@@ -413,6 +444,11 @@ DECLARE
   v_latest_event text;
   v_document_types text[];
   v_preview_document_types text[];
+  v_nested_clause_keys text[];
+  v_dependency_revision_ids jsonb;
+  v_template_publication_revision_ids jsonb;
+  v_dependency_missing boolean;
+  v_dependency_cycle boolean;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.users u
@@ -422,9 +458,10 @@ BEGIN
   END IF;
 
   SELECT r.clause_id, r.author_id, r.validation_status, r.validation_report,
-         r.base_published_revision_id, c.document_types
+         r.base_published_revision_id, c.document_types, r.nested_clause_keys, c.clause_key
   INTO v_clause_id, v_author_id, v_validation_status, v_validation_report,
-       v_base_published_revision_id, v_document_types
+       v_base_published_revision_id, v_document_types, v_nested_clause_keys,
+       v_clause_key
   FROM public.estate_clause_revisions r
   JOIN public.estate_clauses c ON c.id = r.clause_id
   WHERE r.id = p_revision_id;
@@ -439,6 +476,48 @@ BEGIN
     RAISE EXCEPTION 'Estate clause revision has not passed validation';
   END IF;
 
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-clause-publications', 0)
+  );
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_clause_id::text, 0));
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-template-publications', 0)
+  );
+
+  WITH RECURSIVE dependency_graph(clause_key, nested_keys, path, cycle, available, revision_id) AS (
+    SELECT v_clause_key, v_nested_clause_keys, ARRAY[v_clause_key]::text[],
+           false, true, p_revision_id
+    UNION ALL
+    SELECT child.clause_key, COALESCE(r.nested_clause_keys, '{}'::text[]),
+           graph.path || child.clause_key, child.clause_key = ANY(graph.path),
+           c.id IS NOT NULL AND p.current_revision_id IS NOT NULL, p.current_revision_id
+    FROM dependency_graph graph
+    CROSS JOIN LATERAL unnest(graph.nested_keys) child(clause_key)
+    LEFT JOIN public.estate_clauses c ON c.clause_key = child.clause_key AND c.is_active
+    LEFT JOIN public.estate_clause_publications p ON p.clause_id = c.id
+    LEFT JOIN public.estate_clause_revisions r
+      ON r.id = p.current_revision_id AND r.clause_id = c.id
+    WHERE NOT graph.cycle AND graph.available
+  )
+  SELECT COALESCE(bool_or(NOT available), false), COALESCE(bool_or(cycle), false),
+         COALESCE(jsonb_object_agg(clause_key, revision_id::text)
+           FILTER (WHERE clause_key <> v_clause_key AND available AND NOT cycle), '{}'::jsonb)
+  INTO v_dependency_missing, v_dependency_cycle, v_dependency_revision_ids
+  FROM dependency_graph;
+  IF v_dependency_missing THEN RAISE EXCEPTION 'Estate clause dependency has no current publication'; END IF;
+  IF v_dependency_cycle THEN RAISE EXCEPTION 'Estate clause dependency graph contains a cycle'; END IF;
+
+  PERFORM 1
+  FROM public.estate_clause_publications p
+  JOIN public.estate_clauses c ON c.id = p.clause_id
+  WHERE c.clause_key IN (SELECT jsonb_object_keys(v_dependency_revision_ids))
+  FOR SHARE OF p;
+
+  SELECT COALESCE(jsonb_object_agg(p.template_id, p.version_id::text ORDER BY p.template_id), '{}'::jsonb)
+  INTO v_template_publication_revision_ids
+  FROM public.document_template_publications p
+  WHERE p.template_id LIKE 'estate-%';
+
   SELECT pe.document_types INTO v_preview_document_types
   FROM public.estate_clause_preview_evidence pe
   WHERE pe.revision_id = p_revision_id
@@ -448,18 +527,11 @@ BEGIN
     )
     AND pe.validation_report->>'status' = 'passed'
     AND pe.template_snapshot_hash = p_current_template_snapshot_hash
+    AND pe.dependency_revision_ids = v_dependency_revision_ids
+    AND pe.template_publication_revision_ids = v_template_publication_revision_ids
     AND COALESCE((pe.validation_report->>'missingCount')::integer, 1) = 0
     AND COALESCE((pe.validation_report->>'warningCount')::integer, 1) = 0
     AND COALESCE((pe.validation_report->>'unresolvedMarkerCount')::integer, 1) = 0
-    AND NOT EXISTS (
-      SELECT 1
-      FROM jsonb_each_text(pe.dependency_revision_ids) dependency(clause_key, revision_id)
-      LEFT JOIN public.estate_clauses dependency_clause
-        ON dependency_clause.clause_key = dependency.clause_key AND dependency_clause.is_active
-      LEFT JOIN public.estate_clause_publications dependency_publication
-        ON dependency_publication.clause_id = dependency_clause.id
-      WHERE dependency_publication.current_revision_id::text IS DISTINCT FROM dependency.revision_id
-    )
   ORDER BY pe.created_at DESC, pe.id DESC
   LIMIT 1;
   IF cardinality(v_preview_document_types) IS NULL
@@ -467,7 +539,6 @@ BEGIN
     RAISE EXCEPTION 'Current candidate preview evidence is missing or incomplete';
   END IF;
 
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_clause_id::text, 0));
   SELECT e.event_type INTO v_latest_event
   FROM public.estate_clause_review_events e
   WHERE e.revision_id = p_revision_id
@@ -536,6 +607,7 @@ DECLARE
   v_clause_id uuid;
   v_content_hash text;
   v_declared_types text[];
+  v_template_publication_revision_ids jsonb;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')) THEN
     RAISE EXCEPTION 'Attorney or administrator role required';
@@ -556,13 +628,25 @@ BEGIN
   IF jsonb_typeof(p_dependency_revision_ids) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'Candidate preview dependency revisions must be a JSON object';
   END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-clause-publications', 0)
+  );
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-template-publications', 0)
+  );
+  SELECT COALESCE(jsonb_object_agg(p.template_id, p.version_id::text ORDER BY p.template_id), '{}'::jsonb)
+  INTO v_template_publication_revision_ids
+  FROM public.document_template_publications p
+  WHERE p.template_id LIKE 'estate-%';
   INSERT INTO public.estate_clause_preview_evidence (
     clause_id, revision_id, revision_content_hash, template_snapshot_hash,
-    document_types, dependency_revision_ids, representative_matter_id,
+    document_types, dependency_revision_ids, template_publication_revision_ids,
+    representative_matter_id,
     validation_report, created_by
   ) VALUES (
     v_clause_id, p_revision_id, v_content_hash, p_template_snapshot_hash,
-    p_document_types, p_dependency_revision_ids, p_representative_matter_id,
+    p_document_types, p_dependency_revision_ids, v_template_publication_revision_ids,
+    p_representative_matter_id,
     p_validation_report, p_actor_id
   ) RETURNING id INTO v_evidence_id;
   RETURN v_evidence_id;
@@ -585,6 +669,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')) THEN
     RAISE EXCEPTION 'Attorney or administrator role required';
   END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-clause-publications', 0)
+  );
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_clause_id::text, 0));
   SELECT p.current_revision_id INTO v_current_revision_id
   FROM public.estate_clause_publications p WHERE p.clause_id = p_clause_id FOR UPDATE;
@@ -617,35 +704,71 @@ DECLARE
   v_current_revision_id uuid;
   v_target_author_id uuid;
   v_event_id uuid;
+  v_clause_key text;
+  v_nested_clause_keys text[];
+  v_dependency_revision_ids jsonb;
+  v_template_publication_revision_ids jsonb;
+  v_dependency_missing boolean;
+  v_dependency_cycle boolean;
 BEGIN
   IF length(pg_catalog.btrim(COALESCE(p_reason, ''))) = 0 THEN RAISE EXCEPTION 'Reversion reason is required'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_actor_id AND u.role IN ('attorney', 'admin')) THEN
     RAISE EXCEPTION 'Attorney or administrator role required';
   END IF;
-  SELECT r.author_id INTO v_target_author_id FROM public.estate_clause_revisions r
+  SELECT r.author_id, r.nested_clause_keys, c.clause_key
+  INTO v_target_author_id, v_nested_clause_keys, v_clause_key
+  FROM public.estate_clause_revisions r
+  JOIN public.estate_clauses c ON c.id = r.clause_id
   WHERE r.id = p_target_revision_id AND r.clause_id = p_clause_id AND r.validation_status = 'valid';
   IF NOT FOUND OR NOT EXISTS (
     SELECT 1 FROM public.estate_clause_review_events e
     WHERE e.clause_id = p_clause_id AND e.revision_id = p_target_revision_id AND e.event_type = 'published'
   ) THEN RAISE EXCEPTION 'Target revision has no approved publication history'; END IF;
+  IF v_target_author_id = p_actor_id THEN RAISE EXCEPTION 'A different attorney or administrator must revert this revision'; END IF;
+
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-clause-publications', 0)
+  );
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_clause_id::text, 0));
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('estate-template-publications', 0)
+  );
+  WITH RECURSIVE dependency_graph(clause_key, nested_keys, path, cycle, available, revision_id) AS (
+    SELECT v_clause_key, v_nested_clause_keys, ARRAY[v_clause_key]::text[], false, true, p_target_revision_id
+    UNION ALL
+    SELECT child.clause_key, COALESCE(r.nested_clause_keys, '{}'::text[]),
+           graph.path || child.clause_key, child.clause_key = ANY(graph.path),
+           c.id IS NOT NULL AND p.current_revision_id IS NOT NULL, p.current_revision_id
+    FROM dependency_graph graph
+    CROSS JOIN LATERAL unnest(graph.nested_keys) child(clause_key)
+    LEFT JOIN public.estate_clauses c ON c.clause_key = child.clause_key AND c.is_active
+    LEFT JOIN public.estate_clause_publications p ON p.clause_id = c.id
+    LEFT JOIN public.estate_clause_revisions r ON r.id = p.current_revision_id AND r.clause_id = c.id
+    WHERE NOT graph.cycle AND graph.available
+  )
+  SELECT COALESCE(bool_or(NOT available), false), COALESCE(bool_or(cycle), false),
+         COALESCE(jsonb_object_agg(clause_key, revision_id::text)
+           FILTER (WHERE clause_key <> v_clause_key AND available AND NOT cycle), '{}'::jsonb)
+  INTO v_dependency_missing, v_dependency_cycle, v_dependency_revision_ids
+  FROM dependency_graph;
+  IF v_dependency_missing THEN RAISE EXCEPTION 'Estate clause dependency has no current publication'; END IF;
+  IF v_dependency_cycle THEN RAISE EXCEPTION 'Estate clause dependency graph contains a cycle'; END IF;
+  PERFORM 1 FROM public.estate_clause_publications p
+  JOIN public.estate_clauses c ON c.id = p.clause_id
+  WHERE c.clause_key IN (SELECT jsonb_object_keys(v_dependency_revision_ids))
+  FOR SHARE OF p;
+  SELECT COALESCE(jsonb_object_agg(p.template_id, p.version_id::text ORDER BY p.template_id), '{}'::jsonb)
+  INTO v_template_publication_revision_ids
+  FROM public.document_template_publications p WHERE p.template_id LIKE 'estate-%';
   IF NOT EXISTS (
     SELECT 1 FROM public.estate_clause_preview_evidence pe
     WHERE pe.clause_id = p_clause_id
       AND pe.revision_id = p_target_revision_id
       AND pe.template_snapshot_hash = p_current_template_snapshot_hash
+      AND pe.dependency_revision_ids = v_dependency_revision_ids
+      AND pe.template_publication_revision_ids = v_template_publication_revision_ids
       AND pe.validation_report->>'status' = 'passed'
-      AND NOT EXISTS (
-        SELECT 1
-        FROM jsonb_each_text(pe.dependency_revision_ids) dependency(clause_key, revision_id)
-        LEFT JOIN public.estate_clauses dependency_clause
-          ON dependency_clause.clause_key = dependency.clause_key AND dependency_clause.is_active
-        LEFT JOIN public.estate_clause_publications dependency_publication
-          ON dependency_publication.clause_id = dependency_clause.id
-        WHERE dependency_publication.current_revision_id::text IS DISTINCT FROM dependency.revision_id
-      )
   ) THEN RAISE EXCEPTION 'Current preview evidence is required before publication reversion'; END IF;
-  IF v_target_author_id = p_actor_id THEN RAISE EXCEPTION 'A different attorney or administrator must revert this revision'; END IF;
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_clause_id::text, 0));
   SELECT p.current_revision_id INTO v_current_revision_id
   FROM public.estate_clause_publications p WHERE p.clause_id = p_clause_id FOR UPDATE;
   IF v_current_revision_id IS DISTINCT FROM p_expected_current_revision_id THEN
@@ -1084,6 +1207,8 @@ REVOKE ALL ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid, u
 REVOKE ALL ON FUNCTION public.retire_matter_estate_clause_override(uuid, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.load_estate_clause_generation_snapshot(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.persist_generated_estate_document(jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lock_estate_clause_publication_changes() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lock_estate_template_publication_changes() FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.submit_estate_clause_revision(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.request_estate_clause_changes(uuid, uuid, text) TO service_role;
@@ -1095,3 +1220,5 @@ GRANT EXECUTE ON FUNCTION public.upsert_matter_estate_clause_override(uuid, uuid
 GRANT EXECUTE ON FUNCTION public.retire_matter_estate_clause_override(uuid, uuid, text, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.load_estate_clause_generation_snapshot(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.persist_generated_estate_document(jsonb, jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.lock_estate_clause_publication_changes() TO service_role;
+GRANT EXECUTE ON FUNCTION public.lock_estate_template_publication_changes() TO service_role;

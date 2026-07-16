@@ -165,6 +165,8 @@ different attorney or administrator independently publishes the revision.
        'estate_clause_preview_evidence_immutable',
        'matter_estate_clause_overrides_immutable',
        'generated_document_clause_revisions_immutable',
+       'estate_clause_publications_serialized',
+       'estate_template_publications_serialized',
        'estate_clause_key_stable_after_use'
      ])
    order by trigger_name;
@@ -203,7 +205,7 @@ different attorney or administrator independently publishes the revision.
    Pass criteria: eight RLS-enabled tables; ten `SECURITY DEFINER` RPCs with
    `search_path` fixed to an empty value; `anon_execute=false`,
    `authenticated_execute=false`, and `service_role_execute=true` for each RPC;
-   six immutable/stability triggers, a composite publication pointer from
+   eight immutable/stability/serialization triggers, a composite publication pointer from
    `(current_revision_id, clause_id)` to the same immutable revision, eight
    read policies, and six named indexes. Table grants and RLS policies are
    separate controls and both must remain present.
