@@ -9,8 +9,8 @@ const INCLUDE_CLAUSE_RE = /^include_clause\(\s*(['"])([A-Za-z0-9._-]+)\1\s*\)$/
 const SIMPLE_FILTER_RE = /^(?:name|NAME|optional)$/
 
 type FilterChainResult =
-  | { parts: string[]; error?: never }
-  | { parts?: never; error: string }
+  | { parts: string[] }
+  | { error: string }
 
 function splitFilterChain(expression: string): FilterChainResult {
   const parts: string[] = []
@@ -100,7 +100,7 @@ function duplicateValues(values: readonly string[]): string[] {
 
 function validateVariableExpression(expression: string, declaredFields: ReadonlySet<string>): string[] {
   const filterChain = splitFilterChain(expression)
-  if (filterChain.error) return [filterChain.error]
+  if ('error' in filterChain) return [filterChain.error]
 
   const [rawField, ...rawFilters] = filterChain.parts
   const field = rawField.trim()

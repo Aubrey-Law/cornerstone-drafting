@@ -10,8 +10,8 @@ export type EstateClauseOverrideAction = 'force_include' | 'force_omit'
 
 export interface EstateClauseContent {
   text: string
-  requiredFields: string[]
-  nestedClauseKeys: string[]
+  requiredFields: readonly string[]
+  nestedClauseKeys: readonly string[]
   conditionField?: string | null
 }
 
@@ -20,7 +20,7 @@ export interface PublishedEstateClause extends EstateClauseContent {
   clauseKey: string
   title: string
   jurisdiction: 'MA'
-  documentTypes: EstateDocumentType[]
+  documentTypes: readonly EstateDocumentType[]
   revisionId: string
   revisionNumber: number
   contentHash: string

@@ -5,12 +5,39 @@ import { loadBundledEstateClauseSnapshot } from '@/lib/estateClauses/fileReposit
 import { runtimeReadonlyMap, type EstateClauseClient } from '@/lib/estateClauses/repository'
 import type { EstateClauseOverride, EstateClauseSnapshot } from '@/lib/estateClauses/types'
 import { estateClauseSource, loadEstateClauseSnapshot } from '@/lib/estateClauses/source'
+import { referencedClauseKeys } from '@/lib/estateClauses/templateReferences'
 import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
 import { buildNodeEstateContext } from '@/lib/estateGenerator/node/context'
 import { renderNodeEstateText } from '@/lib/estateGenerator/node/renderText'
 import { isPresent, missingRequiredFields } from '@/lib/estateGenerator/node/validation'
 
 const root = path.join(process.cwd(), 'tools/aubreylaw-docgeneration')
+const cutoverFixturePath = path.join(process.cwd(), 'tests/fixtures/estate-clause-database-cutover.json')
+
+interface CutoverPublication {
+  clauseKey: string
+  reviewStatus: string
+  contentHash: string
+  text: string
+}
+
+interface CutoverFixture {
+  capturedFrom: string
+  stagedClauseKeys: string[]
+  activePublications: CutoverPublication[]
+}
+
+const representativeTemplateNames = [
+  'will.docx',
+  'joint-trust.docx',
+  'durable-power-of-attorney.docx',
+  'health-care-proxy.docx',
+  'hipaa-authorization.docx',
+] as const
+
+// Any approved difference must name the stable clause key and explain why the
+// database publication intentionally differs from the rollback file source.
+const intentionalDifferences: Readonly<Record<string, string>> = {}
 
 interface LegacyClause {
   id: string
@@ -362,5 +389,89 @@ describe('estate clause source selection', () => {
       root,
       allowDraft: true,
     })).rejects.toThrow('Published clause will.executor_appointment failed its integrity check')
+  })
+})
+
+describe('estate clause release gate', () => {
+  it('keeps privileged RPCs service-role-only with a fixed search path', () => {
+    const migration = fs.readFileSync(
+      path.join(process.cwd(), 'supabase/migrations/20260715210000_estate_clause_library.sql'),
+      'utf8',
+    )
+    const tables = [
+      'estate_clauses',
+      'estate_clause_working_drafts',
+      'estate_clause_revisions',
+      'estate_clause_review_events',
+      'estate_clause_publications',
+      'matter_estate_clause_overrides',
+      'generated_document_clause_revisions',
+    ]
+    const rpcs = [
+      'submit_estate_clause_revision(uuid, uuid)',
+      'request_estate_clause_changes(uuid, uuid, text)',
+      'publish_estate_clause_revision(uuid, uuid, uuid)',
+      'upsert_matter_estate_clause_override(uuid, uuid, uuid, text, text, uuid)',
+      'persist_generated_estate_document(jsonb, jsonb)',
+    ]
+
+    for (const table of tables) {
+      expect(migration).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`)
+      expect(migration).toContain(`REVOKE ALL ON public.${table} FROM PUBLIC, anon, authenticated`)
+    }
+    expect(migration.match(/SECURITY DEFINER\nSET search_path = ''/g)).toHaveLength(rpcs.length)
+    for (const signature of rpcs) {
+      expect(migration).toContain(`REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC, anon, authenticated`)
+      expect(migration).toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO service_role`)
+      expect(migration).not.toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO authenticated`)
+      expect(migration).not.toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO anon`)
+    }
+  })
+
+  it('database cutover readiness', () => {
+    const fixture = JSON.parse(fs.readFileSync(cutoverFixturePath, 'utf8')) as CutoverFixture
+    const bundled = loadBundledEstateClauseSnapshot({ root, jurisdiction: 'MA', allowDraft: true })
+    const publications = new Map(fixture.activePublications.map(publication => [publication.clauseKey, publication]))
+    const referenced = new Set<string>()
+
+    for (const templateName of representativeTemplateNames) {
+      const template = fs.readFileSync(path.join(root, 'templates', templateName))
+      for (const clauseKey of referencedClauseKeys(template)) referenced.add(clauseKey)
+    }
+
+    expect(fixture.stagedClauseKeys, 'the local import rehearsal must stage all bundled clause keys')
+      .toEqual([...bundled.clauses.keys()].sort())
+
+    const missingPublications = [...referenced].filter(clauseKey => !publications.has(clauseKey)).sort()
+    const draftPublications = fixture.activePublications
+      .filter(publication => publication.reviewStatus === 'draft')
+      .map(publication => publication.clauseKey)
+      .sort()
+    const unexplainedDifferences = fixture.activePublications.flatMap(publication => {
+      const fileClause = bundled.clauses.get(publication.clauseKey)
+      if (fileClause?.contentHash === publication.contentHash && fileClause.text === publication.text) return []
+      return intentionalDifferences[publication.clauseKey] ? [] : [publication.clauseKey]
+    }).sort()
+    const staleDifferenceApprovals = Object.keys(intentionalDifferences)
+      .filter(clauseKey => {
+        const publication = publications.get(clauseKey)
+        const fileClause = bundled.clauses.get(clauseKey)
+        return !publication || (publication.contentHash === fileClause?.contentHash && publication.text === fileClause?.text)
+      })
+      .sort()
+
+    expect({
+      fixture: fixture.capturedFrom,
+      missingPublications,
+      draftPublications,
+      unexplainedDifferences,
+      staleDifferenceApprovals,
+    }).toEqual({
+      fixture: fixture.capturedFrom,
+      missingPublications: [],
+      draftPublications: [],
+      unexplainedDifferences: [],
+      staleDifferenceApprovals: [],
+    })
   })
 })

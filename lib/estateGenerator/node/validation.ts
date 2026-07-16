@@ -30,6 +30,6 @@ export function isPresent(value: unknown): boolean {
   return true
 }
 
-export function missingRequiredFields(data: Record<string, unknown>, requiredFields: string[]): string[] {
+export function missingRequiredFields(data: Record<string, unknown>, requiredFields: readonly string[]): string[] {
   return requiredFields.filter(field => !isPresent(getPath(data, field)))
 }
