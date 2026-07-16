@@ -34,7 +34,6 @@ function parseReviewBody(value: unknown): ReviewBody | null {
 }
 
 function workflowStatus(message: string) {
-  if (/different attorney|different administrator/i.test(message)) return 403
   if (/not found|no row/i.test(message)) return 404
   if (/valid|stale|current revision|conflict|changed|awaiting review|different publication|base publication/i.test(message)) return 409
   return 500
@@ -76,16 +75,12 @@ export async function POST(
     const pendingRevisions = revisionRows.filter(row => row.id === revisionId && latestEventByRevision.get(row.id) === 'submitted')
     if (pendingRevisions.length === 0) return Response.json({ error: 'Submitted estate clause revision not found' }, { status: 404 })
     const revisionRow = pendingRevisions[0]
-    if (revisionRow.author_id === userId) {
-      return Response.json({ error: 'A different attorney or administrator must review this revision.' }, { status: 403 })
-    }
 
     if (body.action === 'request_changes') {
       const eventId = await requestEstateClauseChanges({
         client,
         revisionId: revisionRow.id,
         actorId: userId,
-        authorId: revisionRow.author_id,
         comment: body.comment,
       })
       return Response.json({ eventId })
@@ -112,7 +107,6 @@ export async function POST(
       client,
       revisionId: revisionRow.id,
       actorId: userId,
-      authorId: revisionRow.author_id,
       expectedCurrentRevisionId: currentRevisionId,
       currentTemplateSnapshotHash,
     })

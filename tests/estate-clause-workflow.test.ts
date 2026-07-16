@@ -95,43 +95,37 @@ describe('estate clause repository workflow', () => {
     })
   })
 
-  it('rejects author self-review before calling the RPC', async () => {
+  it('allows the author to request changes through the audited RPC', async () => {
     const client = fakeClient()
 
-    await expect(requestEstateClauseChanges({
+    await requestEstateClauseChanges({
       client: asRepositoryClient(client),
       revisionId: 'revision-2',
       actorId: 'author-1',
-      authorId: 'author-1',
-      comment: 'Please revise this language.',
-    })).rejects.toThrow('A different attorney or administrator must review this revision.')
-    expect(client.rpc).not.toHaveBeenCalled()
+      comment: 'Revise this language after another deliberate review pass.',
+    })
+
+    expect(client.rpc).toHaveBeenCalledWith('request_estate_clause_changes', {
+      p_revision_id: 'revision-2',
+      p_actor_id: 'author-1',
+      p_comment: 'Revise this language after another deliberate review pass.',
+    })
   })
 
-  it('rejects author publication and otherwise sends the expected current revision', async () => {
-    const selfReviewClient = fakeClient()
-    await expect(publishEstateClauseRevision({
-      revisionId: 'revision-2',
-      actorId: 'author-1',
-      authorId: 'author-1',
-      expectedCurrentRevisionId: 'revision-1',
-      currentTemplateSnapshotHash: 'a'.repeat(64),
-      client: asRepositoryClient(selfReviewClient),
-    })).rejects.toThrow('A different attorney or administrator must publish this revision.')
-    expect(selfReviewClient.rpc).not.toHaveBeenCalled()
-
+  it('allows the author to publish while sending the expected current revision', async () => {
     const client = fakeClient()
+
     await publishEstateClauseRevision({
       revisionId: 'revision-2',
-      actorId: 'reviewer-1',
-      authorId: 'author-1',
+      actorId: 'author-1',
       expectedCurrentRevisionId: 'revision-1',
       currentTemplateSnapshotHash: 'a'.repeat(64),
       client: asRepositoryClient(client),
     })
+
     expect(client.rpc).toHaveBeenCalledWith('publish_estate_clause_revision', {
       p_revision_id: 'revision-2',
-      p_actor_id: 'reviewer-1',
+      p_actor_id: 'author-1',
       p_expected_current_revision_id: 'revision-1',
       p_current_template_snapshot_hash: 'a'.repeat(64),
     })
@@ -586,7 +580,8 @@ describe('estate clause admin route contracts', () => {
     expect(review).not.toContain('body.authorId')
     expect(review).not.toContain('body.currentRevisionId')
     expect(review).not.toContain('body.revisionId')
-    expect(review).toContain('status: 403')
+    expect(review).not.toContain('different attorney')
+    expect(review).not.toContain('different administrator')
     expect(review).toContain('status: 404')
     expect(review).toContain('status: 409')
   })
@@ -745,7 +740,11 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     }), { params: Promise.resolve({ clauseId }) })
 
     expect(response.status).toBe(200)
-    expect(publish).toHaveBeenCalledWith(expect.objectContaining({ revisionId, authorId: 'author-1' }))
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+      revisionId,
+      actorId: 'reviewer-1',
+    }))
+    expect(publish.mock.calls[0][0]).not.toHaveProperty('authorId')
     expect(requestChanges).not.toHaveBeenCalled()
   })
 
@@ -774,7 +773,7 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     expect(publish).toHaveBeenCalledTimes(1)
   })
 
-  it('returns 403 for self-review and 404 when no submitted revision exists', async () => {
+  it('allows self-publication and still returns 404 for a missing submitted revision', async () => {
     const invoke = async (client: ReturnType<typeof fakeClient>, userId: string) => {
       vi.resetModules()
       const publish = vi.fn()
@@ -795,9 +794,14 @@ describe.sequential('estate clause admin route runtime behavior', () => {
     const selfReview = await invoke(fakeClient({
       estate_clause_revisions: { data: [{ id: revisionId, author_id: 'author-1', validation_status: 'valid' }], error: null },
       estate_clause_review_events: { data: [{ revision_id: revisionId, event_type: 'submitted' }], error: null },
+      estate_clause_publications: { data: null, error: null },
     }), 'author-1')
-    expect(selfReview.response.status).toBe(403)
-    expect(selfReview.publish).not.toHaveBeenCalled()
+    expect(selfReview.response.status).toBe(200)
+    expect(selfReview.publish).toHaveBeenCalledWith(expect.objectContaining({
+      revisionId,
+      actorId: 'author-1',
+      expectedCurrentRevisionId: null,
+    }))
 
     const missing = await invoke(fakeClient({
       estate_clause_revisions: { data: [], error: null },

@@ -193,12 +193,8 @@ export async function requestEstateClauseChanges(args: {
   client: EstateClauseClient
   revisionId: string
   actorId: string
-  authorId: string
   comment: string
 }) {
-  if (args.actorId === args.authorId) {
-    throw new Error('A different attorney or administrator must review this revision.')
-  }
   const result = await args.client.rpc('request_estate_clause_changes', {
     p_revision_id: args.revisionId,
     p_actor_id: args.actorId,
@@ -211,13 +207,9 @@ export async function publishEstateClauseRevision(args: {
   client: EstateClauseClient
   revisionId: string
   actorId: string
-  authorId: string
   expectedCurrentRevisionId: string | null
   currentTemplateSnapshotHash: string
 }) {
-  if (args.actorId === args.authorId) {
-    throw new Error('A different attorney or administrator must publish this revision.')
-  }
   const result = await args.client.rpc('publish_estate_clause_revision', {
     p_revision_id: args.revisionId,
     p_actor_id: args.actorId,
