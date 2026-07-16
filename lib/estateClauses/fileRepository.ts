@@ -49,14 +49,16 @@ function nestedClauseKeys(clause: BundledClauseJson): string[] {
 function loadDirectory(args: {
   root: string
   directory: string
-  allowDraft: boolean
+  warnings: string[]
 }): Map<string, PublishedEstateClause> {
   const clauses = new Map<string, PublishedEstateClause>()
   for (const filePath of walkJsonFiles(args.directory)) {
     const source = JSON.parse(fs.readFileSync(filePath, 'utf8')) as BundledClauseJson
-    if (!source.id) continue
+    if (!source.id) {
+      args.warnings.push(`Clause file has no id and was ignored: ${filePath}`)
+      continue
+    }
     const reviewStatus = source.review_status ?? 'draft'
-    if (reviewStatus !== 'approved' && !args.allowDraft) continue
     if (!source.title || !source.document_type || typeof source.text !== 'string') {
       throw new Error(`Bundled clause ${source.id} is missing required publication metadata`)
     }
@@ -94,18 +96,36 @@ export function loadBundledEstateClauseSnapshot({
   if (jurisdiction !== 'MA') {
     throw new Error(`Unsupported estate clause jurisdiction: ${jurisdiction}`)
   }
-  const clauses = loadDirectory({ root, directory: path.join(root, 'clauses'), allowDraft })
+  const warnings: string[] = []
+  const winners = loadDirectory({ root, directory: path.join(root, 'clauses'), warnings })
   const stateClauses = loadDirectory({
     root,
     directory: path.join(root, 'states', jurisdiction, 'clauses'),
-    allowDraft,
+    warnings,
   })
-  for (const [key, clause] of stateClauses) clauses.set(key, clause)
+  for (const [key, clause] of stateClauses) winners.set(key, clause)
+
+  const clauses = new Map<string, PublishedEstateClause>()
+  const unavailableClauses = new Map<string, {
+    clauseKey: string
+    reviewStatus: string
+    sourceFile?: string
+  }>()
+  for (const [key, clause] of winners) {
+    if (clause.reviewStatus === 'approved' || allowDraft) clauses.set(key, clause)
+    else unavailableClauses.set(key, Object.freeze({
+      clauseKey: key,
+      reviewStatus: clause.reviewStatus,
+      sourceFile: clause.sourceFile,
+    }))
+  }
 
   return Object.freeze({
     jurisdiction: 'MA' as const,
     clauses: runtimeReadonlyMap(clauses),
     overrides: runtimeReadonlyMap(new Map()),
     source: 'file' as const,
+    warnings: Object.freeze(warnings),
+    unavailableClauses: runtimeReadonlyMap(unavailableClauses),
   })
 }

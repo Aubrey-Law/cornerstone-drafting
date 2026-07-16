@@ -130,6 +130,51 @@ describe('bundled estate clause adapter parity', () => {
     }
   })
 
+  it('does not reveal an approved base clause when the winning state publication is draft', () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(process.cwd(), '.estate-clause-parity-'))
+    const writeClause = (relativePath: string, reviewStatus: string, text: string) => {
+      const filePath = path.join(fixtureRoot, relativePath)
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
+      fs.writeFileSync(filePath, JSON.stringify({
+        id: 'conditional.key',
+        title: 'Conditional clause',
+        document_type: 'will',
+        jurisdiction: relativePath.startsWith('states/') ? 'MA' : 'base',
+        condition: 'has_children',
+        review_status: reviewStatus,
+        text,
+      }))
+    }
+
+    try {
+      writeClause('clauses/conditional.key.json', 'approved', 'BASE APPROVED')
+      writeClause('states/MA/clauses/conditional.key.json', 'draft', 'STATE DRAFT')
+      const snapshot = loadBundledEstateClauseSnapshot({ root: fixtureRoot, jurisdiction: 'MA' })
+
+      expect(snapshot.clauses.has('conditional.key')).toBe(false)
+      expect(() => createNodeClauseStore({ snapshot, state: 'MA' })
+        .include('conditional.key', { has_children: true } as never))
+        .toThrow('Clause conditional.key is marked "draft". Use allowDraft to generate draft documents.')
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('propagates an actionable warning for bundled JSON without an id', () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(process.cwd(), '.estate-clause-parity-'))
+    const filePath = path.join(fixtureRoot, 'clauses', 'missing-id.json')
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, JSON.stringify({ title: 'Missing ID', text: 'Ignored.' }))
+
+    try {
+      const snapshot = loadBundledEstateClauseSnapshot({ root: fixtureRoot, jurisdiction: 'MA' })
+      const store = createNodeClauseStore({ snapshot, state: 'MA' })
+      expect(store.report.warnings).toEqual([`Clause file has no id and was ignored: ${filePath}`])
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
   it('preserves legacy inclusion, skipping, missing markers, reports, state lookup warnings, and nested rendering', () => {
     const legacy = effectiveLegacyClauses()
     const snapshot = loadBundledEstateClauseSnapshot({ root, jurisdiction: 'MA', allowDraft: true })
@@ -208,9 +253,9 @@ describe('snapshot-backed clause selection', () => {
     })])
   })
 
-  it('force-omits before condition evaluation and records attorney provenance', () => {
+  it('force-omits a conditional clause before condition evaluation and records attorney provenance', () => {
     const clause = loadBundledEstateClauseSnapshot({ root, jurisdiction: 'MA', allowDraft: true })
-      .clauses.get('will.executor_appointment')!
+      .clauses.get('trust.spendthrift')!
     const snapshot = withOverride({
       id: 'override-omit',
       clauseId: clause.clauseId,
@@ -227,6 +272,22 @@ describe('snapshot-backed clause selection', () => {
       selection_reason: 'attorney_override',
       override_id: 'override-omit',
     })])
+  })
+
+  it('rejects an override targeting an unconditional mandatory publication', () => {
+    const clause = loadBundledEstateClauseSnapshot({ root, jurisdiction: 'MA', allowDraft: true })
+      .clauses.get('will.executor_appointment')!
+    const snapshot = withOverride({
+      id: 'override-unconditional',
+      clauseId: clause.clauseId,
+      clauseKey: clause.clauseKey,
+      action: 'force_omit',
+      reason: 'Invalid mandatory-clause omission.',
+      actorId: 'attorney-1',
+    })
+
+    expect(() => createNodeClauseStore({ snapshot, state: 'MA', allowDraft: true }))
+      .toThrow('Estate clause override override-unconditional cannot target unconditional publication will.executor_appointment')
   })
 
   it('rejects overrides without matching publications and creates a fresh report per store', () => {

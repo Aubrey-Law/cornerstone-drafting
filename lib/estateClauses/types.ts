@@ -48,9 +48,17 @@ export interface EstateClauseManifestEntry {
   overrideId: string | null
 }
 
+export interface UnavailableEstateClause {
+  clauseKey: string
+  reviewStatus: string
+  sourceFile?: string
+}
+
 export interface EstateClauseSnapshot {
   jurisdiction: 'MA'
   clauses: ReadonlyMap<string, PublishedEstateClause>
   overrides: ReadonlyMap<string, EstateClauseOverride>
   source: 'database' | 'file'
+  warnings?: readonly string[]
+  unavailableClauses?: ReadonlyMap<string, UnavailableEstateClause>
 }

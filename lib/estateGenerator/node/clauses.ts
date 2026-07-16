@@ -52,18 +52,27 @@ export function createNodeClauseStore({
     included_clauses: [],
     skipped_clauses: [],
     missing_fields: [],
-    warnings: [],
+    warnings: [...(snapshot.warnings ?? [])],
   }
   for (const override of snapshot.overrides.values()) {
     const publication = snapshot.clauses.get(override.clauseKey)
     if (!publication || publication.clauseId !== override.clauseId) {
       throw new Error(`Estate clause override ${override.id} references a missing publication: ${override.clauseKey}`)
     }
+    if (!publication.conditionField?.trim()) {
+      throw new Error(`Estate clause override ${override.id} cannot target unconditional publication ${override.clauseKey}; only conditional clauses may be overridden.`)
+    }
   }
 
   function getClause(clauseId: string): PublishedEstateClause {
     const clause = snapshot.clauses.get(clauseId)
-    if (!clause) throw new Error(`Clause not found: ${clauseId}`)
+    if (!clause) {
+      const unavailable = snapshot.unavailableClauses?.get(clauseId)
+      if (unavailable) {
+        throw new Error(`Clause ${clauseId} is marked ${JSON.stringify(unavailable.reviewStatus)}. Use allowDraft to generate draft documents.`)
+      }
+      throw new Error(`Clause not found: ${clauseId}`)
+    }
     return clause
   }
 
