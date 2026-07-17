@@ -33,7 +33,7 @@ describe('documents PATCH review gate wiring', () => {
   )
 
   it('loads marker_count and reviewed_at for the gate', () => {
-    expect(routeSource).toContain('marker_count, reviewed_at, reviewed_by')
+    expect(routeSource).toContain('content_type, generation_id, marker_count, missing_count, reviewed_at, reviewed_by')
   })
 
   it('requires explicit confirmation before promoting internal drafts to client-visible folders', () => {
@@ -45,5 +45,11 @@ describe('documents PATCH review gate wiring', () => {
   it('records the review toggle in the audit trail', () => {
     expect(routeSource).toContain('isReviewToggle')
     expect(routeSource).toContain("auditDocumentAccess(sb, user, data, 'review'")
+  })
+
+  it('blocks generated PDFs with markers or missing attorney review from sharing', () => {
+    expect(routeSource).toContain('canPromoteDraft')
+    expect(routeSource).toContain("code: 'generated_pdf_has_markers'")
+    expect(routeSource).toContain("code: 'generated_pdf_not_reviewed'")
   })
 })

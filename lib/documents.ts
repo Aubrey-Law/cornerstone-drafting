@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import type { MatterDocument } from '@/types/database'
+import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
 
 const WORD_CONTENT_TYPES = new Set([
   'application/msword',
@@ -270,6 +270,29 @@ export async function renameDocument(docId: string, name: string): Promise<Matte
   }
   const { document } = await res.json()
   return document as MatterDocument
+}
+
+export async function getDocumentAuditEvents({
+  matterId,
+  documentId,
+  limit = 25,
+}: {
+  matterId: string
+  documentId?: string
+  limit?: number
+}): Promise<DocumentAccessAudit[]> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const params = new URLSearchParams({ matterId, limit: String(limit) })
+  if (documentId) params.set('documentId', documentId)
+
+  const res = await fetch(`/api/admin/documents/audit?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error ?? 'Failed to load document audit history')
+  return (body.events ?? []) as DocumentAccessAudit[]
 }
 
 /** List documents for a matter, optionally filtered by folder. */

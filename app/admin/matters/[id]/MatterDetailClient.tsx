@@ -1149,6 +1149,9 @@ function MatterDetailClientInner({
               documents={documents}
               loading={docsLoading}
               onDocumentsChanged={loadDocuments}
+              unreviewedUploadCounts={unreviewedUploadCounts}
+              onReviewPortalUploads={handleMarkPortalUploadsReviewed}
+              onReviewIntakeUploads={openIntakeSheet}
             />
           </TabsContent>
 
