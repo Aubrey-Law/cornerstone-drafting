@@ -291,7 +291,7 @@ export function DocxViewerPanel({
 
   const editsBlock =
     edits.length > 0 ? (
-      <div className="flex min-h-0 flex-col border-b border-border">
+      <div className={`flex min-h-0 flex-col border-b border-border ${maximized ? 'flex-1' : ''}`}>
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-2">
           <span className="mr-auto text-[11px] font-medium text-muted-foreground">
             {activeIndex >= 0 ? `Change ${activeIndex + 1} of ${edits.length}` : `${edits.length} pending change${edits.length === 1 ? '' : 's'}`}
@@ -367,7 +367,7 @@ export function DocxViewerPanel({
     ) : null
 
   const docBlock = (
-    <div className="relative min-h-0 flex-1 overflow-auto bg-muted/20 p-4 md:p-6">
+    <div className={`relative min-h-0 flex-1 overflow-auto bg-muted/20 p-4 md:p-6 ${maximized ? 'order-1' : 'order-2'}`}>
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -425,21 +425,28 @@ export function DocxViewerPanel({
         </div>
       </div>
 
-      {maximized ? (
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
-          {docBlock}
-          <div className="flex min-h-0 flex-col overflow-hidden border-t border-border lg:border-t-0 lg:border-l">
-            {redlineBlock}
-            {editsBlock}
-          </div>
-        </div>
-      ) : (
-        <>
+      {/* One stable container in both modes: only the classes change, so the
+          imperatively-rendered docx host div is never remounted (which would
+          blank the document) when toggling maximize. */}
+      <div
+        className={
+          maximized
+            ? 'grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1'
+            : 'flex min-h-0 flex-1 flex-col'
+        }
+      >
+        {docBlock}
+        <div
+          className={
+            maximized
+              ? 'order-2 flex min-h-0 flex-col overflow-hidden border-t border-border lg:border-t-0 lg:border-l'
+              : 'order-1 flex flex-col'
+          }
+        >
           {redlineBlock}
           {editsBlock}
-          {docBlock}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   )
 }
