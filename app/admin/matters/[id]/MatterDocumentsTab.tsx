@@ -140,7 +140,7 @@ export function MatterDocumentsTab({
 }: MatterDocumentsTabProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [folderFilter, setFolderFilter] = useState<DocumentFolder | 'all'>('all')
+  const [activeFolder, setActiveFolder] = useState<DocumentFolder>('draft')
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all')
   const [typeFilter, setTypeFilter] = useState<FileTypeFilter>('all')
   const [uploadFolder, setUploadFolder] = useState<DocumentFolder>('client')
@@ -166,13 +166,20 @@ export function MatterDocumentsTab({
   const filteredDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return documents.filter(doc => {
+      if (doc.folder !== activeFolder) return false
       if (normalized && !doc.name.toLowerCase().includes(normalized)) return false
-      if (folderFilter !== 'all' && doc.folder !== folderFilter) return false
       if (visibilityFilter !== 'all' && classifyDocumentVisibility(doc) !== visibilityFilter) return false
       if (typeFilter !== 'all' && documentFileType(doc) !== typeFilter) return false
       return true
     })
-  }, [documents, folderFilter, query, typeFilter, visibilityFilter])
+  }, [activeFolder, documents, query, typeFilter, visibilityFilter])
+
+  const folderSummaries = useMemo(() => DOCUMENT_FOLDERS.map(folder => ({
+    ...folder,
+    count: documents.filter(doc => doc.folder === folder.value).length,
+  })), [documents])
+
+  const activeFolderSummary = folderSummaries.find(folder => folder.value === activeFolder)
 
   const selectedDocuments = useMemo(
     () => documents.filter(doc => selectedIds.has(doc.id)),
@@ -502,7 +509,47 @@ export function MatterDocumentsTab({
           </div>
         )}
 
-        <div className="grid gap-2 border-b border-border px-4 py-3 md:grid-cols-[minmax(220px,1fr)_repeat(3,180px)]">
+        <div className="border-b border-border px-4 py-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Folders</p>
+              <p className="text-xs text-muted-foreground">Select a folder to see its documents.</p>
+            </div>
+            <Badge variant="outline" className="shrink-0 text-[11px]">
+              Selected folder
+            </Badge>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {folderSummaries.map(folder => {
+              const selected = folder.value === activeFolder
+              return (
+                <button
+                  key={folder.value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setActiveFolder(folder.value)}
+                  className={cn(
+                    'rounded-md border px-3 py-2 text-left transition-colors',
+                    selected
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background hover:bg-muted/50',
+                  )}
+                >
+                  <span className="block text-sm font-semibold">{folder.label}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{folder.description}</span>
+                  <span className="mt-2 block text-lg font-semibold">
+                    {folder.count}
+                    <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                      document{folder.count === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="grid gap-2 border-b border-border px-4 py-3 md:grid-cols-[minmax(220px,1fr)_repeat(2,180px)]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -512,19 +559,6 @@ export function MatterDocumentsTab({
               placeholder="Search documents"
             />
           </div>
-          <Select value={folderFilter} onValueChange={value => setFolderFilter(value as DocumentFolder | 'all')}>
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue placeholder="Folder" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All folders</SelectItem>
-              {DOCUMENT_FOLDERS.map(folder => (
-                <SelectItem key={folder.value} value={folder.value}>
-                  {folder.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={visibilityFilter} onValueChange={value => setVisibilityFilter(value as VisibilityFilter)}>
             <SelectTrigger className="h-9 w-full">
               <SelectValue placeholder="Visibility" />
@@ -548,6 +582,11 @@ export function MatterDocumentsTab({
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{activeFolderSummary?.label ?? documentFolderLabel(activeFolder)}</span>
+          {activeFolderSummary?.description ? ` · ${activeFolderSummary.description}` : ''}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
@@ -586,9 +625,13 @@ export function MatterDocumentsTab({
         ) : filteredDocuments.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <FileText className="mx-auto h-8 w-8 text-muted-foreground/60" />
-            <p className="mt-3 text-sm font-medium">No matching documents</p>
+            <p className="mt-3 text-sm font-medium">
+              {query.trim() || visibilityFilter !== 'all' || typeFilter !== 'all' ? 'No matching documents' : 'No documents in this folder'}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Upload a file or adjust the filters to see matter documents.
+              {query.trim() || visibilityFilter !== 'all' || typeFilter !== 'all'
+                ? 'Adjust the filters to see documents in this folder.'
+                : 'Upload a file or move documents here to fill this folder.'}
             </p>
           </div>
         ) : (
