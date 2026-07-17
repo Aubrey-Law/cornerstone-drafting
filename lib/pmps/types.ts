@@ -22,6 +22,7 @@ export interface PmpsClient {
   firstName: string
   lastName: string
   dob: string | null
+  citizenship: string | null
 }
 
 export interface PmpsData {
@@ -29,6 +30,9 @@ export interface PmpsData {
   matterNumber: string | null
   date: string
   filePrefix: string
+  address: string | null
+  county: string | null
+  marriedSince: string | null
   clients: { type: 'couple' | 'individual'; client: PmpsClient; spouse: PmpsClient | null }
   children: DraftPayload['children']
   assets: NonNullable<DraftPayload['assets']>

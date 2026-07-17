@@ -23,7 +23,10 @@ export function assemblePmpsData(payload: DraftPayload, input: PmpsRunInput = {}
   const grossEstate = assets.reduce((sum, asset) => sum + (asset.estimated_value ?? 0), 0)
 
   if (!payload.client.full_name?.trim() || !payload.client.dob) preflight.push({ field: 'client', message: '[UNKNOWN] Confirm the client name and date of birth.' })
+  if (!payload.client.citizenship) preflight.push({ field: 'clientCitizenship', message: '[UNKNOWN] Confirm the client citizenship.' })
   if (isCouple && (!payload.spouse?.full_name?.trim() || !payload.spouse.dob)) preflight.push({ field: 'spouse', message: '[UNKNOWN] Confirm the spouse name and date of birth.' })
+  if (isCouple && !payload.spouse?.citizenship) preflight.push({ field: 'spouseCitizenship', message: '[UNKNOWN] Confirm the spouse citizenship.' })
+  if (isCouple && !payload.marriage?.date) preflight.push({ field: 'marriageDate', message: '[UNKNOWN] Confirm the marriage date.' })
   if (hasLegalPlan === undefined) preflight.push({ field: 'hasLegalPlan', message: '[UNKNOWN] Confirm whether a legal insurance plan applies.' })
   if (hasLegalPlan === false && (!flatFee || flatFee <= 0)) preflight.push({ field: 'flatFee', message: '[UNKNOWN] Provide the approved flat fee for a client without legal-plan coverage.' })
   if (!planStructure) preflight.push({ field: 'planStructure', message: '[UNKNOWN] Select the approved PMPS plan structure.' })
@@ -33,6 +36,10 @@ export function assemblePmpsData(payload: DraftPayload, input: PmpsRunInput = {}
   if (grossEstate <= 0) preflight.push({ field: 'assets', message: '[UNKNOWN] A positive approved gross-estate value is required.' })
   if (!payload.fiduciaries.pr_primary || !payload.fiduciaries.dpoa_primary || !payload.fiduciaries.hcp_primary) {
     preflight.push({ field: 'fiduciaries', message: '[UNKNOWN] Confirm primary personal representative, DPOA agent, and health-care agent.' })
+  }
+  if (!payload.fiduciaries.trustee_successor) preflight.push({ field: 'fiduciaries', message: '[UNKNOWN] Confirm the client successor trustee.' })
+  if (isCouple && (!payload.fiduciaries.spouse_pr_primary || !payload.fiduciaries.spouse_dpoa_primary || !payload.fiduciaries.spouse_hcp_primary || !payload.fiduciaries.spouse_trustee_successor)) {
+    preflight.push({ field: 'spouseFiduciaries', message: '[UNKNOWN] Confirm the spouse personal representative, DPOA agent, health-care agent, and successor trustee.' })
   }
 
   const selectedKinds = input.documentKinds?.length
@@ -51,10 +58,13 @@ export function assemblePmpsData(payload: DraftPayload, input: PmpsRunInput = {}
       matterNumber: payload.matter.matter_number,
       date: new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'America/New_York' }).format(new Date()),
       filePrefix,
+      address: [payload.client.address, payload.client.city, payload.client.state, payload.client.zip].filter(Boolean).join(', ') || null,
+      county: payload.client.county,
+      marriedSince: payload.marriage?.date ?? null,
       clients: {
         type: isCouple ? 'couple' : 'individual',
-        client: { fullName: payload.client.full_name, firstName: payload.client.first_name, lastName: payload.client.last_name, dob: payload.client.dob },
-        spouse: payload.spouse ? { fullName: payload.spouse.full_name, firstName: payload.spouse.first_name, lastName: payload.spouse.last_name, dob: payload.spouse.dob } : null,
+        client: { fullName: payload.client.full_name, firstName: payload.client.first_name, lastName: payload.client.last_name, dob: payload.client.dob, citizenship: payload.client.citizenship ?? null },
+        spouse: payload.spouse ? { fullName: payload.spouse.full_name, firstName: payload.spouse.first_name, lastName: payload.spouse.last_name, dob: payload.spouse.dob, citizenship: payload.spouse.citizenship ?? null } : null,
       },
       children: payload.children,
       assets,

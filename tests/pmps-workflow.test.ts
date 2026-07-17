@@ -7,12 +7,13 @@ import { ANNUAL_GIFT_EXCLUSION_2026, FEDERAL_BASIC_EXCLUSION_2026, computeMaEsta
 function payload(overrides: Partial<DraftPayload> = {}): DraftPayload {
   return {
     matter: { id: '11111111-1111-4111-8111-111111111111', matter_number: 'EP-100', type: 'married_joint', trust_type: 'revocable_living', practice_area: 'Estate Planning', minor_children: false },
-    client: { first_name: 'Alex', last_name: 'Chen', full_name: 'Alex Chen', aka: null, preferred_pronoun: null, dob: '1970-01-01', address: '1 Main St', city: 'Needham', county: 'Norfolk', state: 'MA', zip: '02492', email: null, phone: null, excluded_guardian: null },
-    spouse: { first_name: 'Jamie', last_name: 'Chen', full_name: 'Jamie Chen', aka: null, preferred_pronoun: null, dob: '1971-01-01' },
+    client: { first_name: 'Alex', last_name: 'Chen', full_name: 'Alex Chen', aka: null, preferred_pronoun: null, citizenship: 'US', dob: '1970-01-01', address: '1 Main St', city: 'Needham', county: 'Norfolk', state: 'MA', zip: '02492', email: null, phone: null, excluded_guardian: null },
+    spouse: { first_name: 'Jamie', last_name: 'Chen', full_name: 'Jamie Chen', aka: null, preferred_pronoun: null, citizenship: 'US', dob: '1971-01-01' },
+    marriage: { date: '1998-06-15' },
     children: [{ full_name: 'Taylor Chen', dob: '2000-01-01', relationship: 'biological', minor: false }],
     trust: null,
     trust_provisions: {} as DraftPayload['trust_provisions'],
-    fiduciaries: { pr_primary: 'Jamie Chen', dpoa_primary: 'Jamie Chen', hcp_primary: 'Jamie Chen', trustee_initial: 'Alex and Jamie Chen', trustee_successor: 'Taylor Chen' } as DraftPayload['fiduciaries'],
+    fiduciaries: { pr_primary: 'Jamie Chen', dpoa_primary: 'Jamie Chen', hcp_primary: 'Jamie Chen', trustee_initial: 'Alex and Jamie Chen', trustee_successor: 'Taylor Chen', spouse_pr_primary: 'Alex Chen', spouse_dpoa_primary: 'Alex Chen', spouse_hcp_primary: 'Alex Chen', spouse_trustee_successor: 'Taylor Chen' } as DraftPayload['fiduciaries'],
     documents: { include_trust: true, include_pour_over_will: true, include_simple_will: false, include_testamentary_trust_will: false, include_dpoa: true, include_hcp: true, include_hipaa: true, include_ahd: true, include_ppm: false, include_parental_appointment: false, include_temp_delegation: false, spouse_docs: true, trust_planning_type: 'clayton_election' } as unknown as DraftPayload['documents'],
     will_provisions: {} as DraftPayload['will_provisions'], dpoa_provisions: {} as DraftPayload['dpoa_provisions'], hcp_provisions: {} as DraftPayload['hcp_provisions'], hipaa_provisions: {} as DraftPayload['hipaa_provisions'],
     assets: [{ category: 'real_property', description: 'Residence', institution: null, estimated_value: 2_000_000, notes: null, from_intake: true }, { category: 'retirement', description: 'Retirement accounts', institution: null, estimated_value: 4_500_000, notes: null, from_intake: true }],

@@ -196,6 +196,7 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
         full_name: spouseFullName,
         aka: designSheet.spouse_aka ?? null,
         preferred_pronoun: designSheet.spouse_pronouns ?? null,
+        citizenship: designSheet.spouse_citizenship ?? null,
         dob: designSheet.spouse_dob ?? null,
       }
     : null
@@ -410,6 +411,7 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
       full_name: clientFullName,
       aka: designSheet.client_aka ?? null,
       preferred_pronoun: designSheet.client_pronouns ?? null,
+      citizenship: designSheet.client_citizenship ?? null,
       dob: designSheet.client_dob ?? null,
       address: clientAddress,
       city: clientCity,

@@ -31,6 +31,7 @@ export interface DraftPayload {
     full_name: string
     aka: string | null
     preferred_pronoun: string | null
+    citizenship?: string | null
     dob: string | null
     address: string | null
     city: string | null
@@ -47,6 +48,7 @@ export interface DraftPayload {
     full_name: string
     aka: string | null
     preferred_pronoun: string | null
+    citizenship?: string | null
     dob: string | null
   } | null
   marriage?: {
@@ -313,6 +315,7 @@ export interface DesignSheetRow {
   client_phone?: string | null
   client_email?: string | null
   client_pronouns?: string | null
+  client_citizenship?: string | null
   street?: string | null
   city?: string | null
   state?: string | null
@@ -324,6 +327,7 @@ export interface DesignSheetRow {
   spouse_phone?: string | null
   spouse_email?: string | null
   spouse_pronouns?: string | null
+  spouse_citizenship?: string | null
   plan_type?: string | null
   is_joint?: boolean | null
   trust_name?: string | null
