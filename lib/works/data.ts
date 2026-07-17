@@ -3,6 +3,7 @@ import { parseSkillMarkdown, type ParsedSkillMarkdown, type WorkSkillMetadata, t
 
 export type WorkSkillRow = {
   id: string
+  slug?: string | null
   owner_id: string | null
   name: string
   description: string

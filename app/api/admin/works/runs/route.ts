@@ -4,6 +4,11 @@ import { callAnthropic } from '@/lib/anthropic'
 import { resolveFirmModel } from '@/lib/firmModels'
 import { worksDb } from '@/lib/works/data'
 import { canLaunchSkill } from '@/lib/works/run'
+import { buildDraftPayload } from '@/lib/buildDraftPayload'
+import { assemblePmpsData } from '@/lib/pmps/assemble'
+import { generatePmpsArtifacts } from '@/lib/pmps/generate'
+import type { PmpsRunInput } from '@/lib/pmps/types'
+import { artifactClientShape, storeRunArtifacts } from '@/lib/works/artifacts'
 
 async function loadMatterSnapshot(matterId: string | null) {
   if (!matterId) return null
@@ -54,6 +59,33 @@ export async function POST(req: Request) {
   if (runError || !run) return NextResponse.json({ error: runError?.message ?? 'Unable to create run' }, { status: 500 })
 
   try {
+    if (skill.slug === 'prepare-pmps-package') {
+      if (!matterId) throw new Error('A matter is required to prepare a PMPS package.')
+      const payload = await buildDraftPayload(matterId)
+      const { data: details } = await db.from('matter_details').select('legal_plan, flat_fee_amount').eq('client_id', matterId).maybeSingle()
+      const assembly = assemblePmpsData(payload, (requestedInput ?? {}) as PmpsRunInput, {
+        legalPlan: typeof details?.legal_plan === 'string' ? details.legal_plan : null,
+        flatFee: typeof details?.flat_fee_amount === 'number' ? details.flat_fee_amount : Number(details?.flat_fee_amount) || null,
+      })
+      if (!assembly.data) {
+        const message = assembly.preflight.map(issue => issue.message).join('\n')
+        const { data: blocked } = await db.from('work_runs').update({
+          status: 'failed', error_message: 'PMPS preflight requires additional approved facts.', output_text: message,
+          input_snapshot: { ...inputSnapshot, preflight: assembly.preflight }, updated_at: new Date().toISOString(),
+        }).eq('id', run.id).select('*').single()
+        return NextResponse.json({ error: 'PMPS preflight requires additional approved facts.', preflight: assembly.preflight, run: blocked }, { status: 422 })
+      }
+      const generated = await generatePmpsArtifacts(assembly.data, assembly.selectedKinds)
+      const stored = await storeRunArtifacts(run.id, generated)
+      const output = `Generated ${stored.length} isolated PMPS draft${stored.length === 1 ? '' : 's'} for attorney review. Confirm this run to save them to Matter Documents / Intake.`
+      const { data: completed, error } = await db.from('work_runs').update({
+        status: 'awaiting_confirmation', output_text: output,
+        input_snapshot: { ...inputSnapshot, pmps: { planStructure: assembly.data.planStructure, grossEstate: assembly.data.grossEstate, artifactKinds: assembly.selectedKinds } },
+        updated_at: new Date().toISOString(),
+      }).eq('id', run.id).select('*').single()
+      if (error) throw new Error(error.message)
+      return NextResponse.json({ run: completed, artifacts: stored.map(artifactClientShape), preflight: [] }, { status: 201 })
+    }
     const model = await resolveFirmModel('assistant')
     const response = await callAnthropic({
       model,

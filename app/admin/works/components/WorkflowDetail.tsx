@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, Copy, FileText, MessageSquare, Play, ShieldCheck, X } from 'lucide-react'
+import { Check, Copy, Download, FileText, MessageSquare, Play, ShieldCheck, X } from 'lucide-react'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,16 @@ interface RunState {
   output_text?: string | null
   status: string
 }
+
+interface RunArtifact {
+  id: string
+  filename: string
+  size: number
+  status: string
+  downloadUrl: string
+}
+
+interface PreflightIssue { field: string; message: string }
 
 interface WorkflowDetailProps {
   skill: WorkSkill | null
@@ -30,6 +40,12 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
   const [runLoading, setRunLoading] = useState(false)
   const [runOutput, setRunOutput] = useState<RunState | null>(null)
   const [runPanelOpen, setRunPanelOpen] = useState(false)
+  const [runArtifacts, setRunArtifacts] = useState<RunArtifact[]>([])
+  const [preflight, setPreflight] = useState<PreflightIssue[]>([])
+  const [pmpsHasLegalPlan, setPmpsHasLegalPlan] = useState('')
+  const [pmpsLegalPlanName, setPmpsLegalPlanName] = useState('')
+  const [pmpsFlatFee, setPmpsFlatFee] = useState('')
+  const [pmpsPlanStructure, setPmpsPlanStructure] = useState('')
 
   if (!skill) {
     return (
@@ -81,25 +97,44 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
     const response = await fetch('/api/admin/works/runs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skillId: skill.id, matterId: runMatterId.trim() || null }),
+      body: JSON.stringify({
+        skillId: skill.id,
+        matterId: runMatterId.trim() || null,
+        ...(skill.slug === 'prepare-pmps-package' ? { input: {
+          ...(pmpsHasLegalPlan ? { hasLegalPlan: pmpsHasLegalPlan === 'yes' } : {}),
+          ...(pmpsLegalPlanName.trim() ? { legalPlanName: pmpsLegalPlanName.trim() } : {}),
+          ...(pmpsFlatFee ? { flatFee: Number(pmpsFlatFee) } : {}),
+          ...(pmpsPlanStructure ? { planStructure: pmpsPlanStructure } : {}),
+        } } : {}),
+      }),
     })
-    const body = await response.json().catch(() => ({})) as { run?: RunState; error?: string }
-    if (!response.ok) toast.error(body.error ?? 'Unable to run skill')
-    else if (body.run) setRunOutput(body.run)
+    const body = await response.json().catch(() => ({})) as { run?: RunState; artifacts?: RunArtifact[]; preflight?: PreflightIssue[]; error?: string }
+    setPreflight(body.preflight ?? [])
+    setRunArtifacts(body.artifacts ?? [])
+    if (!response.ok) {
+      if (body.run) setRunOutput(body.run)
+      toast.error(body.error ?? 'Unable to run skill')
+    } else if (body.run) setRunOutput(body.run)
     setRunLoading(false)
   }
 
   async function confirmRun() {
     if (!runOutput) return
     const response = await fetch(`/api/admin/works/runs/${runOutput.id}/confirm`, { method: 'POST' })
-    if (response.ok) setRunOutput(prev => prev ? { ...prev, status: 'confirmed' } : prev)
+    if (response.ok) {
+      setRunOutput(prev => prev ? { ...prev, status: 'confirmed' } : prev)
+      setRunArtifacts(prev => prev.map(artifact => ({ ...artifact, status: 'promoted' })))
+    }
     else toast.error('Unable to confirm run')
   }
 
   async function cancelRun() {
     if (!runOutput) return
     const response = await fetch(`/api/admin/works/runs/${runOutput.id}/cancel`, { method: 'POST' })
-    if (response.ok) setRunOutput(prev => prev ? { ...prev, status: 'cancelled' } : prev)
+    if (response.ok) {
+      setRunOutput(prev => prev ? { ...prev, status: 'cancelled' } : prev)
+      setRunArtifacts([])
+    }
     else toast.error('Unable to cancel run')
   }
 
@@ -194,6 +229,30 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
               className="mt-1"
             />
           </label>
+          {skill.slug === 'prepare-pmps-package' && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium">Legal plan
+                <select className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={pmpsHasLegalPlan} onChange={event => setPmpsHasLegalPlan(event.target.value)}>
+                  <option value="">Use approved matter value</option><option value="yes">Yes</option><option value="no">No</option>
+                </select>
+              </label>
+              <label className="text-xs font-medium">Legal-plan name (if applicable)
+                <Input className="mt-1" value={pmpsLegalPlanName} onChange={event => setPmpsLegalPlanName(event.target.value)} placeholder="MetLife, ARAG…" />
+              </label>
+              <label className="text-xs font-medium">Approved flat fee (if no plan)
+                <Input className="mt-1" type="number" min="0" step="1" value={pmpsFlatFee} onChange={event => setPmpsFlatFee(event.target.value)} placeholder="3500" />
+              </label>
+              <label className="text-xs font-medium">Approved plan structure
+                <select className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={pmpsPlanStructure} onChange={event => setPmpsPlanStructure(event.target.value)}>
+                  <option value="">Select…</option>
+                  <option value="joint_outright">Joint — outright</option>
+                  <option value="joint_disclaimer">Joint — disclaimer</option>
+                  <option value="separate_clayton">Separate — Clayton</option>
+                  <option value="individual_single">Individual</option>
+                </select>
+              </label>
+            </div>
+          )}
           <Button type="button" size="sm" className="mt-3" disabled={runLoading} onClick={() => void launchRun()}>
             {runLoading ? 'Running…' : 'Run skill'}
           </Button>
@@ -207,6 +266,18 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
             {runOutput.status === 'awaiting_confirmation' && <ShieldCheck className="h-4 w-4 text-amber-600" />}
           </div>
           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs leading-5">{runOutput.output_text ?? 'No output'}</pre>
+          {preflight.length > 0 && (
+            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+              <p className="font-semibold">Required before generation</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">{preflight.map(issue => <li key={`${issue.field}-${issue.message}`}>{issue.message}</li>)}</ul>
+            </div>
+          )}
+          {runArtifacts.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between"><p className="text-xs font-semibold">Generated drafts</p><Button asChild type="button" size="sm" variant="outline"><a href={`/api/admin/works/runs/${runOutput.id}/artifacts`}><Download className="h-3.5 w-3.5" /> Download ZIP</a></Button></div>
+              {runArtifacts.map(artifact => <div key={artifact.id} className="flex items-center justify-between rounded border p-2 text-xs"><span>{artifact.filename} · {(artifact.size / 1024).toFixed(1)} KB</span><Button asChild type="button" size="sm" variant="ghost"><a href={artifact.downloadUrl}><Download className="h-3.5 w-3.5" /> Download</a></Button></div>)}
+            </div>
+          )}
           {runOutput.status === 'awaiting_confirmation' && (
             <div className="mt-3 flex gap-2">
               <Button type="button" size="sm" onClick={() => void confirmRun()}>
@@ -216,6 +287,9 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
                 <X className="h-3.5 w-3.5" /> Cancel
               </Button>
             </div>
+          )}
+          {runOutput.status === 'failed' && preflight.length > 0 && (
+            <Button type="button" size="sm" className="mt-3" onClick={() => setRunOutput(null)}>Edit inputs and retry</Button>
           )}
         </div>
       )}

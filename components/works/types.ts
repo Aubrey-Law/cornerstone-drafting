@@ -2,6 +2,7 @@ import { parseSkillMarkdown, type WorkTableColumn } from '@/lib/works/skill'
 
 export interface WorkSkill {
   id: string
+  slug?: string | null
   name: string
   description: string
   version: string
