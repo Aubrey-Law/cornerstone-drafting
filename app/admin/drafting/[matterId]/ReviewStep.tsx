@@ -5,13 +5,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
+  BookOpen,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Combine,
   Download,
   Eye,
   FileText,
   FileType2,
   Loader2,
+  Maximize2,
+  Minimize2,
   Send,
   Sparkles,
   Trash2,
@@ -33,6 +38,14 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   deleteDocument,
@@ -98,6 +111,8 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string; quote?: string | null } | null>(null)
   const [assistantOpen, setAssistantOpen] = useState(true)
+  const [maximized, setMaximized] = useState(false)
+  const [assistantWidth, setAssistantWidth] = useState(340)
   const [scrollToViewer, setScrollToViewer] = useState(false)
   const viewerSectionRef = useRef<HTMLDivElement>(null)
   const pdfUploadRef = useRef<HTMLInputElement>(null)
@@ -110,6 +125,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     }
     setViewerDoc({ id: doc.id, name: doc.name, quote: quote ?? null })
     setAssistantOpen(true)
+    setScrollToViewer(true)
   }
 
   const openCitationInViewer = (payload: { documentId: string; documentName: string; quote: string }) => {
@@ -123,10 +139,51 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   }
 
   useEffect(() => {
-    if (!scrollToViewer || !viewerDoc) return
+    // Don't fight the browser scroll while the viewer fills the screen.
+    if (!scrollToViewer || !viewerDoc || maximized) {
+      if (scrollToViewer) setScrollToViewer(false)
+      return
+    }
     viewerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setScrollToViewer(false)
-  }, [scrollToViewer, viewerDoc])
+  }, [scrollToViewer, viewerDoc, maximized])
+
+  // Escape exits fullscreen; reset the flag whenever the viewer closes.
+  useEffect(() => {
+    if (!maximized) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMaximized(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [maximized])
+
+  const closeViewer = () => {
+    setViewerDoc(null)
+    setMaximized(false)
+  }
+
+  // Drag the divider between the document and the assistant (lg screens only).
+  const startAssistantResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = assistantWidth
+    const onMove = (ev: PointerEvent) => {
+      // Dragging left (negative delta) widens the assistant panel.
+      const next = Math.min(560, Math.max(280, startWidth - (ev.clientX - startX)))
+      setAssistantWidth(next)
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const nudgeAssistantWidth = (delta: number) => {
+    setAssistantWidth(prev => Math.min(560, Math.max(280, prev + delta)))
+  }
 
   // Optimistic review-state overrides keyed by document id (ISO string when
   // reviewed, null when cleared) so the checkbox + gate update before refresh.
@@ -332,6 +389,24 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     }
   }
 
+  // In-viewer draft switching walks the Word drafts (the only kind the in-app
+  // viewer renders); PDFs open in a new tab instead.
+  const wordDrafts = recentDrafts.filter(d => isWordDocument(d.name))
+  const viewerDraft = viewerDoc ? recentDrafts.find(d => d.id === viewerDoc.id) ?? null : null
+  const viewerIndex = viewerDoc ? wordDrafts.findIndex(d => d.id === viewerDoc.id) : -1
+
+  const switchToDraft = (id: string) => {
+    const target = wordDrafts.find(d => d.id === id)
+    if (target) setViewerDoc({ id: target.id, name: target.name, quote: null })
+  }
+
+  const stepDraft = (dir: 1 | -1) => {
+    if (viewerIndex < 0 || wordDrafts.length === 0) return
+    const next = (viewerIndex + dir + wordDrafts.length) % wordDrafts.length
+    const target = wordDrafts[next]
+    if (target) setViewerDoc({ id: target.id, name: target.name, quote: null })
+  }
+
   return (
     <div className="guided-interview space-y-4">
       <GuidedIntroCard
@@ -472,14 +547,19 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                     Reviewed
                   </label>
                   {isWord ? (
-                    <Button
-                      size="sm"
-                      variant={isOpen ? 'secondary' : 'outline'}
-                      className="h-8 gap-1.5 text-xs"
-                      onClick={() => openInApp(doc)}
-                    >
-                      <Sparkles className="h-3.5 w-3.5" /> {isOpen ? 'Hide viewer' : 'Open in app'}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant={isOpen ? 'secondary' : 'outline'}
+                          className="h-8 gap-1.5 text-xs"
+                          onClick={() => openInApp(doc)}
+                        >
+                          <BookOpen className="h-3.5 w-3.5" /> {isOpen ? 'Hide viewer' : 'Review in app'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Open the in-app viewer to read, redline, and step through tracked changes.</TooltipContent>
+                    </Tooltip>
                   ) : (
                     <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => void openDocument(doc.id, 'view', doc.name)}>
                       <Eye className="h-3.5 w-3.5" /> View
@@ -578,49 +658,144 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
 
       {/* In-app document review — viewer + assistant side-by-side below drafts list */}
       {viewerDoc ? (
-        <section ref={viewerSectionRef} className="overflow-hidden rounded-lg border border-border bg-card">
+        <section
+          ref={viewerSectionRef}
+          className={
+            maximized
+              ? 'fixed inset-0 z-50 flex flex-col overflow-hidden border-0 bg-card'
+              : 'overflow-hidden rounded-lg border border-border bg-card'
+          }
+        >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-            <p className="text-xs text-muted-foreground">
-              Reviewing <span className="font-medium text-foreground">{viewerDoc.name}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <span className="shrink-0 text-xs text-muted-foreground">Reviewing</span>
+              {wordDrafts.length > 1 ? (
+                <>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => stepDraft(-1)}
+                    aria-label="Previous draft"
+                    title="Previous draft"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Select value={viewerDoc.id} onValueChange={switchToDraft}>
+                    <SelectTrigger className="h-7 max-w-[420px] min-w-0 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wordDrafts.map(d => (
+                        <SelectItem key={d.id} value={d.id} className="text-xs">
+                          {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => stepDraft(1)}
+                    aria-label="Next draft"
+                    title="Next draft"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <span className="truncate text-xs font-medium text-foreground">{viewerDoc.name}</span>
+              )}
               {viewerDoc.quote ? (
-                <span className="text-muted-foreground"> · citation highlight active</span>
+                <span className="shrink-0 text-xs text-muted-foreground"> · citation highlight active</span>
               ) : null}
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant={assistantOpen ? 'secondary' : 'outline'}
-              className="h-7 gap-1.5 text-[11px]"
-              onClick={() => setAssistantOpen(open => !open)}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {assistantOpen ? 'Hide assistant' : 'Show assistant'}
-            </Button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={assistantOpen ? 'secondary' : 'outline'}
+                className="h-7 gap-1.5 text-[11px]"
+                onClick={() => setAssistantOpen(open => !open)}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {assistantOpen ? 'Hide assistant' : 'Show assistant'}
+              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7"
+                    onClick={() => setMaximized(m => !m)}
+                    aria-label={maximized ? 'Exit fullscreen' : 'Maximize viewer'}
+                  >
+                    {maximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{maximized ? 'Exit fullscreen (Esc)' : 'Maximize viewer'}</TooltipContent>
+              </Tooltip>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-[11px]"
+                onClick={closeViewer}
+              >
+                Done
+              </Button>
+            </div>
           </div>
           <div
             className={
-              assistantOpen
-                ? 'grid h-[min(78vh,920px)] min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px]'
-                : 'h-[min(78vh,920px)] min-h-[520px]'
+              maximized
+                ? 'flex min-h-0 flex-1 flex-col lg:flex-row'
+                : assistantOpen
+                  ? 'flex h-[min(78vh,920px)] min-h-[520px] flex-col lg:flex-row'
+                  : 'flex h-[min(78vh,920px)] min-h-[520px] flex-col'
             }
           >
-            <div className="min-h-0 min-w-0 border-r border-border">
+            <div className="min-h-0 min-w-0 flex-1 border-b border-border lg:border-b-0 lg:border-r">
               <DocxViewerPanel
                 documentId={viewerDoc.id}
                 documentName={viewerDoc.name}
                 quote={viewerDoc.quote}
-                onClose={() => setViewerDoc(null)}
+                maximized={maximized}
+                onConvert={viewerDraft ? () => void handleConvertPdf(viewerDraft) : undefined}
+                converting={viewerDraft ? convertingId === viewerDraft.id : false}
+                onClose={closeViewer}
                 onMutated={() => router.refresh()}
               />
             </div>
             {assistantOpen ? (
-              <aside className="min-h-[280px] border-t border-border lg:min-h-0 lg:border-t-0">
-                <MatterAssistantPanel
-                  matterId={matterId}
-                  documentIds={[viewerDoc.id, ...recentDrafts.map(d => d.id).filter(id => id !== viewerDoc.id)]}
-                  onClose={() => setAssistantOpen(false)}
+              <>
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize assistant panel"
+                  tabIndex={0}
+                  onPointerDown={startAssistantResize}
+                  onKeyDown={e => {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); nudgeAssistantWidth(24) }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); nudgeAssistantWidth(-24) }
+                  }}
+                  className="hidden w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-accent focus:bg-accent focus:outline-none lg:block"
                 />
-              </aside>
+                <aside
+                  className="min-h-[280px] w-full shrink-0 border-t border-border lg:min-h-0 lg:w-[var(--assistant-w)] lg:border-t-0"
+                  style={{ ['--assistant-w' as string]: `${assistantWidth}px` }}
+                >
+                  <MatterAssistantPanel
+                    matterId={matterId}
+                    documentIds={[viewerDoc.id, ...recentDrafts.map(d => d.id).filter(id => id !== viewerDoc.id)]}
+                    onClose={() => setAssistantOpen(false)}
+                  />
+                </aside>
+              </>
             ) : null}
           </div>
         </section>

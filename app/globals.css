@@ -63,4 +63,12 @@
     background-color: rgba(250, 204, 21, 0.35) !important;
     outline: 1px solid rgba(250, 204, 21, 0.55);
   }
+
+  /* Transient pulse when a tracked change is focused via Prev/Next or a click. */
+  .docx-host .docx-change-active {
+    background-color: rgba(59, 130, 246, 0.28) !important;
+    outline: 2px solid rgba(59, 130, 246, 0.6);
+    border-radius: 2px;
+    transition: background-color 0.3s ease, outline-color 0.3s ease;
+  }
 }
