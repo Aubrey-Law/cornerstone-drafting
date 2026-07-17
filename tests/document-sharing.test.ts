@@ -65,6 +65,14 @@ describe('document sharing route wiring', () => {
     expect(patchRoute).toContain("code: 'word_doc_not_shareable'")
   })
 
+  it('keeps firm sharing PDF-only and applies generated PDF review gates', () => {
+    expect(patchRoute).toContain('canPromoteDraft')
+    expect(patchRoute).toContain('isPdfDocument')
+    expect(patchRoute).toContain("code: 'pdf_required'")
+    expect(patchRoute).toContain("code: 'generated_pdf_has_markers'")
+    expect(patchRoute).toContain("code: 'generated_pdf_not_reviewed'")
+  })
+
   it('requires PDF for admin uploads to share folders', () => {
     expect(uploadRoute).toContain('pdfRequiredUploadReason')
     expect(uploadRoute).toContain("code: 'pdf_required'")

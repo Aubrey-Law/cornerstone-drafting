@@ -10,6 +10,8 @@ import {
   isAdminUser,
   userCanReadDocument,
 } from '@/lib/documentSecurity'
+import { canPromoteDraft } from '@/lib/drafting/reviewGate'
+import { isPdfDocument } from '@/lib/documents'
 import { isFirmSharedFolder, wordDocShareBlockReason } from '@/lib/documentSharing'
 import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
 
@@ -103,7 +105,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const { data: existing, error: loadError } = await sb
     .from('matter_documents')
-    .select('id, matter_id, folder, name, marker_count, reviewed_at, reviewed_by')
+    .select('id, matter_id, folder, name, content_type, generation_id, marker_count, missing_count, reviewed_at, reviewed_by')
     .eq('id', id)
     .single()
   if (loadError || !existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -183,6 +185,38 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     )
   }
 
+  if (isFirmSharedFolder(toFolder) && !isPdfDocument(existing.name, existing.content_type)) {
+    return NextResponse.json(
+      { error: 'Only PDF files can be shared with clients', code: 'pdf_required' },
+      { status: 409 },
+    )
+  }
+
+  if (isFirmSharedFolder(toFolder) && existing.generation_id) {
+    const gate = canPromoteDraft({
+      markerCount: existing.marker_count ?? null,
+      reviewedAt: existing.reviewed_at ?? null,
+    })
+    if (!gate.ok) {
+      if (gate.reason === 'markers') {
+        return NextResponse.json(
+          {
+            error: 'Generated PDFs with unresolved markers cannot be shared',
+            code: 'generated_pdf_has_markers',
+          },
+          { status: 409 },
+        )
+      }
+      return NextResponse.json(
+        {
+          error: 'Generated PDFs must be marked reviewed before sharing',
+          code: 'generated_pdf_not_reviewed',
+        },
+        { status: 409 },
+      )
+    }
+  }
+
   // Server-side review-gate: any move from an internal-only folder
   // (draft, meeting-notes) to a client-visible folder requires an explicit
   // confirmation flag. The UI shows a modal that posts confirmed=true; a
@@ -193,9 +227,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       { status: 409 },
     )
   }
-
-  // Hard marker gate removed — attorneys may email or share any document.
-  // Review tracking is separate from portal visibility (see reviewed PATCH).
 
   const updatePayload: { folder: DocFolder } = { folder: toFolder }
 

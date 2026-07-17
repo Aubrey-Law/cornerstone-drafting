@@ -20,8 +20,10 @@ describe('matter documents tab', () => {
     const source = readFileSync(tabPath, 'utf8')
 
     for (const helper of [
+      'buildSelectedDocumentEligibility',
       'deleteDocument',
       'downloadDocumentsZip',
+      'getDocumentAuditEvents',
       'getDocumentViewerUrl',
       'getDocumentUrl',
       'renameDocument',
@@ -34,22 +36,36 @@ describe('matter documents tab', () => {
     for (const label of [
       'Upload',
       'Download selected',
+      'Bulk move',
+      'Share PDFs',
+      'Unshare',
+      'Combine Word documents',
+      'Preview PDF',
       'View',
       'Download',
       'Rename',
       'Move',
+      'Share PDF',
+      'Audit',
       'Delete',
-      'Client visible',
-      'Internal',
-      'Reviewed',
-      'Markers',
+      'Internal drafts',
+      'Firm-shared PDFs',
+      'Client uploads',
+      'Portal uploads need review',
+      'Marker issues',
       'Superseded',
+      'Versioned',
     ]) {
       expect(source).toContain(label)
     }
 
-    for (const folder of ['draft', 'review', 'final', 'signed', 'client', 'intake', 'meeting-notes']) {
-      expect(source).toContain(`value: '${folder}'`)
-    }
+    expect(source).toContain('DocumentStatusBadges')
+    expect(source).toContain('DocumentPreviewDialog')
+    expect(source).toContain('PromoteDocumentDialog')
+    expect(source).toContain('CombineWordDraftsDialog')
+    expect(source).toContain('unreviewedUploadCounts')
+    expect(source).toContain('onReviewPortalUploads')
+    expect(source).not.toContain('function statusBadges')
+    expect(source).not.toContain('const INTERNAL_FOLDERS')
   })
 })
