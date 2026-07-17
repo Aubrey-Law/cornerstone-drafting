@@ -92,6 +92,7 @@ import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { MatterOverviewSummaryCards } from './MatterOverviewSummaryCards'
 import { MatterPeopleTab } from './MatterPeopleTab'
+import { MatterDocumentsTab } from './MatterDocumentsTab'
 import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { useMatterAssets } from './useMatterAssets'
@@ -155,13 +156,6 @@ type SmsMessage = {
   to_number: string | null
   created_at: string
   actor_name: string | null
-}
-
-function formatBytes(size: number) {
-  if (!Number.isFinite(size) || size <= 0) return '—'
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export default function MatterDetailClient(props: MatterDetailClientProps) {
@@ -738,17 +732,6 @@ function MatterDetailClientInner({
     void loadDocuments()
   }, [loadDocuments])
 
-  const docsByFolder = useMemo(() => {
-    const map = new Map<string, MatterDocument[]>()
-    for (const doc of documents) {
-      const folder = doc.folder || 'other'
-      const list = map.get(folder) ?? []
-      list.push(doc)
-      map.set(folder, list)
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [documents])
-
   const handleStageChange = async (stage: MatterStage) => {
     if (!token || stage === matter.stage) return
     setStageSaving(true)
@@ -1161,37 +1144,12 @@ function MatterDetailClientInner({
           />
 
           <TabsContent value="documents" className="space-y-4">
-            {docsLoading ? (
-              <p className="text-xs text-muted-foreground">Loading documents…</p>
-            ) : docsByFolder.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border px-6 py-12 text-center text-xs text-muted-foreground">
-                No documents for this matter yet.
-              </div>
-            ) : (
-              docsByFolder.map(([folder, docs]) => (
-                <div key={folder} className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {folder}
-                  </h3>
-                  <ul className="divide-y divide-border rounded-md border border-border">
-                    {docs.map(doc => (
-                      <li
-                        key={doc.id}
-                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-                      >
-                        <span className="font-medium">{doc.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatBytes(doc.size)}
-                          {doc.created_at
-                            ? ` · ${new Date(doc.created_at).toLocaleDateString()}`
-                            : ''}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
-            )}
+            <MatterDocumentsTab
+              matterId={matterId}
+              documents={documents}
+              loading={docsLoading}
+              onDocumentsChanged={loadDocuments}
+            />
           </TabsContent>
 
           <MatterCommunicationsTab

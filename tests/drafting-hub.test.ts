@@ -169,6 +169,16 @@ describe('drafting hub and workspace', () => {
     expect(workspace).toContain('Do not override an existing localStorage/URL choice')
   })
 
+  it('offers a direct path back to the matter from the drafting workspace', () => {
+    const workspace = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/DraftingWorkspace.tsx'),
+      'utf8',
+    )
+
+    expect(workspace).toContain('href={`/admin/matters/${matterId}`}')
+    expect(workspace).toContain('Back to matter')
+  })
+
   it('prefetches drafting workspace routes on hub hover', () => {
     const kanban = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineKanban.tsx'), 'utf8')
     const table = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'), 'utf8')

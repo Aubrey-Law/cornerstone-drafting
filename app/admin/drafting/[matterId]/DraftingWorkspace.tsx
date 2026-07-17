@@ -219,6 +219,12 @@ export default function DraftingWorkspace({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="text-[11px]">Drafting workspace</Badge>
+            <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground" asChild>
+              <Link href={`/admin/matters/${matterId}`}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to matter
+              </Link>
+            </Button>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
               <Link href={`/admin/drafting/${matterId}/design`}>
                 <FileText className="h-3.5 w-3.5" />
