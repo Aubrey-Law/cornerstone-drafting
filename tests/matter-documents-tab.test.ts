@@ -68,4 +68,15 @@ describe('matter documents tab', () => {
     expect(source).not.toContain('function statusBadges')
     expect(source).not.toContain('const INTERNAL_FOLDERS')
   })
+
+  it('shows folders as the primary workspace instead of an all-folder document filter', () => {
+    const source = readFileSync(tabPath, 'utf8')
+
+    expect(source).toContain('activeFolder')
+    expect(source).toContain('folderSummaries')
+    expect(source).toContain('Select a folder to see its documents')
+    expect(source).toContain('No documents in this folder')
+    expect(source).toContain('Selected folder')
+    expect(source).not.toContain('<SelectItem value="all">All folders</SelectItem>')
+  })
 })
