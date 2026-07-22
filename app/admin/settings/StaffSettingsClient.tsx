@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
+import { SchedulingSettingsSection } from './SchedulingSettingsSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { TemplateCenter } from './TemplateCenter'
 
@@ -31,6 +32,7 @@ type Tab =
   | 'connectors'
   | 'outlook'
   | 'email'
+  | 'scheduling'
   | 'sla'
   | 'ai-usage'
   | 'templates'
@@ -88,6 +90,7 @@ export function StaffSettingsClient({
     if (
       t === 'outlook' ||
       t === 'email' ||
+      t === 'scheduling' ||
       t === 'models' ||
       t === 'api-keys' ||
       t === 'connectors' ||
@@ -330,6 +333,7 @@ export function StaffSettingsClient({
             ['connectors', 'Connectors'],
             ['outlook', 'Outlook'],
             ['email', 'Email'],
+            ['scheduling', 'Scheduling'],
             ...(isAdministrator ? [['templates', 'Templates'] as const] : []),
             ['ai-usage', 'AI Usage'],
             ['sla', 'Stage SLA'],
@@ -651,6 +655,8 @@ export function StaffSettingsClient({
       )}
 
       {tab === 'email' && <EmailSettingsSection />}
+
+      {tab === 'scheduling' && <SchedulingSettingsSection />}
 
       {tab === 'templates' && isAdministrator && <TemplateCenter currentUserId={currentUserId} />}
 

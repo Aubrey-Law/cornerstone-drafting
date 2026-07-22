@@ -59,6 +59,16 @@ export default async function PortalDashboardPage() {
             </Button>
           </div>
         </section>
+
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h2 className="text-sm font-semibold text-foreground">Schedule an appointment</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Book time with the firm — only open times on our calendar are shown.
+          </p>
+          <Button asChild size="sm" className="mt-4">
+            <Link href="/schedule">Find a time</Link>
+          </Button>
+        </section>
       </div>
     </div>
   )

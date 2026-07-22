@@ -10,7 +10,7 @@ const ADMIN_ROLES = ['attorney', 'admin']
 const CLIENT_ROLE = 'client'
 
 const ADMIN_PREFIXES = ['/admin', '/api/admin', '/api/drafting']
-const PORTAL_PATHS = ['/dashboard', '/documents', '/messages', '/intake']
+const PORTAL_PATHS = ['/dashboard', '/documents', '/messages', '/intake', '/schedule']
 /** Public client onboarding — must not require an existing session. */
 const PUBLIC_AUTH_PATHS = ['/intake/auth', '/api/intake/signup']
 const SESSION_REQUIRED_PREFIXES = [
