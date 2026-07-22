@@ -135,6 +135,7 @@ const TYPE: AppointmentType = {
   active: true,
   public: true,
   sort: 1,
+  customWeeklyHours: null,
 }
 
 // Monday 2026-08-10 10:00 ET = 14:00 UTC — inside mon 09:00–17:00.
@@ -216,6 +217,26 @@ describe('bookAppointment', () => {
     await expect(
       bookAppointment({ ...bookingInput(), startIso: '2026-08-09T14:00:00.000Z' }), // Sunday
     ).rejects.toThrow(SlotTakenError)
+  })
+
+  it("rejects a slot outside the type's custom hours even when general hours allow it", async () => {
+    const tuesdayOnly: AppointmentType = {
+      ...TYPE,
+      customWeeklyHours: {
+        sun: [], mon: [], tue: [{ start: '09:00', end: '17:00' }], wed: [], thu: [], fri: [], sat: [],
+      },
+    }
+    // Monday 10:00 ET — inside general hours, outside the type's Tuesday-only hours.
+    await expect(
+      bookAppointment({ ...bookingInput(), type: tuesdayOnly }),
+    ).rejects.toThrow(SlotTakenError)
+    // Tuesday 10:00 ET books fine.
+    await bookAppointment({
+      ...bookingInput(),
+      type: tuesdayOnly,
+      startIso: '2026-08-11T14:00:00.000Z',
+    })
+    expect(state.inserts.find(i => i.table === 'appointments')).toBeDefined()
   })
 
   it('maps the exclusion-constraint race to SlotTakenError', async () => {

@@ -5,7 +5,12 @@ import {
   zonedTimeToUtcMs,
   type ComputeSlotsInput,
 } from '@/lib/appointments/availability'
-import { emptyWeeklyHours, type WeeklyHours } from '@/lib/appointments/types'
+import {
+  effectiveWeeklyHours,
+  emptyWeeklyHours,
+  sanitizeCustomWeeklyHours,
+  type WeeklyHours,
+} from '@/lib/appointments/types'
 
 const TZ = 'America/New_York'
 
@@ -193,5 +198,47 @@ describe('isSlotAvailable', () => {
 
   it('rejects garbage input', () => {
     expect(isSlotAvailable('not-a-date', check)).toBe(false)
+  })
+})
+
+describe('per-type custom hours', () => {
+  const general = hours({ mon: [{ start: '09:00', end: '12:00' }] })
+
+  it('effectiveWeeklyHours falls back to general hours', () => {
+    expect(effectiveWeeklyHours(general, { customWeeklyHours: null })).toBe(general)
+  })
+
+  it('effectiveWeeklyHours prefers the type override', () => {
+    const custom = hours({ tue: [{ start: '13:00', end: '15:00' }] })
+    expect(effectiveWeeklyHours(general, { customWeeklyHours: custom })).toBe(custom)
+  })
+
+  it('a type limited to Tuesday offers no Monday slots', () => {
+    const custom = hours({ tue: [{ start: '09:00', end: '12:00' }] })
+    // Same Monday range as baseInput — general hours would offer 6 slots.
+    expect(computeSlots(baseInput({ weeklyHours: custom }))).toHaveLength(0)
+    // The following Tuesday is offered.
+    const tuesday = computeSlots(
+      baseInput({
+        weeklyHours: custom,
+        rangeStart: new Date('2026-07-21T00:00:00Z'),
+        rangeEnd: new Date('2026-07-22T00:00:00Z'),
+      }),
+    )
+    expect(tuesday[0]).toBe('2026-07-21T13:00:00.000Z') // 9:00 ET Tue
+  })
+
+  it('sanitizeCustomWeeklyHours parses valid hours', () => {
+    const parsed = sanitizeCustomWeeklyHours({ sat: [{ start: '10:00', end: '13:00' }] })
+    expect(parsed).not.toBeNull()
+    expect(parsed?.sat).toEqual([{ start: '10:00', end: '13:00' }])
+    expect(parsed?.mon).toEqual([])
+  })
+
+  it('sanitizeCustomWeeklyHours maps null, garbage, and windowless values to null', () => {
+    expect(sanitizeCustomWeeklyHours(null)).toBeNull()
+    expect(sanitizeCustomWeeklyHours('9-5')).toBeNull()
+    expect(sanitizeCustomWeeklyHours({})).toBeNull()
+    expect(sanitizeCustomWeeklyHours({ mon: [], tue: [{ start: 'noon', end: '15:00' }] })).toBeNull()
   })
 })

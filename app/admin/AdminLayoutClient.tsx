@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import {
   Briefcase,
   BookOpen,
+  CalendarDays,
   FilePenLine,
   LogOut,
   Menu,
@@ -65,6 +66,7 @@ const navItems: { href: string; label: string; icon: React.ElementType; exact?: 
   { href: '/admin/assistant', label: 'Assistant', icon: Sparkles },
   { href: '/admin/works', label: 'Library', icon: BookOpen },
   { href: '/admin/calls', label: 'Calls', icon: Phone },
+  { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 

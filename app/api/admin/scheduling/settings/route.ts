@@ -38,6 +38,7 @@ interface PutBody {
     active?: unknown
     public?: unknown
     sort?: unknown
+    customWeeklyHours?: unknown
   }>
 }
 
@@ -94,6 +95,9 @@ export async function PUT(req: NextRequest) {
         active: typeof t.active === 'boolean' ? t.active : undefined,
         public: typeof t.public === 'boolean' ? t.public : undefined,
         sort: intInRange(t.sort, 0, 999),
+        // Absent key = leave unchanged; null or an hours object = set/clear
+        // (updateAppointmentType sanitizes, mapping empty/invalid to null).
+        customWeeklyHours: 'customWeeklyHours' in t ? t.customWeeklyHours : undefined,
       })
     }
   }

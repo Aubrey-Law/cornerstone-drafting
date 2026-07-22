@@ -4,6 +4,7 @@ import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/g
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { hashManageToken, isManageTokenExpired } from '@/lib/appointments/manageTokens'
 import { getAppointmentTypeBySlug, getSchedulingSettings } from '@/lib/appointments/settings'
+import { effectiveWeeklyHours } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getCachedClaims } from '@/lib/supabaseServer'
 
@@ -69,7 +70,7 @@ export async function GET(req: Request) {
   try {
     const busy = await fetchAllBusy(new Date(from), new Date(to))
     const slots = computeSlots({
-      weeklyHours: settings.weeklyHours,
+      weeklyHours: effectiveWeeklyHours(settings.weeklyHours, type),
       timezone: settings.timezone,
       durationMinutes: type.durationMinutes,
       bufferMinutes: settings.bufferMinutes,

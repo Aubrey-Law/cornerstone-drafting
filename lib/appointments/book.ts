@@ -13,11 +13,12 @@ import {
 } from './graphEvents'
 import { createManageToken } from './manageTokens'
 import { getSchedulingSettings } from './settings'
-import type {
-  AppointmentRow,
-  AppointmentSource,
-  AppointmentType,
-  Interval,
+import {
+  effectiveWeeklyHours,
+  type AppointmentRow,
+  type AppointmentSource,
+  type AppointmentType,
+  type Interval,
 } from './types'
 
 type AdminClient = ReturnType<typeof getAdminClient>
@@ -271,7 +272,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     new Date(start + DAY_MS),
   )
   const available = isSlotAvailable(startIso, {
-    weeklyHours: settings.weeklyHours,
+    weeklyHours: effectiveWeeklyHours(settings.weeklyHours, input.type),
     timezone: settings.timezone,
     durationMinutes: input.type.durationMinutes,
     bufferMinutes: settings.bufferMinutes,
@@ -472,7 +473,7 @@ export async function rescheduleAppointment(
       ),
   )
   const available = isSlotAvailable(startIso, {
-    weeklyHours: settings.weeklyHours,
+    weeklyHours: effectiveWeeklyHours(settings.weeklyHours, type),
     timezone: settings.timezone,
     durationMinutes: type.durationMinutes,
     bufferMinutes: settings.bufferMinutes,
