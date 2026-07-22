@@ -34,6 +34,7 @@ export default function ManageBookingClient({ token }: { token: string }) {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [mode, setMode] = useState<'view' | 'reschedule'>('view')
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -142,17 +143,38 @@ export default function ManageBookingClient({ token }: { token: string }) {
           >
             {mode === 'reschedule' ? 'Keep current time' : 'Reschedule'}
           </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              if (window.confirm('Cancel this appointment?')) void act({ action: 'cancel' })
-            }}
-          >
-            Cancel appointment
-          </Button>
+          {confirmingCancel ? (
+            <>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={busy}
+                onClick={() => void act({ action: 'cancel' })}
+              >
+                {busy ? 'Cancelling…' : 'Yes, cancel it'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => setConfirmingCancel(false)}
+              >
+                Keep appointment
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              onClick={() => setConfirmingCancel(true)}
+            >
+              Cancel appointment
+            </Button>
+          )}
         </div>
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </div>
