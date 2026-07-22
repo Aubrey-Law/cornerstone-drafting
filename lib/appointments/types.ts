@@ -8,6 +8,8 @@ export interface SchedulingSettings {
   minNoticeHours: number
   horizonDays: number
   bufferMinutes: number
+  /** Hours before the start time to email a reminder; 0 disables reminders. */
+  reminderHoursBefore: number
 }
 
 /** Per-weekday bookable windows in the firm timezone ("HH:MM" 24h). */
@@ -65,6 +67,8 @@ export interface AppointmentRow {
   microsoft_event_id: string | null
   manage_token_hash: string | null
   manage_token_expires_at: string | null
+  reminder_sent_at: string | null
+  online_meeting_url: string | null
   source: AppointmentSource
   created_at: string
   updated_at: string
