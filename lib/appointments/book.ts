@@ -11,13 +11,15 @@ import {
   createCalendarEvent,
   rescheduleCalendarEvent,
 } from './graphEvents'
+import { formatWhen, locationLine } from './emailFormat'
 import { createManageToken } from './manageTokens'
 import { getSchedulingSettings } from './settings'
-import type {
-  AppointmentRow,
-  AppointmentSource,
-  AppointmentType,
-  Interval,
+import {
+  effectiveWeeklyHours,
+  type AppointmentRow,
+  type AppointmentSource,
+  type AppointmentType,
+  type Interval,
 } from './types'
 
 type AdminClient = ReturnType<typeof getAdminClient>
@@ -159,39 +161,6 @@ async function recordActivity(input: {
   }
 }
 
-function formatWhen(iso: string, timezone = 'America/New_York'): string {
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    }).format(new Date(iso))
-  } catch {
-    return iso
-  }
-}
-
-function locationLine(
-  type: AppointmentType,
-  officeAddress: string | null,
-  teamsUrl: string | null,
-): string {
-  switch (type.locationType) {
-    case 'teams':
-      return teamsUrl
-        ? `Microsoft Teams — <a href="${teamsUrl}" style="color:#1a6b72">Join the meeting</a>`
-        : 'Microsoft Teams (join link is in your calendar invite)'
-    case 'in_person':
-      return officeAddress ? `In person at ${officeAddress}` : 'In person at our office'
-    default:
-      return 'Phone call — we will call the number you provided'
-  }
-}
 
 async function sendConfirmationEmails(input: {
   type: AppointmentType
@@ -271,7 +240,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     new Date(start + DAY_MS),
   )
   const available = isSlotAvailable(startIso, {
-    weeklyHours: settings.weeklyHours,
+    weeklyHours: effectiveWeeklyHours(settings.weeklyHours, input.type),
     timezone: settings.timezone,
     durationMinutes: input.type.durationMinutes,
     bufferMinutes: settings.bufferMinutes,
@@ -362,7 +331,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     teamsUrl = event.onlineMeetingUrl
     await admin
       .from('appointments')
-      .update({ microsoft_event_id: event.eventId })
+      .update({ microsoft_event_id: event.eventId, online_meeting_url: teamsUrl })
       .eq('id', appointmentId)
   } catch (err) {
     console.error('[appointments] graph event create failed for', appointmentId, err)
@@ -472,7 +441,7 @@ export async function rescheduleAppointment(
       ),
   )
   const available = isSlotAvailable(startIso, {
-    weeklyHours: settings.weeklyHours,
+    weeklyHours: effectiveWeeklyHours(settings.weeklyHours, type),
     timezone: settings.timezone,
     durationMinutes: type.durationMinutes,
     bufferMinutes: settings.bufferMinutes,
@@ -485,7 +454,8 @@ export async function rescheduleAppointment(
 
   const { error } = await admin
     .from('appointments')
-    .update({ start_time: startIso, end_time: endIso })
+    // reminder_sent_at resets so the moved time gets its own reminder.
+    .update({ start_time: startIso, end_time: endIso, reminder_sent_at: null })
     .eq('id', appointment.id)
     .eq('status', 'scheduled')
   if (error) {

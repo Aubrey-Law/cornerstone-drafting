@@ -8,6 +8,8 @@ export interface SchedulingSettings {
   minNoticeHours: number
   horizonDays: number
   bufferMinutes: number
+  /** Hours before the start time to email a reminder; 0 disables reminders. */
+  reminderHoursBefore: number
 }
 
 /** Per-weekday bookable windows in the firm timezone ("HH:MM" 24h). */
@@ -31,6 +33,8 @@ export interface AppointmentType {
   active: boolean
   public: boolean
   sort: number
+  /** When set, this type is only bookable inside these windows (firm TZ). */
+  customWeeklyHours: WeeklyHours | null
 }
 
 export interface AppointmentTypeRow {
@@ -44,6 +48,7 @@ export interface AppointmentTypeRow {
   active: boolean
   public: boolean
   sort: number
+  custom_weekly_hours: unknown
 }
 
 export interface AppointmentRow {
@@ -62,6 +67,8 @@ export interface AppointmentRow {
   microsoft_event_id: string | null
   manage_token_hash: string | null
   manage_token_expires_at: string | null
+  reminder_sent_at: string | null
+  online_meeting_url: string | null
   source: AppointmentSource
   created_at: string
   updated_at: string
@@ -85,7 +92,50 @@ export function appointmentTypeFromRow(row: AppointmentTypeRow): AppointmentType
     active: row.active,
     public: row.public,
     sort: row.sort,
+    customWeeklyHours: sanitizeCustomWeeklyHours(row.custom_weekly_hours),
   }
+}
+
+function sanitizeWindow(value: unknown): DayWindow | null {
+  if (!value || typeof value !== 'object') return null
+  const { start, end } = value as { start?: unknown; end?: unknown }
+  if (typeof start !== 'string' || typeof end !== 'string') return null
+  const re = /^\d{1,2}:\d{2}$/
+  if (!re.test(start.trim()) || !re.test(end.trim())) return null
+  return { start: start.trim(), end: end.trim() }
+}
+
+export function sanitizeWeeklyHours(value: unknown): WeeklyHours {
+  const result = emptyWeeklyHours()
+  if (!value || typeof value !== 'object') return result
+  for (const day of WEEKDAYS) {
+    const windows = (value as Record<string, unknown>)[day]
+    if (!Array.isArray(windows)) continue
+    result[day] = windows
+      .map(sanitizeWindow)
+      .filter((w): w is DayWindow => w !== null)
+  }
+  return result
+}
+
+/**
+ * Per-type hours: null/invalid → null (use general hours). An object with no
+ * valid windows also maps to null so a malformed value can never silently make
+ * a type unbookable.
+ */
+export function sanitizeCustomWeeklyHours(value: unknown): WeeklyHours | null {
+  if (!value || typeof value !== 'object') return null
+  const hours = sanitizeWeeklyHours(value)
+  const hasWindows = WEEKDAYS.some(day => hours[day].length > 0)
+  return hasWindows ? hours : null
+}
+
+/** The weekly hours a given type is bookable in. */
+export function effectiveWeeklyHours(
+  general: WeeklyHours,
+  type: Pick<AppointmentType, 'customWeeklyHours'>,
+): WeeklyHours {
+  return type.customWeeklyHours ?? general
 }
 
 export const WEEKDAYS: readonly Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']

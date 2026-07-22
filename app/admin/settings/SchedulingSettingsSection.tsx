@@ -7,18 +7,8 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { WeeklyHours, Weekday } from '@/lib/appointments/types'
-
-const WEEKDAY_ORDER: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-const WEEKDAY_LABELS: Record<Weekday, string> = {
-  mon: 'Monday',
-  tue: 'Tuesday',
-  wed: 'Wednesday',
-  thu: 'Thursday',
-  fri: 'Friday',
-  sat: 'Saturday',
-  sun: 'Sunday',
-}
+import type { WeeklyHours } from '@/lib/appointments/types'
+import { WeeklyHoursEditor } from './WeeklyHoursEditor'
 
 interface SettingsShape {
   timezone: string
@@ -26,6 +16,7 @@ interface SettingsShape {
   minNoticeHours: number
   horizonDays: number
   bufferMinutes: number
+  reminderHoursBefore: number
 }
 
 interface TypeShape {
@@ -39,6 +30,7 @@ interface TypeShape {
   active: boolean
   public: boolean
   sort: number
+  customWeeklyHours: WeeklyHours | null
 }
 
 interface AppointmentListItem {
@@ -144,31 +136,6 @@ export function SchedulingSettingsSection() {
     }
   }
 
-  function updateWindow(day: Weekday, index: number, field: 'start' | 'end', value: string) {
-    setSettings(s => {
-      if (!s) return s
-      const windows = [...(s.weeklyHours[day] ?? [])]
-      windows[index] = { ...windows[index], [field]: value }
-      return { ...s, weeklyHours: { ...s.weeklyHours, [day]: windows } }
-    })
-  }
-
-  function addWindow(day: Weekday) {
-    setSettings(s => {
-      if (!s) return s
-      const windows = [...(s.weeklyHours[day] ?? []), { start: '09:00', end: '17:00' }]
-      return { ...s, weeklyHours: { ...s.weeklyHours, [day]: windows } }
-    })
-  }
-
-  function removeWindow(day: Weekday, index: number) {
-    setSettings(s => {
-      if (!s) return s
-      const windows = (s.weeklyHours[day] ?? []).filter((_, i) => i !== index)
-      return { ...s, weeklyHours: { ...s.weeklyHours, [day]: windows } }
-    })
-  }
-
   function updateType(id: string, patch: Partial<TypeShape>) {
     setTypes(list => list.map(t => (t.id === id ? { ...t, ...patch } : t)))
   }
@@ -244,6 +211,21 @@ export function SchedulingSettingsSection() {
               onChange={e => setSettings({ ...settings, bufferMinutes: Number(e.target.value) })}
             />
           </div>
+          <div>
+            <Label htmlFor="sched-reminder">Reminder email (hours before)</Label>
+            <Input
+              id="sched-reminder"
+              className="mt-1"
+              type="number"
+              min={0}
+              max={336}
+              value={settings.reminderHoursBefore}
+              onChange={e =>
+                setSettings({ ...settings, reminderHoursBefore: Number(e.target.value) })
+              }
+            />
+            <p className="mt-1 text-xs text-muted-foreground">0 turns reminders off.</p>
+          </div>
         </div>
       </section>
 
@@ -252,43 +234,11 @@ export function SchedulingSettingsSection() {
         <p className="mt-1 text-xs text-muted-foreground">
           Bookable windows in {settings.timezone}. Outlook busy times are automatically excluded.
         </p>
-        <div className="mt-4 space-y-3">
-          {WEEKDAY_ORDER.map(day => (
-            <div key={day} className="flex flex-wrap items-center gap-2">
-              <span className="w-24 text-sm text-foreground">{WEEKDAY_LABELS[day]}</span>
-              {(settings.weeklyHours[day] ?? []).length === 0 && (
-                <span className="text-xs text-muted-foreground">Unavailable</span>
-              )}
-              {(settings.weeklyHours[day] ?? []).map((w, i) => (
-                <span key={i} className="flex items-center gap-1">
-                  <Input
-                    type="time"
-                    className="h-8 w-28"
-                    value={w.start}
-                    onChange={e => updateWindow(day, i, 'start', e.target.value)}
-                  />
-                  <span className="text-xs text-muted-foreground">–</span>
-                  <Input
-                    type="time"
-                    className="h-8 w-28"
-                    value={w.end}
-                    onChange={e => updateWindow(day, i, 'end', e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeWindow(day, i)}
-                  >
-                    ✕
-                  </Button>
-                </span>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => addWindow(day)}>
-                + Add
-              </Button>
-            </div>
-          ))}
+        <div className="mt-4">
+          <WeeklyHoursEditor
+            value={settings.weeklyHours}
+            onChange={weeklyHours => setSettings(s => (s ? { ...s, weeklyHours } : s))}
+          />
         </div>
       </section>
 
@@ -361,6 +311,38 @@ export function SchedulingSettingsSection() {
                     onChange={e => updateType(t.id, { label: e.target.value })}
                   />
                 </div>
+              </div>
+              <div className="mt-3 border-t border-border pt-3">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={t.customWeeklyHours !== null}
+                    onChange={e =>
+                      updateType(t.id, {
+                        // Seed from the general hours so toggling on never
+                        // starts from "unavailable every day".
+                        customWeeklyHours: e.target.checked
+                          ? structuredClone(settings.weeklyHours)
+                          : null,
+                      })
+                    }
+                  />
+                  Limit this type to its own hours
+                </label>
+                {t.customWeeklyHours !== null && (
+                  <div className="mt-3 rounded-md bg-muted/40 p-3">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      {t.label} can only be booked in these windows ({settings.timezone}).
+                      General weekly hours are ignored for this type; Outlook busy times and
+                      buffers still apply.
+                    </p>
+                    <WeeklyHoursEditor
+                      compact
+                      value={t.customWeeklyHours}
+                      onChange={customWeeklyHours => updateType(t.id, { customWeeklyHours })}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ))}
