@@ -8,6 +8,7 @@ export const EMAIL_CATEGORIES = [
   'daily_digest',
   'appointment_confirmation',
   'appointment_booked_alert',
+  'appointment_reminder',
   'manual',
 ] as const
 
@@ -82,6 +83,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     label: 'Appointment booked alert',
     description: 'Sent to the firm when a client books, reschedules, or cancels an appointment.',
     recipient: 'internal',
+  },
+  appointment_reminder: {
+    category: 'appointment_reminder',
+    label: 'Appointment reminder',
+    description: 'Sent to a client ahead of an upcoming appointment (lead time set in Scheduling settings).',
+    recipient: 'client',
   },
   manual: {
     category: 'manual',

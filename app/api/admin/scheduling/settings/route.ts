@@ -28,6 +28,7 @@ interface PutBody {
     minNoticeHours?: unknown
     horizonDays?: unknown
     bufferMinutes?: unknown
+    reminderHoursBefore?: unknown
   }
   types?: Array<{
     id?: unknown
@@ -75,6 +76,7 @@ export async function PUT(req: NextRequest) {
       minNoticeHours: intInRange(s.minNoticeHours, 0, 720),
       horizonDays: intInRange(s.horizonDays, 1, 365),
       bufferMinutes: intInRange(s.bufferMinutes, 0, 240),
+      reminderHoursBefore: intInRange(s.reminderHoursBefore, 0, 336),
       updatedBy: userId ?? null,
     })
   }

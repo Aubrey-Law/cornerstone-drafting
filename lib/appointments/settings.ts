@@ -18,6 +18,7 @@ interface SchedulingSettingsRow {
   min_notice_hours: number | null
   horizon_days: number | null
   buffer_minutes: number | null
+  reminder_hours_before: number | null
 }
 
 const TTL_MS = 30_000
@@ -35,6 +36,7 @@ function defaults(): SchedulingSettings {
     minNoticeHours: 24,
     horizonDays: 30,
     bufferMinutes: 15,
+    reminderHoursBefore: 24,
   }
 }
 
@@ -43,7 +45,7 @@ export async function getSchedulingSettings(): Promise<SchedulingSettings> {
 
   const { data } = await getAdminClient()
     .from('scheduling_settings')
-    .select('timezone, weekly_hours, min_notice_hours, horizon_days, buffer_minutes')
+    .select('timezone, weekly_hours, min_notice_hours, horizon_days, buffer_minutes, reminder_hours_before')
     .eq('id', 1)
     .maybeSingle()
 
@@ -56,6 +58,7 @@ export async function getSchedulingSettings(): Promise<SchedulingSettings> {
         minNoticeHours: row.min_notice_hours ?? base.minNoticeHours,
         horizonDays: row.horizon_days ?? base.horizonDays,
         bufferMinutes: row.buffer_minutes ?? base.bufferMinutes,
+        reminderHoursBefore: row.reminder_hours_before ?? base.reminderHoursBefore,
       }
     : base
 
@@ -69,6 +72,7 @@ export interface UpdateSchedulingSettingsInput {
   minNoticeHours?: number
   horizonDays?: number
   bufferMinutes?: number
+  reminderHoursBefore?: number
   updatedBy?: string | null
 }
 
@@ -81,6 +85,7 @@ export async function updateSchedulingSettings(
   if (input.minNoticeHours !== undefined) patch.min_notice_hours = input.minNoticeHours
   if (input.horizonDays !== undefined) patch.horizon_days = input.horizonDays
   if (input.bufferMinutes !== undefined) patch.buffer_minutes = input.bufferMinutes
+  if (input.reminderHoursBefore !== undefined) patch.reminder_hours_before = input.reminderHoursBefore
   if (input.updatedBy !== undefined) patch.updated_by = input.updatedBy
 
   const { error } = await getAdminClient()

@@ -16,6 +16,7 @@ interface SettingsShape {
   minNoticeHours: number
   horizonDays: number
   bufferMinutes: number
+  reminderHoursBefore: number
 }
 
 interface TypeShape {
@@ -209,6 +210,21 @@ export function SchedulingSettingsSection() {
               value={settings.bufferMinutes}
               onChange={e => setSettings({ ...settings, bufferMinutes: Number(e.target.value) })}
             />
+          </div>
+          <div>
+            <Label htmlFor="sched-reminder">Reminder email (hours before)</Label>
+            <Input
+              id="sched-reminder"
+              className="mt-1"
+              type="number"
+              min={0}
+              max={336}
+              value={settings.reminderHoursBefore}
+              onChange={e =>
+                setSettings({ ...settings, reminderHoursBefore: Number(e.target.value) })
+              }
+            />
+            <p className="mt-1 text-xs text-muted-foreground">0 turns reminders off.</p>
           </div>
         </div>
       </section>
