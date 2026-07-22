@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
+  CalendarClock,
   ClipboardList,
   FolderOpen,
   LayoutDashboard,
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/intake', label: 'Intake', icon: ClipboardList },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
   { href: '/messages', label: 'Messages', icon: MessageSquare },
+  { href: '/schedule', label: 'Schedule', icon: CalendarClock },
 ]
 
 export default function PortalShell({ children }: { children: React.ReactNode }) {
