@@ -11,20 +11,33 @@ export async function GET(req: NextRequest) {
   const { err } = await requireAdmin(req)
   if (err) return err
 
-  const scope = req.nextUrl.searchParams.get('scope') === 'past' ? 'past' : 'upcoming'
-  const nowIso = new Date().toISOString()
+  const params = req.nextUrl.searchParams
+  const from = params.get('from') ? Date.parse(params.get('from')!) : NaN
+  const to = params.get('to') ? Date.parse(params.get('to')!) : NaN
+  const hasRange = Number.isFinite(from) && Number.isFinite(to) && to > from
 
   let query = getAdminClient()
     .from('appointments')
     .select(
       'id, appointment_type_id, start_time, end_time, status, attendee_name, attendee_email, attendee_phone, notes, linked_lead_id, linked_matter_id, microsoft_event_id, source, created_at',
     )
-    .limit(100)
 
-  query =
-    scope === 'past'
-      ? query.lt('start_time', nowIso).order('start_time', { ascending: false })
-      : query.gte('start_time', nowIso).order('start_time', { ascending: true })
+  if (hasRange) {
+    // Calendar mode: everything in [from, to), oldest first.
+    query = query
+      .gte('start_time', new Date(from).toISOString())
+      .lt('start_time', new Date(to).toISOString())
+      .order('start_time', { ascending: true })
+      .limit(500)
+  } else {
+    const scope = params.get('scope') === 'past' ? 'past' : 'upcoming'
+    const nowIso = new Date().toISOString()
+    query = (
+      scope === 'past'
+        ? query.lt('start_time', nowIso).order('start_time', { ascending: false })
+        : query.gte('start_time', nowIso).order('start_time', { ascending: true })
+    ).limit(100)
+  }
 
   const { data, error } = await query
   if (error) {

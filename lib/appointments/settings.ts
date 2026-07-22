@@ -3,13 +3,14 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
   appointmentTypeFromRow,
   emptyWeeklyHours,
-  WEEKDAYS,
+  sanitizeCustomWeeklyHours,
+  sanitizeWeeklyHours,
   type AppointmentType,
   type AppointmentTypeRow,
-  type DayWindow,
   type SchedulingSettings,
-  type WeeklyHours,
 } from './types'
+
+export { sanitizeWeeklyHours }
 
 interface SchedulingSettingsRow {
   timezone: string | null
@@ -35,28 +36,6 @@ function defaults(): SchedulingSettings {
     horizonDays: 30,
     bufferMinutes: 15,
   }
-}
-
-function sanitizeWindow(value: unknown): DayWindow | null {
-  if (!value || typeof value !== 'object') return null
-  const { start, end } = value as { start?: unknown; end?: unknown }
-  if (typeof start !== 'string' || typeof end !== 'string') return null
-  const re = /^\d{1,2}:\d{2}$/
-  if (!re.test(start.trim()) || !re.test(end.trim())) return null
-  return { start: start.trim(), end: end.trim() }
-}
-
-export function sanitizeWeeklyHours(value: unknown): WeeklyHours {
-  const result = emptyWeeklyHours()
-  if (!value || typeof value !== 'object') return result
-  for (const day of WEEKDAYS) {
-    const windows = (value as Record<string, unknown>)[day]
-    if (!Array.isArray(windows)) continue
-    result[day] = windows
-      .map(sanitizeWindow)
-      .filter((w): w is DayWindow => w !== null)
-  }
-  return result
 }
 
 export async function getSchedulingSettings(): Promise<SchedulingSettings> {
@@ -116,7 +95,7 @@ export async function listAppointmentTypes(): Promise<AppointmentType[]> {
 
   const { data } = await getAdminClient()
     .from('appointment_types')
-    .select('id, key, slug, label, description, duration_minutes, location_type, active, public, sort')
+    .select('id, key, slug, label, description, duration_minutes, location_type, active, public, sort, custom_weekly_hours')
     .order('sort', { ascending: true })
 
   const value = ((data ?? []) as AppointmentTypeRow[]).map(appointmentTypeFromRow)
@@ -143,6 +122,8 @@ export interface UpdateAppointmentTypeInput {
   active?: boolean
   public?: boolean
   sort?: number
+  /** null clears the override (use general hours); an object limits the type to those windows. */
+  customWeeklyHours?: unknown
 }
 
 export async function updateAppointmentType(input: UpdateAppointmentTypeInput): Promise<void> {
@@ -154,6 +135,9 @@ export async function updateAppointmentType(input: UpdateAppointmentTypeInput): 
   if (input.active !== undefined) patch.active = input.active
   if (input.public !== undefined) patch.public = input.public
   if (input.sort !== undefined) patch.sort = input.sort
+  if (input.customWeeklyHours !== undefined) {
+    patch.custom_weekly_hours = sanitizeCustomWeeklyHours(input.customWeeklyHours)
+  }
   if (Object.keys(patch).length === 0) return
 
   const { error } = await getAdminClient()
