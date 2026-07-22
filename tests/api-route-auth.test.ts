@@ -69,6 +69,8 @@ describe('API route auth coverage', () => {
             /requireEngagementStaff\b/,
             /ENABLE_DEBUG_ROUTES/,
             /isAdmin\b/,
+            // Document routes: getDocumentApiUser + isAdminUser (lib/documentSecurity).
+            /isAdminUser\b/,
             /\['attorney', 'admin'\]/,
             /\['admin', 'attorney'\]/,
           ]),
