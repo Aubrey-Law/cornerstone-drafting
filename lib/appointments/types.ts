@@ -1,4 +1,20 @@
 export type AppointmentLocationType = 'phone' | 'teams' | 'in_person'
+
+export const APPOINTMENT_LOCATION_TYPES: readonly AppointmentLocationType[] = [
+  'phone',
+  'teams',
+  'in_person',
+]
+
+export const APPOINTMENT_LOCATION_LABELS: Record<AppointmentLocationType, string> = {
+  phone: 'Phone call',
+  teams: 'Virtual meeting',
+  in_person: 'In person',
+}
+
+export function isAppointmentLocationType(value: unknown): value is AppointmentLocationType {
+  return value === 'phone' || value === 'teams' || value === 'in_person'
+}
 export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled'
 export type AppointmentSource = 'public' | 'portal' | 'admin'
 
@@ -29,7 +45,10 @@ export interface AppointmentType {
   label: string
   description: string
   durationMinutes: number
+  /** Default format — always the first entry of locationTypes. */
   locationType: AppointmentLocationType
+  /** Formats the client may choose from, in display order. */
+  locationTypes: AppointmentLocationType[]
   active: boolean
   public: boolean
   sort: number
@@ -45,6 +64,7 @@ export interface AppointmentTypeRow {
   description: string
   duration_minutes: number
   location_type: AppointmentLocationType
+  location_types: unknown
   active: boolean
   public: boolean
   sort: number
@@ -57,6 +77,7 @@ export interface AppointmentRow {
   start_time: string
   end_time: string
   status: AppointmentStatus
+  location_type: AppointmentLocationType | null
   attendee_name: string
   attendee_email: string
   attendee_phone: string | null
@@ -81,6 +102,7 @@ export interface Interval {
 }
 
 export function appointmentTypeFromRow(row: AppointmentTypeRow): AppointmentType {
+  const locationTypes = sanitizeLocationTypes(row.location_types, row.location_type)
   return {
     id: row.id,
     key: row.key,
@@ -88,12 +110,35 @@ export function appointmentTypeFromRow(row: AppointmentTypeRow): AppointmentType
     label: row.label,
     description: row.description,
     durationMinutes: row.duration_minutes,
-    locationType: row.location_type,
+    locationType: locationTypes[0],
+    locationTypes,
     active: row.active,
     public: row.public,
     sort: row.sort,
     customWeeklyHours: sanitizeCustomWeeklyHours(row.custom_weekly_hours),
   }
+}
+
+/** Dedupe and validate an allowed-formats list; falls back to the legacy single format. */
+export function sanitizeLocationTypes(
+  value: unknown,
+  fallback: AppointmentLocationType,
+): AppointmentLocationType[] {
+  const list = Array.isArray(value) ? value.filter(isAppointmentLocationType) : []
+  const deduped = [...new Set(list)]
+  return deduped.length > 0
+    ? deduped
+    : [isAppointmentLocationType(fallback) ? fallback : 'phone']
+}
+
+/** The format a specific appointment uses (stored choice, else type default). */
+export function resolveLocationType(
+  chosen: unknown,
+  type: Pick<AppointmentType, 'locationType' | 'locationTypes'>,
+): AppointmentLocationType {
+  return isAppointmentLocationType(chosen) && type.locationTypes.includes(chosen)
+    ? chosen
+    : type.locationType
 }
 
 function sanitizeWindow(value: unknown): DayWindow | null {

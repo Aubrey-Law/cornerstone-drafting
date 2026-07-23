@@ -36,6 +36,7 @@ interface PutBody {
     description?: unknown
     durationMinutes?: unknown
     locationType?: unknown
+    locationTypes?: unknown
     active?: unknown
     public?: unknown
     sort?: unknown
@@ -94,6 +95,8 @@ export async function PUT(req: NextRequest) {
           t.locationType === 'phone' || t.locationType === 'teams' || t.locationType === 'in_person'
             ? t.locationType
             : undefined,
+        // Sanitized in updateAppointmentType; an empty list leaves it unchanged.
+        locationTypes: Array.isArray(t.locationTypes) ? t.locationTypes : undefined,
         active: typeof t.active === 'boolean' ? t.active : undefined,
         public: typeof t.public === 'boolean' ? t.public : undefined,
         sort: intInRange(t.sort, 0, 999),

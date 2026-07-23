@@ -4,7 +4,7 @@ import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { formatWhen, locationLine } from './emailFormat'
 import { getSchedulingSettings, listAppointmentTypes } from './settings'
-import type { AppointmentType } from './types'
+import { resolveLocationType, type AppointmentType } from './types'
 
 const HOUR_MS = 3_600_000
 
@@ -15,6 +15,7 @@ interface DueReminderRow {
   attendee_name: string
   attendee_email: string
   online_meeting_url: string | null
+  location_type: string | null
   created_at: string
 }
 
@@ -47,7 +48,7 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
 
   const { data, error } = await admin
     .from('appointments')
-    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, online_meeting_url, created_at')
+    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, online_meeting_url, location_type, created_at')
     .eq('status', 'scheduled')
     .is('reminder_sent_at', null)
     .gt('start_time', nowIso)
@@ -121,7 +122,13 @@ async function sendReminderEmail(input: {
   const { row, type, office, timezone } = input
   const label = type?.label ?? 'Appointment'
   const when = formatWhen(row.start_time, timezone)
-  const location = type ? locationLine(type, office, row.online_meeting_url) : null
+  const location = type
+    ? locationLine(
+        { ...type, locationType: resolveLocationType(row.location_type, type) },
+        office,
+        row.online_meeting_url,
+      )
+    : null
 
   try {
     const result = await sendEmail({

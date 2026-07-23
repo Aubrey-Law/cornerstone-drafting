@@ -7,13 +7,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
+type LocationType = 'phone' | 'teams' | 'in_person'
+
 export interface BookingWidgetType {
   key: string
   slug: string
   label: string
   description: string
   durationMinutes: number
-  locationType: 'phone' | 'teams' | 'in_person'
+  locationType: LocationType
+  /** Formats the client may choose from, in display order. */
+  locationTypes?: LocationType[]
 }
 
 export interface BookingWidgetProps {
@@ -26,10 +30,16 @@ export interface BookingWidgetProps {
   emailLocked?: boolean
 }
 
-const LOCATION_HINT: Record<BookingWidgetType['locationType'], string> = {
+const LOCATION_HINT: Record<LocationType, string> = {
   phone: 'Phone call — we will call the number you provide.',
   teams: 'Video call — a Microsoft Teams link will be in your calendar invite.',
   in_person: 'In person at our office.',
+}
+
+const LOCATION_LABEL: Record<LocationType, string> = {
+  phone: 'Phone call',
+  teams: 'Virtual meeting',
+  in_person: 'In person',
 }
 
 function fmtSelected(iso: string): string {
@@ -49,7 +59,10 @@ export default function BookingWidget({
   defaultPhone = '',
   emailLocked = false,
 }: BookingWidgetProps) {
+  const locationOptions: LocationType[] =
+    type.locationTypes && type.locationTypes.length > 0 ? type.locationTypes : [type.locationType]
   const [selected, setSelected] = useState<string | null>(null)
+  const [locationType, setLocationType] = useState<LocationType>(locationOptions[0])
   const [name, setName] = useState(defaultName)
   const [email, setEmail] = useState(defaultEmail)
   const [phone, setPhone] = useState(defaultPhone)
@@ -74,6 +87,7 @@ export default function BookingWidget({
           email,
           phone: phone || undefined,
           notes: notes || undefined,
+          locationType,
         }),
       })
       const json = (await res.json().catch(() => ({}))) as {
@@ -117,8 +131,34 @@ export default function BookingWidget({
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-card p-5">
         <p className="text-sm text-muted-foreground">
-          {type.durationMinutes} minutes · {LOCATION_HINT[type.locationType]}
+          {type.durationMinutes} minutes · {LOCATION_HINT[locationType]}
         </p>
+        {locationOptions.length > 1 && (
+          <fieldset className="mt-4">
+            <legend className="text-sm font-medium text-foreground">How would you like to meet?</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {locationOptions.map(option => (
+                <label
+                  key={option}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                    locationType === option
+                      ? 'border-primary bg-primary/5 text-foreground'
+                      : 'border-border text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="booking-location"
+                    className="sr-only"
+                    checked={locationType === option}
+                    onChange={() => setLocationType(option)}
+                  />
+                  {LOCATION_LABEL[option]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <div className="mt-4">
           <SlotPicker
             typeSlug={type.slug}
@@ -165,13 +205,13 @@ export default function BookingWidget({
             </div>
             <div>
               <Label htmlFor="booking-phone">
-                Phone{type.locationType === 'phone' ? '' : ' (optional)'}
+                Phone{locationType === 'phone' ? '' : ' (optional)'}
               </Label>
               <Input
                 id="booking-phone"
                 className="mt-1"
                 type="tel"
-                required={type.locationType === 'phone'}
+                required={locationType === 'phone'}
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
               />

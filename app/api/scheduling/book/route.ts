@@ -6,6 +6,7 @@ import {
 } from '@/lib/appointments/book'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { getAppointmentTypeByKey } from '@/lib/appointments/settings'
+import { isAppointmentLocationType } from '@/lib/appointments/types'
 import { getCachedClaims } from '@/lib/supabaseServer'
 
 export const runtime = 'nodejs'
@@ -20,6 +21,7 @@ interface BookBody {
   email?: unknown
   phone?: unknown
   notes?: unknown
+  locationType?: unknown
 }
 
 function str(value: unknown, max: number): string | null {
@@ -62,6 +64,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  if (
+    body.locationType !== undefined &&
+    !(isAppointmentLocationType(body.locationType) && type.locationTypes.includes(body.locationType))
+  ) {
+    return NextResponse.json(
+      { error: 'That meeting format is not offered for this appointment type' },
+      { status: 400 },
+    )
+  }
+
   // Signed-in bookings are attributed to the session; the session email is
   // authoritative so a portal client can't book on someone else's behalf.
   const email = claims?.email ?? emailRaw
@@ -74,6 +86,7 @@ export async function POST(req: Request) {
       attendeeEmail: email,
       attendeePhone: phone,
       notes,
+      locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
       source: claims ? 'portal' : 'public',
       bookedByUserId: claims?.id ?? null,
     })

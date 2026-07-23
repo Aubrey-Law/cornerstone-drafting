@@ -16,6 +16,7 @@ import { createManageToken } from './manageTokens'
 import { getSchedulingSettings } from './settings'
 import {
   effectiveWeeklyHours,
+  resolveLocationType,
   type AppointmentRow,
   type AppointmentSource,
   type AppointmentType,
@@ -41,6 +42,8 @@ export interface BookAppointmentInput {
   attendeeEmail: string
   attendeePhone?: string | null
   notes?: string | null
+  /** Chosen meeting format; must be in type.locationTypes (else the default is used). */
+  locationType?: string | null
   source: AppointmentSource
   bookedByUserId?: string | null
 }
@@ -262,6 +265,11 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     if (!available) throw new SlotTakenError()
   }
 
+  // The chosen meeting format, constrained to the type's allowed list; the
+  // rest of the flow (Outlook event, emails) sees it as the type's format.
+  const locationType = resolveLocationType(input.locationType, input.type)
+  const effectiveType: AppointmentType = { ...input.type, locationType }
+
   const manage = createManageToken()
 
   const { data: inserted, error: insertError } = await admin
@@ -275,6 +283,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       attendee_email: input.attendeeEmail,
       attendee_phone: input.attendeePhone ?? null,
       notes: input.notes ?? null,
+      location_type: locationType,
       booked_by_user_id: input.bookedByUserId ?? null,
       manage_token_hash: manage.tokenHash,
       manage_token_expires_at: manage.expiresAt,
@@ -330,7 +339,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
   let teamsUrl: string | null = null
   try {
     const event = await createCalendarEvent({
-      type: input.type,
+      type: effectiveType,
       startIso,
       endIso,
       attendeeName: input.attendeeName,
@@ -359,7 +368,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
   })
 
   await sendConfirmationEmails({
-    type: input.type,
+    type: effectiveType,
     startIso,
     attendeeName: input.attendeeName,
     attendeeEmail: input.attendeeEmail,
@@ -494,13 +503,14 @@ export async function rescheduleAppointment(
   })
 
   await sendConfirmationEmails({
-    type,
+    // Honor the format chosen at booking time (stored on the row).
+    type: { ...type, locationType: resolveLocationType(appointment.location_type, type) },
     startIso,
     attendeeName: appointment.attendee_name,
     attendeeEmail: appointment.attendee_email,
     // Manage link keeps working — token is unchanged on reschedule.
     manageToken: null,
-    teamsUrl: null,
+    teamsUrl: appointment.online_meeting_url,
     timezone: settings.timezone,
     action: 'Rescheduled',
   })

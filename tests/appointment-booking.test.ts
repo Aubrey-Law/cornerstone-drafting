@@ -132,6 +132,7 @@ const TYPE: AppointmentType = {
   description: '',
   durationMinutes: 30,
   locationType: 'phone',
+  locationTypes: ['phone', 'teams'],
   active: true,
   public: true,
   sort: 1,
@@ -253,6 +254,21 @@ describe('bookAppointment', () => {
     await expect(
       bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday }),
     ).rejects.toThrow(SlotTakenError)
+  })
+
+  it('stores the chosen meeting format and uses it for the Outlook event', async () => {
+    await bookAppointment({ ...bookingInput(), locationType: 'teams' })
+    const insert = state.inserts.find(i => i.table === 'appointments')
+    expect(insert?.values.location_type).toBe('teams')
+    // Graph event created as a Teams meeting, not the type's phone default.
+    const eventType = state.createdEvents[0]?.type as { locationType?: string } | undefined
+    expect(eventType?.locationType).toBe('teams')
+  })
+
+  it('falls back to the default format when the choice is not allowed', async () => {
+    await bookAppointment({ ...bookingInput(), locationType: 'in_person' })
+    const insert = state.inserts.find(i => i.table === 'appointments')
+    expect(insert?.values.location_type).toBe('phone')
   })
 
   it('admin bookings send the client confirmation but no internal alert', async () => {
