@@ -29,8 +29,10 @@ interface CalendarAppointment {
   id: string
   startTime: string
   endTime: string
-  status: 'scheduled' | 'cancelled' | 'rescheduled'
+  status: 'scheduled' | 'cancelled' | 'rescheduled' | 'no_show'
   locationType: LocationType | null
+  secondAttendeeName: string | null
+  secondAttendeeEmail: string | null
   attendeeName: string
   attendeeEmail: string
   attendeePhone: string | null
@@ -126,7 +128,16 @@ interface BookingDraft {
   attendeeName: string
   attendeeEmail: string
   attendeePhone: string
+  secondAttendeeName: string
+  secondAttendeeEmail: string
   notes: string
+}
+
+interface RescheduleDraft {
+  id: string
+  label: string
+  date: string
+  time: string
 }
 
 export function CalendarClient() {
@@ -140,6 +151,9 @@ export function CalendarClient() {
   const [selectedDay, setSelectedDay] = useState<string>(dayKey(today))
   const [draft, setDraft] = useState<BookingDraft | null>(null)
   const [booking, setBooking] = useState(false)
+  const [reschedule, setReschedule] = useState<RescheduleDraft | null>(null)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [acting, setActing] = useState(false)
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined
@@ -210,9 +224,38 @@ export function CalendarClient() {
       attendeeName: '',
       attendeeEmail: '',
       attendeePhone: '',
+      secondAttendeeName: '',
+      secondAttendeeEmail: '',
       notes: '',
     })
   }
+
+  const patchAppointment = useCallback(
+    async (payload: Record<string, unknown>, successMessage: string): Promise<boolean> => {
+      setActing(true)
+      try {
+        const res = await fetch('/api/admin/scheduling/appointments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify(payload),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast.error(json.error ?? 'Action failed')
+          return false
+        }
+        toast.success(successMessage)
+        void load()
+        return true
+      } catch {
+        toast.error('Action failed')
+        return false
+      } finally {
+        setActing(false)
+      }
+    },
+    [authHeaders, load],
+  )
 
   async function submitBooking() {
     if (!draft) return
@@ -237,6 +280,8 @@ export function CalendarClient() {
           attendeeName: draft.attendeeName.trim(),
           attendeeEmail: draft.attendeeEmail.trim(),
           attendeePhone: draft.attendeePhone.trim() || undefined,
+          secondAttendeeName: draft.secondAttendeeName.trim() || undefined,
+          secondAttendeeEmail: draft.secondAttendeeEmail.trim() || undefined,
           notes: draft.notes.trim() || undefined,
         }),
       })
@@ -351,36 +396,132 @@ export function CalendarClient() {
           <p className="mt-2 text-sm text-muted-foreground">No appointments.</p>
         ) : (
           <div className="mt-2 divide-y divide-border">
-            {selectedAppointments.map(a => (
-              <div key={a.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-                <div>
-                  <p className={cn('text-sm text-foreground', a.status === 'cancelled' && 'line-through')}>
-                    {fmtTime(a.startTime)}–{fmtTime(a.endTime)} · {a.typeLabel} — {a.attendeeName}
-                    {a.status !== 'scheduled' && (
-                      <span className="ml-2 text-xs uppercase text-muted-foreground">{a.status}</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {a.attendeeEmail}
-                    {a.attendeePhone ? ` · ${a.attendeePhone}` : ''}
-                    {a.locationType ? ` · ${LOCATION_LABEL[a.locationType]}` : ''}
-                    {!a.outlookSynced && a.status === 'scheduled' && (
-                      <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
-                    )}
-                  </p>
-                  {a.notes && <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p>}
+            {selectedAppointments.map(a => {
+              const isPast = Date.parse(a.startTime) < Date.now()
+              return (
+                <div key={a.id} className="py-2.5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className={cn('text-sm text-foreground', a.status === 'cancelled' && 'line-through')}>
+                        {fmtTime(a.startTime)}–{fmtTime(a.endTime)} · {a.typeLabel} — {a.attendeeName}
+                        {a.status !== 'scheduled' && (
+                          <span className="ml-2 text-xs uppercase text-muted-foreground">
+                            {a.status.replace('_', ' ')}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {a.attendeeEmail}
+                        {a.attendeePhone ? ` · ${a.attendeePhone}` : ''}
+                        {a.secondAttendeeEmail ? ` · +${a.secondAttendeeName || a.secondAttendeeEmail}` : ''}
+                        {a.locationType ? ` · ${LOCATION_LABEL[a.locationType]}` : ''}
+                        {!a.outlookSynced && a.status === 'scheduled' && (
+                          <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
+                        )}
+                      </p>
+                      {a.notes && <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p>}
+                    </div>
+                    {a.linkedMatterId ? (
+                      <Link href={`/admin/matters/${a.linkedMatterId}`} className="text-xs text-primary underline">
+                        View matter
+                      </Link>
+                    ) : a.linkedLeadId ? (
+                      <Link href={`/admin/leads/${a.linkedLeadId}`} className="text-xs text-primary underline">
+                        View lead
+                      </Link>
+                    ) : null}
+                  </div>
+                  {a.status === 'scheduled' && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {confirmingId === a.id ? (
+                        <>
+                          <span className="text-xs text-muted-foreground">
+                            {isPast ? 'Mark as no-show?' : 'Cancel this appointment? The client will be notified.'}
+                          </span>
+                          {isPast ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={acting}
+                                onClick={() => {
+                                  void patchAppointment(
+                                    { appointmentId: a.id, action: 'no_show', sendFollowUp: true },
+                                    'Marked no-show — follow-up email sent',
+                                  ).then(ok => ok && setConfirmingId(null))
+                                }}
+                              >
+                                No-show + follow-up email
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={acting}
+                                onClick={() => {
+                                  void patchAppointment(
+                                    { appointmentId: a.id, action: 'no_show', sendFollowUp: false },
+                                    'Marked no-show',
+                                  ).then(ok => ok && setConfirmingId(null))
+                                }}
+                              >
+                                No-show only
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={acting}
+                              onClick={() => {
+                                void patchAppointment(
+                                  { appointmentId: a.id, action: 'cancel' },
+                                  'Appointment cancelled — client notified',
+                                ).then(ok => ok && setConfirmingId(null))
+                              }}
+                            >
+                              Confirm cancel
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={() => setConfirmingId(null)}>
+                            Keep it
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {!isPast && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const start = new Date(a.startTime)
+                                  setReschedule({
+                                    id: a.id,
+                                    label: `${a.typeLabel} — ${a.attendeeName}`,
+                                    date: dayKey(start),
+                                    time: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+                                  })
+                                }}
+                              >
+                                Reschedule
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
+                                Cancel…
+                              </Button>
+                            </>
+                          )}
+                          {isPast && (
+                            <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
+                              Mark no-show…
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {a.linkedMatterId ? (
-                  <Link href={`/admin/matters/${a.linkedMatterId}`} className="text-xs text-primary underline">
-                    View matter
-                  </Link>
-                ) : a.linkedLeadId ? (
-                  <Link href={`/admin/leads/${a.linkedLeadId}`} className="text-xs text-primary underline">
-                    View lead
-                  </Link>
-                ) : null}
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>
@@ -465,6 +606,27 @@ export function CalendarClient() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <Label htmlFor="book-spouse-name">Spouse name (optional)</Label>
+                  <Input
+                    id="book-spouse-name"
+                    className="mt-1"
+                    value={draft.secondAttendeeName}
+                    onChange={e => setDraft({ ...draft, secondAttendeeName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="book-spouse-email">Spouse email (optional)</Label>
+                  <Input
+                    id="book-spouse-email"
+                    className="mt-1"
+                    type="email"
+                    value={draft.secondAttendeeEmail}
+                    onChange={e => setDraft({ ...draft, secondAttendeeEmail: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <Label htmlFor="book-email">Email</Label>
                   <Input
                     id="book-email"
@@ -505,6 +667,70 @@ export function CalendarClient() {
                 </Button>
                 <Button onClick={() => void submitBooking()} disabled={booking}>
                   {booking ? 'Booking…' : 'Book appointment'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reschedule !== null} onOpenChange={open => !open && setReschedule(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reschedule appointment</DialogTitle>
+          </DialogHeader>
+          {reschedule && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{reschedule.label}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="resched-date">New date</Label>
+                  <Input
+                    id="resched-date"
+                    className="mt-1"
+                    type="date"
+                    value={reschedule.date}
+                    onChange={e => setReschedule({ ...reschedule, date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="resched-time">New time</Label>
+                  <Input
+                    id="resched-time"
+                    className="mt-1"
+                    type="time"
+                    value={reschedule.time}
+                    onChange={e => setReschedule({ ...reschedule, time: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Moves the Outlook event and emails the client the new time. Any free
+                time works — client-facing hours and notice rules do not apply.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setReschedule(null)} disabled={acting}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={acting}
+                  onClick={() => {
+                    const start = new Date(`${reschedule.date}T${reschedule.time}`)
+                    if (!Number.isFinite(start.getTime())) {
+                      toast.error('Invalid date or time')
+                      return
+                    }
+                    void patchAppointment(
+                      {
+                        appointmentId: reschedule.id,
+                        action: 'reschedule',
+                        newStartIso: start.toISOString(),
+                      },
+                      'Appointment rescheduled — client notified',
+                    ).then(ok => ok && setReschedule(null))
+                  }}
+                >
+                  {acting ? 'Rescheduling…' : 'Reschedule'}
                 </Button>
               </div>
             </div>

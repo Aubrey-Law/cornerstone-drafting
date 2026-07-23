@@ -15,7 +15,7 @@ export const APPOINTMENT_LOCATION_LABELS: Record<AppointmentLocationType, string
 export function isAppointmentLocationType(value: unknown): value is AppointmentLocationType {
   return value === 'phone' || value === 'teams' || value === 'in_person'
 }
-export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled'
+export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled' | 'no_show'
 export type AppointmentSource = 'public' | 'portal' | 'admin'
 
 export interface SchedulingSettings {
@@ -26,6 +26,14 @@ export interface SchedulingSettings {
   bufferMinutes: number
   /** Hours before the start time to email a reminder; 0 disables reminders. */
   reminderHoursBefore: number
+  /** Pause all client-facing booking (staff bookings unaffected). */
+  bookingPaused: boolean
+  /** Also text the reminder when the attendee left a phone number. */
+  smsRemindersEnabled: boolean
+  /** Auto-send the intake invite when a lead books a discovery call. */
+  autoIntakeInvite: boolean
+  /** Per-date hour overrides ("YYYY-MM-DD" → windows; empty array = closed). */
+  dateOverrides: Record<string, DayWindow[]>
 }
 
 /** Per-weekday bookable windows in the firm timezone ("HH:MM" 24h). */
@@ -81,6 +89,8 @@ export interface AppointmentRow {
   attendee_name: string
   attendee_email: string
   attendee_phone: string | null
+  second_attendee_name: string | null
+  second_attendee_email: string | null
   notes: string | null
   linked_lead_id: string | null
   linked_matter_id: string | null
@@ -117,6 +127,25 @@ export function appointmentTypeFromRow(row: AppointmentTypeRow): AppointmentType
     sort: row.sort,
     customWeeklyHours: sanitizeCustomWeeklyHours(row.custom_weekly_hours),
   }
+}
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Per-date hour overrides: "YYYY-MM-DD" → bookable windows for that date.
+ * An empty array means closed all day. Invalid keys/windows are dropped.
+ */
+export function sanitizeDateOverrides(value: unknown): Record<string, DayWindow[]> {
+  const result: Record<string, DayWindow[]> = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return result
+  for (const [key, windows] of Object.entries(value as Record<string, unknown>)) {
+    if (!DATE_KEY_RE.test(key)) continue
+    if (!Array.isArray(windows)) continue
+    // Reuse the single-window sanitizer via a one-day WeeklyHours pass.
+    const sanitized = sanitizeWeeklyHours({ mon: windows }).mon
+    result[key] = sanitized
+  }
+  return result
 }
 
 /** Dedupe and validate an allowed-formats list; falls back to the legacy single format. */

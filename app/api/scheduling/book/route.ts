@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import {
   AvailabilityUnavailableError,
   bookAppointment,
+  BookingPausedError,
   SlotTakenError,
 } from '@/lib/appointments/book'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
@@ -22,6 +23,8 @@ interface BookBody {
   phone?: unknown
   notes?: unknown
   locationType?: unknown
+  secondAttendeeName?: unknown
+  secondAttendeeEmail?: unknown
 }
 
 function str(value: unknown, max: number): string | null {
@@ -43,6 +46,18 @@ export async function POST(req: Request) {
   const emailRaw = str(body.email, 200)
   const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 40) || null : null
   const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 2000) || null : null
+  const secondAttendeeName =
+    typeof body.secondAttendeeName === 'string'
+      ? body.secondAttendeeName.trim().slice(0, 120) || null
+      : null
+  const secondAttendeeEmail =
+    typeof body.secondAttendeeEmail === 'string'
+      ? body.secondAttendeeEmail.trim().toLowerCase() || null
+      : null
+
+  if (secondAttendeeEmail && !EMAIL_RE.test(secondAttendeeEmail)) {
+    return NextResponse.json({ error: 'Invalid spouse/partner email address' }, { status: 400 })
+  }
 
   if (!typeKey || !startTime || !name || !emailRaw) {
     return NextResponse.json(
@@ -87,6 +102,8 @@ export async function POST(req: Request) {
       attendeePhone: phone,
       notes,
       locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
+      secondAttendeeName,
+      secondAttendeeEmail,
       source: claims ? 'portal' : 'public',
       bookedByUserId: claims?.id ?? null,
     })
@@ -98,6 +115,9 @@ export async function POST(req: Request) {
       manageToken: result.manageToken,
     })
   } catch (err) {
+    if (err instanceof BookingPausedError) {
+      return NextResponse.json({ error: err.message, code: 'paused' }, { status: 503 })
+    }
     if (err instanceof SlotTakenError) {
       return NextResponse.json({ error: err.message, code: 'slot_taken' }, { status: 409 })
     }

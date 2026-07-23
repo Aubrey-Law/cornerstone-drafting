@@ -11,6 +11,7 @@ import {
   createCalendarEvent,
   rescheduleCalendarEvent,
 } from './graphEvents'
+import { runPostBookingAutomation } from './automation'
 import { formatWhen, locationLine } from './emailFormat'
 import { createManageToken } from './manageTokens'
 import { getSchedulingSettings } from './settings'
@@ -35,6 +36,13 @@ export class SlotTakenError extends Error {
 
 export { AvailabilityUnavailableError }
 
+export class BookingPausedError extends Error {
+  constructor() {
+    super('Online booking is temporarily paused. Please call or email us to schedule.')
+    this.name = 'BookingPausedError'
+  }
+}
+
 export interface BookAppointmentInput {
   type: AppointmentType
   startIso: string
@@ -44,6 +52,9 @@ export interface BookAppointmentInput {
   notes?: string | null
   /** Chosen meeting format; must be in type.locationTypes (else the default is used). */
   locationType?: string | null
+  /** Optional spouse/partner — invited to the event and cc'd on emails. */
+  secondAttendeeName?: string | null
+  secondAttendeeEmail?: string | null
   source: AppointmentSource
   bookedByUserId?: string | null
 }
@@ -108,7 +119,7 @@ async function createLeadFromAppointment(input: {
 
 async function recordActivity(input: {
   admin: AdminClient
-  action: 'Booked' | 'Rescheduled' | 'Cancelled'
+  action: 'Booked' | 'Rescheduled' | 'Cancelled' | 'No-show'
   type: AppointmentType
   startIso: string | null
   leadId: string | null
@@ -174,6 +185,8 @@ async function sendConfirmationEmails(input: {
   teamsUrl: string | null
   timezone: string
   action: 'Booked' | 'Rescheduled'
+  /** Spouse/partner cc'd on the client-facing email. */
+  ccEmail?: string | null
   /** Staff booked it themselves — no point alerting them about it. */
   skipInternalAlert?: boolean
 }): Promise<void> {
@@ -192,6 +205,7 @@ async function sendConfirmationEmails(input: {
     await sendEmail({
       category: 'appointment_confirmation',
       to: input.attendeeEmail,
+      cc: input.ccEmail ?? undefined,
       subject: `Appointment ${verb}: ${input.type.label} — ${when}`,
       html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
         <h2 style="margin:0 0 12px">Your appointment is ${verb}</h2>
@@ -235,6 +249,10 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
   const admin = getAdminClient()
   const settings = await getSchedulingSettings()
 
+  if (settings.bookingPaused && input.source !== 'admin') {
+    throw new BookingPausedError()
+  }
+
   const start = Date.parse(input.startIso)
   if (!Number.isFinite(start)) throw new Error('Invalid start time')
   const startIso = new Date(start).toISOString()
@@ -261,6 +279,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       horizonDays: settings.horizonDays,
       busy,
       now: new Date(),
+      dateOverrides: settings.dateOverrides,
     })
     if (!available) throw new SlotTakenError()
   }
@@ -284,6 +303,8 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       attendee_phone: input.attendeePhone ?? null,
       notes: input.notes ?? null,
       location_type: locationType,
+      second_attendee_name: input.secondAttendeeName?.trim() || null,
+      second_attendee_email: input.secondAttendeeEmail?.trim().toLowerCase() || null,
       booked_by_user_id: input.bookedByUserId ?? null,
       manage_token_hash: manage.tokenHash,
       manage_token_expires_at: manage.expiresAt,
@@ -345,6 +366,8 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
       attendeeName: input.attendeeName,
       attendeeEmail: input.attendeeEmail,
       attendeePhone: input.attendeePhone,
+      secondAttendeeName: input.secondAttendeeName,
+      secondAttendeeEmail: input.secondAttendeeEmail,
       notes: input.notes,
       officeAddress: office || null,
     })
@@ -372,11 +395,19 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     startIso,
     attendeeName: input.attendeeName,
     attendeeEmail: input.attendeeEmail,
+    ccEmail: input.secondAttendeeEmail?.trim().toLowerCase() || null,
     manageToken: manage.token,
     teamsUrl,
     timezone: settings.timezone,
     action: 'Booked',
     skipInternalAlert: input.source === 'admin',
+  })
+
+  await runPostBookingAutomation({
+    type: input.type,
+    leadId,
+    matterId,
+    autoIntakeInvite: settings.autoIntakeInvite,
   })
 
   return { appointmentId, startIso, endIso, manageToken: manage.token }
@@ -385,6 +416,8 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
 export interface CancelAppointmentInput {
   appointment: AppointmentRow
   type: AppointmentType
+  /** Staff cancelled from the admin calendar: notify the client, not the firm. */
+  cancelledByStaff?: boolean
 }
 
 export async function cancelAppointment(input: CancelAppointmentInput): Promise<void> {
@@ -418,18 +451,92 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
 
   try {
     const settings = await getSchedulingSettings()
+    const when = formatWhen(appointment.start_time, settings.timezone)
+    if (input.cancelledByStaff) {
+      // Outlook also emails an event cancellation; this adds the human note.
+      await sendEmail({
+        category: 'appointment_confirmation',
+        to: appointment.attendee_email,
+        cc: appointment.second_attendee_email ?? undefined,
+        subject: `Appointment cancelled: ${type.label} — ${when}`,
+        html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
+          <h2 style="margin:0 0 12px">Your appointment was cancelled</h2>
+          <p>${type.label} — ${when}</p>
+          <p>If this is unexpected or you'd like to rebook, just reply to this
+          email and we will find a new time.</p>
+        </div>`,
+      })
+    } else {
+      await sendEmail({
+        category: 'appointment_booked_alert',
+        to: ADMIN_EMAIL,
+        replyTo: appointment.attendee_email,
+        subject: `Cancelled: ${type.label} — ${appointment.attendee_name}`,
+        html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
+          <p><strong>${appointment.attendee_name}</strong> (${appointment.attendee_email}) cancelled
+          their ${type.label} on ${when}.</p>
+        </div>`,
+      })
+    }
+  } catch (err) {
+    console.error('[appointments] cancel email failed', err)
+  }
+}
+
+export interface MarkNoShowInput {
+  appointment: AppointmentRow
+  type: AppointmentType
+  /** Send the client a "sorry we missed you" email with a rebook link. */
+  sendFollowUp: boolean
+}
+
+/**
+ * Mark a past appointment as a no-show. Leaves the Outlook event alone (it
+ * already happened) and optionally emails the client a rebook nudge.
+ */
+export async function markNoShow(input: MarkNoShowInput): Promise<void> {
+  const admin = getAdminClient()
+  const { appointment, type } = input
+
+  const { data, error } = await admin
+    .from('appointments')
+    .update({ status: 'no_show' })
+    .eq('id', appointment.id)
+    .eq('status', 'scheduled')
+    .select('id')
+  if (error) throw error
+  if (!data?.length) throw new Error('Appointment is not in a scheduled state')
+
+  await recordActivity({
+    admin,
+    action: 'No-show',
+    type,
+    startIso: appointment.start_time,
+    leadId: appointment.linked_lead_id,
+    matterId: appointment.linked_matter_id,
+    appointmentId: appointment.id,
+  })
+
+  if (!input.sendFollowUp || !appointment.attendee_email) return
+
+  try {
+    const settings = await getSchedulingSettings()
     await sendEmail({
-      category: 'appointment_booked_alert',
-      to: ADMIN_EMAIL,
-      replyTo: appointment.attendee_email,
-      subject: `Cancelled: ${type.label} — ${appointment.attendee_name}`,
+      category: 'appointment_missed_followup',
+      to: appointment.attendee_email,
+      cc: appointment.second_attendee_email ?? undefined,
+      subject: `Sorry we missed you — ${type.label}`,
       html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
-        <p><strong>${appointment.attendee_name}</strong> (${appointment.attendee_email}) cancelled
-        their ${type.label} on ${formatWhen(appointment.start_time, settings.timezone)}.</p>
+        <h2 style="margin:0 0 12px">Sorry we missed you</h2>
+        <p>We had a ${type.label} scheduled for
+        ${formatWhen(appointment.start_time, settings.timezone)}, but weren't able
+        to connect.</p>
+        <p><a href="${portalUrl(`/book/${type.slug}`)}" style="color:#1a6b72">Pick a new time</a>
+        — or just reply to this email and we will get you rescheduled.</p>
       </div>`,
     })
   } catch (err) {
-    console.error('[appointments] cancel alert email failed', err)
+    console.error('[appointments] no-show follow-up email failed', err)
   }
 }
 
@@ -437,6 +544,8 @@ export interface RescheduleAppointmentInput {
   appointment: AppointmentRow
   type: AppointmentType
   newStartIso: string
+  /** Staff reschedule: bypass client-facing rules, hard conflicts only. */
+  adminOverride?: boolean
 }
 
 export async function rescheduleAppointment(
@@ -461,17 +570,23 @@ export async function rescheduleAppointment(
         iv.end === Date.parse(appointment.end_time)
       ),
   )
-  const available = isSlotAvailable(startIso, {
-    weeklyHours: effectiveWeeklyHours(settings.weeklyHours, type),
-    timezone: settings.timezone,
-    durationMinutes: type.durationMinutes,
-    bufferMinutes: settings.bufferMinutes,
-    minNoticeHours: settings.minNoticeHours,
-    horizonDays: settings.horizonDays,
-    busy,
-    now: new Date(),
-  })
-  if (!available) throw new SlotTakenError()
+  if (input.adminOverride) {
+    const end = start + type.durationMinutes * 60_000
+    if (busy.some(b => start < b.end && end > b.start)) throw new SlotTakenError()
+  } else {
+    const available = isSlotAvailable(startIso, {
+      weeklyHours: effectiveWeeklyHours(settings.weeklyHours, type),
+      timezone: settings.timezone,
+      durationMinutes: type.durationMinutes,
+      bufferMinutes: settings.bufferMinutes,
+      minNoticeHours: settings.minNoticeHours,
+      horizonDays: settings.horizonDays,
+      busy,
+      now: new Date(),
+      dateOverrides: settings.dateOverrides,
+    })
+    if (!available) throw new SlotTakenError()
+  }
 
   const { error } = await admin
     .from('appointments')
@@ -508,6 +623,7 @@ export async function rescheduleAppointment(
     startIso,
     attendeeName: appointment.attendee_name,
     attendeeEmail: appointment.attendee_email,
+    ccEmail: appointment.second_attendee_email ?? null,
     // Manage link keeps working — token is unchanged on reschedule.
     manageToken: null,
     teamsUrl: appointment.online_meeting_url,

@@ -5,6 +5,7 @@ import {
   emptyWeeklyHours,
   isAppointmentLocationType,
   sanitizeCustomWeeklyHours,
+  sanitizeDateOverrides,
   sanitizeWeeklyHours,
   type AppointmentType,
   type AppointmentTypeRow,
@@ -20,6 +21,10 @@ interface SchedulingSettingsRow {
   horizon_days: number | null
   buffer_minutes: number | null
   reminder_hours_before: number | null
+  booking_paused: boolean | null
+  sms_reminders_enabled: boolean | null
+  auto_intake_invite: boolean | null
+  date_overrides: unknown
 }
 
 const TTL_MS = 30_000
@@ -38,6 +43,10 @@ function defaults(): SchedulingSettings {
     horizonDays: 30,
     bufferMinutes: 15,
     reminderHoursBefore: 24,
+    bookingPaused: false,
+    smsRemindersEnabled: false,
+    autoIntakeInvite: true,
+    dateOverrides: {},
   }
 }
 
@@ -46,7 +55,7 @@ export async function getSchedulingSettings(): Promise<SchedulingSettings> {
 
   const { data } = await getAdminClient()
     .from('scheduling_settings')
-    .select('timezone, weekly_hours, min_notice_hours, horizon_days, buffer_minutes, reminder_hours_before')
+    .select('timezone, weekly_hours, min_notice_hours, horizon_days, buffer_minutes, reminder_hours_before, booking_paused, sms_reminders_enabled, auto_intake_invite, date_overrides')
     .eq('id', 1)
     .maybeSingle()
 
@@ -60,6 +69,10 @@ export async function getSchedulingSettings(): Promise<SchedulingSettings> {
         horizonDays: row.horizon_days ?? base.horizonDays,
         bufferMinutes: row.buffer_minutes ?? base.bufferMinutes,
         reminderHoursBefore: row.reminder_hours_before ?? base.reminderHoursBefore,
+        bookingPaused: row.booking_paused ?? base.bookingPaused,
+        smsRemindersEnabled: row.sms_reminders_enabled ?? base.smsRemindersEnabled,
+        autoIntakeInvite: row.auto_intake_invite ?? base.autoIntakeInvite,
+        dateOverrides: sanitizeDateOverrides(row.date_overrides),
       }
     : base
 
@@ -74,6 +87,10 @@ export interface UpdateSchedulingSettingsInput {
   horizonDays?: number
   bufferMinutes?: number
   reminderHoursBefore?: number
+  bookingPaused?: boolean
+  smsRemindersEnabled?: boolean
+  autoIntakeInvite?: boolean
+  dateOverrides?: unknown
   updatedBy?: string | null
 }
 
@@ -87,6 +104,10 @@ export async function updateSchedulingSettings(
   if (input.horizonDays !== undefined) patch.horizon_days = input.horizonDays
   if (input.bufferMinutes !== undefined) patch.buffer_minutes = input.bufferMinutes
   if (input.reminderHoursBefore !== undefined) patch.reminder_hours_before = input.reminderHoursBefore
+  if (input.bookingPaused !== undefined) patch.booking_paused = input.bookingPaused
+  if (input.smsRemindersEnabled !== undefined) patch.sms_reminders_enabled = input.smsRemindersEnabled
+  if (input.autoIntakeInvite !== undefined) patch.auto_intake_invite = input.autoIntakeInvite
+  if (input.dateOverrides !== undefined) patch.date_overrides = sanitizeDateOverrides(input.dateOverrides)
   if (input.updatedBy !== undefined) patch.updated_by = input.updatedBy
 
   const { error } = await getAdminClient()

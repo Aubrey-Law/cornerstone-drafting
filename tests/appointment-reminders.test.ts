@@ -9,9 +9,11 @@ const state = vi.hoisted(() => ({
   updates: [] as Array<{ values: Record<string, unknown>; id: string }>,
   /** ids whose claim update should return no rows (lost race). */
   claimLosers: new Set<string>(),
-  emails: [] as Array<{ category: string; to: string; subject: string; html: string }>,
+  emails: [] as Array<{ category: string; to: string; cc?: string; subject: string; html: string }>,
   emailResultOk: true,
   reminderHours: 24,
+  smsEnabled: false,
+  smsSends: [] as Array<{ to: string; body: string }>,
   reset() {
     this.rows = []
     this.updates = []
@@ -19,6 +21,8 @@ const state = vi.hoisted(() => ({
     this.emails = []
     this.emailResultOk = true
     this.reminderHours = 24
+    this.smsEnabled = false
+    this.smsSends = []
   },
 }))
 
@@ -90,6 +94,10 @@ vi.mock('@/lib/appointments/settings', () => ({
     horizonDays: 60,
     bufferMinutes: 0,
     reminderHoursBefore: state.reminderHours,
+    bookingPaused: false,
+    smsRemindersEnabled: state.smsEnabled,
+    autoIntakeInvite: true,
+    dateOverrides: {},
   })),
   listAppointmentTypes: vi.fn(async () => [
     {
@@ -109,6 +117,17 @@ vi.mock('@/lib/appointments/settings', () => ({
   ]),
 }))
 
+vi.mock('@/lib/twilio/sms', () => ({
+  normalizeSmsRecipient: vi.fn((v: string | null) => {
+    const digits = (v ?? '').replace(/\D/g, '')
+    return digits.length === 10 ? `+1${digits}` : null
+  }),
+  sendSmsMessage: vi.fn(async (input: { to: string; body: string }) => {
+    state.smsSends.push(input)
+    return { ok: true, providerMessageId: 'sms-1', status: 'queued', to: input.to }
+  }),
+}))
+
 import { sendDueReminders } from '@/lib/appointments/reminders'
 
 // ── fixtures ────────────────────────────────────────────────────────────────
@@ -122,6 +141,8 @@ function dueRow(overrides: Partial<Record<string, unknown>> = {}) {
     start_time: '2026-08-11T10:00:00.000Z', // 22h out — inside 24h window
     attendee_name: 'Pat Client',
     attendee_email: 'pat@example.com',
+    attendee_phone: '(555) 123-4567',
+    second_attendee_email: null,
     online_meeting_url: 'https://teams.microsoft.com/l/meetup-join/abc',
     location_type: 'teams',
     created_at: '2026-08-01T00:00:00.000Z', // booked well before the window
@@ -184,6 +205,34 @@ describe('sendDueReminders', () => {
     expect(state.updates).toHaveLength(2)
     expect(state.updates[0].values.reminder_sent_at).toBeTruthy()
     expect(state.updates[1].values.reminder_sent_at).toBeNull()
+  })
+
+  it('also texts the reminder when SMS reminders are enabled', async () => {
+    state.smsEnabled = true
+    state.rows = [dueRow()]
+    const result = await sendDueReminders(NOW)
+    expect(result.sent).toBe(1)
+    expect(state.smsSends).toHaveLength(1)
+    expect(state.smsSends[0].to).toBe('+15551234567')
+    expect(state.smsSends[0].body).toContain('Discovery Call')
+  })
+
+  it('sends no SMS when disabled or when there is no usable phone', async () => {
+    state.rows = [dueRow()]
+    await sendDueReminders(NOW)
+    expect(state.smsSends).toHaveLength(0)
+
+    state.reset()
+    state.smsEnabled = true
+    state.rows = [dueRow({ attendee_phone: null })]
+    await sendDueReminders(NOW)
+    expect(state.smsSends).toHaveLength(0)
+  })
+
+  it("cc's the spouse on the reminder email", async () => {
+    state.rows = [dueRow({ second_attendee_email: 'spouse@example.com' })]
+    await sendDueReminders(NOW)
+    expect(state.emails[0].cc).toBe('spouse@example.com')
   })
 
   it('handles multiple rows independently', async () => {

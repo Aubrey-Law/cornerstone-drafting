@@ -7,6 +7,7 @@ const DAY_MS = 86_400_000
 
 interface AvailabilityResponse {
   slots?: string[]
+  paused?: boolean
   timezone?: string
   durationMinutes?: number
   error?: string
@@ -67,6 +68,11 @@ export default function SlotPicker({
       if (!res.ok) {
         setSlots([])
         setError(json.error ?? 'Could not load availability')
+        return
+      }
+      if (json.paused) {
+        setSlots([])
+        setError('Online booking is temporarily paused. Please call or email us to schedule.')
         return
       }
       setSlots(json.slots ?? [])

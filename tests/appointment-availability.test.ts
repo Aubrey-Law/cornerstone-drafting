@@ -245,6 +245,34 @@ describe('per-type custom hours', () => {
   })
 })
 
+describe('date overrides', () => {
+  it('a closed date removes all its slots', () => {
+    const slots = computeSlots(baseInput({ dateOverrides: { '2026-07-20': [] } }))
+    expect(slots).toHaveLength(0)
+  })
+
+  it('override windows replace the weekly hours for that date only', () => {
+    // Monday normally 09:00–12:00; override to a single afternoon hour.
+    const slots = computeSlots(
+      baseInput({ dateOverrides: { '2026-07-20': [{ start: '14:00', end: '15:00' }] } }),
+    )
+    // 2:00 and 2:30 PM ET only — the morning weekly window is ignored.
+    expect(slots).toEqual(['2026-07-20T18:00:00.000Z', '2026-07-20T18:30:00.000Z'])
+  })
+
+  it('an override can open a normally-closed day', () => {
+    // Sunday 2026-07-19 has no weekly hours.
+    const slots = computeSlots(
+      baseInput({
+        rangeStart: new Date('2026-07-19T00:00:00Z'),
+        rangeEnd: new Date('2026-07-20T00:00:00Z'),
+        dateOverrides: { '2026-07-19': [{ start: '10:00', end: '11:00' }] },
+      }),
+    )
+    expect(slots).toEqual(['2026-07-19T14:00:00.000Z', '2026-07-19T14:30:00.000Z'])
+  })
+})
+
 describe('meeting formats', () => {
   it('sanitizeLocationTypes dedupes, validates, and falls back to the legacy format', () => {
     expect(sanitizeLocationTypes(['teams', 'phone', 'teams'], 'phone')).toEqual(['teams', 'phone'])
