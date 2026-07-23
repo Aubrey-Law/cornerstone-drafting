@@ -15,6 +15,9 @@ const state = vi.hoisted(() => ({
   busy: [] as Array<{ start: number; end: number }>,
   lead: null as { id: string; lead_status: string } | null,
   matterId: null as string | null,
+  paused: false,
+  dateOverrides: {} as Record<string, Array<{ start: string; end: string }>>,
+  automationCalls: [] as Array<Record<string, unknown>>,
   reset() {
     this.inserts = []
     this.updates = []
@@ -25,6 +28,9 @@ const state = vi.hoisted(() => ({
     this.busy = []
     this.lead = null
     this.matterId = null
+    this.paused = false
+    this.dateOverrides = {}
+    this.automationCalls = []
   },
 }))
 
@@ -117,10 +123,26 @@ vi.mock('@/lib/appointments/settings', () => ({
     minNoticeHours: 0,
     horizonDays: 60,
     bufferMinutes: 0,
+    reminderHoursBefore: 24,
+    bookingPaused: state.paused,
+    smsRemindersEnabled: false,
+    autoIntakeInvite: true,
+    dateOverrides: state.dateOverrides,
   })),
 }))
 
-import { bookAppointment, cancelAppointment, SlotTakenError } from '@/lib/appointments/book'
+vi.mock('@/lib/appointments/automation', () => ({
+  runPostBookingAutomation: vi.fn(async (input: Record<string, unknown>) => {
+    state.automationCalls.push(input)
+  }),
+}))
+
+import {
+  bookAppointment,
+  BookingPausedError,
+  cancelAppointment,
+  SlotTakenError,
+} from '@/lib/appointments/book'
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -276,6 +298,40 @@ describe('bookAppointment', () => {
     const categories = state.emails.map(e => e.category)
     expect(categories).toContain('appointment_confirmation')
     expect(categories).not.toContain('appointment_booked_alert')
+  })
+
+  it('rejects client bookings while paused; admin bookings still work', async () => {
+    state.paused = true
+    await expect(bookAppointment(bookingInput())).rejects.toThrow(BookingPausedError)
+    await bookAppointment({ ...bookingInput(), source: 'admin' })
+    expect(state.inserts.find(i => i.table === 'appointments')).toBeDefined()
+  })
+
+  it('a date override closing the day removes its slots for client bookings', async () => {
+    state.dateOverrides = { '2026-08-10': [] } // the Monday of SLOT_ISO, closed
+    await expect(bookAppointment(bookingInput())).rejects.toThrow(SlotTakenError)
+  })
+
+  it('invites the spouse on the event and stores their details', async () => {
+    await bookAppointment({
+      ...bookingInput(),
+      secondAttendeeName: 'Sam Spouse',
+      secondAttendeeEmail: 'Sam@Example.com',
+    })
+    const insert = state.inserts.find(i => i.table === 'appointments')
+    expect(insert?.values.second_attendee_email).toBe('sam@example.com')
+    const event = state.createdEvents[0] as { secondAttendeeEmail?: string } | undefined
+    expect(event?.secondAttendeeEmail).toBe('Sam@Example.com')
+  })
+
+  it('runs post-booking automation with the lead and settings toggle', async () => {
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+    await bookAppointment(bookingInput())
+    expect(state.automationCalls).toHaveLength(1)
+    expect(state.automationCalls[0]).toMatchObject({
+      leadId: 'lead-9',
+      autoIntakeInvite: true,
+    })
   })
 
   it('maps the exclusion-constraint race to SlotTakenError', async () => {

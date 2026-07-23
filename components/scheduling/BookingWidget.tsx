@@ -66,6 +66,9 @@ export default function BookingWidget({
   const [name, setName] = useState(defaultName)
   const [email, setEmail] = useState(defaultEmail)
   const [phone, setPhone] = useState(defaultPhone)
+  const [includeSpouse, setIncludeSpouse] = useState(false)
+  const [spouseName, setSpouseName] = useState('')
+  const [spouseEmail, setSpouseEmail] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +91,8 @@ export default function BookingWidget({
           phone: phone || undefined,
           notes: notes || undefined,
           locationType,
+          secondAttendeeName: includeSpouse ? spouseName || undefined : undefined,
+          secondAttendeeEmail: includeSpouse ? spouseEmail || undefined : undefined,
         }),
       })
       const json = (await res.json().catch(() => ({}))) as {
@@ -216,6 +221,42 @@ export default function BookingWidget({
                 onChange={e => setPhone(e.target.value)}
               />
             </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={includeSpouse}
+                  onChange={e => setIncludeSpouse(e.target.checked)}
+                />
+                Include my spouse or partner
+              </label>
+            </div>
+            {includeSpouse && (
+              <>
+                <div>
+                  <Label htmlFor="booking-spouse-name">Spouse/partner name</Label>
+                  <Input
+                    id="booking-spouse-name"
+                    className="mt-1"
+                    value={spouseName}
+                    onChange={e => setSpouseName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="booking-spouse-email">Spouse/partner email</Label>
+                  <Input
+                    id="booking-spouse-email"
+                    className="mt-1"
+                    type="email"
+                    value={spouseEmail}
+                    onChange={e => setSpouseEmail(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    They&apos;ll receive the calendar invite and reminders too.
+                  </p>
+                </div>
+              </>
+            )}
             <div className="sm:col-span-2">
               <Label htmlFor="booking-notes">Anything we should know? (optional)</Label>
               <Textarea

@@ -26,6 +26,8 @@ export interface CreateEventInput {
   attendeeName: string
   attendeeEmail: string
   attendeePhone?: string | null
+  secondAttendeeName?: string | null
+  secondAttendeeEmail?: string | null
   notes?: string | null
   /** In-person location line (office address) when locationType = in_person. */
   officeAddress?: string | null
@@ -78,6 +80,17 @@ export async function createCalendarEvent(input: CreateEventInput): Promise<Crea
         emailAddress: { address: input.attendeeEmail, name: input.attendeeName },
         type: 'required',
       },
+      ...(input.secondAttendeeEmail
+        ? [
+            {
+              emailAddress: {
+                address: input.secondAttendeeEmail,
+                name: input.secondAttendeeName || input.secondAttendeeEmail,
+              },
+              type: 'required',
+            },
+          ]
+        : []),
     ],
   }
   if (location) payload.location = location

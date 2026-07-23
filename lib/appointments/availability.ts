@@ -1,4 +1,4 @@
-import { WEEKDAYS, type Interval, type WeeklyHours } from './types'
+import { WEEKDAYS, type DayWindow, type Interval, type WeeklyHours } from './types'
 
 /**
  * Pure slot computation — no I/O. All timezone math uses Intl so the firm's
@@ -23,6 +23,12 @@ export interface ComputeSlotsInput {
   rangeEnd: Date
   /** Slot grid step in minutes (slots start on this boundary within a window). */
   slotStepMinutes?: number
+  /**
+   * Per-date overrides ("YYYY-MM-DD" in the firm TZ). When a date has an
+   * entry, its windows replace the weekly hours for that day; an empty
+   * array closes the day entirely.
+   */
+  dateOverrides?: Record<string, DayWindow[]>
 }
 
 const MINUTE_MS = 60_000
@@ -131,6 +137,7 @@ export function computeSlots(input: ComputeSlotsInput): string[] {
     rangeStart,
     rangeEnd,
     slotStepMinutes = 30,
+    dateOverrides,
   } = input
 
   if (durationMinutes <= 0) return []
@@ -156,7 +163,8 @@ export function computeSlots(input: ComputeSlotsInput): string[] {
     const dayStartMs = zonedTimeToUtcMs({ ...wall, hour: 0, minute: 0 }, timezone)
     if (dayStartMs > latest) break
 
-    const windows = weeklyHours[weekdayOf(wall)] ?? []
+    const dateKey = `${wall.year}-${String(wall.month).padStart(2, '0')}-${String(wall.day).padStart(2, '0')}`
+    const windows = dateOverrides?.[dateKey] ?? weeklyHours[weekdayOf(wall)] ?? []
     for (const window of windows) {
       const start = parseHHMM(window.start)
       const end = parseHHMM(window.end)

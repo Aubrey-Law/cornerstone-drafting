@@ -29,6 +29,10 @@ interface PutBody {
     horizonDays?: unknown
     bufferMinutes?: unknown
     reminderHoursBefore?: unknown
+    bookingPaused?: unknown
+    smsRemindersEnabled?: unknown
+    autoIntakeInvite?: unknown
+    dateOverrides?: unknown
   }
   types?: Array<{
     id?: unknown
@@ -78,6 +82,11 @@ export async function PUT(req: NextRequest) {
       horizonDays: intInRange(s.horizonDays, 1, 365),
       bufferMinutes: intInRange(s.bufferMinutes, 0, 240),
       reminderHoursBefore: intInRange(s.reminderHoursBefore, 0, 336),
+      bookingPaused: typeof s.bookingPaused === 'boolean' ? s.bookingPaused : undefined,
+      smsRemindersEnabled:
+        typeof s.smsRemindersEnabled === 'boolean' ? s.smsRemindersEnabled : undefined,
+      autoIntakeInvite: typeof s.autoIntakeInvite === 'boolean' ? s.autoIntakeInvite : undefined,
+      dateOverrides: 'dateOverrides' in s ? s.dateOverrides : undefined,
       updatedBy: userId ?? null,
     })
   }

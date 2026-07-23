@@ -4,6 +4,8 @@ import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { formatWhen, locationLine } from './emailFormat'
 import { getSchedulingSettings, listAppointmentTypes } from './settings'
+import { getFirmConfig } from '@/lib/firmConfig'
+import { normalizeSmsRecipient, sendSmsMessage } from '@/lib/twilio/sms'
 import { resolveLocationType, type AppointmentType } from './types'
 
 const HOUR_MS = 3_600_000
@@ -14,6 +16,8 @@ interface DueReminderRow {
   start_time: string
   attendee_name: string
   attendee_email: string
+  attendee_phone: string | null
+  second_attendee_email: string | null
   online_meeting_url: string | null
   location_type: string | null
   created_at: string
@@ -48,7 +52,7 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
 
   const { data, error } = await admin
     .from('appointments')
-    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, online_meeting_url, location_type, created_at')
+    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, attendee_phone, second_attendee_email, online_meeting_url, location_type, created_at')
     .eq('status', 'scheduled')
     .is('reminder_sent_at', null)
     .gt('start_time', nowIso)
@@ -100,6 +104,10 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
     })
     if (ok) {
       sent++
+      // SMS is additive — an SMS failure never rolls back the email claim.
+      if (settings.smsRemindersEnabled) {
+        await sendReminderSms(row, type ?? null, settings.timezone)
+      }
     } else {
       failed++
       // Release the claim so the next run retries.
@@ -111,6 +119,36 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
   }
 
   return { sent, skipped, failed, disabled: false }
+}
+
+/** Best-effort SMS nudge alongside the email reminder. */
+async function sendReminderSms(
+  row: DueReminderRow,
+  type: AppointmentType | null,
+  timezone: string,
+): Promise<void> {
+  try {
+    const to = normalizeSmsRecipient(row.attendee_phone)
+    if (!to) return
+    const firm = getFirmConfig()
+    const when = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(row.start_time))
+    const result = await sendSmsMessage({
+      to,
+      body: `Reminder from ${firm.firmName}: ${type?.label ?? 'appointment'} on ${when}. Questions? Call ${firm.phone}.`,
+    })
+    if (!result.ok) {
+      console.error('[appointments] reminder SMS failed for', row.id, result.error)
+    }
+  } catch (err) {
+    console.error('[appointments] reminder SMS failed for', row.id, err)
+  }
 }
 
 async function sendReminderEmail(input: {
@@ -134,6 +172,7 @@ async function sendReminderEmail(input: {
     const result = await sendEmail({
       category: 'appointment_reminder',
       to: row.attendee_email,
+      cc: row.second_attendee_email ?? undefined,
       subject: `Reminder: ${label} — ${when}`,
       html: `<div style="font-family:sans-serif;font-size:14px;color:#222">
         <h2 style="margin:0 0 12px">Your upcoming appointment</h2>

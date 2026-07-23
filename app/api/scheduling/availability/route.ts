@@ -67,6 +67,16 @@ export async function GET(req: Request) {
 
   const settings = await getSchedulingSettings()
 
+  if (settings.bookingPaused) {
+    return NextResponse.json({
+      slots: [],
+      paused: true,
+      timezone: settings.timezone,
+      durationMinutes: type.durationMinutes,
+      horizonDays: settings.horizonDays,
+    })
+  }
+
   try {
     const busy = await fetchAllBusy(new Date(from), new Date(to))
     const slots = computeSlots({
@@ -80,6 +90,7 @@ export async function GET(req: Request) {
       now: new Date(),
       rangeStart: new Date(from),
       rangeEnd: new Date(to),
+      dateOverrides: settings.dateOverrides,
     })
     return NextResponse.json({
       slots,

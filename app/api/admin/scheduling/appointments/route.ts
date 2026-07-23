@@ -3,6 +3,9 @@ import { requireAdmin } from '@/lib/apiAuth'
 import {
   AvailabilityUnavailableError,
   bookAppointment,
+  cancelAppointment,
+  markNoShow,
+  rescheduleAppointment,
   SlotTakenError,
 } from '@/lib/appointments/book'
 import { listAppointmentTypes } from '@/lib/appointments/settings'
@@ -24,7 +27,7 @@ export async function GET(req: NextRequest) {
   let query = getAdminClient()
     .from('appointments')
     .select(
-      'id, appointment_type_id, start_time, end_time, status, attendee_name, attendee_email, attendee_phone, notes, linked_lead_id, linked_matter_id, microsoft_event_id, source, created_at',
+      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, source, created_at',
     )
 
   if (hasRange) {
@@ -67,6 +70,8 @@ export async function GET(req: NextRequest) {
       endTime: row.end_time,
       status: row.status,
       locationType: row.location_type ?? null,
+      secondAttendeeName: row.second_attendee_name ?? null,
+      secondAttendeeEmail: row.second_attendee_email ?? null,
       attendeeName: row.attendee_name,
       attendeeEmail: row.attendee_email,
       attendeePhone: row.attendee_phone,
@@ -92,6 +97,8 @@ interface PostBody {
   attendeePhone?: unknown
   notes?: unknown
   locationType?: unknown
+  secondAttendeeName?: unknown
+  secondAttendeeEmail?: unknown
 }
 
 /**
@@ -112,6 +119,14 @@ export async function POST(req: NextRequest) {
   const attendeePhone =
     typeof body.attendeePhone === 'string' ? body.attendeePhone.trim().slice(0, 40) : null
   const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 2000) : null
+  const secondAttendeeName =
+    typeof body.secondAttendeeName === 'string' ? body.secondAttendeeName.trim().slice(0, 200) : null
+  const secondAttendeeEmail =
+    typeof body.secondAttendeeEmail === 'string' ? body.secondAttendeeEmail.trim().toLowerCase() : null
+
+  if (secondAttendeeEmail && !EMAIL_RE.test(secondAttendeeEmail)) {
+    return NextResponse.json({ error: 'Invalid second attendee email' }, { status: 400 })
+  }
 
   if (!typeId || !startIso || !attendeeName || !EMAIL_RE.test(attendeeEmail)) {
     return NextResponse.json(
@@ -145,6 +160,8 @@ export async function POST(req: NextRequest) {
       attendeePhone: attendeePhone || null,
       notes,
       locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
+      secondAttendeeName: secondAttendeeName || null,
+      secondAttendeeEmail: secondAttendeeEmail || null,
       source: 'admin',
       bookedByUserId: userId ?? null,
     })
@@ -154,6 +171,96 @@ export async function POST(req: NextRequest) {
       startIso: result.startIso,
       endIso: result.endIso,
     })
+  } catch (e) {
+    if (e instanceof SlotTakenError) {
+      return NextResponse.json(
+        { error: 'That time conflicts with the Outlook calendar or another appointment.' },
+        { status: 409 },
+      )
+    }
+    if (e instanceof AvailabilityUnavailableError) {
+      return NextResponse.json(
+        { error: 'Outlook is unreachable — cannot verify the time is free. Try again shortly.' },
+        { status: 503 },
+      )
+    }
+    throw e
+  }
+}
+
+interface PatchBody {
+  appointmentId?: unknown
+  action?: unknown
+  newStartIso?: unknown
+  sendFollowUp?: unknown
+}
+
+/**
+ * Staff manages an existing appointment from the admin calendar:
+ * cancel (client notified), reschedule (admin override — hard conflicts
+ * only), or mark a past appointment as a no-show (optional follow-up email).
+ */
+export async function PATCH(req: NextRequest) {
+  const { err } = await requireAdmin(req)
+  if (err) return err
+
+  const body = (await req.json().catch(() => ({}))) as PatchBody
+  const appointmentId = typeof body.appointmentId === 'string' ? body.appointmentId : ''
+  const action = body.action
+  if (!appointmentId || (action !== 'cancel' && action !== 'reschedule' && action !== 'no_show')) {
+    return NextResponse.json(
+      { error: 'appointmentId and a valid action (cancel | reschedule | no_show) are required' },
+      { status: 400 },
+    )
+  }
+
+  const { data, error } = await getAdminClient()
+    .from('appointments')
+    .select('*')
+    .eq('id', appointmentId)
+    .maybeSingle()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const appointment = data as AppointmentRow | null
+  if (!appointment) return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
+
+  const type = (await listAppointmentTypes()).find(t => t.id === appointment.appointment_type_id)
+  if (!type) return NextResponse.json({ error: 'Unknown appointment type' }, { status: 404 })
+
+  try {
+    if (action === 'cancel') {
+      if (appointment.status !== 'scheduled') {
+        return NextResponse.json({ error: 'Only scheduled appointments can be cancelled' }, { status: 409 })
+      }
+      await cancelAppointment({ appointment, type, cancelledByStaff: true })
+      return NextResponse.json({ ok: true, status: 'cancelled' })
+    }
+
+    if (action === 'no_show') {
+      if (appointment.status !== 'scheduled') {
+        return NextResponse.json({ error: 'Only scheduled appointments can be marked no-show' }, { status: 409 })
+      }
+      if (Date.parse(appointment.start_time) > Date.now()) {
+        return NextResponse.json({ error: 'Cannot mark a future appointment as a no-show' }, { status: 409 })
+      }
+      await markNoShow({ appointment, type, sendFollowUp: body.sendFollowUp !== false })
+      return NextResponse.json({ ok: true, status: 'no_show' })
+    }
+
+    // action === 'reschedule'
+    const newStartIso = typeof body.newStartIso === 'string' ? body.newStartIso : ''
+    if (!Number.isFinite(Date.parse(newStartIso))) {
+      return NextResponse.json({ error: 'newStartIso is required to reschedule' }, { status: 400 })
+    }
+    if (appointment.status !== 'scheduled') {
+      return NextResponse.json({ error: 'Only scheduled appointments can be rescheduled' }, { status: 409 })
+    }
+    const result = await rescheduleAppointment({
+      appointment,
+      type,
+      newStartIso,
+      adminOverride: true,
+    })
+    return NextResponse.json({ ok: true, status: 'scheduled', ...result })
   } catch (e) {
     if (e instanceof SlotTakenError) {
       return NextResponse.json(

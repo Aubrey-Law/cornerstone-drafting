@@ -9,6 +9,7 @@ export const EMAIL_CATEGORIES = [
   'appointment_confirmation',
   'appointment_booked_alert',
   'appointment_reminder',
+  'appointment_missed_followup',
   'manual',
 ] as const
 
@@ -88,6 +89,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'appointment_reminder',
     label: 'Appointment reminder',
     description: 'Sent to a client ahead of an upcoming appointment (lead time set in Scheduling settings).',
+    recipient: 'client',
+  },
+  appointment_missed_followup: {
+    category: 'appointment_missed_followup',
+    label: 'Missed appointment follow-up',
+    description: 'Sent to a client after staff marks an appointment as a no-show, with a rebook link.',
     recipient: 'client',
   },
   manual: {

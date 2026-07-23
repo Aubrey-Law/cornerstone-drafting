@@ -17,6 +17,10 @@ interface SettingsShape {
   horizonDays: number
   bufferMinutes: number
   reminderHoursBefore: number
+  bookingPaused: boolean
+  smsRemindersEnabled: boolean
+  autoIntakeInvite: boolean
+  dateOverrides: Record<string, Array<{ start: string; end: string }>>
 }
 
 interface TypeShape {
@@ -71,6 +75,7 @@ export function SchedulingSettingsSection() {
   const [outlookConnected, setOutlookConnected] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [newOverrideDate, setNewOverrideDate] = useState('')
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined
@@ -226,6 +231,146 @@ export function SchedulingSettingsSection() {
               }
             />
             <p className="mt-1 text-xs text-muted-foreground">0 turns reminders off.</p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-2 border-t border-border pt-4">
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={settings.bookingPaused}
+              onChange={e => setSettings({ ...settings, bookingPaused: e.target.checked })}
+            />
+            Pause online booking
+            <span className="text-xs text-muted-foreground">
+              — clients see “booking is paused”; you can still book from the calendar
+            </span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={settings.smsRemindersEnabled}
+              onChange={e => setSettings({ ...settings, smsRemindersEnabled: e.target.checked })}
+            />
+            Also send reminders by text message
+            <span className="text-xs text-muted-foreground">
+              — uses the firm Twilio number when the client left a phone number
+            </span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={settings.autoIntakeInvite}
+              onChange={e => setSettings({ ...settings, autoIntakeInvite: e.target.checked })}
+            />
+            Auto-send the intake invite when a lead books a discovery call
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border p-4">
+        <h2 className="text-sm font-semibold text-foreground">Date overrides</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Close specific dates (vacation, holidays) or set special hours that replace the
+          weekly hours for that date only.
+        </p>
+        <div className="mt-3 space-y-2">
+          {Object.entries(settings.dateOverrides)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, windows]) => (
+              <div key={date} className="flex flex-wrap items-center gap-2">
+                <span className="w-28 text-sm text-foreground">{date}</span>
+                {windows.length === 0 ? (
+                  <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    Closed all day
+                  </span>
+                ) : (
+                  windows.map((w, i) => (
+                    <span key={i} className="flex items-center gap-1">
+                      <Input
+                        type="time"
+                        className="h-8 w-28"
+                        value={w.start}
+                        onChange={e => {
+                          const next = windows.map((win, j) =>
+                            j === i ? { ...win, start: e.target.value } : win,
+                          )
+                          setSettings({
+                            ...settings,
+                            dateOverrides: { ...settings.dateOverrides, [date]: next },
+                          })
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">–</span>
+                      <Input
+                        type="time"
+                        className="h-8 w-28"
+                        value={w.end}
+                        onChange={e => {
+                          const next = windows.map((win, j) =>
+                            j === i ? { ...win, end: e.target.value } : win,
+                          )
+                          setSettings({
+                            ...settings,
+                            dateOverrides: { ...settings.dateOverrides, [date]: next },
+                          })
+                        }}
+                      />
+                    </span>
+                  ))
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setSettings({
+                      ...settings,
+                      dateOverrides: {
+                        ...settings.dateOverrides,
+                        [date]:
+                          windows.length === 0 ? [{ start: '09:00', end: '17:00' }] : [],
+                      },
+                    })
+                  }
+                >
+                  {windows.length === 0 ? 'Set hours instead' : 'Close all day'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const next = { ...settings.dateOverrides }
+                    delete next[date]
+                    setSettings({ ...settings, dateOverrides: next })
+                  }}
+                >
+                  ✕
+                </Button>
+              </div>
+            ))}
+          <div className="flex items-center gap-2 pt-1">
+            <Input
+              type="date"
+              className="h-8 w-40"
+              value={newOverrideDate}
+              onChange={e => setNewOverrideDate(e.target.value)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!newOverrideDate || newOverrideDate in settings.dateOverrides}
+              onClick={() => {
+                setSettings({
+                  ...settings,
+                  dateOverrides: { ...settings.dateOverrides, [newOverrideDate]: [] },
+                })
+                setNewOverrideDate('')
+              }}
+            >
+              + Add date
+            </Button>
           </div>
         </div>
       </section>
