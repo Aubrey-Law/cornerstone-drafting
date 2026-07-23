@@ -14,5 +14,6 @@ export async function getAppointmentTypesForPortal(): Promise<BookingWidgetType[
       description: t.description,
       durationMinutes: t.durationMinutes,
       locationType: t.locationType,
+      locationTypes: t.locationTypes,
     }))
 }

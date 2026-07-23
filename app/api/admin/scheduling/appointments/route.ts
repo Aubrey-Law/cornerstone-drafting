@@ -6,7 +6,7 @@ import {
   SlotTakenError,
 } from '@/lib/appointments/book'
 import { listAppointmentTypes } from '@/lib/appointments/settings'
-import type { AppointmentRow } from '@/lib/appointments/types'
+import { isAppointmentLocationType, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
       label: t.label,
       durationMinutes: t.durationMinutes,
       locationType: t.locationType,
+      locationTypes: t.locationTypes,
       active: t.active,
     })),
     appointments: ((data ?? []) as Partial<AppointmentRow>[]).map(row => ({
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
       startTime: row.start_time,
       endTime: row.end_time,
       status: row.status,
+      locationType: row.location_type ?? null,
       attendeeName: row.attendee_name,
       attendeeEmail: row.attendee_email,
       attendeePhone: row.attendee_phone,
@@ -89,6 +91,7 @@ interface PostBody {
   attendeeEmail?: unknown
   attendeePhone?: unknown
   notes?: unknown
+  locationType?: unknown
 }
 
 /**
@@ -123,6 +126,16 @@ export async function POST(req: NextRequest) {
   const type = (await listAppointmentTypes()).find(t => t.id === typeId)
   if (!type) return NextResponse.json({ error: 'Unknown appointment type' }, { status: 404 })
 
+  if (
+    body.locationType !== undefined &&
+    !(isAppointmentLocationType(body.locationType) && type.locationTypes.includes(body.locationType))
+  ) {
+    return NextResponse.json(
+      { error: 'That meeting format is not offered for this appointment type' },
+      { status: 400 },
+    )
+  }
+
   try {
     const result = await bookAppointment({
       type,
@@ -131,6 +144,7 @@ export async function POST(req: NextRequest) {
       attendeeEmail,
       attendeePhone: attendeePhone || null,
       notes,
+      locationType: isAppointmentLocationType(body.locationType) ? body.locationType : null,
       source: 'admin',
       bookedByUserId: userId ?? null,
     })

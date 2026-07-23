@@ -27,6 +27,7 @@ interface TypeShape {
   description: string
   durationMinutes: number
   locationType: 'phone' | 'teams' | 'in_person'
+  locationTypes: Array<'phone' | 'teams' | 'in_person'>
   active: boolean
   public: boolean
   sort: number
@@ -47,8 +48,8 @@ interface AppointmentListItem {
 }
 
 const LOCATION_OPTIONS = [
-  ['phone', 'Phone'],
-  ['teams', 'Teams video'],
+  ['phone', 'Phone call'],
+  ['teams', 'Virtual meeting'],
   ['in_person', 'In person'],
 ] as const
 
@@ -288,20 +289,33 @@ export function SchedulingSettingsSection() {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Format</Label>
-                  <select
-                    className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
-                    value={t.locationType}
-                    onChange={e =>
-                      updateType(t.id, { locationType: e.target.value as TypeShape['locationType'] })
-                    }
-                  >
-                    {LOCATION_OPTIONS.map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
+                  <Label className="text-xs">Meeting formats offered</Label>
+                  <div className="mt-2 space-y-1">
+                    {LOCATION_OPTIONS.map(([value, label]) => {
+                      const checked = t.locationTypes.includes(value)
+                      return (
+                        <label
+                          key={value}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            // The last remaining format can't be removed.
+                            disabled={checked && t.locationTypes.length === 1}
+                            onChange={e =>
+                              updateType(t.id, {
+                                locationTypes: e.target.checked
+                                  ? [...t.locationTypes, value]
+                                  : t.locationTypes.filter(v => v !== value),
+                              })
+                            }
+                          />
+                          {label}
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs">Label</Label>

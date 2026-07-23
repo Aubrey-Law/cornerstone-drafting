@@ -27,6 +27,7 @@ export async function GET(req: Request) {
       description: t.description,
       durationMinutes: t.durationMinutes,
       locationType: t.locationType,
+      locationTypes: t.locationTypes,
       public: t.public,
     })),
   })

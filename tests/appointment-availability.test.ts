@@ -8,7 +8,9 @@ import {
 import {
   effectiveWeeklyHours,
   emptyWeeklyHours,
+  resolveLocationType,
   sanitizeCustomWeeklyHours,
+  sanitizeLocationTypes,
   type WeeklyHours,
 } from '@/lib/appointments/types'
 
@@ -240,5 +242,22 @@ describe('per-type custom hours', () => {
     expect(sanitizeCustomWeeklyHours('9-5')).toBeNull()
     expect(sanitizeCustomWeeklyHours({})).toBeNull()
     expect(sanitizeCustomWeeklyHours({ mon: [], tue: [{ start: 'noon', end: '15:00' }] })).toBeNull()
+  })
+})
+
+describe('meeting formats', () => {
+  it('sanitizeLocationTypes dedupes, validates, and falls back to the legacy format', () => {
+    expect(sanitizeLocationTypes(['teams', 'phone', 'teams'], 'phone')).toEqual(['teams', 'phone'])
+    expect(sanitizeLocationTypes(['fax', 'carrier_pigeon'], 'in_person')).toEqual(['in_person'])
+    expect(sanitizeLocationTypes(null, 'teams')).toEqual(['teams'])
+    expect(sanitizeLocationTypes(undefined, 'bogus' as never)).toEqual(['phone'])
+  })
+
+  it('resolveLocationType honors an allowed choice and falls back otherwise', () => {
+    const type = { locationType: 'in_person', locationTypes: ['in_person', 'teams'] } as const
+    expect(resolveLocationType('teams', type)).toBe('teams')
+    expect(resolveLocationType('phone', type)).toBe('in_person') // not offered
+    expect(resolveLocationType(null, type)).toBe('in_person')
+    expect(resolveLocationType('garbage', type)).toBe('in_person')
   })
 })
