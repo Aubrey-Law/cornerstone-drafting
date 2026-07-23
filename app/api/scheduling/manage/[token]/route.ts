@@ -8,7 +8,7 @@ import {
 import { hashManageToken, isManageTokenExpired } from '@/lib/appointments/manageTokens'
 import { guardPublicSchedulingRoute } from '@/lib/appointments/publicRouteGuard'
 import { listAppointmentTypes } from '@/lib/appointments/settings'
-import type { AppointmentRow } from '@/lib/appointments/types'
+import { resolveLocationType, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
@@ -57,7 +57,8 @@ export async function GET(
             slug: type.slug,
             label: type.label,
             durationMinutes: type.durationMinutes,
-            locationType: type.locationType,
+            // The format chosen for this booking, not the type default.
+            locationType: resolveLocationType(row.location_type, type),
           }
         : null,
     },

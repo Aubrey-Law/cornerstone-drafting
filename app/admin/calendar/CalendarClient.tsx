@@ -17,11 +17,20 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
+type LocationType = 'phone' | 'teams' | 'in_person'
+
+const LOCATION_LABEL: Record<LocationType, string> = {
+  phone: 'Phone call',
+  teams: 'Virtual meeting',
+  in_person: 'In person',
+}
+
 interface CalendarAppointment {
   id: string
   startTime: string
   endTime: string
   status: 'scheduled' | 'cancelled' | 'rescheduled'
+  locationType: LocationType | null
   attendeeName: string
   attendeeEmail: string
   attendeePhone: string | null
@@ -37,8 +46,14 @@ interface BookableType {
   id: string
   label: string
   durationMinutes: number
-  locationType: 'phone' | 'teams' | 'in_person'
+  locationType: LocationType
+  locationTypes: LocationType[]
   active: boolean
+}
+
+function allowedFormats(type: BookableType | undefined): LocationType[] {
+  if (!type) return ['phone']
+  return type.locationTypes.length > 0 ? type.locationTypes : [type.locationType]
 }
 
 type CalendarView = 'month' | 'week' | 'day'
@@ -105,6 +120,7 @@ function minutesOfDay(iso: string): number {
 
 interface BookingDraft {
   typeId: string
+  locationType: LocationType
   date: string
   time: string
   attendeeName: string
@@ -188,6 +204,7 @@ export function CalendarClient() {
     const date = prefill?.date ?? startOfDay(today)
     setDraft({
       typeId: types[0]?.id ?? '',
+      locationType: allowedFormats(types[0])[0],
       date: toDateInputValue(date),
       time: prefill?.time ?? '09:00',
       attendeeName: '',
@@ -215,6 +232,7 @@ export function CalendarClient() {
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
           typeId: draft.typeId,
+          locationType: draft.locationType,
           startIso: start.toISOString(),
           attendeeName: draft.attendeeName.trim(),
           attendeeEmail: draft.attendeeEmail.trim(),
@@ -345,6 +363,7 @@ export function CalendarClient() {
                   <p className="text-xs text-muted-foreground">
                     {a.attendeeEmail}
                     {a.attendeePhone ? ` · ${a.attendeePhone}` : ''}
+                    {a.locationType ? ` · ${LOCATION_LABEL[a.locationType]}` : ''}
                     {!a.outlookSynced && a.status === 'scheduled' && (
                       <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
                     )}
@@ -379,11 +398,36 @@ export function CalendarClient() {
                   id="book-type"
                   className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
                   value={draft.typeId}
-                  onChange={e => setDraft({ ...draft, typeId: e.target.value })}
+                  onChange={e => {
+                    const next = types.find(t => t.id === e.target.value)
+                    setDraft({
+                      ...draft,
+                      typeId: e.target.value,
+                      // Keep the format if the new type also offers it.
+                      locationType: allowedFormats(next).includes(draft.locationType)
+                        ? draft.locationType
+                        : allowedFormats(next)[0],
+                    })
+                  }}
                 >
                   {types.map(t => (
                     <option key={t.id} value={t.id}>
                       {t.label} ({t.durationMinutes} min)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="book-format">Meeting format</Label>
+                <select
+                  id="book-format"
+                  className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                  value={draft.locationType}
+                  onChange={e => setDraft({ ...draft, locationType: e.target.value as LocationType })}
+                >
+                  {allowedFormats(types.find(t => t.id === draft.typeId)).map(f => (
+                    <option key={f} value={f}>
+                      {LOCATION_LABEL[f]}
                     </option>
                   ))}
                 </select>

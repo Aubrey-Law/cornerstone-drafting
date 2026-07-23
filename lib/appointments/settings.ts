@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
   appointmentTypeFromRow,
   emptyWeeklyHours,
+  isAppointmentLocationType,
   sanitizeCustomWeeklyHours,
   sanitizeWeeklyHours,
   type AppointmentType,
@@ -100,7 +101,7 @@ export async function listAppointmentTypes(): Promise<AppointmentType[]> {
 
   const { data } = await getAdminClient()
     .from('appointment_types')
-    .select('id, key, slug, label, description, duration_minutes, location_type, active, public, sort, custom_weekly_hours')
+    .select('id, key, slug, label, description, duration_minutes, location_type, location_types, active, public, sort, custom_weekly_hours')
     .order('sort', { ascending: true })
 
   const value = ((data ?? []) as AppointmentTypeRow[]).map(appointmentTypeFromRow)
@@ -124,6 +125,8 @@ export interface UpdateAppointmentTypeInput {
   description?: string
   durationMinutes?: number
   locationType?: string
+  /** Ordered allowed formats; first entry becomes the default location_type. */
+  locationTypes?: unknown
   active?: boolean
   public?: boolean
   sort?: number
@@ -137,6 +140,16 @@ export async function updateAppointmentType(input: UpdateAppointmentTypeInput): 
   if (input.description !== undefined) patch.description = input.description
   if (input.durationMinutes !== undefined) patch.duration_minutes = input.durationMinutes
   if (input.locationType !== undefined) patch.location_type = input.locationType
+  if (input.locationTypes !== undefined) {
+    const list = Array.isArray(input.locationTypes)
+      ? [...new Set(input.locationTypes.filter(isAppointmentLocationType))]
+      : []
+    if (list.length > 0) {
+      patch.location_types = list
+      // Keep the legacy single-format column synced to the default.
+      patch.location_type = list[0]
+    }
+  }
   if (input.active !== undefined) patch.active = input.active
   if (input.public !== undefined) patch.public = input.public
   if (input.sort !== undefined) patch.sort = input.sort

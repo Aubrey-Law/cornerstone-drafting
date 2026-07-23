@@ -100,6 +100,7 @@ vi.mock('@/lib/appointments/settings', () => ({
       description: '',
       durationMinutes: 30,
       locationType: 'teams',
+      locationTypes: ['teams', 'phone'],
       active: true,
       public: true,
       sort: 1,
@@ -122,6 +123,7 @@ function dueRow(overrides: Partial<Record<string, unknown>> = {}) {
     attendee_name: 'Pat Client',
     attendee_email: 'pat@example.com',
     online_meeting_url: 'https://teams.microsoft.com/l/meetup-join/abc',
+    location_type: 'teams',
     created_at: '2026-08-01T00:00:00.000Z', // booked well before the window
     ...overrides,
   }
