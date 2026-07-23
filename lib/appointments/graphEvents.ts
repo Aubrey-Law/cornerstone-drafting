@@ -123,6 +123,110 @@ export async function createCalendarEvent(input: CreateEventInput): Promise<Crea
   }
 }
 
+export interface OutlookCalendarEvent {
+  id: string
+  subject: string
+  startIso: string
+  endIso: string
+  isAllDay: boolean
+  /** Outlook free/busy status: free | tentative | busy | oof | workingElsewhere. */
+  showAs: string
+}
+
+interface RawGraphViewEvent {
+  id?: string
+  seriesMasterId?: string
+  subject?: string
+  isAllDay?: boolean
+  isCancelled?: boolean
+  showAs?: string
+  start?: { dateTime?: string }
+  end?: { dateTime?: string }
+}
+
+/** Graph returns naive datetimes in the requested zone (we request UTC). */
+function graphDateTimeToIso(value: string | undefined): string | null {
+  if (!value) return null
+  const iso = /z$|[+-]\d\d:\d\d$/i.test(value) ? value : `${value}Z`
+  const ms = Date.parse(iso)
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+}
+
+/**
+ * Map a Graph calendarView page to calendar events, dropping cancelled
+ * events and any event that IS a Cornerstone appointment (those render from
+ * the appointments table — excluding them here prevents duplicates).
+ */
+export function mapGraphCalendarView(
+  raw: unknown,
+  excludeEventIds: ReadonlySet<string>,
+): OutlookCalendarEvent[] {
+  if (!Array.isArray(raw)) return []
+  const events: OutlookCalendarEvent[] = []
+  for (const item of raw as RawGraphViewEvent[]) {
+    if (!item || typeof item !== 'object' || !item.id) continue
+    if (item.isCancelled) continue
+    if (excludeEventIds.has(item.id)) continue
+    if (item.seriesMasterId && excludeEventIds.has(item.seriesMasterId)) continue
+    const startIso = graphDateTimeToIso(item.start?.dateTime)
+    const endIso = graphDateTimeToIso(item.end?.dateTime)
+    if (!startIso || !endIso) continue
+    events.push({
+      id: item.id,
+      subject: item.subject?.trim() || '(no subject)',
+      startIso,
+      endIso,
+      isAllDay: Boolean(item.isAllDay),
+      showAs: item.showAs ?? 'busy',
+    })
+  }
+  return events.sort((a, b) => a.startIso.localeCompare(b.startIso))
+}
+
+const CALENDAR_VIEW_MAX_PAGES = 3
+
+/**
+ * The attorney's Outlook calendar for a range (raw Graph events, UTC).
+ * Follows up to a few nextLink pages; throws when Outlook is unreachable
+ * or not connected.
+ */
+export async function listCalendarView(fromIso: string, toIso: string): Promise<unknown[]> {
+  const conn = await getMicrosoftConnectionForUser(null)
+  if (!conn) throw new Error('Microsoft Outlook is not connected')
+  const token = await getAccessToken(conn.user_id)
+
+  const params = new URLSearchParams({
+    startDateTime: fromIso,
+    endDateTime: toIso,
+    $top: '100',
+    $orderby: 'start/dateTime',
+    $select: 'id,seriesMasterId,subject,isAllDay,isCancelled,showAs,start,end',
+  })
+  let url: string | null = `${GRAPH_BASE}/me/calendarView?${params.toString()}`
+  const all: unknown[] = []
+
+  for (let page = 0; url && page < CALENDAR_VIEW_MAX_PAGES; page++) {
+    const r = await graphFetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Prefer: 'outlook.timezone="UTC"',
+      },
+    })
+    const json = (await r.json().catch(() => ({}))) as {
+      value?: unknown[]
+      '@odata.nextLink'?: string
+      error?: { message?: string }
+    }
+    if (!r.ok) {
+      throw new Error(json.error?.message || `Graph calendarView failed (${r.status})`)
+    }
+    all.push(...(json.value ?? []))
+    url = json['@odata.nextLink'] ?? null
+  }
+
+  return all
+}
+
 /** Delete the Outlook event — Outlook sends the cancellation to the attendee. */
 export async function cancelCalendarEvent(eventId: string): Promise<void> {
   const conn = await getMicrosoftConnectionForUser(null)
