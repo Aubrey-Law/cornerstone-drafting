@@ -1,6 +1,6 @@
 export type AppointmentLocationType = 'phone' | 'teams' | 'in_person'
 export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled'
-export type AppointmentSource = 'public' | 'portal'
+export type AppointmentSource = 'public' | 'portal' | 'admin'
 
 export interface SchedulingSettings {
   timezone: string

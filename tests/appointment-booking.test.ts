@@ -239,6 +239,29 @@ describe('bookAppointment', () => {
     expect(state.inserts.find(i => i.table === 'appointments')).toBeDefined()
   })
 
+  it('admin bookings bypass weekly hours but still reject hard conflicts', async () => {
+    // Sunday 10:00 ET — outside weekly hours; a client booking would fail.
+    const sunday = '2026-08-09T14:00:00.000Z'
+    await bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday })
+    expect(state.inserts.find(i => i.table === 'appointments')).toBeDefined()
+
+    // Same slot with an Outlook conflict is still rejected.
+    state.reset()
+    state.busy = [
+      { start: Date.parse('2026-08-09T14:00:00Z'), end: Date.parse('2026-08-09T15:00:00Z') },
+    ]
+    await expect(
+      bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday }),
+    ).rejects.toThrow(SlotTakenError)
+  })
+
+  it('admin bookings send the client confirmation but no internal alert', async () => {
+    await bookAppointment({ ...bookingInput(), source: 'admin' })
+    const categories = state.emails.map(e => e.category)
+    expect(categories).toContain('appointment_confirmation')
+    expect(categories).not.toContain('appointment_booked_alert')
+  })
+
   it('maps the exclusion-constraint race to SlotTakenError', async () => {
     state.insertError = { code: '23P01', message: 'conflicting key value violates exclusion constraint "appointments_no_overlap"' }
     await expect(bookAppointment(bookingInput())).rejects.toThrow(SlotTakenError)

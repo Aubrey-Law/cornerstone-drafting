@@ -171,6 +171,8 @@ async function sendConfirmationEmails(input: {
   teamsUrl: string | null
   timezone: string
   action: 'Booked' | 'Rescheduled'
+  /** Staff booked it themselves — no point alerting them about it. */
+  skipInternalAlert?: boolean
 }): Promise<void> {
   const firm = await loadFirmSettings()
   const office = [firm.street, [firm.city, firm.state].filter(Boolean).join(', '), firm.zip]
@@ -200,6 +202,8 @@ async function sendConfirmationEmails(input: {
   } catch (err) {
     console.error('[appointments] confirmation email failed', err)
   }
+
+  if (input.skipInternalAlert) return
 
   try {
     await sendEmail({
@@ -239,17 +243,24 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     new Date(start - DAY_MS),
     new Date(start + DAY_MS),
   )
-  const available = isSlotAvailable(startIso, {
-    weeklyHours: effectiveWeeklyHours(settings.weeklyHours, input.type),
-    timezone: settings.timezone,
-    durationMinutes: input.type.durationMinutes,
-    bufferMinutes: settings.bufferMinutes,
-    minNoticeHours: settings.minNoticeHours,
-    horizonDays: settings.horizonDays,
-    busy,
-    now: new Date(),
-  })
-  if (!available) throw new SlotTakenError()
+  if (input.source === 'admin') {
+    // Staff bookings bypass client-facing rules (weekly hours, notice,
+    // horizon, buffer, slot grid) — only hard conflicts block them.
+    const end = start + input.type.durationMinutes * 60_000
+    if (busy.some(b => start < b.end && end > b.start)) throw new SlotTakenError()
+  } else {
+    const available = isSlotAvailable(startIso, {
+      weeklyHours: effectiveWeeklyHours(settings.weeklyHours, input.type),
+      timezone: settings.timezone,
+      durationMinutes: input.type.durationMinutes,
+      bufferMinutes: settings.bufferMinutes,
+      minNoticeHours: settings.minNoticeHours,
+      horizonDays: settings.horizonDays,
+      busy,
+      now: new Date(),
+    })
+    if (!available) throw new SlotTakenError()
+  }
 
   const manage = createManageToken()
 
@@ -356,6 +367,7 @@ export async function bookAppointment(input: BookAppointmentInput): Promise<Book
     teamsUrl,
     timezone: settings.timezone,
     action: 'Booked',
+    skipInternalAlert: input.source === 'admin',
   })
 
   return { appointmentId, startIso, endIso, manageToken: manage.token }
