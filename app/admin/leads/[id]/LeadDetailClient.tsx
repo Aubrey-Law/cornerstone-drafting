@@ -5,8 +5,10 @@ import { ArrowLeft } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import type { LeadEditableField } from '@/lib/leads/details'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { LeadDetailsCard, type LeadForm } from '@/components/leads/LeadDetailsCard'
+import { LeadDetailsCard } from '@/components/leads/LeadDetailsCard'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { LeadNotesCard, type LeadMeetingNote, type LeadNote } from '@/components/leads/LeadNotesCard'
 import { LeadActivityCard } from '@/components/leads/LeadActivityCard'
@@ -90,39 +92,10 @@ type LeadDetailClientProps = {
   activeAgreement?: { id: string } | null
 }
 
-function snapshot(lead: LeadRecord, spouse: LeadSpouse | null): LeadForm {
-  return {
-    firstName: lead.first_name ?? '',
-    middleName: lead.middle_name ?? '',
-    lastName: lead.last_name ?? '',
-    preferredName: lead.preferred_name ?? '',
-    email: lead.email ?? '',
-    phone: lead.phone ?? '',
-    dateOfBirth: lead.date_of_birth ?? '',
-    addressLine1: lead.address_line1 ?? '',
-    addressLine2: lead.address_line2 ?? '',
-    city: lead.city ?? '',
-    state: lead.state ?? '',
-    zip: lead.zip ?? '',
-    county: lead.county ?? '',
-    maritalStatus: lead.marital_status ?? '',
-    practiceArea: normalizePracticeArea(lead.practice_area),
-    source: lead.lead_source ?? '',
-    status: lead.lead_status ?? 'lead',
-    fee: lead.engagement_fee_quoted == null ? '' : String(lead.engagement_fee_quoted),
-    urgency: lead.lead_urgency ?? '',
-    estimatedEstateValue: lead.taxable_estate == null ? '' : String(lead.taxable_estate),
-    minorChildren: lead.has_minor_children == null ? '' : lead.has_minor_children ? 'yes' : 'no',
-    qualificationNotes: lead.qualification_notes ?? '',
-    spousePresent: spouse ? 'yes' : 'no',
-    spouseFirstName: spouse?.first_name ?? '',
-    spouseMiddleName: spouse?.middle_name ?? '',
-    spouseLastName: spouse?.last_name ?? '',
-    spousePreferredName: spouse?.preferred_name ?? '',
-    spouseEmail: spouse?.email ?? '',
-    spousePhone: spouse?.phone ?? '',
-    spouseDateOfBirth: spouse?.date_of_birth ?? '',
-  }
+type LeadPatchResponse = {
+  lead: LeadRecord
+  spouse: LeadSpouse | null
+  matterId?: string
 }
 
 export function LeadDetailClient({
@@ -138,10 +111,8 @@ export function LeadDetailClient({
   const router = useRouter()
   const [lead, setLead] = useState(initialLead)
   const [spouse, setSpouse] = useState(initialSpouse)
-  const [form, setForm] = useState(() => snapshot(initialLead, initialSpouse))
-  const [editing, setEditing] = useState(false)
+  const [activeField, setActiveField] = useState<LeadEditableField | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [activity, setActivity] = useState(initialActivity)
   const [busy, setBusy] = useState(false)
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
@@ -204,90 +175,76 @@ export function LeadDetailClient({
     }
   }
 
-  function cancel() {
-    setForm(snapshot(lead, spouse))
-    setError(null)
-    setFieldErrors({})
-    setEditing(false)
-  }
-
-  function payload(status = form.status) {
+  function statusPayload(status: string) {
     return {
-      firstName: form.firstName,
-      middleName: form.middleName,
-      lastName: form.lastName,
-      preferredName: form.preferredName,
-      email: form.email,
-      phone: form.phone,
-      dateOfBirth: form.dateOfBirth,
-      addressLine1: form.addressLine1,
-      addressLine2: form.addressLine2,
-      city: form.city,
-      state: form.state,
-      zip: form.zip,
-      county: form.county,
-      maritalStatus: form.maritalStatus,
-      practiceArea: form.practiceArea,
-      source: form.source,
+      firstName: lead.first_name ?? '',
+      middleName: lead.middle_name ?? '',
+      lastName: lead.last_name ?? '',
+      preferredName: lead.preferred_name ?? '',
+      email: lead.email ?? '',
+      phone: lead.phone ?? '',
+      dateOfBirth: lead.date_of_birth ?? '',
+      addressLine1: lead.address_line1 ?? '',
+      addressLine2: lead.address_line2 ?? '',
+      city: lead.city ?? '',
+      state: lead.state ?? '',
+      zip: lead.zip ?? '',
+      county: lead.county ?? '',
+      maritalStatus: lead.marital_status ?? '',
+      practiceArea: normalizePracticeArea(lead.practice_area),
+      source: lead.lead_source ?? '',
       status,
-      fee: form.fee === '' ? null : Number(form.fee),
-      urgency: form.urgency || null,
-      estimatedEstateValue: form.estimatedEstateValue === '' ? null : Number(form.estimatedEstateValue),
-      hasMinorChildren: form.minorChildren === '' ? null : form.minorChildren === 'yes',
-      qualificationNotes: form.qualificationNotes,
-      spouse: form.spousePresent === 'yes' ? {
-        firstName: form.spouseFirstName,
-        middleName: form.spouseMiddleName,
-        lastName: form.spouseLastName,
-        preferredName: form.spousePreferredName,
-        email: form.spouseEmail,
-        phone: form.spousePhone,
-        dateOfBirth: form.spouseDateOfBirth,
+      fee: lead.engagement_fee_quoted,
+      urgency: lead.lead_urgency ?? null,
+      estimatedEstateValue: lead.taxable_estate ?? null,
+      hasMinorChildren: lead.has_minor_children ?? null,
+      qualificationNotes: lead.qualification_notes ?? '',
+      spouse: spouse ? {
+        firstName: spouse.first_name ?? '',
+        middleName: spouse.middle_name ?? '',
+        lastName: spouse.last_name ?? '',
+        preferredName: spouse.preferred_name ?? '',
+        email: spouse.email ?? '',
+        phone: spouse.phone ?? '',
+        dateOfBirth: spouse.date_of_birth ?? '',
       } : null,
     }
   }
 
-  async function persist(status = form.status, close = true) {
+  async function persistStatus(status: string) {
     setError(null)
-    setFieldErrors({})
     setBusy(true)
     try {
-      const json = await call<{ lead: LeadRecord; spouse: LeadSpouse | null; matterId?: string }>(
+      const json = await call<LeadPatchResponse>(
         `/api/admin/leads/${lead.id}`,
-        payload(status),
+        statusPayload(status),
         'PATCH',
       )
       setLead(json.lead)
       setSpouse(json.spouse)
-      setForm(snapshot(json.lead, json.spouse))
-      if (close) setEditing(false)
       await refreshActivity()
       if (json.matterId) router.push(`/admin/matters/${json.matterId}`)
     } catch (caught) {
-      const detail = caught as Error & { fieldErrors?: Record<string, string> }
-      setError(detail.message || 'Could not save')
-      setFieldErrors(detail.fieldErrors || {})
+      setError(caught instanceof Error ? caught.message : 'Could not save')
     } finally {
       setBusy(false)
     }
   }
 
-  async function save() {
-    const errors: Record<string, string> = {}
-    if (!form.firstName.trim()) errors.firstName = 'First name is required'
-    if (!form.lastName.trim()) errors.lastName = 'Last name is required'
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) errors.email = 'Invalid email'
-    if (form.spousePresent === 'yes' && !form.spouseFirstName.trim()) errors.spouseFirstName = 'Spouse first name is required'
-    if (form.spousePresent === 'yes' && !form.spouseLastName.trim()) errors.spouseLastName = 'Spouse last name is required'
-    if (form.spousePresent === 'yes' && form.spouseEmail && !/^\S+@\S+\.\S+$/.test(form.spouseEmail)) errors.spouseEmail = 'Invalid spouse email'
-    if (form.fee !== '' && (!Number.isFinite(Number(form.fee)) || Number(form.fee) < 0)) errors.fee = 'Invalid fee'
-    if (form.estimatedEstateValue !== '' && (!Number.isFinite(Number(form.estimatedEstateValue)) || Number(form.estimatedEstateValue) < 0)) errors.estimatedEstateValue = 'Invalid estate value'
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors)
-      setError(Object.values(errors)[0])
-      return
+  async function saveField(field: LeadEditableField, value: unknown) {
+    try {
+      const json = await call<LeadPatchResponse>(
+        `/api/admin/leads/${lead.id}`,
+        { field, value },
+        'PATCH',
+      )
+      setLead(json.lead)
+      setSpouse(json.spouse)
+      await refreshActivity()
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Could not save field')
+      throw caught
     }
-    await persist()
   }
 
   function action(path: string, body?: unknown) {
@@ -310,13 +267,7 @@ export function LeadDetailClient({
   const [removeSpouseConfirmOpen, setRemoveSpouseConfirmOpen] = useState(false)
 
   function removeSpouse() {
-    const populated = ['spouseFirstName', 'spouseMiddleName', 'spouseLastName', 'spousePreferredName', 'spouseEmail', 'spousePhone', 'spouseDateOfBirth']
-      .some(key => form[key].trim())
-    if (!populated) {
-      setForm(current => ({ ...current, spousePresent: 'no' }))
-    } else {
-      setRemoveSpouseConfirmOpen(true)
-    }
+    setRemoveSpouseConfirmOpen(true)
   }
 
   const clientName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Lead'
@@ -342,11 +293,11 @@ export function LeadDetailClient({
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
             matterId={lead.matter_id}
-            actionError={editing ? null : error}
+            actionError={error}
             onIntake={() => void sendIntake()}
             onDraft={action(`/api/admin/leads/${lead.id}/engagement-draft`)}
             onConvert={lead.lead_status === 'hired' && lead.matter_id ? () => router.push(`/admin/matters/${lead.matter_id}`) : action(`/api/admin/leads/${lead.id}/convert`)}
-            onStatusChange={status => void persist(status, false)}
+            onStatusChange={status => void persistStatus(status)}
           />
         </div>
       </header>
@@ -362,22 +313,9 @@ export function LeadDetailClient({
           <LeadDetailsCard
             lead={lead}
             spouse={spouse}
-            editing={editing}
-            form={form}
-            error={error}
-            fieldErrors={fieldErrors}
-            busy={busy}
-            onEdit={() => setEditing(true)}
-            onCancel={cancel}
-            onSave={save}
-            onChange={(key, value) => {
-              setForm(current => ({ ...current, [key]: value }))
-              setFieldErrors(current => {
-                const next = { ...current }
-                delete next[key]
-                return next
-              })
-            }}
+            activeField={activeField}
+            onActiveFieldChange={setActiveField}
+            onSaveField={saveField}
             onRemoveSpouse={removeSpouse}
           />
           <LeadNotesCard
@@ -443,7 +381,9 @@ export function LeadDetailClient({
             <AlertDialogAction
               onClick={() => {
                 setRemoveSpouseConfirmOpen(false)
-                setForm(current => ({ ...current, spousePresent: 'no' }))
+                void saveField('spouse', null)
+                  .catch(() => undefined)
+                  .finally(() => setActiveField(null))
               }}
             >
               Remove spouse
