@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const harness = vi.hoisted(() => {
   const rawLead = {
@@ -64,9 +64,13 @@ const harness = vi.hoisted(() => {
       { id: 'user-2', display_name: null, email: 'ben@example.com' },
     ],
   }
+  const errors: Record<string, { message: string } | null> = {}
   const admin = {
     from: vi.fn((table: string) => {
-      const result = () => ({ data: rows[table] ?? [], error: null })
+      const result = () => ({
+        data: errors[table] ? null : rows[table] ?? [],
+        error: errors[table] ?? null,
+      })
       const chain = {
         select: () => chain,
         eq: () => chain,
@@ -84,7 +88,7 @@ const harness = vi.hoisted(() => {
       return chain
     }),
   }
-  return { admin, hydrate: vi.fn(async () => hydratedLead), hydratedLead, rawLead, calls }
+  return { admin, hydrate: vi.fn(async () => hydratedLead), hydratedLead, rawLead, calls, errors }
 })
 
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => harness.admin }))
@@ -99,6 +103,11 @@ vi.mock('@/app/admin/leads/[id]/LeadDetailClient', () => ({ LeadDetailClient: ()
 import LeadDetailPage from '@/app/admin/leads/[id]/page'
 
 describe('LeadDetailPage intake loader', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    for (const table of Object.keys(harness.errors)) delete harness.errors[table]
+  })
+
   it('hydrates contact-backed household and fiduciary intake data before rendering the lead client', async () => {
     const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
 
@@ -112,6 +121,19 @@ describe('LeadDetailPage intake loader', () => {
       },
       nextAppointmentAt: '2026-07-30T14:00:00Z',
       lastTouchAt: '2026-07-23T11:00:00Z',
+    })
+  })
+
+  it('passes a visible actor warning while retaining the loaded timeline rows when actor lookup fails', async () => {
+    harness.errors.users = { message: 'actor lookup failed' }
+
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+
+    expect(page.props).toMatchObject({
+      initialActivity: [expect.objectContaining({ id: 'activity-1' })],
+      initialCalls: harness.calls,
+      actorNames: {},
+      actorError: 'actor lookup failed',
     })
   })
 })

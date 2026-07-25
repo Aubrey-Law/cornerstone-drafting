@@ -101,6 +101,27 @@ describe('lead detail page', () => {
     expect(screen.getByText('Event 9')).toBeTruthy()
   })
 
+  it('shows an actor-loading warning without hiding timeline content', () => {
+    render(
+      <LeadDetailClient
+        lead={lead}
+        spouse={spouse}
+        actorError="actor lookup failed"
+        initialActivity={[{
+          id: 'a1',
+          event_type: 'details_updated',
+          title: 'Phone updated',
+          actor_id: 'user-1',
+          created_at: '2026-07-24T12:00:00Z',
+        }]}
+      />,
+    )
+
+    expect(screen.getByText('Actor names unavailable: actor lookup failed')).toBeTruthy()
+    expect(screen.getByText('Phone updated')).toBeTruthy()
+    expect(screen.getByText(/System ·/)).toBeTruthy()
+  })
+
   it('renders the one visible status, complete subtitle, and top action set without a status selector', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)

@@ -155,6 +155,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       nextAppointmentAt={appointment?.start_time ?? null}
       lastTouchAt={lastTouchAt}
       callsError={callsError?.message ?? null}
+      actorError={actorResult.error?.message ?? null}
       activeAgreement={agreement}
       currentUser={{
         id: user?.id ?? '',

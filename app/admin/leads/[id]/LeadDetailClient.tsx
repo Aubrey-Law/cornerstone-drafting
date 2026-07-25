@@ -103,6 +103,7 @@ type LeadDetailClientProps = {
   nextAppointmentAt?: string | null
   lastTouchAt?: string | null
   callsError?: string | null
+  actorError?: string | null
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
 }
@@ -141,6 +142,7 @@ export function LeadDetailClient({
   nextAppointmentAt = null,
   lastTouchAt,
   callsError = null,
+  actorError = null,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
 }: LeadDetailClientProps) {
@@ -521,6 +523,7 @@ export function LeadDetailClient({
                 initialActivity={activity}
                 actorNames={actorNames}
                 callsError={callsError}
+                actorError={actorError}
                 currentUser={currentUser}
                 onActivityChange={refreshActivity}
               />

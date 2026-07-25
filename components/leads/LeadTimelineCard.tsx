@@ -54,6 +54,7 @@ type Props = {
   initialCalls?: LeadTimelineCall[]
   actorNames?: Record<string, string>
   callsError?: string | null
+  actorError?: string | null
   currentUser: { id: string; role: string }
   onActivityChange?: () => void | Promise<void>
 }
@@ -104,6 +105,7 @@ export function LeadTimelineCard({
   initialCalls = [],
   actorNames = {},
   callsError = null,
+  actorError = null,
   currentUser,
   onActivityChange,
 }: Props) {
@@ -379,6 +381,9 @@ export function LeadTimelineCard({
       )}
       {callsError && (
         <p className="mt-4 text-xs text-muted-foreground">Calls unavailable: {callsError}</p>
+      )}
+      {actorError && (
+        <p className="mt-4 text-xs text-muted-foreground">Actor names unavailable: {actorError}</p>
       )}
 
       {granolaOpen && (
