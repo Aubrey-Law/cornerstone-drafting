@@ -1,13 +1,22 @@
 import type { IntakeRow } from '@/lib/intakeSections'
+import { DESIGN_SECTION_IDS, type DesignSectionId } from '@/lib/designSheet/sectionIds'
 
 export type IntakeReadinessFlagSeverity = 'review'
+export type IntakeReadinessResolutionKind = 'needs_data' | 'attorney_judgment'
 
 export interface IntakeReadinessFlag {
   key: string
   label: string
   sectionId: string
   severity: IntakeReadinessFlagSeverity
+  resolutionKind: IntakeReadinessResolutionKind
   message: string
+}
+
+export interface IntakeReviewTarget {
+  sectionId: DesignSectionId
+  targetField: string | null
+  href: (matterId: string) => string
 }
 
 type ReviewChoice = 'discuss_with_attorney' | 'not_provided_yet'
@@ -90,20 +99,24 @@ export function getIntakeReadinessFlags(data: IntakeRow): IntakeReadinessFlag[] 
   for (const item of FIDUCIARY_FLAG_LABELS) {
     if (item.entryKey.endsWith('_spouse') && !married) continue
     if (hasNamedFiduciary(data, item.entryKey)) continue
+    const choice = reviewChoice(data, item.choiceKey)
     flags.push(flag(
       item.key,
       item.label,
       item.sectionId,
-      readinessMessage(`${item.label} was not provided.`, reviewChoice(data, item.choiceKey)),
+      readinessMessage(`${item.label} was not provided.`, choice),
+      choice === 'discuss_with_attorney' ? 'attorney_judgment' : 'needs_data',
     ))
   }
 
   if (minorChildren && !hasNamedFiduciary(data, 'fid_guardian_client')) {
+    const choice = reviewChoice(data, 'guardian')
     flags.push(flag(
       'guardian_missing',
       'Guardian for minor children',
       'guardian',
-      readinessMessage('Guardian for minor children was not provided.', reviewChoice(data, 'guardian')),
+      readinessMessage('Guardian for minor children was not provided.', choice),
+      choice === 'discuss_with_attorney' ? 'attorney_judgment' : 'needs_data',
     ))
   }
 
@@ -133,8 +146,43 @@ function assetDetailFlags(data: IntakeRow): IntakeReadinessFlag[] {
   return flags
 }
 
-function flag(key: string, label: string, sectionId: string, message: string): IntakeReadinessFlag {
-  return { key, label, sectionId, severity: 'review', message }
+function flag(
+  key: string,
+  label: string,
+  sectionId: string,
+  message: string,
+  resolutionKind: IntakeReadinessResolutionKind = 'needs_data',
+): IntakeReadinessFlag {
+  return { key, label, sectionId, severity: 'review', resolutionKind, message }
+}
+
+const INTAKE_REVIEW_TARGETS: Record<string, { sectionId: DesignSectionId; targetField: string | null }> = {
+  client_dob_missing: { sectionId: DESIGN_SECTION_IDS.clientInformation, targetField: 'client_dob' },
+  spouse_dob_missing: { sectionId: DESIGN_SECTION_IDS.clientInformation, targetField: 'spouse_dob' },
+  county_missing: { sectionId: DESIGN_SECTION_IDS.clientInformation, targetField: 'county' },
+  client_trustee_missing: { sectionId: DESIGN_SECTION_IDS.trustDetails, targetField: 'trustee_slots' },
+  client_personal_rep_missing: { sectionId: DESIGN_SECTION_IDS.willDetails, targetField: 'executor_slots' },
+  spouse_personal_rep_missing: { sectionId: DESIGN_SECTION_IDS.willDetails, targetField: 'spouse_executor_slots' },
+  guardian_missing: { sectionId: DESIGN_SECTION_IDS.willDetails, targetField: 'guardian_slots' },
+  client_poa_missing: { sectionId: DESIGN_SECTION_IDS.financialPoa, targetField: 'poa_slots' },
+  spouse_poa_missing: { sectionId: DESIGN_SECTION_IDS.financialPoa, targetField: 'spouse_poa_slots' },
+  client_hcp_missing: { sectionId: DESIGN_SECTION_IDS.healthcareDirectives, targetField: 'hcp_slots' },
+  spouse_hcp_missing: { sectionId: DESIGN_SECTION_IDS.healthcareDirectives, targetField: 'spouse_hcp_slots' },
+}
+
+export function resolveIntakeReviewTarget(flag: Pick<IntakeReadinessFlag, 'key'>): IntakeReviewTarget {
+  const mapped = INTAKE_REVIEW_TARGETS[flag.key]
+    ?? (flag.key.endsWith('_details_missing')
+      ? { sectionId: DESIGN_SECTION_IDS.assetSchedules, targetField: null }
+      : { sectionId: DESIGN_SECTION_IDS.intakeReview, targetField: null })
+
+  return {
+    ...mapped,
+    href(matterId: string) {
+      const focus = `${mapped.sectionId}:${mapped.targetField ?? ''}`
+      return `/admin/drafting/${matterId}?step=design&focus=${encodeURIComponent(focus)}`
+    },
+  }
 }
 
 function readinessMessage(base: string, choice: ReviewChoice | null): string {

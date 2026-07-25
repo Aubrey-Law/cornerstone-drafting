@@ -1,4 +1,8 @@
 import type { PipelineMatter } from '@/types/database'
+import {
+  resolveIntakeReviewTarget,
+  type IntakeReadinessFlag,
+} from '@/lib/intakeReadiness'
 
 export type MatterNextActionTone = 'default' | 'warning' | 'success'
 export type MatterNextActionKind =
@@ -7,6 +11,7 @@ export type MatterNextActionKind =
   | 'waiting-intake'
   | 'review-intake'
   | 'waiting-engagement'
+  | 'resolve-review-flags'
   | 'draft'
 
 export interface MatterNextAction {
@@ -28,6 +33,7 @@ export interface EngagementSnapshot {
 export function computeMatterNextAction(
   matter: PipelineMatter,
   engagement?: EngagementSnapshot,
+  reviewFlags: IntakeReadinessFlag[] = [],
 ): MatterNextAction {
   const intakeStatus = matter.intake_status?.toLowerCase() ?? ''
   const intakeComplete = intakeStatus === 'completed' || intakeStatus === 'approved' || intakeStatus === 'submitted'
@@ -41,6 +47,17 @@ export function computeMatterNextAction(
       href: `/admin/matters/${matter.matter_id}`,
       cta: 'Send intake',
       tone: 'warning',
+    }
+  }
+
+  if (!intakeComplete) {
+    return {
+      kind: 'waiting-intake',
+      title: 'Waiting for client intake',
+      detail: 'The invite is out — follow up if the questionnaire is still incomplete.',
+      href: `/admin/matters/${matter.matter_id}`,
+      cta: 'Resend intake',
+      tone: 'default',
     }
   }
 
@@ -59,14 +76,26 @@ export function computeMatterNextAction(
     }
   }
 
-  if (!intakeComplete && matter.stage === 'intake') {
+  if (engagementUnsigned && engagement.sentAt) {
     return {
-      kind: 'waiting-intake',
-      title: 'Waiting for client intake',
-      detail: 'The invite is out — follow up if the questionnaire is still incomplete.',
+      kind: 'waiting-engagement',
+      title: 'Awaiting engagement signature',
+      detail: `Sent ${new Date(engagement.sentAt).toLocaleDateString()} — the client hasn't signed yet.`,
       href: `/admin/matters/${matter.matter_id}`,
-      cta: 'Resend intake',
+      cta: 'Resend engagement',
       tone: 'default',
+    }
+  }
+
+  if (reviewFlags.length > 0) {
+    const first = resolveIntakeReviewTarget(reviewFlags[0])
+    return {
+      kind: 'resolve-review-flags',
+      title: 'Resolve intake and design review flags',
+      detail: `${reviewFlags.length} item${reviewFlags.length === 1 ? '' : 's'} need attorney review before drafting continues.`,
+      href: first.href(matter.matter_id),
+      cta: 'Resolve review flags',
+      tone: 'warning',
     }
   }
 
@@ -78,17 +107,6 @@ export function computeMatterNextAction(
       href: `/admin/drafting/${matter.matter_id}`,
       cta: 'Open drafting',
       tone: 'success',
-    }
-  }
-
-  if (engagementUnsigned && engagement.sentAt) {
-    return {
-      kind: 'waiting-engagement',
-      title: 'Awaiting engagement signature',
-      detail: `Sent ${new Date(engagement.sentAt).toLocaleDateString()} — the client hasn't signed yet.`,
-      href: `/admin/matters/${matter.matter_id}`,
-      cta: 'Resend engagement',
-      tone: 'default',
     }
   }
 

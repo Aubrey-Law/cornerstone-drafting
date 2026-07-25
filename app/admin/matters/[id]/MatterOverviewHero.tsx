@@ -8,13 +8,18 @@ import type { MatterNextAction } from '@/lib/matterNextAction'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel } from '@/lib/matter/unreviewedUploads'
 import type { PipelineMatter } from '@/types/database'
+import {
+  resolveIntakeReviewTarget,
+  type IntakeReadinessFlag,
+  type IntakeReadinessResolutionKind,
+} from '@/lib/intakeReadiness'
 
 interface MatterOverviewHeroProps {
   matter: PipelineMatter
   nextAction: MatterNextAction
   unreadPortalCount: number
   unreviewedUploadCounts?: UnreviewedUploadCounts
-  reviewFlagsCount: number
+  reviewFlags: IntakeReadinessFlag[]
   lastPortalMessage: { body: string; created_at: string; sender_role: string } | null
   quickPrompts?: React.ReactNode
   onIntakeActionClick?: () => void
@@ -43,7 +48,7 @@ export function MatterOverviewHero({
   nextAction,
   unreadPortalCount,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
-  reviewFlagsCount,
+  reviewFlags,
   lastPortalMessage,
   quickPrompts,
   onIntakeActionClick,
@@ -57,6 +62,15 @@ export function MatterOverviewHero({
   const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
   const uploadDetail = formatUnreviewedUploadDetail(unreviewedUploadCounts)
   const showSpouse = isMarried(matter.marital_status)
+  const groupedFlags = reviewFlags.reduce<Record<IntakeReadinessResolutionKind, IntakeReadinessFlag[]>>(
+    (groups, flag) => {
+      const kind = flag.resolutionKind
+        ?? (flag.message.includes('discuss this with the attorney') ? 'attorney_judgment' : 'needs_data')
+      groups[kind].push(flag)
+      return groups
+    },
+    { needs_data: [], attorney_judgment: [] },
+  )
 
   return (
     <section className="rounded-lg border border-border bg-card p-4 md:p-5">
@@ -70,14 +84,14 @@ export function MatterOverviewHero({
                 </Badge>
               </button>
             )}
-            {reviewFlagsCount > 0 && (
+            {reviewFlags.length > 0 && (
               <button type="button" onClick={onReviewFlagsClick} className="inline-flex">
                 <Badge
                   variant="outline"
                   className="cursor-pointer border-amber-border bg-amber-bg text-[10px] text-amber hover:bg-amber-bg/80"
                 >
                   <AlertTriangle className="mr-1 h-3 w-3" />
-                  {reviewFlagsCount} review flag{reviewFlagsCount === 1 ? '' : 's'}
+                  {reviewFlags.length} review flag{reviewFlags.length === 1 ? '' : 's'}
                 </Badge>
               </button>
             )}
@@ -104,6 +118,30 @@ export function MatterOverviewHero({
             <h2 className="text-sm font-semibold text-foreground">{nextAction.title}</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">{nextAction.detail}</p>
           </div>
+          {reviewFlags.length > 0 && (
+            <div className="grid gap-3 rounded-md border border-amber-border bg-amber-bg/40 p-3 sm:grid-cols-2">
+              {([
+                ['needs_data', 'Needs data'],
+                ['attorney_judgment', 'Attorney judgment'],
+              ] as const).map(([kind, label]) => groupedFlags[kind].length > 0 && (
+                <div key={kind}>
+                  <p className="text-xs font-semibold text-amber-strong">{label}</p>
+                  <ul className="mt-1 space-y-1">
+                    {groupedFlags[kind].map(flag => (
+                      <li key={flag.key}>
+                        <Link
+                          className="text-xs text-foreground underline-offset-2 hover:underline"
+                          href={resolveIntakeReviewTarget(flag).href(matter.matter_id)}
+                        >
+                          {flag.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="space-y-0.5">
             <ContactLine
               label="Client"

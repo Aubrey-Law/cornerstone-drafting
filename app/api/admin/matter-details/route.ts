@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
 import { parsePracticeArea } from '@/lib/practiceArea'
+import { normalizeTargetSigningDate } from '@/lib/matterDates'
 
 // PATCH /api/admin/matter-details
 // Body: { matterId: string; field: string; value: unknown }
@@ -86,14 +87,13 @@ export async function PATCH(req: Request) {
     }
   }
   if (field === 'scheduled_signing_date' && normalizedValue !== null) {
-    if (
-      typeof normalizedValue !== 'string' ||
-      !normalizedValue.trim() ||
-      Number.isNaN(Date.parse(normalizedValue))
-    ) {
-      return NextResponse.json({ error: 'Invalid target signing date and time' }, { status: 400 })
+    if (typeof normalizedValue !== 'string') {
+      return NextResponse.json({ error: 'Invalid target signing date' }, { status: 400 })
     }
-    normalizedValue = new Date(normalizedValue).toISOString()
+    normalizedValue = normalizeTargetSigningDate(normalizedValue)
+    if (!normalizedValue) {
+      return NextResponse.json({ error: 'Invalid target signing date' }, { status: 400 })
+    }
   }
 
   if (field === 'matter_number') {

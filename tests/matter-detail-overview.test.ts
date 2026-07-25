@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
+import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { PipelineMatter } from '@/types/database'
 
 function baseMatter(overrides: Partial<PipelineMatter> = {}): PipelineMatter {
@@ -82,7 +83,10 @@ describe('matter next action — engagement', () => {
   })
 
   it('prompts send-engagement once intake is out but engagement never sent', () => {
-    const action = computeMatterNextAction(baseMatter(intakeSent), {
+    const action = computeMatterNextAction(baseMatter({
+      ...intakeSent,
+      intake_status: 'completed',
+    }), {
       signed: false,
       sentAt: null,
       status: null,
@@ -93,7 +97,10 @@ describe('matter next action — engagement', () => {
   })
 
   it('prompts send-engagement again after a decline', () => {
-    const action = computeMatterNextAction(baseMatter(intakeSent), {
+    const action = computeMatterNextAction(baseMatter({
+      ...intakeSent,
+      intake_status: 'completed',
+    }), {
       signed: false,
       sentAt: new Date().toISOString(),
       status: 'declined',
@@ -124,5 +131,37 @@ describe('matter next action — engagement', () => {
       baseMatter({ stage: 'drafting', intake_status: 'completed', intake_sent_at: new Date().toISOString() }),
     )
     expect(action.kind).toBe('draft')
+  })
+
+  it('waits for incomplete intake before prompting for engagement', () => {
+    const action = computeMatterNextAction(baseMatter(intakeSent), {
+      signed: false,
+      sentAt: null,
+      status: null,
+    })
+    expect(action.kind).toBe('waiting-intake')
+  })
+
+  it('prioritizes review flags over generic drafting', () => {
+    const flags: IntakeReadinessFlag[] = [{
+      key: 'county_missing',
+      label: 'County',
+      sectionId: 'personal',
+      severity: 'review',
+      resolutionKind: 'needs_data',
+      message: 'County was not provided.',
+    }]
+    const action = computeMatterNextAction(
+      baseMatter({
+        stage: 'drafting',
+        intake_status: 'completed',
+        intake_sent_at: new Date().toISOString(),
+      }),
+      { signed: true, sentAt: new Date().toISOString(), status: 'signed' },
+      flags,
+    )
+    expect(action.kind).toBe('resolve-review-flags')
+    expect(action.href).toContain('step=design')
+    expect(action.href).toContain('focus=client-information%3Acounty')
   })
 })

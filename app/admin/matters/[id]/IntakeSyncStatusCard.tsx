@@ -80,7 +80,7 @@ export function IntakeSyncStatusCard({
         <span className="flex items-center gap-2">
           <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', !open && '-rotate-90')} />
           <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold">Intake</span>
+          <span className="text-xs font-semibold">Intake responses</span>
         </span>
         {needsAttention ? (
           <span className="text-[10px] font-semibold text-amber-orange">Needs attention</span>
@@ -93,6 +93,11 @@ export function IntakeSyncStatusCard({
 
       {open && (
         <div className="space-y-3 px-4 py-3">
+          {!needsAttention && resyncPreviewCount === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Intake submitted · Design sheet seeded · No review flags · Intake and design sheet aligned
+            </p>
+          ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             <StatusRow
               label="Intake submitted"
@@ -115,6 +120,7 @@ export function IntakeSyncStatusCard({
               detail={resyncPreviewCount > 0 ? `${resyncPreviewCount} fields can be re-synced` : 'Intake and design sheet aligned'}
             />
           </div>
+          )}
 
           {reviewFlags.length > 0 && (
             <ul className="space-y-1 pl-1">
@@ -131,7 +137,7 @@ export function IntakeSyncStatusCard({
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" onClick={onSendIntake} disabled={sendingIntake}>
+            <Button type="button" size="sm" variant="outline" onClick={onSendIntake} disabled={sendingIntake}>
               <Send className="h-3.5 w-3.5" />
               {sendingIntake ? 'Sending…' : intakeSent ? 'Resend intake' : 'Send intake'}
             </Button>
