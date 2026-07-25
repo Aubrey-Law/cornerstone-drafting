@@ -5,7 +5,8 @@ import { Layers, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { AssetValueBars } from '@/components/assets/AssetValueBars'
+import { AssetPortfolioSummary } from '@/components/assets/AssetPortfolioSummary'
+import { AssetDonutChart } from '@/components/assets/AssetDonutChart'
 import { AssetCategoryFilters } from '@/components/assets/AssetCategoryFilters'
 import { AssetTable } from '@/components/assets/AssetTable'
 import { BulkAssetsDialog } from '@/components/assets/BulkAssetsDialog'
@@ -13,8 +14,6 @@ import { AssetFormDialog } from '@/components/assets/AssetFormDialog'
 import { computeAssetAggregates, groupAssetsByCategory } from '@/lib/assets/aggregates'
 import { ASSET_CATEGORIES, ASSET_CHART_COLORS } from '@/lib/assets/categories'
 import { buildOwnershipLabels } from '@/lib/assets/labels'
-import { formatAssetCurrency } from '@/lib/assets/format'
-import { calculateMAEstateTax } from '@/lib/estateTax'
 import type { AssetIntakeInput, AssetIntakeRow } from '@/types/assetIntake'
 import { useMatterAssets } from '../useMatterAssets'
 import { openCornerstoneAssistant } from '@/app/admin/components/adminChatEvents'
@@ -35,7 +34,7 @@ function MatterAssetsTabImpl({
   intakeId,
   clientName,
   spouseName,
-  maritalStatus: _maritalStatus,
+  maritalStatus,
   accessToken,
   enabled = true,
   onAssetCountChange,
@@ -68,6 +67,11 @@ function MatterAssetsTabImpl({
     () => buildOwnershipLabels(clientName, spouseName),
     [clientName, spouseName],
   )
+
+  const marriedForTax = useMemo(() => {
+    const status = maritalStatus?.toLowerCase() ?? ''
+    return status === 'married' || Boolean(spouseName?.trim())
+  }, [maritalStatus, spouseName])
 
   const aggregates = useMemo(() => computeAssetAggregates(assets), [assets])
   const groups = useMemo(
@@ -110,22 +114,13 @@ function MatterAssetsTabImpl({
   }, [])
 
   const allocationSegments = useMemo(() => {
-    return ASSET_CATEGORIES.filter(cat => cat.key !== 'life_insurance').map((cat, i) => ({
+    return ASSET_CATEGORIES.map((cat, i) => ({
       key: cat.key,
       label: cat.label,
       value: aggregates.byCategory[cat.key]?.total ?? 0,
       color: ASSET_CHART_COLORS[i % ASSET_CHART_COLORS.length],
     })).filter(s => s.value > 0)
   }, [aggregates.byCategory])
-
-  const deathBenefit = aggregates.byCategory.life_insurance?.total ?? 0
-  const ownedAssets = aggregates.grossValue - deathBenefit
-  const latestAssetUpdatedAt = useMemo(
-    () => assets.reduce<string | null>((latest, asset) => (
-      !latest || (asset.updated_at && asset.updated_at > latest) ? asset.updated_at : latest
-    ), null),
-    [assets],
-  )
 
   const ownershipSegments = useMemo(
     () => [
@@ -227,7 +222,7 @@ function MatterAssetsTabImpl({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" className="gap-1.5" onClick={openAdd}>
+        <Button className="gap-1.5 bg-brand-navy hover:bg-brand-navy/90" onClick={openAdd}>
           <Plus className="h-4 w-4" />
           Add new asset
         </Button>
@@ -287,33 +282,10 @@ function MatterAssetsTabImpl({
         </div>
       ) : (
         <>
-          <div className="space-y-6 rounded-lg border border-border bg-card p-4 md:p-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ['Net inventory value', aggregates.netValue],
-                ['Estimated MA tax', calculateMAEstateTax(aggregates.grossValue)],
-                ['Owned assets', ownedAssets],
-                ['Death benefit', deathBenefit],
-              ].map(([label, value]) => (
-                <div key={String(label)}>
-                  <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums">{formatAssetCurrency(Number(value))}</p>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-md border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-              All listed death benefits are included in the conservative MA estimate pending attorney review.
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Inventory-based estimate
-              {latestAssetUpdatedAt
-                ? ` · Asset inventory last updated ${new Date(latestAssetUpdatedAt).toLocaleString()}`
-                : ' · No inventory update recorded'}
-            </p>
-            <div className="grid gap-8 md:grid-cols-2">
-              <AssetValueBars title="Asset allocation" segments={allocationSegments} />
-              <AssetValueBars title="Ownership split" segments={ownershipSegments} />
-            </div>
+          <div className="grid gap-6 rounded-lg border border-border bg-card p-4 md:grid-cols-3 md:p-6">
+            <AssetPortfolioSummary aggregates={aggregates} married={marriedForTax} />
+            <AssetDonutChart title="Asset allocation" segments={allocationSegments} />
+            <AssetDonutChart title="Ownership split" segments={ownershipSegments} />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
