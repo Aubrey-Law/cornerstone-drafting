@@ -5,7 +5,7 @@ import {
   resolveMatterSmsTarget,
   sendOutboundSms,
 } from '@/lib/sms/outbound'
-import { isTwilioSmsConfigured } from '@/lib/twilio/config'
+import { isSmsConfigured } from '@/lib/communications/config'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -18,9 +18,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { err, userId, user } = await requireAdmin(req)
   if (err) return err
 
-  if (!isTwilioSmsConfigured()) {
+  if (!isSmsConfigured()) {
     return NextResponse.json(
-      { error: 'Twilio SMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_SMS_FROM (or TWILIO_MESSAGING_SERVICE_SID).' },
+      { error: 'The selected SMS provider is not configured.' },
       { status: 503 },
     )
   }

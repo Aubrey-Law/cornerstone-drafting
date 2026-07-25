@@ -51,7 +51,7 @@ export interface MatterMessagesSectionsProps {
   emailSubject: string
   emailBody: string
   emailSending: boolean
-  twilioSmsEnabled: boolean
+  smsEnabled: boolean
   emailSendEnabled: boolean
   setPortalDraft: (value: string) => void
   setSmsDraft: (value: string) => void
@@ -136,7 +136,7 @@ export function SmsMessagesSection({
   smsDraft,
   smsRecipient,
   smsSending,
-  twilioSmsEnabled,
+  smsEnabled,
   setSmsDraft,
   setSmsRecipient,
   onSendSms,
@@ -147,7 +147,7 @@ export function SmsMessagesSection({
   | 'smsDraft'
   | 'smsRecipient'
   | 'smsSending'
-  | 'twilioSmsEnabled'
+  | 'smsEnabled'
   | 'setSmsDraft'
   | 'setSmsRecipient'
   | 'onSendSms'
@@ -158,8 +158,8 @@ export function SmsMessagesSection({
         <h3 className="text-sm font-semibold">SMS</h3>
         <p className="text-xs text-muted-foreground">Text thread with the client or spouse.</p>
       </div>
-      {!twilioSmsEnabled ? (
-        <SetupBanner feature="SMS" detail="Add Twilio credentials in environment variables to text clients from this tab." />
+      {!smsEnabled ? (
+        <SetupBanner feature="SMS" detail="Configure the selected SMS provider in environment variables to text clients from this tab." />
       ) : (
         <>
           <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3">

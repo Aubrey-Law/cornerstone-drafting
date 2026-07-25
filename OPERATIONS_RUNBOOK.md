@@ -342,6 +342,29 @@ supabase db reset
 
 ## Part 5 — Twilio softphone (browser Voice + call logging)
 
+### Telnyx replacement and rollback
+
+Cornerstone can select SMS and voice providers independently with `SMS_PROVIDER`
+and `VOICE_PROVIDER`. Use `telnyx` for the new number; use `twilio` for rollback.
+
+For Telnyx, create a Messaging Profile and Credential Connection, assign the new
+number to both, complete 10DLC or toll-free verification, and create one
+telephony credential per staff user. Set the credential IDs in
+`TELNYX_TELEPHONY_CREDENTIAL_IDS` as a JSON object keyed by Supabase user UUID.
+
+Configure:
+
+| Telnyx portal setting | Cornerstone URL |
+|---|---|
+| Messaging primary webhook | `https://<host>/api/webhooks/telnyx/messaging` |
+| Voice connection webhook | `https://<host>/api/webhooks/telnyx/voice` |
+
+Verify `GET /api/admin/communications/status`, then test outbound/inbound SMS,
+STOP handling, browser inbound/outbound calls, DTMF, mute, hangup, and webhook
+redelivery before switching production provider flags. Telnyx fallback routing,
+ring timeout, and recording must also be enabled on the Telnyx connection using
+the matching `TELNYX_*` environment settings.
+
 Cornerstone uses the same Twilio browser softphone stack as the full portal. Configuration is **env-only** (no Settings UI).
 
 ### Environment variables

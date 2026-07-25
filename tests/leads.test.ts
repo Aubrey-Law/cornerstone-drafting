@@ -14,10 +14,12 @@ describe('lead tracking source shape', () => {
   })
 
   it('lead creation inserts a standalone client_intake', () => {
-    const source = read('app/api/admin/leads/route.ts')
-    expect(source).toContain('requireAdmin')
-    expect(source).toContain("from('client_intake')")
-    expect(source).toContain('engagement_fee_quoted')
+    const route = read('app/api/admin/leads/route.ts')
+    const service = read('lib/leads/createLead.ts')
+    expect(route).toContain('requireAdmin')
+    expect(route).toContain('createLead')
+    expect(service).toContain("from('client_intake')")
+    expect(service).toContain('engagement_fee_quoted')
   })
 
   it('lead engagement send guards converted and signed leads', () => {
@@ -130,7 +132,7 @@ describe('lead status pipeline source shape', () => {
   })
 
   it('lead creation defaults to the lead status', () => {
-    expect(read('app/api/admin/leads/route.ts')).toContain("lead_status: 'lead'")
+    expect(read('lib/leads/createLead.ts')).toContain("lead_status: 'lead'")
   })
 
   it('conversion flips a lead to hired', () => {

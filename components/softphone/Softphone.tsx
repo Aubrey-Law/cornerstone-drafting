@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Device, Call } from '@twilio/voice-sdk'
+import { Device, Call as TwilioCall } from '@twilio/voice-sdk'
+import { TelnyxRTC, type Call as TelnyxCall } from '@telnyx/webrtc'
 
 /**
  * Browser-based dialer for Cornerstone staff. Authenticates via /api/token,
@@ -59,8 +60,11 @@ export default function Softphone() {
   const [error, setError] = useState<string | null>(null)
   const [incomingFrom, setIncomingFrom] = useState('')
 
-  const deviceRef = useRef<Device | null>(null)
-  const callRef = useRef<Call | null>(null)
+  const providerRef = useRef<'twilio' | 'telnyx'>('twilio')
+  const deviceRef = useRef<Device | TelnyxRTC | null>(null)
+  const callRef = useRef<TwilioCall | TelnyxCall | null>(null)
+  const callerNumberRef = useRef<string | null>(null)
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const stopTimer = useCallback(() => {
@@ -82,8 +86,8 @@ export default function Softphone() {
     setStatus(deviceRef.current ? STATUS.IDLE : STATUS.OFFLINE)
   }, [stopTimer])
 
-  const wireCall = useCallback(
-    (call: Call) => {
+  const wireTwilioCall = useCallback(
+    (call: TwilioCall) => {
       call.on('accept', () => {
         setStatus(STATUS.ON_CALL)
         setMuted(false)
@@ -100,52 +104,89 @@ export default function Softphone() {
     [cleanupCall, startTimer],
   )
 
-  const fetchToken = useCallback(async (): Promise<string> => {
+  const fetchToken = useCallback(async (): Promise<{ provider: 'twilio' | 'telnyx'; token: string; callerNumber?: string | null }> => {
     const res = await fetch('/api/token')
     if (!res.ok) throw new Error('Token request failed')
-    const data = (await res.json()) as { token: string }
-    return data.token
+    return await res.json()
   }, [])
 
   useEffect(() => {
-    let device: Device | undefined
+    let device: Device | TelnyxRTC | undefined
+    let refreshTimer: ReturnType<typeof setInterval> | undefined
     let cancelled = false
 
     void (async () => {
       try {
-        const token = await fetchToken()
+        const auth = await fetchToken()
         if (cancelled) return
+        providerRef.current = auth.provider
+        callerNumberRef.current = auth.callerNumber ?? null
 
-        device = new Device(token, {
-          codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+        if (auth.provider === 'telnyx') {
+          const telnyx = new TelnyxRTC({ login_token: auth.token })
+          device = telnyx
+          telnyx.on('telnyx.ready', () => setStatus(STATUS.IDLE))
+          telnyx.on('telnyx.error', (e: Error) => {
+            setError(e?.message || 'Device error')
+            setStatus(STATUS.OFFLINE)
+          })
+          telnyx.on('telnyx.notification', (notification) => {
+            if (notification.type !== 'callUpdate' || !notification.call) return
+            const call = notification.call
+            callRef.current = call
+            if (call.state === 'ringing' && call.direction === 'inbound') {
+              setIncomingFrom(call.options?.remoteCallerNumber || call.options?.callerNumber || 'Unknown caller')
+              setStatus(STATUS.INCOMING)
+            } else if (call.state === 'active') {
+              setStatus(STATUS.ON_CALL)
+              setMuted(false)
+              startTimer()
+            } else if (call.state === 'hangup' || call.state === 'destroy') {
+              cleanupCall()
+            }
+          })
+          deviceRef.current = telnyx
+          await telnyx.connect()
+          refreshTimer = setInterval(() => {
+            void fetchToken()
+              .then(fresh => telnyx.login({ creds: { login_token: fresh.token } }))
+              .catch(() => {
+                setError('Could not refresh softphone credentials')
+              })
+          }, 50 * 60 * 1000)
+          return
+        }
+
+        const twilioDevice = new Device(auth.token, {
+          codecPreferences: [TwilioCall.Codec.Opus, TwilioCall.Codec.PCMU],
           allowIncomingWhileBusy: false,
         })
-
-        device.on('registered', () => setStatus(STATUS.IDLE))
-        device.on('unregistered', () => setStatus(STATUS.OFFLINE))
-        device.on('error', (e: Error) => {
+        device = twilioDevice
+        twilioDevice.on('registered', () => setStatus(STATUS.IDLE))
+        twilioDevice.on('unregistered', () => setStatus(STATUS.OFFLINE))
+        twilioDevice.on('error', (e: Error) => {
           setError(e?.message || 'Device error')
           setStatus(STATUS.OFFLINE)
         })
 
-        device.on('incoming', (call: Call) => {
+        twilioDevice.on('incoming', (call: TwilioCall) => {
           callRef.current = call
           setIncomingFrom(call.parameters?.From || 'Unknown caller')
           setStatus(STATUS.INCOMING)
-          wireCall(call)
+          wireTwilioCall(call)
         })
 
-        device.on('tokenWillExpire', async () => {
+        twilioDevice.on('tokenWillExpire', async () => {
           try {
             const fresh = await fetchToken()
-            device?.updateToken(fresh)
+            twilioDevice.updateToken(fresh.token)
           } catch {
             /* surfaces as device error if refresh actually fails */
           }
         })
 
-        await device.register()
-        deviceRef.current = device
+        await twilioDevice.register()
+        deviceRef.current = twilioDevice
       } catch (e) {
         if (!cancelled) {
           const message = e instanceof Error ? e.message : 'Could not start softphone'
@@ -157,50 +198,77 @@ export default function Softphone() {
 
     return () => {
       cancelled = true
+      if (refreshTimer) clearInterval(refreshTimer)
       stopTimer()
-      device?.destroy()
+      if (device instanceof Device) device.destroy()
+      else device?.disconnect()
     }
-  }, [fetchToken, stopTimer, wireCall])
+  }, [cleanupCall, fetchToken, startTimer, stopTimer, wireTwilioCall])
 
   const placeCall = useCallback(async () => {
     const device = deviceRef.current
     if (!device || !number.trim()) return
     try {
       setStatus(STATUS.DIALING)
-      const call = await device.connect({ params: { To: toE164(number) } })
-      callRef.current = call
-      wireCall(call)
+      if (providerRef.current === 'telnyx' && device instanceof TelnyxRTC) {
+        callRef.current = device.newCall({
+          destinationNumber: toE164(number),
+          callerNumber: callerNumberRef.current ?? undefined,
+          audio: true,
+          remoteElement: remoteAudioRef.current ?? undefined,
+        })
+      } else if (device instanceof Device) {
+        const call = await device.connect({ params: { To: toE164(number) } })
+        callRef.current = call
+        wireTwilioCall(call)
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not place call'
       setError(message)
       cleanupCall()
     }
-  }, [number, wireCall, cleanupCall])
+  }, [number, wireTwilioCall, cleanupCall])
 
   const acceptCall = useCallback(() => {
-    callRef.current?.accept()
+    const call = callRef.current
+    if (!call) return
+    if (providerRef.current === 'telnyx') void (call as TelnyxCall).answer({ remoteElement: remoteAudioRef.current ?? undefined })
+    else (call as TwilioCall).accept()
   }, [])
 
   const rejectCall = useCallback(() => {
-    callRef.current?.reject()
+    const call = callRef.current
+    if (!call) return
+    if (providerRef.current === 'telnyx') void (call as TelnyxCall).hangup()
+    else (call as TwilioCall).reject()
   }, [])
 
   const hangUp = useCallback(() => {
-    callRef.current?.disconnect()
+    const call = callRef.current
+    if (!call) return
+    if (providerRef.current === 'telnyx') void (call as TelnyxCall).hangup()
+    else (call as TwilioCall).disconnect()
   }, [])
 
   const toggleMute = useCallback(() => {
     const call = callRef.current
     if (!call) return
     const next = !muted
-    call.mute(next)
+    if (providerRef.current === 'telnyx') {
+      if (next) (call as TelnyxCall).muteAudio()
+      else (call as TelnyxCall).unmuteAudio()
+    } else {
+      (call as TwilioCall).mute(next)
+    }
     setMuted(next)
   }, [muted])
 
   const pressKey = useCallback(
     (digit: string) => {
       if (status === STATUS.ON_CALL) {
-        callRef.current?.sendDigits(digit)
+        const call = callRef.current
+        if (providerRef.current === 'telnyx') (call as TelnyxCall | null)?.dtmf(digit)
+        else (call as TwilioCall | null)?.sendDigits(digit)
         return
       }
       setNumber((prev) => formatPhone(prev.replace(/\D/g, '') + digit))
@@ -235,6 +303,7 @@ export default function Softphone() {
 
   return (
     <div className="sp">
+      <audio ref={remoteAudioRef} autoPlay />
       <style>{styles}</style>
 
       <header className="sp__bar">

@@ -1,5 +1,5 @@
 import { sendEmail } from '@/lib/email/send'
-import { sendSmsMessage } from '@/lib/twilio/sms'
+import { sendProviderSmsMessage } from '@/lib/sms/provider'
 import type { RetellCallRowInsert } from './normalize'
 import {
   formatRetellAlertEmail,
@@ -56,7 +56,7 @@ export async function notifyRetellCallAnalyzed(
   if (!smsTo) return
 
   try {
-    const result = await sendSmsMessage({
+    const result = await sendProviderSmsMessage({
       to: smsTo,
       body: formatRetellAlertSms(row),
     })

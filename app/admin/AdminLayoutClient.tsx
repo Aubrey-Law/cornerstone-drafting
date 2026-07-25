@@ -74,14 +74,14 @@ interface AdminLayoutClientProps {
   children: React.ReactNode
   userName: string
   userInitials: string
-  twilioVoiceEnabled?: boolean
+  voiceEnabled?: boolean
 }
 
 export default function AdminLayoutClient({
   children,
   userName,
   userInitials,
-  twilioVoiceEnabled = false,
+  voiceEnabled = false,
 }: AdminLayoutClientProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -301,7 +301,7 @@ export default function AdminLayoutClient({
         </SheetContent>
       </Sheet>
 
-      {twilioVoiceEnabled ? <StaffSoftphone /> : null}
+      {voiceEnabled ? <StaffSoftphone /> : null}
       <FloatingChatButton isOpen={chatOpen} onOpen={() => setChatOpen(true)} />
       {chatOpen && (
         <ChatPanel

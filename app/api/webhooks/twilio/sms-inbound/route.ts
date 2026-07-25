@@ -32,6 +32,7 @@ export async function POST(req: Request) {
     body,
     providerMessageId: messageSid,
     rawPayload: params,
+    provider: 'twilio',
   })
 
   if (!result.ok) {

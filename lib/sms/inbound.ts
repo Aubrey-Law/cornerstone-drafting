@@ -1,5 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getFirmConfig } from '@/lib/firmConfig'
+import type { CommunicationsProvider } from '@/lib/communications/providers'
 
 const SMS_OPT_OUT_PATTERN = /^\s*(stop|stopall|unsubscribe|cancel|end|quit)\s*$/i
 
@@ -13,6 +14,7 @@ export interface InboundSmsInput {
   body: string
   providerMessageId: string
   rawPayload: Record<string, unknown>
+  provider?: CommunicationsProvider
 }
 
 export interface InboundSmsResult {
@@ -65,7 +67,7 @@ export async function recordInboundSms(
     return { ok: false, error: 'empty body' }
   }
   if (!input.providerMessageId) {
-    return { ok: false, error: 'missing MessageSid' }
+    return { ok: false, error: 'missing provider message id' }
   }
 
   const admin = getAdminClient()
@@ -91,7 +93,7 @@ export async function recordInboundSms(
     .from('sms_messages')
     .insert({
       direction: 'inbound',
-      provider: 'twilio',
+      provider: input.provider ?? 'twilio',
       provider_message_id: input.providerMessageId,
       recipient_role: 'other',
       from_number: input.fromNumber,

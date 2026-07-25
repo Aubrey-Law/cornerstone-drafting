@@ -1,26 +1,13 @@
 import twilio from 'twilio'
 import { twilioAppBaseUrl } from '@/lib/twilio/config'
+import {
+  normalizeSmsRecipient,
+  type SmsSendInput,
+  type SmsSendResult,
+} from '@/lib/sms/transport'
 
-const SMS_EXTENSION_PATTERN = /\b(?:ext\.?|extension|x)\s*[0-9][0-9 .-]*$/i
-
-export interface SmsSendInput {
-  to: string
-  body: string
-}
-
-export interface SmsSendSuccess {
-  ok: true
-  providerMessageId: string
-  status: string
-  to: string
-}
-
-export interface SmsSendFailure {
-  ok: false
-  error: string
-}
-
-export type SmsSendResult = SmsSendSuccess | SmsSendFailure
+export { normalizeSmsRecipient }
+export type { SmsSendInput, SmsSendResult }
 
 interface TwilioMessageCreateParams {
   to: string
@@ -37,21 +24,6 @@ interface TwilioMessageResult {
 
 interface SmsSendDeps {
   createMessage?: (params: TwilioMessageCreateParams) => Promise<TwilioMessageResult>
-}
-
-function digitsOnly(value: string): string {
-  return value.replace(/\D/g, '')
-}
-
-export function normalizeSmsRecipient(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  if (!trimmed) return null
-  if (SMS_EXTENSION_PATTERN.test(trimmed)) return null
-
-  const digits = digitsOnly(trimmed)
-  if (digits.length === 10) return `+1${digits}`
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
-  return null
 }
 
 export function smsStatusCallbackUrl(): string {

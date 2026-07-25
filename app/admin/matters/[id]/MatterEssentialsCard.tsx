@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDateDetail } from '@/lib/utils'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { MATTER_PLAN_TYPE_OPTIONS, normalizePlanType } from '@/lib/matterPlanType'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea'
@@ -64,7 +64,7 @@ function MilestoneCell({ milestone, isLast }: { milestone: Milestone; isLast: bo
           milestone.complete ? 'text-foreground' : 'text-muted-foreground',
         )}
       >
-        {milestone.date ? formatDate(milestone.date) : '—'}
+        {milestone.date ? formatDateDetail(milestone.date) : '—'}
       </p>
     </div>
   )
@@ -270,12 +270,12 @@ export function MatterEssentialsCard({
             <span className="text-xs text-muted-foreground">
               {details?.engagement_signed
                 ? details?.engagement_signed_at
-                  ? `Signed ${formatDate(details.engagement_signed_at)}`
+                  ? `Signed ${formatDateDetail(details.engagement_signed_at)}`
                   : ''
                 : details?.engagement_status === 'declined'
                   ? 'Declined'
                   : details?.engagement_sent_at
-                    ? `Sent ${formatDate(details.engagement_sent_at)}`
+                    ? `Sent ${formatDateDetail(details.engagement_sent_at)}`
                     : 'Not sent'}
             </span>
             {esignEnabled && !details?.engagement_signed && (
