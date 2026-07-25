@@ -204,7 +204,7 @@ describe('Cal.com webhook sync', () => {
     }))
     expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
       table: 'matter_details',
-      values: { client_id: 'matter-1', scheduled_signing_date: '2026-06-10' },
+      values: { client_id: 'matter-1', scheduled_signing_date: '2026-06-10T14:00:00.000Z' },
     }))
     expect(routeMocks.state.inserts).toContainEqual(expect.objectContaining({
       table: 'matter_notes',

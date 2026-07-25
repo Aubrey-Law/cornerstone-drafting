@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { CalendarDays, ChevronDown, ChevronUp, CircleDot, FilePenLine, MessageSquareText, RefreshCw } from 'lucide-react'
-import { formatDateTime } from '@/lib/utils'
 
 type ActivityRow = {
   id: string
@@ -13,6 +12,21 @@ type ActivityRow = {
 }
 
 const PREVIEW_COUNT = 8
+
+function activityTime(value: string) {
+  const date = new Date(value)
+  const elapsed = Date.now() - date.getTime()
+  const hours = Math.floor(elapsed / 3_600_000)
+  if (hours < 1) return 'Just now'
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+  })
+}
 
 function activityIcon(type: string | null | undefined) {
   if (type?.includes('meeting')) return CalendarDays
@@ -48,7 +62,7 @@ export function LeadActivityCard({ activity }: { activity: ActivityRow[] }) {
               <div className="min-w-0 flex-1 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <p className="font-medium">{row.title}</p>
-                  <time className="text-xs text-muted-foreground" dateTime={row.created_at}>{formatDateTime(row.created_at)}</time>
+                  <time className="text-xs text-muted-foreground" dateTime={row.created_at}>{activityTime(row.created_at)}</time>
                 </div>
                 {row.detail && <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{row.detail}</p>}
               </div>

@@ -8,7 +8,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { cn, formatDateTime } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { getDocumentUrl, listDocuments } from '@/lib/documents'
 import type { MatterDocument } from '@/types/database'
 
@@ -113,7 +113,7 @@ export function MatterPortalUploadsCard({
                   <p className="truncate text-sm font-medium">{doc.name}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {formatSize(doc.size)}
-                    {doc.created_at ? ` · ${formatDateTime(doc.created_at)}` : ''}
+                    {doc.created_at ? ` · ${formatDate(doc.created_at)}` : ''}
                   </p>
                 </div>
                 <button

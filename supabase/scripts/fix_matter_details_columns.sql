@@ -15,7 +15,7 @@ ALTER TABLE public.matter_details
   ADD COLUMN IF NOT EXISTS legal_plan_type text,
   ADD COLUMN IF NOT EXISTS target_close_date date,
   ADD COLUMN IF NOT EXISTS closed_date date,
-  ADD COLUMN IF NOT EXISTS scheduled_signing_date date,
+  ADD COLUMN IF NOT EXISTS scheduled_signing_date timestamptz,
   ADD COLUMN IF NOT EXISTS signing_date date,
   ADD COLUMN IF NOT EXISTS documents_filed_date date,
   ADD COLUMN IF NOT EXISTS est_estate_value numeric,

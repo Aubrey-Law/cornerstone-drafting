@@ -84,6 +84,16 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Invalid practice area' }, { status: 400 })
     }
   }
+  if (field === 'scheduled_signing_date' && normalizedValue !== null) {
+    if (
+      typeof normalizedValue !== 'string' ||
+      !normalizedValue.trim() ||
+      Number.isNaN(Date.parse(normalizedValue))
+    ) {
+      return NextResponse.json({ error: 'Invalid target signing date and time' }, { status: 400 })
+    }
+    normalizedValue = new Date(normalizedValue).toISOString()
+  }
 
   if (field === 'matter_number') {
     // matter_number lives on two tables; setMatterNumber keeps them in sync.

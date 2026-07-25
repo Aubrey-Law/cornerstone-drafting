@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { cn, formatDateDetail } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { MATTER_PLAN_TYPE_OPTIONS, normalizePlanType } from '@/lib/matterPlanType'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea'
@@ -47,6 +47,14 @@ function resolveDate(...candidates: Array<string | null | undefined>): string | 
   return null
 }
 
+function toDateTimeLocal(value: string | null | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 type Milestone = {
   key: string
   label: string
@@ -64,7 +72,7 @@ function MilestoneCell({ milestone, isLast }: { milestone: Milestone; isLast: bo
           milestone.complete ? 'text-foreground' : 'text-muted-foreground',
         )}
       >
-        {milestone.date ? formatDateDetail(milestone.date) : '—'}
+        {milestone.date ? formatDate(milestone.date) : '—'}
       </p>
     </div>
   )
@@ -154,10 +162,17 @@ export function MatterEssentialsCard({
         <label className="space-y-1.5">
           <FieldLabel>Target signing date</FieldLabel>
           <Input
-            type="date"
+            type="datetime-local"
+            step={900}
             className="h-9"
-            defaultValue={details?.scheduled_signing_date ?? ''}
-            onBlur={event => void onSaveField('scheduled_signing_date', event.target.value)}
+            defaultValue={toDateTimeLocal(details?.scheduled_signing_date)}
+            onBlur={event => {
+              const raw = event.target.value
+              void onSaveField(
+                'scheduled_signing_date',
+                raw ? new Date(raw).toISOString() : null,
+              )
+            }}
           />
         </label>
 
@@ -270,12 +285,12 @@ export function MatterEssentialsCard({
             <span className="text-xs text-muted-foreground">
               {details?.engagement_signed
                 ? details?.engagement_signed_at
-                  ? `Signed ${formatDateDetail(details.engagement_signed_at)}`
+                  ? `Signed ${formatDate(details.engagement_signed_at)}`
                   : ''
                 : details?.engagement_status === 'declined'
                   ? 'Declined'
                   : details?.engagement_sent_at
-                    ? `Sent ${formatDateDetail(details.engagement_sent_at)}`
+                    ? `Sent ${formatDate(details.engagement_sent_at)}`
                     : 'Not sent'}
             </span>
             {esignEnabled && !details?.engagement_signed && (

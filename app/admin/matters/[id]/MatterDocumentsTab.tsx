@@ -94,7 +94,7 @@ import {
   updateDocumentFolder,
   uploadDocument,
 } from '@/lib/documents'
-import { cn, formatDateTime } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
 
@@ -671,7 +671,7 @@ export function MatterDocumentsTab({
                           <p className="break-words text-sm font-medium">{doc.name}</p>
                           <p className="text-[11px] text-muted-foreground">
                             {formatBytes(doc.size)}
-                            {doc.created_at ? ` · ${formatDateTime(doc.created_at)}` : ''}
+                            {doc.created_at ? ` · ${formatDate(doc.created_at)}` : ''}
                           </p>
                         </div>
                       </div>
@@ -874,7 +874,7 @@ export function MatterDocumentsTab({
                       <p className="text-sm font-medium capitalize">{auditLabel(event)}</p>
                       <p className="text-xs text-muted-foreground">{event.user_email ?? 'Unknown user'}</p>
                     </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(event.created_at)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatDate(event.created_at)}</span>
                   </div>
                   {Object.keys(event.metadata ?? {}).length > 0 && (
                     <pre className={cn('mt-2 max-h-32 overflow-auto rounded bg-muted p-2 text-[11px] text-muted-foreground')}>
