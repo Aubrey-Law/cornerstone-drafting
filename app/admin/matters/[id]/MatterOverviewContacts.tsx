@@ -2,15 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { Button } from '@/components/ui/button'
 import { PersonContactCard, PersonContactCardGrid } from '@/components/matter/PersonContactCard'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import { formatPhoneDisplay } from '@/lib/phone'
 import type { ClientFormValues, ContactFormValues } from './FamilyMemberDialog'
 import { clientRowToForm, contactRowToForm } from './FamilyMemberDialog'
+import type { PersonAddRequest } from './MatterPeopleTab'
 
 const FamilyMemberDialog = dynamic(
   () => import('./FamilyMemberDialog').then(m => ({ default: m.FamilyMemberDialog })),
@@ -107,7 +106,15 @@ function emptyPatchValues(values: ClientFormValues | ContactFormValues): Record<
   return patch
 }
 
-export function MatterOverviewContacts({ matterId, matter }: { matterId: string; matter: PipelineMatter }) {
+export function MatterOverviewContacts({
+  matterId,
+  matter: _matter,
+  addRequest,
+}: {
+  matterId: string
+  matter: PipelineMatter
+  addRequest?: PersonAddRequest | null
+}) {
   const token = useAccessToken()
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -157,6 +164,15 @@ export function MatterOverviewContacts({ matterId, matter }: { matterId: string;
   }, [data])
 
   const canAddSpouse = !spouseRow
+
+  useEffect(() => {
+    if (addRequest?.kind === 'spouse') {
+      if (canAddSpouse) setDialog({ kind: 'add-spouse' })
+      else toast.message('A spouse is already listed')
+    } else if (addRequest?.kind === 'child') {
+      setDialog({ kind: 'add-child' })
+    }
+  }, [addRequest?.kind, addRequest?.nonce, canAddSpouse])
 
   async function saveClient(values: ClientFormValues) {
     const res = await fetch(`/api/admin/matters/${matterId}/contacts`, {
@@ -263,19 +279,6 @@ export function MatterOverviewContacts({ matterId, matter }: { matterId: string;
           />
         ))}
       </PersonContactCardGrid>
-
-      <div className="flex flex-wrap gap-2">
-        {canAddSpouse && (
-          <Button type="button" size="sm" className="gap-1.5" onClick={() => setDialog({ kind: 'add-spouse' })}>
-            <Plus className="h-3.5 w-3.5" />
-            Add Spouse
-          </Button>
-        )}
-        <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => setDialog({ kind: 'add-child' })}>
-          <Plus className="h-3.5 w-3.5" />
-          Add Child
-        </Button>
-      </div>
 
       {!clientContact && (
         <p className="text-xs text-muted-foreground">No family contact data yet. Use Intake to add client information.</p>

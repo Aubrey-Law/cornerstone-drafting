@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Combine,
   Download,
@@ -10,6 +10,7 @@ import {
   FolderInput,
   History,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Search,
   Share2,
@@ -68,8 +69,15 @@ import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDia
 import { DocumentStatusBadges } from '@/components/documents/DocumentStatusBadges'
 import { PromoteDocumentDialog } from '@/components/documents/PromoteDocumentDialog'
 import {
-  buildDocumentStatusBadges,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   buildSelectedDocumentEligibility,
+  buildDocumentStatusBadges,
   classifyDocumentVisibility,
   DEFAULT_SHARE_FOLDER,
   DEFAULT_UNSHARE_FOLDER,
@@ -97,6 +105,7 @@ import {
 import { cn, formatDateTime } from '@/lib/utils'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
+import { documentDisplayTitle } from '@/lib/documentDisplayTitle'
 
 function formatBytes(size: number) {
   if (!Number.isFinite(size) || size <= 0) return '-'
@@ -127,6 +136,8 @@ interface MatterDocumentsTabProps {
   unreviewedUploadCounts?: UnreviewedUploadCounts
   onReviewPortalUploads?: () => void | Promise<void>
   onReviewIntakeUploads?: () => void | Promise<void>
+  clientName?: string | null
+  deepLinkedDocumentId?: string | null
 }
 
 export function MatterDocumentsTab({
@@ -137,6 +148,8 @@ export function MatterDocumentsTab({
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
   onReviewPortalUploads,
   onReviewIntakeUploads,
+  clientName,
+  deepLinkedDocumentId,
 }: MatterDocumentsTabProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -162,6 +175,29 @@ export function MatterDocumentsTab({
   const [auditTarget, setAuditTarget] = useState<MatterDocument | null>(null)
   const [auditEvents, setAuditEvents] = useState<DocumentAccessAudit[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
+  const [highlightedDocumentId, setHighlightedDocumentId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!deepLinkedDocumentId) return
+    const document = documents.find(candidate => candidate.id === deepLinkedDocumentId)
+    if (!document) return
+    setActiveFolder(document.folder)
+    setQuery('')
+    setVisibilityFilter('all')
+    setTypeFilter('all')
+    setHighlightedDocumentId(document.id)
+    const scrollTimer = window.setTimeout(() => {
+      window.document.getElementById(`document-row-${document.id}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 0)
+    const highlightTimer = window.setTimeout(() => setHighlightedDocumentId(null), 2500)
+    return () => {
+      window.clearTimeout(scrollTimer)
+      window.clearTimeout(highlightTimer)
+    }
+  }, [deepLinkedDocumentId, documents])
 
   const filteredDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -472,7 +508,7 @@ export function MatterDocumentsTab({
           </div>
         </div>
 
-        <div className="grid gap-2 border-b border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-border px-4 py-2 text-xs text-muted-foreground">
           {[
             ['Internal drafts', commandCounts.internal],
             ['Firm-shared PDFs', commandCounts.firmSharedPdfs],
@@ -482,10 +518,9 @@ export function MatterDocumentsTab({
             ['Superseded', commandCounts.superseded],
             ['Versioned', commandCounts.versioned],
           ].map(([label, count]) => (
-            <div key={label} className="rounded-md border border-border bg-muted/25 px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">{label}</p>
-              <p className="text-lg font-semibold">{count}</p>
-            </div>
+            <span key={label} className={label === 'Marker issues' && Number(count) > 0 ? 'font-semibold text-amber' : ''}>
+              {label} <span className="font-semibold tabular-nums text-foreground">{count}</span>
+            </span>
           ))}
         </div>
 
@@ -509,17 +544,11 @@ export function MatterDocumentsTab({
           </div>
         )}
 
-        <div className="border-b border-border px-4 py-3">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Folders</p>
-              <p className="text-xs text-muted-foreground">Select a folder to see its documents.</p>
-            </div>
-            <Badge variant="outline" className="shrink-0 text-[11px]">
-              Selected folder
-            </Badge>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid lg:grid-cols-[180px_minmax(0,1fr)]">
+          <nav aria-label="Document folders" className="border-b border-border p-3 lg:border-b-0 lg:border-r">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Folders</p>
+            <p className="sr-only">Select a folder to see its documents. Selected folder is indicated.</p>
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-1">
             {folderSummaries.map(folder => {
               const selected = folder.value === activeFolder
               return (
@@ -529,25 +558,21 @@ export function MatterDocumentsTab({
                   aria-pressed={selected}
                   onClick={() => setActiveFolder(folder.value)}
                   className={cn(
-                    'rounded-md border px-3 py-2 text-left transition-colors',
+                    'flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
                     selected
-                      ? 'border-primary bg-primary/10 text-foreground'
-                      : 'border-border bg-background hover:bg-muted/50',
+                      ? 'bg-primary/10 font-semibold text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/50',
+                    folder.count === 0 && !selected && 'opacity-60',
                   )}
                 >
-                  <span className="block text-sm font-semibold">{folder.label}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{folder.description}</span>
-                  <span className="mt-2 block text-lg font-semibold">
-                    {folder.count}
-                    <span className="ml-1 text-[11px] font-normal text-muted-foreground">
-                      document{folder.count === 1 ? '' : 's'}
-                    </span>
-                  </span>
+                  <span>{folder.label}</span>
+                  <span className="tabular-nums">{folder.count}</span>
                 </button>
               )
             })}
-          </div>
-        </div>
+            </div>
+          </nav>
+          <div className="min-w-0">
 
         <div className="grid gap-2 border-b border-border px-4 py-3 md:grid-cols-[minmax(220px,1fr)_repeat(2,180px)]">
           <div className="relative">
@@ -589,7 +614,8 @@ export function MatterDocumentsTab({
           {activeFolderSummary?.description ? ` · ${activeFolderSummary.description}` : ''}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+        {selectedDocuments.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-3">
           <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={selectedDocuments.length === 0 || busy === 'bulk-download'} onClick={() => void handleDownloadSelected()}>
             {busy === 'bulk-download' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             Download selected
@@ -616,6 +642,7 @@ export function MatterDocumentsTab({
             </span>
           )}
         </div>
+        )}
 
         {loading ? (
           <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
@@ -656,7 +683,12 @@ export function MatterDocumentsTab({
                 const shareEligibility = getDocumentShareEligibility(doc)
                 const firmShared = classifyDocumentVisibility(doc) === 'firm-shared'
                 return (
-                  <TableRow key={doc.id} data-state={selectedIds.has(doc.id) ? 'selected' : undefined}>
+                  <TableRow
+                    key={doc.id}
+                    id={`document-row-${doc.id}`}
+                    data-state={selectedIds.has(doc.id) ? 'selected' : undefined}
+                    className={cn(highlightedDocumentId === doc.id && 'bg-amber-100/70 ring-1 ring-inset ring-amber-400 dark:bg-amber-950/30')}
+                  >
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(doc.id)}
@@ -668,7 +700,13 @@ export function MatterDocumentsTab({
                       <div className="flex items-start gap-2">
                         <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0">
-                          <p className="break-words text-sm font-medium">{doc.name}</p>
+                          <p
+                            className="break-words text-sm font-medium"
+                            title={doc.name}
+                            aria-label={`${documentDisplayTitle(doc.name, clientName)}. Full filename: ${doc.name}`}
+                          >
+                            {documentDisplayTitle(doc.name, clientName)}
+                          </p>
                           <p className="text-[11px] text-muted-foreground">
                             {formatBytes(doc.size)}
                             {doc.created_at ? ` · ${formatDateTime(doc.created_at)}` : ''}
@@ -682,52 +720,71 @@ export function MatterDocumentsTab({
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-normal">
-                      <DocumentStatusBadges badges={buildDocumentStatusBadges(doc)} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 1)} />
+                        {((doc.marker_count ?? 0) + (doc.missing_count ?? 0)) > 0 && (
+                          <span className="text-xs font-medium text-amber">
+                            {(doc.marker_count ?? 0) + (doc.missing_count ?? 0)} issue{((doc.marker_count ?? 0) + (doc.missing_count ?? 0)) === 1 ? '' : 's'}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        {isDocumentPdf(doc) && (
-                          <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => setPreviewTarget(doc)}>
-                            <FileSearch className="h-3.5 w-3.5" />
-                            Preview PDF
-                          </Button>
-                        )}
-                        <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => void openDocument(doc, 'view')}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs"
+                          aria-label={isDocumentPdf(doc) ? `Preview PDF ${doc.name}` : `View ${doc.name}`}
+                          onClick={() => isDocumentPdf(doc) ? setPreviewTarget(doc) : void openDocument(doc, 'view')}
+                        >
                           {busy === `view:${doc.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
                           View
                         </Button>
-                        <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => void openDocument(doc, 'download')}>
-                          {busy === `download:${doc.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                          Download
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => openRename(doc)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                          Rename
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => openMove(doc)}>
-                          <FolderInput className="h-3.5 w-3.5" />
-                          Move
-                        </Button>
-                        {!firmShared && (
-                          <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" disabled={!shareEligibility.ok} title={shareEligibility.ok ? 'Share PDF' : shareEligibility.reason} onClick={() => beginShare([doc])}>
-                            <Share2 className="h-3.5 w-3.5" />
-                            Share PDF
-                          </Button>
-                        )}
-                        {firmShared && (
-                          <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => void handleUnshare([doc])}>
-                            <Undo2 className="h-3.5 w-3.5" />
-                            Unshare
-                          </Button>
-                        )}
-                        <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => void openAudit(doc)}>
-                          <History className="h-3.5 w-3.5" />
-                          Audit
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs text-red-strong hover:bg-red-bg" onClick={() => setDeleteTarget(doc)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label={`Actions for ${doc.name}`}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {isDocumentPdf(doc) && (
+                              <DropdownMenuItem onSelect={() => void openDocument(doc, 'view')}>
+                                <FileSearch className="mr-2 h-4 w-4" />Open original
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onSelect={() => void openDocument(doc, 'download')}>
+                              <Download className="mr-2 h-4 w-4" />Download
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openRename(doc)}>
+                              <Pencil className="mr-2 h-4 w-4" />Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openMove(doc)}>
+                              <FolderInput className="mr-2 h-4 w-4" />Move
+                            </DropdownMenuItem>
+                            {!firmShared ? (
+                              <DropdownMenuItem
+                                disabled={!shareEligibility.ok}
+                                title={shareEligibility.ok ? 'Share PDF' : shareEligibility.reason}
+                                onSelect={() => beginShare([doc])}
+                              >
+                                <Share2 className="mr-2 h-4 w-4" />Share PDF
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onSelect={() => void handleUnshare([doc])}>
+                                <Undo2 className="mr-2 h-4 w-4" />Unshare
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onSelect={() => void openAudit(doc)}>
+                              <History className="mr-2 h-4 w-4" />Audit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(doc)}>
+                              <Trash2 className="mr-2 h-4 w-4" />Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -736,6 +793,8 @@ export function MatterDocumentsTab({
             </TableBody>
           </Table>
         )}
+          </div>
+        </div>
       </section>
 
       <Dialog open={renameTarget !== null} onOpenChange={open => !open && setRenameTarget(null)}>
