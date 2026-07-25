@@ -5,13 +5,13 @@ import type { NextAction } from '@/lib/leads/nextAction'
 
 type LeadNextActionProps = {
   action: NextAction
-  busyIntent: string | null
+  busy: boolean
   onIntent: (intent: string) => void
 }
 
 export function LeadNextAction({
   action,
-  busyIntent,
+  busy,
   onIntent,
 }: LeadNextActionProps) {
   if (action.key === 'nothing') return null
@@ -41,7 +41,7 @@ export function LeadNextAction({
             type="button"
             size="sm"
             variant={item.kind === 'secondary' ? 'outline' : 'default'}
-            disabled={busyIntent !== null}
+            disabled={busy}
             onClick={() => onIntent(item.intent)}
           >
             {item.label}

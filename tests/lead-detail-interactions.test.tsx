@@ -657,16 +657,76 @@ describe('lead detail page', () => {
       screen.getByRole('button', { name: 'Mark lost' }),
       screen.getByRole('button', { name: 'More actions' }),
     ] as HTMLButtonElement[]
+    const ribbonControls = ['Send intake', 'Fill it myself', 'Import', 'Snooze']
+      .map(name => screen.getByRole('button', { name })) as HTMLButtonElement[]
     for (const control of topControls) expect(control.disabled).toBe(true)
+    for (const control of ribbonControls) expect(control.disabled).toBe(true)
 
     const phone = screen.getByRole('textbox', { name: 'Phone' })
     await user.clear(phone)
     await user.type(phone, '617-555-0111{Enter}')
     expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saving')
     for (const control of topControls) expect(control.disabled).toBe(true)
+    for (const control of ribbonControls) expect(control.disabled).toBe(true)
 
     resolvePatch({ ok: true, json: async () => ({ lead: { ...lead, phone: '617-555-0111' }, spouse }) } as Response)
     await waitFor(() => expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saved'))
+  })
+
+  it('disables ribbon actions while a header action is pending', async () => {
+    let resolveDraft!: (response: Response) => void
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/engagement-draft') && init?.method === 'POST') {
+        return new Promise<Response>(resolve => { resolveDraft = resolve })
+      }
+      return { ok: true, json: async () => ({ activity: [] }) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Draft engagement' }))
+
+    for (const name of ['Send intake', 'Fill it myself', 'Import', 'Snooze']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    }
+
+    resolveDraft({ ok: true, json: async () => ({ agreementId: 'agreement-1' }) } as Response)
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/admin/engagements/agreement-1?step=design'))
+  })
+
+  it('disables header actions while a ribbon action is pending', async () => {
+    const until = '2026-08-01T12:00:00.000Z'
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    let resolveSnooze!: (response: Response) => void
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/l1') && init?.method === 'PATCH') {
+        return new Promise<Response>(resolve => { resolveSnooze = resolve })
+      }
+      return { ok: true, json: async () => ({ activity: [] }) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Snooze' }))
+
+    for (const name of ['Draft engagement', 'Hire matter', 'Mark lost', 'More actions']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    }
+
+    resolveSnooze({
+      ok: true,
+      json: async () => ({
+        lead: { ...lead, lead_next_action_snoozed_until: until },
+        activity: {
+          id: 'snooze-1',
+          event_type: 'next_action_snoozed',
+          title: 'Next action snoozed',
+          detail: 'Snoozed until Aug 1, 2026 08:00 AM',
+          created_at: '2026-07-25T12:00:01Z',
+        },
+      }),
+    } as Response)
+    expect(await screen.findByText('Next action snoozed')).toBeTruthy()
   })
 
   it('rolls back, closes, restores trigger focus, and toasts when the server rejects a field', async () => {

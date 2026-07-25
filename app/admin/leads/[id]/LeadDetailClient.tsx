@@ -158,6 +158,21 @@ export function LeadDetailClient({
   const [sendingIntake, setSendingIntake] = useState(false)
   const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
   const initialLeadRef = useRef(initialLead)
+  const interactionBusy = busy
+    || sendingIntake
+    || activeField !== null
+    || busyIntent !== null
+  const interactionLockRef = useRef(false)
+
+  function beginInteraction() {
+    if (interactionBusy || interactionLockRef.current) return false
+    interactionLockRef.current = true
+    return true
+  }
+
+  function endInteraction() {
+    interactionLockRef.current = false
+  }
 
   useEffect(() => {
     if (initialLeadRef.current.updated_at === initialLead.updated_at) return
@@ -316,7 +331,7 @@ export function LeadDetailClient({
   }
 
   async function handleNextAction(intent: string) {
-    if (busyIntent) return
+    if (!beginInteraction()) return
     setBusyIntent(intent)
     setError(null)
     try {
@@ -350,6 +365,35 @@ export function LeadDetailClient({
       setError(caught instanceof Error ? caught.message : 'Request failed')
     } finally {
       setBusyIntent(null)
+      endInteraction()
+    }
+  }
+
+  async function handleTopDraft() {
+    if (!beginInteraction()) return
+    try {
+      await action(`/api/admin/leads/${lead.id}/engagement-draft`)()
+    } finally {
+      endInteraction()
+    }
+  }
+
+  function handleTopConvert() {
+    if (!beginInteraction()) return
+    if (lead.lead_status === 'hired' && lead.matter_id) {
+      router.push(`/admin/matters/${lead.matter_id}`)
+      endInteraction()
+      return
+    }
+    void action(`/api/admin/leads/${lead.id}/convert`)().finally(endInteraction)
+  }
+
+  async function handleTopStatusChange(status: 'lead' | 'hired' | 'lost') {
+    if (!beginInteraction()) return
+    try {
+      await persistStatus(status)
+    } finally {
+      endInteraction()
     }
   }
 
@@ -426,14 +470,14 @@ export function LeadDetailClient({
             <p className="mt-0.5 text-xs text-muted-foreground">{subtitle || 'Prospective client'}</p>
           </div>
           <LeadTopActions
-            busy={busy || sendingIntake || activeField !== null}
+            busy={interactionBusy}
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
             matterId={lead.matter_id}
             actionError={error}
-            onDraft={action(`/api/admin/leads/${lead.id}/engagement-draft`)}
-            onConvert={lead.lead_status === 'hired' && lead.matter_id ? () => router.push(`/admin/matters/${lead.matter_id}`) : action(`/api/admin/leads/${lead.id}/convert`)}
-            onStatusChange={status => void persistStatus(status)}
+            onDraft={handleTopDraft}
+            onConvert={handleTopConvert}
+            onStatusChange={handleTopStatusChange}
           />
         </div>
       </header>
@@ -443,7 +487,7 @@ export function LeadDetailClient({
           {visibleAction && (
             <LeadNextAction
               action={visibleAction}
-              busyIntent={busyIntent}
+              busy={interactionBusy}
               onIntent={intent => void handleNextAction(intent)}
             />
           )}
