@@ -288,7 +288,7 @@ export function LeadDetailClient({
             <p className="mt-0.5 text-xs text-muted-foreground">{subtitle || 'Prospective client'}</p>
           </div>
           <LeadTopActions
-            busy={busy || sendingIntake}
+            busy={busy || sendingIntake || activeField !== null}
             intakeSent={Boolean(lead.intake_sent_at)}
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
