@@ -1,7 +1,7 @@
 'use client'
 
 import { Activity, CheckCircle2, FileText, Info, Send } from 'lucide-react'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDateTime } from '@/lib/utils'
 import type { ActivityEventType, MatterActivity } from '@/types/database'
 
 const EVENT_META: Partial<Record<ActivityEventType, { icon: React.ReactNode; color: string }>> = {
@@ -12,15 +12,6 @@ const EVENT_META: Partial<Record<ActivityEventType, { icon: React.ReactNode; col
   draft_generated: { icon: <FileText className="h-3.5 w-3.5" />, color: 'text-accent bg-accent/10' },
   draft_promoted_to_review: { icon: <CheckCircle2 className="h-3.5 w-3.5" />, color: 'text-success bg-success/10' },
   matter_created: { icon: <Info className="h-3.5 w-3.5" />, color: 'text-muted-foreground bg-muted' },
-}
-
-function relativeTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`
-  return formatDate(iso)
 }
 
 interface MatterActivityTabProps {
@@ -57,7 +48,7 @@ export function MatterActivityTab({ activity, loading }: MatterActivityTabProps)
               {item.metadata?.origin === 'lead' && <span className="inline-flex rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">From lead</span>}
               {item.detail && <p className="text-xs text-muted-foreground">{item.detail}</p>}
               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {relativeTime(item.created_at)}
+                {formatDateTime(item.created_at)}
                 {item.actor_name ? ` · ${item.actor_name}` : ''}
               </p>
             </div>

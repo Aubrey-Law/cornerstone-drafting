@@ -6,6 +6,10 @@ export const EMAIL_CATEGORIES = [
   'intake_invite',
   'retell_call_alert',
   'daily_digest',
+  'appointment_confirmation',
+  'appointment_booked_alert',
+  'appointment_reminder',
+  'appointment_missed_followup',
   'manual',
 ] as const
 
@@ -68,6 +72,30 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     label: 'Daily digest',
     description: 'Weekday-morning summary of overdue matters, unread messages, and intakes waiting on review.',
     recipient: 'internal',
+  },
+  appointment_confirmation: {
+    category: 'appointment_confirmation',
+    label: 'Appointment confirmation',
+    description: 'Sent to a client after they book an appointment through the scheduling page.',
+    recipient: 'client',
+  },
+  appointment_booked_alert: {
+    category: 'appointment_booked_alert',
+    label: 'Appointment booked alert',
+    description: 'Sent to the firm when a client books, reschedules, or cancels an appointment.',
+    recipient: 'internal',
+  },
+  appointment_reminder: {
+    category: 'appointment_reminder',
+    label: 'Appointment reminder',
+    description: 'Sent to a client ahead of an upcoming appointment (lead time set in Scheduling settings).',
+    recipient: 'client',
+  },
+  appointment_missed_followup: {
+    category: 'appointment_missed_followup',
+    label: 'Missed appointment follow-up',
+    description: 'Sent to a client after staff marks an appointment as a no-show, with a rebook link.',
+    recipient: 'client',
   },
   manual: {
     category: 'manual',

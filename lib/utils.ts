@@ -38,3 +38,10 @@ export function formatDateTime(dateString: string, timeZone: string = FIRM_TIMEZ
   })
   return `${datePart} · ${timePart}`
 }
+
+/** Show time for timestamps without inventing midnight for date-only fields. */
+export function formatDateDetail(dateString: string, timeZone: string = FIRM_TIMEZONE): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())
+    ? formatDate(dateString)
+    : formatDateTime(dateString, timeZone)
+}

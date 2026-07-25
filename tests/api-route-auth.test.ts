@@ -18,6 +18,16 @@ const PUBLIC_ROUTE_SUFFIXES = [
   // Address-autocomplete proxy used by anonymous intake clients: same-origin
   // guard + per-IP rate limit protect the Google Places quota.
   'places/route.ts',
+  // Public scheduling: anonymous prospects book from /book/[slug]. Per-IP
+  // rate limited; anonymous callers only see public appointment types and
+  // free slot times (never busy-event details); portal-only types require a
+  // session (or, for availability, a valid hashed manage token).
+  'scheduling/types/route.ts',
+  'scheduling/availability/route.ts',
+  'scheduling/book/route.ts',
+  // Manage link: authorization is possession of an unguessable 256-bit token
+  // stored hashed with an expiry (same pattern as intake invite tokens).
+  'scheduling/manage/[token]/route.ts',
 ] as const
 
 function listRouteFiles(dir = API_ROOT, acc: string[] = []): string[] {
@@ -69,6 +79,8 @@ describe('API route auth coverage', () => {
             /requireEngagementStaff\b/,
             /ENABLE_DEBUG_ROUTES/,
             /isAdmin\b/,
+            // Document routes: getDocumentApiUser + isAdminUser (lib/documentSecurity).
+            /isAdminUser\b/,
             /\['attorney', 'admin'\]/,
             /\['admin', 'attorney'\]/,
           ]),

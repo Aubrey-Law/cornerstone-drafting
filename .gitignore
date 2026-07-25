@@ -30,3 +30,4 @@ supabase/.temp/
 # Firma engagement proof-of-concept artifacts
 .firma-poc/
 firma-webhook-captures/
+.env*

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { CalendarDays, ChevronDown, ChevronUp, CircleDot, FilePenLine, MessageSquareText, RefreshCw } from 'lucide-react'
+import { formatDateTime } from '@/lib/utils'
 
 type ActivityRow = {
   id: string
@@ -62,7 +63,7 @@ export function LeadActivityCard({ activity }: { activity: ActivityRow[] }) {
               <div className="min-w-0 flex-1 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <p className="font-medium">{row.title}</p>
-                  <time className="text-xs text-muted-foreground" dateTime={row.created_at}>{activityTime(row.created_at)}</time>
+                  <time className="text-xs text-muted-foreground" dateTime={row.created_at}>{formatDateTime(row.created_at)}</time>
                 </div>
                 {row.detail && <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{row.detail}</p>}
               </div>
