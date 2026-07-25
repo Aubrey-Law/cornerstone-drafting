@@ -3,8 +3,35 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { deleteLead } from '@/lib/leads/deleteLead'
 import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
-import { validateLeadDetails } from '@/lib/leads/details'
-import { ZodError } from 'zod'
+import { mergeLeadFieldPatch, validateLeadDetails } from '@/lib/leads/details'
+import type { LeadEditableField, ValidatedLeadDetails } from '@/lib/leads/details'
+import type { LeadSnapshotRow, LeadSpouseSnapshot } from '@/types/database'
+import { z, ZodError } from 'zod'
+
+const snoozeRequestSchema = z.object({
+  nextActionSnoozedUntil: z.string()
+    .datetime({ offset: true, message: 'Invalid snooze time' })
+    .refine(value => new Date(value).getTime() > Date.now(), 'Snooze time must be in the future'),
+}).strict()
+
+function validationError(error: unknown) {
+  if (error instanceof ZodError) {
+    const fieldErrors: Record<string, string> = {}
+    for (const issue of error.issues) {
+      const key = issue.path.join('.').replace(/^spouse\./, 'spouse').replace(/\.([a-z])/g, (_, c) => c.toUpperCase())
+      if (key && !fieldErrors[key]) fieldErrors[key] = issue.message
+    }
+    return NextResponse.json(
+      { error: error.issues[0]?.message ?? 'Invalid lead details', fieldErrors },
+      { status: 400 },
+    )
+  }
+  return NextResponse.json({ error: 'Invalid lead details' }, { status: 400 })
+}
+
+function hasOwn(value: unknown, key: string): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && Object.prototype.hasOwnProperty.call(value, key)
+}
 
 /**
  * PATCH /api/admin/leads/[id] — edit a lead (standalone client_intake row).
@@ -20,15 +47,26 @@ export async function PATCH(
 
   const { id: intakeId } = await params
   const body = await req.json().catch(() => ({}))
-  let details
-  try { details = validateLeadDetails(body) }
-  catch (error) {
-    if (error instanceof ZodError) {
-      const fieldErrors: Record<string,string> = {}
-      for (const issue of error.issues) { const key=issue.path.join('.').replace(/^spouse\./,'spouse').replace(/\.([a-z])/g,(_,c)=>c.toUpperCase());if(key&&!fieldErrors[key])fieldErrors[key]=issue.message }
-      return NextResponse.json({ error:error.issues[0]?.message??'Invalid lead details',fieldErrors },{status:400})
-    }
-    return NextResponse.json({error:'Invalid lead details'},{status:400})
+
+  if (hasOwn(body, 'nextActionSnoozedUntil')) {
+    let snooze
+    try { snooze = snoozeRequestSchema.parse(body) }
+    catch (error) { return validationError(error) }
+
+    const { data, error } = await getAdminClient().rpc('snooze_lead_next_action', {
+      p_lead_id: intakeId,
+      p_until: snooze.nextActionSnoozedUntil,
+      p_actor_id: userId,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
+  const partialRequest = hasOwn(body, 'field')
+  let legacyDetails: ValidatedLeadDetails | null = null
+  if (!partialRequest) {
+    try { legacyDetails = validateLeadDetails(body) }
+    catch (error) { return validationError(error) }
   }
 
   const admin = getAdminClient()
@@ -38,11 +76,32 @@ export async function PATCH(
     .eq('id', intakeId)
     .maybeSingle()
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
-  const { data: opportunity } = lead.matter_id
-    ? await admin.from('matters').select('id, relationship_status').eq('id', lead.matter_id).maybeSingle()
-    : { data: null }
-  if (opportunity?.relationship_status === 'hired' && details.status === 'hired') {
-    const { data: spouse } = await admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle()
+
+  const [{ data: spouse }, { data: opportunity }] = await Promise.all([
+    admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
+    lead.matter_id
+      ? admin.from('matters').select('id, relationship_status').eq('id', lead.matter_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  let details: ValidatedLeadDetails
+  if (partialRequest) {
+    try {
+      details = mergeLeadFieldPatch(
+        lead as LeadSnapshotRow,
+        (spouse ?? null) as LeadSpouseSnapshot | null,
+        body as { field: LeadEditableField; value: unknown },
+      )
+    } catch (error) {
+      return validationError(error)
+    }
+  } else if (legacyDetails) {
+    details = legacyDetails
+  } else {
+    return NextResponse.json({ error: 'Invalid lead details' }, { status: 400 })
+  }
+
+  if (!partialRequest && opportunity?.relationship_status === 'hired' && details.status === 'hired') {
     return NextResponse.json({ lead, spouse: spouse ?? null, matterId: lead.matter_id })
   }
   if (opportunity?.relationship_status === 'hired') {
@@ -52,7 +111,7 @@ export async function PATCH(
     )
   }
 
-  const requestedHired = details.status === 'hired'
+  const requestedHired = !partialRequest && details.status === 'hired'
   if (requestedHired && opportunity?.relationship_status === 'lost') {
     return NextResponse.json(
       { error: 'Reactivate the lost opportunity as Lead before hiring it.' },
@@ -73,11 +132,11 @@ export async function PATCH(
     matterId = converted.matterId
   }
   if (details.status === 'lost') { /* retained as a lead; the RPC persisted lost */ }
-  const [{ data: persistedLead }, { data: spouse }] = await Promise.all([
+  const [{ data: persistedLead }, { data: persistedSpouse }] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', intakeId).single(),
     admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
   ])
-  return NextResponse.json({ lead: persistedLead ?? savedLead, spouse: spouse ?? null, ...(matterId ? { matterId } : {}) })
+  return NextResponse.json({ lead: persistedLead ?? savedLead, spouse: persistedSpouse ?? null, ...(matterId ? { matterId } : {}) })
 }
 
 export async function DELETE(

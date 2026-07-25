@@ -2,11 +2,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { validateLeadDetails } from '@/lib/leads/details'
+import { mergeLeadFieldPatch, validateLeadDetails } from '@/lib/leads/details'
 
 const migrationPath = path.join(
   process.cwd(),
   'supabase/migrations/20260713020824_lite_lead_details_notes.sql',
+)
+const snoozeMigrationPath = path.join(
+  process.cwd(),
+  'supabase/migrations/20260811000000_lead_next_action_snooze.sql',
 )
 
 const completeInput = {
@@ -37,6 +41,42 @@ const completeInput = {
     phone: '',
     dateOfBirth: '',
   },
+}
+
+const leadSnapshot = {
+  id: 'lead-1',
+  first_name: 'Jane',
+  middle_name: 'Q',
+  last_name: 'Doe',
+  preferred_name: 'Janie',
+  email: 'jane@example.com',
+  phone: '617-555-0100',
+  date_of_birth: '1980-04-03',
+  address_line1: '10 Main St',
+  address_line2: 'Unit 2',
+  city: 'Boston',
+  state: 'MA',
+  zip: '02108',
+  county: 'Suffolk',
+  marital_status: 'married',
+  practice_area: 'EP',
+  lead_source: 'Referral',
+  lead_status: 'lead' as const,
+  engagement_fee_quoted: 4500,
+  lead_urgency: 'high',
+  taxable_estate: 2_500_000,
+  has_minor_children: true,
+  qualification_notes: 'Needs a trust review.',
+}
+
+const spouseSnapshot = {
+  first_name: 'John',
+  middle_name: 'R',
+  last_name: 'Doe',
+  preferred_name: 'Jack',
+  email: 'john@example.com',
+  phone: '617-555-0199',
+  date_of_birth: '1981-05-04',
 }
 
 describe('lead details validation', () => {
@@ -83,7 +123,7 @@ describe('lead details validation', () => {
   })
 
   it.each(['prospect', 'converted', ''])('rejects invalid status %s', status => {
-    expect(() => validateLeadDetails({ ...completeInput, status })).toThrow(/status/i)
+    expect(() => validateLeadDetails({ ...completeInput, status } as never)).toThrow(/status/i)
   })
 
   it('normalizes blank optional values and absent spouse to null', () => {
@@ -91,6 +131,88 @@ describe('lead details validation', () => {
     expect(result.fee).toBeNull()
     expect(result.source).toBeNull()
     expect(result.spouse).toBeNull()
+  })
+
+  it('merges a phone-only patch into the trusted lead and spouse snapshot', () => {
+    expect(mergeLeadFieldPatch(leadSnapshot, spouseSnapshot, {
+      field: 'phone',
+      value: ' 617-555-0111 ',
+    })).toEqual({
+      firstName: 'Jane', middleName: 'Q', lastName: 'Doe', preferredName: 'Janie',
+      email: 'jane@example.com', phone: '617-555-0111', dateOfBirth: '1980-04-03',
+      addressLine1: '10 Main St', addressLine2: 'Unit 2', city: 'Boston', state: 'MA',
+      zip: '02108', county: 'Suffolk', maritalStatus: 'married', practiceArea: 'EP',
+      source: 'Referral', status: 'lead', fee: 4500, urgency: 'high',
+      estimatedEstateValue: 2_500_000, hasMinorChildren: true,
+      qualificationNotes: 'Needs a trust review.',
+      spouse: {
+        firstName: 'John', middleName: 'R', lastName: 'Doe', preferredName: 'Jack',
+        email: 'john@example.com', phone: '617-555-0199', dateOfBirth: '1981-05-04',
+      },
+    })
+  })
+
+  it('rejects status as an inline-edit field', () => {
+    expect(() => mergeLeadFieldPatch(leadSnapshot, spouseSnapshot, {
+      field: 'status',
+      value: 'lost',
+    } as never)).toThrow()
+  })
+
+  it('rejects a partial patch that omits its value', () => {
+    expect(() => mergeLeadFieldPatch(
+      leadSnapshot,
+      spouseSnapshot,
+      { field: 'phone' } as never,
+    )).toThrow()
+  })
+
+  it('validates the complete merged object so required identity cannot be erased', () => {
+    expect(() => mergeLeadFieldPatch(leadSnapshot, spouseSnapshot, {
+      field: 'firstName',
+      value: ' ',
+    })).toThrow(/first name is required/i)
+  })
+})
+
+describe('lead next-action snooze migration', () => {
+  const source = () => fs.readFileSync(snoozeMigrationPath, 'utf8').toLowerCase()
+
+  it('adds the snooze timestamp and defines the atomic RPC', () => {
+    const sql = source()
+    expect(sql).toContain('lead_next_action_snoozed_until timestamptz')
+    expect(sql).toContain('create or replace function public.snooze_lead_next_action')
+    expect(sql).toContain('set search_path = pg_catalog, public')
+  })
+
+  it('fails for a missing lead and a converted or lost lead while holding the row lock', () => {
+    const sql = source()
+    expect(sql).toContain('where id = p_lead_id for update')
+    expect(sql).toContain("if not found then raise exception 'lead not found'")
+    expect(sql).toContain("if v_lead.lead_status in ('hired', 'lost')")
+    expect(sql).toContain("raise exception 'next action is unavailable for this lead'")
+  })
+
+  it('updates the snooze and inserts exactly one activity in the same function', () => {
+    const sql = source()
+    const functionBody = sql.slice(
+      sql.indexOf('create or replace function public.snooze_lead_next_action'),
+      sql.indexOf('revoke execute on function public.snooze_lead_next_action'),
+    )
+    expect(functionBody).toContain('set lead_next_action_snoozed_until = p_until')
+    expect(functionBody.match(/insert into public\.lead_activity/g)).toHaveLength(1)
+    expect(functionBody).toContain("'next_action_snoozed'")
+    expect(functionBody).toContain("'next action snoozed'")
+  })
+
+  it('requires the service role and validates the route actor as attorney or admin', () => {
+    const sql = source()
+    expect(sql).toContain(") <> 'service_role'")
+    expect(sql).toContain("u.id = p_actor_id and u.role in ('attorney', 'admin')")
+    expect(sql).toContain('revoke execute on function public.snooze_lead_next_action')
+    expect(sql).toContain('from public, anon, authenticated')
+    expect(sql).toContain('grant execute on function public.snooze_lead_next_action')
+    expect(sql).toContain('to service_role')
   })
 })
 
