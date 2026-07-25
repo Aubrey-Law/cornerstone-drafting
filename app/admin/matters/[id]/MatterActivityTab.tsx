@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { formatDateTime } from '@/lib/utils'
-import type { MatterActivity } from '@/types/database'
+import { Activity, CheckCircle2, FileText, Info, Send, type LucideIcon } from 'lucide-react'
+import { cn, formatDateTime } from '@/lib/utils'
+import type { ActivityEventType, MatterActivity } from '@/types/database'
 
 interface DocumentReference {
   id: string
@@ -20,6 +21,22 @@ const ACTIVITY_EVENT_LABELS: Partial<Record<MatterActivity['event_type'], string
   intake_completed: 'Intake completed',
   draft_generated: 'Drafts generated',
   stage_changed: 'Stage changed',
+}
+
+interface EventMeta {
+  icon: LucideIcon
+  color: string
+  label: string
+}
+
+const EVENT_META: Partial<Record<ActivityEventType, EventMeta>> = {
+  stage_changed: { icon: Activity, color: 'text-accent bg-accent/10', label: 'Stage changed activity' },
+  intake_sent: { icon: Send, color: 'text-accent bg-accent/10', label: 'Intake sent activity' },
+  intake_completed: { icon: CheckCircle2, color: 'text-success bg-success/10', label: 'Intake completed activity' },
+  email_sent: { icon: Send, color: 'text-muted-foreground bg-muted', label: 'Email sent activity' },
+  draft_generated: { icon: FileText, color: 'text-accent bg-accent/10', label: 'Draft generated activity' },
+  draft_promoted_to_review: { icon: CheckCircle2, color: 'text-success bg-success/10', label: 'Draft promoted to review activity' },
+  matter_created: { icon: Info, color: 'text-muted-foreground bg-muted', label: 'Matter activity' },
 }
 
 export function groupActivityByDay(activity: MatterActivity[]): ActivityDay[] {
@@ -40,11 +57,6 @@ export function groupActivityByDay(activity: MatterActivity[]): ActivityDay[] {
     label: formatter.format(new Date(events[0].created_at)),
     events,
   }))
-}
-
-function actorInitials(name: string | null | undefined): string {
-  if (!name?.trim()) return 'CS'
-  return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase()).join('')
 }
 
 function documentReferences(metadata: MatterActivity['metadata']): DocumentReference[] {
@@ -85,16 +97,21 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
           <div className="relative space-y-4">
             <div className="absolute bottom-3 left-[15px] top-3 w-px bg-border" aria-hidden />
             {day.events.map(item => {
+              const meta = EVENT_META[item.event_type] ?? EVENT_META.matter_created!
+              const EventIcon = meta.icon
               const refs = item.event_type === 'draft_generated' ? documentReferences(item.metadata) : []
               const legacyNames = item.event_type === 'draft_generated' ? legacyDocumentNames(item.metadata) : []
               const draftCount = refs.length || legacyNames.length
               return (
                 <article key={item.id} className="relative flex gap-3">
                   <div
-                    className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-background text-[10px] font-semibold"
-                    aria-label={item.actor_name ? `Actor: ${item.actor_name}` : 'Cornerstone system'}
+                    className={cn(
+                      'relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                      meta.color,
+                    )}
+                    aria-label={meta.label}
                   >
-                    {actorInitials(item.actor_name)}
+                    <EventIcon className="h-3.5 w-3.5" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1 pb-1">
                     <p className="text-sm font-medium">
