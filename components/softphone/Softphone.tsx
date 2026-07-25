@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Device, Call as TwilioCall } from '@twilio/voice-sdk'
 import { TelnyxRTC, type Call as TelnyxCall } from '@telnyx/webrtc'
-import { Mic, MicOff, Minus, Moon, PhoneOff } from 'lucide-react'
+import { Delete, Mic, MicOff, Minus, Moon, Pause, Play, Grid3x3, Briefcase, PhoneOff } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { usePhoneDirectory, type DirectoryEntry } from './usePhoneDirectory'
 
 /**
  * Browser-based dialer for Cornerstone staff. Authenticates via /api/token,
- * places outbound calls through the TwiML App's Voice URL (/api/voice),
- * and accepts inbound calls routed to <Client>identity</Client>.
+ * places outbound calls through the configured provider (Twilio TwiML App or
+ * Telnyx WebRTC), and accepts inbound calls routed to this user.
  *
- * Inbound ringing is active when the business-line Voice URL points at
- * /api/voice/inbound and TWILIO_INBOUND_CLIENT_IDENTITIES includes this user.
+ * Styling uses the app's semantic theme tokens only (bg-card, border-border,
+ * text-primary, …) so light and dark both follow the admin theme.
  */
 
 const STATUS = {
@@ -24,6 +26,16 @@ const STATUS = {
 } as const
 
 type SoftphoneStatus = (typeof STATUS)[keyof typeof STATUS]
+type Outcome = 'Reached' | 'Voicemail' | 'No answer'
+
+const OUTCOMES: Outcome[] = ['Reached', 'Voicemail', 'No answer']
+
+const KEYPAD: [string, string][] = [
+  ['1', ''], ['2', 'ABC'], ['3', 'DEF'],
+  ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'],
+  ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'],
+  ['*', ''], ['0', '+'], ['#', ''],
+]
 
 function formatDuration(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0')
@@ -46,35 +58,76 @@ function toE164(display: string): string {
   return `+${digits}`
 }
 
-const KEYPAD: [string, string][] = [
-  ['1', ''], ['2', 'ABC'], ['3', 'DEF'],
-  ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'],
-  ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'],
-  ['*', ''], ['0', '+'], ['#', ''],
-]
+function last10(value: string): string {
+  return value.replace(/\D/g, '').slice(-10)
+}
+
+function initials(name: string): string {
+  return name.trim().split(/\s+/).slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase()
+}
+
+/** Ignore global key handling while the user is typing anywhere else in the admin. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
+function externalCallId(call: TwilioCall | TelnyxCall | null, provider: 'twilio' | 'telnyx'): string | null {
+  if (!call) return null
+  if (provider === 'twilio') return (call as TwilioCall).parameters?.CallSid ?? null
+  const telnyx = call as TelnyxCall & { telnyxIDs?: { telnyxCallControlId?: string; telnyxLegId?: string }; id?: string }
+  return telnyx.telnyxIDs?.telnyxCallControlId ?? telnyx.telnyxIDs?.telnyxLegId ?? telnyx.id ?? null
+}
 
 export default function Softphone() {
   const [status, setStatus] = useState<SoftphoneStatus>(STATUS.CONNECTING)
   const [number, setNumber] = useState('')
   const [muted, setMuted] = useState(false)
+  const [held, setHeld] = useState(false)
   const [dnd, setDnd] = useState(false)
   const [minimized, setMinimized] = useState(false)
-  const [wrapUpOpen, setWrapUpOpen] = useState(false)
-  const [wrapUpNotes, setWrapUpNotes] = useState('')
-  const [wrapUpOutcome, setWrapUpOutcome] = useState('Reached')
-  const [lastDuration, setLastDuration] = useState(0)
+  const [showKeypad, setShowKeypad] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [incomingFrom, setIncomingFrom] = useState('')
+
+  // wrap-up
+  const [wrapUp, setWrapUp] = useState<{
+    durationSeconds: number
+    participantNumber: string
+    direction: 'inbound' | 'outbound'
+    externalCallId: string | null
+    entry: DirectoryEntry | null
+  } | null>(null)
+  const [wrapUpNotes, setWrapUpNotes] = useState('')
+  const [wrapUpOutcome, setWrapUpOutcome] = useState<Outcome>('Reached')
+  const [saving, setSaving] = useState(false)
 
   const providerRef = useRef<'twilio' | 'telnyx'>('twilio')
   const deviceRef = useRef<Device | TelnyxRTC | null>(null)
   const callRef = useRef<TwilioCall | TelnyxCall | null>(null)
   const callerNumberRef = useRef<string | null>(null)
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
+  const numberInputRef = useRef<HTMLInputElement | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const secondsRef = useRef(0)
   const connectedRef = useRef(false)
+  const directionRef = useRef<'inbound' | 'outbound'>('outbound')
+  const participantRef = useRef('')
+
+  const { lookup } = usePhoneDirectory()
+
+  const dialedEntry = useMemo(() => {
+    const digits = last10(number)
+    return digits.length >= 3 ? lookup(digits) : null
+  }, [number, lookup])
+
+  const incomingEntry = useMemo(
+    () => (incomingFrom ? lookup(last10(incomingFrom)) : null),
+    [incomingFrom, lookup],
+  )
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -94,28 +147,40 @@ export default function Softphone() {
   const cleanupCall = useCallback(() => {
     stopTimer()
     if (connectedRef.current) {
-      setLastDuration(secondsRef.current)
-      setWrapUpOpen(true)
+      const digits = last10(participantRef.current)
+      setWrapUp({
+        durationSeconds: secondsRef.current,
+        participantNumber: participantRef.current,
+        direction: directionRef.current,
+        externalCallId: externalCallId(callRef.current, providerRef.current),
+        entry: digits ? lookup(digits) : null,
+      })
+      setWrapUpNotes('')
+      setWrapUpOutcome('Reached')
       setMinimized(false)
     }
     connectedRef.current = false
     secondsRef.current = 0
     setSeconds(0)
     setMuted(false)
+    setHeld(false)
+    setShowKeypad(false)
     setIncomingFrom('')
     callRef.current = null
     setStatus(deviceRef.current ? STATUS.IDLE : STATUS.OFFLINE)
-  }, [stopTimer])
+  }, [lookup, stopTimer])
+
+  const markConnected = useCallback(() => {
+    connectedRef.current = true
+    setStatus(STATUS.ON_CALL)
+    setMuted(false)
+    setHeld(false)
+    startTimer()
+  }, [startTimer])
 
   const wireTwilioCall = useCallback(
     (call: TwilioCall) => {
-      call.on('accept', () => {
-        connectedRef.current = true
-        setWrapUpOpen(false)
-        setStatus(STATUS.ON_CALL)
-        setMuted(false)
-        startTimer()
-      })
+      call.on('accept', markConnected)
       call.on('disconnect', cleanupCall)
       call.on('cancel', cleanupCall)
       call.on('reject', cleanupCall)
@@ -124,61 +189,86 @@ export default function Softphone() {
         cleanupCall()
       })
     },
-    [cleanupCall, startTimer],
+    [cleanupCall, markConnected],
   )
 
-  const fetchToken = useCallback(async (): Promise<{ provider: 'twilio' | 'telnyx'; token: string; callerNumber?: string | null }> => {
+  const fetchToken = useCallback(async (): Promise<{
+    provider: 'twilio' | 'telnyx'
+    token: string
+    callerNumber?: string | null
+  }> => {
     const res = await fetch('/api/token')
     if (!res.ok) throw new Error('Token request failed')
-    return await res.json()
+    const auth = await res.json()
+    if (typeof auth?.token !== 'string' || !auth.token) throw new Error('Token response was malformed')
+    return auth
   }, [])
 
   useEffect(() => {
     let device: Device | TelnyxRTC | undefined
-    let refreshTimer: ReturnType<typeof setInterval> | undefined
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined
     let cancelled = false
 
     void (async () => {
       try {
         const auth = await fetchToken()
         if (cancelled) return
-        providerRef.current = auth.provider
+        providerRef.current = auth.provider === 'telnyx' ? 'telnyx' : 'twilio'
         callerNumberRef.current = auth.callerNumber ?? null
 
         if (auth.provider === 'telnyx') {
           const telnyx = new TelnyxRTC({ login_token: auth.token })
           device = telnyx
+          if (remoteAudioRef.current) telnyx.remoteElement = remoteAudioRef.current
           telnyx.on('telnyx.ready', () => setStatus(STATUS.IDLE))
           telnyx.on('telnyx.error', (e: Error) => {
             setError(e?.message || 'Device error')
             setStatus(STATUS.OFFLINE)
           })
+          telnyx.on('telnyx.socket.close', () => setStatus(STATUS.OFFLINE))
           telnyx.on('telnyx.notification', (notification) => {
             if (notification.type !== 'callUpdate' || !notification.call) return
             const call = notification.call
             callRef.current = call
+            const remote = call.options?.remoteCallerNumber || call.options?.destinationNumber || ''
             if (call.state === 'ringing' && call.direction === 'inbound') {
-              setIncomingFrom(call.options?.remoteCallerNumber || call.options?.callerNumber || 'Unknown caller')
+              directionRef.current = 'inbound'
+              participantRef.current = remote
+              setIncomingFrom(remote || 'Unknown caller')
               setStatus(STATUS.INCOMING)
             } else if (call.state === 'active') {
-              connectedRef.current = true
-              setWrapUpOpen(false)
-              setStatus(STATUS.ON_CALL)
-              setMuted(false)
-              startTimer()
+              if (remote) participantRef.current = remote
+              markConnected()
+            } else if (call.state === 'held') {
+              setHeld(true)
             } else if (call.state === 'hangup' || call.state === 'destroy') {
               cleanupCall()
             }
           })
           deviceRef.current = telnyx
           await telnyx.connect()
-          refreshTimer = setInterval(() => {
-            void fetchToken()
-              .then(fresh => telnyx.login({ creds: { login_token: fresh.token } }))
-              .catch(() => {
+
+          // Telnyx login tokens are short-lived: reconnect with a fresh one
+          // rather than calling login() on a live socket.
+          const scheduleReconnect = () => {
+            refreshTimer = setTimeout(async () => {
+              if (cancelled) return
+              try {
+                const fresh = await fetchToken()
+                if (cancelled) return
+                // safe only when no call is up; otherwise defer
+                if (callRef.current) return scheduleReconnect()
+                await telnyx.disconnect()
+                telnyx.options.login_token = fresh.token
+                await telnyx.connect()
+                scheduleReconnect()
+              } catch {
                 setError('Could not refresh softphone credentials')
-              })
-          }, 50 * 60 * 1000)
+                setStatus(STATUS.OFFLINE)
+              }
+            }, 45 * 60 * 1000)
+          }
+          scheduleReconnect()
           return
         }
 
@@ -193,20 +283,21 @@ export default function Softphone() {
           setError(e?.message || 'Device error')
           setStatus(STATUS.OFFLINE)
         })
-
         twilioDevice.on('incoming', (call: TwilioCall) => {
           callRef.current = call
-          setIncomingFrom(call.parameters?.From || 'Unknown caller')
+          const from = call.parameters?.From || ''
+          directionRef.current = 'inbound'
+          participantRef.current = from
+          setIncomingFrom(from || 'Unknown caller')
           setStatus(STATUS.INCOMING)
           wireTwilioCall(call)
         })
-
         twilioDevice.on('tokenWillExpire', async () => {
           try {
             const fresh = await fetchToken()
             twilioDevice.updateToken(fresh.token)
           } catch {
-            /* surfaces as device error if refresh actually fails */
+            setError('Could not refresh softphone credentials')
           }
         })
 
@@ -214,8 +305,7 @@ export default function Softphone() {
         deviceRef.current = twilioDevice
       } catch (e) {
         if (!cancelled) {
-          const message = e instanceof Error ? e.message : 'Could not start softphone'
-          setError(message)
+          setError(e instanceof Error ? e.message : 'Could not start softphone')
           setStatus(STATUS.OFFLINE)
         }
       }
@@ -223,17 +313,20 @@ export default function Softphone() {
 
     return () => {
       cancelled = true
-      if (refreshTimer) clearInterval(refreshTimer)
+      if (refreshTimer) clearTimeout(refreshTimer)
       stopTimer()
       if (device instanceof Device) device.destroy()
-      else device?.disconnect()
+      else void device?.disconnect()
     }
-  }, [cleanupCall, fetchToken, startTimer, stopTimer, wireTwilioCall])
+  }, [cleanupCall, fetchToken, markConnected, stopTimer, wireTwilioCall])
 
   const placeCall = useCallback(async () => {
     const device = deviceRef.current
-    if (!device || dnd || number.replace(/\D/g, '').length < 10) return
+    if (!device || dnd || last10(number).length < 10) return
     try {
+      directionRef.current = 'outbound'
+      participantRef.current = toE164(number)
+      setWrapUp(null)
       setStatus(STATUS.DIALING)
       if (providerRef.current === 'telnyx' && device instanceof TelnyxRTC) {
         callRef.current = device.newCall({
@@ -248,15 +341,15 @@ export default function Softphone() {
         wireTwilioCall(call)
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not place call'
-      setError(message)
+      setError(e instanceof Error ? e.message : 'Could not place call')
       cleanupCall()
     }
-  }, [dnd, number, wireTwilioCall, cleanupCall])
+  }, [cleanupCall, dnd, number, wireTwilioCall])
 
   const acceptCall = useCallback(() => {
     const call = callRef.current
     if (!call) return
+    setWrapUp(null)
     if (providerRef.current === 'telnyx') void (call as TelnyxCall).answer({ remoteElement: remoteAudioRef.current ?? undefined })
     else (call as TwilioCall).accept()
   }, [])
@@ -288,336 +381,499 @@ export default function Softphone() {
     setMuted(next)
   }, [muted])
 
+  const toggleHold = useCallback(async () => {
+    const call = callRef.current
+    if (!call || providerRef.current !== 'telnyx') return
+    const next = !held
+    try {
+      if (next) await (call as TelnyxCall).hold()
+      else await (call as TelnyxCall).unhold()
+      setHeld(next)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not hold the call')
+    }
+  }, [held])
+
   const pressKey = useCallback(
     (digit: string) => {
-      if (status === STATUS.ON_CALL || status === STATUS.DIALING) {
+      if (status === STATUS.ON_CALL) {
         const call = callRef.current
         if (providerRef.current === 'telnyx') (call as TelnyxCall | null)?.dtmf(digit)
         else (call as TwilioCall | null)?.sendDigits(digit)
         return
       }
-      setNumber((prev) => formatPhone(prev.replace(/\D/g, '') + digit))
+      if (status !== STATUS.IDLE) return
+      setNumber(prev => formatPhone(prev.replace(/\D/g, '') + digit))
     },
     [status],
   )
 
   const backspace = useCallback(() => {
-    setNumber((prev) => formatPhone(prev.replace(/\D/g, '').slice(0, -1)))
+    setNumber(prev => formatPhone(prev.replace(/\D/g, '').slice(0, -1)))
   }, [])
 
+  // Enter dials, Backspace deletes — only when focus is inside the softphone,
+  // so typing in the matters search never reaches the dialer.
+  const rootRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (status !== STATUS.IDLE && status !== STATUS.DIALING) return
-      if (/^[0-9*#]$/.test(e.key)) pressKey(e.key)
-      else if (e.key === 'Backspace') backspace()
+      const root = rootRef.current
+      const active = document.activeElement
+      const inside = !!root && !!active && root.contains(active)
+      if (!inside) return
+      // Inputs and textareas inside the softphone handle their own typing;
+      // only the number input's Enter should dial.
+      if (isTypingTarget(e.target) && e.target !== numberInputRef.current) return
+      if (status === STATUS.ON_CALL) {
+        if (/^[0-9*#]$/.test(e.key) && !isTypingTarget(e.target)) pressKey(e.key)
+        return
+      }
+      if (status !== STATUS.IDLE) return
+      if (/^[0-9*#]$/.test(e.key) && e.target !== numberInputRef.current) pressKey(e.key)
       else if (e.key === 'Enter' && !dnd) void placeCall()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dnd, status, pressKey, backspace, placeCall])
+  }, [dnd, placeCall, pressKey, status])
+
+  const saveWrapUp = useCallback(async () => {
+    if (!wrapUp) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/phone/call-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          externalCallId: wrapUp.externalCallId,
+          participantNumber: wrapUp.participantNumber,
+          direction: wrapUp.direction,
+          durationSeconds: wrapUp.durationSeconds,
+          outcome: wrapUpOutcome,
+          notes: wrapUpNotes.trim() || null,
+          matterId: wrapUp.entry?.matterId ?? null,
+          leadId: wrapUp.entry?.leadId ?? null,
+        }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Could not save the call')
+      setWrapUp(null)
+      setNumber('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the call')
+    } finally {
+      setSaving(false)
+    }
+  }, [wrapUp, wrapUpNotes, wrapUpOutcome])
 
   const inCall = status === STATUS.ON_CALL || status === STATUS.DIALING
-  const canDial = status === STATUS.IDLE && !dnd && number.replace(/\D/g, '').length >= 10
+  const canDial = status === STATUS.IDLE && !dnd && last10(number).length >= 10
+  const activeEntry = directionRef.current === 'inbound' ? incomingEntry : dialedEntry
+
   const statusLabel: Record<SoftphoneStatus, string> = {
-    [STATUS.CONNECTING]: 'Connecting…',
-    [STATUS.IDLE]: 'Ready',
-    [STATUS.INCOMING]: 'Incoming call',
-    [STATUS.DIALING]: 'Calling…',
-    [STATUS.ON_CALL]: formatDuration(seconds),
+    [STATUS.CONNECTING]: 'Connecting',
+    [STATUS.IDLE]: dnd ? 'Do not disturb' : 'Ready',
+    [STATUS.INCOMING]: 'Ringing',
+    [STATUS.DIALING]: 'Dialing',
+    [STATUS.ON_CALL]: held ? 'On hold' : 'On call',
     [STATUS.OFFLINE]: 'Offline',
   }
 
   if (minimized && inCall) {
     return (
-      <button type="button" className="sp-bubble" onClick={() => setMinimized(false)} aria-label="Open active call">
-        <style>{styles}</style>
-        <span className="sp-bubble__dot" aria-hidden />
-        <span>{statusLabel[status]}</span>
+      <button
+        type="button"
+        onClick={() => setMinimized(false)}
+        aria-label="Open active call"
+        className="flex items-center gap-2.5 rounded-full border border-border bg-card py-2 pl-3 pr-4 shadow-lg transition-shadow hover:shadow-xl"
+      >
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground">
+          <Mic size={13} aria-hidden />
+        </span>
+        <span className="text-left">
+          <span className="block text-xs font-medium leading-tight">
+            {activeEntry?.name ?? formatPhone(participantRef.current) ?? 'Call'}
+          </span>
+          <span className="block text-[10px] uppercase tracking-wider text-primary tabular-nums">
+            {formatDuration(seconds)} · on call
+          </span>
+        </span>
       </button>
     )
   }
 
   return (
-    <div className="sp">
+    <div
+      ref={rootRef}
+      className="w-[328px] overflow-hidden rounded-[14px] border border-border bg-card text-card-foreground shadow-lg"
+    >
       <audio ref={remoteAudioRef} autoPlay />
-      <style>{styles}</style>
 
-      <header className="sp__bar">
-        <span className={`sp__dot sp__dot--${status}`} aria-hidden />
-        <span className="sp__status">{statusLabel[status]}</span>
-        <span className="sp__brand">Cornerstone</span>
-        {inCall && (
-          <button type="button" className="sp__icon" onClick={() => setMinimized(true)} aria-label="Minimize active call">
-            <Minus size={15} />
-          </button>
-        )}
-      </header>
-
-      {status === STATUS.INCOMING && (
-        <div className="sp__incoming" role="dialog" aria-label="Incoming call">
-          <p className="sp__incoming-label">Incoming</p>
-          <p className="sp__incoming-from">{formatPhone(incomingFrom) || incomingFrom}</p>
-          <div className="sp__incoming-actions">
-            <button type="button" className="sp__btn sp__btn--decline" onClick={rejectCall}>
-              Decline
-            </button>
-            <button type="button" className="sp__btn sp__btn--accept" onClick={acceptCall}>
-              Answer
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="sp__readout" aria-live="polite">
-        {inCall ? (
-          <span className="sp__readout-num">{formatPhone(number) || 'Call in progress'}</span>
-        ) : (
-          <input
-            className="sp__readout-input"
-            value={number}
-            onChange={(e) => setNumber(formatPhone(e.target.value))}
-            placeholder="Enter a number"
-            inputMode="tel"
-            aria-label="Phone number"
-            disabled={status === STATUS.INCOMING}
+      <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            aria-hidden
+            className={cn(
+              'h-[7px] w-[7px] shrink-0 rounded-full',
+              status === STATUS.OFFLINE && 'bg-destructive',
+              dnd && status !== STATUS.OFFLINE && 'bg-destructive',
+              !dnd && status === STATUS.IDLE && 'bg-emerald-600 dark:bg-emerald-400',
+              !dnd && (status === STATUS.ON_CALL || status === STATUS.DIALING || status === STATUS.INCOMING) &&
+                'bg-primary motion-safe:animate-pulse',
+              status === STATUS.CONNECTING && 'bg-muted-foreground motion-safe:animate-pulse',
+            )}
           />
-        )}
-        {!inCall && number && (
-          <button type="button" className="sp__back" onClick={backspace} aria-label="Delete last digit">
-            ⌫
-          </button>
-        )}
-      </div>
-
-      <div className="sp__pad" role="group" aria-label="Dial pad">
-        {KEYPAD.map(([digit, letters]) => (
-          <button
-            key={digit}
-            type="button"
-            className="sp__key"
-            onClick={() => pressKey(digit)}
-            disabled={status === STATUS.INCOMING}
-          >
-            <span className="sp__key-digit">{digit}</span>
-            <span className="sp__key-letters">{letters}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="sp__actions">
-        {inCall ? (
-          <>
+          <span className="truncate text-[11px] font-medium uppercase tracking-[0.1em]">
+            {statusLabel[status]}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {!inCall && (
             <button
               type="button"
-              className={`sp__round ${muted ? 'sp__round--on' : ''}`}
-              onClick={toggleMute}
-              disabled={status !== STATUS.ON_CALL}
-              aria-pressed={muted}
-            >
-              {muted ? <MicOff size={16} /> : <Mic size={16} />}
-              <span>{muted ? 'Unmute' : 'Mute'}</span>
-            </button>
-            <button type="button" className="sp__round sp__round--end" onClick={hangUp}>
-              <PhoneOff size={16} />
-              <span>End</span>
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              className={`sp__round sp__round--dnd ${dnd ? 'sp__round--on' : ''}`}
-              onClick={() => setDnd((prev) => !prev)}
+              onClick={() => setDnd(prev => !prev)}
               aria-pressed={dnd}
               aria-label={dnd ? 'Disable do not disturb' : 'Enable do not disturb'}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-medium tracking-[0.1em]',
+                dnd ? 'border-destructive text-destructive' : 'border-border text-muted-foreground hover:text-foreground',
+              )}
             >
-              <Moon size={16} />
-              <span>DND</span>
+              <Moon size={10} aria-hidden />
+              {dnd ? 'ON' : 'OFF'}
+            </button>
+          )}
+          <span className="text-[11px] text-muted-foreground">Cornerstone</span>
+          {inCall && (
+            <button
+              type="button"
+              onClick={() => setMinimized(true)}
+              aria-label="Minimize active call"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Minus size={15} aria-hidden />
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* ── wrap-up (replaces the body so notes can't be lost) ───────── */}
+      {wrapUp && (
+        <section className="px-4 py-4" aria-label="Call wrap-up">
+          <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Call ended · {formatDuration(wrapUp.durationSeconds)} · {wrapUp.direction}
+          </p>
+          <p className="mt-2 font-serif text-xl leading-tight">
+            {wrapUp.entry?.name ?? formatPhone(wrapUp.participantNumber) ?? 'Unknown caller'}
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            {wrapUp.entry?.matterNumber
+              ? `Logging to ${wrapUp.entry.matterNumber}`
+              : wrapUp.entry
+                ? 'Logging to lead record'
+                : 'No matching client — saved to the call log'}
+          </p>
+
+          <div className="mt-4 flex gap-1.5" role="group" aria-label="Outcome">
+            {OUTCOMES.map(o => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setWrapUpOutcome(o)}
+                aria-pressed={wrapUpOutcome === o}
+                className={cn(
+                  'flex-1 rounded-lg border py-2 text-[9px] font-medium uppercase tracking-[0.1em]',
+                  wrapUpOutcome === o
+                    ? 'border-primary text-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+
+          <label className="mt-3 block">
+            <span className="sr-only">Call notes</span>
+            <textarea
+              value={wrapUpNotes}
+              onChange={e => setWrapUpNotes(e.target.value)}
+              rows={4}
+              placeholder="Call notes…"
+              className="w-full resize-y rounded-[10px] border border-border bg-muted/40 px-3 py-2.5 text-[11px] leading-relaxed outline-none focus:border-primary"
+            />
+          </label>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setWrapUp(null)}
+              disabled={saving}
+              className="flex-1 rounded-[10px] border border-border py-3 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              Discard
             </button>
             <button
               type="button"
-              className="sp__round sp__round--call"
+              onClick={() => void saveWrapUp()}
+              disabled={saving}
+              className="flex-[2] rounded-[10px] bg-primary py-3 text-[10px] font-medium uppercase tracking-[0.12em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : wrapUp.entry?.matterNumber ? 'Save to matter' : 'Save call'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* ── incoming ─────────────────────────────────────────────────── */}
+      {!wrapUp && status === STATUS.INCOMING && (
+        <section className="px-4 py-6 text-center" aria-label="Incoming call">
+          <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-primary motion-safe:animate-pulse">
+            Incoming call
+          </p>
+          <p className="mt-3 font-serif text-[22px] leading-tight">
+            {incomingEntry?.name ?? formatPhone(incomingFrom) ?? incomingFrom}
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">{formatPhone(incomingFrom) || incomingFrom}</p>
+          {incomingEntry?.matterNumber && (
+            <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-[10px]">
+              <span className="h-[5px] w-[5px] rounded-full bg-primary" aria-hidden />
+              {incomingEntry.matterNumber}
+              {incomingEntry.practiceArea ? ` · ${incomingEntry.practiceArea}` : ''}
+            </p>
+          )}
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={rejectCall}
+              className="flex-1 rounded-[10px] border border-destructive py-3 text-[10px] font-medium uppercase tracking-[0.14em] text-destructive"
+            >
+              Decline
+            </button>
+            <button
+              type="button"
+              onClick={acceptCall}
+              className="flex-1 rounded-[10px] bg-primary py-3 text-[10px] font-medium uppercase tracking-[0.14em] text-primary-foreground hover:opacity-90"
+            >
+              Accept
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* ── dialing ──────────────────────────────────────────────────── */}
+      {!wrapUp && status === STATUS.DIALING && (
+        <section className="px-4 py-8 text-center" aria-label="Dialing">
+          <span className="grid h-14 w-14 place-items-center rounded-full border border-border bg-muted/40 mx-auto font-medium text-primary">
+            {initials(dialedEntry?.name ?? '') || '☏'}
+          </span>
+          <p className="mt-4 font-serif text-xl leading-tight">
+            {dialedEntry?.name ?? formatPhone(number)}
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Calling · {formatPhone(number)}</p>
+          <button
+            type="button"
+            onClick={hangUp}
+            className="mt-6 w-full rounded-[10px] border border-destructive py-3 text-[10px] font-medium uppercase tracking-[0.16em] text-destructive"
+          >
+            Cancel
+          </button>
+        </section>
+      )}
+
+      {/* ── active call ──────────────────────────────────────────────── */}
+      {!wrapUp && status === STATUS.ON_CALL && (
+        <section className="px-4 py-4" aria-label="Active call">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-muted/40 text-xs font-medium text-primary">
+              {initials(activeEntry?.name ?? '') || '☏'}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-serif text-lg leading-tight">
+                {activeEntry?.name ?? formatPhone(participantRef.current)}
+              </p>
+              <p className="truncate text-[10px] text-muted-foreground">
+                {activeEntry?.matterNumber ?? formatPhone(participantRef.current)}
+              </p>
+            </div>
+            <span className="text-sm font-medium tabular-nums text-primary">{formatDuration(seconds)}</span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-4 gap-1.5">
+            <button
+              type="button"
+              onClick={toggleMute}
+              aria-pressed={muted}
+              className={cn(
+                'grid place-items-center gap-1 rounded-[10px] border py-2.5',
+                muted ? 'border-primary text-primary' : 'border-border hover:bg-muted/50',
+              )}
+            >
+              {muted ? <MicOff size={15} aria-hidden /> : <Mic size={15} aria-hidden />}
+              <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                {muted ? 'Unmute' : 'Mute'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void toggleHold()}
+              aria-pressed={held}
+              disabled={providerRef.current !== 'telnyx'}
+              title={providerRef.current !== 'telnyx' ? 'Hold requires the Telnyx line' : undefined}
+              className={cn(
+                'grid place-items-center gap-1 rounded-[10px] border py-2.5 disabled:opacity-40',
+                held ? 'border-primary text-primary' : 'border-border hover:bg-muted/50',
+              )}
+            >
+              {held ? <Play size={15} aria-hidden /> : <Pause size={15} aria-hidden />}
+              <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                {held ? 'Resume' : 'Hold'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowKeypad(prev => !prev)}
+              aria-pressed={showKeypad}
+              aria-label="Keypad"
+              className={cn(
+                'grid place-items-center gap-1 rounded-[10px] border py-2.5',
+                showKeypad ? 'border-primary text-primary' : 'border-border hover:bg-muted/50',
+              )}
+            >
+              <Grid3x3 size={15} aria-hidden />
+              <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Keypad</span>
+            </button>
+            <a
+              href={activeEntry?.matterId ? `/admin/matters/${activeEntry.matterId}` : undefined}
+              aria-disabled={!activeEntry?.matterId}
+              className={cn(
+                'grid place-items-center gap-1 rounded-[10px] border border-border py-2.5',
+                activeEntry?.matterId ? 'hover:bg-muted/50' : 'pointer-events-none opacity-40',
+              )}
+            >
+              <Briefcase size={15} aria-hidden />
+              <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Matter</span>
+            </a>
+          </div>
+
+          {showKeypad && (
+            <div className="mt-3 grid grid-cols-3 gap-1.5" role="group" aria-label="Dial pad">
+              {KEYPAD.map(([digit, letters]) => (
+                <button
+                  key={digit}
+                  type="button"
+                  onClick={() => pressKey(digit)}
+                  className="grid place-items-center gap-px rounded-[10px] border border-border bg-background py-2 pt-2.5 hover:bg-muted/60 active:translate-y-px"
+                >
+                  <span className="font-serif text-xl leading-none">{digit}</span>
+                  <span className="min-h-[7px] text-[7px] font-medium tracking-[0.16em] text-muted-foreground">
+                    {letters}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={hangUp}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] bg-destructive py-3 text-[10px] font-medium uppercase tracking-[0.16em] text-destructive-foreground"
+          >
+            <PhoneOff size={14} aria-hidden />
+            End call
+          </button>
+        </section>
+      )}
+
+      {/* ── idle: dial pad ───────────────────────────────────────────── */}
+      {!wrapUp && (status === STATUS.IDLE || status === STATUS.CONNECTING || status === STATUS.OFFLINE) && (
+        <section className="px-4 pb-4 pt-4">
+          <div className="flex items-baseline gap-2 border-b border-border pb-2.5">
+            <input
+              ref={numberInputRef}
+              className="min-h-[29px] min-w-0 flex-1 border-0 bg-transparent p-0 font-serif text-2xl outline-none placeholder:text-lg placeholder:text-muted-foreground"
+              value={number}
+              onChange={e => setNumber(formatPhone(e.target.value))}
+              placeholder="Enter a number"
+              inputMode="tel"
+              aria-label="Phone number"
+            />
+            {number && (
+              <button
+                type="button"
+                onClick={backspace}
+                aria-label="Delete last digit"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Delete size={15} aria-hidden />
+              </button>
+            )}
+          </div>
+
+          {dialedEntry && (
+            <button
+              type="button"
+              onClick={() => setNumber(formatPhone(dialedEntry.digits))}
+              className="mt-2 flex w-full items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-2.5 py-2 text-left hover:border-primary"
+            >
+              <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                {initials(dialedEntry.name)}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-medium">{dialedEntry.name}</span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {dialedEntry.matterNumber ?? 'Lead'}
+                </span>
+              </span>
+            </button>
+          )}
+
+          <div className="mt-3 grid grid-cols-3 gap-1.5" role="group" aria-label="Dial pad">
+            {KEYPAD.map(([digit, letters]) => (
+              <button
+                key={digit}
+                type="button"
+                onClick={() => pressKey(digit)}
+                className="grid place-items-center gap-px rounded-[10px] border border-border bg-background py-2 pt-2.5 hover:bg-muted/60 active:translate-y-px"
+              >
+                <span className="font-serif text-xl leading-none">{digit}</span>
+                <span className="min-h-[7px] text-[7px] font-medium tracking-[0.16em] text-muted-foreground">
+                  {letters}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <a
+              href={dialedEntry?.matterId ? `/admin/matters/${dialedEntry.matterId}` : undefined}
+              aria-disabled={!dialedEntry?.matterId}
+              className={cn(
+                'grid w-11 place-items-center rounded-[10px] border border-border text-[10px] font-medium tracking-[0.08em] text-muted-foreground',
+                dialedEntry?.matterId ? 'hover:text-foreground' : 'pointer-events-none opacity-40',
+              )}
+            >
+              SMS
+            </a>
+            <button
+              type="button"
               onClick={() => void placeCall()}
               disabled={!canDial}
+              className="flex-1 rounded-[10px] bg-primary py-3.5 text-[11px] font-medium uppercase tracking-[0.16em] text-primary-foreground hover:opacity-90 disabled:opacity-45"
             >
               Call
             </button>
-          </>
-        )}
-      </div>
-
-      {wrapUpOpen && !inCall && (
-        <section className="sp__wrap" aria-label="Call wrap-up">
-          <div className="sp__wrap-head">
-            <div>
-              <h2>Call wrap-up</h2>
-              <p>{formatDuration(lastDuration)} call</p>
-            </div>
-            <button type="button" className="sp__wrap-close" onClick={() => setWrapUpOpen(false)}>
-              Done
-            </button>
           </div>
-          <label className="sp__field">
-            <span>Outcome</span>
-            <select value={wrapUpOutcome} onChange={(e) => setWrapUpOutcome(e.target.value)}>
-              <option>Reached</option>
-              <option>Voicemail</option>
-              <option>No answer</option>
-            </select>
-          </label>
-          <label className="sp__field">
-            <span>Call notes</span>
-            <textarea value={wrapUpNotes} onChange={(e) => setWrapUpNotes(e.target.value)} rows={3} />
-          </label>
         </section>
       )}
 
       {error && (
-        <p className="sp__error" role="alert" onClick={() => setError(null)}>
+        <p
+          role="alert"
+          onClick={() => setError(null)}
+          className="cursor-pointer border-t border-border bg-destructive/10 px-4 py-2 text-center text-[11px] text-destructive"
+        >
           {error} — tap to dismiss
         </p>
       )}
     </div>
   )
 }
-
-const styles = `
-.sp {
-  --navy: #1B3A6B;
-  --teal: #0F6E56;
-  --ink: #14223b;
-  --line: #e4e8f0;
-  --bg: #fbfcfe;
-  --muted: #7d8aa3;
-  width: 320px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 16px;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--ink);
-  box-shadow: 0 12px 32px -16px rgba(27,58,107,.35);
-  position: relative;
-  user-select: none;
-}
-.sp__bar {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; margin-bottom: 14px;
-}
-.sp__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.sp__dot--idle { background: var(--teal); }
-.sp__dot--on_call { background: var(--teal); animation: pulse 1.6s infinite; }
-.sp__dot--dialing, .sp__dot--incoming { background: #d98a00; animation: pulse 1s infinite; }
-.sp__dot--offline { background: #c0392b; }
-.sp__dot--connecting { background: var(--muted); animation: pulse 1.2s infinite; }
-@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
-.sp__status { font-variant-numeric: tabular-nums; font-weight: 600; }
-.sp__brand { margin-left: auto; color: var(--navy); font-weight: 700; letter-spacing: .2px; }
-.sp__icon {
-  width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: #fff; color: var(--muted); cursor: pointer;
-}
-.sp__icon:hover { color: var(--navy); background: #f3f6fb; }
-
-.sp__readout {
-  display: flex; align-items: center; gap: 6px;
-  border-bottom: 1px solid var(--line);
-  padding: 6px 2px 12px; margin-bottom: 14px; min-height: 40px;
-}
-.sp__readout-input {
-  flex: 1; border: 0; background: transparent; outline: none;
-  font-size: 24px; letter-spacing: .5px; color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.sp__readout-input::placeholder { color: var(--muted); font-size: 17px; letter-spacing: 0; }
-.sp__readout-num { flex: 1; font-size: 22px; color: var(--navy); font-weight: 600; }
-.sp__back { border: 0; background: transparent; font-size: 18px; color: var(--muted); cursor: pointer; padding: 4px 8px; }
-.sp__back:hover { color: var(--navy); }
-
-.sp__pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.sp__key {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: 56px; border: 1px solid var(--line); border-radius: 12px;
-  background: #fff; cursor: pointer; transition: transform .06s, background .12s, border-color .12s;
-}
-.sp__key:hover { background: #f3f6fb; border-color: #cdd6e6; }
-.sp__key:active { transform: scale(.96); background: #eef2f9; }
-.sp__key:disabled { opacity: .4; cursor: not-allowed; }
-.sp__key-digit { font-size: 22px; font-weight: 600; color: var(--ink); line-height: 1; }
-.sp__key-letters { font-size: 9px; letter-spacing: 1.5px; color: var(--muted); margin-top: 3px; min-height: 11px; }
-
-.sp__actions { display: flex; justify-content: center; gap: 14px; margin-top: 16px; }
-.sp__round {
-  min-width: 110px; height: 48px; border: 0; border-radius: 24px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  font-size: 15px; font-weight: 600; color: #fff; cursor: pointer;
-  transition: filter .12s, transform .06s;
-}
-.sp__round:active { transform: scale(.97); }
-.sp__round:disabled { opacity: .45; cursor: not-allowed; }
-.sp__round--call { background: var(--teal); }
-.sp__round--end { background: #c0392b; }
-.sp__round--on { background: var(--navy); }
-.sp__round--dnd { background: var(--muted); }
-.sp__round:not(.sp__round--call):not(.sp__round--end):not(.sp__round--on) { background: var(--muted); }
-.sp__round:hover:not(:disabled) { filter: brightness(1.06); }
-
-.sp__wrap {
-  margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line);
-  display: grid; gap: 10px;
-}
-.sp__wrap-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
-.sp__wrap h2 { margin: 0; font-size: 15px; color: var(--ink); }
-.sp__wrap p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
-.sp__wrap-close {
-  border: 1px solid var(--line); background: #fff; color: var(--navy); border-radius: 8px;
-  height: 30px; padding: 0 10px; font-size: 12px; font-weight: 700; cursor: pointer;
-}
-.sp__field { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: var(--ink); }
-.sp__field select,
-.sp__field textarea {
-  width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff;
-  color: var(--ink); font: inherit; font-weight: 500; padding: 8px 9px; outline: none;
-}
-.sp__field textarea { resize: vertical; min-height: 74px; }
-.sp__field select:focus,
-.sp__field textarea:focus { border-color: var(--navy); box-shadow: 0 0 0 2px rgba(27,58,107,.12); }
-
-.sp-bubble {
-  --navy: #1B3A6B;
-  --teal: #0F6E56;
-  --line: #e4e8f0;
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 44px; min-width: 118px; padding: 0 14px;
-  border: 1px solid var(--line); border-radius: 22px; background: #fff;
-  color: var(--navy); font: 700 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  box-shadow: 0 12px 32px -16px rgba(27,58,107,.35); cursor: pointer;
-}
-.sp-bubble__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); animation: pulse 1.6s infinite; }
-
-.sp__incoming {
-  position: absolute; inset: 0; z-index: 5;
-  background: rgba(251,252,254,.97); border-radius: 18px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  animation: rise .18s ease-out;
-}
-@keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
-.sp__incoming-label { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
-.sp__incoming-from { font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 18px; }
-.sp__incoming-actions { display: flex; gap: 14px; }
-.sp__btn { min-width: 104px; height: 46px; border: 0; border-radius: 23px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; }
-.sp__btn--accept { background: var(--teal); }
-.sp__btn--decline { background: #c0392b; }
-.sp__btn:active { transform: scale(.97); }
-
-.sp__error {
-  margin: 12px 0 0; padding: 8px 10px; font-size: 12px;
-  background: #fdecea; color: #a13226; border-radius: 8px; cursor: pointer; text-align: center;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sp__dot, .sp__incoming { animation: none; }
-  .sp__round:active, .sp__key:active, .sp__btn:active { transform: none; }
-}
-`

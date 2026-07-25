@@ -25,7 +25,21 @@ function getTwilioEnv() {
 }
 
 /**
- * GET /api/token — Twilio Voice Access Token for the logged-in attorney/admin.
+ * The Telnyx SDK has returned the JWT both bare and wrapped in `{ data }`
+ * depending on version. TelnyxRTC needs a string, so normalize here rather
+ * than shipping an object into login_token and failing at connect time.
+ */
+function asJwt(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() || null
+  if (value && typeof value === 'object') {
+    const inner = (value as { data?: unknown; token?: unknown }).data ?? (value as { token?: unknown }).token
+    if (typeof inner === 'string') return inner.trim() || null
+  }
+  return null
+}
+
+/**
+ * GET /api/token — voice access token for the logged-in attorney/admin.
  */
 export async function GET(req: Request) {
   const { err, userId } = await requireAdmin(req)
@@ -40,13 +54,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'No Telnyx credential is configured for this user' }, { status: 503 })
     }
     try {
-      const token = await getTelnyxClient().telephonyCredentials.createToken(credentialId)
-      return NextResponse.json({
-        provider: 'telnyx',
-        token,
-        identity: userId,
-        callerNumber: process.env.TELNYX_PHONE_NUMBER?.trim() || null,
-      })
+      const raw = await getTelnyxClient().telephonyCredentials.createToken(credentialId)
+      const token = asJwt(raw)
+      if (!token) {
+        return NextResponse.json({ error: 'Telnyx returned an unreadable token' }, { status: 502 })
+      }
+      return NextResponse.json(
+        {
+          provider: 'telnyx',
+          token,
+          identity: userId,
+          callerNumber: process.env.TELNYX_PHONE_NUMBER?.trim() || null,
+        },
+        { headers: { 'Cache-Control': 'no-store' } },
+      )
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : 'Could not issue Telnyx token' },
@@ -74,5 +95,8 @@ export async function GET(req: Request) {
     }),
   )
 
-  return NextResponse.json({ provider: 'twilio', token: token.toJwt(), identity })
+  return NextResponse.json(
+    { provider: 'twilio', token: token.toJwt(), identity },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
 }
