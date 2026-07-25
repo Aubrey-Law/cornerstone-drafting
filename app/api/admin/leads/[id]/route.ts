@@ -3,8 +3,60 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { deleteLead } from '@/lib/leads/deleteLead'
 import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
-import { validateLeadDetails } from '@/lib/leads/details'
-import { ZodError } from 'zod'
+import { validateLeadDetails, validateLeadFieldPatch } from '@/lib/leads/details'
+import type { ValidatedLeadDetails } from '@/lib/leads/details'
+import { z, ZodError } from 'zod'
+
+const snoozeRequestSchema = z.object({
+  nextActionSnoozedUntil: z.union([
+    z.string()
+      .datetime({ offset: true, message: 'Invalid snooze time' })
+      .refine(value => new Date(value).getTime() > Date.now(), 'Snooze time must be in the future'),
+    z.null(),
+  ]),
+}).strict()
+
+const statusRequestSchema = z.object({
+  status: z.enum(['lead', 'lost']),
+}).strict()
+
+function validationError(error: unknown) {
+  if (error instanceof ZodError) {
+    const fieldErrors: Record<string, string> = {}
+    for (const issue of error.issues) {
+      const key = issue.path.join('.').replace(/^spouse\./, 'spouse').replace(/\.([a-z])/g, (_, c) => c.toUpperCase())
+      if (key && !fieldErrors[key]) fieldErrors[key] = issue.message
+    }
+    return NextResponse.json(
+      { error: error.issues[0]?.message ?? 'Invalid lead details', fieldErrors },
+      { status: 400 },
+    )
+  }
+  return NextResponse.json({ error: 'Invalid lead details' }, { status: 400 })
+}
+
+function hasOwn(value: unknown, key: string): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function atomicUpdateErrorStatus(error: { code?: string | null; message: string }) {
+  if (error.code === 'P0002' || error.message.trim().toLowerCase() === 'lead not found') return 404
+  if (/already (?:converted|hired)/i.test(error.message)) return 409
+  return 500
+}
+
+function spouseResponse(details: ValidatedLeadDetails['spouse']) {
+  if (!details) return null
+  return {
+    first_name: details.firstName,
+    middle_name: details.middleName,
+    last_name: details.lastName,
+    preferred_name: details.preferredName,
+    email: details.email,
+    phone: details.phone,
+    date_of_birth: details.dateOfBirth,
+  }
+}
 
 /**
  * PATCH /api/admin/leads/[id] — edit a lead (standalone client_intake row).
@@ -20,29 +72,94 @@ export async function PATCH(
 
   const { id: intakeId } = await params
   const body = await req.json().catch(() => ({}))
-  let details
-  try { details = validateLeadDetails(body) }
-  catch (error) {
-    if (error instanceof ZodError) {
-      const fieldErrors: Record<string,string> = {}
-      for (const issue of error.issues) { const key=issue.path.join('.').replace(/^spouse\./,'spouse').replace(/\.([a-z])/g,(_,c)=>c.toUpperCase());if(key&&!fieldErrors[key])fieldErrors[key]=issue.message }
-      return NextResponse.json({ error:error.issues[0]?.message??'Invalid lead details',fieldErrors },{status:400})
-    }
-    return NextResponse.json({error:'Invalid lead details'},{status:400})
+
+  if (hasOwn(body, 'nextActionSnoozedUntil')) {
+    let snooze
+    try { snooze = snoozeRequestSchema.parse(body) }
+    catch (error) { return validationError(error) }
+
+    const { data, error } = await getAdminClient().rpc('snooze_lead_next_action', {
+      p_lead_id: intakeId,
+      p_until: snooze.nextActionSnoozedUntil,
+      p_actor_id: userId,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
   }
 
+  const statusOnlyRequest = hasOwn(body, 'status') && Object.keys(body).length === 1
+  if (statusOnlyRequest) {
+    let statusChange
+    try { statusChange = statusRequestSchema.parse(body) }
+    catch (error) { return validationError(error) }
+
+    const { data, error } = await getAdminClient().rpc('update_lead_opportunity_status', {
+      p_lead_id: intakeId,
+      p_status: statusChange.status,
+      p_actor_id: userId,
+    })
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: atomicUpdateErrorStatus(error) },
+      )
+    }
+    return NextResponse.json(data)
+  }
+
+  const partialRequest = hasOwn(body, 'field')
+  if (partialRequest) {
+    let patch
+    try { patch = validateLeadFieldPatch(body) }
+    catch (error) { return validationError(error) }
+
+    const { data, error } = await getAdminClient().rpc('update_lead_opportunity_field', {
+      p_lead_id: intakeId,
+      p_field: patch.field,
+      p_value: patch.value,
+      p_actor_id: userId,
+    })
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: atomicUpdateErrorStatus(error) },
+      )
+    }
+    return NextResponse.json(data)
+  }
+
+  let legacyDetails: ValidatedLeadDetails | null = null
+  try { legacyDetails = validateLeadDetails(body) }
+  catch (error) { return validationError(error) }
+
   const admin = getAdminClient()
-  const { data: lead } = await admin
+  const { data: lead, error: leadReadError } = await admin
     .from('client_intake')
     .select('*')
     .eq('id', intakeId)
     .maybeSingle()
+  if (leadReadError) return NextResponse.json({ error: leadReadError.message }, { status: 500 })
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
-  const { data: opportunity } = lead.matter_id
-    ? await admin.from('matters').select('id, relationship_status').eq('id', lead.matter_id).maybeSingle()
-    : { data: null }
-  if (opportunity?.relationship_status === 'hired' && details.status === 'hired') {
-    const { data: spouse } = await admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle()
+
+  const [spouseResult, opportunityResult] = await Promise.all([
+    admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
+    lead.matter_id
+      ? admin.from('matters').select('id, relationship_status').eq('id', lead.matter_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ])
+  if (spouseResult.error) return NextResponse.json({ error: spouseResult.error.message }, { status: 500 })
+  if (opportunityResult.error) return NextResponse.json({ error: opportunityResult.error.message }, { status: 500 })
+  const spouse = spouseResult.data
+  const opportunity = opportunityResult.data
+
+  let details: ValidatedLeadDetails
+  if (legacyDetails) {
+    details = legacyDetails
+  } else {
+    return NextResponse.json({ error: 'Invalid lead details' }, { status: 400 })
+  }
+
+  if (!partialRequest && opportunity?.relationship_status === 'hired' && details.status === 'hired') {
     return NextResponse.json({ lead, spouse: spouse ?? null, matterId: lead.matter_id })
   }
   if (opportunity?.relationship_status === 'hired') {
@@ -52,7 +169,7 @@ export async function PATCH(
     )
   }
 
-  const requestedHired = details.status === 'hired'
+  const requestedHired = !partialRequest && details.status === 'hired'
   if (requestedHired && opportunity?.relationship_status === 'lost') {
     return NextResponse.json(
       { error: 'Reactivate the lost opportunity as Lead before hiring it.' },
@@ -73,11 +190,28 @@ export async function PATCH(
     matterId = converted.matterId
   }
   if (details.status === 'lost') { /* retained as a lead; the RPC persisted lost */ }
-  const [{ data: persistedLead }, { data: spouse }] = await Promise.all([
+  const [persistedLeadResult, persistedSpouseResult] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', intakeId).single(),
     admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
   ])
-  return NextResponse.json({ lead: persistedLead ?? savedLead, spouse: spouse ?? null, ...(matterId ? { matterId } : {}) })
+  const fallbackLead = matterId
+    ? { ...savedLead, lead_status: 'hired', matter_id: matterId }
+    : savedLead
+  const response = {
+    lead: persistedLeadResult.data ?? fallbackLead,
+    spouse: persistedSpouseResult.error
+      ? spouseResponse(details.spouse)
+      : persistedSpouseResult.data ?? null,
+    ...(matterId ? { matterId } : {}),
+  }
+  const refreshWarning = persistedLeadResult.error && persistedSpouseResult.error
+    ? 'Saved, but refreshed lead and spouse data are unavailable.'
+    : persistedLeadResult.error
+      ? 'Saved, but refreshed lead data is unavailable.'
+      : persistedSpouseResult.error
+        ? 'Saved, but refreshed spouse data is unavailable.'
+        : null
+  return NextResponse.json(refreshWarning ? { ...response, refreshWarning } : response)
 }
 
 export async function DELETE(

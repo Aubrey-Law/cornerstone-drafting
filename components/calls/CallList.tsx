@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { CallRow, type CallRowData } from './CallRow'
 
+export type { CallRowData } from './CallRow'
+
 type Props = {
   matterId: string
   leadId?: never

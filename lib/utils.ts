@@ -8,6 +8,46 @@ export function cn(...inputs: ClassValue[]) {
 /** Firm timezone — matches draft filename dates in the generate route. */
 export const FIRM_TIMEZONE = 'America/New_York'
 
+const DAY_MS = 86_400_000
+
+/**
+ * Return the calendar-day ordinal for an instant in the requested timezone.
+ * Using local date parts avoids elapsed-hour errors across DST boundaries.
+ */
+export function calendarDayOrdinal(
+  value: string | number | Date,
+  timeZone: string = FIRM_TIMEZONE,
+): number | null {
+  const date = value instanceof Date ? value : new Date(value)
+  if (!Number.isFinite(date.getTime())) return null
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const valueFor = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find(part => part.type === type)?.value)
+  const year = valueFor('year')
+  const month = valueFor('month')
+  const day = valueFor('day')
+  if (![year, month, day].every(Number.isFinite)) return null
+
+  return Math.round(Date.UTC(year, month - 1, day) / DAY_MS)
+}
+
+/** Whole calendar days from `earlier` to `later` in the configured timezone. */
+export function calendarDayDifference(
+  later: string | number | Date,
+  earlier: string | number | Date,
+  timeZone: string = FIRM_TIMEZONE,
+): number | null {
+  const laterDay = calendarDayOrdinal(later, timeZone)
+  const earlierDay = calendarDayOrdinal(earlier, timeZone)
+  return laterDay === null || earlierDay === null ? null : laterDay - earlierDay
+}
+
 /**
  * Format a date string consistently to avoid hydration mismatches
  * Uses a fixed locale and timezone to ensure server/client consistency

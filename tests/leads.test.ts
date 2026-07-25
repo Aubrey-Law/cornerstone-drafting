@@ -61,12 +61,13 @@ describe('lead tracking source shape', () => {
 })
 
 describe('lead edit and delete source shape', () => {
-  it('renders lead essentials in a compact responsive grid', () => {
+  it('renders editable lead details with completeness and no status field', () => {
     const source = read('components/leads/LeadDetailsCard.tsx')
-    expect(source).toContain('Lead essentials')
-    expect(source).toContain('lg:grid-cols-4')
-    expect(source).toContain('DetailCell label="Matter status"')
-    expect(source).toContain('DetailCell label="Qualification notes"')
+    expect(source).toContain('Lead details')
+    expect(source).toContain('lg:grid-cols-3')
+    expect(source).toContain('of 14 complete')
+    expect(source).toContain('+ Add {field.missingLabel}')
+    expect(source).not.toContain('Matter status')
   })
 
   it('edit/delete route exports PATCH and DELETE with a converted guard', () => {

@@ -22,7 +22,7 @@ vi.mock('@/lib/granola', async importOriginal => ({
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc }) }))
 
 import { AddMeetingNotesDialog } from '@/components/meeting-notes/AddMeetingNotesDialog'
-import { LeadNotesCard } from '@/components/leads/LeadNotesCard'
+import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import { POST } from '@/app/api/admin/leads/[id]/meeting-notes/granola/route'
 
 const granolaDoc = {
@@ -59,7 +59,7 @@ describe('lead Granola notes', () => {
       .mockResolvedValueOnce(response({ title: granolaDoc.title, meetingDate: granolaDoc.meetingDate, content: granolaDoc.notesMarkdown, attendees: granolaDoc.attendees, sourceUrl: granolaDoc.sourceUrl }))
       .mockResolvedValueOnce(response({ meetingNote: row, imported: true }))
     const user = userEvent.setup()
-    render(<LeadNotesCard leadId="lead-1" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'user-1', role: 'attorney' }} />)
+    render(<LeadTimelineCard leadId="lead-1" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'user-1', role: 'attorney' }} />)
 
     await user.click(screen.getByRole('button', { name: 'Import from Granola' }))
     await user.click(await screen.findByRole('button', { name: new RegExp(granolaDoc.title) }))
@@ -92,12 +92,12 @@ describe('lead Granola notes', () => {
       .mockResolvedValueOnce(response({ title: granolaDoc.title, meetingDate: granolaDoc.meetingDate, content: granolaDoc.notesMarkdown, attendees: granolaDoc.attendees }))
       .mockResolvedValueOnce(response({ meetingNote: meeting, imported: false }))
     const user = userEvent.setup()
-    render(<LeadNotesCard leadId="lead-1" initialNotes={[]} initialMeetingNotes={[meeting]} currentUser={{ id: 'user-1', role: 'attorney' }} />)
+    render(<LeadTimelineCard leadId="lead-1" initialNotes={[]} initialMeetingNotes={[meeting]} currentUser={{ id: 'user-1', role: 'attorney' }} />)
     await user.click(screen.getByRole('button', { name: 'Import from Granola' }))
     await user.click(await screen.findByRole('button', { name: new RegExp(granolaDoc.title) }))
     await user.click(screen.getByRole('button', { name: 'Save notes' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(screen.getByLabelText('Meeting notes list').querySelectorAll('article')).toHaveLength(1)
+    expect(screen.getByLabelText('Lead timeline').querySelectorAll('article')).toHaveLength(1)
   })
 
   it('keeps the existing matter endpoint and payload unchanged', async () => {

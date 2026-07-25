@@ -64,6 +64,43 @@ export interface MatterContact {
   date_of_birth?: string | null
 }
 
+export interface LeadSnapshotRow {
+  id: string
+  first_name: string | null
+  middle_name: string | null
+  last_name: string | null
+  preferred_name: string | null
+  email: string | null
+  phone: string | null
+  date_of_birth: string | null
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  county: string | null
+  marital_status: string | null
+  practice_area: string | null
+  lead_source: string | null
+  lead_status: 'lead' | 'hired' | 'lost'
+  engagement_fee_quoted: number | null
+  lead_urgency: string | null
+  taxable_estate: number | null
+  has_minor_children: boolean | null
+  qualification_notes: string | null
+  lead_next_action_snoozed_until?: string | null
+}
+
+export interface LeadSpouseSnapshot {
+  first_name: string | null
+  middle_name: string | null
+  last_name: string | null
+  preferred_name: string | null
+  email: string | null
+  phone: string | null
+  date_of_birth: string | null
+}
+
 export type MatterStage =
   | 'intake'
   | 'intake_review'

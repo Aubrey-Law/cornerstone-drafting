@@ -3,10 +3,22 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/StaffSoftphone'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import { formatPhoneDisplay, phoneTelHref } from '@/lib/phone'
+import { practiceAreaLabel } from '@/lib/practiceArea'
+import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
+import type { LeadEditableField } from '@/lib/leads/details'
+import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
+import type {
+  LeadTimelineCall,
+  LeadTimelineMeeting,
+  LeadTimelineNote,
+} from '@/lib/leads/timeline'
+import { newestTimestamp } from '@/lib/leads/timeline'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,17 +29,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { LeadDetailsCard, type LeadForm } from '@/components/leads/LeadDetailsCard'
+import { LeadDetailsCard } from '@/components/leads/LeadDetailsCard'
+import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
-import { LeadNotesCard, type LeadMeetingNote, type LeadNote } from '@/components/leads/LeadNotesCard'
-import { LeadActivityCard } from '@/components/leads/LeadActivityCard'
-import { CallList } from '@/components/calls/CallList'
+import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import { LeadIntakeCard } from './LeadIntakeCard'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
 
 type LeadRecord = {
+  [key: string]: unknown
   id: string
   first_name: string | null
   middle_name: string | null
@@ -52,9 +64,12 @@ type LeadRecord = {
   taxable_estate?: number | null
   has_minor_children?: boolean | null
   qualification_notes?: string | null
+  created_at?: string | null
+  updated_at?: string | null
   intake_sent_at?: string | null
   intake_completed_at?: string | null
   intake_status?: string | null
+  lead_next_action_snoozed_until?: string | null
   user_id?: string | null
   client_user_id?: string | null
   matter_id?: string | null
@@ -75,6 +90,7 @@ type LeadActivityRow = {
   event_type?: string | null
   title: string
   detail?: string | null
+  actor_id?: string | null
   created_at: string
 }
 
@@ -82,45 +98,66 @@ type LeadDetailClientProps = {
   lead: LeadRecord
   spouse: LeadSpouse | null
   initialActivity: LeadActivityRow[]
-  initialNotes?: LeadNote[]
-  initialMeetingNotes?: LeadMeetingNote[]
+  initialNotes?: LeadTimelineNote[]
+  initialMeetingNotes?: LeadTimelineMeeting[]
+  initialCalls?: LeadTimelineCall[]
+  actorNames?: Record<string, string>
+  firmTimezone?: string
+  nextAppointmentAt?: string | null
+  lastTouchAt?: string | null
+  callsError?: string | null
+  actorError?: string | null
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
 }
 
-function snapshot(lead: LeadRecord, spouse: LeadSpouse | null): LeadForm {
-  return {
-    firstName: lead.first_name ?? '',
-    middleName: lead.middle_name ?? '',
-    lastName: lead.last_name ?? '',
-    preferredName: lead.preferred_name ?? '',
-    email: lead.email ?? '',
-    phone: lead.phone ?? '',
-    dateOfBirth: lead.date_of_birth ?? '',
-    addressLine1: lead.address_line1 ?? '',
-    addressLine2: lead.address_line2 ?? '',
-    city: lead.city ?? '',
-    state: lead.state ?? '',
-    zip: lead.zip ?? '',
-    county: lead.county ?? '',
-    maritalStatus: lead.marital_status ?? '',
-    practiceArea: normalizePracticeArea(lead.practice_area),
-    source: lead.lead_source ?? '',
-    status: lead.lead_status ?? 'lead',
-    fee: lead.engagement_fee_quoted == null ? '' : String(lead.engagement_fee_quoted),
-    urgency: lead.lead_urgency ?? '',
-    estimatedEstateValue: lead.taxable_estate == null ? '' : String(lead.taxable_estate),
-    minorChildren: lead.has_minor_children == null ? '' : lead.has_minor_children ? 'yes' : 'no',
-    qualificationNotes: lead.qualification_notes ?? '',
-    spousePresent: spouse ? 'yes' : 'no',
-    spouseFirstName: spouse?.first_name ?? '',
-    spouseMiddleName: spouse?.middle_name ?? '',
-    spouseLastName: spouse?.last_name ?? '',
-    spousePreferredName: spouse?.preferred_name ?? '',
-    spouseEmail: spouse?.email ?? '',
-    spousePhone: spouse?.phone ?? '',
-    spouseDateOfBirth: spouse?.date_of_birth ?? '',
+type LeadPatchResponse = {
+  lead: LeadRecord
+  spouse: LeadSpouse | null
+  activity?: LeadActivityRow
+  refreshWarning?: string
+  matterId?: string
+}
+
+type SnoozeResponse = {
+  lead: LeadRecord
+  activity: LeadActivityRow
+}
+
+const DAY_MS = 86_400_000
+
+function calendarDaysAgo(value: string | null | undefined, timeZone: string): number | null {
+  if (!value) return null
+  const days = calendarDayDifference(Date.now(), value, timeZone)
+  return days === null ? null : Math.max(0, days)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function mergeHydratedLead(
+  current: LeadRecord,
+  saved: LeadRecord,
+  savedSpouse: LeadSpouse | null,
+): LeadRecord {
+  const next: LeadRecord = { ...current, ...saved }
+  if (!savedSpouse) {
+    delete next._spouse
+    return next
   }
+  const currentSpouse = isRecord(current._spouse) ? current._spouse : {}
+  next._spouse = {
+    ...currentSpouse,
+    first_name: savedSpouse.first_name ?? '',
+    middle_name: savedSpouse.middle_name ?? '',
+    last_name: savedSpouse.last_name ?? '',
+    preferred_name: savedSpouse.preferred_name ?? '',
+    email: savedSpouse.email ?? '',
+    phone: savedSpouse.phone ?? '',
+    date_of_birth: savedSpouse.date_of_birth ?? '',
+  }
+  return next
 }
 
 export function LeadDetailClient({
@@ -129,6 +166,13 @@ export function LeadDetailClient({
   initialActivity,
   initialNotes = [],
   initialMeetingNotes = [],
+  initialCalls = [],
+  actorNames = {},
+  firmTimezone = FIRM_TIMEZONE,
+  nextAppointmentAt = null,
+  lastTouchAt,
+  callsError = null,
+  actorError = null,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
 }: LeadDetailClientProps) {
@@ -136,17 +180,42 @@ export function LeadDetailClient({
   const router = useRouter()
   const [lead, setLead] = useState(initialLead)
   const [spouse, setSpouse] = useState(initialSpouse)
-  const [form, setForm] = useState(() => snapshot(initialLead, initialSpouse))
-  const [editing, setEditing] = useState(false)
+  const [activeField, setActiveField] = useState<LeadEditableField | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [activity, setActivity] = useState(initialActivity)
   const [busy, setBusy] = useState(false)
+  const [busyIntent, setBusyIntent] = useState<string | null>(null)
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [sendingIntake, setSendingIntake] = useState(false)
+  const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
+  const [dataRefreshWarning, setDataRefreshWarning] = useState<string | null>(null)
+  const [activityRefreshWarning, setActivityRefreshWarning] = useState<string | null>(null)
+  const [localTouchAt, setLocalTouchAt] = useState<string | null>(null)
+  const initialLeadRef = useRef(initialLead)
+  const interactionBusy = busy
+    || sendingIntake
+    || activeField !== null
+    || busyIntent !== null
+  const interactionLockRef = useRef(false)
+
+  function beginInteraction() {
+    if (interactionBusy || interactionLockRef.current) return false
+    interactionLockRef.current = true
+    return true
+  }
+
+  function endInteraction() {
+    interactionLockRef.current = false
+  }
+
+  useEffect(() => {
+    if (initialLeadRef.current.updated_at === initialLead.updated_at) return
+    initialLeadRef.current = initialLead
+    setLead(initialLead)
+  }, [initialLead])
 
   async function call<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
     const response = await fetch(path, {
@@ -164,6 +233,38 @@ export function LeadDetailClient({
   async function refreshActivity() {
     const json = await call<{ activity?: LeadActivityRow[] }>(`/api/admin/leads/${lead.id}/activity`, undefined, 'GET')
     setActivity(Array.isArray(json.activity) ? json.activity : [])
+    setActivityRefreshWarning(null)
+  }
+
+  async function refreshActivityBestEffort() {
+    try {
+      await refreshActivity()
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Could not refresh timeline'
+      setActivityRefreshWarning(message)
+    }
+  }
+
+  function recordTouch(value: string | null | undefined) {
+    const timestamp = value && Number.isFinite(Date.parse(value))
+      ? value
+      : new Date(Date.now()).toISOString()
+    setLocalTouchAt(current => newestTimestamp([current, timestamp]))
+  }
+
+  function applyLeadPatch(json: LeadPatchResponse) {
+    setLead(current => mergeHydratedLead(current, json.lead, json.spouse))
+    setSpouse(json.spouse)
+    if (json.activity) {
+      setActivity(current => [
+        json.activity!,
+        ...current.filter(row => row.id !== json.activity!.id),
+      ])
+      recordTouch(json.activity.created_at)
+    } else {
+      recordTouch(null)
+    }
+    setDataRefreshWarning(json.refreshWarning ?? null)
   }
 
   async function sendIntake() {
@@ -177,7 +278,8 @@ export function LeadDetailClient({
         intake_sent_at: new Date().toISOString(),
         intake_status: current.intake_status === 'completed' ? current.intake_status : 'sent',
       }))
-      await refreshActivity()
+      recordTouch(null)
+      await refreshActivityBestEffort()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not send intake')
     } finally {
@@ -195,90 +297,39 @@ export function LeadDetailClient({
     }
   }
 
-  function cancel() {
-    setForm(snapshot(lead, spouse))
+  async function persistStatus(status: 'lead' | 'lost') {
     setError(null)
-    setFieldErrors({})
-    setEditing(false)
-  }
-
-  function payload(status = form.status) {
-    return {
-      firstName: form.firstName,
-      middleName: form.middleName,
-      lastName: form.lastName,
-      preferredName: form.preferredName,
-      email: form.email,
-      phone: form.phone,
-      dateOfBirth: form.dateOfBirth,
-      addressLine1: form.addressLine1,
-      addressLine2: form.addressLine2,
-      city: form.city,
-      state: form.state,
-      zip: form.zip,
-      county: form.county,
-      maritalStatus: form.maritalStatus,
-      practiceArea: form.practiceArea,
-      source: form.source,
-      status,
-      fee: form.fee === '' ? null : Number(form.fee),
-      urgency: form.urgency || null,
-      estimatedEstateValue: form.estimatedEstateValue === '' ? null : Number(form.estimatedEstateValue),
-      hasMinorChildren: form.minorChildren === '' ? null : form.minorChildren === 'yes',
-      qualificationNotes: form.qualificationNotes,
-      spouse: form.spousePresent === 'yes' ? {
-        firstName: form.spouseFirstName,
-        middleName: form.spouseMiddleName,
-        lastName: form.spouseLastName,
-        preferredName: form.spousePreferredName,
-        email: form.spouseEmail,
-        phone: form.spousePhone,
-        dateOfBirth: form.spouseDateOfBirth,
-      } : null,
-    }
-  }
-
-  async function persist(status = form.status, close = true) {
-    setError(null)
-    setFieldErrors({})
     setBusy(true)
     try {
-      const json = await call<{ lead: LeadRecord; spouse: LeadSpouse | null; matterId?: string }>(
+      const json = await call<LeadPatchResponse>(
         `/api/admin/leads/${lead.id}`,
-        payload(status),
+        { status },
         'PATCH',
       )
-      setLead(json.lead)
-      setSpouse(json.spouse)
-      setForm(snapshot(json.lead, json.spouse))
-      if (close) setEditing(false)
-      await refreshActivity()
+      applyLeadPatch(json)
+      await refreshActivityBestEffort()
       if (json.matterId) router.push(`/admin/matters/${json.matterId}`)
     } catch (caught) {
-      const detail = caught as Error & { fieldErrors?: Record<string, string> }
-      setError(detail.message || 'Could not save')
-      setFieldErrors(detail.fieldErrors || {})
+      setError(caught instanceof Error ? caught.message : 'Could not save')
     } finally {
       setBusy(false)
     }
   }
 
-  async function save() {
-    const errors: Record<string, string> = {}
-    if (!form.firstName.trim()) errors.firstName = 'First name is required'
-    if (!form.lastName.trim()) errors.lastName = 'Last name is required'
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) errors.email = 'Invalid email'
-    if (form.spousePresent === 'yes' && !form.spouseFirstName.trim()) errors.spouseFirstName = 'Spouse first name is required'
-    if (form.spousePresent === 'yes' && !form.spouseLastName.trim()) errors.spouseLastName = 'Spouse last name is required'
-    if (form.spousePresent === 'yes' && form.spouseEmail && !/^\S+@\S+\.\S+$/.test(form.spouseEmail)) errors.spouseEmail = 'Invalid spouse email'
-    if (form.fee !== '' && (!Number.isFinite(Number(form.fee)) || Number(form.fee) < 0)) errors.fee = 'Invalid fee'
-    if (form.estimatedEstateValue !== '' && (!Number.isFinite(Number(form.estimatedEstateValue)) || Number(form.estimatedEstateValue) < 0)) errors.estimatedEstateValue = 'Invalid estate value'
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors)
-      setError(Object.values(errors)[0])
-      return
+  async function saveField(field: LeadEditableField, value: unknown) {
+    if (field === 'spouse' && value !== null) setSpouseRemovalError(null)
+    try {
+      const json = await call<LeadPatchResponse>(
+        `/api/admin/leads/${lead.id}`,
+        { field, value },
+        'PATCH',
+      )
+      applyLeadPatch(json)
+      await refreshActivityBestEffort()
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Could not save field')
+      throw caught
     }
-    await persist()
   }
 
   function action(path: string, body?: unknown) {
@@ -298,20 +349,158 @@ export function LeadDetailClient({
     }
   }
 
-  const [removeSpouseConfirmOpen, setRemoveSpouseConfirmOpen] = useState(false)
+  async function snoozeNextAction(nextActionSnoozedUntil: string | null) {
+    const json = await call<SnoozeResponse>(
+      `/api/admin/leads/${lead.id}`,
+      { nextActionSnoozedUntil },
+      'PATCH',
+    )
+    setLead(current => mergeHydratedLead(current, json.lead, spouse))
+    setActivity(current => [
+      json.activity,
+      ...current.filter(row => row.id !== json.activity.id),
+    ])
+    recordTouch(json.activity.created_at)
+  }
 
-  function removeSpouse() {
-    const populated = ['spouseFirstName', 'spouseMiddleName', 'spouseLastName', 'spousePreferredName', 'spouseEmail', 'spousePhone', 'spouseDateOfBirth']
-      .some(key => form[key].trim())
-    if (!populated) {
-      setForm(current => ({ ...current, spousePresent: 'no' }))
-    } else {
-      setRemoveSpouseConfirmOpen(true)
+  async function clearNextActionSnooze() {
+    if (!beginInteraction()) return
+    setBusyIntent('clear_snooze')
+    setError(null)
+    try {
+      await snoozeNextAction(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not clear snooze')
+    } finally {
+      setBusyIntent(null)
+      endInteraction()
     }
   }
 
+  async function handleNextAction(intent: string) {
+    if (!beginInteraction()) return
+    setBusyIntent(intent)
+    setError(null)
+    try {
+      switch (intent) {
+        case 'send_intake':
+          await sendIntake()
+          return
+        case 'fill_intake':
+        case 'review_intake':
+          setIntakeSheetOpen(true)
+          return
+        case 'import_intake':
+          setImportIntakeOpen(true)
+          return
+        case 'quote_fee':
+          setActiveField('fee')
+          return
+        case 'draft_engagement':
+          await action(`/api/admin/leads/${lead.id}/engagement-draft`)()
+          return
+        case 'call':
+          window.dispatchEvent(new Event(OPEN_STAFF_SOFTPHONE_EVENT))
+          return
+        case 'email':
+          window.location.assign(`mailto:${lead.email ?? ''}`)
+          return
+        case 'snooze':
+          await snoozeNextAction(new Date(Date.now() + 7 * DAY_MS).toISOString())
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Request failed')
+    } finally {
+      setBusyIntent(null)
+      endInteraction()
+    }
+  }
+
+  async function handleTopDraft() {
+    if (!beginInteraction()) return
+    try {
+      await action(`/api/admin/leads/${lead.id}/engagement-draft`)()
+    } finally {
+      endInteraction()
+    }
+  }
+
+  function handleTopConvert() {
+    if (!beginInteraction()) return
+    if (lead.lead_status === 'hired' && lead.matter_id) {
+      router.push(`/admin/matters/${lead.matter_id}`)
+      endInteraction()
+      return
+    }
+    void action(`/api/admin/leads/${lead.id}/convert`)().finally(endInteraction)
+  }
+
+  async function handleTopStatusChange(status: 'lead' | 'lost') {
+    if (!beginInteraction()) return
+    try {
+      await persistStatus(status)
+    } finally {
+      endInteraction()
+    }
+  }
+
+  const [removeSpouseConfirmOpen, setRemoveSpouseConfirmOpen] = useState(false)
+
+  function removeSpouse() {
+    setSpouseRemovalError(null)
+    setRemoveSpouseConfirmOpen(true)
+  }
+
+  function changeActiveField(field: LeadEditableField | null) {
+    if (field !== 'spouse') setSpouseRemovalError(null)
+    setActiveField(field)
+  }
+
   const clientName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Lead'
-  const subtitle = [practiceAreaLabel(lead.practice_area), lead.lead_source, lead.email].filter(Boolean).join(' · ')
+  const subtitle = [
+    practiceAreaLabel(lead.practice_area),
+    lead.lead_source,
+    formatPhoneDisplay(lead.phone),
+    lead.email?.trim(),
+  ].filter(Boolean).join(' · ')
+  const statusLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
+  const leadDay = calendarDaysAgo(lead.created_at, firmTimezone) ?? 0
+  const effectiveLastTouchAt = newestTimestamp([
+    lastTouchAt,
+    localTouchAt,
+    ...activity.map(row => row.created_at),
+    ...initialNotes.map(note => note.createdAt),
+    ...initialMeetingNotes.map(note => note.createdAt),
+    ...initialCalls.map(call => call.started_at),
+  ])
+  const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
+  const computedAction = computeNextAction({
+    leadStatus: lead.lead_status,
+    intakeSentAt: lead.intake_sent_at ?? null,
+    intakeCompletedAt: lead.intake_completed_at ?? null,
+    nextAppointmentAt,
+    feeQuoted: lead.engagement_fee_quoted,
+    hasActiveAgreement: Boolean(activeAgreement),
+    lastTouchAt: effectiveLastTouchAt,
+    timeZone: firmTimezone,
+  })
+  const availableAction: NextAction = computedAction.key === 'follow_up'
+    ? {
+        ...computedAction,
+        actions: computedAction.actions.filter(item => {
+          if (item.intent === 'call') return phoneTelHref(lead.phone) !== null
+          if (item.intent === 'email') return Boolean(lead.email?.trim())
+          return true
+        }),
+      }
+    : computedAction
+  const snoozedUntil = Date.parse(lead.lead_next_action_snoozed_until ?? '')
+  const snoozed = Number.isFinite(snoozedUntil) && snoozedUntil > Date.now()
+  const visibleAction = availableAction.key !== 'nothing'
+    && availableAction.actions.length > 0
+    && !snoozed
+    ? availableAction
+    : null
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
@@ -324,72 +513,80 @@ export function LeadDetailClient({
         </div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight">{clientName}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-[21px] font-semibold tracking-tight">{clientName}</h1>
+              <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {statusLabel} · day {leadDay}
+              </span>
+              {effectiveLastTouchAt !== null && lastTouchDays !== null && (
+                <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Last touch {lastTouchDays}d ago
+                </span>
+              )}
+            </div>
             <p className="mt-0.5 text-xs text-muted-foreground">{subtitle || 'Prospective client'}</p>
           </div>
           <LeadTopActions
-            busy={busy || sendingIntake}
-            intakeSent={Boolean(lead.intake_sent_at)}
+            busy={interactionBusy}
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
+            snoozed={snoozed}
             matterId={lead.matter_id}
-            actionError={editing ? null : error}
-            onIntake={() => void sendIntake()}
-            onDraft={action(`/api/admin/leads/${lead.id}/engagement-draft`)}
-            onConvert={lead.lead_status === 'hired' && lead.matter_id ? () => router.push(`/admin/matters/${lead.matter_id}`) : action(`/api/admin/leads/${lead.id}/convert`)}
-            onStatusChange={status => void persist(status, false)}
+            actionError={error}
+            onDraft={handleTopDraft}
+            onConvert={handleTopConvert}
+            onClearSnooze={() => void clearNextActionSnooze()}
+            onStatusChange={handleTopStatusChange}
           />
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto px-4 py-4 md:px-6">
-        <div className="mx-auto w-full max-w-6xl space-y-4">
-          <LeadIntakeCard
-            intakeCompleted={Boolean(lead.intake_completed_at || lead.intake_status === 'completed')}
-            intakeId={liveIntakeId ?? lead.id}
-            intakeUrl={intakeUrl}
-            sending={sendingIntake}
-            onOpen={() => setIntakeSheetOpen(true)}
-            onImport={() => setImportIntakeOpen(true)}
-            onSend={() => void sendIntake()}
-            onCopy={() => void copyIntakeUrl()}
-          />
-          <LeadDetailsCard
-            lead={lead}
-            spouse={spouse}
-            editing={editing}
-            form={form}
-            error={error}
-            fieldErrors={fieldErrors}
-            busy={busy}
-            onEdit={() => setEditing(true)}
-            onCancel={cancel}
-            onSave={save}
-            onChange={(key, value) => {
-              setForm(current => ({ ...current, [key]: value }))
-              setFieldErrors(current => {
-                const next = { ...current }
-                delete next[key]
-                return next
-              })
-            }}
-            onRemoveSpouse={removeSpouse}
-          />
-          <LeadNotesCard
-            leadId={lead.id}
-            initialNotes={initialNotes}
-            initialMeetingNotes={initialMeetingNotes}
-            currentUser={currentUser}
-            onActivityChange={refreshActivity}
-          />
-          <section className="space-y-2 rounded-lg border border-border bg-card p-4">
-            <div>
-              <h2 className="font-semibold">Calls</h2>
-              <p className="text-xs text-muted-foreground">Logged Twilio and Retell calls linked to this lead.</p>
+      <main className="flex-1 overflow-auto px-6 py-4">
+        <div className="space-y-4">
+          {visibleAction && (
+            <LeadNextAction
+              action={visibleAction}
+              busy={interactionBusy}
+              onIntent={intent => void handleNextAction(intent)}
+            />
+          )}
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.6fr_1fr]">
+            <div className="space-y-4">
+              <LeadDetailsCard
+                lead={lead}
+                spouse={spouse}
+                activeField={activeField}
+                onActiveFieldChange={changeActiveField}
+                onSaveField={saveField}
+                onRemoveSpouse={removeSpouse}
+                spouseRemovalError={spouseRemovalError}
+              />
+              <LeadIntakeCard
+                intake={lead}
+                intakeUrl={intakeUrl}
+                onOpen={() => setIntakeSheetOpen(true)}
+                onCopy={() => void copyIntakeUrl()}
+              />
             </div>
-            <CallList leadId={lead.id} />
-          </section>
-          <LeadActivityCard activity={activity} />
+            <div className="xl:sticky xl:top-4">
+              <LeadTimelineCard
+                leadId={lead.id}
+                leadPhone={lead.phone}
+                initialNotes={initialNotes}
+                initialMeetingNotes={initialMeetingNotes}
+                initialCalls={initialCalls}
+                initialActivity={activity}
+                actorNames={actorNames}
+                callsError={callsError}
+                actorError={actorError}
+                dataRefreshWarning={dataRefreshWarning}
+                activityRefreshWarning={activityRefreshWarning}
+                currentUser={currentUser}
+                onActivityChange={refreshActivity}
+                onCommittedTouch={recordTouch}
+              />
+            </div>
+          </div>
         </div>
       </main>
 
@@ -438,7 +635,14 @@ export function LeadDetailClient({
             <AlertDialogAction
               onClick={() => {
                 setRemoveSpouseConfirmOpen(false)
-                setForm(current => ({ ...current, spousePresent: 'no' }))
+                void saveField('spouse', null)
+                  .then(() => {
+                    setSpouseRemovalError(null)
+                    setActiveField(null)
+                  })
+                  .catch(caught => {
+                    setSpouseRemovalError(caught instanceof Error ? caught.message : 'Could not remove spouse')
+                  })
               }}
             >
               Remove spouse

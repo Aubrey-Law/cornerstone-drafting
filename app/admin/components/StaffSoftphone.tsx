@@ -14,9 +14,17 @@ const Softphone = dynamic(() => import('@/components/softphone/Softphone'), {
   ),
 })
 
+export const OPEN_STAFF_SOFTPHONE_EVENT = 'cornerstone:open-softphone'
+
 export function StaffSoftphone() {
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const openPhone = () => setOpen(true)
+    window.addEventListener(OPEN_STAFF_SOFTPHONE_EVENT, openPhone)
+    return () => window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, openPhone)
+  }, [])
 
   useEffect(() => {
     if (!open) return
