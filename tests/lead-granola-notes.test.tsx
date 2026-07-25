@@ -22,7 +22,6 @@ vi.mock('@/lib/granola', async importOriginal => ({
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ rpc }) }))
 
 import { AddMeetingNotesDialog } from '@/components/meeting-notes/AddMeetingNotesDialog'
-import { LeadNotesCard } from '@/components/leads/LeadNotesCard'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import { POST } from '@/app/api/admin/leads/[id]/meeting-notes/granola/route'
 
@@ -54,21 +53,6 @@ beforeEach(() => {
 })
 
 describe('lead Granola notes', () => {
-  it('maps a snake_case Granola API row before the legacy notes renderer reads the meeting date', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(response({ notes: [{ id: granolaDoc.id, title: granolaDoc.title, createdAt: row.created_at }] }))
-      .mockResolvedValueOnce(response({ title: granolaDoc.title, meetingDate: granolaDoc.meetingDate, content: granolaDoc.notesMarkdown, attendees: granolaDoc.attendees }))
-      .mockResolvedValueOnce(response({ meetingNote: row, imported: true }))
-    const user = userEvent.setup()
-    render(<LeadNotesCard leadId="lead-1" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'user-1', role: 'attorney' }} />)
-
-    await user.click(screen.getByRole('button', { name: 'Import from Granola' }))
-    await user.click(await screen.findByRole('button', { name: new RegExp(granolaDoc.title) }))
-    await user.click(screen.getByRole('button', { name: 'Save notes' }))
-
-    expect(await screen.findByRole('button', { name: /Estate planning consult/ })).toBeTruthy()
-  })
-
   it('opens from Lead Notes, fetches a Granola note, and persists it to the lead target', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(response({ notes: [{ id: granolaDoc.id, title: granolaDoc.title, createdAt: '2026-07-10T12:00:00Z' }] }))

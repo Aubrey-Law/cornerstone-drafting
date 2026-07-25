@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), createMatter: vi.fn(), admin: null as any }))
 vi.mock('@/lib/apiAuth', () => ({ requireAdmin: mocks.requireAdmin }))
@@ -7,6 +9,11 @@ vi.mock('@/lib/matters/createFromIntake', () => ({ createMatterFromIntake: mocks
 vi.mock('@/lib/leads/deleteLead', () => ({ deleteLead: vi.fn() }))
 
 import { PATCH } from '@/app/api/admin/leads/[id]/route'
+import { newestTimestamp } from '@/lib/leads/timeline'
+
+function source(relativePath: string): string {
+  return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8')
+}
 
 const valid = { firstName:'Jane',middleName:'',lastName:'Doe',preferredName:'',email:'jane@example.com',phone:'',dateOfBirth:'',addressLine1:'',addressLine2:'',city:'',state:'',zip:'',county:'',maritalStatus:'married',practiceArea:'EP',source:'Referral',status:'lead',fee:4500,spouse:null }
 
@@ -129,5 +136,51 @@ describe('lead details PATCH handler',()=>{
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({error:message})
     expect(calls.rpc).toHaveLength(1)
+  })
+})
+
+describe('lead detail workflow loader contract', () => {
+  it('loads the soonest future non-cancelled appointment linked to this lead', () => {
+    const page = source('app/admin/leads/[id]/page.tsx')
+    expect(page).toMatch(
+      /from\('appointments'\)[\s\S]*?select\('start_time'\)[\s\S]*?eq\('linked_lead_id', id\)[\s\S]*?gte\('start_time', new Date\(\)\.toISOString\(\)\)[\s\S]*?neq\('status', 'cancelled'\)[\s\S]*?order\('start_time', \{ ascending: true \}\)[\s\S]*?limit\(1\)[\s\S]*?maybeSingle\(\)/,
+    )
+  })
+
+  it('loads initial lead calls newest-first and resolves timeline actors with one users query', () => {
+    const page = source('app/admin/leads/[id]/page.tsx')
+    expect(page).toMatch(
+      /from\('calls'\)[\s\S]*?select\('id, direction, status, participant_number, started_at, duration_seconds, recording_url, voicemail_url, summary, firm_user_email'\)[\s\S]*?eq\('lead_id', id\)[\s\S]*?order\('started_at', \{ ascending: false \}\)[\s\S]*?limit\(50\)/,
+    )
+    expect(page.match(/from\('users'\)/g)).toHaveLength(1)
+    expect(page).toMatch(/new Set\([\s\S]*?actor_id/)
+    expect(page).toMatch(/select\('id, display_name, email'\)[\s\S]*?in\('id', actorIds\)/)
+    expect(page).toMatch(/initialCalls=\{calls \?\? \[\]\}/)
+    expect(page).toMatch(/actorNames=\{actorNames\}/)
+  })
+
+  it('passes the hydrated whole intake row and workflow timestamps to the client', () => {
+    const page = source('app/admin/leads/[id]/page.tsx')
+    expect(page).toMatch(/lead=\{hydratedLead\}/)
+    expect(page).toMatch(/nextAppointmentAt=\{appointment\?\.start_time \?\? null\}/)
+    expect(page).toMatch(/lastTouchAt=\{lastTouchAt\}/)
+    expect(page).not.toMatch(/lastTouchAt=\{lead\.updated_at\}/)
+  })
+})
+
+describe('newestTimestamp', () => {
+  it('selects the newest valid touch and ignores invalid or empty values', () => {
+    expect(newestTimestamp([
+      '2026-07-20T12:00:00Z',
+      undefined,
+      'not-a-date',
+      null,
+      '2026-07-24T08:00:00Z',
+      '2026-07-22T16:30:00Z',
+    ])).toBe('2026-07-24T08:00:00Z')
+  })
+
+  it('returns null when no valid touch timestamp exists', () => {
+    expect(newestTimestamp([null, undefined, '', 'invalid'])).toBeNull()
   })
 })

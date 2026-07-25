@@ -60,6 +60,13 @@ export type LeadTimelineFilter = 'all' | 'notes' | 'calls' | 'system'
 
 const ECHO_WINDOW_MS = 5_000
 
+export function newestTimestamp(values: Array<string | null | undefined>): string | null {
+  return values
+    .filter((value): value is string =>
+      Boolean(value && Number.isFinite(Date.parse(value))))
+    .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null
+}
+
 function actorName(actorId: string | null | undefined, names: Record<string, string>): string {
   return actorId ? names[actorId] ?? 'System' : 'System'
 }

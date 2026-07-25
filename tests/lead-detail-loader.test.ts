@@ -14,18 +14,77 @@ const harness = vi.hoisted(() => {
     _children: [{ first_name: 'Sam', last_name: 'Doe', date_of_birth: '2014-01-01' }],
     _fid_personal_rep_client: [{ first_name: 'Pat', last_name: 'Representative' }],
   }
+  const activity = [{
+    id: 'activity-1',
+    title: 'Lead updated',
+    actor_id: 'user-1',
+    created_at: '2026-07-20T09:00:00Z',
+  }]
+  const notes = [{
+    id: 'note-1',
+    body: 'Internal note',
+    actor_id: 'user-1',
+    created_at: '2026-07-21T09:00:00Z',
+    updated_at: '2026-07-21T09:00:00Z',
+  }]
+  const meetings = [{
+    id: 'meeting-1',
+    title: 'Discovery call',
+    meeting_date: '2026-07-22T09:00:00Z',
+    attendees: ['Jane Doe'],
+    body: 'Meeting note',
+    source: 'manual',
+    granola_note_id: null,
+    actor_id: 'user-2',
+    created_at: '2026-07-22T10:00:00Z',
+    updated_at: '2026-07-22T10:00:00Z',
+  }]
+  const calls = [{
+    id: 'call-1',
+    direction: 'inbound',
+    status: 'completed',
+    participant_number: '+16175550100',
+    started_at: '2026-07-23T11:00:00Z',
+    duration_seconds: 120,
+    recording_url: null,
+    voicemail_url: null,
+    summary: null,
+    firm_user_email: 'attorney@example.com',
+  }]
+  const rows: Record<string, unknown> = {
+    client_intake: rawLead,
+    contacts: null,
+    lead_activity: activity,
+    lead_notes: notes,
+    lead_meeting_notes: meetings,
+    appointments: { start_time: '2026-07-30T14:00:00Z' },
+    calls,
+    users: [
+      { id: 'user-1', display_name: 'Alice Attorney', email: 'alice@example.com' },
+      { id: 'user-2', display_name: null, email: 'ben@example.com' },
+    ],
+  }
   const admin = {
     from: vi.fn((table: string) => {
-      if (table === 'client_intake') {
-        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: rawLead }) }) }) }
+      const result = () => ({ data: rows[table] ?? [], error: null })
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        gte: () => chain,
+        neq: () => chain,
+        order: () => chain,
+        limit: () => chain,
+        in: () => chain,
+        maybeSingle: async () => result(),
+        then: (
+          resolve: (value: ReturnType<typeof result>) => unknown,
+          reject: (reason: unknown) => unknown,
+        ) => Promise.resolve(result()).then(resolve, reject),
       }
-      if (table === 'contacts') {
-        return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) }
-      }
-      return { select: () => ({ eq: () => ({ order: async () => ({ data: [] }) }) }) }
+      return chain
     }),
   }
-  return { admin, hydrate: vi.fn(async () => hydratedLead), hydratedLead, rawLead }
+  return { admin, hydrate: vi.fn(async () => hydratedLead), hydratedLead, rawLead, calls }
 })
 
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => harness.admin }))
@@ -45,5 +104,14 @@ describe('LeadDetailPage intake loader', () => {
 
     expect(harness.hydrate).toHaveBeenCalledWith(harness.admin, harness.rawLead)
     expect((page.props as { lead: unknown }).lead).toBe(harness.hydratedLead)
+    expect(page.props).toMatchObject({
+      initialCalls: harness.calls,
+      actorNames: {
+        'user-1': 'Alice Attorney',
+        'user-2': 'ben@example.com',
+      },
+      nextAppointmentAt: '2026-07-30T14:00:00Z',
+      lastTouchAt: '2026-07-23T11:00:00Z',
+    })
   })
 })

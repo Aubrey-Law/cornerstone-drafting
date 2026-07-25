@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
+import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
 import { LeadDetailClient } from './LeadDetailClient'
 
 export const dynamic = 'force-dynamic'
@@ -20,6 +21,21 @@ type LeadMeetingNoteLoaderRow = LeadNoteLoaderRow & {
   attendees: string[]
   source: string
   granola_note_id: string | null
+}
+
+type LeadActivityLoaderRow = {
+  id: string
+  event_type?: string | null
+  title: string
+  detail?: string | null
+  actor_id?: string | null
+  created_at: string
+}
+
+type ActorLoaderRow = {
+  id: string
+  display_name: string | null
+  email: string | null
 }
 
 function mapNote(note: LeadNoteLoaderRow) {
@@ -50,20 +66,78 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
 
   const [
-    { data: lead },
-    { data: spouse },
-    { data: activity },
-    { data: notes },
-    { data: meetings },
+    leadResult,
+    spouseResult,
+    activityResult,
+    notesResult,
+    meetingsResult,
+    appointmentResult,
+    callsResult,
   ] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
     admin.from('contacts').select('*').eq('client_intake_id', id).eq('relationship_type', 'spouse').maybeSingle(),
     admin.from('lead_activity').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
     admin.from('lead_notes').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
     admin.from('lead_meeting_notes').select('*').eq('lead_id', id).order('meeting_date', { ascending: false }),
+    admin.from('appointments').select('start_time')
+      .eq('linked_lead_id', id)
+      .gte('start_time', new Date().toISOString())
+      .neq('status', 'cancelled')
+      .order('start_time', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    admin.from('calls')
+      .select('id, direction, status, participant_number, started_at, duration_seconds, recording_url, voicemail_url, summary, firm_user_email')
+      .eq('lead_id', id)
+      .order('started_at', { ascending: false })
+      .limit(50),
   ])
 
+  const { data: lead, error: leadError } = leadResult
+  const { data: spouse, error: spouseError } = spouseResult
+  const { data: activity, error: activityError } = activityResult
+  const { data: notes, error: notesError } = notesResult
+  const { data: meetings, error: meetingsError } = meetingsResult
+  const { data: appointment, error: appointmentError } = appointmentResult
+  const { data: calls, error: callsError } = callsResult
+
+  if (leadError) console.error('Could not load lead detail', { leadId: id, error: leadError })
   if (!lead || !lead.lead_status) notFound()
+  if (spouseError) console.error('Could not load lead spouse', { leadId: id, error: spouseError })
+  if (activityError) console.error('Could not load lead activity', { leadId: id, error: activityError })
+  if (notesError) console.error('Could not load lead notes', { leadId: id, error: notesError })
+  if (meetingsError) console.error('Could not load lead meeting notes', { leadId: id, error: meetingsError })
+  if (appointmentError) console.error('Could not load lead appointment', { leadId: id, error: appointmentError })
+  if (callsError) console.error('Could not load lead calls', { leadId: id, error: callsError })
+
+  const activityRows = (activity ?? []) as LeadActivityLoaderRow[]
+  const noteRows = (notes ?? []) as LeadNoteLoaderRow[]
+  const meetingRows = (meetings ?? []) as LeadMeetingNoteLoaderRow[]
+  const callRows = (calls ?? []) as LeadTimelineCall[]
+  const actorIds = [...new Set(
+    [...activityRows, ...noteRows, ...meetingRows]
+      .map(row => row.actor_id)
+      .filter((actorId): actorId is string => Boolean(actorId)),
+  )]
+  const actorResult = actorIds.length > 0
+    ? await admin.from('users').select('id, display_name, email').in('id', actorIds)
+    : { data: [] as ActorLoaderRow[], error: null }
+  if (actorResult.error) {
+    console.error('Could not load lead timeline actors', { leadId: id, error: actorResult.error })
+  }
+  const actorNames = Object.fromEntries(
+    ((actorResult.data ?? []) as ActorLoaderRow[]).map(actor => [
+      actor.id,
+      actor.display_name?.trim() || actor.email?.trim() || 'System',
+    ]),
+  )
+  const lastTouchAt = newestTimestamp([
+    ...activityRows.map(row => row.created_at),
+    ...noteRows.map(row => row.created_at),
+    ...meetingRows.map(row => row.created_at),
+    ...callRows.map(row => row.started_at),
+  ])
+
   const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
   const { data: agreement } = lead.matter_id
     ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -73,9 +147,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     <LeadDetailClient
       lead={hydratedLead}
       spouse={spouse}
-      initialActivity={activity ?? []}
-      initialNotes={((notes ?? []) as LeadNoteLoaderRow[]).map(mapNote)}
-      initialMeetingNotes={((meetings ?? []) as LeadMeetingNoteLoaderRow[]).map(mapMeeting)}
+      initialActivity={activityRows}
+      initialNotes={noteRows.map(mapNote)}
+      initialMeetingNotes={meetingRows.map(mapMeeting)}
+      initialCalls={calls ?? []}
+      actorNames={actorNames}
+      nextAppointmentAt={appointment?.start_time ?? null}
+      lastTouchAt={lastTouchAt}
+      callsError={callsError?.message ?? null}
       activeAgreement={agreement}
       currentUser={{
         id: user?.id ?? '',
