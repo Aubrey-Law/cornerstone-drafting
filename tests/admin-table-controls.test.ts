@@ -22,6 +22,43 @@ const leads: LeadTableRow[] = [
   { id: 'smith', full_name: null, first_name: 'Sam', last_name: 'Smith', email: 'smith@example.com', phone: '617-555-0105', practice_area: 'Estate Planning', status: 'lost', intake_sent_at: null, intake_completed_at: null, engagement_status: null, engagement_sent_at: null, engagement_fee_quoted: 6000, created_at: '2026-07-15T00:00:00Z', last_activity_at: '2026-07-16T00:00:00Z' },
 ]
 
+const canonicalPracticeLeads: LeadTableRow[] = [
+  {
+    id: 'canonical-ep',
+    full_name: 'Taylor Planner',
+    first_name: 'Taylor',
+    last_name: 'Planner',
+    email: 'taylor@planning.test',
+    phone: '617-555-0191',
+    practice_area: 'EP',
+    status: 'draft',
+    intake_sent_at: null,
+    intake_completed_at: null,
+    engagement_status: null,
+    engagement_sent_at: null,
+    engagement_fee_quoted: null,
+    created_at: '2026-07-10T00:00:00Z',
+    last_activity_at: null,
+  },
+  {
+    id: 'canonical-ep-lp',
+    full_name: 'Jordan Lane',
+    first_name: 'Jordan',
+    last_name: 'Lane',
+    email: 'jordan@legacy.test',
+    phone: '617-555-0192',
+    practice_area: 'EP-LP',
+    status: 'draft',
+    intake_sent_at: null,
+    intake_completed_at: null,
+    engagement_status: null,
+    engagement_sent_at: null,
+    engagement_fee_quoted: null,
+    created_at: '2026-07-11T00:00:00Z',
+    last_activity_at: null,
+  },
+]
+
 const sortRow = (id: string, fields: Partial<LeadTableRow>): LeadTableRow => ({
   id, full_name: null, first_name: null, last_name: null, email: null, phone: null,
   practice_area: null, status: 'draft', intake_sent_at: null, intake_completed_at: null,
@@ -39,11 +76,19 @@ const sortFixtures = {
 } satisfies Record<string, LeadTableRow[]>
 
 describe('lead table controls', () => {
-  it('searches lead identity fields including provisional number (catches wrong field coverage)', () => {
-    expect(ids(filterAndSortLeads(leads, {
+  it.each([
+    ['name', 'Taylor Planner', ['canonical-ep']],
+    ['email', 'jordan@legacy.test', ['canonical-ep-lp']],
+    ['phone', '617-555-0191', ['canonical-ep']],
+    ['provisional number', '2026-EPLP-Lane', ['canonical-ep-lp']],
+    ['raw practice code', 'EP-LP', ['canonical-ep-lp']],
+    ['displayed EP-LP practice label', 'Estate Planning - LP', ['canonical-ep-lp']],
+    ['displayed practice label across canonical EP and EP-LP rows', 'Estate Planning', ['canonical-ep-lp', 'canonical-ep']],
+  ] as const)('searches by %s (catches missing user-visible lead search fields)', (_field, search, want) => {
+    expect(ids(filterAndSortLeads(canonicalPracticeLeads, {
       ...EMPTY_LEAD_TABLE_FILTERS,
-      search: '2026-EP-Smith',
-    }, 'newest'))).toEqual(['smith'])
+      search,
+    }, 'newest'))).toEqual(want)
   })
 
   it.each([

@@ -1,5 +1,5 @@
 import { clientNameMatterSlug } from '@/lib/matterNumber'
-import { practiceAreaMatterCode } from '@/lib/practiceArea'
+import { practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
 
 export interface LeadTableRow {
   id: string
@@ -56,11 +56,11 @@ export function provisionalLeadNumber(lead: LeadTableRow, fallbackYear = new Dat
   return `${year}-${practiceAreaMatterCode(lead.practice_area)}-${clientNameMatterSlug(leadDisplayName(lead))}`
 }
 
-export function filterAndSortLeads(
-  leads: LeadTableRow[],
+export function filterAndSortLeads<T extends LeadTableRow>(
+  leads: T[],
   filters: LeadTableFilters,
   sortKey: LeadSortKey,
-): LeadTableRow[] {
+): T[] {
   const search = normalize(filters.search)
   const practice = normalize(filters.practice)
   const filtered = leads.filter(lead =>
@@ -82,6 +82,7 @@ function matchesSearch(lead: LeadTableRow, search: string): boolean {
     lead.email,
     lead.phone,
     lead.practice_area,
+    practiceAreaLabel(lead.practice_area),
     provisionalLeadNumber(lead),
   ].some(value => normalize(value).includes(search))
 }
