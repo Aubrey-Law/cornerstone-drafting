@@ -28,10 +28,11 @@ describe('matter overview frame', () => {
     expect(hero).not.toContain('Aging {agingHealth}')
   })
 
-  it('left-aligns the bounded workspace instead of centering the tab shell', () => {
+  it('uses the full available admin content width with shared workspace edges', () => {
     const client = fs.readFileSync(path.join(routeDir, 'MatterDetailClient.tsx'), 'utf8')
 
-    expect(client).toContain('max-w-[1280px]')
+    expect(client).not.toContain('max-w-[1280px]')
+    expect(client).toContain('className="w-full gap-4"')
     expect(client).not.toContain('className="mx-auto w-full max-w-6xl gap-4"')
   })
 })
