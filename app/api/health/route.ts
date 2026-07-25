@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { HeadBucketCommand } from '@aws-sdk/client-s3'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
+import { isSmsConfigured, isVoiceConfigured } from '@/lib/communications/config'
+import { smsProvider, voiceProvider } from '@/lib/communications/providers'
 
 // Default GET returns liveness only (200 {ok:true}) for Vercel uptime checks
 // and any external synthetic monitor.
@@ -50,6 +52,19 @@ async function checkR2(): Promise<Check> {
   }
 }
 
+function checkCommunications(): Check {
+  const smsSelected = Boolean(process.env.SMS_PROVIDER?.trim())
+  const voiceSelected = Boolean(process.env.VOICE_PROVIDER?.trim())
+  if (!smsSelected && !voiceSelected) return { status: 'skip' }
+  const missing = [
+    ...(smsSelected && !isSmsConfigured() ? [`${smsProvider()} SMS`] : []),
+    ...(voiceSelected && !isVoiceConfigured() ? [`${voiceProvider()} voice`] : []),
+  ]
+  return missing.length
+    ? { status: 'fail', detail: `Incomplete configuration: ${missing.join(', ')}` }
+    : { status: 'ok' }
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   if (url.searchParams.get('check') !== 'full') {
@@ -58,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   const [supabase, r2] = await Promise.all([checkSupabase(), checkR2()])
 
-  const checks = { supabase, r2 }
+  const checks = { supabase, r2, communications: checkCommunications() }
   const ok = Object.values(checks).every((c) => c.status !== 'fail')
 
   return NextResponse.json(

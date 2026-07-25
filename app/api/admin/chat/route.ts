@@ -14,6 +14,7 @@ import {
 import { isDraftingSummaryRequest, formatClaudeDraftingSkillInput } from '@/lib/adminChat/prompts'
 import { designSheetImportExecutor } from '@/lib/adminChat/designSheetTool'
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
+import { createLeadToolExecutor, leadSystemPromptNote } from '@/lib/adminChat/leadTools'
 
 export const maxDuration = 120
 
@@ -109,12 +110,13 @@ export async function POST(req: Request) {
 
   const contextMatterId = contextType === 'matter' && body.context_id ? body.context_id : null
   const tools: AdminChatToolExecutor[] = [
+    createLeadToolExecutor,
     ...(contextMatterId ? [designSheetImportExecutor(contextMatterId, adminUserId ?? null)] : []),
     ...workflowToolExecutors({ userId: adminUserId ?? '', email: user?.email ?? null }),
   ]
 
   return createAdminChatStream({
-    system: context.systemPrompt + workflowSystemPromptNote(),
+    system: context.systemPrompt + workflowSystemPromptNote() + leadSystemPromptNote(),
     messages: requestMessages.map(message => ({ role: message.role, content: message.content })),
     tools,
     maxIterations: 4,

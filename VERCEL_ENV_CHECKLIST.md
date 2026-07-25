@@ -127,6 +127,9 @@ Categories used: `message_alert`, `portal_message_notice`, `intake_complete_aler
 
 ## Optional — Twilio (SMS + softphone)
 
+Twilio remains available as a rollback provider. Select providers independently with
+`SMS_PROVIDER=twilio` and `VOICE_PROVIDER=twilio`.
+
 | Variable | Purpose |
 |----------|---------|
 | `TWILIO_ACCOUNT_SID` | Account SID |
@@ -142,6 +145,29 @@ Categories used: `message_alert`, `portal_message_notice`, `intake_complete_aler
 | `TWILIO_WEBHOOK_BASE_URL` | Public base for status callbacks if different from `NEXT_PUBLIC_APP_URL` |
 
 Point Twilio Voice / Messaging webhooks at this app’s host (`/api/webhooks/twilio/*`, `/api/voice/*`). Softphone FAB hides when Voice env is incomplete.
+
+## Optional — Telnyx (SMS + softphone)
+
+Set `SMS_PROVIDER=telnyx` and/or `VOICE_PROVIDER=telnyx` to activate Telnyx.
+
+| Variable | Purpose |
+|---|---|
+| `TELNYX_API_KEY` | Server API authentication |
+| `TELNYX_PUBLIC_KEY` | Ed25519 webhook verification key |
+| `TELNYX_PHONE_NUMBER` | New Telnyx number in E.164 format |
+| `TELNYX_MESSAGING_PROFILE_ID` | Messaging Profile assigned to the number |
+| `TELNYX_CONNECTION_ID` | Credential Connection assigned to the number |
+| `TELNYX_TELEPHONY_CREDENTIAL_IDS` | JSON map of Supabase user UUID to Telnyx telephony credential ID |
+| `TELNYX_TELEPHONY_CREDENTIAL_ID` | Optional single-user credential fallback |
+| `TELNYX_WEBHOOK_BASE_URL` | Optional public callback base; defaults to `NEXT_PUBLIC_APP_URL` |
+| `TELNYX_RECORD_CALLS` | Optional `true` recording flag for portal routing configuration |
+| `TELNYX_INBOUND_RING_TIMEOUT` | Optional unanswered ring timeout |
+| `TELNYX_INBOUND_FALLBACK_DESTINATION` | Optional Retell phone number or SIP destination |
+
+Configure the Messaging Profile webhook as `/api/webhooks/telnyx/messaging` and
+the Credential Connection voice webhook as `/api/webhooks/telnyx/voice`. Each
+staff softphone user needs a distinct telephony credential. The admin-safe audit
+endpoint is `GET /api/admin/communications/status`.
 
 ## Optional — Microsoft Graph (Outlook send)
 

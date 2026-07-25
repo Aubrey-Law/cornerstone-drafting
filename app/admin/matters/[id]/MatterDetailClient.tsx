@@ -131,7 +131,7 @@ interface MatterDetailClientProps {
   designSheetSeeded?: boolean
   reviewFlags?: IntakeReadinessFlag[]
   resyncPreviewCount?: number
-  twilioSmsEnabled?: boolean
+  smsEnabled?: boolean
   emailSendEnabled?: boolean
   esignEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
@@ -199,7 +199,7 @@ function MatterDetailClientInner({
   designSheetSeeded = false,
   reviewFlags = [],
   resyncPreviewCount = 0,
-  twilioSmsEnabled = false,
+  smsEnabled = false,
   emailSendEnabled = false,
   esignEnabled = false,
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
@@ -1172,7 +1172,7 @@ function MatterDetailClientInner({
             emailSubject={emailSubject}
             emailBody={emailBody}
             emailSending={emailSending}
-            twilioSmsEnabled={twilioSmsEnabled}
+            smsEnabled={smsEnabled}
             emailSendEnabled={emailSendEnabled}
             setPortalDraft={setPortalDraft}
             setSmsDraft={setSmsDraft}

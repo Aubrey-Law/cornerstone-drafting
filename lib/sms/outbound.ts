@@ -1,6 +1,8 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { normalizeSmsRecipient, sendSmsMessage } from '@/lib/twilio/sms'
+import { normalizeSmsRecipient, sendProviderSmsMessage } from '@/lib/sms/provider'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
+import { smsProvider } from '@/lib/communications/providers'
+import { telnyxPhoneNumber } from '@/lib/telnyx/config'
 
 export { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 
@@ -36,6 +38,7 @@ export interface OutboundSmsFailure {
 }
 
 function publicSenderNumber(): string | null {
+  if (smsProvider() === 'telnyx') return telnyxPhoneNumber()
   return (
     process.env.TWILIO_SMS_FROM?.trim() ||
     process.env.TWILIO_CALLER_ID?.trim() ||
@@ -110,7 +113,7 @@ export async function sendOutboundSms(
   const baseRow = {
     matter_id: target.matterId,
     direction: 'outbound',
-    provider: 'twilio',
+    provider: smsProvider(),
     recipient_role: target.recipientRole,
     recipient_name: target.recipientName,
     to_number: to,
@@ -136,7 +139,7 @@ export async function sendOutboundSms(
     return { ok: false, error: insertError.message, status: 500 }
   }
 
-  const result = await sendSmsMessage({ to, body: trimmedBody })
+  const result = await sendProviderSmsMessage({ to, body: trimmedBody })
   const nextStatus = result.ok ? result.status : 'failed'
 
   const updatePayload = result.ok
@@ -147,8 +150,8 @@ export async function sendOutboundSms(
         error: null,
         raw_payload: {
           ...baseRow.raw_payload,
-          twilio: {
-            sid: result.providerMessageId,
+          [smsProvider()]: {
+            id: result.providerMessageId,
             status: result.status,
           },
         },

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { isTwilioVoiceConfigured } from '@/lib/twilio/config'
+import { isVoiceConfigured } from '@/lib/communications/config'
 import AdminLayoutClient from './AdminLayoutClient'
 import { AuthTokenProvider } from '@/lib/auth/AuthTokenProvider'
 
@@ -44,7 +44,7 @@ export default async function AdminLayout({
       <AdminLayoutClient
         userName={userName}
         userInitials={userInitials}
-        twilioVoiceEnabled={isTwilioVoiceConfigured()}
+        voiceEnabled={isVoiceConfigured()}
       >
         {children}
       </AdminLayoutClient>

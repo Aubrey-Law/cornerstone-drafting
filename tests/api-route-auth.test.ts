@@ -83,6 +83,7 @@ describe('API route auth coverage', () => {
           /Unauthorized/,
           // Webhooks: cryptographic signature verification instead of a session.
           /verifyTwilioRequest\b/,
+          /unwrapTelnyxWebhook\b/,
           /verifyRetellSignature\b/,
           /verifyCalcomSignature\b/,
           /verifyEsignWebhookSecret\b/,

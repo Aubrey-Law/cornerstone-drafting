@@ -11,7 +11,7 @@ Drafting (design sheet → generate → review) lives in this repo and is the so
 - Supabase Postgres/Auth (greenfield baseline + lite migrations)
 - Cloudflare R2 private document storage
 - Node estate document generator (data in `tools/aubreylaw-docgeneration`)
-- Optional: Resend (alerts), Twilio (SMS/voice), Microsoft Graph (Outlook send), Retell (AI receptionist)
+- Optional: Resend (alerts), Telnyx or Twilio (SMS/voice), Microsoft Graph (Outlook send), Retell (AI receptionist)
 
 ## Local setup
 
@@ -103,7 +103,7 @@ npm run build:next
 
 ## Environment
 
-See [VERCEL_ENV_CHECKLIST.md](VERCEL_ENV_CHECKLIST.md) for Supabase, R2, Resend, Twilio, Microsoft Graph, and Retell variables.
+See [VERCEL_ENV_CHECKLIST.md](VERCEL_ENV_CHECKLIST.md) for Supabase, R2, Resend, Telnyx/Twilio, Microsoft Graph, and Retell variables.
 
 ## Sharing PDFs with clients
 

@@ -5,7 +5,7 @@ import { Calendar, Check, Pencil, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { TabsContent } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
+import { cn, formatDateTime } from '@/lib/utils'
 import { AssistantNotePromptButton } from '@/app/admin/components/AssistantNotePromptButton'
 import type { LinkedMatterNote } from './noteLinks'
 export { mapMatterNoteRows, mergeLinkedNotes } from './noteLinks'
@@ -95,7 +95,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                       </span>
                     )}
                     <span className="text-[11px] text-text-tertiary">
-                      {new Date(note.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {formatDateTime(note.created_at)}
                     </span>
                     {isLead && <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">From lead</span>}
                   </div>
