@@ -19,13 +19,13 @@ const snapshotLead = {
 }
 const snapshotSpouse = {first_name:'John',middle_name:null,last_name:'Doe',preferred_name:null,email:'john@example.com',phone:null,date_of_birth:null}
 
-function harness({ lead={id:'l1',matter_id:null,lead_status:'lead'} as any, finalLead=lead as any, spouse=null as any, opportunity=null as any, rpcError=null as null|{message:string}, rpcData }: {lead?:any;finalLead?:any;spouse?:any;opportunity?:any;rpcError?:null|{message:string};rpcData?:any}={}) {
+function harness({ lead={id:'l1',matter_id:null,lead_status:'lead'} as any, finalLead=lead as any, spouse=null as any, opportunity=null as any, rpcError=null as null|{message:string}, rpcData, readErrors={} }: {lead?:any;finalLead?:any;spouse?:any;opportunity?:any;rpcError?:null|{message:string};rpcData?:any;readErrors?:Record<string,{message:string}>}={}) {
   const calls:{rpc:any[];updates:any[];deletes:string[]}={rpc:[],updates:[],deletes:[]}
   const admin={
     rpc:vi.fn(async (name:string,args:any)=>{calls.rpc.push([name,args]);return {data:rpcData ?? {...lead,lead_status:args.p_details?.status ?? lead?.lead_status},error:rpcError}}),
     from:vi.fn((table:string)=>{
       const row=table==='client_intake'?lead:table==='matters'?opportunity:spouse
-      const chain:any={select:()=>chain,eq:()=>chain,maybeSingle:async()=>({data:row,error:null}),single:async()=>({data:table==='client_intake'?finalLead:row,error:null}),update:(value:any)=>{calls.updates.push([table,value]);return chain},delete:()=>{calls.deletes.push(table);return chain}}
+      const chain:any={select:()=>chain,eq:()=>chain,maybeSingle:async()=>({data:row,error:readErrors[table]??null}),single:async()=>({data:table==='client_intake'?finalLead:row,error:null}),update:(value:any)=>{calls.updates.push([table,value]);return chain},delete:()=>{calls.deletes.push(table);return chain}}
       return chain
     }),
   }
@@ -54,6 +54,22 @@ describe('lead details PATCH handler',()=>{
     expect(res.status).toBe(400)
     expect(admin.from).toHaveBeenCalledWith('client_intake')
     expect(admin.from).toHaveBeenCalledWith('contacts')
+  })
+  it.each([
+    ['lead','client_intake'],
+    ['spouse','contacts'],
+    ['opportunity','matters'],
+  ])('returns a server error without writing when the %s snapshot read fails',async(_label,table)=>{
+    const {calls}=harness({
+      lead:snapshotLead,
+      spouse:snapshotSpouse,
+      opportunity:{id:'m1',relationship_status:'lead'},
+      readErrors:{[table]:{message:`${_label} read failed`}},
+    })
+    const res=await PATCH(request({field:'phone',value:'617-555-0111'}),params)
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({error:`${_label} read failed`})
+    expect(calls.rpc).toEqual([])
   })
   it('sends only the complete merged server snapshot to the existing update RPC',async()=>{
     const {calls}=harness({lead:snapshotLead,spouse:snapshotSpouse,opportunity:{id:'m1',relationship_status:'lead'}})

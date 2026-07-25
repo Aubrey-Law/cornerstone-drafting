@@ -185,6 +185,12 @@ describe('lead next-action snooze migration', () => {
     expect(sql).toContain('set search_path = pg_catalog, public')
   })
 
+  it('rejects a null snooze timestamp as well as a non-future timestamp', () => {
+    const sql = source()
+    expect(sql).toContain('if p_until is null or p_until <= statement_timestamp() then')
+    expect(sql).toContain("raise exception 'snooze time must be in the future'")
+  })
+
   it('fails for a missing lead and a converted or lost lead while holding the row lock', () => {
     const sql = source()
     expect(sql).toContain('where id = p_lead_id for update')

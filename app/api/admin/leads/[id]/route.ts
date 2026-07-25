@@ -70,19 +70,24 @@ export async function PATCH(
   }
 
   const admin = getAdminClient()
-  const { data: lead } = await admin
+  const { data: lead, error: leadReadError } = await admin
     .from('client_intake')
     .select('*')
     .eq('id', intakeId)
     .maybeSingle()
+  if (leadReadError) return NextResponse.json({ error: leadReadError.message }, { status: 500 })
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
 
-  const [{ data: spouse }, { data: opportunity }] = await Promise.all([
+  const [spouseResult, opportunityResult] = await Promise.all([
     admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
     lead.matter_id
       ? admin.from('matters').select('id, relationship_status').eq('id', lead.matter_id).maybeSingle()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
   ])
+  if (spouseResult.error) return NextResponse.json({ error: spouseResult.error.message }, { status: 500 })
+  if (opportunityResult.error) return NextResponse.json({ error: opportunityResult.error.message }, { status: 500 })
+  const spouse = spouseResult.data
+  const opportunity = opportunityResult.data
 
   let details: ValidatedLeadDetails
   if (partialRequest) {

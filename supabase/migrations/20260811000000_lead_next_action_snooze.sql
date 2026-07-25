@@ -27,7 +27,7 @@ begin
   ) then
     raise exception 'Attorney or admin access required' using errcode = '42501';
   end if;
-  if p_until <= statement_timestamp() then
+  if p_until is null or p_until <= statement_timestamp() then
     raise exception 'Snooze time must be in the future' using errcode = '22023';
   end if;
 
