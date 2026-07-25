@@ -156,4 +156,19 @@ describe('computeNextAction', () => {
       intakeSentAt: '2026-07-20T16:00:00Z',
     })).toEqual({ key: 'nothing', title: '', detail: '', actions: [] })
   })
+
+  it('does not share static action objects between results', () => {
+    const input = {
+      ...baseInput,
+      intakeCompletedAt: '2026-07-24T16:00:00Z',
+    }
+
+    computeNextAction(input).actions[0].label = 'Changed by caller'
+
+    expect(computeNextAction(input).actions[0]).toEqual({
+      label: 'Quote fee',
+      kind: 'primary',
+      intent: 'quote_fee',
+    })
+  })
 })

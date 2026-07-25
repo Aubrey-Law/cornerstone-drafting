@@ -59,7 +59,7 @@ const daysUntil = (iso: string) => Math.ceil((Date.parse(iso) - Date.now()) / DA
 const daysSince = (iso: string) => Math.floor((Date.now() - Date.parse(iso)) / DAY_MS)
 
 function copyAction(action: Readonly<Omit<NextAction, 'actions'>> & { actions: readonly Action[] }): NextAction {
-  return { ...action, actions: [...action.actions] }
+  return { ...action, actions: action.actions.map(item => ({ ...item })) }
 }
 
 function formatDate(iso: string) {
