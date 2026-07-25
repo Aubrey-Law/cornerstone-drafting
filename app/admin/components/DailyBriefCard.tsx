@@ -1,28 +1,40 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Sparkles } from 'lucide-react'
+import { ChevronDown, RefreshCw, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { firmTodayKey } from '@/lib/firmDate'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 
 function cacheKey() {
-  return `cornerstone.dailyBrief.${new Date().toLocaleDateString('en-CA')}`
+  return `cornerstone.dailyBrief.${firmTodayKey()}`
+}
+
+function firstLine(markdown: string): string {
+  for (const raw of markdown.split('\n')) {
+    const line = raw.replace(/^[#>*\-\s]+/, '').replace(/\*\*/g, '').trim()
+    if (line) return line
+  }
+  return markdown
 }
 
 /**
- * AI daily briefing at the top of Today: one model call over the same pipeline
- * data the page already shows, cached per browser day so revisits are free.
+ * AI daily briefing in the Today rail: one model call over the same pipeline
+ * data the page already shows, cached per firm day in localStorage so a second
+ * tab (or a reload) doesn't re-bill the model.
  */
 export function DailyBriefCard() {
   const [brief, setBrief] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   const generate = useCallback(async (force = false) => {
     if (!force) {
       try {
-        const cached = sessionStorage.getItem(cacheKey())
+        const cached = localStorage.getItem(cacheKey())
         if (cached) {
           setBrief(cached)
           return
@@ -40,7 +52,7 @@ export function DailyBriefCard() {
       const body = await response.json().catch(() => ({})) as { brief?: string; error?: string }
       if (!response.ok || !body.brief) throw new Error(body.error ?? 'Unable to generate briefing')
       setBrief(body.brief)
-      try { sessionStorage.setItem(cacheKey(), body.brief) } catch { /* ignore */ }
+      try { localStorage.setItem(cacheKey(), body.brief) } catch { /* ignore */ }
     } catch (err) {
       setError((err as Error).message || 'Unable to generate briefing')
     } finally {
@@ -52,7 +64,7 @@ export function DailyBriefCard() {
 
   return (
     <section className="rounded-lg border border-border bg-card">
-      <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+      <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden />
           <h2 className="text-sm font-semibold text-foreground">Daily briefing</h2>
@@ -69,13 +81,30 @@ export function DailyBriefCard() {
           Refresh
         </Button>
       </header>
-      <div className="px-4 py-3 text-sm">
+      <div className="px-3 py-2.5 text-sm">
         {loading && !brief ? (
           <p className="text-muted-foreground">Reading your pipeline…</p>
         ) : error ? (
-          <p className="text-muted-foreground">{error}</p>
+          <div className="space-y-2">
+            <p className="text-muted-foreground">{error}</p>
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => void generate(true)}>
+              Retry
+            </Button>
+          </div>
         ) : brief ? (
-          <ChatMarkdown content={brief} />
+          <div>
+            {expanded ? <ChatMarkdown content={brief} /> : (
+              <p className="truncate text-muted-foreground">{firstLine(brief)}</p>
+            )}
+            <button
+              type="button"
+              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => setExpanded(prev => !prev)}
+            >
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} aria-hidden />
+              {expanded ? 'Show less' : 'Show more'}
+            </button>
+          </div>
         ) : null}
       </div>
     </section>
