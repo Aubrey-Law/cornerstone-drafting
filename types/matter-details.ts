@@ -110,6 +110,7 @@ export interface MatterDetailsRow {
   engagement_signed_at?: string | null
   fee_collected?: boolean | null
   fee_collected_date?: string | null
+  fee_payment_status?: 'unpaid' | 'deposit' | 'paid_in_full' | null
 
   // ── V2 — EP Document Tracking ──
   ep_living_will_status?: string | null

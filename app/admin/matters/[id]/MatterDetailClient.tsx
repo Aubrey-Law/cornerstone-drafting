@@ -8,21 +8,21 @@ import {
   ArrowLeft,
   ChevronDown,
   ClipboardList,
-  FilePenLine,
   Loader as Loader2,
   MoreHorizontal,
   Trash2,
   Upload,
   Clock as UnlockIcon,
-  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { listDocuments } from '@/lib/documents'
-import { computeAssetAggregates } from '@/lib/assets/aggregates'
+import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
+import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import {
   stageLabel,
+  STAGES,
   type MatterActivity,
   type MatterContact,
   type MatterDocument,
@@ -57,8 +57,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { computeMatterNextAction, matterDaysOpen } from '@/lib/matterNextAction'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { computeMatterNextAction } from '@/lib/matterNextAction'
 import {
   type CommunicationChannel,
   type MatterTab,
@@ -91,11 +97,11 @@ import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { MatterOverviewSummaryCards } from './MatterOverviewSummaryCards'
+import { MatterOverviewFactsRail } from './MatterOverviewFactsRail'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
 import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
-import { useMatterAssets } from './useMatterAssets'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
 import { MatterCommunicationsTab } from './tabs/messages'
 
@@ -106,7 +112,7 @@ interface MatterDetailClientProps {
   matter: PipelineMatter
   matterId: string
   contacts: MatterContact[]
-  agingHealth?: 'red' | 'amber' | 'green' | null
+  agingSummary?: MatterAgingSummary | null
   intakeId?: string | null
   clientIntakeRow?: {
     id: string
@@ -121,9 +127,9 @@ interface MatterDetailClientProps {
     unlock_request_note?: string | null
   } | null
   matterNumber?: string | null
-  matterNumberManual?: boolean
   matterDetails?: MatterDetailsRow | null
   designSheetPlanType?: string | null
+  initialEstateSnapshot: MatterEstateSnapshot
   initialNotes?: MatterNoteRow[]
   initialLeadNotes?: Array<{ id: string; lead_id: string; body: string; created_at: string; note_type: 'internal' | 'system' }>
   initialMatterLinkedNotes?: LinkedMatterNote[]
@@ -185,13 +191,13 @@ function MatterDetailClientInner({
   matter: initialMatter,
   matterId,
   contacts: initialContacts,
-  agingHealth = null,
+  agingSummary = null,
   intakeId: initialIntakeId = null,
   clientIntakeRow = null,
   matterNumber: initialMatterNumber = null,
-  matterNumberManual: initialMatterNumberManual = false,
   matterDetails: initialMatterDetails = null,
   designSheetPlanType = null,
+  initialEstateSnapshot,
   initialNotes = [],
   initialLeadNotes = [],
   initialMatterLinkedNotes = [],
@@ -227,8 +233,6 @@ function MatterDetailClientInner({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
-  const [matterNumberManual, setMatterNumberManual] = useState(initialMatterNumberManual)
-  const [generatingNumber, setGeneratingNumber] = useState(false)
   const [unlocking, setUnlocking] = useState(false)
   const [portalUploadsOpen, setPortalUploadsOpen] = useState(false)
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
@@ -334,10 +338,6 @@ function MatterDetailClientInner({
   useEffect(() => {
     setMatterNum(initialMatterNumber)
   }, [initialMatterNumber])
-
-  useEffect(() => {
-    setMatterNumberManual(initialMatterNumberManual)
-  }, [initialMatterNumberManual])
 
   useEffect(() => {
     setLiveIntakeId(initialIntakeId)
@@ -455,18 +455,6 @@ function MatterDetailClientInner({
     handleEngineStageTaskUpdated,
   } = useMatterEngineStageTask(matterId, matter.stage)
 
-  const {
-    assets,
-    assetCount,
-    loading: assetsLoading,
-  } = useMatterAssets({
-    intakeId: liveIntakeId,
-    accessToken: token,
-    enabled: assetsTabVisited && Boolean(liveIntakeId),
-  })
-
-  const assetAggregates = useMemo(() => computeAssetAggregates(assets), [assets])
-
   const handleUnlockIntake = useCallback(() => {
     if (!liveIntakeId || unlocking) return
     setUnlockConfirmOpen(true)
@@ -487,55 +475,6 @@ function MatterDetailClientInner({
       setUnlocking(false)
     }
   }, [liveIntakeId, matterId, router, unlocking])
-
-  const handleSaveMatterNumber = useCallback(async (value: string) => {
-    const trimmed = value.trim()
-    const next = trimmed === '' ? null : trimmed
-    if (next === (matterNum ?? null)) return
-    try {
-      const patchRes = await fetch('/api/admin/matter-details', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matterId, field: 'matter_number', value: next, manual: true }),
-      })
-      const patchBody = await patchRes.json().catch(() => ({}))
-      if (!patchRes.ok) throw new Error(patchBody.error ?? 'Failed to save matter number')
-      setMatterNum(next)
-      setMatterNumberManual(true)
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save matter number')
-    }
-  }, [matterId, matterNum, router])
-
-  const handleGenerateMatterNumber = useCallback(async () => {
-    if (matterNumberManual) {
-      toast.error('Matter number was manually set')
-      return
-    }
-    setGeneratingNumber(true)
-    try {
-      const res = await fetch(`/api/admin/matters/${matterId}/matter-number`, { method: 'POST' })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Failed to generate matter number')
-      const num = body.matterNumber as string
-      const patchRes = await fetch('/api/admin/matter-details', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matterId, field: 'matter_number', value: num, manual: false }),
-      })
-      const patchBody = await patchRes.json().catch(() => ({}))
-      if (!patchRes.ok) throw new Error(patchBody.error ?? 'Failed to save matter number')
-      setMatterNum(num)
-      setMatterNumberManual(false)
-      toast.success('Matter number updated')
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not generate matter number')
-    } finally {
-      setGeneratingNumber(false)
-    }
-  }, [matterId, matterNumberManual, router])
 
   const handleMarkIntakeUploadsReviewed = useCallback(async (intakeId: string) => {
     try {
@@ -889,22 +828,31 @@ function MatterDetailClientInner({
       ),
     [matter, matterDetails, esignEnabled],
   )
-  const daysOpen = useMemo(() => matterDaysOpen(matter.matter_created), [matter.matter_created])
   const unreadPortalCount = useMemo(
     () => portalMessages.filter(m => m.sender_role === 'client' && !m.read_at).length,
     [portalMessages],
   )
   const lastPortalMessage = portalMessages.length > 0 ? portalMessages[portalMessages.length - 1] : null
 
-  const subtitleParts = [
-    practiceAreaLabel(matterDetails?.practice_area ?? matter.practice_area),
-    matter.matter_name || null,
-    matterNum ? `#${matterNum}` : null,
-  ].filter(Boolean)
+  const healthLabel = agingSummary?.isSnoozed
+    ? null
+    : agingSummary?.health === 'red'
+      ? 'Stalled'
+      : agingSummary?.health === 'amber'
+        ? 'Needs attention'
+        : agingSummary?.health === 'green'
+          ? 'On track'
+          : null
+  const healthClass = agingSummary?.health === 'red'
+    ? 'border-red-strong-border bg-red-strong-bg text-red-strong'
+    : agingSummary?.health === 'amber'
+      ? 'border-amber-border bg-amber-bg text-amber'
+      : 'border-green/40 bg-green-bg text-green'
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
-      <div className="border-b border-border bg-card px-4 py-4 md:px-6">
+      <div className="border-b border-border bg-card px-4 py-4 md:px-8">
+        <div className="w-full max-w-[1280px]">
         <div className="mb-3">
           <Link
             href="/admin/matters"
@@ -919,45 +867,41 @@ function MatterDetailClientInner({
             <h1 className="text-xl font-semibold tracking-tight">
               {matter.client_name || matter.matter_name || 'Matter'}
             </h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {subtitleParts.join(' · ')}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Input
-                key={matterNum ?? 'empty'}
-                className="h-8 max-w-[220px] text-xs tabular-nums"
-                defaultValue={matterNum ?? ''}
-                placeholder="e.g. 2026-EP-Smith-001"
-                onBlur={event => void handleSaveMatterNumber(event.target.value)}
-              />
-              {!matterNumberManual && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 gap-1 px-2 text-[11px]"
-                  disabled={generatingNumber}
-                  onClick={() => void handleGenerateMatterNumber()}
-                >
-                  {generatingNumber ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Zap className="h-3 w-3" />
-                  )}
-                  {matterNum ? 'Auto-generate' : 'Generate matter #'}
-                </Button>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>{matterNum ? `#${matterNum}` : 'Matter number —'}</span>
+              <span aria-hidden>·</span>
+              <span>{practiceAreaLabel(matterDetails?.practice_area ?? matter.practice_area)}</span>
+              {agingSummary && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{agingSummary.daysInStage} business day{agingSummary.daysInStage === 1 ? '' : 's'} in {stageLabel(matter.stage)}</span>
+                </>
               )}
-              {matterNumberManual && (
-                <span className="text-[11px] text-muted-foreground">Manually set</span>
+              {healthLabel && (
+                <Badge variant="outline" className={`text-[10px] ${healthClass}`}>{healthLabel}</Badge>
               )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={matter.stage}
+              onValueChange={value => void handleStageChange(value as MatterStage)}
+              disabled={stageSaving}
+            >
+              <SelectTrigger size="sm" className="w-[150px]" aria-label="Matter stage">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STAGES.map(stage => (
+                  <SelectItem key={stage.key} value={stage.key}>{stage.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" size="sm" variant="outline" className="gap-1.5">
                   <ClipboardList className="h-3.5 w-3.5" />
-                  Intake
+                  Intake actions
                   <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
@@ -982,12 +926,6 @@ function MatterDetailClientInner({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href={`/admin/drafting/${matter.matter_id}`}>
-                <FilePenLine className="h-3.5 w-3.5" />
-                Open drafting
-              </Link>
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" size="sm" variant="outline" aria-label="More actions">
@@ -1005,6 +943,7 @@ function MatterDetailClientInner({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
         </div>
       </div>
 
@@ -1025,11 +964,11 @@ function MatterDetailClientInner({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
+      <div className="flex-1 overflow-auto px-4 py-4 md:px-8">
         <Tabs
           value={activeTab}
           onValueChange={v => setActiveTab(v as MatterTab)}
-          className="mx-auto w-full max-w-6xl gap-4"
+          className="w-full max-w-[1280px] gap-4"
         >
           <TabsList className="sticky top-0 z-10 w-full justify-start overflow-x-auto bg-background">
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -1048,13 +987,11 @@ function MatterDetailClientInner({
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-4">
+          <TabsContent value="overview">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
+              <div className="space-y-4">
             <MatterOverviewHero
               matter={matter}
-              stageSaving={stageSaving}
-              onStageChange={v => void handleStageChange(v)}
-              daysOpen={daysOpen}
-              agingHealth={agingHealth}
               nextAction={nextAction}
               unreadPortalCount={unreadPortalCount}
               unreviewedUploadCounts={unreviewedUploadCounts}
@@ -1077,9 +1014,9 @@ function MatterDetailClientInner({
             />
             <MatterOverviewSummaryCards
               household={householdPreview}
-              assetCount={assetsTabVisited ? assetCount : null}
-              assetNetValue={assetsTabVisited ? assetAggregates.netValue : null}
-              assetsLoading={assetsTabVisited && assetsLoading}
+              assetCount={initialEstateSnapshot.assetCount}
+              assetNetValue={initialEstateSnapshot.netInventoryValue}
+              assetsLoading={false}
               documentCount={documents.length}
               documentsLoading={docsLoading}
               engineStageTask={currentEngineStageTask}
@@ -1128,6 +1065,14 @@ function MatterDetailClientInner({
               onOpenChange={setPortalUploadsOpen}
               onOpened={() => void handleMarkPortalUploadsReviewed()}
             />
+              </div>
+              <MatterOverviewFactsRail
+                matterId={matterId}
+                details={matterDetails}
+                designSheetPlanType={designSheetPlanType}
+                estate={initialEstateSnapshot}
+              />
+            </div>
           </TabsContent>
 
           <MatterPeopleTab

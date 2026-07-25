@@ -1,0 +1,37 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const routeDir = path.join(process.cwd(), 'app/admin/matters/[id]')
+
+describe('matter overview frame', () => {
+  it('loads full stage-aging context and server-derived estate facts', () => {
+    const query = fs.readFileSync(path.join(process.cwd(), 'lib/queries/matterOverview.ts'), 'utf8')
+    const page = fs.readFileSync(path.join(routeDir, 'page.tsx'), 'utf8')
+
+    expect(query).toContain('fetchMatterAgingSummary')
+    expect(query).toContain('days_in_stage')
+    expect(page).toContain('fetchMatterEstateSnapshot')
+    expect(page).toContain('initialEstateSnapshot')
+  })
+
+  it('retains intake operations while exposing only one stage selector', () => {
+    const client = fs.readFileSync(path.join(routeDir, 'MatterDetailClient.tsx'), 'utf8')
+    const hero = fs.readFileSync(path.join(routeDir, 'MatterOverviewHero.tsx'), 'utf8')
+
+    expect(client).toContain('Intake actions')
+    expect(client).toContain('Import intake — paste text or upload Word')
+    expect(client).toContain('Unlock intake for client editing')
+    expect(client).toContain('aria-label="Matter stage"')
+    expect(hero).not.toContain('aria-label="Matter stage"')
+    expect(hero).not.toContain('Matter Status: Hired')
+    expect(hero).not.toContain('Aging {agingHealth}')
+  })
+
+  it('left-aligns the bounded workspace instead of centering the tab shell', () => {
+    const client = fs.readFileSync(path.join(routeDir, 'MatterDetailClient.tsx'), 'utf8')
+
+    expect(client).toContain('max-w-[1280px]')
+    expect(client).not.toContain('className="mx-auto w-full max-w-6xl gap-4"')
+  })
+})

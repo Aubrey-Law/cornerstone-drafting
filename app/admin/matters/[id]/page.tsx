@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
-import { fetchMatterAgingHealth } from '@/lib/queries/matterOverview'
+import { fetchMatterAgingSummary, fetchMatterEstateSnapshot } from '@/lib/queries/matterOverview'
 import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
 import { fetchUnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { isSmsConfigured } from '@/lib/communications/config'
@@ -221,10 +221,10 @@ export default async function MatterDetailPage({ params }: Params) {
   const { id: rawId } = await params
   const admin = getAdminClient()
   const id = await resolveMatterId(rawId, admin)
-  const [matter, contacts, agingHealth] = await Promise.all([
+  const [matter, contacts, agingSummary] = await Promise.all([
     fetchMatter(id),
     fetchMatterContacts(id),
-    fetchMatterAgingHealth(id),
+    fetchMatterAgingSummary(id),
   ])
 
   if (!matter) notFound()
@@ -249,6 +249,7 @@ export default async function MatterDetailPage({ params }: Params) {
   if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
+  const initialEstateSnapshot = await fetchMatterEstateSnapshot(intakeId)
   let clientIntakeRow: ClientIntakeShellRow | null = null
 
   if (intakeId) {
@@ -260,7 +261,6 @@ export default async function MatterDetailPage({ params }: Params) {
   const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
 
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
-  const matterNumberManual = Boolean(matterRow?.matter_number_manual)
   const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
   const reviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
   const resyncPreviewCount = intakeSnapshot && designSheet
@@ -284,13 +284,13 @@ export default async function MatterDetailPage({ params }: Params) {
       matter={matter}
       matterId={id}
       contacts={contacts}
-      agingHealth={agingHealth}
+      agingSummary={agingSummary}
       intakeId={intakeId}
       clientIntakeRow={clientIntakeRow}
       matterNumber={matterNumber}
-      matterNumberManual={matterNumberManual}
       matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
+      initialEstateSnapshot={initialEstateSnapshot}
       unreviewedUploadCounts={unreviewedUploadCounts}
       initialNotes={notes as MatterNoteRow[]}
       initialMatterLinkedNotes={mapMatterNoteRows(notes)}
