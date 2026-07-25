@@ -45,6 +45,7 @@ const WRITABLE_FIELDS = new Set([
   'conflict_check_completed', 'conflict_check_date',
   'conflict_cleared', 'engagement_signed',
   'fee_collected', 'fee_collected_date',
+  'fee_payment_status',
   // V2 — EP Document Tracking
   'ep_living_will_status', 'ep_hipaa_auth_status',
   'ep_signing_method', 'ep_witness_required', 'ep_funding_complete_date',

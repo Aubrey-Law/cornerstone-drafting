@@ -1,28 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Clock, TriangleAlert as AlertTriangle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ArrowRight, TriangleAlert as AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import type { MatterNextAction } from '@/lib/matterNextAction'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel } from '@/lib/matter/unreviewedUploads'
-import { STAGES, type MatterStage, type PipelineMatter } from '@/types/database'
+import type { PipelineMatter } from '@/types/database'
 
 interface MatterOverviewHeroProps {
   matter: PipelineMatter
-  stageSaving: boolean
-  onStageChange: (stage: MatterStage) => void
-  daysOpen: number
-  agingHealth: 'red' | 'amber' | 'green' | null
   nextAction: MatterNextAction
   unreadPortalCount: number
   unreviewedUploadCounts?: UnreviewedUploadCounts
@@ -50,18 +38,8 @@ function ContactLine({ label, name, email, phone }: { label: string; name: strin
   )
 }
 
-const AGING_BADGE: Record<'red' | 'amber' | 'green', string> = {
-  red: 'border-red-strong-border bg-red-strong-bg text-red-strong',
-  amber: 'border-amber-border bg-amber-bg text-amber',
-  green: 'border-green/40 bg-green-bg text-green',
-}
-
 export function MatterOverviewHero({
   matter,
-  stageSaving,
-  onStageChange,
-  daysOpen,
-  agingHealth,
   nextAction,
   unreadPortalCount,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
@@ -85,40 +63,6 @@ export function MatterOverviewHero({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="border-green/40 bg-green-bg text-[10px] text-green">
-              Matter Status: Hired
-            </Badge>
-            <Select
-              value={matter.stage}
-              onValueChange={v => onStageChange(v as MatterStage)}
-              disabled={stageSaving}
-            >
-              <SelectTrigger size="sm" className="h-7 w-auto gap-1.5 text-xs" aria-label="Matter stage">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STAGES.map(s => (
-                  <SelectItem key={s.key} value={s.key}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Clock className="h-3 w-3" aria-hidden />
-              {daysOpen} day{daysOpen === 1 ? '' : 's'} open
-            </span>
-            <span
-              className="text-[11px] capitalize text-muted-foreground"
-              title={matter.intake_sent_at ? `Intake sent ${new Date(matter.intake_sent_at).toLocaleString()}` : undefined}
-            >
-              Intake {matter.intake_status?.replace(/_/g, ' ') || '—'}
-            </span>
-            {agingHealth && (
-              <Badge variant="outline" className={cn('text-[10px] capitalize', AGING_BADGE[agingHealth])}>
-                Aging {agingHealth}
-              </Badge>
-            )}
             {unreadPortalCount > 0 && (
               <button type="button" onClick={onUnreadClick} className="inline-flex">
                 <Badge variant="outline" className="cursor-pointer text-[10px] hover:bg-muted">
