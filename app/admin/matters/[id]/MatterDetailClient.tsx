@@ -96,7 +96,6 @@ import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
-import { MatterOverviewSummaryCards } from './MatterOverviewSummaryCards'
 import { MatterOverviewFactsRail } from './MatterOverviewFactsRail'
 import { MatterProgressTimeline } from './MatterProgressTimeline'
 import { MatterPeopleTab } from './MatterPeopleTab'
@@ -821,7 +820,7 @@ function MatterDetailClientInner({
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-4 md:px-8">
-        <div className="w-full max-w-[1280px]">
+        <div className="w-full">
         <div className="mb-3">
           <Link
             href="/admin/matters"
@@ -917,7 +916,7 @@ function MatterDetailClientInner({
       </div>
 
       <div className="border-b border-border bg-background px-4 py-3 md:px-8">
-        <div className="w-full max-w-[1280px]">
+        <div className="w-full">
           <MatterProgressTimeline
             matter={matter}
             details={matterDetails}
@@ -947,13 +946,13 @@ function MatterDetailClientInner({
         <Tabs
           value={activeTab}
           onValueChange={v => setActiveTab(v as MatterTab)}
-          className="w-full max-w-[1280px] gap-4"
+          className="w-full gap-4"
         >
           <TabsList className="sticky top-0 z-10 w-full justify-start overflow-x-auto bg-background">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="people">People {contacts.length}</TabsTrigger>
-            <TabsTrigger value="assets">Assets {initialEstateSnapshot.assetCount}</TabsTrigger>
-            <TabsTrigger value="documents">Documents {documents.length}</TabsTrigger>
+            <TabsTrigger value="people">People</TabsTrigger>
+            <TabsTrigger value="assets">Assets</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="communications" className="gap-1.5">
               Communications
               {unreadPortalCount > 0 && (
@@ -990,13 +989,6 @@ function MatterDetailClientInner({
                   ]}
                 />
               }
-            />
-            <MatterOverviewSummaryCards
-              peopleCount={contacts.length}
-              assetCount={initialEstateSnapshot.assetCount}
-              documentCount={documents.length}
-              engineStageTask={currentEngineStageTask}
-              onNavigate={(tab, section) => setActiveTab(tab, section)}
             />
             <IntakeSyncStatusCard
               matterId={matterId}
