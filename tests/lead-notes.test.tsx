@@ -131,6 +131,15 @@ describe('lead notes', () => {
     window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, openPhone)
   })
 
+  it('keeps Log call disabled for a nonblank malformed phone number', () => {
+    render(<LeadTimelineCard leadId="l1" leadPhone="unknown" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
+
+    const logCall = screen.getByRole('button', { name: 'Log call' }) as HTMLButtonElement
+    expect(logCall.disabled).toBe(true)
+    expect(logCall.getAttribute('aria-describedby')).toBe('lead-log-call-help')
+    expect(logCall.getAttribute('title')).toBe('Add a lead phone number before logging a call')
+  })
+
   it('opens the staff softphone when Log call dispatches the shared event', async () => {
     const user = userEvent.setup()
     render(

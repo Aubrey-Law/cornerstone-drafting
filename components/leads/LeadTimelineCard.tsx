@@ -8,6 +8,7 @@ import { CallRow } from '@/components/calls/CallRow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { phoneTelHref } from '@/lib/phone'
 import {
   buildLeadTimeline,
   filterLeadTimeline,
@@ -119,6 +120,7 @@ export function LeadTimelineCard({
   const [meeting, setMeeting] = useState({ title: '', date: '', attendees: '', body: '' })
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const hasCallablePhone = phoneTelHref(leadPhone) !== null
 
   const items = useMemo(() => buildLeadTimeline({
     notes,
@@ -234,14 +236,14 @@ export function LeadTimelineCard({
             type="button"
             size="sm"
             variant="outline"
-            disabled={!leadPhone?.trim()}
-            aria-describedby={leadPhone?.trim() ? undefined : 'lead-log-call-help'}
-            title={leadPhone?.trim() ? undefined : 'Add a lead phone number before logging a call'}
+            disabled={!hasCallablePhone}
+            aria-describedby={hasCallablePhone ? undefined : 'lead-log-call-help'}
+            title={hasCallablePhone ? undefined : 'Add a lead phone number before logging a call'}
             onClick={openSoftphone}
           >
             Log call
           </Button>
-          {!leadPhone?.trim() && (
+          {!hasCallablePhone && (
             <span id="lead-log-call-help" className="sr-only">
               Add a lead phone number before logging a call
             </span>
