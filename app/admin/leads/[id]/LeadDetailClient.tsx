@@ -6,9 +6,17 @@ import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/StaffSoftphone'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { formatPhoneDisplay, phoneTelHref } from '@/lib/phone'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import type { LeadEditableField } from '@/lib/leads/details'
+import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
+import type {
+  LeadTimelineCall,
+  LeadTimelineMeeting,
+  LeadTimelineNote,
+} from '@/lib/leads/timeline'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,10 +28,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { LeadDetailsCard } from '@/components/leads/LeadDetailsCard'
+import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
-import { LeadNotesCard, type LeadMeetingNote, type LeadNote } from '@/components/leads/LeadNotesCard'
-import { LeadActivityCard } from '@/components/leads/LeadActivityCard'
-import { CallList } from '@/components/calls/CallList'
+import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import { LeadIntakeCard } from './LeadIntakeCard'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
@@ -55,10 +62,12 @@ type LeadRecord = {
   taxable_estate?: number | null
   has_minor_children?: boolean | null
   qualification_notes?: string | null
+  created_at?: string | null
   updated_at?: string | null
   intake_sent_at?: string | null
   intake_completed_at?: string | null
   intake_status?: string | null
+  lead_next_action_snoozed_until?: string | null
   user_id?: string | null
   client_user_id?: string | null
   matter_id?: string | null
@@ -79,6 +88,7 @@ type LeadActivityRow = {
   event_type?: string | null
   title: string
   detail?: string | null
+  actor_id?: string | null
   created_at: string
 }
 
@@ -86,8 +96,12 @@ type LeadDetailClientProps = {
   lead: LeadRecord
   spouse: LeadSpouse | null
   initialActivity: LeadActivityRow[]
-  initialNotes?: LeadNote[]
-  initialMeetingNotes?: LeadMeetingNote[]
+  initialNotes?: LeadTimelineNote[]
+  initialMeetingNotes?: LeadTimelineMeeting[]
+  initialCalls?: LeadTimelineCall[]
+  actorNames?: Record<string, string>
+  nextAppointmentAt?: string | null
+  lastTouchAt?: string | null
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
 }
@@ -98,12 +112,33 @@ type LeadPatchResponse = {
   matterId?: string
 }
 
+type SnoozeResponse = {
+  lead: LeadRecord
+  activity: LeadActivityRow
+}
+
+const DAY_MS = 86_400_000
+
+function calendarDaysAgo(value: string | null | undefined): number | null {
+  if (!value) return null
+  const then = new Date(value)
+  if (!Number.isFinite(then.getTime())) return null
+  const now = new Date(Date.now())
+  const nowDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  const thenDay = Date.UTC(then.getFullYear(), then.getMonth(), then.getDate())
+  return Math.max(0, Math.round((nowDay - thenDay) / DAY_MS))
+}
+
 export function LeadDetailClient({
   lead: initialLead,
   spouse: initialSpouse,
   initialActivity,
   initialNotes = [],
   initialMeetingNotes = [],
+  initialCalls = [],
+  actorNames = {},
+  nextAppointmentAt = null,
+  lastTouchAt,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
 }: LeadDetailClientProps) {
@@ -115,6 +150,7 @@ export function LeadDetailClient({
   const [error, setError] = useState<string | null>(null)
   const [activity, setActivity] = useState(initialActivity)
   const [busy, setBusy] = useState(false)
+  const [busyIntent, setBusyIntent] = useState<string | null>(null)
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
@@ -266,6 +302,57 @@ export function LeadDetailClient({
     }
   }
 
+  async function snoozeNextAction(nextActionSnoozedUntil: string) {
+    const json = await call<SnoozeResponse>(
+      `/api/admin/leads/${lead.id}`,
+      { nextActionSnoozedUntil },
+      'PATCH',
+    )
+    setLead(json.lead)
+    setActivity(current => [
+      json.activity,
+      ...current.filter(row => row.id !== json.activity.id),
+    ])
+  }
+
+  async function handleNextAction(intent: string) {
+    if (busyIntent) return
+    setBusyIntent(intent)
+    setError(null)
+    try {
+      switch (intent) {
+        case 'send_intake':
+          await sendIntake()
+          return
+        case 'fill_intake':
+        case 'review_intake':
+          setIntakeSheetOpen(true)
+          return
+        case 'import_intake':
+          setImportIntakeOpen(true)
+          return
+        case 'quote_fee':
+          setActiveField('fee')
+          return
+        case 'draft_engagement':
+          await action(`/api/admin/leads/${lead.id}/engagement-draft`)()
+          return
+        case 'call':
+          window.dispatchEvent(new Event(OPEN_STAFF_SOFTPHONE_EVENT))
+          return
+        case 'email':
+          window.location.assign(`mailto:${lead.email ?? ''}`)
+          return
+        case 'snooze':
+          await snoozeNextAction(new Date(Date.now() + 7 * DAY_MS).toISOString())
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Request failed')
+    } finally {
+      setBusyIntent(null)
+    }
+  }
+
   const [removeSpouseConfirmOpen, setRemoveSpouseConfirmOpen] = useState(false)
 
   function removeSpouse() {
@@ -279,7 +366,40 @@ export function LeadDetailClient({
   }
 
   const clientName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Lead'
-  const subtitle = [practiceAreaLabel(lead.practice_area), lead.lead_source, lead.email].filter(Boolean).join(' · ')
+  const subtitle = [
+    practiceAreaLabel(lead.practice_area),
+    lead.lead_source,
+    formatPhoneDisplay(lead.phone),
+    lead.email?.trim(),
+  ].filter(Boolean).join(' · ')
+  const statusLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
+  const leadDay = calendarDaysAgo(lead.created_at) ?? 0
+  const lastTouchDays = calendarDaysAgo(lastTouchAt)
+  const computedAction = computeNextAction({
+    leadStatus: lead.lead_status,
+    intakeSentAt: lead.intake_sent_at ?? null,
+    intakeCompletedAt: lead.intake_completed_at ?? null,
+    nextAppointmentAt,
+    feeQuoted: lead.engagement_fee_quoted,
+    hasActiveAgreement: Boolean(activeAgreement),
+    lastTouchAt: lastTouchAt ?? null,
+  })
+  const availableAction: NextAction = computedAction.key === 'follow_up'
+    ? {
+        ...computedAction,
+        actions: computedAction.actions.filter(item => {
+          if (item.intent === 'call') return phoneTelHref(lead.phone) !== null
+          if (item.intent === 'email') return Boolean(lead.email?.trim())
+          return true
+        }),
+      }
+    : computedAction
+  const snoozedUntil = Date.parse(lead.lead_next_action_snoozed_until ?? '')
+  const visibleAction = availableAction.key !== 'nothing'
+    && availableAction.actions.length > 0
+    && !(Number.isFinite(snoozedUntil) && snoozedUntil > Date.now())
+    ? availableAction
+    : null
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
@@ -292,17 +412,25 @@ export function LeadDetailClient({
         </div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight">{clientName}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-[21px] font-semibold tracking-tight">{clientName}</h1>
+              <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {statusLabel} · day {leadDay}
+              </span>
+              {lastTouchAt !== undefined && lastTouchDays !== null && (
+                <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Last touch {lastTouchDays}d ago
+                </span>
+              )}
+            </div>
             <p className="mt-0.5 text-xs text-muted-foreground">{subtitle || 'Prospective client'}</p>
           </div>
           <LeadTopActions
             busy={busy || sendingIntake || activeField !== null}
-            intakeSent={Boolean(lead.intake_sent_at)}
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
             matterId={lead.matter_id}
             actionError={error}
-            onIntake={() => void sendIntake()}
             onDraft={action(`/api/admin/leads/${lead.id}/engagement-draft`)}
             onConvert={lead.lead_status === 'hired' && lead.matter_id ? () => router.push(`/admin/matters/${lead.matter_id}`) : action(`/api/admin/leads/${lead.id}/convert`)}
             onStatusChange={status => void persistStatus(status)}
@@ -310,38 +438,47 @@ export function LeadDetailClient({
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto px-4 py-4 md:px-6">
-        <div className="mx-auto w-full max-w-6xl space-y-4">
-          <LeadIntakeCard
-            intake={lead}
-            intakeUrl={intakeUrl}
-            onOpen={() => setIntakeSheetOpen(true)}
-            onCopy={() => void copyIntakeUrl()}
-          />
-          <LeadDetailsCard
-            lead={lead}
-            spouse={spouse}
-            activeField={activeField}
-            onActiveFieldChange={changeActiveField}
-            onSaveField={saveField}
-            onRemoveSpouse={removeSpouse}
-            spouseRemovalError={spouseRemovalError}
-          />
-          <LeadNotesCard
-            leadId={lead.id}
-            initialNotes={initialNotes}
-            initialMeetingNotes={initialMeetingNotes}
-            currentUser={currentUser}
-            onActivityChange={refreshActivity}
-          />
-          <section className="space-y-2 rounded-lg border border-border bg-card p-4">
-            <div>
-              <h2 className="font-semibold">Calls</h2>
-              <p className="text-xs text-muted-foreground">Logged Twilio and Retell calls linked to this lead.</p>
+      <main className="flex-1 overflow-auto px-6 py-4">
+        <div className="space-y-4">
+          {visibleAction && (
+            <LeadNextAction
+              action={visibleAction}
+              busyIntent={busyIntent}
+              onIntent={intent => void handleNextAction(intent)}
+            />
+          )}
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.6fr_1fr]">
+            <div className="space-y-4">
+              <LeadDetailsCard
+                lead={lead}
+                spouse={spouse}
+                activeField={activeField}
+                onActiveFieldChange={changeActiveField}
+                onSaveField={saveField}
+                onRemoveSpouse={removeSpouse}
+                spouseRemovalError={spouseRemovalError}
+              />
+              <LeadIntakeCard
+                intake={lead}
+                intakeUrl={intakeUrl}
+                onOpen={() => setIntakeSheetOpen(true)}
+                onCopy={() => void copyIntakeUrl()}
+              />
             </div>
-            <CallList leadId={lead.id} />
-          </section>
-          <LeadActivityCard activity={activity} />
+            <div className="xl:sticky xl:top-4">
+              <LeadTimelineCard
+                leadId={lead.id}
+                leadPhone={lead.phone}
+                initialNotes={initialNotes}
+                initialMeetingNotes={initialMeetingNotes}
+                initialCalls={initialCalls}
+                initialActivity={activity}
+                actorNames={actorNames}
+                currentUser={currentUser}
+                onActivityChange={refreshActivity}
+              />
+            </div>
+          </div>
         </div>
       </main>
 
