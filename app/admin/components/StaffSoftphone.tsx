@@ -35,26 +35,26 @@ export function StaffSoftphone() {
 
   return (
     <>
-      {open && (
-        <div
-          ref={panelRef}
-          className="fixed bottom-20 right-20 z-50"
-          role="dialog"
-          aria-label="Softphone"
-        >
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="absolute -right-2 -top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm hover:text-foreground"
-              aria-label="Close softphone"
-            >
-              <X size={14} />
-            </button>
-            <Softphone />
-          </div>
+      <div
+        ref={panelRef}
+        className={cn('fixed bottom-20 right-20 z-50', !open && 'hidden')}
+        role="dialog"
+        aria-label="Softphone"
+        aria-hidden={!open}
+      >
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute -right-2 -top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm hover:text-foreground"
+            aria-label="Close softphone"
+            tabIndex={open ? 0 : -1}
+          >
+            <X size={14} />
+          </button>
+          <Softphone />
         </div>
-      )}
+      </div>
 
       <button
         id="staff-softphone-fab"

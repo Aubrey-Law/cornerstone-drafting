@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Device, Call as TwilioCall } from '@twilio/voice-sdk'
 import { TelnyxRTC, type Call as TelnyxCall } from '@telnyx/webrtc'
+import { Mic, MicOff, Minus, Moon, PhoneOff } from 'lucide-react'
 
 /**
  * Browser-based dialer for Cornerstone staff. Authenticates via /api/token,
@@ -56,6 +57,12 @@ export default function Softphone() {
   const [status, setStatus] = useState<SoftphoneStatus>(STATUS.CONNECTING)
   const [number, setNumber] = useState('')
   const [muted, setMuted] = useState(false)
+  const [dnd, setDnd] = useState(false)
+  const [minimized, setMinimized] = useState(false)
+  const [wrapUpOpen, setWrapUpOpen] = useState(false)
+  const [wrapUpNotes, setWrapUpNotes] = useState('')
+  const [wrapUpOutcome, setWrapUpOutcome] = useState('Reached')
+  const [lastDuration, setLastDuration] = useState(0)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [incomingFrom, setIncomingFrom] = useState('')
@@ -66,6 +73,8 @@ export default function Softphone() {
   const callerNumberRef = useRef<string | null>(null)
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const secondsRef = useRef(0)
+  const connectedRef = useRef(false)
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -74,11 +83,23 @@ export default function Softphone() {
 
   const startTimer = useCallback(() => {
     stopTimer()
-    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
+    secondsRef.current = 0
+    setSeconds(0)
+    timerRef.current = setInterval(() => {
+      secondsRef.current += 1
+      setSeconds(secondsRef.current)
+    }, 1000)
   }, [stopTimer])
 
   const cleanupCall = useCallback(() => {
     stopTimer()
+    if (connectedRef.current) {
+      setLastDuration(secondsRef.current)
+      setWrapUpOpen(true)
+      setMinimized(false)
+    }
+    connectedRef.current = false
+    secondsRef.current = 0
     setSeconds(0)
     setMuted(false)
     setIncomingFrom('')
@@ -89,6 +110,8 @@ export default function Softphone() {
   const wireTwilioCall = useCallback(
     (call: TwilioCall) => {
       call.on('accept', () => {
+        connectedRef.current = true
+        setWrapUpOpen(false)
         setStatus(STATUS.ON_CALL)
         setMuted(false)
         startTimer()
@@ -138,6 +161,8 @@ export default function Softphone() {
               setIncomingFrom(call.options?.remoteCallerNumber || call.options?.callerNumber || 'Unknown caller')
               setStatus(STATUS.INCOMING)
             } else if (call.state === 'active') {
+              connectedRef.current = true
+              setWrapUpOpen(false)
               setStatus(STATUS.ON_CALL)
               setMuted(false)
               startTimer()
@@ -207,7 +232,7 @@ export default function Softphone() {
 
   const placeCall = useCallback(async () => {
     const device = deviceRef.current
-    if (!device || !number.trim()) return
+    if (!device || dnd || number.replace(/\D/g, '').length < 10) return
     try {
       setStatus(STATUS.DIALING)
       if (providerRef.current === 'telnyx' && device instanceof TelnyxRTC) {
@@ -227,7 +252,7 @@ export default function Softphone() {
       setError(message)
       cleanupCall()
     }
-  }, [number, wireTwilioCall, cleanupCall])
+  }, [dnd, number, wireTwilioCall, cleanupCall])
 
   const acceptCall = useCallback(() => {
     const call = callRef.current
@@ -265,7 +290,7 @@ export default function Softphone() {
 
   const pressKey = useCallback(
     (digit: string) => {
-      if (status === STATUS.ON_CALL) {
+      if (status === STATUS.ON_CALL || status === STATUS.DIALING) {
         const call = callRef.current
         if (providerRef.current === 'telnyx') (call as TelnyxCall | null)?.dtmf(digit)
         else (call as TwilioCall | null)?.sendDigits(digit)
@@ -285,13 +310,14 @@ export default function Softphone() {
       if (status !== STATUS.IDLE && status !== STATUS.DIALING) return
       if (/^[0-9*#]$/.test(e.key)) pressKey(e.key)
       else if (e.key === 'Backspace') backspace()
-      else if (e.key === 'Enter') void placeCall()
+      else if (e.key === 'Enter' && !dnd) void placeCall()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [status, pressKey, backspace, placeCall])
+  }, [dnd, status, pressKey, backspace, placeCall])
 
   const inCall = status === STATUS.ON_CALL || status === STATUS.DIALING
+  const canDial = status === STATUS.IDLE && !dnd && number.replace(/\D/g, '').length >= 10
   const statusLabel: Record<SoftphoneStatus, string> = {
     [STATUS.CONNECTING]: 'Connecting…',
     [STATUS.IDLE]: 'Ready',
@@ -299,6 +325,16 @@ export default function Softphone() {
     [STATUS.DIALING]: 'Calling…',
     [STATUS.ON_CALL]: formatDuration(seconds),
     [STATUS.OFFLINE]: 'Offline',
+  }
+
+  if (minimized && inCall) {
+    return (
+      <button type="button" className="sp-bubble" onClick={() => setMinimized(false)} aria-label="Open active call">
+        <style>{styles}</style>
+        <span className="sp-bubble__dot" aria-hidden />
+        <span>{statusLabel[status]}</span>
+      </button>
+    )
   }
 
   return (
@@ -310,6 +346,11 @@ export default function Softphone() {
         <span className={`sp__dot sp__dot--${status}`} aria-hidden />
         <span className="sp__status">{statusLabel[status]}</span>
         <span className="sp__brand">Cornerstone</span>
+        {inCall && (
+          <button type="button" className="sp__icon" onClick={() => setMinimized(true)} aria-label="Minimize active call">
+            <Minus size={15} />
+          </button>
+        )}
       </header>
 
       {status === STATUS.INCOMING && (
@@ -373,23 +414,63 @@ export default function Softphone() {
               disabled={status !== STATUS.ON_CALL}
               aria-pressed={muted}
             >
-              {muted ? 'Unmute' : 'Mute'}
+              {muted ? <MicOff size={16} /> : <Mic size={16} />}
+              <span>{muted ? 'Unmute' : 'Mute'}</span>
             </button>
             <button type="button" className="sp__round sp__round--end" onClick={hangUp}>
-              End
+              <PhoneOff size={16} />
+              <span>End</span>
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            className="sp__round sp__round--call"
-            onClick={() => void placeCall()}
-            disabled={status !== STATUS.IDLE || !number.trim()}
-          >
-            Call
-          </button>
+          <>
+            <button
+              type="button"
+              className={`sp__round sp__round--dnd ${dnd ? 'sp__round--on' : ''}`}
+              onClick={() => setDnd((prev) => !prev)}
+              aria-pressed={dnd}
+              aria-label={dnd ? 'Disable do not disturb' : 'Enable do not disturb'}
+            >
+              <Moon size={16} />
+              <span>DND</span>
+            </button>
+            <button
+              type="button"
+              className="sp__round sp__round--call"
+              onClick={() => void placeCall()}
+              disabled={!canDial}
+            >
+              Call
+            </button>
+          </>
         )}
       </div>
+
+      {wrapUpOpen && !inCall && (
+        <section className="sp__wrap" aria-label="Call wrap-up">
+          <div className="sp__wrap-head">
+            <div>
+              <h2>Call wrap-up</h2>
+              <p>{formatDuration(lastDuration)} call</p>
+            </div>
+            <button type="button" className="sp__wrap-close" onClick={() => setWrapUpOpen(false)}>
+              Done
+            </button>
+          </div>
+          <label className="sp__field">
+            <span>Outcome</span>
+            <select value={wrapUpOutcome} onChange={(e) => setWrapUpOutcome(e.target.value)}>
+              <option>Reached</option>
+              <option>Voicemail</option>
+              <option>No answer</option>
+            </select>
+          </label>
+          <label className="sp__field">
+            <span>Call notes</span>
+            <textarea value={wrapUpNotes} onChange={(e) => setWrapUpNotes(e.target.value)} rows={3} />
+          </label>
+        </section>
+      )}
 
       {error && (
         <p className="sp__error" role="alert" onClick={() => setError(null)}>
@@ -432,6 +513,12 @@ const styles = `
 @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
 .sp__status { font-variant-numeric: tabular-nums; font-weight: 600; }
 .sp__brand { margin-left: auto; color: var(--navy); font-weight: 700; letter-spacing: .2px; }
+.sp__icon {
+  width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #fff; color: var(--muted); cursor: pointer;
+}
+.sp__icon:hover { color: var(--navy); background: #f3f6fb; }
 
 .sp__readout {
   display: flex; align-items: center; gap: 6px;
@@ -463,6 +550,7 @@ const styles = `
 .sp__actions { display: flex; justify-content: center; gap: 14px; margin-top: 16px; }
 .sp__round {
   min-width: 110px; height: 48px; border: 0; border-radius: 24px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   font-size: 15px; font-weight: 600; color: #fff; cursor: pointer;
   transition: filter .12s, transform .06s;
 }
@@ -471,8 +559,42 @@ const styles = `
 .sp__round--call { background: var(--teal); }
 .sp__round--end { background: #c0392b; }
 .sp__round--on { background: var(--navy); }
+.sp__round--dnd { background: var(--muted); }
 .sp__round:not(.sp__round--call):not(.sp__round--end):not(.sp__round--on) { background: var(--muted); }
 .sp__round:hover:not(:disabled) { filter: brightness(1.06); }
+
+.sp__wrap {
+  margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line);
+  display: grid; gap: 10px;
+}
+.sp__wrap-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.sp__wrap h2 { margin: 0; font-size: 15px; color: var(--ink); }
+.sp__wrap p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.sp__wrap-close {
+  border: 1px solid var(--line); background: #fff; color: var(--navy); border-radius: 8px;
+  height: 30px; padding: 0 10px; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.sp__field { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: var(--ink); }
+.sp__field select,
+.sp__field textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  color: var(--ink); font: inherit; font-weight: 500; padding: 8px 9px; outline: none;
+}
+.sp__field textarea { resize: vertical; min-height: 74px; }
+.sp__field select:focus,
+.sp__field textarea:focus { border-color: var(--navy); box-shadow: 0 0 0 2px rgba(27,58,107,.12); }
+
+.sp-bubble {
+  --navy: #1B3A6B;
+  --teal: #0F6E56;
+  --line: #e4e8f0;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 44px; min-width: 118px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 22px; background: #fff;
+  color: var(--navy); font: 700 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 12px 32px -16px rgba(27,58,107,.35); cursor: pointer;
+}
+.sp-bubble__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); animation: pulse 1.6s infinite; }
 
 .sp__incoming {
   position: absolute; inset: 0; z-index: 5;
