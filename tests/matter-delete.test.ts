@@ -30,9 +30,13 @@ describe('matter delete', () => {
     expect(route).toContain('deleteMatter')
   })
 
-  it('matters list supports column filters and bulk delete', () => {
+  it('matters list supports stage-group filters and bulk delete', () => {
     const client = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/MattersClient.tsx'), 'utf8')
-    expect(client).toContain('Matter Number')
+    // The matter number moved inline next to the client name; the stage
+    // dropdown became a stage-group pill bar.
+    expect(client).toContain('m.matter_number')
+    expect(client).toContain('stageGroup')
+    expect(client).toContain('GROUP_LABELS')
     expect(client).toContain('/api/admin/matters/bulk-delete')
     expect(client).toContain('Delete selected')
   })

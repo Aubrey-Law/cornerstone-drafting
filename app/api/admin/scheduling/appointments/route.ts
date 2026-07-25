@@ -55,6 +55,22 @@ export async function GET(req: NextRequest) {
   const types = await listAppointmentTypes()
   const typeById = new Map(types.map(t => [t.id, t]))
 
+  // Matter numbers for the chip shown on calendar events.
+  const rows = (data ?? []) as Partial<AppointmentRow>[]
+  const linkedMatterIds = Array.from(
+    new Set(rows.map(row => row.linked_matter_id).filter((id): id is string => Boolean(id))),
+  )
+  const matterNumberById = new Map<string, string>()
+  if (linkedMatterIds.length > 0) {
+    const { data: linkedMatters } = await getAdminClient()
+      .from('matters')
+      .select('id, matter_number')
+      .in('id', linkedMatterIds)
+    for (const row of linkedMatters ?? []) {
+      if (row.matter_number) matterNumberById.set(row.id, row.matter_number)
+    }
+  }
+
   return NextResponse.json({
     types: types.map(t => ({
       id: t.id,
@@ -64,7 +80,7 @@ export async function GET(req: NextRequest) {
       locationTypes: t.locationTypes,
       active: t.active,
     })),
-    appointments: ((data ?? []) as Partial<AppointmentRow>[]).map(row => ({
+    appointments: rows.map(row => ({
       id: row.id,
       startTime: row.start_time,
       endTime: row.end_time,
@@ -78,6 +94,9 @@ export async function GET(req: NextRequest) {
       notes: row.notes,
       linkedLeadId: row.linked_lead_id,
       linkedMatterId: row.linked_matter_id,
+      linkedMatterNumber: row.linked_matter_id
+        ? matterNumberById.get(row.linked_matter_id) ?? null
+        : null,
       source: row.source,
       typeLabel: typeById.get(row.appointment_type_id ?? '')?.label ?? 'Unknown',
       // Null after a successful booking means the Outlook event failed to

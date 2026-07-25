@@ -4,13 +4,13 @@ import { useMemo, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Briefcase, Database, Plus, Search, Trash2, X } from 'lucide-react'
+import { Briefcase, ChevronRight, Database, Plus, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
-import { STAGES, stageLabel } from '@/types/database'
+import { GROUP_COLORS, stageInfo, stageLabel, type StageGroup } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -49,18 +49,63 @@ interface MattersClientProps {
 
 type MatterFilters = {
   practice: string
-  stage: string
-  intake: string
+  stageGroup: StageGroup | 'all'
 }
 
 const EMPTY_FILTERS: MatterFilters = {
   practice: 'all',
-  stage: 'all',
-  intake: 'all',
+  stageGroup: 'all',
 }
+
+const GROUP_LABELS: Record<StageGroup, string> = {
+  early: 'Intake',
+  active: 'Drafting',
+  work: 'Client work',
+  done: 'Signing',
+  closed: 'Closed',
+}
+
+const GROUP_ORDER: StageGroup[] = ['early', 'active', 'work', 'done', 'closed']
+
+/** Days since a matter last moved, for the Last activity and quiet columns. */
+const QUIET_DAYS = 10
 
 function intakeStatusLabel(status: string | null | undefined) {
   return status?.replace(/_/g, ' ') || '—'
+}
+
+const INTAKE_BADGE_CLASS: Record<string, string> = {
+  submitted: 'border-green/40 bg-green-bg text-green',
+  in_progress: 'border-blue-strong-border bg-blue-bg text-blue',
+}
+
+/**
+ * `v_matter_pipeline` has no updated-at column, so last activity is the newest
+ * timestamp the view does carry.
+ */
+function lastActivityAt(m: MatterListRow): number | null {
+  const stamps = [
+    m.documents_executed_at,
+    m.drafts_sent_at,
+    m.intake_submitted_at,
+    m.matter_created,
+  ]
+    .filter((s): s is string => Boolean(s))
+    .map(s => Date.parse(s))
+    .filter(Number.isFinite)
+  return stamps.length ? Math.max(...stamps) : null
+}
+
+function daysSince(ms: number): number {
+  return Math.max(0, Math.floor((Date.now() - ms) / 86_400_000))
+}
+
+function formatLastActivity(ms: number | null): string {
+  if (ms === null) return '—'
+  const days = daysSince(ms)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  return `${days}d ago`
 }
 
 export default function MattersClient(props: MattersClientProps) {
@@ -98,7 +143,6 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const [clientEmail, setClientEmail] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [planType, setPlanType] = useState<PracticeAreaCode>('EP')
-  const [deleteTarget, setDeleteTarget] = useState<MatterListRow | null>(null)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
@@ -121,21 +165,14 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
     }
   }, [router, searchParams])
 
-  const intakeStatuses = useMemo(() => {
-    const set = new Set<string>()
-    for (const matter of matters) {
-      if (matter.intake_status) set.add(matter.intake_status)
-    }
-    return Array.from(set).sort()
+  const groupCounts = useMemo(() => {
+    const counts: Record<StageGroup, number> = { early: 0, active: 0, work: 0, done: 0, closed: 0 }
+    for (const matter of matters) counts[stageInfo(matter.stage).group] += 1
+    return counts
   }, [matters])
 
   const hasActiveFilters = useMemo(() => {
-    return Boolean(
-      search.trim()
-      || filters.practice !== 'all'
-      || filters.stage !== 'all'
-      || filters.intake !== 'all',
-    )
+    return Boolean(search.trim() || filters.practice !== 'all' || filters.stageGroup !== 'all')
   }, [filters, search])
 
   const filtered = useMemo(() => {
@@ -158,8 +195,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
         if (!hay.includes(q)) return false
       }
       if (filters.practice !== 'all' && m.practice_area !== filters.practice) return false
-      if (filters.stage !== 'all' && m.stage !== filters.stage) return false
-      if (filters.intake !== 'all' && (m.intake_status ?? '') !== filters.intake) return false
+      if (filters.stageGroup !== 'all' && stageInfo(m.stage).group !== filters.stageGroup) return false
       return true
     })
   }, [filters, matters, search])
@@ -265,31 +301,6 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
     }
   }
 
-  const handleDelete = async () => {
-    if (!token || !deleteTarget) return
-    setDeleting(true)
-    try {
-      const res = await fetch(`/api/admin/matters/${deleteTarget.matter_id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not delete matter')
-      toast.success(`Deleted matter for ${deleteTarget.client_name || 'client'}`)
-      setDeleteTarget(null)
-      setSelected(current => {
-        const next = { ...current }
-        delete next[deleteTarget.matter_id]
-        return next
-      })
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not delete matter')
-    } finally {
-      setDeleting(false)
-    }
-  }
-
   const handleBulkDelete = async () => {
     if (!token || selectedIds.length === 0) return
     setDeleting(true)
@@ -370,57 +381,59 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            Practice
-            <select
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => updateFilter('stageGroup', 'all')}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              filters.stageGroup === 'all'
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            All · {matters.length}
+          </button>
+          {GROUP_ORDER.map(group => (
+            <button
+              key={group}
+              type="button"
+              onClick={() => updateFilter('stageGroup', filters.stageGroup === group ? 'all' : group)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                filters.stageGroup === group
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: GROUP_COLORS[group].dot }}
+              />
+              {GROUP_LABELS[group]} · {groupCounts[group]}
+            </button>
+          ))}
+          <div className="ml-auto flex items-center gap-2">
+            <Select
               value={filters.practice}
-              onChange={e => updateFilter('practice', e.target.value)}
-              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              onValueChange={value => updateFilter('practice', value)}
             >
-              <option value="all">All</option>
-              {PRACTICE_AREA_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            Stage
-            <select
-              value={filters.stage}
-              onChange={e => updateFilter('stage', e.target.value)}
-              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-            >
-              <option value="all">All</option>
-              {STAGES.map(stage => (
-                <option key={stage.key} value={stage.key}>
-                  {stage.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            Intake
-            <select
-              value={filters.intake}
-              onChange={e => updateFilter('intake', e.target.value)}
-              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-            >
-              <option value="all">All</option>
-              {intakeStatuses.map(status => (
-                <option key={status} value={status}>
-                  {intakeStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {hasActiveFilters && (
-            <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          )}
+              <SelectTrigger size="sm" className="w-40" aria-label="Filter by practice area">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Practice · All</SelectItem>
+                {PRACTICE_AREA_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasActiveFilters && (
+              <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </div>
         </div>
         {selectedIds.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
@@ -436,6 +449,9 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete selected
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelected({})}>
+              Clear selection
             </Button>
           </div>
         )}
@@ -455,7 +471,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
           </div>
         ) : (
           <div className="rounded-lg border border-border bg-card">
-            <Table className="min-w-[72rem]">
+            <Table className="min-w-[56rem]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
@@ -465,83 +481,105 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                       aria-label="Select all visible matters"
                     />
                   </TableHead>
-                  <TableHead>Matter Number</TableHead>
-                  <TableHead>Client Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead>Practice Area</TableHead>
                   <TableHead>Stage</TableHead>
                   <TableHead>Intake</TableHead>
-                  <TableHead className="w-10" aria-label="Actions" />
+                  <TableHead>Last activity</TableHead>
+                  <TableHead>Attention</TableHead>
+                  <TableHead className="w-10" aria-label="Open matter" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(m => (
-                  <TableRow key={m.matter_id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={Boolean(selected[m.matter_id])}
-                        onCheckedChange={checked => toggleSelected(m.matter_id, checked === true)}
-                        aria-label={`Select matter for ${m.client_name || 'client'}`}
-                      />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {m.matter_number || '—'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
+                {filtered.map(m => {
+                  const group = stageInfo(m.stage).group
+                  const groupColor = GROUP_COLORS[group]
+                  const unreviewed = mergeUnreviewedCounts(
+                    m.unreviewed_intake_upload_count ?? 0,
+                    m.unreviewed_portal_upload_count ?? 0,
+                  )
+                  const activity = lastActivityAt(m)
+                  const quietDays = activity === null ? null : daysSince(activity)
+                  return (
+                    <TableRow key={m.matter_id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={Boolean(selected[m.matter_id])}
+                          onCheckedChange={checked => toggleSelected(m.matter_id, checked === true)}
+                          aria-label={`Select matter for ${m.client_name || 'client'}`}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <Link
                           href={`/admin/matters/${m.matter_id}`}
                           className="font-medium text-foreground hover:underline"
                         >
                           {m.client_name || m.matter_name || 'Untitled'}
                         </Link>
-                        {(m.unreviewed_upload_count ?? 0) > 0 && (
-                          <Badge
-                            variant="outline"
-                            className="border-amber-border bg-amber-bg text-[10px] text-amber"
-                            title={formatUnreviewedUploadDetail(
-                              mergeUnreviewedCounts(
-                                m.unreviewed_intake_upload_count ?? 0,
-                                m.unreviewed_portal_upload_count ?? 0,
-                              ),
-                            )}
-                          >
-                            {formatUnreviewedUploadLabel(
-                              mergeUnreviewedCounts(
-                                m.unreviewed_intake_upload_count ?? 0,
-                                m.unreviewed_portal_upload_count ?? 0,
-                              ),
-                            )}
-                          </Badge>
+                        {m.matter_number && (
+                          <span className="ml-1.5 text-[11px] text-muted-foreground">
+                            {m.matter_number}
+                          </span>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {m.client_email || '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {m.client_phone || '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {practiceAreaLabel(m.practice_area)}
-                    </TableCell>
-                    <TableCell>{stageLabel(m.stage)}</TableCell>
-                    <TableCell className="capitalize text-muted-foreground">
-                      {intakeStatusLabel(m.intake_status)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        type="button"
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                        aria-label={`Delete matter for ${m.client_name || 'client'}`}
-                        onClick={() => setDeleteTarget(m)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {practiceAreaLabel(m.practice_area)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium"
+                          style={{ background: groupColor.bg, color: groupColor.text }}
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ background: groupColor.dot }}
+                          />
+                          {stageLabel(m.stage)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] capitalize ${
+                            INTAKE_BADGE_CLASS[m.intake_status ?? ''] ?? 'text-muted-foreground'
+                          }`}
+                        >
+                          {intakeStatusLabel(m.intake_status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatLastActivity(activity)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {unreviewed.total > 0 && (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-border bg-amber-bg text-[10px] text-amber"
+                              title={formatUnreviewedUploadDetail(unreviewed)}
+                            >
+                              {formatUnreviewedUploadLabel(unreviewed)}
+                            </Badge>
+                          )}
+                          {quietDays !== null && quietDays > QUIET_DAYS && (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                              quiet {quietDays}d
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link
+                          href={`/admin/matters/${m.matter_id}`}
+                          className="inline-flex rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          aria-label={`Open matter for ${m.client_name || 'client'}`}
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -661,29 +699,6 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
             </Button>
               </>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleteTarget !== null} onOpenChange={open => !open && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete matter?</DialogTitle>
-            <DialogDescription>
-              This permanently deletes{' '}
-              <span className="font-medium text-foreground">
-                {deleteTarget?.client_name || deleteTarget?.matter_name || 'this matter'}
-              </span>
-              , including intake, documents, design sheet, and messages. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={() => void handleDelete()} disabled={deleting}>
-              {deleting ? 'Deleting…' : 'Delete matter'}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

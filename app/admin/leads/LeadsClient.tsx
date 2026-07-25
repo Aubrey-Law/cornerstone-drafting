@@ -3,15 +3,20 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
+import { MoreVertical, Plus, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { normalizePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
 import { clientNameMatterSlug } from '@/lib/matterNumber'
-import { formatDate } from '@/lib/utils'
 import { SendEngagementDialog } from './SendEngagementDialog'
 import LawmaticsImportDialog from '../matters/LawmaticsImportDialog'
-import { LeadPipelineInsights } from '@/components/leads/LeadPipelineInsights'
+import {
+  hasPendingAgreement,
+  isOpenLead,
+  LeadPipelineInsights,
+  needsAttention,
+  type LeadCardFilter,
+} from '@/components/leads/LeadPipelineInsights'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,9 +27,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -93,17 +104,6 @@ function matchesFilter(lead: LeadRow, filter: LeadFilter): boolean {
   return lead.lead_status === filter
 }
 
-function LeadStatusBadge({ lead }: { lead: LeadRow }) {
-  const status = lead.lead_status ?? 'lead'
-  if (status === 'hired') {
-    return <Badge variant="outline" className="border-green/40 bg-green-bg text-[10px] text-green">Hired</Badge>
-  }
-  if (status === 'lost') {
-    return <Badge variant="outline" className="text-[10px] text-muted-foreground">Lost</Badge>
-  }
-  return <Badge variant="outline" className="text-[10px]">Lead</Badge>
-}
-
 function leadName(lead: LeadRow): string {
   return (
     lead.full_name?.trim() ||
@@ -121,27 +121,96 @@ function provisionalNumber(lead: LeadRow): string {
   return `${year}-${code}-${slug}`
 }
 
-function IntakeStatusBadge({ lead }: { lead: LeadRow }) {
-  if (lead.intake_completed_at || lead.status === 'completed') {
-    return <Badge variant="outline" className="border-green/40 bg-green-bg text-[10px] text-green">Intake done</Badge>
-  }
-  if (lead.intake_sent_at) {
-    return <Badge variant="outline" className="text-[10px]">Intake sent</Badge>
-  }
-  return <Badge variant="outline" className="text-[10px] text-muted-foreground">Intake not sent</Badge>
+function intakeDone(lead: LeadRow): boolean {
+  return Boolean(lead.intake_completed_at) || lead.status === 'completed'
 }
 
-function EngagementStatusBadge({ lead }: { lead: LeadRow }) {
-  if (lead.engagement_status === 'signed') {
-    return <Badge variant="outline" className="border-green/40 bg-green-bg text-[10px] text-green">Signed</Badge>
+type NextStep =
+  | { key: 'send_intake'; label: string; primary: true }
+  | { key: 'remind_intake'; label: string; primary: false }
+  | { key: 'send_engagement'; label: string; primary: true }
+  | { key: 'resend_engagement'; label: string; primary: false }
+  | { key: 'view_matter'; label: string; primary: false }
+  | { key: 'hire_matter'; label: string; primary: false }
+
+/** The single action a lead is waiting on, derived from its intake/engagement state. */
+function nextStep(lead: LeadRow, esignEnabled: boolean): NextStep {
+  if (lead.lead_status === 'hired' && lead.matter_id) {
+    return { key: 'view_matter', label: 'View matter', primary: false }
   }
-  if (lead.engagement_status === 'declined') {
-    return <Badge variant="outline" className="border-amber-border bg-amber-bg text-[10px] text-amber">Declined</Badge>
+  if (!lead.intake_sent_at && !intakeDone(lead)) {
+    return { key: 'send_intake', label: 'Send intake', primary: true }
   }
+  if (!intakeDone(lead)) {
+    return { key: 'remind_intake', label: 'Remind client', primary: false }
+  }
+  if (esignEnabled && lead.engagement_status !== 'signed') {
+    if (!lead.engagement_sent_at) {
+      return { key: 'send_engagement', label: 'Send engagement', primary: true }
+    }
+    return { key: 'resend_engagement', label: 'Resend engagement', primary: false }
+  }
+  return { key: 'hire_matter', label: 'Hire matter', primary: false }
+}
+
+type StepState = 'done' | 'pending' | 'todo'
+
+/** Whole days since an ISO timestamp, for the "sent 6d" sub-label. */
+function daysSince(iso: string): number {
+  return Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 86_400_000))
+}
+
+function intakeStep(lead: LeadRow): { state: StepState; label: string } {
+  if (intakeDone(lead)) return { state: 'done', label: 'Intake' }
+  if (lead.intake_sent_at) {
+    return { state: 'pending', label: `Intake · sent ${daysSince(lead.intake_sent_at)}d` }
+  }
+  return { state: 'todo', label: 'Intake' }
+}
+
+function engagementStep(lead: LeadRow): { state: StepState; label: string } {
+  if (lead.engagement_status === 'signed') return { state: 'done', label: 'Engagement' }
+  if (lead.engagement_status === 'declined') return { state: 'pending', label: 'Engagement · declined' }
   if (lead.engagement_sent_at) {
-    return <Badge variant="outline" className="text-[10px]">Sent {formatDate(lead.engagement_sent_at)}</Badge>
+    return { state: 'pending', label: `Engagement · sent ${daysSince(lead.engagement_sent_at)}d` }
   }
-  return <Badge variant="outline" className="text-[10px] text-muted-foreground">Not sent</Badge>
+  return { state: 'todo', label: 'Engagement' }
+}
+
+const STEP_DOT: Record<StepState, string> = {
+  done: 'bg-green border-green',
+  pending: 'bg-amber-orange border-amber-orange',
+  todo: 'border-border-strong bg-transparent',
+}
+
+const STEP_TEXT: Record<StepState, string> = {
+  done: 'text-green',
+  pending: 'text-amber',
+  todo: 'text-muted-foreground',
+}
+
+function Step({ state, label }: { state: StepState; label: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 ${STEP_TEXT[state]}`}>
+      <span className={`h-2 w-2 rounded-full border-[1.5px] ${STEP_DOT[state]}`} />
+      {label}
+    </span>
+  )
+}
+
+function LeadProgress({ lead }: { lead: LeadRow }) {
+  const intake = intakeStep(lead)
+  const engagement = engagementStep(lead)
+  const hired: StepState = lead.lead_status === 'hired' ? 'done' : 'todo'
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px]">
+      <Step state={intake.state} label={intake.label} />
+      <span className="h-px w-3 bg-border" />
+      <Step state={engagement.state} label={engagement.label} />
+      <span className="h-px w-3 bg-border" />
+      <Step state={hired} label="Hired" />
+    </span>
+  )
 }
 
 export function LeadsClient({
@@ -159,6 +228,7 @@ export function LeadsClient({
   const [busyLeadId, setBusyLeadId] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
   const [filter, setFilter] = useState<LeadFilter>('open')
+  const [cardFilter, setCardFilter] = useState<LeadCardFilter | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
@@ -168,9 +238,26 @@ export function LeadsClient({
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
 
   const filteredLeads = useMemo(
-    () => initialLeads.filter(l => matchesFilter(l, filter)),
-    [initialLeads, filter],
+    () =>
+      initialLeads.filter(l => {
+        if (!matchesFilter(l, filter)) return false
+        if (cardFilter === 'attention') return isOpenLead(l) && needsAttention(l)
+        if (cardFilter === 'agreements') return isOpenLead(l) && hasPendingAgreement(l)
+        return true
+      }),
+    [initialLeads, filter, cardFilter],
   )
+
+  /** Cards narrow the current tab; "Open leads" just resets to the Open tab. */
+  const toggleCardFilter = (next: LeadCardFilter) => {
+    if (next === 'open') {
+      setCardFilter(null)
+      setFilter('open')
+      return
+    }
+    setCardFilter(current => (current === next ? null : next))
+    setFilter('open')
+  }
   const counts = useMemo(() => {
     const c: Record<LeadFilter, number> = { open: 0, lost: 0, all: initialLeads.length }
     for (const l of initialLeads) {
@@ -370,9 +457,49 @@ export function LeadsClient({
 
   return (
     <div className="space-y-3">
-      <LeadPipelineInsights leads={initialLeads} />
-      <div className="flex items-center justify-between gap-2">
-        {selectedIds.length > 0 ? (
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Leads</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Prospective matters before hiring — send the intake and engagement agreement from here.
+            Signing promotes the existing opportunity to a hired matter.
+          </p>
+        </div>
+        <div className="flex flex-none gap-2">
+          <Button size="sm" variant="outline" onClick={() => setLawmaticsOpen(true)}>
+            Import from Lawmatics
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Create lead matter
+          </Button>
+        </div>
+      </div>
+
+      <LeadPipelineInsights
+        leads={initialLeads}
+        activeFilter={cardFilter}
+        onToggleFilter={toggleCardFilter}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {FILTER_TABS.map(tab => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setFilter(tab.value)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                filter === tab.value
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {tab.label} ({counts[tab.value]})
+            </button>
+          ))}
+        </div>
+        {selectedIds.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{selectedIds.length} selected</span>
             <Button
@@ -385,31 +512,11 @@ export function LeadsClient({
               <Trash2 className="h-3.5 w-3.5" />
               Delete selected
             </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelected({})}>
+              Clear
+            </Button>
           </div>
-        ) : (
-          <span />
         )}
-        <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setLawmaticsOpen(true)}>Import from Lawmatics</Button><Button size="sm" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Create lead matter
-        </Button></div>
-      </div>
-
-      <div className="flex flex-wrap gap-1">
-        {FILTER_TABS.map(tab => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setFilter(tab.value)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              filter === tab.value
-                ? 'bg-accent text-accent-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            {tab.label} ({counts[tab.value]})
-          </button>
-        ))}
       </div>
 
       {filteredLeads.length === 0 ? (
@@ -434,18 +541,33 @@ export function LeadsClient({
                   />
                 </TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Matter Status</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Practice</TableHead>
-                <TableHead>Fee quoted</TableHead>
-                <TableHead>Intake</TableHead>
-                <TableHead>Engagement</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>Fee</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead className="text-right">Next step</TableHead>
+                <TableHead className="w-10" aria-label="More actions" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredLeads.map(lead => {
                 const busy = busyLeadId === lead.id
+                const step = nextStep(lead, esignEnabled)
+                const hired = lead.lead_status === 'hired'
+                const runStep = () => {
+                  switch (step.key) {
+                    case 'send_intake':
+                    case 'remind_intake':
+                      void handleSendIntake(lead)
+                      return
+                    case 'send_engagement':
+                    case 'resend_engagement':
+                      setEngagementLead(lead)
+                      return
+                    default:
+                      setConvertTarget(lead)
+                  }
+                }
                 return (
                   <TableRow key={lead.id}>
                     <TableCell>
@@ -461,7 +583,6 @@ export function LeadsClient({
                         {provisionalNumber(lead)}
                       </div>
                     </TableCell>
-                    <TableCell><LeadStatusBadge lead={lead} /></TableCell>
                     <TableCell className="text-muted-foreground">{lead.email}</TableCell>
                     <TableCell>{practiceAreaLabel(lead.practice_area)}</TableCell>
                     <TableCell>
@@ -469,70 +590,67 @@ export function LeadsClient({
                         ? `$${lead.engagement_fee_quoted.toLocaleString('en-US')}`
                         : '—'}
                     </TableCell>
-                    <TableCell><IntakeStatusBadge lead={lead} /></TableCell>
-                    <TableCell><EngagementStatusBadge lead={lead} /></TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        {lead.lead_status === 'hired' && lead.matter_id ? (
-                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" asChild>
-                            <Link href={`/admin/matters/${lead.matter_id}`}>View matter</Link>
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs"
-                              disabled={busy}
-                              onClick={() => void handleSendIntake(lead)}
-                            >
-                              {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
-                            </Button>
-                            {esignEnabled && lead.engagement_status !== 'signed' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2 text-xs"
-                                disabled={busy}
-                                onClick={() => setEngagementLead(lead)}
-                              >
-                                {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2 text-xs"
-                              disabled={busy}
-                              onClick={() => setConvertTarget(lead)}
-                            >
-                              Hire matter
-                            </Button>
-                          </>
-                        )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          disabled={busy}
-                          aria-label={`Edit ${leadName(lead)}`}
-                          onClick={() => openEdit(lead)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
+                    <TableCell><LeadProgress lead={lead} /></TableCell>
+                    <TableCell className="text-right">
+                      {step.key === 'view_matter' && lead.matter_id ? (
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" asChild>
+                          <Link href={`/admin/matters/${lead.matter_id}`}>{step.label}</Link>
                         </Button>
-                        {lead.lead_status !== 'hired' && (
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant={step.primary ? 'default' : 'outline'}
+                          className="h-7 px-2.5 text-xs"
+                          disabled={busy}
+                          onClick={runStep}
+                        >
+                          {step.label}
+                        </Button>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            className="h-7 w-7"
                             disabled={busy}
-                            aria-label={`Delete ${leadName(lead)}`}
-                            onClick={() => setDeleteTarget(lead)}
+                            aria-label={`More actions for ${leadName(lead)}`}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <MoreVertical className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                      </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onSelect={() => openEdit(lead)}>Edit</DropdownMenuItem>
+                          {!hired && (
+                            <DropdownMenuItem onSelect={() => void handleSendIntake(lead)}>
+                              {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
+                            </DropdownMenuItem>
+                          )}
+                          {!hired && esignEnabled && lead.engagement_status !== 'signed' && (
+                            <DropdownMenuItem onSelect={() => setEngagementLead(lead)}>
+                              {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
+                            </DropdownMenuItem>
+                          )}
+                          {!hired && (
+                            <DropdownMenuItem onSelect={() => setConvertTarget(lead)}>
+                              Hire matter
+                            </DropdownMenuItem>
+                          )}
+                          {!hired && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => setDeleteTarget(lead)}
+                              >
+                                Archive lead
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 )

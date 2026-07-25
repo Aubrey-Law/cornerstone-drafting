@@ -43,6 +43,7 @@ export function SendEngagementDialog({
   const token = useAccessToken()
   const [form, setForm] = useState({ name: '', email: '', spouseName: '', spouseEmail: '', fee: '' })
   const [busy, setBusy] = useState<null | 'email' | 'sign'>(null)
+  const feeRequired = lead !== null && lead.engagement_fee_quoted == null
 
   useEffect(() => {
     if (!lead) return
@@ -65,6 +66,12 @@ export function SendEngagementDialog({
     const spouseEmail = form.spouseEmail.trim()
     if (Boolean(spouseName) !== Boolean(spouseEmail)) {
       toast.error('Enter both the spouse name and email, or leave both blank')
+      return
+    }
+    // A lead with no fee on file must get one here — otherwise the quoted
+    // pipeline stays at $0 because nothing else captures it.
+    if (feeRequired && !(Number(form.fee.trim()) > 0)) {
+      toast.error('Enter the quoted flat fee before sending')
       return
     }
     setBusy(mode)
@@ -150,16 +157,22 @@ export function SendEngagementDialog({
           </div>
           <div className="space-y-1.5">
             <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Quoted flat fee (optional)
+              {feeRequired ? 'Quoted flat fee' : 'Quoted flat fee (optional)'}
             </span>
             <Input
               type="number"
               min={0}
               step="0.01"
               placeholder="0.00"
+              required={feeRequired}
               value={form.fee}
               onChange={e => setForm(f => ({ ...f, fee: e.target.value }))}
             />
+            {feeRequired && (
+              <p className="text-[11px] text-muted-foreground">
+                Recorded on the lead so the quoted pipeline totals stay accurate.
+              </p>
+            )}
           </div>
         </div>
         <DialogFooter className="gap-2 sm:justify-between">

@@ -148,11 +148,19 @@ describe('lead status pipeline source shape', () => {
     expect(source).toContain("['lead', 'hired', 'lost']")
   })
 
-  it('leads client has status filter tabs and a status badge', () => {
+  it('leads client has status filter tabs and a per-lead progress cell', () => {
     const source = read('app/admin/leads/LeadsClient.tsx')
-    expect(source).toContain('LeadStatusBadge')
+    expect(source).toContain('LeadProgress')
     expect(source).toContain('FILTER_TABS')
     expect(source).toContain('View matter')
+  })
+
+  it('leads client derives a single next step per lead', () => {
+    const source = read('app/admin/leads/LeadsClient.tsx')
+    expect(source).toContain('function nextStep')
+    expect(source).toContain('send_intake')
+    expect(source).toContain('send_engagement')
+    expect(source).toContain('hire_matter')
   })
 })
 

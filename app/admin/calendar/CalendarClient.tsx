@@ -41,7 +41,53 @@ interface CalendarAppointment {
   source: string
   outlookSynced: boolean
   linkedMatterId: string | null
+  linkedMatterNumber: string | null
   linkedLeadId: string | null
+}
+
+type EventCategory = 'discovery' | 'meeting' | 'draft' | 'signing' | 'internal'
+
+/**
+ * Appointments carry a `typeLabel`; Outlook events only ever have a subject,
+ * so both are classified from their display text.
+ */
+function categorize(label: string): EventCategory {
+  const s = label.toLowerCase()
+  if (/discovery/.test(s)) return 'discovery'
+  if (/signing|execution/.test(s)) return 'signing'
+  if (/draft|design|review/.test(s)) return 'draft'
+  if (/client|peace of mind|planning session|estate plan/.test(s)) return 'meeting'
+  return 'internal'
+}
+
+const CATEGORY_STYLE: Record<EventCategory, { bg: string; text: string; dot: string }> = {
+  discovery: { bg: 'var(--stage-early-bg)', text: 'var(--stage-early-text)', dot: 'var(--stage-early)' },
+  meeting: { bg: 'var(--stage-work-bg)', text: 'var(--stage-work-text)', dot: 'var(--stage-work)' },
+  draft: { bg: 'var(--stage-active-bg)', text: 'var(--stage-active-text)', dot: 'var(--stage-active)' },
+  signing: { bg: 'var(--stage-done-bg)', text: 'var(--stage-done-text)', dot: 'var(--stage-done)' },
+  internal: { bg: 'var(--stage-closed-bg)', text: 'var(--stage-closed-text)', dot: 'var(--stage-closed)' },
+}
+
+const CATEGORY_LEGEND: { category: EventCategory; label: string }[] = [
+  { category: 'discovery', label: 'Discovery' },
+  { category: 'meeting', label: 'Client meeting' },
+  { category: 'draft', label: 'Draft / design review' },
+  { category: 'signing', label: 'Signing' },
+  { category: 'internal', label: 'Internal / Outlook' },
+]
+
+/** Diagonal hatch used for Outlook "block" holds, which are background, not events. */
+const BLOCK_HATCH =
+  'repeating-linear-gradient(45deg, var(--page-bg) 0 3px, var(--page-bg-2) 3px 6px)'
+
+/** Outlook holds named "BLOCK" are time the attorney reserved, not a meeting. */
+function isBlock(e: OutlookEvent): boolean {
+  return /^\s*◦?\s*block/i.test(e.subject)
+}
+
+/** Last two segments of a matter number, e.g. "2026-EP-Example-007" → "Example-007". */
+function shortMatterLabel(matterNumber: string): string {
+  return matterNumber.split('-').slice(-2).join('-')
 }
 
 interface BookableType {
@@ -182,7 +228,7 @@ function outlookEventsByDay(events: OutlookEvent[]): Map<string, OutlookEvent[]>
 export function CalendarClient() {
   const token = useAccessToken()
   const today = useMemo(() => new Date(), [])
-  const [view, setView] = useState<CalendarView>('month')
+  const [view, setView] = useState<CalendarView>('week')
   const [anchor, setAnchor] = useState<Date>(startOfDay(today))
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([])
   const [types, setTypes] = useState<BookableType[]>([])
@@ -372,6 +418,174 @@ export function CalendarClient() {
     return new Date(y, m - 1, d)
   }, [selectedDay])
 
+  const selectedOutlook = outlookByDay.get(selectedDay) ?? []
+  const selectedBlocks = selectedOutlook.filter(isBlock)
+
+  const dayPanel = (
+    <section className="rounded-lg border border-border p-4">
+          <h2 className="text-sm font-semibold text-foreground">{fmtDayHeading(selectedDate)}</h2>
+          {selectedOutlook.filter(e => !isBlock(e)).length > 0 && (
+            <div className="mt-2 space-y-0.5">
+              {selectedOutlook.filter(e => !isBlock(e)).map(e => (
+                <p key={e.id} className="text-xs text-muted-foreground">
+                  <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">Outlook</span>
+                  {e.isAllDay ? 'All day' : `${fmtTime(e.startIso)}–${fmtTime(e.endIso)}`} · {e.subject}
+                </p>
+              ))}
+            </div>
+          )}
+          {selectedAppointments.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">No appointments.</p>
+          ) : (
+            <div className="mt-2 divide-y divide-border">
+              {selectedAppointments.map(a => {
+                const isPast = Date.parse(a.startTime) < Date.now()
+                return (
+                  <div key={a.id} className="py-2.5">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className={cn('text-sm text-foreground', a.status === 'cancelled' && 'line-through')}>
+                          <span
+                            className="mr-1.5 inline-block h-2 w-2 rounded-[3px] align-middle"
+                            style={{ background: CATEGORY_STYLE[categorize(a.typeLabel)].dot }}
+                            aria-hidden
+                          />
+                          {fmtTime(a.startTime)}–{fmtTime(a.endTime)} · {a.typeLabel} — {a.attendeeName}
+                          {a.status !== 'scheduled' && (
+                            <span className="ml-2 text-xs uppercase text-muted-foreground">
+                              {a.status.replace('_', ' ')}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {a.attendeeEmail}
+                          {a.attendeePhone ? ` · ${a.attendeePhone}` : ''}
+                          {a.secondAttendeeEmail ? ` · +${a.secondAttendeeName || a.secondAttendeeEmail}` : ''}
+                          {a.locationType ? ` · ${LOCATION_LABEL[a.locationType]}` : ''}
+                          {!a.outlookSynced && a.status === 'scheduled' && (
+                            <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
+                          )}
+                        </p>
+                        {a.notes && <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p>}
+                      </div>
+                      {a.linkedMatterId ? (
+                        <Link href={`/admin/matters/${a.linkedMatterId}`} className="text-xs text-primary underline">
+                          View matter
+                        </Link>
+                      ) : a.linkedLeadId ? (
+                        <Link href={`/admin/leads/${a.linkedLeadId}`} className="text-xs text-primary underline">
+                          View lead
+                        </Link>
+                      ) : null}
+                    </div>
+                    {a.status === 'scheduled' && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        {confirmingId === a.id ? (
+                          <>
+                            <span className="text-xs text-muted-foreground">
+                              {isPast ? 'Mark as no-show?' : 'Cancel this appointment? The client will be notified.'}
+                            </span>
+                            {isPast ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  disabled={acting}
+                                  onClick={() => {
+                                    void patchAppointment(
+                                      { appointmentId: a.id, action: 'no_show', sendFollowUp: true },
+                                      'Marked no-show — follow-up email sent',
+                                    ).then(ok => ok && setConfirmingId(null))
+                                  }}
+                                >
+                                  No-show + follow-up email
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={acting}
+                                  onClick={() => {
+                                    void patchAppointment(
+                                      { appointmentId: a.id, action: 'no_show', sendFollowUp: false },
+                                      'Marked no-show',
+                                    ).then(ok => ok && setConfirmingId(null))
+                                  }}
+                                >
+                                  No-show only
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={acting}
+                                onClick={() => {
+                                  void patchAppointment(
+                                    { appointmentId: a.id, action: 'cancel' },
+                                    'Appointment cancelled — client notified',
+                                  ).then(ok => ok && setConfirmingId(null))
+                                }}
+                              >
+                                Confirm cancel
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" onClick={() => setConfirmingId(null)}>
+                              Keep it
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            {!isPast && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    const start = new Date(a.startTime)
+                                    setReschedule({
+                                      id: a.id,
+                                      label: `${a.typeLabel} — ${a.attendeeName}`,
+                                      date: dayKey(start),
+                                      time: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+                                    })
+                                  }}
+                                >
+                                  Reschedule
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
+                                  Cancel…
+                                </Button>
+                              </>
+                            )}
+                            {isPast && (
+                              <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
+                                Mark no-show…
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {selectedBlocks.length > 0 && (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              {selectedBlocks
+                .map(b =>
+                  b.isAllDay
+                    ? 'Blocked all day'
+                    : `Blocked ${fmtTime(b.startIso)}–${fmtTime(b.endIso)}`,
+                )
+                .join(' · ')}{' '}
+              · shown as background, not events
+            </p>
+          )}
+    </section>
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -441,177 +655,60 @@ export function CalendarClient() {
         </div>
       </div>
 
-      <div className={cn(loading && 'opacity-60')}>
-        {view === 'month' ? (
-          <MonthGrid
-            anchor={anchor}
-            byDay={byDay}
-            outlookByDay={outlookByDay}
-            todayKey={todayKey}
-            selectedDay={selectedDay}
-            onSelectDay={setSelectedDay}
-          />
-        ) : (
-          <TimeGrid
-            days={
-              view === 'week'
-                ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))
-                : [startOfDay(anchor)]
-            }
-            byDay={byDay}
-            outlookByDay={outlookByDay}
-            todayKey={todayKey}
-            onSlotClick={(date, time) => openBookingDialog({ date, time })}
-            onEventClick={a => setSelectedDay(dayKey(new Date(a.startTime)))}
-          />
+      <div
+        className={cn(
+          'flex-wrap items-center gap-3 text-[11px] text-foreground',
+          view === 'month' ? 'flex' : 'hidden',
         )}
+      >
+        {CATEGORY_LEGEND.map(({ category, label }) => (
+          <span key={category} className="inline-flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-2.5 rounded-[3px] border"
+              style={{
+                background: CATEGORY_STYLE[category].bg,
+                borderColor: CATEGORY_STYLE[category].dot,
+              }}
+            />
+            {label}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundImage: BLOCK_HATCH }} />
+          Blocked
+        </span>
       </div>
 
-      <section className="rounded-lg border border-border p-4">
-        <h2 className="text-sm font-semibold text-foreground">{fmtDayHeading(selectedDate)}</h2>
-        {(outlookByDay.get(selectedDay) ?? []).length > 0 && (
-          <div className="mt-2 space-y-0.5">
-            {(outlookByDay.get(selectedDay) ?? []).map(e => (
-              <p key={e.id} className="text-xs text-muted-foreground">
-                <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">Outlook</span>
-                {e.isAllDay ? 'All day' : `${fmtTime(e.startIso)}–${fmtTime(e.endIso)}`} · {e.subject}
-              </p>
-            ))}
-          </div>
-        )}
-        {selectedAppointments.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No appointments.</p>
-        ) : (
-          <div className="mt-2 divide-y divide-border">
-            {selectedAppointments.map(a => {
-              const isPast = Date.parse(a.startTime) < Date.now()
-              return (
-                <div key={a.id} className="py-2.5">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className={cn('text-sm text-foreground', a.status === 'cancelled' && 'line-through')}>
-                        {fmtTime(a.startTime)}–{fmtTime(a.endTime)} · {a.typeLabel} — {a.attendeeName}
-                        {a.status !== 'scheduled' && (
-                          <span className="ml-2 text-xs uppercase text-muted-foreground">
-                            {a.status.replace('_', ' ')}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {a.attendeeEmail}
-                        {a.attendeePhone ? ` · ${a.attendeePhone}` : ''}
-                        {a.secondAttendeeEmail ? ` · +${a.secondAttendeeName || a.secondAttendeeEmail}` : ''}
-                        {a.locationType ? ` · ${LOCATION_LABEL[a.locationType]}` : ''}
-                        {!a.outlookSynced && a.status === 'scheduled' && (
-                          <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
-                        )}
-                      </p>
-                      {a.notes && <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p>}
-                    </div>
-                    {a.linkedMatterId ? (
-                      <Link href={`/admin/matters/${a.linkedMatterId}`} className="text-xs text-primary underline">
-                        View matter
-                      </Link>
-                    ) : a.linkedLeadId ? (
-                      <Link href={`/admin/leads/${a.linkedLeadId}`} className="text-xs text-primary underline">
-                        View lead
-                      </Link>
-                    ) : null}
-                  </div>
-                  {a.status === 'scheduled' && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      {confirmingId === a.id ? (
-                        <>
-                          <span className="text-xs text-muted-foreground">
-                            {isPast ? 'Mark as no-show?' : 'Cancel this appointment? The client will be notified.'}
-                          </span>
-                          {isPast ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                disabled={acting}
-                                onClick={() => {
-                                  void patchAppointment(
-                                    { appointmentId: a.id, action: 'no_show', sendFollowUp: true },
-                                    'Marked no-show — follow-up email sent',
-                                  ).then(ok => ok && setConfirmingId(null))
-                                }}
-                              >
-                                No-show + follow-up email
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={acting}
-                                onClick={() => {
-                                  void patchAppointment(
-                                    { appointmentId: a.id, action: 'no_show', sendFollowUp: false },
-                                    'Marked no-show',
-                                  ).then(ok => ok && setConfirmingId(null))
-                                }}
-                              >
-                                No-show only
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              disabled={acting}
-                              onClick={() => {
-                                void patchAppointment(
-                                  { appointmentId: a.id, action: 'cancel' },
-                                  'Appointment cancelled — client notified',
-                                ).then(ok => ok && setConfirmingId(null))
-                              }}
-                            >
-                              Confirm cancel
-                            </Button>
-                          )}
-                          <Button size="sm" variant="ghost" onClick={() => setConfirmingId(null)}>
-                            Keep it
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          {!isPast && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const start = new Date(a.startTime)
-                                  setReschedule({
-                                    id: a.id,
-                                    label: `${a.typeLabel} — ${a.attendeeName}`,
-                                    date: dayKey(start),
-                                    time: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
-                                  })
-                                }}
-                              >
-                                Reschedule
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
-                                Cancel…
-                              </Button>
-                            </>
-                          )}
-                          {isPast && (
-                            <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
-                              Mark no-show…
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </section>
+      <div className={cn('flex items-start gap-3', loading && 'opacity-60')}>
+        <div className="min-w-0 flex-1">
+          {view === 'month' ? (
+            <MonthGrid
+              anchor={anchor}
+              byDay={byDay}
+              outlookByDay={outlookByDay}
+              todayKey={todayKey}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+            />
+          ) : (
+            <TimeGrid
+              days={
+                view === 'week'
+                  ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))
+                  : [startOfDay(anchor)]
+              }
+              byDay={byDay}
+              outlookByDay={outlookByDay}
+              todayKey={todayKey}
+              onSlotClick={(date, time) => openBookingDialog({ date, time })}
+              onEventClick={a => setSelectedDay(dayKey(new Date(a.startTime)))}
+            />
+          )}
+        </div>
+        {view === 'week' && <div className="w-[300px] shrink-0">{dayPanel}</div>}
+      </div>
+
+      {view !== 'week' && dayPanel}
 
       <Dialog open={draft !== null} onOpenChange={open => !open && setDraft(null)}>
         <DialogContent className="sm:max-w-md">
@@ -853,7 +950,11 @@ function MonthGrid(props: {
           const key = dayKey(date)
           const inMonth = date.getMonth() === anchor.getMonth()
           const dayAppointments = byDay.get(key) ?? []
-          const dayOutlook = outlookByDay.get(key) ?? []
+          const allOutlook = outlookByDay.get(key) ?? []
+          // Blocks collapse to one strip so they don't eat the three event slots.
+          const blocks = allOutlook.filter(isBlock)
+          const dayOutlook = allOutlook.filter(e => !isBlock(e))
+          const blockLabel = blocks.some(b => b.isAllDay) ? 'Blocked all day' : 'Blocked'
           const shown = dayAppointments.slice(0, 3)
           const outlookShown = dayOutlook.slice(0, Math.max(0, 3 - shown.length))
           const hiddenCount =
@@ -883,29 +984,48 @@ function MonthGrid(props: {
               >
                 {date.getDate()}
               </span>
-              {shown.map(a => (
+              {blocks.length > 0 && (
                 <span
-                  key={a.id}
-                  className={cn(
-                    'truncate rounded px-1 py-0.5 text-[11px] leading-4',
-                    a.status === 'cancelled'
-                      ? 'bg-muted text-muted-foreground line-through'
-                      : 'bg-primary/10 text-foreground',
-                  )}
-                  title={`${fmtTime(a.startTime)} ${a.typeLabel} — ${a.attendeeName}`}
+                  className="truncate rounded px-1 text-[10px] leading-4 text-muted-foreground"
+                  style={{ backgroundImage: BLOCK_HATCH }}
+                  title={blocks.map(b => b.subject).join(', ')}
                 >
-                  {fmtTime(a.startTime)} {a.attendeeName}
+                  {blockLabel}
                 </span>
-              ))}
-              {outlookShown.map(e => (
-                <span
-                  key={e.id}
-                  className="truncate rounded border border-border/60 bg-muted/60 px-1 py-0.5 text-[11px] leading-4 text-muted-foreground"
-                  title={`${e.isAllDay ? 'All day' : fmtTime(e.startIso)} ${e.subject} (Outlook)`}
-                >
-                  {e.isAllDay ? '◦' : fmtTime(e.startIso)} {e.subject}
-                </span>
-              ))}
+              )}
+              {shown.map(a => {
+                const style = CATEGORY_STYLE[categorize(a.typeLabel)]
+                return (
+                  <span
+                    key={a.id}
+                    className={cn(
+                      'truncate rounded px-1 py-0.5 text-[11px] leading-4',
+                      a.status === 'cancelled' && 'bg-muted text-muted-foreground line-through',
+                    )}
+                    style={
+                      a.status === 'cancelled'
+                        ? undefined
+                        : { background: style.bg, color: style.text, borderLeft: `3px solid ${style.dot}` }
+                    }
+                    title={`${fmtTime(a.startTime)} ${a.typeLabel} — ${a.attendeeName}`}
+                  >
+                    {fmtTime(a.startTime)} {a.attendeeName}
+                  </span>
+                )
+              })}
+              {outlookShown.map(e => {
+                const style = CATEGORY_STYLE[categorize(e.subject)]
+                return (
+                  <span
+                    key={e.id}
+                    className="truncate rounded px-1 py-0.5 text-[11px] leading-4"
+                    style={{ background: style.bg, color: style.text, borderLeft: `3px solid ${style.dot}` }}
+                    title={`${e.isAllDay ? 'All day' : fmtTime(e.startIso)} ${e.subject} (Outlook)`}
+                  >
+                    {e.isAllDay ? '◦' : fmtTime(e.startIso)} {e.subject}
+                  </span>
+                )
+              })}
               {hiddenCount > 0 && (
                 <span className="px-1 text-[11px] text-muted-foreground">+{hiddenCount} more</span>
               )}
@@ -939,7 +1059,9 @@ function TimeGrid(props: {
           <div />
           {days.map(d => {
             const key = dayKey(d)
-            const allDay = (outlookByDay.get(key) ?? []).filter(e => e.isAllDay)
+            const dayOutlook = outlookByDay.get(key) ?? []
+            const allDay = dayOutlook.filter(e => e.isAllDay && !isBlock(e))
+            const allDayBlocked = dayOutlook.some(e => e.isAllDay && isBlock(e))
             return (
               <div key={key} className="border-l border-border px-2 py-1.5 text-center">
                 <span
@@ -950,6 +1072,14 @@ function TimeGrid(props: {
                 >
                   {d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })}
                 </span>
+                {allDayBlocked && (
+                  <span
+                    className="mt-0.5 block truncate rounded px-1 text-[10px] leading-4 text-muted-foreground"
+                    style={{ backgroundImage: BLOCK_HATCH }}
+                  >
+                    Blocked all day
+                  </span>
+                )}
                 {allDay.map(e => (
                   <span
                     key={e.id}
@@ -981,9 +1111,15 @@ function TimeGrid(props: {
           {days.map(d => {
             const key = dayKey(d)
             const events = (byDay.get(key) ?? []).filter(a => a.status !== 'cancelled')
-            const outlookTimed = (outlookByDay.get(key) ?? []).filter(e => !e.isAllDay)
+            const timed = (outlookByDay.get(key) ?? []).filter(e => !e.isAllDay)
+            const blocks = timed.filter(isBlock)
+            const outlookTimed = timed.filter(e => !isBlock(e))
             return (
-              <div key={key} className="relative border-l border-border" style={{ height: gridHeight }}>
+              <div
+                key={key}
+                className={cn('relative border-l border-border', key === todayKey && 'bg-primary/5')}
+                style={{ height: gridHeight }}
+              >
                 {Array.from({ length: slotCount }, (_, i) => {
                   const minutes = GRID_START_MIN + i * SLOT_MIN
                   const hh = String(Math.floor(minutes / 60)).padStart(2, '0')
@@ -999,6 +1135,24 @@ function TimeGrid(props: {
                         minutes % 60 === 0 ? 'border-t border-border' : 'border-t border-border/40',
                       )}
                       style={{ top: i * SLOT_PX, height: SLOT_PX }}
+                    />
+                  )
+                })}
+                {blocks.map(e => {
+                  const startMin = Math.max(minutesOfDay(e.startIso), GRID_START_MIN)
+                  const endMin = Math.min(
+                    Math.max(minutesOfDay(e.endIso), startMin + 15),
+                    GRID_END_MIN,
+                  )
+                  if (startMin >= GRID_END_MIN) return null
+                  const top = ((startMin - GRID_START_MIN) / SLOT_MIN) * SLOT_PX
+                  const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 18)
+                  return (
+                    <div
+                      key={e.id}
+                      className="pointer-events-none absolute inset-x-0.5 rounded"
+                      style={{ top, height, backgroundImage: BLOCK_HATCH }}
+                      title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (blocked)`}
                     />
                   )
                 })}
@@ -1036,21 +1190,41 @@ function TimeGrid(props: {
                   if (startMin >= GRID_END_MIN) return null
                   const top = ((startMin - GRID_START_MIN) / SLOT_MIN) * SLOT_PX
                   const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 20)
+                  const style = CATEGORY_STYLE[categorize(a.typeLabel)]
+                  const matterChip = a.linkedMatterNumber
+                    ? shortMatterLabel(a.linkedMatterNumber)
+                    : null
+                  // A sub-90-minute event only fits two lines; the matter chip
+                  // is more useful there than repeating the type label.
+                  const showTypeLabel = !matterChip || endMin - startMin >= 90
                   return (
                     <button
                       key={a.id}
                       type="button"
                       onClick={() => onEventClick(a)}
-                      className="absolute inset-x-1 overflow-hidden rounded border border-primary/30 bg-primary/15 px-1.5 py-0.5 text-left hover:bg-primary/25"
-                      style={{ top, height }}
+                      className="absolute inset-x-1 overflow-hidden rounded px-1.5 py-0.5 text-left hover:brightness-95"
+                      style={{
+                        top,
+                        height,
+                        background: style.bg,
+                        color: style.text,
+                        borderLeft: `3px solid ${style.dot}`,
+                      }}
                       title={`${fmtTime(a.startTime)}–${fmtTime(a.endTime)} ${a.typeLabel} — ${a.attendeeName}`}
                     >
-                      <span className="block truncate text-[11px] font-medium leading-4 text-foreground">
+                      <span className="block truncate text-[11px] font-medium leading-4">
                         {fmtTime(a.startTime)} {a.attendeeName}
                       </span>
-                      <span className="block truncate text-[10px] leading-4 text-muted-foreground">
-                        {a.typeLabel}
-                      </span>
+                      {showTypeLabel && (
+                        <span className="block truncate text-[10px] leading-4 opacity-80">
+                          {a.typeLabel}
+                        </span>
+                      )}
+                      {matterChip && (
+                        <span className="mt-0.5 inline-block max-w-full truncate rounded-full border border-navy-12 bg-white/75 px-1.5 text-[9px] font-medium text-secondary-foreground">
+                          ↗ {matterChip}
+                        </span>
+                      )}
                     </button>
                   )
                 })}

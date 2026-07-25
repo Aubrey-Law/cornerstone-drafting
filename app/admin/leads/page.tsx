@@ -60,13 +60,6 @@ export default async function LeadsPage() {
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-xl font-semibold">Leads</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Prospective matters before hiring — send the intake and engagement agreement from here.
-          Signing promotes the existing opportunity to a hired matter.
-        </p>
-      </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
         <LeadsClient initialLeads={leadsWithActivity as LeadRow[]} esignEnabled={isEsignConfigured()} />
       </Suspense>
