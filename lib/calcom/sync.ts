@@ -121,12 +121,13 @@ async function syncMatterBooking(input: {
     (triggerEvent === 'BOOKING_CREATED' || triggerEvent === 'BOOKING_RESCHEDULED') &&
     startTime
   ) {
-    const dateOnly = new Date(startTime).toISOString().split('T')[0]
+    const startTimestamp = new Date(startTime).toISOString()
+    const dateOnly = startTimestamp.split('T')[0]
     if (eventKey === 'signing_appointment') {
       await admin
         .from('matter_details')
         .upsert(
-          { client_id: matterId, scheduled_signing_date: dateOnly },
+          { client_id: matterId, scheduled_signing_date: startTimestamp },
           { onConflict: 'client_id' },
         )
     } else if (eventKey === 'pmps') {

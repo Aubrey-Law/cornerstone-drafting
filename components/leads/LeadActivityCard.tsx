@@ -14,6 +14,21 @@ type ActivityRow = {
 
 const PREVIEW_COUNT = 8
 
+function activityTime(value: string) {
+  const date = new Date(value)
+  const elapsed = Date.now() - date.getTime()
+  const hours = Math.floor(elapsed / 3_600_000)
+  if (hours < 1) return 'Just now'
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+  })
+}
+
 function activityIcon(type: string | null | undefined) {
   if (type?.includes('meeting')) return CalendarDays
   if (type?.includes('note')) return MessageSquareText
