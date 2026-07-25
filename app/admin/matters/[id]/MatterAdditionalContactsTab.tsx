@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { PersonContactCard, PersonContactCardGrid } from '@/components/matter/PersonContactCard'
 import { FiduciaryContactTools, type FiduciaryContactInput } from '@/components/admin/FiduciaryContactTools'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
@@ -24,6 +23,7 @@ import {
 } from '@/lib/kinship/relationshipLabels'
 import { contactFullName } from '@/app/admin/drafting/[matterId]/design/sections/ContactPicker'
 import type { PersonFormValues } from '@/app/admin/drafting/[matterId]/design/sections/AddPersonDialog'
+import type { PersonAddRequest } from './MatterPeopleTab'
 
 const AddPersonDialog = dynamic(
   () => import('@/app/admin/drafting/[matterId]/design/sections/AddPersonDialog').then(m => ({ default: m.AddPersonDialog })),
@@ -35,9 +35,16 @@ interface Props {
   matter: PipelineMatter
   initialContacts: MatterContact[]
   embedded?: boolean
+  addRequest?: PersonAddRequest | null
 }
 
-export function MatterAdditionalContactsTab({ matterId, matter, initialContacts, embedded = false }: Props) {
+export function MatterAdditionalContactsTab({
+  matterId,
+  matter,
+  initialContacts,
+  embedded = false,
+  addRequest,
+}: Props) {
   const token = useAccessToken()
   const [contacts, setContacts] = useState(initialContacts)
   const [sheet, setSheet] = useState<DesignSheet | null>(null)
@@ -84,8 +91,17 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
 
   useEffect(() => { void loadData() }, [loadData])
   useEffect(() => { setContacts(initialContacts) }, [initialContacts])
+  useEffect(() => {
+    if (addRequest?.kind === 'fiduciary') setAddFiduciaryOpen(true)
+    if (addRequest?.kind === 'beneficiary') setAddBeneficiaryOpen(true)
+  }, [addRequest?.kind, addRequest?.nonce])
 
   const profiles = useMemo(() => (sheet ? getContactProfiles(sheet) : {}), [sheet])
+  const unresolvedSlots = useMemo(
+    () => Object.entries(sheet?.fiduciary_slot_states ?? {})
+      .filter(([, state]) => state === 'pending_client' || state === 'optional'),
+    [sheet?.fiduciary_slot_states],
+  )
 
   const fiduciaryContacts = useMemo(() => {
     return contacts.filter(c => {
@@ -265,6 +281,24 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
         </div>
       )}
 
+      {unresolvedSlots.length > 0 && (
+        <section aria-labelledby="unresolved-role-heading" className="space-y-2">
+          <h4 id="unresolved-role-heading" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Unresolved roles
+          </h4>
+          <div className="divide-y rounded-lg border bg-card">
+            {unresolvedSlots.map(([slot, state]) => (
+              <div key={slot} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <span className="text-sm font-medium">
+                  {slot.replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase())}
+                </span>
+                <Badge variant="outline">{state === 'pending_client' ? 'Pending client' : 'Optional'}</Badge>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section id="fiduciaries" className="scroll-mt-24 space-y-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fiduciaries</h4>
         {fiduciaryContacts.length === 0 ? (
@@ -288,10 +322,6 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
             })}
           </PersonContactCardGrid>
         )}
-        <Button type="button" size="sm" className="gap-1.5" onClick={() => setAddFiduciaryOpen(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          Add Fiduciary
-        </Button>
       </section>
 
       <section id="beneficiaries" className="scroll-mt-24 space-y-3">
@@ -316,10 +346,6 @@ export function MatterAdditionalContactsTab({ matterId, matter, initialContacts,
             })}
           </PersonContactCardGrid>
         )}
-        <Button type="button" size="sm" className="gap-1.5" onClick={() => setAddBeneficiaryOpen(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          Add Beneficiary
-        </Button>
       </section>
 
       {otherContacts.length > 0 && (

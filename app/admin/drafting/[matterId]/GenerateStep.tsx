@@ -49,6 +49,7 @@ type DraftResult =
   | {
       success: true
       documents: string[]
+      documentRefs: Array<{ id: string; name: string }>
       warnings: string[]
       missing: string[]
       documentReports: DocumentReport[]
@@ -376,7 +377,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           const documentReports = meta?.documentReports ?? []
           const hasBlockingMarkers = meta?.hasBlockingMarkers === true
           const generationDiff = computeGenerationDiff(priorDraftNames, documents)
-          setResult({ success: true, documents, warnings, missing, documentReports, hasBlockingMarkers, downloaded: true, generationDiff })
+          setResult({ success: true, documents, documentRefs: [], warnings, missing, documentReports, hasBlockingMarkers, downloaded: true, generationDiff })
           toast.success(
             documents.length
               ? `Downloaded ${documents.length} draft document${documents.length === 1 ? '' : 's'}`
@@ -400,6 +401,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           error?: string
           detail?: string
           documents?: string[]
+          documentRefs?: Array<{ id: string; name: string }>
           missing?: string[]
           warnings?: string[]
           documentReports?: DocumentReport[]
@@ -422,13 +424,19 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
           return
         }
         const documents = data.documents ?? []
+        const documentRefs = Array.isArray(data.documentRefs)
+          ? data.documentRefs.filter(
+              (reference): reference is { id: string; name: string } =>
+                Boolean(reference) && typeof reference.id === 'string' && typeof reference.name === 'string',
+            )
+          : []
         const generationDiff = computeGenerationDiff(priorDraftNames, documents)
-        setResult({ success: true, documents, warnings, missing, documentReports, hasBlockingMarkers, downloaded: false, generationDiff })
-        void logMatterActivity(matterId, 'draft_generated', 'AI drafts generated', {
+        setResult({ success: true, documents, documentRefs, warnings, missing, documentReports, hasBlockingMarkers, downloaded: false, generationDiff })
+        void logMatterActivity(matterId, 'draft_generated', `Generated ${documents.length} drafts`, {
           detail: documents.length > 0
             ? `Generated ${documents.length} draft document${documents.length === 1 ? '' : 's'}: ${documents.join(', ')}`
             : 'Generated draft documents',
-          metadata: { documents },
+          metadata: { documents, documentRefs },
         })
         toast.success(
           documents.length

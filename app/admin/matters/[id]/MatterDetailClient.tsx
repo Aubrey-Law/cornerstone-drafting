@@ -1083,6 +1083,8 @@ function MatterDetailClientInner({
           <TabsContent value="documents" className="space-y-4">
             <MatterDocumentsTab
               matterId={matterId}
+              clientName={matter.client_name}
+              deepLinkedDocumentId={searchParams.get('document')}
               documents={documents}
               loading={docsLoading}
               onDocumentsChanged={loadDocuments}

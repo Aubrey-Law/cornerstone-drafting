@@ -495,6 +495,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     assertR2Configured()
     const r2 = getR2Client()
     const uploadedFilenames: string[] = []
+    const documentRefs: Array<{ id: string; name: string }> = []
     const documentReports: DocumentReport[] = []
 
     // One id groups every document from this run; used to supersede prior runs
@@ -573,7 +574,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       // legacy registration path so synthetic file IDs never reach provenance FKs.
       if (file.clauseSource === 'database') {
         try {
-          await persistGeneratedEstateDocument({
+          const persisted = await persistGeneratedEstateDocument({
             admin,
             document: {
               matter_id: canonicalMatterId,
@@ -592,6 +593,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             },
             manifest: file.clauseManifest ?? [],
           })
+          documentRefs.push({ id: persisted.documentId, name: documentName })
         } catch (persistenceError) {
           try {
             await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: r2Key }))
@@ -625,7 +627,12 @@ export async function POST(req: NextRequest, { params }: Params) {
           throw new Error(`Failed to register document "${documentName}": ${insertErr.message}`)
         }
 
-        if (insertedDoc?.id) {
+        if (!insertedDoc?.id) {
+          throw new Error(`Failed to register document "${documentName}": no document ID returned`)
+        }
+        documentRefs.push({ id: insertedDoc.id, name: documentName })
+
+        if (insertedDoc.id) {
           try {
             const { ensureInitialVersion } = await import('@/lib/documentVersions')
             await ensureInitialVersion({
@@ -686,6 +693,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({
       success: true,
       documents: uploadedFilenames,
+      documentRefs,
       documentReports,
       hasBlockingMarkers,
       generationId,
