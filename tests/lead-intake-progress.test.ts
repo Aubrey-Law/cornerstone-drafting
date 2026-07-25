@@ -89,6 +89,29 @@ describe('getLeadIntakeProgress', () => {
     }).real_estate).toBe(true)
   })
 
+  it('normalizes the wizard real-estate asset shape', () => {
+    const wizardIntake = {
+      ...completeSingleIntake,
+      has_real_property: undefined,
+      financial_details: {
+        asset_types: ['real_estate'],
+        real_estate: [{ address: '1 Main Street', value: '$500,000' }],
+      },
+    }
+
+    expect(progressFor(wizardIntake).real_estate).toBe(true)
+    expect(progressFor({
+      ...wizardIntake,
+      financial_details: { asset_types: ['real_estate'], real_estate: [{ address: '1 Main Street', value: '' }] },
+    }).real_estate).toBe(false)
+    expect(progressFor({
+      ...completeSingleIntake,
+      has_real_property: undefined,
+      financial_details: { asset_types: ['financial'] },
+    }).real_estate).toBe(true)
+    expect(progressFor({ ...completeSingleIntake, has_real_property: undefined, financial_details: {} }).real_estate).toBe(false)
+  })
+
   it('requires active spouse and guardian fiduciaries', () => {
     expect(progressFor(completeSingleIntake).fiduciaries).toBe(true)
     expect(progressFor({ ...completeSingleIntake, marital_status: 'married' }).fiduciaries).toBe(false)

@@ -25,11 +25,25 @@ function estateWithoutRealPropertyComplete(intake: IntakeRow): boolean {
 
 function realEstateComplete(intake: IntakeRow): boolean {
   if (intake.has_real_property === false) return true
-  if (intake.has_real_property !== true) return false
+  if (intake.has_real_property === true) {
+    const financial = financialDetails(intake)
+    return Boolean(text(intake.real_property_address) || text(financial.real_property_address)) &&
+      Boolean(text(intake.real_property_value) || text(financial.real_property_value))
+  }
 
   const financial = financialDetails(intake)
-  return Boolean(text(intake.real_property_address) || text(financial.real_property_address)) &&
-    Boolean(text(intake.real_property_value) || text(financial.real_property_value))
+  const assetTypes = assetTypesFor(intake, financial)
+  if (Object.prototype.hasOwnProperty.call(intake, 'has_real_property') && !Array.isArray(financial.asset_types)) {
+    return false
+  }
+  if (!assetTypes) return false
+  if (!assetTypes.includes('real_estate')) return true
+
+  const properties = realEstateItems(intake, financial)
+  return properties.length > 0 && properties.every((property) =>
+    Boolean(text(property.address) || text(property.street)) &&
+    hasValue(property.value ?? property.estimatedValue ?? property.estimated_value),
+  )
 }
 
 function financialDetails(intake: IntakeRow): IntakeRow {
@@ -41,6 +55,24 @@ function financialDetails(intake: IntakeRow): IntakeRow {
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function assetTypesFor(intake: IntakeRow, financial: IntakeRow): string[] | null {
+  const raw = Array.isArray(financial.asset_types)
+    ? financial.asset_types
+    : Array.isArray(intake.asset_types) ? intake.asset_types : null
+  return raw?.filter((asset): asset is string => typeof asset === 'string') ?? null
+}
+
+function realEstateItems(intake: IntakeRow, financial: IntakeRow): IntakeRow[] {
+  const raw = Array.isArray(financial.real_estate)
+    ? financial.real_estate
+    : Array.isArray(intake.financial_real_estate) ? intake.financial_real_estate : []
+  return raw.filter((item): item is IntakeRow => !!item && typeof item === 'object' && !Array.isArray(item))
+}
+
+function hasValue(value: unknown): boolean {
+  return typeof value === 'number' ? Number.isFinite(value) : Boolean(text(value))
 }
 
 export function getLeadIntakeProgress(intake: IntakeRow): LeadIntakeSegment[] {

@@ -38,6 +38,19 @@ describe('lead detail page', () => {
     expect(screen.getAllByRole('button', { name: 'Send intake' }).length).toBeGreaterThan(0)
   })
 
+  it('refreshes intake progress when the server supplies a newer intake record', () => {
+    const { rerender } = render(
+      <LeadDetailClient lead={{ ...lead, updated_at: '2026-07-25T00:00:00Z', status: 'draft' }} spouse={spouse} initialActivity={[]} />,
+    )
+    expect(screen.getByText('Never sent · nothing submitted · 0 of 7 sections')).toBeTruthy()
+
+    rerender(
+      <LeadDetailClient lead={{ ...lead, updated_at: '2026-07-25T00:01:00Z', status: 'submitted' }} spouse={spouse} initialActivity={[]} />,
+    )
+
+    expect(screen.getByText('Sent · submitted · 1 of 7 sections')).toBeTruthy()
+  })
+
   it('keeps the returned intake link available to copy after sending', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       if (String(input).includes('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response

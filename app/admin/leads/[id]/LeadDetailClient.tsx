@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
@@ -53,6 +53,7 @@ type LeadRecord = {
   taxable_estate?: number | null
   has_minor_children?: boolean | null
   qualification_notes?: string | null
+  updated_at?: string | null
   intake_sent_at?: string | null
   intake_completed_at?: string | null
   intake_status?: string | null
@@ -148,6 +149,13 @@ export function LeadDetailClient({
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [sendingIntake, setSendingIntake] = useState(false)
+  const initialLeadRef = useRef(initialLead)
+
+  useEffect(() => {
+    if (initialLeadRef.current.updated_at === initialLead.updated_at) return
+    initialLeadRef.current = initialLead
+    setLead(initialLead)
+  }, [initialLead])
 
   async function call<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
     const response = await fetch(path, {

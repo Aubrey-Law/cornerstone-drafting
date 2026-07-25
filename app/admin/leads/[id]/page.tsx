@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
+import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { LeadDetailClient } from './LeadDetailClient'
 
 export const dynamic = 'force-dynamic'
@@ -63,13 +64,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ])
 
   if (!lead || !lead.lead_status) notFound()
+  const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
   const { data: agreement } = lead.matter_id
     ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
 
   return (
     <LeadDetailClient
-      lead={lead}
+      lead={hydratedLead}
       spouse={spouse}
       initialActivity={activity ?? []}
       initialNotes={((notes ?? []) as LeadNoteLoaderRow[]).map(mapNote)}
