@@ -410,7 +410,7 @@ describe('lead detail page', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Reactivate' }))
 
     const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')
-    expect(JSON.parse(String(patch?.[1]?.body))).toMatchObject({ status: 'lead' })
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ status: 'lead' })
   })
 
   it('marks the lead lost from the top row and removes its next action', async () => {
@@ -430,7 +430,7 @@ describe('lead detail page', () => {
     await user.click(screen.getByRole('button', { name: 'Mark lost' }))
 
     const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')
-    expect(JSON.parse(String(patch?.[1]?.body))).toMatchObject({ status: 'lost' })
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ status: 'lost' })
     expect(await screen.findByText('Lost · day 4')).toBeTruthy()
     expect(screen.queryByText('Send intake to get the facts')).toBeNull()
   })
@@ -553,6 +553,7 @@ describe('lead detail page', () => {
     vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:true,json:async()=>({matterId:'m1'})} as Response)
     const user=userEvent.setup();render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     await user.click(screen.getByRole('button',{name:'Hire matter'}))
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/admin/leads/l1/convert',expect.objectContaining({method:'POST'}))
     expect(router.push).toHaveBeenCalledWith('/admin/matters/m1')
   })
@@ -829,6 +830,37 @@ describe('lead detail page', () => {
     expect(screen.queryByText('Follow up with this lead')).toBeNull()
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
     expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('keeps a lead-data refresh warning after a successful timeline refresh', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) {
+        return { ok: true, json: async () => ({ activity: [] }) } as Response
+      }
+      if (init?.method === 'PATCH') {
+        return {
+          ok: true,
+          json: async () => ({
+            lead: { ...lead, phone: '617-555-0111' },
+            spouse,
+            refreshWarning: 'Saved, but refreshed spouse data is unavailable.',
+          }),
+        } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
+    const phone = screen.getByRole('textbox', { name: 'Phone' })
+    await user.clear(phone)
+    await user.type(phone, '617-555-0111{Enter}')
+
+    expect(await screen.findByText(
+      'Lead data refresh unavailable: Saved, but refreshed spouse data is unavailable.',
+    )).toBeTruthy()
+    expect(screen.queryByText(/Timeline refresh unavailable/)).toBeNull()
   })
 
   it('commits a changed scalar field on blur', async () => {

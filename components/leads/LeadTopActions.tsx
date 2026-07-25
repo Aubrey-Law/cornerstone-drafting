@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-type LeadStatus = 'lead' | 'hired' | 'lost'
+type MutableLeadStatus = 'lead' | 'lost'
 
 type Props = {
   busy: boolean
@@ -21,7 +21,7 @@ type Props = {
   onDraft: () => void
   onConvert: () => void
   onClearSnooze: () => void
-  onStatusChange: (status: LeadStatus) => void
+  onStatusChange: (status: MutableLeadStatus) => void
 }
 
 export function LeadTopActions({

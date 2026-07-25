@@ -55,7 +55,8 @@ type Props = {
   actorNames?: Record<string, string>
   callsError?: string | null
   actorError?: string | null
-  refreshWarning?: string | null
+  dataRefreshWarning?: string | null
+  activityRefreshWarning?: string | null
   currentUser: { id: string; role: string }
   onActivityChange?: () => void | Promise<void>
   onCommittedTouch?: (timestamp: string) => void
@@ -108,7 +109,8 @@ export function LeadTimelineCard({
   actorNames = {},
   callsError = null,
   actorError = null,
-  refreshWarning: externalRefreshWarning = null,
+  dataRefreshWarning = null,
+  activityRefreshWarning: externalActivityRefreshWarning = null,
   currentUser,
   onActivityChange,
   onCommittedTouch,
@@ -126,7 +128,7 @@ export function LeadTimelineCard({
   const [meeting, setMeeting] = useState({ title: '', date: '', attendees: '', body: '' })
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [refreshWarning, setRefreshWarning] = useState<string | null>(null)
+  const [localActivityRefreshWarning, setLocalActivityRefreshWarning] = useState<string | null>(null)
   const hasCallablePhone = phoneTelHref(leadPhone) !== null
 
   const items = useMemo(() => buildLeadTimeline({
@@ -165,9 +167,9 @@ export function LeadTimelineCard({
     }
     try {
       await onActivityChange?.()
-      setRefreshWarning(null)
+      setLocalActivityRefreshWarning(null)
     } catch (caught) {
-      setRefreshWarning(caught instanceof Error ? caught.message : 'Could not refresh timeline')
+      setLocalActivityRefreshWarning(caught instanceof Error ? caught.message : 'Could not refresh timeline')
     } finally {
       setPending(false)
     }
@@ -402,9 +404,14 @@ export function LeadTimelineCard({
       {actorError && (
         <p className="mt-4 text-xs text-muted-foreground">Actor names unavailable: {actorError}</p>
       )}
-      {(refreshWarning ?? externalRefreshWarning) && (
+      {dataRefreshWarning && (
         <p className="mt-4 text-xs text-muted-foreground">
-          Timeline refresh unavailable: {refreshWarning ?? externalRefreshWarning}
+          Lead data refresh unavailable: {dataRefreshWarning}
+        </p>
+      )}
+      {(localActivityRefreshWarning ?? externalActivityRefreshWarning) && (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Timeline refresh unavailable: {localActivityRefreshWarning ?? externalActivityRefreshWarning}
         </p>
       )}
 
@@ -423,9 +430,9 @@ export function LeadTimelineCard({
             void (async () => {
               try {
                 await onActivityChange?.()
-                setRefreshWarning(null)
+                setLocalActivityRefreshWarning(null)
               } catch (caught) {
-                setRefreshWarning(caught instanceof Error ? caught.message : 'Could not refresh timeline')
+                setLocalActivityRefreshWarning(caught instanceof Error ? caught.message : 'Could not refresh timeline')
               }
             })()
           }}

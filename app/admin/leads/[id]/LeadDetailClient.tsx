@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/StaffSoftphone'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatPhoneDisplay, phoneTelHref } from '@/lib/phone'
-import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import { practiceAreaLabel } from '@/lib/practiceArea'
 import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
 import type { LeadEditableField } from '@/lib/leads/details'
 import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
@@ -191,6 +191,7 @@ export function LeadDetailClient({
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
+  const [dataRefreshWarning, setDataRefreshWarning] = useState<string | null>(null)
   const [activityRefreshWarning, setActivityRefreshWarning] = useState<string | null>(null)
   const [localTouchAt, setLocalTouchAt] = useState<string | null>(null)
   const initialLeadRef = useRef(initialLead)
@@ -263,7 +264,7 @@ export function LeadDetailClient({
     } else {
       recordTouch(null)
     }
-    if (json.refreshWarning) setActivityRefreshWarning(json.refreshWarning)
+    setDataRefreshWarning(json.refreshWarning ?? null)
   }
 
   async function sendIntake() {
@@ -296,49 +297,13 @@ export function LeadDetailClient({
     }
   }
 
-  function statusPayload(status: string) {
-    return {
-      firstName: lead.first_name ?? '',
-      middleName: lead.middle_name ?? '',
-      lastName: lead.last_name ?? '',
-      preferredName: lead.preferred_name ?? '',
-      email: lead.email ?? '',
-      phone: lead.phone ?? '',
-      dateOfBirth: lead.date_of_birth ?? '',
-      addressLine1: lead.address_line1 ?? '',
-      addressLine2: lead.address_line2 ?? '',
-      city: lead.city ?? '',
-      state: lead.state ?? '',
-      zip: lead.zip ?? '',
-      county: lead.county ?? '',
-      maritalStatus: lead.marital_status ?? '',
-      practiceArea: normalizePracticeArea(lead.practice_area),
-      source: lead.lead_source ?? '',
-      status,
-      fee: lead.engagement_fee_quoted,
-      urgency: lead.lead_urgency ?? null,
-      estimatedEstateValue: lead.taxable_estate ?? null,
-      hasMinorChildren: lead.has_minor_children ?? null,
-      qualificationNotes: lead.qualification_notes ?? '',
-      spouse: spouse ? {
-        firstName: spouse.first_name ?? '',
-        middleName: spouse.middle_name ?? '',
-        lastName: spouse.last_name ?? '',
-        preferredName: spouse.preferred_name ?? '',
-        email: spouse.email ?? '',
-        phone: spouse.phone ?? '',
-        dateOfBirth: spouse.date_of_birth ?? '',
-      } : null,
-    }
-  }
-
-  async function persistStatus(status: string) {
+  async function persistStatus(status: 'lead' | 'lost') {
     setError(null)
     setBusy(true)
     try {
       const json = await call<LeadPatchResponse>(
         `/api/admin/leads/${lead.id}`,
-        statusPayload(status),
+        { status },
         'PATCH',
       )
       applyLeadPatch(json)
@@ -470,7 +435,7 @@ export function LeadDetailClient({
     void action(`/api/admin/leads/${lead.id}/convert`)().finally(endInteraction)
   }
 
-  async function handleTopStatusChange(status: 'lead' | 'hired' | 'lost') {
+  async function handleTopStatusChange(status: 'lead' | 'lost') {
     if (!beginInteraction()) return
     try {
       await persistStatus(status)
@@ -614,7 +579,8 @@ export function LeadDetailClient({
                 actorNames={actorNames}
                 callsError={callsError}
                 actorError={actorError}
-                refreshWarning={activityRefreshWarning}
+                dataRefreshWarning={dataRefreshWarning}
+                activityRefreshWarning={activityRefreshWarning}
                 currentUser={currentUser}
                 onActivityChange={refreshActivity}
                 onCommittedTouch={recordTouch}

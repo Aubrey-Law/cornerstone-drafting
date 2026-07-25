@@ -16,6 +16,10 @@ const snoozeRequestSchema = z.object({
   ]),
 }).strict()
 
+const statusRequestSchema = z.object({
+  status: z.enum(['lead', 'lost']),
+}).strict()
+
 function validationError(error: unknown) {
   if (error instanceof ZodError) {
     const fieldErrors: Record<string, string> = {}
@@ -33,6 +37,12 @@ function validationError(error: unknown) {
 
 function hasOwn(value: unknown, key: string): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function atomicUpdateErrorStatus(error: { code?: string | null; message: string }) {
+  if (error.code === 'P0002' || error.message.trim().toLowerCase() === 'lead not found') return 404
+  if (/already (?:converted|hired)/i.test(error.message)) return 409
+  return 500
 }
 
 function spouseResponse(details: ValidatedLeadDetails['spouse']) {
@@ -77,6 +87,26 @@ export async function PATCH(
     return NextResponse.json(data)
   }
 
+  const statusOnlyRequest = hasOwn(body, 'status') && Object.keys(body).length === 1
+  if (statusOnlyRequest) {
+    let statusChange
+    try { statusChange = statusRequestSchema.parse(body) }
+    catch (error) { return validationError(error) }
+
+    const { data, error } = await getAdminClient().rpc('update_lead_opportunity_status', {
+      p_lead_id: intakeId,
+      p_status: statusChange.status,
+      p_actor_id: userId,
+    })
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: atomicUpdateErrorStatus(error) },
+      )
+    }
+    return NextResponse.json(data)
+  }
+
   const partialRequest = hasOwn(body, 'field')
   if (partialRequest) {
     let patch
@@ -90,8 +120,10 @@ export async function PATCH(
       p_actor_id: userId,
     })
     if (error) {
-      const conflict = /already (?:converted|hired)/i.test(error.message)
-      return NextResponse.json({ error: error.message }, { status: conflict ? 409 : 500 })
+      return NextResponse.json(
+        { error: error.message },
+        { status: atomicUpdateErrorStatus(error) },
+      )
     }
     return NextResponse.json(data)
   }

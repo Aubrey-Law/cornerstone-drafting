@@ -31,7 +31,7 @@ function harness({
   finalLead=lead as any,
   spouse=null as any,
   opportunity=null as any,
-  rpcError=null as null|{message:string},
+  rpcError=null as null|{message:string;code?:string},
   rpcData,
   readErrors={},
   postReadErrors={},
@@ -40,7 +40,7 @@ function harness({
   finalLead?:any
   spouse?:any
   opportunity?:any
-  rpcError?:null|{message:string}
+  rpcError?:null|{message:string;code?:string}
   rpcData?:any
   readErrors?:Record<string,{message:string}>
   postReadErrors?:Record<string,{message:string}>
@@ -127,6 +127,53 @@ describe('lead details PATCH handler',()=>{
       {field:'source',value:'Website'},
     ])
   })
+  it('keeps a status transition disjoint from a concurrent scalar-field update',async()=>{
+    const {admin,calls}=harness({rpcData:{lead:{...snapshotLead,lead_status:'lost'},spouse:snapshotSpouse,activity:{id:'a1'}}})
+    const [statusResponse,fieldResponse]=await Promise.all([
+      PATCH(request({status:'lost'}),params),
+      PATCH(request({field:'phone',value:'617-555-0111'}),params),
+    ])
+    expect(statusResponse.status).toBe(200)
+    expect(fieldResponse.status).toBe(200)
+    expect(admin.from).not.toHaveBeenCalled()
+    expect(calls.rpc).toEqual([
+      ['update_lead_opportunity_status',{
+        p_lead_id:'l1',
+        p_status:'lost',
+        p_actor_id:'u1',
+      }],
+      ['update_lead_opportunity_field',{
+        p_lead_id:'l1',
+        p_field:'phone',
+        p_value:'617-555-0111',
+        p_actor_id:'u1',
+      }],
+    ])
+  })
+  it('keeps a status transition disjoint from a concurrent spouse update',async()=>{
+    const updatedSpouse={firstName:'John',middleName:null,lastName:'Doe',preferredName:'Jack',email:null,phone:null,dateOfBirth:null}
+    const {admin,calls}=harness({rpcData:{lead:{...snapshotLead,lead_status:'lost'},spouse:updatedSpouse,activity:{id:'a1'}}})
+    const [statusResponse,spouseResponse]=await Promise.all([
+      PATCH(request({status:'lost'}),params),
+      PATCH(request({field:'spouse',value:updatedSpouse}),params),
+    ])
+    expect(statusResponse.status).toBe(200)
+    expect(spouseResponse.status).toBe(200)
+    expect(admin.from).not.toHaveBeenCalled()
+    expect(calls.rpc).toEqual([
+      ['update_lead_opportunity_status',{
+        p_lead_id:'l1',
+        p_status:'lost',
+        p_actor_id:'u1',
+      }],
+      ['update_lead_opportunity_field',{
+        p_lead_id:'l1',
+        p_field:'spouse',
+        p_value:updatedSpouse,
+        p_actor_id:'u1',
+      }],
+    ])
+  })
   it.each([
     ['upserts',{firstName:'John',middleName:null,lastName:'Doe',preferredName:null,email:null,phone:null,dateOfBirth:null}],
     ['deletes',null],
@@ -147,6 +194,34 @@ describe('lead details PATCH handler',()=>{
     const res=await PATCH(request({field:'status',value:'lost'}),params)
     expect(res.status).toBe(400)
     expect(calls.rpc).toEqual([])
+  })
+  it('rejects Hired on the status-only endpoint so conversion remains the only hiring path',async()=>{
+    const {admin,calls}=harness()
+    const res=await PATCH(request({status:'hired'}),params)
+    expect(res.status).toBe(400)
+    expect(admin.from).not.toHaveBeenCalled()
+    expect(calls.rpc).toEqual([])
+    expect(mocks.createMatter).not.toHaveBeenCalled()
+  })
+  it.each([
+    ['null',null],
+    ['non-object','10 Main St'],
+  ])('rejects a %s address partial patch before database access',async(_label,value)=>{
+    const {admin,calls}=harness()
+    const res=await PATCH(request({field:'address',value}),params)
+    expect(res.status).toBe(400)
+    expect(admin.from).not.toHaveBeenCalled()
+    expect(calls.rpc).toEqual([])
+  })
+  it.each([
+    ['P0002 regardless of message',{code:'P0002',message:'missing row'}],
+    ['canonical message without a code',{message:'Lead not found'}],
+  ])('maps a missing lead from the partial RPC to 404 by %s',async(_label,rpcError)=>{
+    const {calls}=harness({rpcError})
+    const res=await PATCH(request({field:'phone',value:'617-555-0111'}),params)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({error:rpcError.message})
+    expect(calls.rpc).toHaveLength(1)
   })
   it('continues to support legacy complete status requests',async()=>{
     const {calls}=harness()

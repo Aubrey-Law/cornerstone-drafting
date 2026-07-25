@@ -6,10 +6,10 @@ Branch: `codex/lead-redesign-2a`
 
 ## Outcome
 
-All eleven final-review findings were reproduced and remediated in one
-coordinated TDD wave. The new database migration is authored but was not
-applied to local or hosted Supabase. No dependency file was changed, and
-nothing was pushed.
+All eleven final-review findings and the four closure-review follow-ups were
+reproduced and remediated in coordinated TDD waves. The new database migration
+is authored but was not applied to local or hosted Supabase. No dependency file
+was changed, and nothing was pushed.
 
 ## Findings closed
 
@@ -53,6 +53,25 @@ nothing was pushed.
 11. **Calls with no duration rendered a dangling dash/separator.** Both the call
     row and normalized timeline body build metadata from present values only;
     real durations retain `m:ss` formatting.
+12. **Status changes could replay a stale full lead/spouse snapshot.** The UI
+    now sends exactly `{ status }` for Lost and Reactivate. The route dispatches
+    those requests to a service-role-only `update_lead_opportunity_status` RPC
+    that locks the intake and linked opportunity, updates only lifecycle state,
+    preserves concurrent scalar/spouse edits, attributes the existing
+    relationship-status audit trigger, and returns committed lead, spouse, and
+    activity rows. Hiring remains a single direct call to the existing
+    conversion route, including its lost-to-hired guard. The legacy complete
+    PATCH contract remains available.
+13. **A successful timeline refresh cleared a lead/spouse reread warning.**
+    Lead-data and timeline-refresh warnings now have separate state, props, and
+    labels. Clearing one warning cannot clear the other.
+14. **The atomic field RPC did not fail closed for null field/address input.**
+    The SQL allowlist now explicitly rejects a null `p_field`, and the address
+    branch rejects SQL/JSON null and non-object values before inspecting keys.
+    Route and migration-contract regressions cover both cases.
+15. **A missing lead from the partial RPC returned 500.** PostgreSQL `P0002`
+    and the canonical `Lead not found` message now map to HTTP 404 while
+    converted/hired conflicts remain 409.
 
 ## TDD evidence
 
@@ -68,22 +87,24 @@ The remediation was developed from observed failures:
   **1/1 GREEN**.
 - Final route/persistence/interaction rerun after clear-snooze:
   **126/126 GREEN**.
+- Closure-review follow-up: **12 expected RED failures** covering exact
+  status-only payloads, status concurrency boundaries, warning separation, SQL
+  null guards, and partial-RPC 404 mapping; then **138/138 GREEN** in the
+  affected route/persistence/interaction subset.
 
 ## Verification
 
 ### Focused matrix
 
-The original twelve-file 184-test matrix plus the new direct-loader tests and
-all added regressions passed:
+The original twelve-file matrix plus the direct-loader tests and all added
+regressions passed:
 
 ```text
 Test Files  13 passed (13)
-Tests       208 passed (208)
+Tests       221 passed (221)
 ```
 
-After adding the final clear-snooze interaction regression, that matrix contains
-**209 passing tests**; the affected interaction/route/persistence subset passed
-**126/126**.
+The affected interaction/route/persistence subset passed **138/138**.
 
 ### ESLint and whitespace
 
@@ -111,7 +132,8 @@ No changed implementation or test file appears in the diagnostics.
 The final full suite reported:
 
 ```text
-Tests  1,430 passed | 6 failed (1,436)
+Test Files  161 passed | 3 failed (164)
+Tests       1,442 passed | 6 failed (1,448)
 ```
 
 The six failures are the exact established baseline:
