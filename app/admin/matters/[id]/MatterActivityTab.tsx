@@ -109,6 +109,7 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
                       'relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
                       meta.color,
                     )}
+                    role="img"
                     aria-label={meta.label}
                   >
                     <EventIcon className="h-3.5 w-3.5" aria-hidden />

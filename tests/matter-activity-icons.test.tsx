@@ -40,10 +40,10 @@ describe('matter activity event icons', () => {
       />,
     )
 
-    expect(screen.getByLabelText('Stage changed activity').querySelector('svg')?.classList.contains('lucide-activity')).toBe(true)
-    expect(screen.getByLabelText('Intake completed activity').querySelector('svg')?.classList.contains('lucide-circle-check')).toBe(true)
-    expect(screen.getByLabelText('Draft generated activity').querySelector('svg')?.classList.contains('lucide-file-text')).toBe(true)
-    expect(screen.getByLabelText('Matter activity').querySelector('svg')?.classList.contains('lucide-info')).toBe(true)
+    expect(screen.getByRole('img', { name: 'Stage changed activity' }).querySelector('svg')?.classList.contains('lucide-activity')).toBe(true)
+    expect(screen.getByRole('img', { name: 'Intake completed activity' }).querySelector('svg')?.classList.contains('lucide-circle-check')).toBe(true)
+    expect(screen.getByRole('img', { name: 'Draft generated activity' }).querySelector('svg')?.classList.contains('lucide-file-text')).toBe(true)
+    expect(screen.getByRole('img', { name: 'Matter activity' }).querySelector('svg')?.classList.contains('lucide-info')).toBe(true)
     expect(screen.queryByText('JD')).toBeNull()
     expect(screen.getAllByText(/Jane Doe/)).toHaveLength(4)
   })
