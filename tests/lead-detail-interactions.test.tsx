@@ -9,6 +9,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => router }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 
 import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
+import { LeadIntakeCard } from '@/app/admin/leads/[id]/LeadIntakeCard'
 
 const lead = { id:'l1', first_name:'Jane', middle_name:null, last_name:'Doe', preferred_name:null, full_name:'Jane Doe', email:'jane@example.com', phone:'617', date_of_birth:null, address_line1:'1 Main', address_line2:null, city:'Boston', state:'MA', zip:'02108', county:'Suffolk', marital_status:'married', practice_area:'EP', lead_source:'Referral', lead_status:'lead', engagement_fee_quoted:4500 }
 const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred_name:null, email:'john@example.com', phone:null, date_of_birth:null }
@@ -16,13 +17,24 @@ const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred
 afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset() })
 
 describe('lead detail page', () => {
+  it('renders the intake status strip without duplicate next actions', () => {
+    render(<LeadIntakeCard intake={{}} intakeUrl={null} onOpen={vi.fn()} onCopy={vi.fn()} />)
+
+    expect(screen.getByText('Never sent · nothing submitted · 0 of 7 sections')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open intake' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Copy link' }).getAttribute('aria-describedby')).toBe('intake-link-unavailable')
+    expect(screen.getAllByLabelText(/incomplete$/i)).toHaveLength(7)
+    for (const duplicate of ['Send intake', 'Resend intake', 'Import intake', 'Summarize intake', 'Analyze MA estate tax']) {
+      expect(screen.queryByRole('button', { name: duplicate })).toBeNull()
+    }
+  })
+
   it('renders the lead-stage intake workspace', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     expect(screen.getByRole('region', { name: 'Lead intake' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Update intake' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Import intake' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Summarize intake' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Analyze MA estate tax' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open intake' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getAllByRole('button', { name: 'Send intake' }).length).toBeGreaterThan(0)
   })
 
@@ -34,8 +46,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     await user.click(screen.getAllByRole('button', { name: 'Send intake' })[0])
-    expect(await screen.findByRole('button', { name: 'Copy intake link' })).toBeTruthy()
-    expect(screen.getByText('https://example.test/intake?invite=abc')).toBeTruthy()
+    expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('places actions first and cards in Details, Notes, Activity order', () => {

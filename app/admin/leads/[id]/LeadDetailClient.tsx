@@ -28,6 +28,7 @@ const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), 
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
 
 type LeadRecord = {
+  [key: string]: unknown
   id: string
   first_name: string | null
   middle_name: string | null
@@ -345,13 +346,9 @@ export function LeadDetailClient({
       <main className="flex-1 overflow-auto px-4 py-4 md:px-6">
         <div className="mx-auto w-full max-w-6xl space-y-4">
           <LeadIntakeCard
-            intakeCompleted={Boolean(lead.intake_completed_at || lead.intake_status === 'completed')}
-            intakeId={liveIntakeId ?? lead.id}
+            intake={lead}
             intakeUrl={intakeUrl}
-            sending={sendingIntake}
             onOpen={() => setIntakeSheetOpen(true)}
-            onImport={() => setImportIntakeOpen(true)}
-            onSend={() => void sendIntake()}
             onCopy={() => void copyIntakeUrl()}
           />
           <LeadDetailsCard
