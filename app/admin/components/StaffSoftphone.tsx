@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 const Softphone = dynamic(() => import('@/components/softphone/Softphone'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[420px] w-[320px] items-center justify-center rounded-[18px] border border-border bg-card text-sm text-muted-foreground">
+    <div className="flex h-[420px] w-[328px] items-center justify-center rounded-[14px] border border-border bg-card text-sm text-muted-foreground">
       Loading phone…
     </div>
   ),

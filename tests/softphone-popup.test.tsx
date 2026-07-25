@@ -74,7 +74,32 @@ vi.mock('@twilio/voice-sdk', () => ({
   },
 }))
 
+vi.mock('@telnyx/webrtc', () => ({
+  TelnyxRTC: class {
+    on() {}
+    connect() {}
+    disconnect() {}
+  },
+}))
+
 import Softphone from '@/components/softphone/Softphone'
+
+/** Routes the softphone's fetches: token, directory, and wrap-up save. */
+function mockFetch() {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input)
+    if (url.includes('/api/token')) {
+      return { ok: true, json: async () => ({ provider: 'twilio', token: 'voice-token' }) } as Response
+    }
+    if (url.includes('/api/admin/phone/directory')) {
+      return { ok: true, json: async () => ({ entries: [] }) } as Response
+    }
+    if (url.includes('/api/admin/phone/call-log')) {
+      return { ok: true, json: async () => ({ ok: true, callId: 'c1', mode: 'inserted' }) } as Response
+    }
+    return { ok: false, json: async () => ({}) } as Response
+  })
+}
 
 describe('Softphone pop-up', () => {
   afterEach(() => {
@@ -84,10 +109,7 @@ describe('Softphone pop-up', () => {
   })
 
   it('keeps DND from dialing and only allows minimizing active calls', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({ token: 'voice-token' }),
-    } as Response)
+    mockFetch()
     const user = userEvent.setup()
 
     render(<Softphone />)
@@ -104,11 +126,27 @@ describe('Softphone pop-up', () => {
     expect(voiceSdk.getLastDevice()?.connect).not.toHaveBeenCalled()
   })
 
-  it('sends keypad digits as DTMF during an active call and reopens to wrap-up after hangup', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({ token: 'voice-token' }),
-    } as Response)
+  it('ignores digit keys typed outside the softphone', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+
+    render(
+      <>
+        <input aria-label="Matters search" />
+        <Softphone />
+      </>,
+    )
+
+    await screen.findByText('Ready')
+    await user.click(screen.getByLabelText('Matters search'))
+    await user.keyboard('781555')
+
+    expect((screen.getByLabelText('Phone number') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Matters search') as HTMLInputElement).value).toBe('781555')
+  })
+
+  it('sends keypad digits as DTMF during an active call and saves the wrap-up after hangup', async () => {
+    const fetchMock = mockFetch()
     const user = userEvent.setup()
 
     render(<Softphone />)
@@ -117,24 +155,40 @@ describe('Softphone pop-up', () => {
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '7815551212' } })
     await user.click(screen.getByRole('button', { name: /^call$/i }))
 
-    await waitFor(() => expect(voiceSdk.getLastDevice()?.connect).toHaveBeenCalledWith({ params: { To: '+17815551212' } }))
+    await waitFor(() =>
+      expect(voiceSdk.getLastDevice()?.connect).toHaveBeenCalledWith({ params: { To: '+17815551212' } }),
+    )
     voiceSdk.getLastCall()?.emit('accept')
     await screen.findByText('00:00')
 
+    // minimize collapses to the timer chip; the active-call controls disappear
     await user.click(screen.getByRole('button', { name: /minimize/i }))
-    expect(screen.queryByRole('group', { name: 'Dial pad' })).toBeNull()
+    expect(screen.getByText(/00:00 · on call/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^keypad$/i })).toBeNull()
     await user.click(screen.getByRole('button', { name: /open active call/i }))
 
-    const readout = screen.getByText('(781) 555-1212')
+    // DTMF goes through the in-call keypad
+    await user.click(screen.getByRole('button', { name: /^keypad$/i }))
     await user.click(within(screen.getByRole('group', { name: 'Dial pad' })).getByRole('button', { name: /5/i }))
-
     expect(voiceSdk.getLastCall()?.sendDigits).toHaveBeenCalledWith('5')
-    expect(readout.textContent).toBe('(781) 555-1212')
 
-    await user.click(screen.getByRole('button', { name: /^end$/i }))
+    await user.click(screen.getByRole('button', { name: /end call/i }))
 
-    expect(await screen.findByText('Call wrap-up')).toBeTruthy()
-    expect((screen.getByLabelText('Outcome') as HTMLSelectElement).value).toBe('Reached')
-    expect(screen.getByLabelText('Call notes')).toBeTruthy()
+    // wrap-up replaces the body: outcome buttons instead of a select
+    expect(await screen.findByText(/call ended/i)).toBeTruthy()
+    const reached = screen.getByRole('button', { name: 'Reached' })
+    expect(reached.getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.change(screen.getByLabelText('Call notes'), { target: { value: 'Discussed the trust draft' } })
+    await user.click(screen.getByRole('button', { name: /save call/i }))
+
+    await waitFor(() => {
+      const wrapUpPost = fetchMock.mock.calls.find(([input]) => String(input).includes('/api/admin/phone/call-log'))
+      expect(wrapUpPost).toBeTruthy()
+      const body = JSON.parse(String((wrapUpPost?.[1] as RequestInit).body))
+      expect(body.outcome).toBe('Reached')
+      expect(body.notes).toBe('Discussed the trust draft')
+      expect(body.direction).toBe('outbound')
+    })
   })
 })
