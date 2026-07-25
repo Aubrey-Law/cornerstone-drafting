@@ -5,9 +5,12 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LeadsClient, type LeadRow } from '@/app/admin/leads/LeadsClient'
+import MattersClient from '@/app/admin/matters/MattersClient'
+import type { MatterListRow } from '@/lib/queries/matters'
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -76,6 +79,63 @@ describe('lead list controls', () => {
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
 
     expect(visibleLeadNames()).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
+    expect(screen.getByText('2 selected')).toBeTruthy()
+  })
+})
+
+const matterRows: MatterListRow[] = [
+  {
+    matter_id: 'zoe', matter_name: 'Zoe Estate Plan', matter_number: '2026-EP-003', stage: 'design', status: 'open', flags: null,
+    matter_created: '2026-07-20T00:00:00Z', client_name: 'Zoe Beta', client_email: 'zoe@example.com', client_phone: '617-555-0101',
+    client_dob: null, client_address: null, spouse_name: null, spouse_email: null, spouse_phone: null, spouse_dob: null, spouse_address: null,
+    plan_type: null, marital_status: null, has_minor_children: null, taxable_estate: null, intake_status: 'submitted', design_status: null,
+    intake_submitted_at: '2026-07-20T00:00:00Z', drafts_sent_at: null, signing_date: null, documents_executed_at: null,
+    next_appointment: null, next_appointment_type: null, referral_source: null, fee_amount: null, opened_at: null, practice_area: 'EP',
+  },
+  {
+    matter_id: 'jane', matter_name: 'Jane Estate Plan', matter_number: '2026-EP-002', stage: 'design', status: 'open', flags: null,
+    matter_created: '2026-07-19T00:00:00Z', client_name: 'Jane Alpha', client_email: 'jane@example.com', client_phone: '617-555-0102',
+    client_dob: null, client_address: null, spouse_name: null, spouse_email: null, spouse_phone: null, spouse_dob: null, spouse_address: null,
+    plan_type: null, marital_status: null, has_minor_children: null, taxable_estate: null, intake_status: 'submitted', design_status: null,
+    intake_submitted_at: '2026-07-19T00:00:00Z', drafts_sent_at: null, signing_date: null, documents_executed_at: null,
+    next_appointment: null, next_appointment_type: null, referral_source: null, fee_amount: null, opened_at: null, practice_area: 'EP',
+  },
+  {
+    matter_id: 'aaron', matter_name: 'Aaron Probate Matter', matter_number: '2026-PB-001', stage: 'intake', status: 'open', flags: null,
+    matter_created: '2026-07-18T00:00:00Z', client_name: 'Aaron Gamma', client_email: 'aaron@example.com', client_phone: '617-555-0103',
+    client_dob: null, client_address: null, spouse_name: null, spouse_email: null, spouse_phone: null, spouse_dob: null, spouse_address: null,
+    plan_type: null, marital_status: null, has_minor_children: null, taxable_estate: null, intake_status: null, design_status: null,
+    intake_submitted_at: null, drafts_sent_at: null, signing_date: null, documents_executed_at: null,
+    next_appointment: null, next_appointment_type: null, referral_source: null, fee_amount: null, opened_at: null, practice_area: 'Probate',
+  },
+]
+
+function visibleMatterNames(): string[] {
+  return screen.getAllByRole('link')
+    .filter(link => link.getAttribute('href')?.startsWith('/admin/matters/'))
+    .map(link => link.textContent ?? '')
+    .filter(Boolean)
+}
+
+describe('matter list controls', () => {
+  it('sorts the filtered matter rows from the Sort by control', async () => {
+    const user = userEvent.setup()
+    render(<MattersClient matters={matterRows} />)
+
+    await selectOption(user, 'Sort matters by', 'Client Z-A')
+    expect(visibleMatterNames()).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
+  })
+
+  it('clear filters preserves matter sort order and visible-row selection', async () => {
+    const user = userEvent.setup()
+    render(<MattersClient matters={matterRows} />)
+
+    await selectOption(user, 'Sort matters by', 'Client Z-A')
+    await selectOption(user, 'Filter by practice area', 'Estate Planning')
+    await user.click(screen.getByRole('checkbox', { name: 'Select all visible matters' }))
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+
+    expect(visibleMatterNames()).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
     expect(screen.getByText('2 selected')).toBeTruthy()
   })
 })
