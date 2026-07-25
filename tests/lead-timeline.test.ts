@@ -108,6 +108,20 @@ describe('lead timeline normalization', () => {
     ])
   })
 
+  it('omits a meaningless duration separator for calls without a duration', () => {
+    const result = buildLeadTimeline({
+      notes: [],
+      meetings: [],
+      calls: [{ ...calls[0], duration_seconds: null }],
+      activity: [],
+      actorNames: {},
+    })
+
+    expect(result[0].body).toContain('inbound · completed')
+    expect(result[0].body).not.toContain('—')
+    expect(result[0].body).not.toContain('completed ·')
+  })
+
   it('sorts all sources newest first and labels unknown actors as System', () => {
     const result = buildLeadTimeline({
       notes,

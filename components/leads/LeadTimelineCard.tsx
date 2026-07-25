@@ -55,8 +55,10 @@ type Props = {
   actorNames?: Record<string, string>
   callsError?: string | null
   actorError?: string | null
+  refreshWarning?: string | null
   currentUser: { id: string; role: string }
   onActivityChange?: () => void | Promise<void>
+  onCommittedTouch?: (timestamp: string) => void
 }
 
 const FILTERS: Array<{ value: LeadTimelineFilter; label: string }> = [
@@ -106,8 +108,10 @@ export function LeadTimelineCard({
   actorNames = {},
   callsError = null,
   actorError = null,
+  refreshWarning: externalRefreshWarning = null,
   currentUser,
   onActivityChange,
+  onCommittedTouch,
 }: Props) {
   const token = useAccessToken()
   const [notes, setNotes] = useState(() => sortNotes(initialNotes))
@@ -122,6 +126,7 @@ export function LeadTimelineCard({
   const [meeting, setMeeting] = useState({ title: '', date: '', attendees: '', body: '' })
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshWarning, setRefreshWarning] = useState<string | null>(null)
   const hasCallablePhone = phoneTelHref(leadPhone) !== null
 
   const items = useMemo(() => buildLeadTimeline({
@@ -153,9 +158,16 @@ export function LeadTimelineCard({
     setError(null)
     try {
       await work()
-      await onActivityChange?.()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Request failed')
+      setPending(false)
+      return
+    }
+    try {
+      await onActivityChange?.()
+      setRefreshWarning(null)
+    } catch (caught) {
+      setRefreshWarning(caught instanceof Error ? caught.message : 'Could not refresh timeline')
     } finally {
       setPending(false)
     }
@@ -164,8 +176,10 @@ export function LeadTimelineCard({
   async function addNote() {
     await mutate(async () => {
       const json = await call(`/api/admin/leads/${leadId}/notes`, 'POST', { body })
-      setNotes(current => sortNotes([...current, json.note as LeadTimelineNote]))
+      const added = json.note as LeadTimelineNote
+      setNotes(current => sortNotes([...current, added]))
       setBody('')
+      onCommittedTouch?.(added.createdAt)
     })
   }
 
@@ -174,6 +188,7 @@ export function LeadTimelineCard({
       const json = await call(`/api/admin/leads/${leadId}/notes/${id}`, 'PATCH', { body: editBody })
       setNotes(current => sortNotes(current.map(note => note.id === id ? json.note : note)))
       setEditingNoteId(null)
+      onCommittedTouch?.((json.note as LeadTimelineNote).updatedAt || new Date().toISOString())
     })
   }
 
@@ -181,6 +196,7 @@ export function LeadTimelineCard({
     await mutate(async () => {
       await call(`/api/admin/leads/${leadId}/notes/${id}`, 'DELETE')
       setNotes(current => current.filter(note => note.id !== id))
+      onCommittedTouch?.(new Date().toISOString())
     })
   }
 
@@ -195,6 +211,7 @@ export function LeadTimelineCard({
       const added = mapMeetingNoteApiRow(json.meetingNote as LeadMeetingNoteApiRow)
       setMeetings(current => sortMeetings([...current, added]))
       setMeetingOpen(false)
+      onCommittedTouch?.(added.createdAt)
     })
   }
 
@@ -385,6 +402,11 @@ export function LeadTimelineCard({
       {actorError && (
         <p className="mt-4 text-xs text-muted-foreground">Actor names unavailable: {actorError}</p>
       )}
+      {(refreshWarning ?? externalRefreshWarning) && (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Timeline refresh unavailable: {refreshWarning ?? externalRefreshWarning}
+        </p>
+      )}
 
       {granolaOpen && (
         <AddMeetingNotesDialog
@@ -397,7 +419,15 @@ export function LeadTimelineCard({
               ...current.filter(existing => existing.id !== imported.id),
               imported,
             ]))
-            void onActivityChange?.()
+            onCommittedTouch?.(imported.createdAt)
+            void (async () => {
+              try {
+                await onActivityChange?.()
+                setRefreshWarning(null)
+              } catch (caught) {
+                setRefreshWarning(caught instanceof Error ? caught.message : 'Could not refresh timeline')
+              }
+            })()
           }}
         />
       )}

@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { mergeLeadFieldPatch, validateLeadDetails } from '@/lib/leads/details'
+import { mergeLeadFieldPatch, validateLeadDetails, validateLeadFieldPatch } from '@/lib/leads/details'
 
 const migrationPath = path.join(
   process.cwd(),
@@ -11,6 +11,10 @@ const migrationPath = path.join(
 const snoozeMigrationPath = path.join(
   process.cwd(),
   'supabase/migrations/20260811000000_lead_next_action_snooze.sql',
+)
+const atomicFieldMigrationPath = path.join(
+  process.cwd(),
+  'supabase/migrations/20260812000000_lead_atomic_field_updates.sql',
 )
 
 const completeInput = {
@@ -173,6 +177,31 @@ describe('lead details validation', () => {
       value: ' ',
     })).toThrow(/first name is required/i)
   })
+
+  it('validates and normalizes one field without requiring a mutable row snapshot', () => {
+    expect(validateLeadFieldPatch({ field: 'email', value: ' JANE@EXAMPLE.COM ' })).toEqual({
+      field: 'email',
+      value: 'jane@example.com',
+    })
+    expect(validateLeadFieldPatch({ field: 'address', value: {
+      addressLine1: ' 10 Main St ',
+      addressLine2: '',
+      city: ' Boston ',
+      state: ' MA ',
+      zip: '02108',
+      county: '',
+    } })).toEqual({
+      field: 'address',
+      value: {
+        addressLine1: '10 Main St',
+        addressLine2: null,
+        city: 'Boston',
+        state: 'MA',
+        zip: '02108',
+        county: null,
+      },
+    })
+  })
 })
 
 describe('lead next-action snooze migration', () => {
@@ -185,9 +214,9 @@ describe('lead next-action snooze migration', () => {
     expect(sql).toContain('set search_path = pg_catalog, public')
   })
 
-  it('rejects a null snooze timestamp as well as a non-future timestamp', () => {
+  it('accepts null as a clear while rejecting a non-null non-future timestamp', () => {
     const sql = source()
-    expect(sql).toContain('if p_until is null or p_until <= statement_timestamp() then')
+    expect(sql).toContain('if p_until is not null and p_until <= statement_timestamp() then')
     expect(sql).toContain("raise exception 'snooze time must be in the future'")
   })
 
@@ -207,6 +236,8 @@ describe('lead next-action snooze migration', () => {
     )
     expect(functionBody).toContain('set lead_next_action_snoozed_until = p_until')
     expect(functionBody.match(/insert into public\.lead_activity/g)).toHaveLength(1)
+    expect(functionBody).toContain("'next_action_snooze_cleared'")
+    expect(functionBody).toContain("'next action snooze cleared'")
     expect(functionBody).toContain("'next_action_snoozed'")
     expect(functionBody).toContain("'next action snoozed'")
   })
@@ -219,6 +250,74 @@ describe('lead next-action snooze migration', () => {
     expect(sql).toContain('from public, anon, authenticated')
     expect(sql).toContain('grant execute on function public.snooze_lead_next_action')
     expect(sql).toContain('to service_role')
+  })
+})
+
+describe('atomic lead field update migration', () => {
+  const source = () => fs.readFileSync(atomicFieldMigrationPath, 'utf8').toLowerCase()
+
+  it('defines a service-role-only field RPC with a closed field allowlist', () => {
+    const sql = source()
+    expect(sql).toContain('create or replace function public.update_lead_opportunity_field')
+    expect(sql).toContain('p_field not in')
+    for (const field of [
+      'firstname', 'middlename', 'lastname', 'preferredname', 'email', 'phone',
+      'dateofbirth', 'address', 'maritalstatus', 'practicearea', 'source', 'fee',
+      'urgency', 'estimatedestatevalue', 'hasminorchildren', 'qualificationnotes', 'spouse',
+    ]) {
+      expect(sql).toContain(`'${field}'`)
+    }
+    expect(sql).toContain(") <> 'service_role'")
+    expect(sql).toContain("u.id = p_actor_id and u.role in ('attorney', 'admin')")
+    expect(sql).toContain('revoke execute on function public.update_lead_opportunity_field')
+    expect(sql).toContain('from public, anon, authenticated')
+    expect(sql).toContain('to service_role')
+  })
+
+  it('locks the lead and opportunity before applying the requested field', () => {
+    const sql = source()
+    const leadLock = sql.indexOf('where id = p_lead_id for update')
+    const matterLock = sql.indexOf('where id = v_lead.matter_id for update')
+    const update = sql.indexOf('update public.client_intake set')
+    expect(leadLock).toBeGreaterThan(-1)
+    expect(matterLock).toBeGreaterThan(leadLock)
+    expect(update).toBeGreaterThan(matterLock)
+    expect(sql).toContain("v_matter.relationship_status = 'hired'")
+    expect(sql).toContain("raise exception 'lead already converted")
+  })
+
+  it('updates disjoint scalar fields from the locked row rather than a full client snapshot', () => {
+    const sql = source()
+    expect(sql).toContain("phone = case when p_field = 'phone'")
+    expect(sql).toContain("lead_source = case when p_field = 'source'")
+    expect(sql).toContain('else phone end')
+    expect(sql).toContain('else lead_source end')
+    expect(sql).not.toContain('p_details')
+  })
+
+  it('serializes spouse upsert or removal behind the same lead lock and leaves spouse untouched for scalar fields', () => {
+    const sql = source()
+    const leadLock = sql.indexOf('where id = p_lead_id for update')
+    const spouseGuard = sql.indexOf("if p_field = 'spouse' then")
+    const spouseDelete = sql.indexOf('delete from public.contacts', spouseGuard)
+    const spouseUpsert = sql.indexOf('insert into public.contacts', spouseGuard)
+    expect(spouseGuard).toBeGreaterThan(leadLock)
+    expect(spouseDelete).toBeGreaterThan(spouseGuard)
+    expect(spouseUpsert).toBeGreaterThan(spouseGuard)
+    expect(sql).toContain("on conflict (client_intake_id) where relationship_type = 'spouse'")
+  })
+
+  it('returns the locked lead, committed spouse state, and exactly one audit row atomically', () => {
+    const sql = source()
+    const functionBody = sql.slice(
+      sql.indexOf('create or replace function public.update_lead_opportunity_field'),
+      sql.indexOf('revoke execute on function public.update_lead_opportunity_field'),
+    )
+    expect(functionBody.match(/insert into public\.lead_activity/g)).toHaveLength(1)
+    expect(functionBody).toContain("'details_updated'")
+    expect(functionBody).toContain("'lead', to_jsonb(v_lead)")
+    expect(functionBody).toContain("'spouse', v_spouse")
+    expect(functionBody).toContain("'activity', to_jsonb(v_activity)")
   })
 })
 

@@ -10,6 +10,7 @@ import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/StaffSoftphon
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatPhoneDisplay, phoneTelHref } from '@/lib/phone'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
 import type { LeadEditableField } from '@/lib/leads/details'
 import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
 import type {
@@ -17,6 +18,7 @@ import type {
   LeadTimelineMeeting,
   LeadTimelineNote,
 } from '@/lib/leads/timeline'
+import { newestTimestamp } from '@/lib/leads/timeline'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -100,6 +102,7 @@ type LeadDetailClientProps = {
   initialMeetingNotes?: LeadTimelineMeeting[]
   initialCalls?: LeadTimelineCall[]
   actorNames?: Record<string, string>
+  firmTimezone?: string
   nextAppointmentAt?: string | null
   lastTouchAt?: string | null
   callsError?: string | null
@@ -111,6 +114,8 @@ type LeadDetailClientProps = {
 type LeadPatchResponse = {
   lead: LeadRecord
   spouse: LeadSpouse | null
+  activity?: LeadActivityRow
+  refreshWarning?: string
   matterId?: string
 }
 
@@ -121,14 +126,38 @@ type SnoozeResponse = {
 
 const DAY_MS = 86_400_000
 
-function calendarDaysAgo(value: string | null | undefined): number | null {
+function calendarDaysAgo(value: string | null | undefined, timeZone: string): number | null {
   if (!value) return null
-  const then = new Date(value)
-  if (!Number.isFinite(then.getTime())) return null
-  const now = new Date(Date.now())
-  const nowDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
-  const thenDay = Date.UTC(then.getFullYear(), then.getMonth(), then.getDate())
-  return Math.max(0, Math.round((nowDay - thenDay) / DAY_MS))
+  const days = calendarDayDifference(Date.now(), value, timeZone)
+  return days === null ? null : Math.max(0, days)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function mergeHydratedLead(
+  current: LeadRecord,
+  saved: LeadRecord,
+  savedSpouse: LeadSpouse | null,
+): LeadRecord {
+  const next: LeadRecord = { ...current, ...saved }
+  if (!savedSpouse) {
+    delete next._spouse
+    return next
+  }
+  const currentSpouse = isRecord(current._spouse) ? current._spouse : {}
+  next._spouse = {
+    ...currentSpouse,
+    first_name: savedSpouse.first_name ?? '',
+    middle_name: savedSpouse.middle_name ?? '',
+    last_name: savedSpouse.last_name ?? '',
+    preferred_name: savedSpouse.preferred_name ?? '',
+    email: savedSpouse.email ?? '',
+    phone: savedSpouse.phone ?? '',
+    date_of_birth: savedSpouse.date_of_birth ?? '',
+  }
+  return next
 }
 
 export function LeadDetailClient({
@@ -139,6 +168,7 @@ export function LeadDetailClient({
   initialMeetingNotes = [],
   initialCalls = [],
   actorNames = {},
+  firmTimezone = FIRM_TIMEZONE,
   nextAppointmentAt = null,
   lastTouchAt,
   callsError = null,
@@ -161,6 +191,8 @@ export function LeadDetailClient({
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
+  const [activityRefreshWarning, setActivityRefreshWarning] = useState<string | null>(null)
+  const [localTouchAt, setLocalTouchAt] = useState<string | null>(null)
   const initialLeadRef = useRef(initialLead)
   const interactionBusy = busy
     || sendingIntake
@@ -200,6 +232,38 @@ export function LeadDetailClient({
   async function refreshActivity() {
     const json = await call<{ activity?: LeadActivityRow[] }>(`/api/admin/leads/${lead.id}/activity`, undefined, 'GET')
     setActivity(Array.isArray(json.activity) ? json.activity : [])
+    setActivityRefreshWarning(null)
+  }
+
+  async function refreshActivityBestEffort() {
+    try {
+      await refreshActivity()
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Could not refresh timeline'
+      setActivityRefreshWarning(message)
+    }
+  }
+
+  function recordTouch(value: string | null | undefined) {
+    const timestamp = value && Number.isFinite(Date.parse(value))
+      ? value
+      : new Date(Date.now()).toISOString()
+    setLocalTouchAt(current => newestTimestamp([current, timestamp]))
+  }
+
+  function applyLeadPatch(json: LeadPatchResponse) {
+    setLead(current => mergeHydratedLead(current, json.lead, json.spouse))
+    setSpouse(json.spouse)
+    if (json.activity) {
+      setActivity(current => [
+        json.activity!,
+        ...current.filter(row => row.id !== json.activity!.id),
+      ])
+      recordTouch(json.activity.created_at)
+    } else {
+      recordTouch(null)
+    }
+    if (json.refreshWarning) setActivityRefreshWarning(json.refreshWarning)
   }
 
   async function sendIntake() {
@@ -213,7 +277,8 @@ export function LeadDetailClient({
         intake_sent_at: new Date().toISOString(),
         intake_status: current.intake_status === 'completed' ? current.intake_status : 'sent',
       }))
-      await refreshActivity()
+      recordTouch(null)
+      await refreshActivityBestEffort()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not send intake')
     } finally {
@@ -276,9 +341,8 @@ export function LeadDetailClient({
         statusPayload(status),
         'PATCH',
       )
-      setLead(json.lead)
-      setSpouse(json.spouse)
-      await refreshActivity()
+      applyLeadPatch(json)
+      await refreshActivityBestEffort()
       if (json.matterId) router.push(`/admin/matters/${json.matterId}`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not save')
@@ -295,9 +359,8 @@ export function LeadDetailClient({
         { field, value },
         'PATCH',
       )
-      setLead(json.lead)
-      setSpouse(json.spouse)
-      await refreshActivity()
+      applyLeadPatch(json)
+      await refreshActivityBestEffort()
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : 'Could not save field')
       throw caught
@@ -321,17 +384,32 @@ export function LeadDetailClient({
     }
   }
 
-  async function snoozeNextAction(nextActionSnoozedUntil: string) {
+  async function snoozeNextAction(nextActionSnoozedUntil: string | null) {
     const json = await call<SnoozeResponse>(
       `/api/admin/leads/${lead.id}`,
       { nextActionSnoozedUntil },
       'PATCH',
     )
-    setLead(json.lead)
+    setLead(current => mergeHydratedLead(current, json.lead, spouse))
     setActivity(current => [
       json.activity,
       ...current.filter(row => row.id !== json.activity.id),
     ])
+    recordTouch(json.activity.created_at)
+  }
+
+  async function clearNextActionSnooze() {
+    if (!beginInteraction()) return
+    setBusyIntent('clear_snooze')
+    setError(null)
+    try {
+      await snoozeNextAction(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not clear snooze')
+    } finally {
+      setBusyIntent(null)
+      endInteraction()
+    }
   }
 
   async function handleNextAction(intent: string) {
@@ -421,8 +499,16 @@ export function LeadDetailClient({
     lead.email?.trim(),
   ].filter(Boolean).join(' · ')
   const statusLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
-  const leadDay = calendarDaysAgo(lead.created_at) ?? 0
-  const lastTouchDays = calendarDaysAgo(lastTouchAt)
+  const leadDay = calendarDaysAgo(lead.created_at, firmTimezone) ?? 0
+  const effectiveLastTouchAt = newestTimestamp([
+    lastTouchAt,
+    localTouchAt,
+    ...activity.map(row => row.created_at),
+    ...initialNotes.map(note => note.createdAt),
+    ...initialMeetingNotes.map(note => note.createdAt),
+    ...initialCalls.map(call => call.started_at),
+  ])
+  const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
   const computedAction = computeNextAction({
     leadStatus: lead.lead_status,
     intakeSentAt: lead.intake_sent_at ?? null,
@@ -430,7 +516,8 @@ export function LeadDetailClient({
     nextAppointmentAt,
     feeQuoted: lead.engagement_fee_quoted,
     hasActiveAgreement: Boolean(activeAgreement),
-    lastTouchAt: lastTouchAt ?? null,
+    lastTouchAt: effectiveLastTouchAt,
+    timeZone: firmTimezone,
   })
   const availableAction: NextAction = computedAction.key === 'follow_up'
     ? {
@@ -443,9 +530,10 @@ export function LeadDetailClient({
       }
     : computedAction
   const snoozedUntil = Date.parse(lead.lead_next_action_snoozed_until ?? '')
+  const snoozed = Number.isFinite(snoozedUntil) && snoozedUntil > Date.now()
   const visibleAction = availableAction.key !== 'nothing'
     && availableAction.actions.length > 0
-    && !(Number.isFinite(snoozedUntil) && snoozedUntil > Date.now())
+    && !snoozed
     ? availableAction
     : null
 
@@ -465,7 +553,7 @@ export function LeadDetailClient({
               <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 {statusLabel} · day {leadDay}
               </span>
-              {lastTouchAt !== undefined && lastTouchDays !== null && (
+              {effectiveLastTouchAt !== null && lastTouchDays !== null && (
                 <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   Last touch {lastTouchDays}d ago
                 </span>
@@ -477,10 +565,12 @@ export function LeadDetailClient({
             busy={interactionBusy}
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
+            snoozed={snoozed}
             matterId={lead.matter_id}
             actionError={error}
             onDraft={handleTopDraft}
             onConvert={handleTopConvert}
+            onClearSnooze={() => void clearNextActionSnooze()}
             onStatusChange={handleTopStatusChange}
           />
         </div>
@@ -524,8 +614,10 @@ export function LeadDetailClient({
                 actorNames={actorNames}
                 callsError={callsError}
                 actorError={actorError}
+                refreshWarning={activityRefreshWarning}
                 currentUser={currentUser}
                 onActivityChange={refreshActivity}
+                onCommittedTouch={recordTouch}
               />
             </div>
           </div>

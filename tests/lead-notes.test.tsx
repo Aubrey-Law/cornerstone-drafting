@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -53,6 +53,44 @@ describe('lead notes', () => {
     await user.click(screen.getByRole('button', { name: 'Edit note' })); const edit = screen.getByLabelText('Edit note body'); await user.clear(edit); await user.type(edit, 'Edited note'); await user.click(screen.getByRole('button', { name: 'Save note' }))
     await user.click(screen.getByRole('button', { name: 'Delete note' }))
     expect(fetchMock.mock.calls.map(call => call[1]?.method)).toEqual(['POST', 'PATCH', 'DELETE'])
+  })
+
+  it('keeps a committed note successful and warns separately when activity refresh fails', async () => {
+    const onActivityChange = vi.fn().mockRejectedValue(new Error('activity refresh failed'))
+    const user = userEvent.setup()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        note: {
+          id: 'n3',
+          body: 'Fresh note',
+          actorId: 'u1',
+          createdAt: '2026-07-25T12:00:00Z',
+          updatedAt: '2026-07-25T12:00:00Z',
+        },
+      }),
+    } as Response)
+    render(
+      <LeadTimelineCard
+        leadId="l1"
+        initialNotes={[]}
+        initialMeetingNotes={[]}
+        currentUser={{ id: 'u1', role: 'attorney' }}
+        actorNames={{ u1: 'Alice Attorney' }}
+        onActivityChange={onActivityChange}
+      />,
+    )
+
+    await user.type(screen.getByLabelText('New note'), 'Fresh note')
+    await user.click(screen.getByRole('button', { name: 'Add note' }))
+
+    expect(await screen.findByText('Fresh note')).toBeTruthy()
+    expect(screen.getByText(/Alice Attorney ·/)).toBeTruthy()
+    expect((screen.getByLabelText('New note') as HTMLInputElement).value).toBe('')
+    expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
+    await waitFor(() => {
+      expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
+    })
   })
 
   it('creates a manual meeting note', async () => {
@@ -153,5 +191,42 @@ describe('lead notes', () => {
     await user.click(screen.getByRole('button', { name: 'Log call' }))
 
     expect(screen.getByRole('dialog', { name: 'Softphone' }).getAttribute('aria-hidden')).toBe('false')
+  })
+
+  it('omits an empty duration marker while retaining real call durations', () => {
+    const baseCall = {
+      id: 'c1',
+      direction: 'inbound' as const,
+      status: 'completed',
+      participant_number: '+16175551212',
+      started_at: '2026-07-02T12:00:00Z',
+      recording_url: null,
+      voicemail_url: null,
+      summary: null,
+      firm_user_email: null,
+    }
+    const { rerender } = render(
+      <LeadTimelineCard
+        leadId="l1"
+        initialNotes={[]}
+        initialMeetingNotes={[]}
+        initialCalls={[{ ...baseCall, duration_seconds: null }]}
+        currentUser={{ id: 'u1', role: 'attorney' }}
+      />,
+    )
+
+    expect(screen.getByText('inbound · completed')).toBeTruthy()
+    expect(screen.queryByText('—')).toBeNull()
+
+    rerender(
+      <LeadTimelineCard
+        leadId="l1"
+        initialNotes={[]}
+        initialMeetingNotes={[]}
+        initialCalls={[{ ...baseCall, duration_seconds: 125 }]}
+        currentUser={{ id: 'u1', role: 'attorney' }}
+      />,
+    )
+    expect(screen.getByText('inbound · completed · 2:05')).toBeTruthy()
   })
 })

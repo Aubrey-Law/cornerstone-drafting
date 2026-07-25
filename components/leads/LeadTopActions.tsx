@@ -15,10 +15,12 @@ type Props = {
   busy: boolean
   status: string
   hasActiveAgreement: boolean
+  snoozed: boolean
   matterId?: string | null
   actionError?: string | null
   onDraft: () => void
   onConvert: () => void
+  onClearSnooze: () => void
   onStatusChange: (status: LeadStatus) => void
 }
 
@@ -26,10 +28,12 @@ export function LeadTopActions({
   busy,
   status,
   hasActiveAgreement,
+  snoozed,
   matterId,
   actionError,
   onDraft,
   onConvert,
+  onClearSnooze,
   onStatusChange,
 }: Props) {
   const active = status === 'lead'
@@ -82,6 +86,11 @@ export function LeadTopActions({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {active && snoozed && (
+              <DropdownMenuItem onClick={onClearSnooze}>
+                Clear snooze
+              </DropdownMenuItem>
+            )}
             {lost && (
               <DropdownMenuItem onClick={() => onStatusChange('lead')}>
                 Reactivate

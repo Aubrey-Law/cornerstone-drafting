@@ -65,6 +65,8 @@ const harness = vi.hoisted(() => {
     ],
   }
   const errors: Record<string, { message: string } | null> = {}
+  const inCalls: { table: string; column: string; values: string[] }[] = []
+  let currentUser: { id: string } | null = null
   const admin = {
     from: vi.fn((table: string) => {
       const result = () => ({
@@ -78,7 +80,10 @@ const harness = vi.hoisted(() => {
         neq: () => chain,
         order: () => chain,
         limit: () => chain,
-        in: () => chain,
+        in: (column: string, values: string[]) => {
+          inCalls.push({ table, column, values })
+          return chain
+        },
         maybeSingle: async () => result(),
         then: (
           resolve: (value: ReturnType<typeof result>) => unknown,
@@ -88,13 +93,27 @@ const harness = vi.hoisted(() => {
       return chain
     }),
   }
-  return { admin, hydrate: vi.fn(async () => hydratedLead), hydratedLead, rawLead, calls, errors }
+  return {
+    admin,
+    hydrate: vi.fn(async () => hydratedLead),
+    hydratedLead,
+    rawLead,
+    calls,
+    errors,
+    rows,
+    inCalls,
+    get currentUser() { return currentUser },
+    set currentUser(value) { currentUser = value },
+  }
 })
 
 vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => harness.admin }))
 vi.mock('@/lib/supabaseServer', () => ({
-  createServerSupabase: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
-  getCachedUserRole: vi.fn(),
+  createServerSupabase: async () => ({ auth: { getUser: async () => ({ data: { user: harness.currentUser } }) } }),
+  getCachedUserRole: vi.fn(async () => 'attorney'),
+}))
+vi.mock('@/lib/appointments/settings', () => ({
+  getSchedulingSettings: vi.fn(async () => ({ timezone: 'America/Los_Angeles' })),
 }))
 vi.mock('@/lib/intakeContactHydration', () => ({ hydrateIntakeWithContacts: harness.hydrate }))
 vi.mock('next/navigation', () => ({ notFound: vi.fn() }))
@@ -105,6 +124,12 @@ import LeadDetailPage from '@/app/admin/leads/[id]/page'
 describe('LeadDetailPage intake loader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    harness.currentUser = null
+    harness.inCalls.splice(0)
+    harness.rows.users = [
+      { id: 'user-1', display_name: 'Alice Attorney', email: 'alice@example.com' },
+      { id: 'user-2', display_name: null, email: 'ben@example.com' },
+    ]
     for (const table of Object.keys(harness.errors)) delete harness.errors[table]
   })
 
@@ -134,6 +159,28 @@ describe('LeadDetailPage intake loader', () => {
       initialCalls: harness.calls,
       actorNames: {},
       actorError: 'actor lookup failed',
+    })
+  })
+
+  it('loads the current user name in the actor batch and passes the configured firm timezone', async () => {
+    harness.currentUser = { id: 'current-user' }
+    harness.rows.users = [
+      { id: 'user-1', display_name: 'Alice Attorney', email: 'alice@example.com' },
+      { id: 'user-2', display_name: null, email: 'ben@example.com' },
+      { id: 'current-user', display_name: 'Current Attorney', email: 'current@example.com' },
+    ]
+
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+
+    expect(page.props).toMatchObject({
+      actorNames: { 'current-user': 'Current Attorney' },
+      currentUser: { id: 'current-user', role: 'attorney' },
+      firmTimezone: 'America/Los_Angeles',
+    })
+    expect(harness.inCalls).toContainEqual({
+      table: 'users',
+      column: 'id',
+      values: expect.arrayContaining(['current-user']),
     })
   })
 })

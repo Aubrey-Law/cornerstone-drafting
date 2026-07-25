@@ -635,6 +635,9 @@ export function LeadDetailsCard({
           {NAME_COMPONENTS.map(component => {
             const value = lead[component.property]
             const populated = hasText(value)
+            if (!populated && (component.key === 'firstName' || component.key === 'lastName')) {
+              return null
+            }
             return (
               <button
                 aria-label={`${populated ? 'Edit' : 'Add'} ${component.label}`}

@@ -171,4 +171,43 @@ describe('computeNextAction', () => {
       intent: 'quote_fee',
     })
   })
+
+  it('uses firm calendar days across fall DST for the fourteen-day appointment boundary', () => {
+    vi.setSystemTime(new Date('2026-10-25T04:30:00Z')) // Oct 25, 00:30 EDT
+
+    expect(computeNextAction({
+      ...baseInput,
+      nextAppointmentAt: '2026-11-08T05:30:00Z', // Nov 8, 00:30 EST
+      timeZone: 'America/New_York',
+    })).toMatchObject({
+      title: 'Send intake before the discovery call',
+      detail: 'Discovery call is November 8, 2026 (14 days out). Intake has never been sent.',
+    })
+  })
+
+  it('uses firm calendar days across spring DST for overdue follow-up', () => {
+    vi.setSystemTime(new Date('2026-03-16T04:30:00Z')) // Mar 16, 00:30 EDT
+
+    expect(computeNextAction({
+      ...baseInput,
+      intakeSentAt: '2026-03-01T05:30:00Z',
+      lastTouchAt: '2026-03-08T05:30:00Z', // Mar 8, 00:30 EST
+      timeZone: 'America/New_York',
+    })).toMatchObject({
+      key: 'follow_up',
+      detail: 'Last touch was 8 days ago.',
+    })
+  })
+
+  it('displays the appointment on its firm-local date near UTC midnight', () => {
+    vi.setSystemTime(new Date('2026-07-25T16:00:00Z'))
+
+    expect(computeNextAction({
+      ...baseInput,
+      nextAppointmentAt: '2026-07-26T01:00:00Z',
+      timeZone: 'America/New_York',
+    })).toMatchObject({
+      detail: 'Discovery call is July 25, 2026 (0 days out). Intake has never been sent.',
+    })
+  })
 })

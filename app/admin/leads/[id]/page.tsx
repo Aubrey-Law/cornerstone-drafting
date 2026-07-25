@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
+import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
 import { LeadDetailClient } from './LeadDetailClient'
 
@@ -115,7 +116,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const meetingRows = (meetings ?? []) as LeadMeetingNoteLoaderRow[]
   const callRows = (calls ?? []) as LeadTimelineCall[]
   const actorIds = [...new Set(
-    [...activityRows, ...noteRows, ...meetingRows]
+    [
+      ...activityRows,
+      ...noteRows,
+      ...meetingRows,
+      ...(user?.id ? [{ actor_id: user.id }] : []),
+    ]
       .map(row => row.actor_id)
       .filter((actorId): actorId is string => Boolean(actorId)),
   )]
@@ -139,6 +145,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ])
 
   const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
+  const schedulingSettings = await getSchedulingSettings()
   const { data: agreement } = lead.matter_id
     ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
@@ -152,6 +159,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       initialMeetingNotes={meetingRows.map(mapMeeting)}
       initialCalls={calls ?? []}
       actorNames={actorNames}
+      firmTimezone={schedulingSettings.timezone}
       nextAppointmentAt={appointment?.start_time ?? null}
       lastTouchAt={lastTouchAt}
       callsError={callsError?.message ?? null}

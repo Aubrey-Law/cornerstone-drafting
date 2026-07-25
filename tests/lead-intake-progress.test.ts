@@ -70,6 +70,24 @@ describe('getLeadIntakeProgress', () => {
     expect(progressFor({ ...completeSingleIntake, asset_types: [] }).assets).toBe(false)
   })
 
+  it('normalizes the real AdminIntake boolean asset payload into Assets completion', () => {
+    const adminIntakePayload = {
+      ...completePersonal,
+      marital_status: 'single',
+      has_children: false,
+      has_minor_children: false,
+      estate_value: '500k_2m',
+      has_real_property: false,
+      has_retirement: true,
+      has_investments: false,
+      has_business: false,
+      has_life_insurance: false,
+    }
+
+    expect(progressFor(adminIntakePayload).assets).toBe(true)
+    expect(progressFor({ ...adminIntakePayload, has_retirement: false }).assets).toBe(false)
+  })
+
   it('treats real estate as an explicit false-or-complete tri-state', () => {
     expect(progressFor(completeSingleIntake).real_estate).toBe(true)
     expect(progressFor({ ...completeSingleIntake, has_real_property: undefined }).real_estate).toBe(false)

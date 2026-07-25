@@ -27,7 +27,7 @@ begin
   ) then
     raise exception 'Attorney or admin access required' using errcode = '42501';
   end if;
-  if p_until is null or p_until <= statement_timestamp() then
+  if p_until is not null and p_until <= statement_timestamp() then
     raise exception 'Snooze time must be in the future' using errcode = '22023';
   end if;
 
@@ -45,11 +45,15 @@ begin
 
   insert into public.lead_activity (lead_id, event_type, title, detail, actor_id)
   values (
-    p_lead_id, 'next_action_snoozed', 'Next action snoozed',
-    'Snoozed until ' || to_char(
-      p_until at time zone 'America/New_York',
-      'Mon FMDD, YYYY FMHH12:MI AM'
-    ),
+    p_lead_id,
+    case when p_until is null then 'next_action_snooze_cleared' else 'next_action_snoozed' end,
+    case when p_until is null then 'Next action snooze cleared' else 'Next action snoozed' end,
+    case when p_until is null then null else
+      'Snoozed until ' || to_char(
+        p_until at time zone 'America/New_York',
+        'Mon FMDD, YYYY FMHH12:MI AM'
+      )
+    end,
     p_actor_id
   ) returning * into v_activity;
 

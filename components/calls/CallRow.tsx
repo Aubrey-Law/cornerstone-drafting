@@ -17,8 +17,8 @@ export interface CallRowData {
   firm_user_email: string | null
 }
 
-function durationLabel(secs: number | null): string {
-  if (!secs || secs <= 0) return '—'
+function durationLabel(secs: number | null): string | null {
+  if (!secs || secs <= 0) return null
   const m = Math.floor(secs / 60)
   const s = secs % 60
   return `${m}:${s.toString().padStart(2, '0')}`
@@ -37,6 +37,12 @@ function iconFor(call: CallRowData): { Icon: typeof PhoneIncoming; label: string
 export function CallRow({ call }: { call: CallRowData }) {
   const { Icon, label } = iconFor(call)
   const phone = formatPhoneDisplay(call.participant_number)
+  const metadata = [
+    call.direction,
+    call.status,
+    durationLabel(call.duration_seconds),
+    call.firm_user_email,
+  ].filter(Boolean).join(' · ')
   return (
     <div className="flex items-start gap-3 px-3 py-2">
       <Icon className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-label={label} />
@@ -46,8 +52,7 @@ export function CallRow({ call }: { call: CallRowData }) {
           <span className="text-xs text-muted-foreground">{formatDate(call.started_at)}</span>
         </div>
         <div className="text-xs text-muted-foreground">
-          {call.direction} · {call.status} · {durationLabel(call.duration_seconds)}
-          {call.firm_user_email ? ` · ${call.firm_user_email}` : ''}
+          {metadata}
         </div>
         {call.summary ? <div className="mt-1 text-sm">{call.summary}</div> : null}
         {call.recording_url ? (

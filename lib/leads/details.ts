@@ -75,6 +75,10 @@ export const leadEditableFields = [
   'estimatedEstateValue', 'hasMinorChildren', 'qualificationNotes', 'spouse',
 ] as const
 export type LeadEditableField = typeof leadEditableFields[number]
+export type ValidatedLeadFieldPatch = {
+  field: LeadEditableField
+  value: unknown
+}
 
 const leadFieldPatchSchema = z.object({
   field: z.enum(leadEditableFields),
@@ -194,12 +198,24 @@ export function validateLeadDetails(input: LeadDetailsInput): ValidatedLeadDetai
   return leadDetailsSchema.parse(input)
 }
 
+export function validateLeadFieldPatch(input: unknown): ValidatedLeadFieldPatch {
+  const patch = leadFieldPatchSchema.parse(input)
+  if (patch.field === 'address') {
+    return { field: patch.field, value: addressPatchSchema.parse(patch.value) }
+  }
+  if (patch.field === 'spouse') {
+    return { field: patch.field, value: spousePatchSchema.parse(patch.value) }
+  }
+  const scalar = scalarFieldPatchSchema.parse(patch)
+  return { field: scalar.field, value: scalar.value }
+}
+
 export function mergeLeadFieldPatch(
   lead: LeadSnapshotRow,
   spouse: LeadSpouseSnapshot | null,
   patch: { field: LeadEditableField; value: unknown },
 ): ValidatedLeadDetails {
-  const parsedPatch = leadFieldPatchSchema.parse(patch)
+  const parsedPatch = validateLeadFieldPatch(patch)
   const complete = snapshotToLeadDetailsInput(lead, spouse)
   if (parsedPatch.field === 'address') completeAddress(complete, parsedPatch.value)
   else if (parsedPatch.field === 'spouse') complete.spouse = parseSpouseValue(parsedPatch.value)

@@ -81,6 +81,26 @@ describe('lead detail page', () => {
     expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('keeps a committed intake send successful when the activity refresh fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      if (String(input).includes('/activity')) {
+        return { ok: false, json: async () => ({ error: 'activity refresh failed' }) } as Response
+      }
+      return {
+        ok: true,
+        json: async () => ({ url: 'https://example.test/intake?invite=abc' }),
+      } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Send intake' }))
+
+    expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
+    expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
+  })
+
   it('keeps the mobile order as ribbon, details, intake, then timeline', () => {
     const { container } = render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     const text = container.textContent ?? ''
@@ -149,6 +169,27 @@ describe('lead detail page', () => {
     expect(screen.getByText('Last touch 2d ago')).toBeTruthy()
   })
 
+  it('uses current activity as the effective last touch instead of stale loader or lead timestamps', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    render(
+      <LeadDetailClient
+        lead={{ ...lead, intake_sent_at: '2026-07-01T12:00:00Z', updated_at: '2026-07-25T11:59:00Z' }}
+        spouse={spouse}
+        initialActivity={[{
+          id: 'activity-1',
+          event_type: 'details_updated',
+          title: 'Lead details updated',
+          created_at: '2026-07-25T11:00:00Z',
+        }]}
+        activeAgreement={{ id: 'agreement-1' }}
+        lastTouchAt="2026-07-15T12:00:00Z"
+      />,
+    )
+
+    expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
+    expect(screen.queryByText('Follow up with this lead')).toBeNull()
+  })
+
   it('clamps a future last-touch timestamp to zero calendar days ago', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(
@@ -161,6 +202,20 @@ describe('lead detail page', () => {
     )
 
     expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
+  })
+
+  it('calculates lead age by firm-local calendar day near UTC midnight', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-26T07:30:00Z'))
+    render(
+      <LeadDetailClient
+        lead={{ ...lead, created_at: '2026-07-26T06:30:00Z' }}
+        spouse={spouse}
+        initialActivity={[]}
+        firmTimezone="America/Los_Angeles"
+      />,
+    )
+
+    expect(screen.getByText('Lead · day 1')).toBeTruthy()
   })
 
   it('renders server-loaded calls without fetching the lead calls route', () => {
@@ -212,6 +267,41 @@ describe('lead detail page', () => {
     )
 
     expect(screen.queryByText('Send intake to get the facts')).toBeNull()
+  })
+
+  it('clears an active snooze from the header overflow and restores the next action', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        lead: { ...lead, lead_next_action_snoozed_until: null },
+        activity: {
+          id: 'snooze-clear-1',
+          event_type: 'next_action_snooze_cleared',
+          title: 'Next action snooze cleared',
+          detail: null,
+          created_at: '2026-07-25T12:00:01Z',
+        },
+      }),
+    } as Response)
+    const user = userEvent.setup()
+    render(
+      <LeadDetailClient
+        lead={{ ...lead, lead_next_action_snoozed_until: '2026-07-26T12:00:00Z' }}
+        spouse={spouse}
+        initialActivity={[]}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Clear snooze' }))
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/leads/l1', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ nextActionSnoozedUntil: null }),
+    }))
+    expect(await screen.findByText('Send intake to get the facts')).toBeTruthy()
+    expect(screen.getByText('Next action snooze cleared')).toBeTruthy()
   })
 
   it('opens the quoted-fee inline editor from the next-action ribbon', async () => {
@@ -343,6 +433,30 @@ describe('lead detail page', () => {
     expect(JSON.parse(String(patch?.[1]?.body))).toMatchObject({ status: 'lost' })
     expect(await screen.findByText('Lost · day 4')).toBeTruthy()
     expect(screen.queryByText('Send intake to get the facts')).toBeNull()
+  })
+
+  it('keeps a committed status change successful when its activity refresh fails', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) {
+        return { ok: false, json: async () => ({ error: 'activity refresh failed' }) } as Response
+      }
+      if (init?.method === 'PATCH') {
+        return {
+          ok: true,
+          json: async () => ({ lead: { ...lead, lead_status: 'lost' }, spouse }),
+        } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Mark lost' }))
+
+    expect(await screen.findByText('Lost · day 4')).toBeTruthy()
+    expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
+    expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
   it('opens the converted matter from the hired lead header', async () => {
@@ -522,6 +636,8 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={missingLastNameLead} spouse={spouse} initialActivity={[]} />)
 
+    expect(screen.getAllByRole('button', { name: '+ Add Name' })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Add Last name' })).toBeNull()
     await user.click(screen.getByRole('button', { name: '+ Add Name' }))
     const lastName = screen.getByRole('textbox', { name: 'Last name' })
     await user.type(lastName, 'Doe{Enter}')
@@ -530,6 +646,59 @@ describe('lead detail page', () => {
       method: 'PATCH',
       body: JSON.stringify({ field: 'lastName', value: 'Doe' }),
     }))
+  })
+
+  it('preserves contact-backed intake projections and synchronizes spouse after a field mutation', async () => {
+    const hydratedLead = {
+      ...lead,
+      has_children: true,
+      has_minor_children: false,
+      _spouse: { first_name: 'John', last_name: 'Doe', date_of_birth: '1981-01-01' },
+      _children: [{ first_name: 'Sam', last_name: 'Doe' }],
+      _fid_personal_rep_client: [{ first_name: 'Pat', last_name: 'Representative' }],
+      _fid_poa_client: [{ first_name: 'Alex', last_name: 'Agent' }],
+      _fid_hcp_client: [{ first_name: 'Casey', last_name: 'Proxy' }],
+      _fid_trustee_client: [{ first_name: 'Taylor', last_name: 'Trustee' }],
+      _fid_personal_rep_spouse: [{ first_name: 'Jordan', last_name: 'Representative' }],
+      _fid_poa_spouse: [{ first_name: 'Jordan', last_name: 'Agent' }],
+      _fid_hcp_spouse: [{ first_name: 'Jordan', last_name: 'Proxy' }],
+    }
+    const savedSpouse = { ...spouse, first_name: 'Jonathan' }
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) {
+        return { ok: true, json: async () => ({ activity: [] }) } as Response
+      }
+      if (init?.method === 'PATCH') {
+        return {
+          ok: true,
+          json: async () => ({
+            lead: { ...lead },
+            spouse: savedSpouse,
+            activity: {
+              id: 'activity-1',
+              event_type: 'details_updated',
+              title: 'Lead details updated',
+              created_at: '2026-07-25T12:00:00Z',
+            },
+          }),
+        } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={hydratedLead} spouse={spouse} initialActivity={[]} />)
+
+    expect(screen.getByLabelText('Household: complete')).toBeTruthy()
+    expect(screen.getByLabelText('Fiduciaries: complete')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
+    const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
+    await user.clear(firstName)
+    await user.type(firstName, 'Jonathan')
+    await user.click(screen.getByRole('button', { name: 'Save spouse' }))
+
+    expect((await screen.findByRole('button', { name: 'Edit Spouse' })).textContent).toContain('Jonathan Doe')
+    expect(screen.getByLabelText('Household: complete')).toBeTruthy()
+    expect(screen.getByLabelText('Fiduciaries: complete')).toBeTruthy()
   })
 
   it('provides separate edit affordances for every populated name component', () => {
@@ -612,6 +781,54 @@ describe('lead detail page', () => {
     resolvePatch({ ok: true, json: async () => ({ lead: { ...lead, phone: '617-555-0111' }, spouse }) } as Response)
     await waitFor(() => expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saved'))
     expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617-555-0111')
+  })
+
+  it('keeps an inline write committed and advances last touch when activity refresh fails', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) {
+        return { ok: false, json: async () => ({ error: 'activity refresh failed' }) } as Response
+      }
+      if (init?.method === 'PATCH') {
+        return {
+          ok: true,
+          json: async () => ({
+            lead: { ...lead, phone: '617-555-0111', intake_sent_at: '2026-07-01T12:00:00Z' },
+            spouse,
+            activity: {
+              id: 'activity-1',
+              event_type: 'details_updated',
+              title: 'Lead details updated',
+              created_at: '2026-07-25T11:59:00Z',
+            },
+          }),
+        } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(
+      <LeadDetailClient
+        lead={{ ...lead, intake_sent_at: '2026-07-01T12:00:00Z' }}
+        spouse={spouse}
+        initialActivity={[]}
+        activeAgreement={{ id: 'agreement-1' }}
+        lastTouchAt="2026-07-15T12:00:00Z"
+      />,
+    )
+    expect(screen.getByText('Follow up with this lead')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
+    const phone = screen.getByRole('textbox', { name: 'Phone' })
+    await user.clear(phone)
+    await user.type(phone, '617-555-0111{Enter}')
+
+    await waitFor(() => expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saved'))
+    expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617-555-0111')
+    expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
+    expect(screen.queryByText('Follow up with this lead')).toBeNull()
+    expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
+    expect(toastError).not.toHaveBeenCalled()
   })
 
   it('commits a changed scalar field on blur', async () => {

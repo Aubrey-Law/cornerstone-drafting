@@ -3,15 +3,17 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { deleteLead } from '@/lib/leads/deleteLead'
 import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
-import { mergeLeadFieldPatch, validateLeadDetails } from '@/lib/leads/details'
-import type { LeadEditableField, ValidatedLeadDetails } from '@/lib/leads/details'
-import type { LeadSnapshotRow, LeadSpouseSnapshot } from '@/types/database'
+import { validateLeadDetails, validateLeadFieldPatch } from '@/lib/leads/details'
+import type { ValidatedLeadDetails } from '@/lib/leads/details'
 import { z, ZodError } from 'zod'
 
 const snoozeRequestSchema = z.object({
-  nextActionSnoozedUntil: z.string()
-    .datetime({ offset: true, message: 'Invalid snooze time' })
-    .refine(value => new Date(value).getTime() > Date.now(), 'Snooze time must be in the future'),
+  nextActionSnoozedUntil: z.union([
+    z.string()
+      .datetime({ offset: true, message: 'Invalid snooze time' })
+      .refine(value => new Date(value).getTime() > Date.now(), 'Snooze time must be in the future'),
+    z.null(),
+  ]),
 }).strict()
 
 function validationError(error: unknown) {
@@ -31,6 +33,19 @@ function validationError(error: unknown) {
 
 function hasOwn(value: unknown, key: string): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function spouseResponse(details: ValidatedLeadDetails['spouse']) {
+  if (!details) return null
+  return {
+    first_name: details.firstName,
+    middle_name: details.middleName,
+    last_name: details.lastName,
+    preferred_name: details.preferredName,
+    email: details.email,
+    phone: details.phone,
+    date_of_birth: details.dateOfBirth,
+  }
 }
 
 /**
@@ -63,11 +78,27 @@ export async function PATCH(
   }
 
   const partialRequest = hasOwn(body, 'field')
-  let legacyDetails: ValidatedLeadDetails | null = null
-  if (!partialRequest) {
-    try { legacyDetails = validateLeadDetails(body) }
+  if (partialRequest) {
+    let patch
+    try { patch = validateLeadFieldPatch(body) }
     catch (error) { return validationError(error) }
+
+    const { data, error } = await getAdminClient().rpc('update_lead_opportunity_field', {
+      p_lead_id: intakeId,
+      p_field: patch.field,
+      p_value: patch.value,
+      p_actor_id: userId,
+    })
+    if (error) {
+      const conflict = /already (?:converted|hired)/i.test(error.message)
+      return NextResponse.json({ error: error.message }, { status: conflict ? 409 : 500 })
+    }
+    return NextResponse.json(data)
   }
+
+  let legacyDetails: ValidatedLeadDetails | null = null
+  try { legacyDetails = validateLeadDetails(body) }
+  catch (error) { return validationError(error) }
 
   const admin = getAdminClient()
   const { data: lead, error: leadReadError } = await admin
@@ -90,17 +121,7 @@ export async function PATCH(
   const opportunity = opportunityResult.data
 
   let details: ValidatedLeadDetails
-  if (partialRequest) {
-    try {
-      details = mergeLeadFieldPatch(
-        lead as LeadSnapshotRow,
-        (spouse ?? null) as LeadSpouseSnapshot | null,
-        body as { field: LeadEditableField; value: unknown },
-      )
-    } catch (error) {
-      return validationError(error)
-    }
-  } else if (legacyDetails) {
+  if (legacyDetails) {
     details = legacyDetails
   } else {
     return NextResponse.json({ error: 'Invalid lead details' }, { status: 400 })
@@ -137,11 +158,28 @@ export async function PATCH(
     matterId = converted.matterId
   }
   if (details.status === 'lost') { /* retained as a lead; the RPC persisted lost */ }
-  const [{ data: persistedLead }, { data: persistedSpouse }] = await Promise.all([
+  const [persistedLeadResult, persistedSpouseResult] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', intakeId).single(),
     admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
   ])
-  return NextResponse.json({ lead: persistedLead ?? savedLead, spouse: persistedSpouse ?? null, ...(matterId ? { matterId } : {}) })
+  const fallbackLead = matterId
+    ? { ...savedLead, lead_status: 'hired', matter_id: matterId }
+    : savedLead
+  const response = {
+    lead: persistedLeadResult.data ?? fallbackLead,
+    spouse: persistedSpouseResult.error
+      ? spouseResponse(details.spouse)
+      : persistedSpouseResult.data ?? null,
+    ...(matterId ? { matterId } : {}),
+  }
+  const refreshWarning = persistedLeadResult.error && persistedSpouseResult.error
+    ? 'Saved, but refreshed lead and spouse data are unavailable.'
+    : persistedLeadResult.error
+      ? 'Saved, but refreshed lead data is unavailable.'
+      : persistedSpouseResult.error
+        ? 'Saved, but refreshed spouse data is unavailable.'
+        : null
+  return NextResponse.json(refreshWarning ? { ...response, refreshWarning } : response)
 }
 
 export async function DELETE(

@@ -90,14 +90,18 @@ function meetingBody(meeting: LeadTimelineMeeting): string {
   return [meeting.body, ...metadata].filter(Boolean).join('\n')
 }
 
-function durationLabel(seconds: number | null): string {
-  if (!seconds || seconds <= 0) return '—'
+function durationLabel(seconds: number | null): string | null {
+  if (!seconds || seconds <= 0) return null
   const minutes = Math.floor(seconds / 60)
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
 }
 
 function callBody(call: LeadTimelineCall): string {
-  const metadata = `${call.direction} · ${call.status} · ${durationLabel(call.duration_seconds)}`
+  const metadata = [
+    call.direction,
+    call.status,
+    durationLabel(call.duration_seconds),
+  ].filter(Boolean).join(' · ')
   return [call.participant_number, metadata, call.summary].filter(Boolean).join('\n')
 }
 

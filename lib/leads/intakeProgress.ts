@@ -20,7 +20,32 @@ function estateWithoutRealPropertyComplete(intake: IntakeRow): boolean {
   // Property address and value have their own segment. Preserve every other
   // estate completion requirement rather than duplicating the estate rules.
   const { real_property_address: _address, real_property_value: _value, ...estateIntake } = intake
-  return step.isComplete(estateIntake)
+  return step.isComplete(normalizeAssetSelection(estateIntake))
+}
+
+const ADMIN_ASSET_FLAGS = [
+  ['has_real_property', 'real_estate'],
+  ['has_retirement', 'retirement'],
+  ['has_investments', 'investments'],
+  ['has_business', 'business'],
+  ['has_life_insurance', 'life_insurance'],
+] as const
+
+function normalizeAssetSelection(intake: IntakeRow): IntakeRow {
+  const financial = financialDetails(intake)
+  const explicitAssetTypes = assetTypesFor(intake, financial)
+  if (explicitAssetTypes !== null) return { ...intake, asset_types: explicitAssetTypes }
+
+  const hasAdminAssetShape = ADMIN_ASSET_FLAGS.some(([flag]) =>
+    Object.prototype.hasOwnProperty.call(intake, flag))
+  if (!hasAdminAssetShape) return intake
+
+  return {
+    ...intake,
+    asset_types: ADMIN_ASSET_FLAGS
+      .filter(([flag]) => intake[flag] === true)
+      .map(([, assetType]) => assetType),
+  }
 }
 
 function realEstateComplete(intake: IntakeRow): boolean {
