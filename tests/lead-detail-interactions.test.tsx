@@ -205,6 +205,48 @@ describe('lead detail page', () => {
     }
   })
 
+  it('adds a blank middle name through its scalar partial field', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response
+      if (init?.method === 'PATCH') {
+        return { ok: true, json: async () => ({ lead: { ...lead, middle_name: 'Quincy' }, spouse }) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    expect(screen.queryByText('—')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Add Middle name' }))
+    await user.type(screen.getByRole('textbox', { name: 'Middle name' }), 'Quincy{Enter}')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/leads/l1', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ field: 'middleName', value: 'Quincy' }),
+    }))
+  })
+
+  it('adds a blank preferred name through its scalar partial field', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response
+      if (init?.method === 'PATCH') {
+        return { ok: true, json: async () => ({ lead: { ...lead, preferred_name: 'Janie' }, spouse }) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    expect(screen.queryByText('—')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Add Preferred name' }))
+    await user.type(screen.getByRole('textbox', { name: 'Preferred name' }), 'Janie{Enter}')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/leads/l1', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ field: 'preferredName', value: 'Janie' }),
+    }))
+  })
+
   it('opens a populated phone in one click and Enter PATCHes only that field while announcing save state', async () => {
     let resolvePatch!: (response: Response) => void
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -291,6 +333,31 @@ describe('lead detail page', () => {
     expect((screen.getByRole('textbox', { name: 'Phone' }) as HTMLInputElement).value).toBe('999')
     expect(screen.queryByRole('textbox', { name: 'Email' })).toBeNull()
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0)
+  })
+
+  it('commits on a later outside blur after a disabled handoff attempt', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response
+      if (init?.method === 'PATCH') {
+        return { ok: true, json: async () => ({ lead: { ...lead, phone: '999' }, spouse }) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
+    const phone = screen.getByRole('textbox', { name: 'Phone' })
+    await user.clear(phone)
+    await user.type(phone, '999')
+    await user.click(screen.getByRole('button', { name: 'Edit Email' }))
+    await user.click(screen.getByRole('button', { name: 'Summarize intake' }))
+
+    await waitFor(() => {
+      const patches = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')
+      expect(patches).toHaveLength(1)
+      expect(patches[0]?.[1]?.body).toBe(JSON.stringify({ field: 'phone', value: '999' }))
+    })
   })
 
   it('disables status and top actions during an active edit and its pending save', async () => {
@@ -432,5 +499,73 @@ describe('lead detail page', () => {
         }),
       ])
     })
+  })
+
+  it('keyboard spouse removal never blur-saves a draft before cancel or null confirmation', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response
+      if (init?.method === 'PATCH') return { ok: true, json: async () => ({ lead, spouse: null }) } as Response
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
+    const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
+    await user.clear(firstName)
+    await user.type(firstName, 'Jonathan')
+
+    const removeTrigger = screen.getByRole('button', { name: 'Remove spouse' })
+    removeTrigger.focus()
+    await user.keyboard('{Enter}')
+    let dialog = await screen.findByRole('alertdialog')
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect((screen.getByRole('textbox', { name: 'Spouse first name' }) as HTMLInputElement).value).toBe('Jonathan')
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0)
+
+    screen.getByRole('button', { name: 'Remove spouse' }).focus()
+    await user.keyboard('{Enter}')
+    dialog = await screen.findByRole('alertdialog')
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0)
+
+    within(dialog).getByRole('button', { name: 'Remove spouse' }).focus()
+    await user.keyboard('{Enter}')
+    await waitFor(() => {
+      const patches = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')
+      expect(patches).toHaveLength(1)
+      expect(patches[0]?.[1]?.body).toBe(JSON.stringify({ field: 'spouse', value: null }))
+    })
+  })
+
+  it('retains the spouse draft and links a focused removal error when null persistence fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response
+      if (init?.method === 'PATCH') {
+        return { ok: false, json: async () => ({ error: 'Could not remove spouse' }) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
+    const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
+    await user.clear(firstName)
+    await user.type(firstName, 'Jonathan')
+    await user.click(screen.getByRole('button', { name: 'Remove spouse' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Remove spouse' }))
+
+    const removeTrigger = await screen.findByRole('button', { name: 'Remove spouse' })
+    expect((screen.getByRole('textbox', { name: 'Spouse first name' }) as HTMLInputElement).value).toBe('Jonathan')
+    const alert = screen.getByRole('alert')
+    expect(alert.id).toBe('lead-spouse-error')
+    expect(alert.textContent).toBe('Could not remove spouse')
+    expect(removeTrigger.getAttribute('aria-invalid')).toBe('true')
+    expect(removeTrigger.getAttribute('aria-describedby')).toBe('lead-spouse-error')
+    await waitFor(() => expect(removeTrigger).toBe(document.activeElement))
+    expect(toastError).toHaveBeenCalledWith('Could not remove spouse')
   })
 })

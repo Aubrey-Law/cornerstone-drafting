@@ -120,6 +120,7 @@ export function LeadDetailClient({
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [sendingIntake, setSendingIntake] = useState(false)
+  const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
   const initialLeadRef = useRef(initialLead)
 
   useEffect(() => {
@@ -267,6 +268,7 @@ export function LeadDetailClient({
   const [removeSpouseConfirmOpen, setRemoveSpouseConfirmOpen] = useState(false)
 
   function removeSpouse() {
+    setSpouseRemovalError(null)
     setRemoveSpouseConfirmOpen(true)
   }
 
@@ -317,6 +319,7 @@ export function LeadDetailClient({
             onActiveFieldChange={setActiveField}
             onSaveField={saveField}
             onRemoveSpouse={removeSpouse}
+            spouseRemovalError={spouseRemovalError}
           />
           <LeadNotesCard
             leadId={lead.id}
@@ -382,8 +385,13 @@ export function LeadDetailClient({
               onClick={() => {
                 setRemoveSpouseConfirmOpen(false)
                 void saveField('spouse', null)
-                  .catch(() => undefined)
-                  .finally(() => setActiveField(null))
+                  .then(() => {
+                    setSpouseRemovalError(null)
+                    setActiveField(null)
+                  })
+                  .catch(caught => {
+                    setSpouseRemovalError(caught instanceof Error ? caught.message : 'Could not remove spouse')
+                  })
               }}
             >
               Remove spouse

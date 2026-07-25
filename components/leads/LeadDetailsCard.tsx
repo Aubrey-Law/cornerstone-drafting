@@ -86,6 +86,7 @@ export type LeadDetailsCardProps = {
   onActiveFieldChange: (field: LeadEditableField | null) => void
   onSaveField: (field: LeadEditableField, value: unknown) => Promise<void>
   onRemoveSpouse: () => void
+  spouseRemovalError?: string | null
 }
 
 const hasText = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0
@@ -380,6 +381,7 @@ export function LeadDetailsCard({
   onActiveFieldChange,
   onSaveField,
   onRemoveSpouse,
+  spouseRemovalError = null,
 }: LeadDetailsCardProps) {
   const [draft, setDraft] = useState<unknown>(null)
   const [savingField, setSavingField] = useState<LeadEditableField | null>(null)
@@ -387,8 +389,8 @@ export function LeadDetailsCard({
   const [fieldError, setFieldError] = useState<FieldErrorState | null>(null)
   const lastPersistedRef = useRef<unknown>(null)
   const savingRef = useRef(false)
-  const suppressDisabledHandoffBlurRef = useRef(false)
   const suppressSpouseBlurRef = useRef(false)
+  const removeSpouseButtonRef = useRef<HTMLButtonElement | null>(null)
   const triggerRefs = useRef<Partial<Record<LeadEditableField, HTMLButtonElement | null>>>({})
 
   useEffect(() => {
@@ -398,9 +400,17 @@ export function LeadDetailsCard({
     setDraft(persisted)
   }, [activeField, lead, spouse])
 
+  useEffect(() => {
+    if (!spouseRemovalError) return
+    requestAnimationFrame(() => removeSpouseButtonRef.current?.focus())
+  }, [spouseRemovalError])
+
   const completeCount = FIELD_DEFINITIONS.filter(field => field.complete(lead, spouse)).length
   const statusField = savingField ?? savedField
   const statusLabel = labelForField(statusField)
+  const displayedFieldError = spouseRemovalError
+    ? { field: 'spouse' as const, message: spouseRemovalError }
+    : fieldError
   const missingFields = useMemo(() => {
     const incomplete = FIELD_DEFINITIONS.filter(field => !field.complete(lead, spouse))
     return [...incomplete].sort((left, right) => {
@@ -472,10 +482,6 @@ export function LeadDetailsCard({
 
   function handleEditorBlur(field: LeadEditableField, event: React.FocusEvent<HTMLDivElement>) {
     if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
-    if (suppressDisabledHandoffBlurRef.current) {
-      suppressDisabledHandoffBlurRef.current = false
-      return
-    }
     if (field === 'spouse' && suppressSpouseBlurRef.current) {
       suppressSpouseBlurRef.current = false
       return
@@ -538,10 +544,15 @@ export function LeadDetailsCard({
           <div className="flex items-end gap-2">
             {spouse ? (
               <Button
+                aria-describedby={spouseRemovalError ? 'lead-spouse-error' : undefined}
+                aria-invalid={spouseRemovalError ? true : undefined}
+                ref={removeSpouseButtonRef}
                 type="button"
                 variant="outline"
-                onPointerDown={() => { suppressSpouseBlurRef.current = true }}
-                onClick={onRemoveSpouse}
+                onClick={() => {
+                  suppressSpouseBlurRef.current = true
+                  onRemoveSpouse()
+                }}
               >
                 Remove spouse
               </Button>
@@ -623,20 +634,22 @@ export function LeadDetailsCard({
         <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1">
           {NAME_COMPONENTS.map(component => {
             const value = lead[component.property]
-            if (!hasText(value)) return null
+            const populated = hasText(value)
             return (
               <button
-                aria-label={`Edit ${component.label}`}
-                aria-describedby={fieldError?.field === component.key ? `lead-${component.key}-error` : undefined}
-                aria-invalid={fieldError?.field === component.key || undefined}
-                className="rounded-sm text-left text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`${populated ? 'Edit' : 'Add'} ${component.label}`}
+                aria-describedby={displayedFieldError?.field === component.key ? `lead-${component.key}-error` : undefined}
+                aria-invalid={displayedFieldError?.field === component.key || undefined}
+                className={populated
+                  ? 'rounded-sm text-left text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring'
+                  : 'rounded-sm text-left text-xs font-medium text-muted-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring'}
                 disabled={activeField !== null}
                 key={component.key}
                 ref={element => { triggerRefs.current[component.key] = element }}
                 type="button"
                 onClick={() => openField(component.key)}
               >
-                {value}
+                {populated ? value : `+ Add ${component.label}`}
               </button>
             )
           })}
@@ -650,7 +663,7 @@ export function LeadDetailsCard({
       className="rounded-lg border border-border bg-card"
       onPointerDownCapture={event => {
         if (event.target instanceof HTMLButtonElement && event.target.disabled) {
-          suppressDisabledHandoffBlurRef.current = true
+          event.preventDefault()
         }
       }}
     >
@@ -693,8 +706,8 @@ export function LeadDetailsCard({
                 <FieldLabel>{field.label}</FieldLabel>
                 <button
                   aria-label={`Edit ${field.label}`}
-                  aria-describedby={fieldError?.field === field.key ? `lead-${field.key}-error` : undefined}
-                  aria-invalid={fieldError?.field === field.key || undefined}
+                  aria-describedby={displayedFieldError?.field === field.key ? `lead-${field.key}-error` : undefined}
+                  aria-invalid={displayedFieldError?.field === field.key || undefined}
                   className="mt-1 w-full rounded-sm text-left text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
                   disabled={activeField !== null}
                   ref={element => { triggerRefs.current[field.key] = element }}
@@ -714,9 +727,9 @@ export function LeadDetailsCard({
           </span>
         )}
 
-        {fieldError && (
-          <p className="mt-2 text-xs text-destructive" id={`lead-${fieldError.field}-error`} role="alert">
-            {fieldError.message}
+        {displayedFieldError && (
+          <p className="mt-2 text-xs text-destructive" id={`lead-${displayedFieldError.field}-error`} role="alert">
+            {displayedFieldError.message}
           </p>
         )}
 
@@ -726,8 +739,8 @@ export function LeadDetailsCard({
               const targetField = field.key === 'firstName' ? firstMissingNameField(lead) : field.key
               return (
                 <button
-                  aria-describedby={fieldError?.field === targetField ? `lead-${targetField}-error` : undefined}
-                  aria-invalid={fieldError?.field === targetField || undefined}
+                  aria-describedby={displayedFieldError?.field === targetField ? `lead-${targetField}-error` : undefined}
+                  aria-invalid={displayedFieldError?.field === targetField || undefined}
                   key={field.key}
                   className="h-7 rounded-full border border-dashed border-border px-3 text-xs font-medium text-muted-foreground outline-none hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
                   disabled={activeField !== null}
