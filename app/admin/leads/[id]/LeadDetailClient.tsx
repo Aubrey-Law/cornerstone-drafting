@@ -233,6 +233,7 @@ export function LeadDetailClient({
   }
 
   async function saveField(field: LeadEditableField, value: unknown) {
+    if (field === 'spouse' && value !== null) setSpouseRemovalError(null)
     try {
       const json = await call<LeadPatchResponse>(
         `/api/admin/leads/${lead.id}`,
@@ -270,6 +271,11 @@ export function LeadDetailClient({
   function removeSpouse() {
     setSpouseRemovalError(null)
     setRemoveSpouseConfirmOpen(true)
+  }
+
+  function changeActiveField(field: LeadEditableField | null) {
+    if (field !== 'spouse') setSpouseRemovalError(null)
+    setActiveField(field)
   }
 
   const clientName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Lead'
@@ -316,7 +322,7 @@ export function LeadDetailClient({
             lead={lead}
             spouse={spouse}
             activeField={activeField}
-            onActiveFieldChange={setActiveField}
+            onActiveFieldChange={changeActiveField}
             onSaveField={saveField}
             onRemoveSpouse={removeSpouse}
             spouseRemovalError={spouseRemovalError}

@@ -568,4 +568,49 @@ describe('lead detail page', () => {
     await waitFor(() => expect(removeTrigger).toBe(document.activeElement))
     expect(toastError).toHaveBeenCalledWith('Could not remove spouse')
   })
+
+  it('clears a failed removal error after spouse recovery so later field errors remain visible', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/activity')) return { ok: true, json: async () => ({ activity: [] }) } as Response
+      if (init?.method !== 'PATCH') return { ok: true, json: async () => ({}) } as Response
+
+      const body = JSON.parse(String(init.body)) as { field: string; value: unknown }
+      if (body.field === 'spouse' && body.value === null) {
+        return { ok: false, json: async () => ({ error: 'Could not remove spouse' }) } as Response
+      }
+      if (body.field === 'spouse') {
+        return {
+          ok: true,
+          json: async () => ({ lead, spouse: { ...spouse, first_name: 'Jonathan' } }),
+        } as Response
+      }
+      return { ok: false, json: async () => ({ error: 'Phone is invalid' }) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
+    const firstName = screen.getByRole('textbox', { name: 'Spouse first name' })
+    await user.clear(firstName)
+    await user.type(firstName, 'Jonathan')
+    await user.click(screen.getByRole('button', { name: 'Remove spouse' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Remove spouse' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not remove spouse')
+
+    await user.click(screen.getByRole('button', { name: 'Save spouse' }))
+    const spouseTrigger = await screen.findByRole('button', { name: 'Edit Spouse' })
+    expect(screen.queryByText('Could not remove spouse')).toBeNull()
+    expect(spouseTrigger.getAttribute('aria-invalid')).toBeNull()
+    expect(spouseTrigger.getAttribute('aria-describedby')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
+    const phone = screen.getByRole('textbox', { name: 'Phone' })
+    await user.clear(phone)
+    await user.type(phone, 'bad{Enter}')
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.id).toBe('lead-phone-error')
+    expect(alert.textContent).toBe('Phone is invalid')
+  })
 })
