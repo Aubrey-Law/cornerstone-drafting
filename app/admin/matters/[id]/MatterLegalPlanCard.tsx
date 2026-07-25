@@ -9,32 +9,50 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import { ReadFirstPanel, ReadValue } from './ReadFirstPanel'
 
 const LEGAL_PLANS = ['MetLife', 'ARAG', 'LegalEase', 'Other'] as const
 
 interface MatterLegalPlanCardProps {
   details: MatterDetailsRow | null
   onSaveField: (field: keyof MatterDetailsRow, value: unknown) => Promise<void>
+  savingField?: keyof MatterDetailsRow | null
+  lastSavedAt?: string | null
+  error?: string | null
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <span className="block text-xs font-medium text-muted-foreground">
       {children}
     </span>
   )
 }
 
-export function MatterLegalPlanCard({ details, onSaveField }: MatterLegalPlanCardProps) {
+export function MatterLegalPlanCard({
+  details,
+  onSaveField,
+  savingField,
+  lastSavedAt,
+  error,
+}: MatterLegalPlanCardProps) {
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 md:p-5">
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold">Legal plan</h3>
-        <p className="text-xs text-muted-foreground">
-          MetLife, ARAG, or other prepaid legal plan coverage for this matter.
-        </p>
-      </div>
+    <ReadFirstPanel
+      title="Legal plan"
+      description="Prepaid legal plan coverage for this matter."
+      savingField={savingField}
+      lastSavedAt={lastSavedAt}
+      error={error}
+      readView={(
+        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <ReadValue label="Plan" value={details?.legal_plan ?? '—'} />
+          <ReadValue label="Service start" value={details?.legal_plan_service_start ?? '—'} />
+          <ReadValue label="Service end" value={details?.legal_plan_service_end ?? '—'} />
+          <ReadValue label="Client status" value={details?.client_status ?? '—'} />
+        </dl>
+      )}
+    >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="space-y-1.5">
           <FieldLabel>Plan</FieldLabel>
@@ -86,6 +104,6 @@ export function MatterLegalPlanCard({ details, onSaveField }: MatterLegalPlanCar
           />
         </label>
       </div>
-    </section>
+    </ReadFirstPanel>
   )
 }

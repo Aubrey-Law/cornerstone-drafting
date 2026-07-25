@@ -3,15 +3,14 @@ import { describe, expect, it } from 'vitest'
 
 const read = (path: string) => fs.readFileSync(path, 'utf8')
 
-describe('target signing date and time', () => {
-  it('uses a date-time input only for the target signing field', () => {
+describe('target signing date', () => {
+  it('uses separate date-only controls for target and actual signing', () => {
     const card = read('app/admin/matters/[id]/MatterEssentialsCard.tsx')
     expect(card).toContain('<FieldLabel>Target signing date</FieldLabel>')
-    expect(card).toContain('type="datetime-local"')
-    expect(card).toContain("'scheduled_signing_date'")
-    expect(card).toContain('new Date(raw).toISOString()')
-    expect(card).toContain('<FieldLabel>Signing date</FieldLabel>')
     expect(card).toContain('type="date"')
+    expect(card).toContain("'scheduled_signing_date'")
+    expect(card).toContain('normalizeTargetSigningDate')
+    expect(card).toContain('<FieldLabel>Signing date</FieldLabel>')
   })
 
   it('stores target signing as a timezone-aware timestamp', () => {
@@ -20,11 +19,11 @@ describe('target signing date and time', () => {
     expect(migration).toContain("at time zone 'America/New_York'")
   })
 
-  it('validates target signing timestamps at the API boundary', () => {
+  it('normalizes UI date-only values to noon UTC at the API boundary', () => {
     const route = read('app/api/admin/matter-details/route.ts')
     expect(route).toContain("field === 'scheduled_signing_date'")
-    expect(route).toContain('Invalid target signing date and time')
-    expect(route).toContain('toISOString()')
+    expect(route).toContain('normalizeTargetSigningDate')
+    expect(route).toContain('Invalid target signing date')
   })
 
   it('preserves the appointment time when Cal.com schedules a signing', () => {

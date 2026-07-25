@@ -261,6 +261,7 @@ export default async function MatterDetailPage({ params }: Params) {
   const initialActivity = buildLinkedMatterActivity(id, leadActivity, matterActivity)
 
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
+  const matterNumberManual = Boolean(matterRow?.matter_number_manual)
   const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
   const reviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
   const resyncPreviewCount = intakeSnapshot && designSheet
@@ -288,6 +289,7 @@ export default async function MatterDetailPage({ params }: Params) {
       intakeId={intakeId}
       clientIntakeRow={clientIntakeRow}
       matterNumber={matterNumber}
+      matterNumberManual={matterNumberManual}
       matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
       initialEstateSnapshot={initialEstateSnapshot}

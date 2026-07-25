@@ -36,4 +36,14 @@ describe('matter fee payment status migration', () => {
     )
     expect(sql).not.toMatch(/fee_(?:collected|paid)_(?:at|date)\s*=/)
   })
+
+  it('keeps both the new status and legacy boolean writable through the existing API', () => {
+    const route = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/matter-details/route.ts'),
+      'utf8',
+    )
+
+    expect(route).toContain("'fee_collected', 'fee_collected_date'")
+    expect(route).toContain("'fee_payment_status'")
+  })
 })

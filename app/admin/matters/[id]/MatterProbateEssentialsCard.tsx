@@ -3,31 +3,53 @@
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import { ReadFirstPanel, ReadValue } from './ReadFirstPanel'
 
 interface MatterProbateEssentialsCardProps {
   details: MatterDetailsRow | null
   onSaveField: (field: keyof MatterDetailsRow, value: unknown) => Promise<void>
+  savingField?: keyof MatterDetailsRow | null
+  lastSavedAt?: string | null
+  error?: string | null
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <span className="block text-xs font-medium text-muted-foreground">
       {children}
     </span>
   )
 }
 
-export function MatterProbateEssentialsCard({ details, onSaveField }: MatterProbateEssentialsCardProps) {
+export function MatterProbateEssentialsCard({
+  details,
+  onSaveField,
+  savingField,
+  lastSavedAt,
+  error,
+}: MatterProbateEssentialsCardProps) {
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 md:p-5">
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold">Probate essentials</h3>
-        <p className="text-xs text-muted-foreground">
-          Core probate filing and administration details for this matter.
-        </p>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <ReadFirstPanel
+      title="Probate essentials"
+      description="Core probate filing and administration details."
+      savingField={savingField}
+      lastSavedAt={lastSavedAt}
+      error={error}
+      readView={(
+        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <ReadValue label="Decedent name" value={details?.pb_decedent_name ?? '—'} />
+          <ReadValue label="Date of death" value={details?.pb_date_of_death ?? '—'} />
+          <ReadValue label="Court" value={details?.pb_court_name ?? '—'} />
+          <ReadValue label="Docket number" value={details?.pb_docket_number ?? '—'} />
+          <ReadValue label="Personal representative" value={details?.pb_personal_representative ?? '—'} />
+          <ReadValue label="PR appointed" value={details?.pb_pr_appointment_date ?? '—'} />
+          <ReadValue label="Inventory due" value={details?.pb_inventory_due_date ?? '—'} />
+          <ReadValue label="Claims period ends" value={details?.pb_claims_period_end_date ?? '—'} />
+        </dl>
+      )}
+    >
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="space-y-1.5">
           <FieldLabel>Decedent name</FieldLabel>
           <Input
@@ -124,6 +146,6 @@ export function MatterProbateEssentialsCard({ details, onSaveField }: MatterProb
           <span className="text-sm font-medium">Estate closed</span>
         </label>
       </div>
-    </section>
+    </ReadFirstPanel>
   )
 }

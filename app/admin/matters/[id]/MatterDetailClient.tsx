@@ -98,6 +98,7 @@ import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { MatterOverviewSummaryCards } from './MatterOverviewSummaryCards'
 import { MatterOverviewFactsRail } from './MatterOverviewFactsRail'
+import { MatterProgressTimeline } from './MatterProgressTimeline'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
 import { useMatterNotes } from './useMatterNotes'
@@ -127,6 +128,7 @@ interface MatterDetailClientProps {
     unlock_request_note?: string | null
   } | null
   matterNumber?: string | null
+  matterNumberManual?: boolean
   matterDetails?: MatterDetailsRow | null
   designSheetPlanType?: string | null
   initialEstateSnapshot: MatterEstateSnapshot
@@ -195,6 +197,7 @@ function MatterDetailClientInner({
   intakeId: initialIntakeId = null,
   clientIntakeRow = null,
   matterNumber: initialMatterNumber = null,
+  matterNumberManual = false,
   matterDetails: initialMatterDetails = null,
   designSheetPlanType = null,
   initialEstateSnapshot,
@@ -237,12 +240,6 @@ function MatterDetailClientInner({
   const [portalUploadsOpen, setPortalUploadsOpen] = useState(false)
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
-  const [householdPreview, setHouseholdPreview] = useState({
-    clientName: null as string | null,
-    spouseName: null as string | null,
-    childCount: 0,
-    loading: true,
-  })
 
   const [portalMessages, setPortalMessages] = useState<PortalMessage[]>([])
   const [portalLoading, setPortalLoading] = useState(false)
@@ -267,14 +264,22 @@ function MatterDetailClientInner({
     setUnreviewedUploadCounts(initialUnreviewedUploadCounts)
   }, [initialUnreviewedUploadCounts])
 
-  const { details: matterDetails, saveField: saveMatterDetailField, setDetails: setMatterDetails } = useMatterDetailsSave(
-    matterId,
-    initialMatterDetails,
-  )
+  const {
+    details: matterDetails,
+    saveField: saveMatterDetailField,
+    setDetails: setMatterDetails,
+    savingField,
+    lastSavedAt,
+    error: matterDetailsError,
+  } = useMatterDetailsSave(matterId, initialMatterDetails)
 
   const handleSaveMatterDetailField = useCallback(
-    async (field: keyof MatterDetailsRow, value: unknown) => {
-      await saveMatterDetailField(field, value)
+    async (
+      field: keyof MatterDetailsRow,
+      value: unknown,
+      options?: { manual?: boolean },
+    ) => {
+      await saveMatterDetailField(field, value, options)
       if (field === 'signing_date' && typeof value === 'string') {
         setMatter(current => ({ ...current, signing_date: value }))
       }
@@ -283,6 +288,9 @@ function MatterDetailClientInner({
       }
       if (field === 'plan_type' && typeof value === 'string') {
         setMatter(current => ({ ...current, plan_type: value }))
+      }
+      if (field === 'matter_number') {
+        setMatterNum(typeof value === 'string' && value.trim() ? value.trim() : null)
       }
     },
     [saveMatterDetailField],
@@ -342,45 +350,6 @@ function MatterDetailClientInner({
   useEffect(() => {
     setLiveIntakeId(initialIntakeId)
   }, [initialIntakeId])
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadHouseholdPreview() {
-      setHouseholdPreview(current => ({ ...current, loading: true }))
-      try {
-        const res = await fetch(`/api/admin/matters/${matterId}/contacts`)
-        if (!res.ok) throw new Error('Failed to load contacts')
-        const data = await res.json() as {
-          client: { first_name?: string | null; last_name?: string | null }
-          contacts: Array<{ relationship_type?: string | null; first_name?: string | null; last_name?: string | null }>
-        }
-        if (cancelled) return
-        const clientName = [data.client?.first_name, data.client?.last_name].filter(Boolean).join(' ') || matter.client_name
-        const spouse = data.contacts?.find(c => c.relationship_type === 'spouse')
-        const spouseName = spouse
-          ? [spouse.first_name, spouse.last_name].filter(Boolean).join(' ')
-          : matter.spouse_name
-        const childCount = data.contacts?.filter(c => c.relationship_type === 'child').length ?? 0
-        setHouseholdPreview({
-          clientName: clientName || null,
-          spouseName: spouseName?.trim() || null,
-          childCount,
-          loading: false,
-        })
-      } catch {
-        if (!cancelled) {
-          setHouseholdPreview({
-            clientName: matter.client_name,
-            spouseName: matter.spouse_name,
-            childCount: 0,
-            loading: false,
-          })
-        }
-      }
-    }
-    void loadHouseholdPreview()
-    return () => { cancelled = true }
-  }, [matter.client_name, matter.spouse_name, matterId])
 
   const prependActivity = useCallback((row: MatterActivity) => {
     setActivity(current => {
@@ -451,7 +420,6 @@ function MatterDetailClientInner({
 
   const {
     currentEngineStageTask,
-    engineStageTaskLoading,
     handleEngineStageTaskUpdated,
   } = useMatterEngineStageTask(matterId, matter.stage)
 
@@ -825,8 +793,9 @@ function MatterDetailClientInner({
               status: matterDetails?.engagement_status ?? null,
             }
           : undefined,
+        reviewFlags,
       ),
-    [matter, matterDetails, esignEnabled],
+    [matter, matterDetails, esignEnabled, reviewFlags],
   )
   const unreadPortalCount = useMemo(
     () => portalMessages.filter(m => m.sender_role === 'client' && !m.read_at).length,
@@ -947,6 +916,16 @@ function MatterDetailClientInner({
         </div>
       </div>
 
+      <div className="border-b border-border bg-background px-4 py-3 md:px-8">
+        <div className="w-full max-w-[1280px]">
+          <MatterProgressTimeline
+            matter={matter}
+            details={matterDetails}
+            intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
+          />
+        </div>
+      </div>
+
       {showUnlockBanner && (
         <div className="border-b border-amber-border bg-amber-bg px-4 py-3 text-sm text-amber-strong md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -972,9 +951,9 @@ function MatterDetailClientInner({
         >
           <TabsList className="sticky top-0 z-10 w-full justify-start overflow-x-auto bg-background">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="people">People</TabsTrigger>
-            <TabsTrigger value="assets">Assets</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
+            <TabsTrigger value="people">People {contacts.length}</TabsTrigger>
+            <TabsTrigger value="assets">Assets {initialEstateSnapshot.assetCount}</TabsTrigger>
+            <TabsTrigger value="documents">Documents {documents.length}</TabsTrigger>
             <TabsTrigger value="communications" className="gap-1.5">
               Communications
               {unreadPortalCount > 0 && (
@@ -995,7 +974,7 @@ function MatterDetailClientInner({
               nextAction={nextAction}
               unreadPortalCount={unreadPortalCount}
               unreviewedUploadCounts={unreviewedUploadCounts}
-              reviewFlagsCount={reviewFlags.length}
+              reviewFlags={reviewFlags}
               lastPortalMessage={lastPortalMessage}
               onIntakeActionClick={scrollToIntakeActions}
               onEngagementActionClick={() => void handleSendEngagement()}
@@ -1013,14 +992,10 @@ function MatterDetailClientInner({
               }
             />
             <MatterOverviewSummaryCards
-              household={householdPreview}
+              peopleCount={contacts.length}
               assetCount={initialEstateSnapshot.assetCount}
-              assetNetValue={initialEstateSnapshot.netInventoryValue}
-              assetsLoading={false}
               documentCount={documents.length}
-              documentsLoading={docsLoading}
               engineStageTask={currentEngineStageTask}
-              engineStageTaskLoading={engineStageTaskLoading}
               onNavigate={(tab, section) => setActiveTab(tab, section)}
             />
             <IntakeSyncStatusCard
@@ -1036,20 +1011,37 @@ function MatterDetailClientInner({
             />
             <MatterEssentialsCard
               matter={matter}
+              matterId={matterId}
+              matterNumber={matterNum}
+              matterNumberManual={matterNumberManual}
               details={matterDetails}
               designSheetPlanType={designSheetPlanType}
-              intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
               onSaveField={handleSaveMatterDetailField}
+              savingField={savingField}
+              lastSavedAt={lastSavedAt}
+              error={matterDetailsError}
               esignEnabled={esignEnabled}
               engagementSending={sendingEngagement}
               onSendEngagement={() => void handleSendEngagement()}
               onDraftEngagement={() => void handleDraftEngagement()}
             />
             {showLegalPlan && (
-              <MatterLegalPlanCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />
+              <MatterLegalPlanCard
+                details={matterDetails}
+                onSaveField={handleSaveMatterDetailField}
+                savingField={savingField}
+                lastSavedAt={lastSavedAt}
+                error={matterDetailsError}
+              />
             )}
             {showProbate && (
-              <MatterProbateEssentialsCard details={matterDetails} onSaveField={handleSaveMatterDetailField} />
+              <MatterProbateEssentialsCard
+                details={matterDetails}
+                onSaveField={handleSaveMatterDetailField}
+                savingField={savingField}
+                lastSavedAt={lastSavedAt}
+                error={matterDetailsError}
+              />
             )}
             {currentEngineStageTask && (
               <div id="matter-open-task" className="scroll-mt-24">
