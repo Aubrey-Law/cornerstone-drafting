@@ -13,6 +13,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatDate, formatDateDetail } from '@/lib/utils'
+import {
+  ENGAGEMENT_STATUS_OPTIONS,
+  deriveEngagementStatus,
+  engagementStatusLabel,
+} from '@/lib/engagementStatus'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { MATTER_PLAN_TYPE_OPTIONS, normalizePlanType } from '@/lib/matterPlanType'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
@@ -83,6 +88,7 @@ export function MatterEssentialsCard({
 }: MatterEssentialsCardProps) {
   const [generatingNumber, setGeneratingNumber] = useState(false)
   const [numberIsManual, setNumberIsManual] = useState(matterNumberManual)
+  const engagementStatus = deriveEngagementStatus(details)
   const matterPlanType = normalizePlanType(details?.plan_type ?? matter.plan_type ?? 'TBD')
   const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
   const actualSigningDate = matter.signing_date ?? details?.signing_date ?? null
@@ -119,7 +125,7 @@ export function MatterEssentialsCard({
       <ReadValue label="Flat fee" value={currency(details?.flat_fee_amount ?? matter.fee_amount)} tabular />
       <ReadValue label="Payment status" value={paymentStatus(details)} />
       <ReadValue label="Attorney tax decision" value={taxDecision(details?.ep_ma_estate_taxable)} />
-      <ReadValue label="Engagement" value={details?.engagement_signed ? 'Signed' : details?.engagement_sent_at ? 'Sent' : 'Not sent'} />
+      <ReadValue label="Engagement" value={engagementStatusLabel(engagementStatus)} />
       <ReadValue label="Referral source" value={details?.referral_source ?? matter.referral_source ?? '—'} />
     </dl>
   )
@@ -261,13 +267,26 @@ export function MatterEssentialsCard({
         <div className="space-y-1.5 sm:col-span-2">
           <FieldLabel>Engagement</FieldLabel>
           <div className="flex min-h-9 flex-wrap items-center gap-2">
-            <span className="text-sm">{details?.engagement_signed ? 'Signed' : details?.engagement_sent_at ? 'Sent' : 'Not sent'}</span>
-            {esignEnabled && !details?.engagement_signed && (
+            <Select
+              value={engagementStatus}
+              onValueChange={value => void onSaveField('engagement_status', value)}
+            >
+              <SelectTrigger className="h-9 w-36" aria-label="Engagement status"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {engagementStatus === 'declined' && (
+                  <SelectItem value="declined">Declined</SelectItem>
+                )}
+                {ENGAGEMENT_STATUS_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {esignEnabled && engagementStatus !== 'signed' && (
               <Button type="button" size="sm" variant="outline" disabled={engagementSending} onClick={onSendEngagement}>
                 {engagementSending ? 'Sending…' : details?.engagement_sent_at ? 'Resend' : 'Send engagement'}
               </Button>
             )}
-            {!details?.engagement_signed && (
+            {engagementStatus !== 'signed' && (
               <Button type="button" size="sm" variant="ghost" disabled={engagementSending} onClick={onDraftEngagement}>
                 Draft engagement
               </Button>

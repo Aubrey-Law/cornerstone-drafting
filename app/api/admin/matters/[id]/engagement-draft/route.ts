@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/apiAuth'
 import { createAgreementDraft } from '@/lib/engagement/repository'
+import { markEngagementDraftStatus } from '@/lib/engagement/status'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 
@@ -17,7 +18,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (existing) return Response.json({ agreementId: existing.id })
+  if (existing) {
+    await markEngagementDraftStatus(admin, { matterId })
+    return Response.json({ agreementId: existing.id })
+  }
 
   const { data: matter } = await admin
     .from('v_matter_pipeline')
@@ -49,6 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     masterVersion: '0',
   })
 
+  await markEngagementDraftStatus(admin, { matterId })
   await admin.from('matter_activity').insert({
     matter_id: matterId,
     event_type: 'engagement_drafted',
