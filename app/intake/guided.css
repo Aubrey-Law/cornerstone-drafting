@@ -113,3 +113,55 @@
 .guided-interview button.hover\:bg-accent:hover {
   color: #fff !important;
 }
+
+/* ── Client-mode progress map ──────────────────────────────────────────────
+   The rail's progress card is desktop-only; below `lg` it collapses to a
+   sticky bar pinned to the top of the interview. */
+.guided-interview .gi-progress-rail {
+  display: block;
+}
+
+.guided-interview .gi-progress-mobile {
+  display: none;
+}
+
+@media (max-width: 1023.98px) {
+  .guided-interview .gi-progress-rail {
+    display: none;
+  }
+
+  .guided-interview .gi-progress-mobile {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 10px 14px 0;
+    border: none;
+    border-bottom: 1px solid var(--gi-border);
+    border-radius: 0;
+    background: var(--gi-surface);
+    cursor: pointer;
+    text-align: left;
+    font: 600 12.5px/1.3 var(--gi-sans);
+    color: var(--gi-ink);
+  }
+}
+
+.guided-interview .gi-progress-mobile-track {
+  display: block;
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--gi-divider);
+  overflow: hidden;
+}
+
+.guided-interview .gi-progress-mobile-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--gi-teal);
+  transition: width 0.25s ease;
+}

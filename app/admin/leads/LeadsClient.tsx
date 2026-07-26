@@ -3,11 +3,17 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { MoreVertical, Plus, Trash2, UserPlus } from 'lucide-react'
+import { MoreVertical, Plus, Search, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { normalizePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
 import { clientNameMatterSlug } from '@/lib/matterNumber'
+import {
+  EMPTY_LEAD_TABLE_FILTERS,
+  filterAndSortLeads,
+  type LeadSortKey,
+  type LeadTableFilters,
+} from '@/lib/adminTables/leadTable'
 import { SendEngagementDialog } from './SendEngagementDialog'
 import LawmaticsImportDialog from '../matters/LawmaticsImportDialog'
 import {
@@ -96,6 +102,24 @@ const FILTER_TABS: { value: LeadFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
   { value: 'lost', label: 'Lost' },
   { value: 'all', label: 'All' },
+]
+
+const LEAD_PROGRESS_OPTIONS: { value: LeadTableFilters['progress']; label: string }[] = [
+  { value: 'all', label: 'Progress · All' },
+  { value: 'intake_not_sent', label: 'Intake not sent' },
+  { value: 'intake_pending', label: 'Intake pending' },
+  { value: 'intake_complete', label: 'Intake complete' },
+  { value: 'engagement_pending', label: 'Engagement pending' },
+  { value: 'engagement_signed', label: 'Engagement signed' },
+]
+
+const LEAD_SORT_OPTIONS: { value: LeadSortKey; label: string }[] = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'name_asc', label: 'Name A-Z' },
+  { value: 'name_desc', label: 'Name Z-A' },
+  { value: 'fee_desc', label: 'Highest fee' },
+  { value: 'last_activity', label: 'Last activity' },
 ]
 
 function matchesFilter(lead: LeadRow, filter: LeadFilter): boolean {
@@ -229,6 +253,8 @@ export function LeadsClient({
   const [form, setForm] = useState({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
   const [filter, setFilter] = useState<LeadFilter>('open')
   const [cardFilter, setCardFilter] = useState<LeadCardFilter | null>(null)
+  const [tableFilters, setTableFilters] = useState<LeadTableFilters>(EMPTY_LEAD_TABLE_FILTERS)
+  const [sortKey, setSortKey] = useState<LeadSortKey>('newest')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
@@ -237,7 +263,7 @@ export function LeadsClient({
   const [engagementLead, setEngagementLead] = useState<LeadRow | null>(null)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
 
-  const filteredLeads = useMemo(
+  const baseLeads = useMemo(
     () =>
       initialLeads.filter(l => {
         if (!matchesFilter(l, filter)) return false
@@ -247,6 +273,19 @@ export function LeadsClient({
       }),
     [initialLeads, filter, cardFilter],
   )
+
+  const filteredLeads = useMemo(
+    () => filterAndSortLeads(baseLeads, tableFilters, sortKey),
+    [baseLeads, tableFilters, sortKey],
+  )
+
+  const hasTableFilters = Boolean(
+    tableFilters.search.trim()
+    || tableFilters.practice !== 'all'
+    || tableFilters.progress !== 'all',
+  )
+
+  const clearTableFilters = () => setTableFilters(EMPTY_LEAD_TABLE_FILTERS)
 
   /** Cards narrow the current tab; "Open leads" just resets to the Open tab. */
   const toggleCardFilter = (next: LeadCardFilter) => {
@@ -519,6 +558,73 @@ export function LeadsClient({
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-52 flex-1 items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 focus-within:border-accent">
+          <Search className="h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            type="search"
+            value={tableFilters.search}
+            onChange={event => setTableFilters(current => ({ ...current, search: event.target.value }))}
+            placeholder="Search leads…"
+            className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            aria-label="Search leads"
+          />
+        </div>
+        <Select
+          value={tableFilters.practice}
+          onValueChange={value => setTableFilters(current => ({ ...current, practice: value }))}
+        >
+          <SelectTrigger size="sm" className="w-48" aria-label="Filter leads by practice area">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Practice · All</SelectItem>
+            {PRACTICE_AREA_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={tableFilters.progress}
+          onValueChange={value => setTableFilters(current => ({
+            ...current,
+            progress: value as LeadTableFilters['progress'],
+          }))}
+        >
+          <SelectTrigger size="sm" className="w-48" aria-label="Filter leads by progress">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LEAD_PROGRESS_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="ml-auto flex items-center gap-2">
+          <Select value={sortKey} onValueChange={value => setSortKey(value as LeadSortKey)}>
+            <SelectTrigger size="sm" className="w-40" aria-label="Sort leads by">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LEAD_SORT_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasTableFilters && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearTableFilters}>
+              Clear filters
+            </Button>
+          )}
+        </div>
+      </div>
+
       {filteredLeads.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card py-12 text-center">
           <UserPlus className="h-6 w-6 text-muted-foreground" aria-hidden />
@@ -537,7 +643,7 @@ export function LeadsClient({
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={checked => toggleAll(checked === true)}
-                    aria-label="Select all leads"
+                    aria-label="Select all visible leads"
                   />
                 </TableHead>
                 <TableHead>Name</TableHead>
