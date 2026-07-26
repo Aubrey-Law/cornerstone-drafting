@@ -81,6 +81,10 @@ GRANT EXECUTE ON FUNCTION public.ensure_user_profile(text) TO authenticated, ser
 
 DROP POLICY IF EXISTS "authenticated_select_matter_activity" ON public.matter_activity;
 DROP POLICY IF EXISTS "authenticated_insert_matter_activity" ON public.matter_activity;
+-- Idempotent: this migration may have been applied by hand in the SQL editor
+-- before the CLI recorded it, so `supabase db push` can legitimately re-run it.
+DROP POLICY IF EXISTS "staff_select_matter_activity" ON public.matter_activity;
+DROP POLICY IF EXISTS "staff_insert_matter_activity" ON public.matter_activity;
 
 CREATE POLICY "staff_select_matter_activity"
   ON public.matter_activity FOR SELECT TO authenticated
@@ -109,6 +113,7 @@ REVOKE ALL ON public.firm_holidays FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.firm_holidays TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.firm_holidays TO service_role;
 
+DROP POLICY IF EXISTS "staff_select_firm_holidays" ON public.firm_holidays;
 CREATE POLICY "staff_select_firm_holidays"
   ON public.firm_holidays FOR SELECT TO authenticated
   USING (

@@ -29,17 +29,37 @@ function allMigrationSql(): string {
     .replace(/--[^\n]*/g, '')
 }
 
-/** Statements that survive, i.e. are not dropped by a later migration. */
+/**
+ * Policies that exist after replaying every migration in order.
+ *
+ * Must be order-aware, not a set difference: the security migration
+ * deliberately drops-then-recreates its own policies so it can be re-applied,
+ * so a name appearing in both DROP and CREATE does not mean it is absent.
+ */
 function effectivePolicies(sql: string, table: string): string[] {
-  const created = [...sql.matchAll(/CREATE POLICY\s+"([^"]+)"\s*\n?\s*ON public\.(\w+)/g)]
-    .filter(match => match[2] === table)
-    .map(match => match[1])
-  const dropped = new Set(
-    [...sql.matchAll(/DROP POLICY(?: IF EXISTS)?\s+"([^"]+)"\s+ON public\.(\w+)/g)]
-      .filter(match => match[2] === table)
-      .map(match => match[1]),
-  )
-  return created.filter(name => !dropped.has(name))
+  const statements = [
+    ...[...sql.matchAll(/CREATE POLICY\s+"([^"]+)"\s*\n?\s*ON public\.(\w+)/g)].map(m => ({
+      at: m.index ?? 0,
+      name: m[1],
+      table: m[2],
+      op: 'create' as const,
+    })),
+    ...[...sql.matchAll(/DROP POLICY(?: IF EXISTS)?\s+"([^"]+)"\s+ON public\.(\w+)/g)].map(m => ({
+      at: m.index ?? 0,
+      name: m[1],
+      table: m[2],
+      op: 'drop' as const,
+    })),
+  ]
+    .filter(statement => statement.table === table)
+    .sort((a, b) => a.at - b.at)
+
+  const live = new Set<string>()
+  for (const statement of statements) {
+    if (statement.op === 'create') live.add(statement.name)
+    else live.delete(statement.name)
+  }
+  return [...live]
 }
 
 const STAFF_ROLE_CHECK = /u\.role IN \('attorney', 'admin'/
@@ -108,6 +128,35 @@ describe('firm_holidays', () => {
 
   it('revokes the default authenticated write grants', () => {
     expect(sql).toMatch(/REVOKE ALL ON public\.firm_holidays FROM PUBLIC, anon, authenticated/)
+  })
+})
+
+describe('trigger functions are not callable over REST', () => {
+  it('revokes EXECUTE on trigger-returning functions', () => {
+    // Supabase exposes every public function at /rest/v1/rpc/<name>; default
+    // grants left trigger functions (incl. a SECURITY DEFINER one) anon-callable.
+    const sql = allMigrationSql()
+    expect(sql).toMatch(/t\.typname = 'trigger'/)
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated/)
+  })
+})
+
+describe('hand-applied migrations stay re-runnable', () => {
+  it('guards each new policy in the security migration with DROP POLICY IF EXISTS', () => {
+    // These were applied directly in the SQL editor, so the CLI history does not
+    // know about them and `supabase db push` may re-run the file. A bare
+    // CREATE POLICY would abort the push half-way through.
+    const file = fs.readFileSync(
+      path.join(MIGRATIONS_DIR, '20260813000000_security_rls_hardening.sql'),
+      'utf8',
+    )
+    const created = [...file.matchAll(/CREATE POLICY\s+"([^"]+)"/g)].map(m => m[1])
+    const guarded = new Set(
+      [...file.matchAll(/DROP POLICY IF EXISTS\s+"([^"]+)"/g)].map(m => m[1]),
+    )
+
+    expect(created.length).toBeGreaterThan(0)
+    expect(created.filter(name => !guarded.has(name))).toEqual([])
   })
 })
 
