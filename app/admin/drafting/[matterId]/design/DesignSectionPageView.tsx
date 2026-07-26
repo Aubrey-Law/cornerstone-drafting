@@ -45,15 +45,15 @@ export function DesignSectionPageView({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollTopRef = useRef(0)
   const previousSectionIdRef = useRef(section.id)
-  if (previousSectionIdRef.current !== section.id) {
-    previousSectionIdRef.current = section.id
-    scrollTopRef.current = 0
-  }
 
   useLayoutEffect(() => {
+    if (previousSectionIdRef.current !== section.id) {
+      previousSectionIdRef.current = section.id
+      scrollTopRef.current = 0
+    }
     const scrollContainer = scrollContainerRef.current
     if (scrollContainer) scrollContainer.scrollTop = scrollTopRef.current
-  })
+  }, [section.id])
 
   const handleSectionScroll = (event: UIEvent<HTMLDivElement>) => {
     scrollTopRef.current = event.currentTarget.scrollTop

@@ -52,6 +52,7 @@ export interface EstateGeneratorData {
   spouse?: Record<string, unknown>
   marriage?: Record<string, unknown>
   children: Array<Record<string, unknown>>
+  summary: Record<string, unknown>
   planning: Record<string, unknown>
   will: Record<string, unknown>
   trust: Record<string, unknown>
@@ -403,6 +404,23 @@ export function clientSlugFromPayload(payload: DraftPayload): string {
 
 export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorData {
   const docs = payload.documents
+  const includesWill = docs.include_pour_over_will
+    || docs.include_simple_will
+    || docs.include_testamentary_trust_will
+  const showTrustee = Boolean(docs.include_trust && payload.fiduciaries.trustee_initial)
+  const showPersonalRepresentative = Boolean(includesWill && payload.fiduciaries.pr_primary)
+  const showDpoaAgent = Boolean(docs.include_dpoa && payload.fiduciaries.dpoa_primary)
+  const showHealthcareAgent = Boolean(docs.include_hcp && payload.fiduciaries.hcp_primary)
+  const showGuardian = Boolean(
+    payload.fiduciaries.guardian_primary
+    && (docs.include_parental_appointment || payload.matter.minor_children),
+  )
+  const hasSummaryCompletionItems = Boolean(
+    (docs.include_trust && !payload.fiduciaries.trustee_successor)
+    || (includesWill && !payload.fiduciaries.pr_successor)
+    || (docs.include_dpoa && !payload.fiduciaries.dpoa_successor)
+    || (docs.include_hcp && !payload.fiduciaries.hcp_successor),
+  )
   const clientPronouns = pronounsFromPreference(payload.client.preferred_pronoun)
   const spousePronouns = pronounsFromPreference(payload.spouse?.preferred_pronoun)
   const signingDate = payload.execution.signing_year && payload.execution.signing_month
@@ -521,6 +539,20 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       date: formatLongDate(payload.marriage?.date) ?? payload.marriage?.date ?? '',
     },
     children,
+    summary: {
+      show_spouse: Boolean(payload.spouse),
+      show_trustee: showTrustee,
+      show_personal_representative: showPersonalRepresentative,
+      show_dpoa_agent: showDpoaAgent,
+      show_healthcare_agent: showHealthcareAgent,
+      show_guardian: showGuardian,
+      has_completion_items: hasSummaryCompletionItems,
+      show_key_people: showTrustee
+        || showPersonalRepresentative
+        || showDpoaAgent
+        || showHealthcareAgent
+        || showGuardian,
+    },
     planning: {
       uses_revocable_trust: Boolean(payload.trust),
       has_minor_children: hasMinorChildren,

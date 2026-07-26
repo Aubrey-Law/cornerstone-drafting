@@ -8,7 +8,7 @@ const script = path.join(process.cwd(), 'scripts/firma-engagement-poc.mjs')
 function run(env: Record<string, string> = {}) {
   return spawnSync(process.execPath, [script], {
     encoding: 'utf8',
-    env: { PATH: process.env.PATH, ...env },
+    env: { PATH: process.env.PATH, NODE_ENV: process.env.NODE_ENV, ...env },
   })
 }
 

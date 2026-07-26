@@ -66,6 +66,10 @@ interface SectionDef {
   badge?: React.ReactNode
 }
 
+function arraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
 const SECTION_ICONS: Record<string, React.ElementType> = {
   [DESIGN_SECTION_IDS.intakeReview]: FileText,
   [DESIGN_SECTION_IDS.clientInformation]: User,
@@ -135,7 +139,7 @@ function ExpressDesignSheetImpl({
   const { loadPreferences } = useUserPreferences()
   const sectionEls = useRef<Record<string, HTMLElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const sectionOrderRef = useRef<string[]>([])
+  const [sectionOrder, setSectionOrder] = useState<string[]>([])
 
   useEffect(() => {
     let active = true
@@ -191,13 +195,14 @@ function ExpressDesignSheetImpl({
       intakeSnapshot, isLP, lpDataState, matter, matterId, selectedDocKeysCount, sheet, updateField, updateLpPatch])
 
   const orderedSections = useMemo(
-    () => {
-      const ordered = preserveFastEntrySectionOrder(sections, sectionSummaries, sectionOrderRef.current)
-      sectionOrderRef.current = ordered.map(section => section.id)
-      return ordered
-    },
-    [sectionSummaries, sections],
+    () => preserveFastEntrySectionOrder(sections, sectionSummaries, sectionOrder),
+    [sectionOrder, sectionSummaries, sections],
   )
+
+  useEffect(() => {
+    const nextOrder = orderedSections.map(section => section.id)
+    setSectionOrder(current => arraysEqual(current, nextOrder) ? current : nextOrder)
+  }, [orderedSections])
 
   // ── Scroll-spy: highlight the section nearest the top of the scroll area ─────
   // Keyed on the section id set (not the section objects, which change on every

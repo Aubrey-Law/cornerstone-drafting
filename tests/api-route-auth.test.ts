@@ -98,7 +98,7 @@ describe('API route auth coverage', () => {
           /unwrapTelnyxWebhook\b/,
           /verifyRetellSignature\b/,
           /verifyCalcomSignature\b/,
-          /verifyEsignWebhookSecret\b/,
+          /verifyFirmaWebhookSignature\b/,
           // Intake uploads: invite-token or bearer auth resolved in a shared helper.
           /resolveIntakeUploadAccess\b/,
         ]),
