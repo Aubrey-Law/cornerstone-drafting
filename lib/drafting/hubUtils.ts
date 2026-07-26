@@ -1,10 +1,14 @@
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
 
 export type HubSortKey = 'updated' | 'client' | 'stage'
-export type HubReadinessFilter = 'all' | 'ready' | 'needs_design' | 'needs_setup'
+export type HubReadinessBucket = 'ready' | 'needs_design' | 'needs_setup'
+export type HubReadinessFilter = 'all' | HubReadinessBucket | 'quiet'
 export type DraftingHubView = 'kanban' | 'table'
 
 export const DRAFTING_HUB_VIEW_KEY = 'drafting-hub-view'
+
+/** Days without activity before a matter is flagged as quiet in the hub and the matter list. */
+export const QUIET_DAYS = 10
 
 function matterHaystack(item: DraftingHubMatter): string {
   const m = item.matter
@@ -31,7 +35,7 @@ export function matchesHubSearch(item: DraftingHubMatter, query: string): boolea
   return tokens.every(token => haystack.includes(token))
 }
 
-export function hubReadinessBucket(item: DraftingHubMatter): HubReadinessFilter {
+export function hubReadinessBucket(item: DraftingHubMatter): HubReadinessBucket {
   if (!item.designSheet) return 'needs_design'
   if (item.includedDocumentLabels.length === 0) return 'needs_setup'
   return 'ready'
@@ -67,6 +71,20 @@ export function sortHubMatters(list: DraftingHubMatter[], sortKey: HubSortKey): 
 export function hubLastActivityAt(item: DraftingHubMatter): string | null {
   const lastDraft = item.recentDrafts[0]
   return lastDraft?.created_at ?? item.designSheet?.updatedAt ?? item.matter.matter_created ?? null
+}
+
+/** Whole days since the matter last moved, or null when there is no usable timestamp. */
+export function hubDaysSinceActivity(item: DraftingHubMatter): number | null {
+  const at = hubLastActivityAt(item)
+  if (!at) return null
+  const ms = Date.parse(at)
+  if (!Number.isFinite(ms)) return null
+  return Math.max(0, Math.floor((Date.now() - ms) / 86_400_000))
+}
+
+export function isHubQuiet(item: DraftingHubMatter): boolean {
+  const days = hubDaysSinceActivity(item)
+  return days !== null && days >= QUIET_DAYS
 }
 
 export function readDraftingHubView(): DraftingHubView {
