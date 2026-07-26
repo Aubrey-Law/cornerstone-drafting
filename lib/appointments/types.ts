@@ -34,6 +34,8 @@ export interface SchedulingSettings {
   autoIntakeInvite: boolean
   /** Per-date hour overrides ("YYYY-MM-DD" → windows; empty array = closed). */
   dateOverrides: Record<string, DayWindow[]>
+  /** Calendly booking page URL per meeting type key; unset types have no link. */
+  calendlyUrls: import('@/lib/calendly/links').CalendlyUrlMap
 }
 
 /** Per-weekday bookable windows in the firm timezone ("HH:MM" 24h). */

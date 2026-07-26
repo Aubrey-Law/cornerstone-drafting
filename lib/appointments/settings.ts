@@ -1,5 +1,6 @@
 import 'server-only'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { sanitizeCalendlyUrls } from '@/lib/calendly/links'
 import {
   appointmentTypeFromRow,
   emptyWeeklyHours,
@@ -25,6 +26,7 @@ interface SchedulingSettingsRow {
   sms_reminders_enabled: boolean | null
   auto_intake_invite: boolean | null
   date_overrides: unknown
+  calendly_urls: unknown
 }
 
 const TTL_MS = 30_000
@@ -47,6 +49,7 @@ function defaults(): SchedulingSettings {
     smsRemindersEnabled: false,
     autoIntakeInvite: true,
     dateOverrides: {},
+    calendlyUrls: {},
   }
 }
 
@@ -55,7 +58,7 @@ export async function getSchedulingSettings(): Promise<SchedulingSettings> {
 
   const { data } = await getAdminClient()
     .from('scheduling_settings')
-    .select('timezone, weekly_hours, min_notice_hours, horizon_days, buffer_minutes, reminder_hours_before, booking_paused, sms_reminders_enabled, auto_intake_invite, date_overrides')
+    .select('timezone, weekly_hours, min_notice_hours, horizon_days, buffer_minutes, reminder_hours_before, booking_paused, sms_reminders_enabled, auto_intake_invite, date_overrides, calendly_urls')
     .eq('id', 1)
     .maybeSingle()
 
@@ -73,6 +76,7 @@ export async function getSchedulingSettings(): Promise<SchedulingSettings> {
         smsRemindersEnabled: row.sms_reminders_enabled ?? base.smsRemindersEnabled,
         autoIntakeInvite: row.auto_intake_invite ?? base.autoIntakeInvite,
         dateOverrides: sanitizeDateOverrides(row.date_overrides),
+        calendlyUrls: sanitizeCalendlyUrls(row.calendly_urls),
       }
     : base
 
@@ -91,6 +95,7 @@ export interface UpdateSchedulingSettingsInput {
   smsRemindersEnabled?: boolean
   autoIntakeInvite?: boolean
   dateOverrides?: unknown
+  calendlyUrls?: unknown
   updatedBy?: string | null
 }
 
@@ -108,6 +113,7 @@ export async function updateSchedulingSettings(
   if (input.smsRemindersEnabled !== undefined) patch.sms_reminders_enabled = input.smsRemindersEnabled
   if (input.autoIntakeInvite !== undefined) patch.auto_intake_invite = input.autoIntakeInvite
   if (input.dateOverrides !== undefined) patch.date_overrides = sanitizeDateOverrides(input.dateOverrides)
+  if (input.calendlyUrls !== undefined) patch.calendly_urls = sanitizeCalendlyUrls(input.calendlyUrls)
   if (input.updatedBy !== undefined) patch.updated_by = input.updatedBy
 
   const { error } = await getAdminClient()
