@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SetupBanner } from '@/components/SetupBanner'
 import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
+import { linkifyText } from '@/lib/linkify'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
 import { CallsSection } from './calls'
 
@@ -97,7 +98,7 @@ export function PortalMessagesSection({
                 <span className="capitalize">{m.sender_role}</span>
                 <span>{new Date(m.created_at).toLocaleString()}</span>
               </div>
-              <p className="whitespace-pre-wrap">{m.body}</p>
+              <p className="whitespace-pre-wrap">{linkifyText(m.body)}</p>
             </div>
           ))
         )}
