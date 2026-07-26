@@ -4,6 +4,9 @@
  */
 
 @theme inline {
+  /* Deliberately single-typeface: every font utility resolves to DM Sans.
+     `font-serif` renders sans too — it is not an escape hatch to a serif face.
+     To introduce a real serif, load it in app/layout.tsx and map it here. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;

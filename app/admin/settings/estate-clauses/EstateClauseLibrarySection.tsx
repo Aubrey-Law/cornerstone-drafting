@@ -173,7 +173,7 @@ export function EstateClauseLibrarySection({ currentUserId }: { currentUserId: s
           </aside>
 
           <main className="min-w-0">
-            {!selectedClause && <div className="flex min-h-80 flex-col items-center justify-center rounded-lg border border-dashed border-border p-8 text-center"><BookOpenText className="size-8 text-muted-foreground" /><h3 className="mt-3 font-serif text-lg font-semibold">Select a clause</h3><p className="mt-1 max-w-md text-sm text-muted-foreground">Choose a working draft to edit or a submitted revision to review against the current publication.</p></div>}
+            {!selectedClause && <div className="flex min-h-80 flex-col items-center justify-center rounded-lg border border-dashed border-border p-8 text-center"><BookOpenText className="size-8 text-muted-foreground" /><h3 className="mt-3 text-lg font-semibold">Select a clause</h3><p className="mt-1 max-w-md text-sm text-muted-foreground">Choose a working draft to edit or a submitted revision to review against the current publication.</p></div>}
             {selectedClause && selection?.mode === 'edit' && <EstateClauseEditor key={selectedClause.id} clause={selectedClause} authHeaders={authHeaders} onRefresh={load} />}
             {selectedClause && selection?.mode === 'review' && selectedRevision && <EstateClauseReviewPanel key={selectedRevision.id} clause={selectedClause} revision={selectedRevision} currentUserId={currentUserId} authHeaders={authHeaders} onRefresh={load} />}
           </main>
