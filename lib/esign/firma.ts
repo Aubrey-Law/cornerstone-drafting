@@ -10,10 +10,12 @@ import type { EsignDocumentRequestInput, EsignDocumentRequestResult, EsignDocume
  *  - FIRMA_API_KEY: API key (sent as the Authorization header by the SDK)
  *  - FIRMA_ENGAGEMENT_TEMPLATE_ID: single-signer engagement template (solo client)
  *  - FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT: two-signer template (client + spouse)
- *  - FIRMA_WEBHOOK_SECRET: shared secret carried in the registered webhook
- *    URL's ?secret= query param — firma.dev webhooks are not signed, so the
- *    webhook handler also re-fetches envelope state from the API before
- *    acting (the webhook is a hint; the API is the truth).
+ *  - FIRMA_WEBHOOK_SECRET: current timestamped-HMAC webhook signing secret
+ *  - FIRMA_WEBHOOK_SECRET_OLD: optional previous secret during rotation
+ *
+ * The webhook handler verifies the raw request body before parsing and also
+ * re-fetches envelope state from the API (the webhook is a hint; the API is
+ * the truth).
  */
 
 export function isEsignConfigured(): boolean {

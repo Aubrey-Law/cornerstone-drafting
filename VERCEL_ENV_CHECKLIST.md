@@ -203,10 +203,14 @@ The current production routes use the legacy template-based flow, so the templat
 | `FIRMA_API_KEY` | firma.dev API key (sent as the Authorization header) |
 | `FIRMA_ENGAGEMENT_TEMPLATE_ID` | Single-signer engagement template (solo client) in firma.dev |
 | `FIRMA_ENGAGEMENT_TEMPLATE_ID_JOINT` | Two-signer engagement template (client + spouse). Set your existing 2-signer template here to unblock couples; build a 1-signer template for `FIRMA_ENGAGEMENT_TEMPLATE_ID` to enable solo clients |
-| `FIRMA_WEBHOOK_SECRET` | Shared secret used by the current app webhook URL query-string check |
+| `FIRMA_WEBHOOK_SECRET` | Current Firma webhook signing secret used to verify `X-Firma-Signature` timestamped HMACs |
+| `FIRMA_WEBHOOK_SECRET_OLD` | Optional previous signing secret used only during Firma secret rotation |
 
-Current webhook URL configured by the legacy integration:
-`https://<host>/api/webhooks/esign?secret=<FIRMA_WEBHOOK_SECRET>`
+Webhook URL: `https://<host>/api/webhooks/esign`
+
+Do not put the signing secret in the URL. The route verifies Firma's signature
+over the exact raw body with a five-minute timestamp tolerance and accepts
+`X-Firma-Signature-Old` only when `FIRMA_WEBHOOK_SECRET_OLD` is configured.
 
 On completion, Cornerstone stores the combined signed PDF + audit certificate in the
 matter's Signed documents and checks "Engagement signed" on the matter.

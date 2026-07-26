@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
 import { resolveEsignProvider } from '@/lib/esign/firma'
-import { verifyEsignWebhookSecret } from '@/lib/esign/verify'
+import { verifyFirmaWebhookSignature } from '@/lib/esign/verify'
 import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
 import type { EsignEnvelopeState } from '@/lib/esign/types'
 
@@ -13,9 +12,8 @@ export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/webhooks/esign — e-signature provider events for engagement
- * agreements. Register this URL with the provider as
- * https://{app}/api/webhooks/esign?secret={FIRMA_WEBHOOK_SECRET} (firma.dev
- * webhooks are not signed, so the secret travels on the URL).
+ * agreements. Register https://{app}/api/webhooks/esign with Firma. The
+ * handler verifies Firma's timestamped HMAC over the exact raw request body.
  *
  * The payload is treated as a hint only: the handler resolves the envelope
  * id, then fetches authoritative state from the provider API before writing
@@ -98,12 +96,17 @@ export async function POST(req: Request) {
     console.error('[esign webhook] FIRMA_WEBHOOK_SECRET is not configured')
     return NextResponse.json({ error: 'webhook not configured' }, { status: 503 })
   }
-  const url = new URL(req.url)
-  if (!verifyEsignWebhookSecret(url.searchParams.get('secret'), secret)) {
-    return NextResponse.json({ error: 'invalid secret' }, { status: 401 })
+  const rawBody = await req.text()
+  if (!verifyFirmaWebhookSignature({
+    payload: rawBody,
+    signatureHeader: req.headers.get('x-firma-signature'),
+    oldSignatureHeader: req.headers.get('x-firma-signature-old'),
+    secret,
+    previousSecret: process.env.FIRMA_WEBHOOK_SECRET_OLD?.trim(),
+  })) {
+    return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
   }
 
-  const rawBody = await req.text()
   let payload: Record<string, unknown>
   try {
     payload = JSON.parse(rawBody) as Record<string, unknown>
@@ -163,40 +166,47 @@ export async function POST(req: Request) {
 
   let versionedEventId: string | null = null
   try {
-    const state = await resolved.provider.getEnvelopeState(envelopeId)
-
     if (agreement) {
       if (!agreement.matter_id) {
         return NextResponse.json({ error: 'engagement agreement has no matter owner' }, { status: 409 })
       }
 
-      const eventId = [payload.event_id, payload.webhook_id, data.event_id]
-        .find((value): value is string => typeof value === 'string' && value.length > 0)
-        ?? createHash('sha256').update(rawBody).digest('hex')
-      versionedEventId = eventId
-      const eventType = [payload.event_type, payload.type, data.event_type, data.type]
+      const eventId = typeof payload.id === 'string' && payload.id.length > 0
+        ? payload.id
+        : null
+      if (!eventId) {
+        return NextResponse.json({ error: 'missing Firma event id' }, { status: 400 })
+      }
+      const eventType = [
+        req.headers.get('x-firma-event'),
+        payload.event_type,
+        payload.type,
+        data.event_type,
+        data.type,
+      ]
         .find((value): value is string => typeof value === 'string' && value.length > 0)
         ?? 'signing_request.updated'
-      const { data: priorEvent, error: priorEventError } = await admin
-        .from('firma_webhook_events')
-        .select('id, processed_at')
-        .eq('event_id', eventId)
-        .maybeSingle()
-      if (priorEventError) throw new Error(priorEventError.message)
-      if (priorEvent?.processed_at) {
+      const { data: claimStatus, error: claimError } = await admin
+        .rpc('claim_firma_webhook_event', {
+          p_event_id: eventId,
+          p_firma_request_id: envelopeId,
+          p_event_type: eventType,
+          p_payload: payload,
+          p_agreement_id: agreement.id,
+        })
+      if (claimError) throw new Error(claimError.message)
+      if (claimStatus === 'duplicate') {
         return NextResponse.json({ ok: true, duplicate: true })
       }
-      if (!priorEvent) {
-        const { error: eventInsertError } = await admin.from('firma_webhook_events').insert({
-          event_id: eventId,
-          firma_request_id: envelopeId,
-          event_type: eventType,
-          payload,
-          agreement_id: agreement.id,
-        })
-        if (eventInsertError && eventInsertError.code !== '23505') throw new Error(eventInsertError.message)
+      if (claimStatus === 'in_progress') {
+        return NextResponse.json({ ok: true, inProgress: true }, { status: 202 })
       }
+      if (claimStatus !== 'claimed') {
+        throw new Error('unexpected Firma webhook claim status')
+      }
+      versionedEventId = eventId
 
+      const state = await resolved.provider.getEnvelopeState(envelopeId)
       const status = state.status === 'signed' ? 'completed' : state.status
       const now = new Date().toISOString()
 
@@ -267,6 +277,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, agreementId: agreement.id })
     }
 
+    const state = await resolved.provider.getEnvelopeState(envelopeId)
     if (state.status === 'declined') {
       if (details && !details.engagement_signed && details.engagement_status !== 'signed') {
         await admin
