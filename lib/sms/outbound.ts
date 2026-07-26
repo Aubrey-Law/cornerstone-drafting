@@ -18,7 +18,9 @@ export interface ResolvedSmsTarget {
   recipientName: string
   recipientRole: SmsRecipientRole
   phone: string | null
-  matterId: string
+  /** Exactly one of matterId / leadId is set. */
+  matterId: string | null
+  leadId?: string | null
 }
 
 export interface OutboundSmsResult {
@@ -83,6 +85,36 @@ export async function resolveMatterSmsTarget(
   }
 }
 
+export async function resolveLeadSmsTarget(
+  leadId: string,
+): Promise<{ target: ResolvedSmsTarget | null; error: string | null }> {
+  const admin = getAdminClient()
+  const { data: lead, error } = await admin
+    .from('client_intake')
+    .select('id, first_name, last_name, full_name, phone')
+    .eq('id', leadId)
+    .maybeSingle()
+
+  if (error) return { target: null, error: error.message }
+  if (!lead) return { target: null, error: 'Lead not found' }
+
+  const name =
+    lead.full_name?.trim() ||
+    [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim() ||
+    'Lead'
+
+  return {
+    target: {
+      recipientName: name,
+      recipientRole: 'client',
+      phone: lead.phone,
+      matterId: null,
+      leadId,
+    },
+    error: null,
+  }
+}
+
 export async function sendOutboundSms(
   target: ResolvedSmsTarget,
   body: string,
@@ -112,6 +144,7 @@ export async function sendOutboundSms(
   const admin = getAdminClient()
   const baseRow = {
     matter_id: target.matterId,
+    lead_id: target.leadId ?? null,
     direction: 'outbound',
     provider: smsProvider(),
     recipient_role: target.recipientRole,
@@ -180,32 +213,51 @@ export async function sendOutboundSms(
     : `Text failed to ${target.recipientName}`
   const detail = `To ${to}${result.ok ? '' : ` (${result.error})`}`
 
-  const { data: matterActivity, error: activityError } = await admin
-    .from('matter_activity')
-    .insert({
-      matter_id: target.matterId,
-      event_type: 'sms_sent',
-      actor_id: actor.id,
-      actor_email: actor.email,
-      actor_name: actor.name,
-      title,
-      detail,
-      metadata: {
-        sms_message_id: smsRow.id,
-        recipient: target.recipientRole,
-        to,
-        status: nextStatus,
-        provider_message_id: result.ok ? result.providerMessageId : undefined,
-        error: result.ok ? undefined : result.error,
-      },
-    })
-    .select()
-    .single()
+  if (target.matterId) {
+    const { data: matterActivity, error: activityError } = await admin
+      .from('matter_activity')
+      .insert({
+        matter_id: target.matterId,
+        event_type: 'sms_sent',
+        actor_id: actor.id,
+        actor_email: actor.email,
+        actor_name: actor.name,
+        title,
+        detail,
+        metadata: {
+          sms_message_id: smsRow.id,
+          recipient: target.recipientRole,
+          to,
+          status: nextStatus,
+          provider_message_id: result.ok ? result.providerMessageId : undefined,
+          error: result.ok ? undefined : result.error,
+        },
+      })
+      .select()
+      .single()
 
-  if (activityError) {
-    console.error('sendOutboundSms: failed to log matter activity', activityError)
-  } else {
-    activity = matterActivity as Record<string, unknown>
+    if (activityError) {
+      console.error('sendOutboundSms: failed to log matter activity', activityError)
+    } else {
+      activity = matterActivity as Record<string, unknown>
+    }
+  } else if (target.leadId) {
+    const { data: leadActivity, error: activityError } = await admin
+      .from('lead_activity')
+      .insert({
+        lead_id: target.leadId,
+        event_type: 'sms',
+        title,
+        detail,
+        actor_id: actor.id,
+      })
+      .select()
+      .single()
+    if (activityError) {
+      console.error('sendOutboundSms: failed to log lead activity', activityError)
+    } else {
+      activity = leadActivity as Record<string, unknown>
+    }
   }
 
   if (!result.ok) {
