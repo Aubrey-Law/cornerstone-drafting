@@ -15,12 +15,18 @@ export async function requestIntakeUnlock(note?: string): Promise<RequestUnlockR
   const { data: { user } } = await sb.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  const { data: intake, error: readError } = await sb
+  // limit(1) rather than maybeSingle(): a user may legitimately have more than
+  // one intake row (re-invite, second engagement), and maybeSingle() errors in
+  // that case, which would make the unlock request permanently unavailable.
+  // Ordering matches findClientIntakeForUser.
+  const { data: intakeRows, error: readError } = await sb
     .from('client_intake')
     .select('id, status, first_name, last_name, email')
     .or(`user_id.eq.${user.id},client_user_id.eq.${user.id}`)
-    .maybeSingle()
+    .order('created_at', { ascending: true })
+    .limit(1)
   if (readError) throw new Error(readError.message)
+  const intake = intakeRows?.[0]
   if (!intake) throw new Error('We could not find your questionnaire.')
   if (intake.status !== 'submitted' && intake.status !== 'approved') {
     throw new Error('Your questionnaire is already open for editing.')

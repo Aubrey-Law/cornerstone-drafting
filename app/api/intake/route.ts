@@ -532,20 +532,29 @@ export async function POST(req: Request) {
     const lookupId = existingId as string | undefined
     let currentStatus: string | null | undefined
     if (lookupId) {
-      const { data: existingRow } = await sb
+      const { data: existingRow, error: existingRowError } = await sb
         .from('client_intake')
         .select('*')
         .eq('id', lookupId)
         .or(ownedOrClause)
         .maybeSingle()
+      if (existingRowError) throw new Error(existingRowError.message)
       currentStatus = existingRow?.status as string | null | undefined
       existingForSubmit = existingRow as Record<string, unknown> | null
     } else {
-      const { data: existingRow } = await sb
+      // Multiple intake rows per user is a legitimate state (re-invite, second
+      // engagement), and `.maybeSingle()` *errors* on more than one row.
+      // Swallowing that error made this read as "no intake": it skipped the
+      // submitted-lock check below and let the save insert yet another row.
+      // Ordering matches findClientIntakeForUser (oldest row is canonical).
+      const { data: existingRows, error: existingRowError } = await sb
         .from('client_intake')
         .select('*')
         .or(ownedOrClause)
-        .maybeSingle()
+        .order('created_at', { ascending: true })
+        .limit(1)
+      if (existingRowError) throw new Error(existingRowError.message)
+      const existingRow = existingRows?.[0] ?? null
       currentStatus = existingRow?.status as string | null | undefined
       existingForSubmit = existingRow as Record<string, unknown> | null
     }
@@ -628,11 +637,22 @@ export async function POST(req: Request) {
   } else {
     // No existingId — check if a record already exists for this user
     // (handles the case where the client lost track of the record ID)
-    const { data: existing } = await sb
+    // `.maybeSingle()` errors when the user already has more than one intake
+    // row; swallowing that error meant this fell through to the INSERT below and
+    // added a further row on *every* autosave. Ordering matches
+    // findClientIntakeForUser so we update the same row the GET reads.
+    const { data: existingRows, error: existingError } = await sb
       .from('client_intake')
       .select('id')
       .or(ownedOrClause)
-      .maybeSingle()
+      .order('created_at', { ascending: true })
+      .limit(1)
+
+    if (existingError) {
+      console.error('[intake POST] existing lookup error:', existingError)
+      return NextResponse.json({ error: existingError.message }, { status: 500 })
+    }
+    const existing = existingRows?.[0] ?? null
 
     if (existing) {
       // UPDATE the found record

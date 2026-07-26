@@ -7,6 +7,7 @@ import {
 } from '@/lib/microsoftCalendar'
 import { storeCalendarConnection } from '@/lib/calendarConnections'
 import { getRequestOrigin } from '@/lib/requestOrigin'
+import { safeAdminRedirectPath } from '@/lib/auth/safeRedirect'
 
 interface CallbackState {
   token?: string | null
@@ -36,7 +37,10 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
   const errorDesc = searchParams.get('error_description')
   const state = decodeState(searchParams.get('state'))
-  const returnTo = state.returnTo || '/admin/settings?tab=outlook'
+  // `state` is unsigned, attacker-suppliable input and the error branches below
+  // redirect before any session check, so an unvalidated returnTo is an
+  // unauthenticated open redirect on the firm's own domain.
+  const returnTo = safeAdminRedirectPath(state.returnTo) ?? '/admin/settings?tab=outlook'
 
   if (error) {
     return redirectBack(req, returnTo, {

@@ -77,6 +77,19 @@
   border-color: var(--gi-border) !important;
   font-family: var(--gi-sans);
 }
+/* iOS Safari auto-zooms the page when a focused form control's font-size is
+   under 16px, and the container above sets 14px, which controls inherit. Pin
+   16px on phone-width screens only, so desktop typography is unchanged. */
+@media (max-width: 767px) {
+  .guided-interview input:not([type='checkbox']):not([type='radio']),
+  .guided-interview textarea,
+  .guided-interview select,
+  .guided-interview [data-slot='select-trigger'],
+  .guided-interview button[role='combobox'] {
+    font-size: 16px;
+  }
+}
+
 .guided-interview input:not([type='checkbox']):not([type='radio']):focus-visible,
 .guided-interview textarea:focus-visible,
 .guided-interview [data-slot='select-trigger']:focus-visible {

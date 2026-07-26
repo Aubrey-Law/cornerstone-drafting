@@ -2,6 +2,7 @@
 
 import { getAdminClient, ADMIN_EMAIL } from '@/lib/supabaseAdmin'
 import { createServerSupabase } from '@/lib/supabaseServer'
+import { requireAdminServerAction } from '@/lib/serverActionAuth'
 import { revalidatePath } from 'next/cache'
 import type { AdminIntakeFormData } from '@/types/adminIntake'
 import { formatPhoneForStorage } from '@/lib/phone'
@@ -193,6 +194,7 @@ async function persistAdminFiduciaries(
 export async function getAdminIntakeData(
   clientIntakeId: string
 ): Promise<Record<string, unknown> | null> {
+  await requireAdminServerAction()
   const admin = getAdminClient()
   const { data, error } = await admin
     .from('client_intake')
@@ -256,6 +258,7 @@ export async function getAdminIntakeData(
 
 /** Resolve and heal the household intake linked to a matter. */
 export async function resolveMatterIntake(matterId: string): Promise<string | null> {
+  await requireAdminServerAction()
   const admin = getAdminClient()
   return resolveMatterIntakeIdForMatter(admin, matterId)
 }
@@ -334,6 +337,7 @@ async function findOrCreateIntake(
 }
 
 export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id: string }> {
+  await requireAdminServerAction()
   const admin = getAdminClient()
   const draftPayload = buildPayload(args.data, 'draft')
   const intakeId = await findOrCreateIntake(args, draftPayload)
@@ -428,6 +432,7 @@ function buildExtendedDataNote(data: AdminIntakeFormData) {
  *  and seed the design sheet + extended-data note. Pre-conversion submits
  *  leave the matter table untouched — the matter is created at convert time. */
 export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: string }> {
+  await requireAdminServerAction()
   const admin = getAdminClient()
   const payload = buildPayload(args.data, 'submitted')
   const intakeId = await findOrCreateIntake(args, payload)

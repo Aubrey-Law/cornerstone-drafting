@@ -106,7 +106,10 @@ export default function SlotPicker({
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      {/* flex-wrap + gap: the two nowrap buttons plus the timezone label need
+          ~357px, so below ~394px the "Next week" control was pushed off-screen
+          and the page scrolled horizontally (iPhone SE/12/13/14/15, most Android). */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button
           type="button"
           variant="outline"

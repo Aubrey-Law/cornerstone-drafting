@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { wizardStreetLine } from '@/lib/intakeContactAddress'
 import { FINANCIAL_DETAILS_ROOT_KEYS, isFinancialDetailsRootKey } from '@/lib/intakeFinancialFields'
@@ -9,14 +9,22 @@ import { intakeExcludedGuardianTextFromRequestBody } from '@/lib/intakeContactHy
 import { formatPhoneFieldsDeep } from '@/lib/phone'
 import { toast } from 'sonner'
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+// 'dirty' means edits exist that the debounce has not yet sent. It maps to the
+// existing "Unsaved changes" pill; without it the UI reported "Saved" during the
+// debounce window, actively telling clients their answer was stored when it was
+// still only in memory.
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'dirty'
 
 export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: string) {
   const [status, setStatus] = useState<SaveStatus>('idle')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestRef = useRef<Record<string, unknown> | null>(null)
 
   const persist = useCallback(
-    async (data: Record<string, unknown>): Promise<boolean> => {
+    async (
+      data: Record<string, unknown>,
+      opts?: { keepalive?: boolean },
+    ): Promise<boolean> => {
       const payload: Record<string, unknown> = {}
       const financialDetails: Record<string, unknown> = {}
       // _fid_* keys are still the wizard/server wire format for contact_roles.
@@ -152,6 +160,9 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
         const res = await fetch('/api/intake', {
           method: 'POST',
           headers,
+          // keepalive lets an in-flight save outlive the page during the
+          // pagehide flush below. Only set there: it caps bodies at ~64KB.
+          keepalive: opts?.keepalive,
           body: JSON.stringify({ ...formatPhoneFieldsDeep(payload), existingId: intakeId }),
         })
 
@@ -177,7 +188,19 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
   const debouncedSave = useCallback(
     (data: Record<string, unknown>) => {
       if (timerRef.current) clearTimeout(timerRef.current)
-      timerRef.current = setTimeout(() => persist(data), delay)
+      // Remember the newest data so an unload can still flush it, and report the
+      // honest state while the timer runs.
+      latestRef.current = data
+      setStatus('dirty')
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null
+        void persist(data).then(ok => {
+          // Only drop the pending snapshot once it is safely stored, so a later
+          // flush() (pre-submit, pre-navigation) still retries a failed save.
+          // Identity check so a newer edit is never discarded.
+          if (ok && latestRef.current === data) latestRef.current = null
+        })
+      }, delay)
     },
     [persist, delay]
   )
@@ -185,15 +208,43 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
   const saveNow = useCallback(
     (data: Record<string, unknown>) => {
       if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = null
       return persist(data)
     },
     [persist]
   )
 
-  const latestRef = useRef<Record<string, unknown> | null>(null)
   const trackForFlush = useCallback((data: Record<string, unknown>) => {
     latestRef.current = data
   }, [])
+
+  // A client who types an answer and immediately closes the tab (or switches
+  // apps on mobile, where pagehide is often the last event a page sees) used to
+  // lose everything still inside the debounce window, with the pill showing
+  // "Saved". Best-effort flush with keepalive so the request survives teardown.
+  useEffect(() => {
+    function flushPending() {
+      // latestRef holds anything not yet safely stored — either still inside the
+      // debounce window, or left over from a save that failed.
+      if (!latestRef.current) return
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = null
+      const pending = latestRef.current
+      latestRef.current = null
+      void persist(pending, { keepalive: true })
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') flushPending()
+    }
+
+    window.addEventListener('pagehide', flushPending)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', flushPending)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [persist])
 
   const flush = useCallback(async () => {
     if (timerRef.current) {

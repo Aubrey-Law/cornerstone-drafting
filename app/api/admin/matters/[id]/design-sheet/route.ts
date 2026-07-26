@@ -215,7 +215,15 @@ export async function PATCH(req: Request, { params }: Params) {
     const syncChildren = shouldSyncChildren(childrenInput, existingSheet?.children)
 
     if (resolvedExistingId) {
-      const { error } = await admin
+      const resolvedUpdatedAt =
+        typeof existingRow?.updated_at === 'string' ? existingRow.updated_at : null
+
+      // The expectedUpdatedAt comparison above is only time-of-check; without
+      // updated_at in the WHERE clause two concurrent saves both pass it and both
+      // write, and because the payload is the full merged sheet the loser's
+      // fields are overwritten wholesale. Make the write a compare-and-swap so
+      // the DB, not the earlier read, decides who wins.
+      let updateQuery = admin
         .from('design_sheets')
         .update({
           ...payload,
@@ -225,7 +233,21 @@ export async function PATCH(req: Request, { params }: Params) {
         .eq('id', resolvedExistingId)
         .eq('matter_id', matterId)
 
+      if (resolvedUpdatedAt) updateQuery = updateQuery.eq('updated_at', resolvedUpdatedAt)
+
+      const { data: updatedRows, error } = await updateQuery.select('id')
+
       if (error) throw new Error(error.message)
+      if (resolvedUpdatedAt && (!updatedRows || updatedRows.length === 0)) {
+        return NextResponse.json(
+          {
+            error: 'Design sheet was updated elsewhere.',
+            conflict: true,
+            updated_at: await readSavedUpdatedAt(admin, resolvedExistingId),
+          },
+          { status: 409 },
+        )
+      }
       if (syncChildren && childrenInput) {
         await saveHouseholdChildren(admin, clientIntakeId, childrenInput, { updatedAt: now })
       }
@@ -237,16 +259,22 @@ export async function PATCH(req: Request, { params }: Params) {
       })
     }
 
+    // No sheet existed at read time. Upsert rather than insert so a seeder that
+    // won the race in between applies this save instead of failing the request
+    // on design_sheets_matter_id_version_key.
     const { data: inserted, error } = await admin
       .from('design_sheets')
-      .insert({
-        matter_id: matterId,
-        client_intake_id: clientIntakeId,
-        version: 1,
-        status: 'draft',
-        ...payload,
-        updated_at: now,
-      })
+      .upsert(
+        {
+          matter_id: matterId,
+          client_intake_id: clientIntakeId,
+          version: 1,
+          status: 'draft',
+          ...payload,
+          updated_at: now,
+        },
+        { onConflict: 'matter_id,version' },
+      )
       .select('id')
       .single()
 
