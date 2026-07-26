@@ -44,7 +44,7 @@ const WRITABLE_FIELDS = new Set([
   'pb_bond_amount', 'pb_bond_waived_in_will',
   // V2 — Shared
   'conflict_check_completed', 'conflict_check_date',
-  'conflict_cleared', 'engagement_signed',
+  'conflict_cleared', 'engagement_signed', 'engagement_status',
   'fee_collected', 'fee_collected_date',
   'fee_payment_status',
   // V2 — EP Document Tracking
@@ -94,6 +94,72 @@ export async function PATCH(req: Request) {
     if (!normalizedValue) {
       return NextResponse.json({ error: 'Invalid target signing date' }, { status: 400 })
     }
+  }
+
+  if (field === 'engagement_status') {
+    // The dropdown also covers engagements handled outside the app (or already
+    // signed on paper), so a manual status change keeps the legacy
+    // engagement_signed / sent_at / signed_at columns consistent, and mirrors
+    // onto the originating lead so the Leads pipeline shows the same status.
+    const allowed = ['not_sent', 'draft', 'sent', 'signed']
+    if (typeof normalizedValue !== 'string' || !allowed.includes(normalizedValue)) {
+      return NextResponse.json({ error: 'Invalid engagement status' }, { status: 400 })
+    }
+    const { data: existing } = await admin
+      .from('matter_details')
+      .select('engagement_sent_at, engagement_signed_at')
+      .eq('client_id', matterId)
+      .maybeSingle()
+    const now = new Date().toISOString()
+    const patch =
+      normalizedValue === 'signed'
+        ? {
+            engagement_status: 'signed',
+            engagement_signed: true,
+            engagement_signed_at: existing?.engagement_signed_at ?? now,
+            engagement_sent_at: existing?.engagement_sent_at ?? null,
+          }
+        : normalizedValue === 'sent'
+          ? {
+              engagement_status: 'sent',
+              engagement_signed: false,
+              engagement_signed_at: null,
+              engagement_sent_at: existing?.engagement_sent_at ?? now,
+            }
+          : {
+              engagement_status: normalizedValue === 'draft' ? 'draft' : null,
+              engagement_signed: false,
+              engagement_signed_at: null,
+              engagement_sent_at: null,
+            }
+    const { data: row, error: statusError } = await admin
+      .from('matter_details')
+      .upsert({ client_id: matterId, ...patch }, { onConflict: 'client_id' })
+      .select()
+      .single()
+    if (statusError) {
+      console.error('matter-details engagement status update failed', { matterId, value, statusError })
+      return NextResponse.json({ error: statusError.message }, { status: 500 })
+    }
+    const { data: matterRow } = await admin
+      .from('matters')
+      .select('client_intake_id')
+      .eq('id', matterId)
+      .maybeSingle()
+    if (matterRow?.client_intake_id) {
+      const { error: leadError } = await admin
+        .from('client_intake')
+        .update({
+          engagement_status: patch.engagement_status,
+          engagement_sent_at: patch.engagement_sent_at,
+          engagement_signed_at: patch.engagement_signed_at,
+        })
+        .eq('id', matterRow.client_intake_id)
+      if (leadError) {
+        return NextResponse.json({ error: leadError.message }, { status: 500 })
+      }
+    }
+    return NextResponse.json({ row })
   }
 
   if (field === 'matter_number') {

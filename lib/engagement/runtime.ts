@@ -4,6 +4,7 @@ import { issueRevisionApproval, verifyRevisionApproval } from './approval'
 import { renderEngagementAgreement } from './render'
 import * as repository from './repository'
 import { createEngagementService } from './service'
+import { markEngagementSentStatus } from './status'
 
 export function engagementService() {
   const client = getAdminClient()
@@ -31,7 +32,16 @@ export function engagementService() {
       },
       recordRecipients: (id, recipients) => repository.recordFirmaRecipients(client, id, recipients),
       markSent: async id => {
-        await repository.markAgreementSent(client, id)
+        const row = await repository.markAgreementSent(client, id) as { matter_id?: string | null } | null
+        if (row?.matter_id) {
+          // The envelope is already out; a status-mirror failure must not fail
+          // the send, so it is logged rather than thrown.
+          try {
+            await markEngagementSentStatus(client, row.matter_id)
+          } catch (e) {
+            console.error('[engagement] matter status sync after send failed', e)
+          }
+        }
       },
     },
     renderer: { render: async input => {

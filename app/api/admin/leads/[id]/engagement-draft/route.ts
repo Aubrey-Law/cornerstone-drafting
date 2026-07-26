@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createAgreementDraft } from '@/lib/engagement/repository'
+import { markEngagementDraftStatus } from '@/lib/engagement/status'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { isSupportedWorkspaceDefinition } from '@/components/engagement/workspaceState'
 
@@ -68,6 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   if (canOpenWorkspace(existingAgreement)) {
+    await markEngagementDraftStatus(admin, { matterId: opportunity.id, leadId: id })
     return Response.json({ agreementId: existingAgreement.id })
   }
 
@@ -107,6 +109,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     masterVersion: '0',
   })
 
+  await markEngagementDraftStatus(admin, { matterId: opportunity.id, leadId: id })
   await admin.from('lead_activity').insert({
     lead_id: id,
     event_type: 'engagement_drafted',
