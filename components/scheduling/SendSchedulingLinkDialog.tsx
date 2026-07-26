@@ -52,6 +52,7 @@ export function SendSchedulingLinkDialog({
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [dirty, setDirty] = useState(false)
+  const [subjectDirty, setSubjectDirty] = useState(false)
   const [sending, setSending] = useState(false)
 
   const query = target.kind === 'lead' ? `leadId=${target.id}` : `matterId=${target.id}`
@@ -62,15 +63,20 @@ export function SendSchedulingLinkDialog({
     fetch(`/api/admin/scheduling-links/send?${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(res => res.json())
-      .then((json: DialogData) => {
+      .then(async res => {
+        const json = await res.json()
+        if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to load')
+        return json as DialogData
+      })
+      .then(json => {
         setData(json)
         const firstConfigured = json.types.find(t => t.configured)
         setTypeKey(firstConfigured?.key ?? '')
         setChannel(json.recipient.email ? 'email' : 'sms')
         setDirty(false)
+        setSubjectDirty(false)
       })
-      .catch(() => toast.error('Failed to load scheduling links'))
+      .catch(e => toast.error(e instanceof Error ? e.message : 'Failed to load scheduling links'))
   }, [open, token, query])
 
   const selected = useMemo(
@@ -81,11 +87,11 @@ export function SendSchedulingLinkDialog({
   // Keep the prefilled message in sync with type/channel until the user edits it.
   useEffect(() => {
     if (!data || !selected?.links) return
-    setSubject(`Schedule your ${selected.label}`)
+    if (!subjectDirty) setSubject(`Schedule your ${selected.label}`)
     if (!dirty) {
       setMessage(defaultMessage(data.recipient.name, selected.label, selected.links[channel]))
     }
-  }, [data, selected, channel, dirty])
+  }, [data, selected, channel, dirty, subjectDirty])
 
   const send = useCallback(async () => {
     setSending(true)
@@ -144,7 +150,7 @@ export function SendSchedulingLinkDialog({
                     variant={typeKey === type.key ? 'default' : 'outline'}
                     disabled={!type.configured}
                     title={type.configured ? undefined : 'Add the link in Settings → Scheduling'}
-                    onClick={() => { setTypeKey(type.key); setDirty(false) }}
+                    onClick={() => { setTypeKey(type.key); setDirty(false); setSubjectDirty(false) }}
                   >
                     {type.label}
                   </Button>
@@ -183,7 +189,7 @@ export function SendSchedulingLinkDialog({
                 <Input
                   id="scheduling-link-subject"
                   value={subject}
-                  onChange={e => setSubject(e.target.value)}
+                  onChange={e => { setSubject(e.target.value); setSubjectDirty(true) }}
                 />
               </div>
             )}

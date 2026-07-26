@@ -37,12 +37,17 @@ export function BookCalendlyDialog({
     fetch(`/api/admin/scheduling-links/send?${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(res => res.json())
-      .then((json: { types: TypeOption[] }) => {
-        setTypes(json.types)
-        setTypeKey(json.types.find(t => t.configured)?.key ?? '')
+      .then(async res => {
+        const json = await res.json()
+        if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to load')
+        return json as { types: TypeOption[] }
       })
-      .catch(() => toast.error('Failed to load Calendly links'))
+      .then(json => {
+        const types = Array.isArray(json.types) ? json.types : []
+        setTypes(types)
+        setTypeKey(types.find(t => t.configured)?.key ?? '')
+      })
+      .catch(e => toast.error(e instanceof Error ? e.message : 'Failed to load Calendly links'))
   }, [open, token, query])
 
   // Calendly emits postMessage events when embed_domain/embed_type are set.
