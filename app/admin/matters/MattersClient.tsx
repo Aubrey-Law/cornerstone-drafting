@@ -7,6 +7,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Briefcase, ChevronRight, Database, Plus, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import {
+  EMPTY_MATTER_TABLE_FILTERS,
+  filterAndSortMatters,
+  matterLastActivityAt,
+  type MatterSortKey,
+  type MatterTableFilters,
+} from '@/lib/adminTables/matterTable'
 import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
@@ -48,16 +55,6 @@ interface MattersClientProps {
   loadError?: string | null
 }
 
-type MatterFilters = {
-  practice: string
-  stageGroup: StageGroup | 'all'
-}
-
-const EMPTY_FILTERS: MatterFilters = {
-  practice: 'all',
-  stageGroup: 'all',
-}
-
 const GROUP_LABELS: Record<StageGroup, string> = {
   early: 'Intake',
   active: 'Drafting',
@@ -75,23 +72,6 @@ function intakeStatusLabel(status: string | null | undefined) {
 const INTAKE_BADGE_CLASS: Record<string, string> = {
   submitted: 'border-green/40 bg-green-bg text-green',
   in_progress: 'border-blue-strong-border bg-blue-bg text-blue',
-}
-
-/**
- * `v_matter_pipeline` has no updated-at column, so last activity is the newest
- * timestamp the view does carry.
- */
-function lastActivityAt(m: MatterListRow): number | null {
-  const stamps = [
-    m.documents_executed_at,
-    m.drafts_sent_at,
-    m.intake_submitted_at,
-    m.matter_created,
-  ]
-    .filter((s): s is string => Boolean(s))
-    .map(s => Date.parse(s))
-    .filter(Number.isFinite)
-  return stamps.length ? Math.max(...stamps) : null
 }
 
 function daysSince(ms: number): number {
@@ -114,7 +94,7 @@ export default function MattersClient(props: MattersClientProps) {
   )
 }
 
-function MattersClientShell({ matters, loadError = null }: MattersClientProps) {
+function MattersClientShell({ matters: _matters, loadError = null }: MattersClientProps) {
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-4 md:px-6">
@@ -131,8 +111,8 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const searchParams = useSearchParams()
   const token = useAccessToken()
   const router = useRouter()
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<MatterFilters>(EMPTY_FILTERS)
+  const [filters, setFilters] = useState<MatterTableFilters>(EMPTY_MATTER_TABLE_FILTERS)
+  const [sortKey, setSortKey] = useState<MatterSortKey>('last_activity')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
@@ -170,33 +150,13 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   }, [matters])
 
   const hasActiveFilters = useMemo(() => {
-    return Boolean(search.trim() || filters.practice !== 'all' || filters.stageGroup !== 'all')
-  }, [filters, search])
+    return Boolean(filters.search.trim() || filters.practice !== 'all' || filters.stageGroup !== 'all')
+  }, [filters])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return matters.filter(m => {
-      if (q) {
-        const hay = [
-          m.matter_number,
-          m.client_name,
-          m.client_email,
-          m.client_phone,
-          m.matter_name,
-          m.practice_area,
-          m.stage,
-          m.intake_status,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      if (filters.practice !== 'all' && m.practice_area !== filters.practice) return false
-      if (filters.stageGroup !== 'all' && stageInfo(m.stage).group !== filters.stageGroup) return false
-      return true
-    })
-  }, [filters, matters, search])
+  const filtered = useMemo(
+    () => filterAndSortMatters(matters, filters, sortKey),
+    [filters, matters, sortKey],
+  )
 
   const selectedIds = useMemo(
     () => filtered.filter(m => selected[m.matter_id]).map(m => m.matter_id),
@@ -205,13 +165,12 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(m => selected[m.matter_id])
 
-  const updateFilter = <K extends keyof MatterFilters>(key: K, value: MatterFilters[K]) => {
+  const updateFilter = <K extends keyof MatterTableFilters>(key: K, value: MatterTableFilters[K]) => {
     setFilters(current => ({ ...current, [key]: value }))
   }
 
   const clearFilters = () => {
-    setSearch('')
-    setFilters(EMPTY_FILTERS)
+    setFilters(EMPTY_MATTER_TABLE_FILTERS)
   }
 
   const toggleAllFiltered = (checked: boolean) => {
@@ -344,23 +303,23 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
         : 'No matters to show.'
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
+    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <div className="space-y-3 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="mr-2 text-xl font-semibold tracking-tight">Matters</h1>
           <div className="flex max-w-md min-w-[14rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
             <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={filters.search}
+              onChange={e => updateFilter('search', e.target.value)}
               placeholder="Search all fields…"
               className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
               aria-label="Search matters"
             />
-            {search && (
+            {filters.search && (
               <button
                 type="button"
-                onClick={() => setSearch('')}
+                onClick={() => updateFilter('search', '')}
                 className="text-muted-foreground hover:text-foreground"
                 aria-label="Clear search"
               >
@@ -424,6 +383,19 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                     {option.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortKey} onValueChange={value => setSortKey(value as MatterSortKey)}>
+              <SelectTrigger size="sm" className="w-40" aria-label="Sort matters by">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="last_activity">Last activity</SelectItem>
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="oldest">Oldest</SelectItem>
+                <SelectItem value="client_asc">Client A-Z</SelectItem>
+                <SelectItem value="client_desc">Client Z-A</SelectItem>
+                <SelectItem value="matter_number">Matter number</SelectItem>
               </SelectContent>
             </Select>
             {hasActiveFilters && (
@@ -496,7 +468,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                     m.unreviewed_intake_upload_count ?? 0,
                     m.unreviewed_portal_upload_count ?? 0,
                   )
-                  const activity = lastActivityAt(m)
+                  const activity = matterLastActivityAt(m)
                   const quietDays = activity === null ? null : daysSince(activity)
                   return (
                     <TableRow key={m.matter_id}>

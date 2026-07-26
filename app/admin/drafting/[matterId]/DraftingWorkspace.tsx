@@ -5,10 +5,8 @@ import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, HelpCircle, ListChecks, X } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import { normalizePracticeArea } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
 import { nextConsumedDesignFocus, shouldConsumeDesignFocus } from '@/lib/designFocusNavigation'
 import { useDesignSheetState } from '@/lib/designSheet/useDesignSheetState'
@@ -196,42 +194,32 @@ export default function DraftingWorkspace({
   }
 
   const clientDisplayName = matter.client_name || 'Unnamed client'
-  const practiceText = practiceAreaLabel(matter.practice_area)
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
+    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       {/* Workspace header */}
       <div className="shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground" asChild>
-              <Link href="/admin/drafting">
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Drafting
-              </Link>
-            </Button>
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-bold text-foreground">{clientDisplayName}</h1>
-              <p className="truncate text-xs text-muted-foreground">
-                {matter.matter_name || 'Matter'} · {practiceText}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="text-[11px]">Drafting workspace</Badge>
-            <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground" asChild>
-              <Link href={`/admin/matters/${matterId}`}>
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to matter
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-              <Link href={`/admin/drafting/${matterId}/design`}>
-                <FileText className="h-3.5 w-3.5" />
-                Design sheet
-              </Link>
-            </Button>
-          </div>
+        <div className="flex items-center justify-between gap-4">
+          <nav aria-label="Breadcrumb" className="min-w-0">
+            <ol className="flex min-w-0 items-center gap-2 text-sm">
+              <li className="shrink-0">
+                <Link href="/admin/drafting" className="font-medium text-muted-foreground hover:text-foreground">
+                  Drafting
+                </Link>
+              </li>
+              <li aria-hidden="true" className="text-muted-foreground">/</li>
+              <li className="truncate font-semibold text-foreground" aria-current="page">
+                {clientDisplayName}
+              </li>
+            </ol>
+          </nav>
+          <Link
+            href={`/admin/matters/${matterId}`}
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to matter
+          </Link>
         </div>
 
         {/* Stepper */}

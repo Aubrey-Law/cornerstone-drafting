@@ -61,7 +61,7 @@ export default function ClientUploadCard({ matterId, matterClosed, initialUpload
   if (matterClosed) {
     return (
       <div className="rounded-xl border border-border bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground">Your uploads</h2>
+        <h2 className="text-lg font-semibold text-foreground">Need to send us something?</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           This matter is closed. Contact your attorney to share new documents.
         </p>
@@ -73,7 +73,7 @@ export default function ClientUploadCard({ matterId, matterClosed, initialUpload
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Your uploads</h2>
+          <h2 className="text-lg font-semibold text-foreground">Need to send us something?</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             PDF, Word, Excel, CSV, text, or image — {formatSize(MAX_UPLOAD_BYTES)} max.
           </p>

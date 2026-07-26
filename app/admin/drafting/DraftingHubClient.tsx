@@ -165,7 +165,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
   const showRetry = Boolean(loadError)
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
+    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-1 text-xl font-semibold tracking-tight">Drafting</h1>

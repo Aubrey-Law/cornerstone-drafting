@@ -53,15 +53,15 @@ export default async function DocumentsPage() {
         </p>
       </div>
 
-      <div className="mb-6">
+      <PortalDocumentList documents={documents} />
+
+      <div className="mt-6">
         <ClientUploadCard
           matterId={matter.id}
           matterClosed={matterClosed}
           initialUploads={clientUploads}
         />
       </div>
-
-      <PortalDocumentList documents={documents} />
     </div>
   )
 }
