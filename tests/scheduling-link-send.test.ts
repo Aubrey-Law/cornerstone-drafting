@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const inserts: Array<{ table: string; values: Record<string, unknown> }> = []
-const sendEmail = vi.fn(async () => ({ ok: true, status: 'sent', logId: 'log-1' }))
-const sendOutboundSms = vi.fn(async () => ({ ok: true, status: 'queued', providerMessageId: 'SM1', smsMessage: {}, activity: null }))
-const notifyClientOfFirmMessage = vi.fn(async () => undefined)
+const sendEmail = vi.fn(async (..._args: unknown[]) => ({ ok: true, status: 'sent', logId: 'log-1' }))
+const sendOutboundSms = vi.fn(async (..._args: unknown[]) => ({ ok: true, status: 'queued', providerMessageId: 'SM1', smsMessage: {}, activity: null }))
+const notifyClientOfFirmMessage = vi.fn(async (..._args: unknown[]) => undefined)
 
 vi.mock('@/lib/apiAuth', () => ({
   requireAdmin: vi.fn(async () => ({
