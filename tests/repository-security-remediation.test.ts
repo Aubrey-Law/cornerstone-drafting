@@ -13,6 +13,17 @@ function remediationSql(): string {
 }
 
 describe('repository security remediation migration', () => {
+  it('creates its lead-status prerequisite in the remediation migration', () => {
+    const sql = remediationSql()
+    const prerequisite = sql.indexOf('add column if not exists lead_status text')
+    const functionDefinition = sql.indexOf(
+      'create or replace function public.snooze_lead_next_action',
+    )
+
+    expect(prerequisite).toBeGreaterThan(-1)
+    expect(prerequisite).toBeLessThan(functionDefinition)
+  })
+
   it('restricts privileged RPC execution to the roles that need it', () => {
     const sql = remediationSql()
 

@@ -157,6 +157,9 @@ create policy "client_read_visible_matter_documents"
   );
 
 alter table public.client_intake
+  add column if not exists lead_status text;
+
+alter table public.client_intake
   add column if not exists lead_next_action_snoozed_until timestamptz;
 
 create or replace function public.snooze_lead_next_action(

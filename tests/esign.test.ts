@@ -205,10 +205,17 @@ describe('esign webhook route source shape', () => {
 
   it('claims the official event id atomically before fetching provider state', () => {
     expect(source).toContain('payload.id')
+    expect(source).toContain('data.signing_request')
     expect(source).toContain("req.headers.get('x-firma-event')")
     expect(source).toContain("rpc('claim_firma_webhook_event'")
     expect(source.indexOf("rpc('claim_firma_webhook_event'"))
       .toBeLessThan(source.indexOf('getEnvelopeState'))
+    expect(source.indexOf("rpc('claim_firma_webhook_event'"))
+      .toBeLessThan(source.indexOf('if (agreement)'))
+    expect(source).toContain("claimStatus === 'in_progress'")
+    expect(source).toContain('{ status: 503 }')
+    expect(source).toContain('markFirmaWebhookFailed')
+    expect(source).toContain('markFirmaWebhookProcessed')
     expect(source).not.toContain("createHash('sha256')")
     expect(source).not.toContain("req.headers.get('x-firma-delivery')")
     expect(source).not.toContain("select('id, processed_at')")
