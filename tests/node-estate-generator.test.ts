@@ -1549,6 +1549,8 @@ describe('node estate generator package generation', () => {
         spouse_hcp_successor: 'Jamie Spouse Alternate',
       },
       hcp_provisions: {
+        anatomical_gift: null,
+        anatomical_specified: null,
         client_anatomical_gift: 'no',
       },
     })
