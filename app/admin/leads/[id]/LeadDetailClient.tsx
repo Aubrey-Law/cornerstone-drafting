@@ -34,6 +34,8 @@ import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import { LeadIntakeCard } from './LeadIntakeCard'
+import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
+import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -187,6 +189,8 @@ export function LeadDetailClient({
   const [busyIntent, setBusyIntent] = useState<string | null>(null)
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
+  const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
+  const [bookForClientOpen, setBookForClientOpen] = useState(false)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [sendingIntake, setSendingIntake] = useState(false)
@@ -537,6 +541,8 @@ export function LeadDetailClient({
             onConvert={handleTopConvert}
             onClearSnooze={() => void clearNextActionSnooze()}
             onStatusChange={handleTopStatusChange}
+            onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
+            onBookForClient={() => setBookForClientOpen(true)}
           />
         </div>
       </header>
@@ -603,6 +609,17 @@ export function LeadDetailClient({
           setIntakeSheetOpen(true)
           router.refresh()
         }}
+      />
+
+      <SendSchedulingLinkDialog
+        target={{ kind: 'lead', id: lead.id }}
+        open={schedulingLinkOpen}
+        onOpenChange={setSchedulingLinkOpen}
+      />
+      <BookCalendlyDialog
+        target={{ kind: 'lead', id: lead.id }}
+        open={bookForClientOpen}
+        onOpenChange={setBookForClientOpen}
       />
 
       {intakeSheetOpen && (

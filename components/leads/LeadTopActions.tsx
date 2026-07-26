@@ -22,6 +22,8 @@ type Props = {
   onConvert: () => void
   onClearSnooze: () => void
   onStatusChange: (status: MutableLeadStatus) => void
+  onSendSchedulingLink: () => void
+  onBookForClient: () => void
 }
 
 export function LeadTopActions({
@@ -35,6 +37,8 @@ export function LeadTopActions({
   onConvert,
   onClearSnooze,
   onStatusChange,
+  onSendSchedulingLink,
+  onBookForClient,
 }: Props) {
   const active = status === 'lead'
   const hired = status === 'hired'
@@ -80,12 +84,18 @@ export function LeadTopActions({
               size="sm"
               variant="outline"
               aria-label="More actions"
-              disabled={busy || hired}
+              disabled={busy}
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onSendSchedulingLink}>
+              Send scheduling link
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onBookForClient}>
+              Book for client…
+            </DropdownMenuItem>
             {active && snoozed && (
               <DropdownMenuItem onClick={onClearSnooze}>
                 Clear snooze
