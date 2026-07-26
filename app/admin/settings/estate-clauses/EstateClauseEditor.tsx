@@ -126,7 +126,7 @@ export function EstateClauseEditor({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Working draft</p>
-          <h3 className="font-serif text-xl font-semibold">{clause.title}</h3>
+          <h3 className="text-xl font-semibold">{clause.title}</h3>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{clause.clauseKey}</p>
         </div>
         <div className="flex flex-wrap gap-1.5">

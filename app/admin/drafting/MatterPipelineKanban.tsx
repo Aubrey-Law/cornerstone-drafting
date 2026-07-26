@@ -1,15 +1,48 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { Clock } from 'lucide-react'
+import { ChevronDown, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn, formatDate } from '@/lib/utils'
-import { hubLastActivityAt, hubReadinessLabel } from '@/lib/drafting/hubUtils'
+import { QUIET_DAYS, hubDaysSinceActivity, hubLastActivityAt, hubReadinessLabel } from '@/lib/drafting/hubUtils'
 import { useDebouncedPrefetch } from '@/lib/useDebouncedPrefetch'
 import { updateMatterStage } from '@/lib/drafting/updateMatterStage'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
-import { STAGES, stageGroupColor, stageInfo, stageLabel, type MatterStage } from '@/types/database'
+import {
+  GROUP_COLORS,
+  STAGES,
+  stageGroupColor,
+  stageInfo,
+  stageLabel,
+  type MatterStage,
+  type StageGroup,
+} from '@/types/database'
+
+/** The board collapses the 11 stages into these 5 columns. */
+const GROUP_ORDER: StageGroup[] = ['early', 'active', 'work', 'done', 'closed']
+
+const GROUP_LABELS: Record<StageGroup, string> = {
+  early: 'Intake',
+  active: 'Drafting',
+  work: 'Client work',
+  done: 'Signing',
+  closed: 'Closed',
+}
+
+/** Dropping on a column moves the matter to that group's first stage. */
+function firstStageOfGroup(group: StageGroup): MatterStage {
+  return (STAGES.find(stage => stage.group === group) ?? STAGES[0]).key
+}
 
 interface MatterPipelineKanbanProps {
   matters: DraftingHubMatter[]
@@ -19,23 +52,23 @@ interface MatterPipelineKanbanProps {
 
 export default function MatterPipelineKanban({ matters, onOpen, onStageChange }: MatterPipelineKanbanProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [dropTarget, setDropTarget] = useState<MatterStage | null>(null)
+  const [dropTarget, setDropTarget] = useState<StageGroup | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const byStage = useMemo(() => {
-    const map = new Map<MatterStage, DraftingHubMatter[]>()
-    for (const stage of STAGES) map.set(stage.key, [])
+  const byGroup = useMemo(() => {
+    const map = new Map<StageGroup, DraftingHubMatter[]>()
+    for (const group of GROUP_ORDER) map.set(group, [])
     for (const item of matters) {
-      const key = item.matter.stage
-      const bucket = map.get(key) ?? []
+      const group = stageInfo(item.matter.stage).group
+      const bucket = map.get(group) ?? []
       bucket.push(item)
-      map.set(key, bucket)
+      map.set(group, bucket)
     }
     return map
   }, [matters])
 
-  const handleDrop = useCallback(async (targetStage: MatterStage, matterId: string) => {
+  const applyStage = useCallback(async (targetStage: MatterStage, matterId: string) => {
     const item = matters.find(m => m.matter.matter_id === matterId)
     if (!item || item.matter.stage === targetStage) return
 
@@ -54,6 +87,10 @@ export default function MatterPipelineKanban({ matters, onOpen, onStageChange }:
     toast.success(`Moved to ${stageLabel(targetStage)}`)
   }, [matters, onStageChange])
 
+  const handleDrop = useCallback((group: StageGroup, matterId: string) => {
+    void applyStage(firstStageOfGroup(group), matterId)
+  }, [applyStage])
+
   return (
     <div className="space-y-2">
       {error && (
@@ -61,29 +98,29 @@ export default function MatterPipelineKanban({ matters, onOpen, onStageChange }:
           {error}
         </p>
       )}
-      <div className="flex gap-3 overflow-x-auto pb-2">
-        {STAGES.map(stage => {
-          const items = byStage.get(stage.key) ?? []
-          const colors = stageGroupColor(stage.key)
-          const isTarget = dropTarget === stage.key
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
+        {GROUP_ORDER.map(group => {
+          const items = byGroup.get(group) ?? []
+          const colors = GROUP_COLORS[group]
+          const isTarget = dropTarget === group
 
           return (
             <section
-              key={stage.key}
+              key={group}
               className={cn(
-                'flex w-[min(100%,17rem)] shrink-0 flex-col rounded-lg border bg-muted/20',
+                'flex min-w-0 flex-col rounded-lg border bg-muted/20',
                 isTarget ? 'border-accent ring-2 ring-accent/20' : 'border-border',
               )}
               onDragOver={e => {
                 e.preventDefault()
-                setDropTarget(stage.key)
+                setDropTarget(group)
               }}
-              onDragLeave={() => setDropTarget(current => (current === stage.key ? null : current))}
+              onDragLeave={() => setDropTarget(current => (current === group ? null : current))}
               onDrop={e => {
                 e.preventDefault()
                 setDropTarget(null)
                 const matterId = e.dataTransfer.getData('text/matter-id')
-                if (matterId) void handleDrop(stage.key, matterId)
+                if (matterId) handleDrop(group, matterId)
               }}
             >
               <header
@@ -92,7 +129,7 @@ export default function MatterPipelineKanban({ matters, onOpen, onStageChange }:
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colors.dot }} aria-hidden />
-                  <h2 className="truncate text-xs font-semibold">{stage.label}</h2>
+                  <h2 className="truncate text-xs font-semibold">{GROUP_LABELS[group]}</h2>
                 </div>
                 <Badge variant="outline" className="border-current/20 bg-background/60 text-[10px] tabular-nums">
                   {items.length}
@@ -111,6 +148,7 @@ export default function MatterPipelineKanban({ matters, onOpen, onStageChange }:
                       dragging={draggingId === item.matter.matter_id}
                       updating={updatingId === item.matter.matter_id}
                       onOpen={() => onOpen(item.matter.matter_id)}
+                      onStageSelect={stage => void applyStage(stage, item.matter.matter_id)}
                       onDragStart={() => setDraggingId(item.matter.matter_id)}
                       onDragEnd={() => setDraggingId(null)}
                     />
@@ -130,6 +168,7 @@ function KanbanCard({
   dragging,
   updating,
   onOpen,
+  onStageSelect,
   onDragStart,
   onDragEnd,
 }: {
@@ -137,13 +176,16 @@ function KanbanCard({
   dragging: boolean
   updating: boolean
   onOpen: () => void
+  onStageSelect: (stage: MatterStage) => void
   onDragStart: () => void
   onDragEnd: () => void
 }) {
   const matter = item.matter
   const readiness = hubReadinessLabel(item)
   const lastActivity = hubLastActivityAt(item)
-  const stage = stageInfo(matter.stage)
+  const quietDays = hubDaysSinceActivity(item)
+  const isQuiet = quietDays !== null && quietDays >= QUIET_DAYS
+  const stageColors = stageGroupColor(matter.stage)
   const draftingHref = `/admin/drafting/${matter.matter_id}`
   const { schedulePrefetch, cancelPrefetch } = useDebouncedPrefetch(draftingHref)
 
@@ -165,7 +207,7 @@ function KanbanCard({
           'rounded-md border bg-card p-2.5 shadow-sm transition-opacity',
           dragging ? 'opacity-50' : 'opacity-100',
           updating && 'pointer-events-none opacity-60',
-          'border-border hover:border-accent',
+          isQuiet ? 'border-red-strong-border hover:border-red-strong' : 'border-border hover:border-accent',
         )}
       >
         <div className="flex items-start justify-between gap-2">
@@ -190,9 +232,52 @@ function KanbanCard({
             {readiness.label}
           </Badge>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span>{stage.label}</span>
-          <span>·</span>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={updating}
+                className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                style={{ backgroundColor: stageColors.bg, color: stageColors.text }}
+                aria-label={`Stage for ${matter.client_name || 'matter'}: ${stageLabel(matter.stage)}`}
+                onClick={e => e.stopPropagation()}
+              >
+                <span className="truncate">{stageLabel(matter.stage)}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" aria-hidden />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              {GROUP_ORDER.map((group, groupIndex) => (
+                <DropdownMenuGroup key={group}>
+                  {groupIndex > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {GROUP_LABELS[group]}
+                  </DropdownMenuLabel>
+                  {STAGES.filter(stage => stage.group === group).map(stage => (
+                    <DropdownMenuItem
+                      key={stage.key}
+                      className="text-xs"
+                      onSelect={() => onStageSelect(stage.key)}
+                    >
+                      {stage.label}
+                      {stage.key === matter.stage && <span className="ml-auto text-[10px] text-muted-foreground">Current</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {isQuiet && (
+            <span
+              className="inline-flex items-center rounded-full bg-red-bg px-2 py-0.5 text-[10px] font-medium text-red"
+              title={`No activity for ${quietDays} days`}
+            >
+              Quiet {quietDays}d
+            </span>
+          )}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
           <span>{item.includedDocumentLabels.length} docs</span>
           <span>·</span>
           <span>{item.draftCount} draft{item.draftCount === 1 ? '' : 's'}</span>

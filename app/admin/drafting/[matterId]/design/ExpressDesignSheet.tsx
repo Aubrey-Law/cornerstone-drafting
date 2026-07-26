@@ -415,7 +415,6 @@ function ExpressDesignSheetImpl({
                 blockerDetails={blockerDetails}
                 pendingFiduciaries={pendingFiduciaries}
                 readinessComplete={readinessComplete}
-                onBlockerClick={blocker => focusField(blocker.sectionId, blocker.targetId)}
                 onGenerate={onOpenDrafting}
                 attorneyPreset={attorneyPreset}
               />
@@ -435,7 +434,6 @@ function ExpressDesignSheetImpl({
               readinessTotal={readinessTotal}
               blockerDetails={[]}
               onSectionClick={scrollToSection}
-              onBlockerClick={(blocker) => focusField(blocker.sectionId, blocker.targetId)}
               onGenerate={onOpenDrafting}
               generateLabel="Generate drafts →"
               activeSectionId={activeSection}
@@ -459,7 +457,6 @@ function ExpressDesignSheetImpl({
                 readinessTotal={readinessTotal}
                 blockerDetails={[]}
                 onSectionClick={scrollToSection}
-                onBlockerClick={(blocker) => focusField(blocker.sectionId, blocker.targetId)}
                 onGenerate={onOpenDrafting}
                 generateLabel="Generate drafts →"
                 activeSectionId={activeSection}

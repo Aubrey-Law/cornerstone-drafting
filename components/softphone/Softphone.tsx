@@ -561,7 +561,7 @@ export default function Softphone() {
           <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             Call ended · {formatDuration(wrapUp.durationSeconds)} · {wrapUp.direction}
           </p>
-          <p className="mt-2 font-serif text-xl leading-tight">
+          <p className="mt-2 text-xl leading-tight">
             {wrapUp.entry?.name ?? formatPhone(wrapUp.participantNumber) ?? 'Unknown caller'}
           </p>
           <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -629,7 +629,7 @@ export default function Softphone() {
           <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-primary motion-safe:animate-pulse">
             Incoming call
           </p>
-          <p className="mt-3 font-serif text-[22px] leading-tight">
+          <p className="mt-3 text-[22px] leading-tight">
             {incomingEntry?.name ?? formatPhone(incomingFrom) ?? incomingFrom}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">{formatPhone(incomingFrom) || incomingFrom}</p>
@@ -665,7 +665,7 @@ export default function Softphone() {
           <span className="grid h-14 w-14 place-items-center rounded-full border border-border bg-muted/40 mx-auto font-medium text-primary">
             {initials(dialedEntry?.name ?? '') || '☏'}
           </span>
-          <p className="mt-4 font-serif text-xl leading-tight">
+          <p className="mt-4 text-xl leading-tight">
             {dialedEntry?.name ?? formatPhone(number)}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">Calling · {formatPhone(number)}</p>
@@ -687,7 +687,7 @@ export default function Softphone() {
               {initials(activeEntry?.name ?? '') || '☏'}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-serif text-lg leading-tight">
+              <p className="truncate text-lg leading-tight">
                 {activeEntry?.name ?? formatPhone(participantRef.current)}
               </p>
               <p className="truncate text-[10px] text-muted-foreground">
@@ -763,7 +763,7 @@ export default function Softphone() {
                   onClick={() => pressKey(digit)}
                   className="grid place-items-center gap-px rounded-[10px] border border-border bg-background py-2 pt-2.5 hover:bg-muted/60 active:translate-y-px"
                 >
-                  <span className="font-serif text-xl leading-none">{digit}</span>
+                  <span className="text-xl leading-none">{digit}</span>
                   <span className="min-h-[7px] text-[7px] font-medium tracking-[0.16em] text-muted-foreground">
                     {letters}
                   </span>
@@ -789,7 +789,7 @@ export default function Softphone() {
           <div className="flex items-baseline gap-2 border-b border-border pb-2.5">
             <input
               ref={numberInputRef}
-              className="min-h-[29px] min-w-0 flex-1 border-0 bg-transparent p-0 font-serif text-2xl outline-none placeholder:text-lg placeholder:text-muted-foreground"
+              className="min-h-[29px] min-w-0 flex-1 border-0 bg-transparent p-0 text-2xl outline-none placeholder:text-lg placeholder:text-muted-foreground"
               value={number}
               onChange={e => setNumber(formatPhone(e.target.value))}
               placeholder="Enter a number"
@@ -834,7 +834,7 @@ export default function Softphone() {
                 onClick={() => pressKey(digit)}
                 className="grid place-items-center gap-px rounded-[10px] border border-border bg-background py-2 pt-2.5 hover:bg-muted/60 active:translate-y-px"
               >
-                <span className="font-serif text-xl leading-none">{digit}</span>
+                <span className="text-xl leading-none">{digit}</span>
                 <span className="min-h-[7px] text-[7px] font-medium tracking-[0.16em] text-muted-foreground">
                   {letters}
                 </span>

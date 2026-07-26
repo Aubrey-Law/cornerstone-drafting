@@ -42,11 +42,14 @@ import {
   FlagPill,
   PlanStructurePicker,
   ProgressRing,
+  SectionProgressList,
   guidedCardStyle,
   guidedIntroCardStyle,
   guidedPageStyle,
   guidedPrimaryButtonStyle,
+  type SectionProgressItem,
 } from '@/components/guided'
+import { getFirmConfig } from '@/lib/firmConfig'
 import type { ChildEntry, FiduciaryEntry, AdditionalContactEntry, StepProps } from './IntakeWizard'
 
 const stepLoading = () => (
@@ -75,6 +78,8 @@ const STEP_COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
 }
 
 const DOC_GROUPS = DEFAULT_DOC_GROUPS
+
+const FIRM = getFirmConfig()
 
 export interface GuidedInterviewProps {
   initialData: Record<string, unknown>
@@ -302,6 +307,35 @@ export default function GuidedInterview({
     ? Math.round((completedRequired / requiredSteps.length) * 100)
     : 0
 
+  // Minutes still to spend: every active step the client hasn't finished.
+  // Includes "Review & Submit", which stays outstanding until submission.
+  const remainingMinutes = useMemo(
+    () => activeSteps
+      .filter((s) => !s.isComplete(data as IntakeRow))
+      .reduce((sum, s) => sum + (s.timeEstimate ?? 0), 0),
+    [activeSteps, data],
+  )
+
+  // Rail progress map — same entries, and same order, as the main column.
+  const progressItems = useMemo<SectionProgressItem[]>(
+    () => sections.map((entry) => entry.kind === 'step'
+      ? { id: entry.id, title: entry.step.title, complete: entry.complete, timeEstimate: entry.step.timeEstimate }
+      : { id: entry.id, title: entry.title, complete: entry.complete }),
+    [sections],
+  )
+  const sectionsDone = progressItems.filter((i) => i.complete).length
+  const firstIncompleteId = progressItems.find((i) => !i.complete)?.id ?? progressItems[0]?.id ?? ''
+
+  const selectSection = useCallback(
+    (id: string) => {
+      toggleSection(id)
+      window.setTimeout(() => {
+        document.getElementById(`intake-section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 50)
+    },
+    [toggleSection],
+  )
+
   // ----- derived: summary -----
   const lastName = text(data, 'last_name')
   const clientName = [text(data, 'first_name'), lastName].filter(Boolean).join(' ')
@@ -419,42 +453,66 @@ export default function GuidedInterview({
           matterLabel={isAttorney ? matterLabel : undefined}
         />
 
+        {/* Mobile stand-in for the rail's progress card (hidden at lg and up). */}
+        {!isAttorney && (
+          <button
+            type="button"
+            className="gi-progress-mobile"
+            onClick={() => {
+              if (!firstIncompleteId) return
+              window.setTimeout(() => {
+                document.getElementById(`intake-section-${firstIncompleteId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }, 50)
+            }}
+          >
+            {sectionsDone} of {progressItems.length} · ~{remainingMinutes} min left
+            <span className="gi-progress-mobile-track">
+              <span className="gi-progress-mobile-fill" style={{ width: `${pct}%` }} />
+            </span>
+          </button>
+        )}
+
         <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* MAIN */}
           <main style={{ flex: 3, minWidth: 'min(520px, 100%)', display: 'flex', flexDirection: 'column', gap: 18 }}>
             {/* intro / progress */}
             <div style={guidedIntroCardStyle}>
               <ProgressRing pct={pct} />
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <h1 style={{ fontWeight: 500, fontSize: 25, lineHeight: 1.2, color: 'var(--gi-heading)', margin: 0 }}>
-                  Welcome
+                  Welcome{!isAttorney && clientName ? `, ${clientName.split(' ')[0]}` : ''}
                 </h1>
-                <div style={{ font: '400 14px/1.6 var(--gi-sans)', color: 'var(--gi-muted)', marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <p style={{ margin: 0 }}>
-                    To help us best support you and your family, we have designed this comprehensive intake form so you can provide important information to us in advance of our meeting together.
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    Please complete this form with as much detail as possible, which will help ensure you get the most value out of our meeting together. Don&apos;t worry about total accuracy as this is only a starting point for our conversation.
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    All information provided is strictly confidential.
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    Thank you, and we look forward to working with you.
-                  </p>
-                </div>
+                <p style={{ font: '400 14px/1.6 var(--gi-sans)', color: 'var(--gi-muted)', margin: '10px 0 0' }}>
+                  Answer what you can before our meeting — rough answers are fine, and everything is
+                  strictly confidential. Your progress saves automatically.
+                </p>
               </div>
+              {!isAttorney && (
+                <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                  <div style={{ font: '600 18px/1.1 var(--gi-sans)', color: 'var(--gi-teal)' }}>
+                    ~{remainingMinutes} min
+                  </div>
+                  <div style={{ font: '400 11.5px/1.3 var(--gi-sans)', color: 'var(--gi-faint)', marginTop: 3 }}>
+                    remaining
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* sections */}
             {sections.map((entry, i) => {
               const number = i + 1
               const nextEntry = sections[i + 1]
+              const nextTitle = nextEntry
+                ? (nextEntry.kind === 'step' ? nextEntry.step.title : nextEntry.title)
+                : null
+              // Attorney sections carry no estimate, so the suffix is dropped there.
+              const nextMinutes = nextEntry?.kind === 'step' ? nextEntry.step.timeEstimate : undefined
               const continueProps = !isAttorney && openId === entry.id
                 ? {
                     onContinue: () => continueToNextSection(entry.id),
-                    continueLabel: nextEntry
-                      ? `Continue to ${nextEntry.kind === 'step' ? nextEntry.step.title : nextEntry.title}`
+                    continueLabel: nextTitle
+                      ? `Continue to ${nextTitle}${nextMinutes != null ? ` · ~${nextMinutes} min` : ''}`
                       : 'Review questionnaire',
                   }
                 : {}
@@ -545,9 +603,21 @@ export default function GuidedInterview({
             )}
 
             {!isAttorney && (
-              <button type="button" onClick={() => setReviewOpen(true)} style={guidedPrimaryButtonStyle}>
-                Review questionnaire →
-              </button>
+              <>
+                <div className="gi-progress-rail">
+                  <SectionProgressList
+                    items={progressItems}
+                    openId={openId}
+                    onSelect={selectSection}
+                  />
+                </div>
+                <button type="button" onClick={() => setReviewOpen(true)} style={guidedPrimaryButtonStyle}>
+                  Review questionnaire →
+                </button>
+                <div style={{ font: '400 11.5px/1.4 var(--gi-sans)', color: 'var(--gi-faint)', textAlign: 'center' }}>
+                  {FIRM.firmName} · {FIRM.city} · {FIRM.phone}
+                </div>
+              </>
             )}
           </aside>
         </div>

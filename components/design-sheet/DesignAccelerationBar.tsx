@@ -1,12 +1,19 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronRight, WandSparkles } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
 import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
 import type { DesignReadinessBlocker } from '@/lib/designSheetReadiness'
 import type { DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
@@ -34,6 +41,12 @@ export interface DesignAccelerationBarProps {
   onExpandAllChange?: (value: boolean) => void
   attorneyPreset: AttorneyDesignPreset | null
   onAttorneyPresetChange: (preset: AttorneyDesignPreset) => void
+  /**
+   * `bar` is the full fast-entry toolbar. `slim` and `inline` collapse the shortcuts
+   * into a dropdown and show only the next-required control; `inline` drops the card
+   * chrome so the row can sit inside the guided overview intro card.
+   */
+  variant?: 'bar' | 'slim' | 'inline'
 }
 
 export function DesignAccelerationBar({
@@ -49,6 +62,7 @@ export function DesignAccelerationBar({
   onExpandAllChange,
   attorneyPreset,
   onAttorneyPresetChange,
+  variant = 'bar',
 }: DesignAccelerationBarProps) {
   const [presetDialogOpen, setPresetDialogOpen] = useState(false)
   const [overwritePresetConflicts, setOverwritePresetConflicts] = useState(false)
@@ -89,6 +103,74 @@ export function DesignAccelerationBar({
     toast.success(`Applied ${Object.keys(patch).length} standard choice${Object.keys(patch).length === 1 ? '' : 's'}.`)
   }, [applyPatch, attorneyPreset, overwritePresetConflicts, sheet])
 
+  const shortcuts = [
+    {
+      key: 'apply-standards',
+      label: 'Apply my standards',
+      description: attorneyPreset
+        ? 'Fill structural choices from your saved defaults.'
+        : 'Save a set of standards first.',
+      disabled: !attorneyPreset,
+      // Let the menu finish closing before the dialog claims focus.
+      onSelect: () => { window.setTimeout(() => setPresetDialogOpen(true), 0) },
+    },
+    {
+      key: 'save-standards',
+      label: 'Save current as my standards',
+      description: 'Reuse this matter’s structural choices on future matters.',
+      disabled: false,
+      onSelect: () => { void handleSavePreset() },
+    },
+    {
+      key: 'copy-spouse',
+      label: 'Copy client selections to spouse',
+      description: 'Mirror the client’s document choices onto the spouse set.',
+      disabled: !documentInclusions.spouse_docs,
+      onSelect: () => applyPatch(buildCopyClientToSpousePatch(sheet)),
+    },
+    {
+      key: 'trustees-primary',
+      label: 'Copy trustees into primary roles',
+      description: 'Nominate the trustees as executor and agent as well.',
+      disabled: !documentInclusions.trust,
+      onSelect: () => applyPatch(buildTrusteesToPrimaryRolesPatch(sheet, documentInclusions)),
+    },
+  ]
+
+  const nextRequiredControl = nextRequired ? (
+    <Button size="sm" className="gap-1.5 text-xs" onClick={() => onNextRequired(nextRequired)}>
+      Next: {nextRequired.label}
+      <ChevronRight className="h-3.5 w-3.5" />
+    </Button>
+  ) : (
+    <Badge className="border-0 bg-success/10 text-success"><Check className="mr-1 h-3 w-3" />Ready to generate</Badge>
+  )
+
+  const shortcutsMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+          <WandSparkles className="h-3.5 w-3.5" />
+          Shortcuts
+          <ChevronDown className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        {shortcuts.map(shortcut => (
+          <DropdownMenuItem
+            key={shortcut.key}
+            disabled={shortcut.disabled}
+            onSelect={shortcut.onSelect}
+            className="flex-col items-start gap-0.5"
+          >
+            <span className="text-xs font-medium">{shortcut.label}</span>
+            <span className="text-[11px] text-muted-foreground">{shortcut.description}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   return (
     <>
       <Dialog open={presetDialogOpen} onOpenChange={setPresetDialogOpen}>
@@ -121,6 +203,17 @@ export function DesignAccelerationBar({
         </DialogContent>
       </Dialog>
 
+      {variant !== 'bar' ? (
+        <div
+          className={cn(
+            'flex flex-wrap items-center gap-2',
+            variant === 'slim' && 'mb-3 rounded-lg border border-border bg-card px-3 py-2',
+          )}
+        >
+          {nextRequiredControl}
+          {shortcutsMenu}
+        </div>
+      ) : (
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
         {nextRequired ? (
           <Button size="sm" className="gap-1.5 text-xs" onClick={() => onNextRequired(nextRequired)}>
@@ -153,6 +246,7 @@ export function DesignAccelerationBar({
           <Button variant="outline" size="sm" className="text-xs" onClick={() => applyPatch(buildTrusteesToPrimaryRolesPatch(sheet, documentInclusions))}>Trustees → primary roles</Button>
         )}
       </div>
+      )}
     </>
   )
 }

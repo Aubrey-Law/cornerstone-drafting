@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState, useTransition } from 'react'
+import { useRef, useEffect, useMemo, useState, useTransition } from 'react'
 import { sendMessage, type Message } from './actions'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -18,13 +18,44 @@ interface Props {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
+  return new Date(iso).toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+  }).toLowerCase()
+}
+
+function calendarDayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+}
+
+function formatDayLabel(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso)
+  if (calendarDayKey(date) === calendarDayKey(now)) return 'Today'
+
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  if (calendarDayKey(date) === calendarDayKey(yesterday)) return 'Yesterday'
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
   })
+}
+
+function groupMessagesByCalendarDay(messages: Message[]): Array<{
+  dayKey: string
+  messages: Message[]
+}> {
+  return messages.reduce<Array<{ dayKey: string; messages: Message[] }>>((groups, message) => {
+    const dayKey = calendarDayKey(new Date(message.created_at))
+    const current = groups[groups.length - 1]
+    if (current?.dayKey === dayKey) {
+      current.messages.push(message)
+    } else {
+      groups.push({ dayKey, messages: [message] })
+    }
+    return groups
+  }, [])
 }
 
 export default function MessageThread({ matterId, messages: initial, clientUserId }: Props) {
@@ -33,6 +64,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
   const [sendError, setSendError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messageGroups = useMemo(() => groupMessagesByCalendarDay(messages), [messages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'instant' })
@@ -101,35 +133,51 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
           </p>
         )}
 
-        {messages.map((message) => {
-          const isClient = message.sender_id === clientUserId
-          return (
+        {messageGroups.map(group => (
+          <div key={group.dayKey} className="space-y-5">
             <div
-              key={message.id}
-              className={cn(
-                'flex flex-col gap-1',
-                isClient ? 'items-end' : 'items-start',
-              )}
+              role="separator"
+              aria-label={formatDayLabel(group.messages[0].created_at)}
+              className="flex items-center gap-3"
             >
-              <span className="px-1 text-[11px] font-medium text-muted-foreground">
-                {isClient ? 'You' : firm.firmName}
+              <span className="h-px flex-1 bg-border" aria-hidden="true" />
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {formatDayLabel(group.messages[0].created_at)}
               </span>
-              <div
-                className={cn(
-                  'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
-                  isClient
-                    ? 'rounded-br-sm bg-primary text-primary-foreground'
-                    : 'rounded-bl-sm bg-muted text-foreground',
-                )}
-              >
-                {message.body}
-              </div>
-              <span className="px-1 text-[11px] text-muted-foreground">
-                {formatTime(message.created_at)}
-              </span>
+              <span className="h-px flex-1 bg-border" aria-hidden="true" />
             </div>
-          )
-        })}
+
+            {group.messages.map((message) => {
+              const isClient = message.sender_id === clientUserId
+              return (
+                <div
+                  key={message.id}
+                  className={cn(
+                    'flex flex-col gap-1',
+                    isClient ? 'items-end' : 'items-start',
+                  )}
+                >
+                  <span className="px-1 text-[11px] font-medium text-muted-foreground">
+                    {isClient ? 'You' : firm.firmName}
+                  </span>
+                  <div
+                    className={cn(
+                      'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
+                      isClient
+                        ? 'rounded-br-sm bg-primary text-primary-foreground'
+                        : 'rounded-bl-sm bg-muted text-foreground',
+                    )}
+                  >
+                    {message.body}
+                  </div>
+                  <span className="px-1 text-[11px] text-muted-foreground">
+                    {formatTime(message.created_at)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        ))}
 
         <div ref={bottomRef} />
       </div>

@@ -14,6 +14,7 @@ import {
   type MatterSortKey,
   type MatterTableFilters,
 } from '@/lib/adminTables/matterTable'
+import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
@@ -63,9 +64,6 @@ const GROUP_LABELS: Record<StageGroup, string> = {
 }
 
 const GROUP_ORDER: StageGroup[] = ['early', 'active', 'work', 'done', 'closed']
-
-/** Days since a matter last moved, for the Last activity and quiet columns. */
-const QUIET_DAYS = 10
 
 function intakeStatusLabel(status: string | null | undefined) {
   return status?.replace(/_/g, ' ') || '—'
@@ -305,7 +303,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
         : 'No matters to show.'
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
+    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <div className="space-y-3 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="mr-2 text-xl font-semibold tracking-tight">Matters</h1>

@@ -4,6 +4,10 @@
  */
 
 @theme inline {
+  /* Every font utility here resolves to DM Sans — including `font-serif`, which
+     is deliberately NOT an escape hatch to a serif face. The app's serif (Lora)
+     is injected as --font-lora in app/layout.tsx; reference it directly when you
+     want serif, as app/(portal)/dashboard/page.tsx does. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
