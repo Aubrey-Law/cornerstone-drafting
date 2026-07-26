@@ -10,7 +10,7 @@ const migrationPath = path.join(
 )
 const snoozeMigrationPath = path.join(
   process.cwd(),
-  'supabase/migrations/20260811000000_lead_next_action_snooze.sql',
+  'supabase/migrations/20260726021847_repository_security_remediation.sql',
 )
 const atomicFieldMigrationPath = path.join(
   process.cwd(),
@@ -222,8 +222,8 @@ describe('lead next-action snooze migration', () => {
 
   it('fails for a missing lead and a converted or lost lead while holding the row lock', () => {
     const sql = source()
-    expect(sql).toContain('where id = p_lead_id for update')
-    expect(sql).toContain("if not found then raise exception 'lead not found'")
+    expect(sql).toMatch(/where id = p_lead_id\s+for update/)
+    expect(sql).toMatch(/if not found then\s+raise exception 'lead not found'/)
     expect(sql).toContain("if v_lead.lead_status in ('hired', 'lost')")
     expect(sql).toContain("raise exception 'next action is unavailable for this lead'")
   })
@@ -245,7 +245,7 @@ describe('lead next-action snooze migration', () => {
   it('requires the service role and validates the route actor as attorney or admin', () => {
     const sql = source()
     expect(sql).toContain(") <> 'service_role'")
-    expect(sql).toContain("u.id = p_actor_id and u.role in ('attorney', 'admin')")
+    expect(sql).toMatch(/u\.id = p_actor_id\s+and u\.role in \('attorney', 'admin'\)/)
     expect(sql).toContain('revoke execute on function public.snooze_lead_next_action')
     expect(sql).toContain('from public, anon, authenticated')
     expect(sql).toContain('grant execute on function public.snooze_lead_next_action')
