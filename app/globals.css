@@ -22,6 +22,10 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   }
+  .admin-root {
+    font-size: 13px;
+    line-height: 1.5;
+  }
 }
 
 /* Type scale utilities */
