@@ -5,7 +5,7 @@ import { firmDateKey, FIRM_TIMEZONE } from '@/lib/firmDate'
  * Evening appointments are the boundary case: after 8pm ET a timestamp is
  * already the *next* day in UTC, so `toISOString().split('T')[0]` reported
  * tomorrow's calendar day. For a signing date in a law practice that drives real
- * scheduling errors, so both lib/appointments/book.ts and lib/calcom/sync.ts
+ * scheduling errors, so both lib/appointments/book.ts and lib/bookings/sync.ts
  * derive `date` columns through firmDateKey instead.
  */
 describe('firm-timezone calendar days for appointments', () => {

@@ -19,6 +19,11 @@ vi.mock('@/lib/calcom/verify', () => ({ verifyCalcomSignature: () => true }))
 const processCalcomWebhook = vi.fn()
 vi.mock('@/lib/calcom/sync', () => ({ processCalcomWebhook: (...a: unknown[]) => processCalcomWebhook(...a) }))
 
+vi.mock('@/lib/calendly/verify', () => ({ verifyCalendlySignature: () => true }))
+
+const processCalendlyWebhook = vi.fn()
+vi.mock('@/lib/calendly/sync', () => ({ processCalendlyWebhook: (...a: unknown[]) => processCalendlyWebhook(...a) }))
+
 const notifyRetellCallAnalyzed = vi.fn()
 vi.mock('@/lib/retell/notify', () => ({
   notifyRetellCallAnalyzed: (...a: unknown[]) => notifyRetellCallAnalyzed(...a),
@@ -56,10 +61,12 @@ function calcomRequest(body: unknown) {
 
 beforeEach(() => {
   process.env.CALCOM_WEBHOOK_SECRET = 'test-secret'
+  process.env.CALENDLY_WEBHOOK_SIGNING_KEY = 'test-signing-key'
   process.env.RETELL_API_KEY = 'test-key'
   rpc.mockReset()
   from.mockReset()
   processCalcomWebhook.mockReset().mockResolvedValue(undefined)
+  processCalendlyWebhook.mockReset().mockResolvedValue(undefined)
   notifyRetellCallAnalyzed.mockReset().mockResolvedValue(undefined)
 })
 
@@ -122,6 +129,92 @@ describe('Cal.com webhook idempotency', () => {
 
     expect(res.status).toBe(500)
     expect(processCalcomWebhook).not.toHaveBeenCalled()
+  })
+})
+
+describe('Calendly webhook idempotency', () => {
+  function calendlyBody(overrides: Record<string, unknown> = {}) {
+    return {
+      event: 'invitee.created',
+      created_at: '2026-09-01T13:00:00Z',
+      payload: {
+        uri: 'https://api.calendly.com/scheduled_events/ev-1/invitees/inv-1',
+        email: 'client@example.invalid',
+        name: 'Client',
+        scheduled_event: {
+          uri: 'https://api.calendly.com/scheduled_events/ev-1',
+          name: 'Discovery Call',
+          start_time: '2026-09-01T14:00:00Z',
+          end_time: '2026-09-01T14:30:00Z',
+          event_type: 'https://api.calendly.com/event_types/et-1',
+        },
+        ...(overrides.payload as Record<string, unknown> ?? {}),
+      },
+      ...overrides,
+    }
+  }
+
+  function calendlyRequest(body: unknown) {
+    return new Request('https://app.test/api/webhooks/calendly', {
+      method: 'POST',
+      headers: { 'calendly-webhook-signature': 't=1,v1=sig', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('processes an event it successfully claims', async () => {
+    rpc.mockResolvedValue({ data: true, error: null })
+    const { POST } = await import('@/app/api/webhooks/calendly/route')
+
+    const res = await POST(calendlyRequest(calendlyBody()))
+
+    expect(res.status).toBe(200)
+    expect(processCalendlyWebhook).toHaveBeenCalledTimes(1)
+    const [fn, args] = rpc.mock.calls[0]
+    expect(fn).toBe('claim_webhook_event')
+    expect(args.p_provider).toBe('calendly')
+    // Keyed on invitee + event + start time; an invitee is created once and
+    // canceled once, so only an identical redelivery is suppressed.
+    expect(args.p_event_id).toContain('inv-1:invitee.created')
+  })
+
+  it('skips processing when the claim is lost (duplicate delivery)', async () => {
+    rpc.mockResolvedValue({ data: false, error: null })
+    const { POST } = await import('@/app/api/webhooks/calendly/route')
+
+    const res = await POST(calendlyRequest(calendlyBody()))
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.duplicate).toBe(true)
+    expect(processCalendlyWebhook).not.toHaveBeenCalled()
+  })
+
+  it('releases the claim when processing throws, so a retry can reprocess', async () => {
+    rpc.mockImplementation((fn: string) =>
+      fn === 'claim_webhook_event'
+        ? Promise.resolve({ data: true, error: null })
+        : Promise.resolve({ data: null, error: null }),
+    )
+    processCalendlyWebhook.mockRejectedValue(new Error('downstream boom'))
+    const { POST } = await import('@/app/api/webhooks/calendly/route')
+
+    const res = await POST(calendlyRequest(calendlyBody()))
+
+    expect(res.status).toBe(500)
+    const released = rpc.mock.calls.find(([fn]) => fn === 'release_webhook_event')
+    expect(released).toBeTruthy()
+    expect(released?.[1].p_provider).toBe('calendly')
+  })
+
+  it('fails loudly when the claim itself errors, rather than skipping the booking', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'claim exploded' } })
+    const { POST } = await import('@/app/api/webhooks/calendly/route')
+
+    const res = await POST(calendlyRequest(calendlyBody()))
+
+    expect(res.status).toBe(500)
+    expect(processCalendlyWebhook).not.toHaveBeenCalled()
   })
 })
 

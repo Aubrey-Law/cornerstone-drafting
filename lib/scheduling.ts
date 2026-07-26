@@ -58,6 +58,8 @@ const MEETING_TYPE_DEFS = {
   },
 } as const satisfies Record<MeetingTypeKey, SchedulingMeetingType & { envVar: string }>
 
+export const MEETING_TYPE_KEYS = Object.keys(MEETING_TYPE_DEFS) as MeetingTypeKey[]
+
 function configuredUrlFor(key: MeetingTypeKey): string {
   const def = MEETING_TYPE_DEFS[key]
   const configured = process.env[def.envVar]?.trim()

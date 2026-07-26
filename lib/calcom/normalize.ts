@@ -10,24 +10,20 @@ import type {
   CalcomWebhookBody,
   CalcomWebhookPayload,
 } from '@/lib/calcom/types'
+import { firstString, stringValue } from '@/lib/bookings/normalize'
+
+export {
+  firstString,
+  formatAppointmentDate,
+  splitAttendeeName,
+  stringValue,
+} from '@/lib/bookings/normalize'
 
 const EVENT_LABELS: Record<string, string> = {
   discoverycall: 'Discovery Call',
   pmps: 'Peace of Mind Planning Session',
   'draft-review': 'Draft Review',
   'signing-appointment': 'Signing Appointment',
-}
-
-export function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-export function firstString(...values: unknown[]): string | null {
-  for (const value of values) {
-    const text = stringValue(value)
-    if (text) return text
-  }
-  return null
 }
 
 export function responseString(payload: CalcomWebhookPayload, keys: string[]): string | null {
@@ -60,31 +56,6 @@ export function responseString(payload: CalcomWebhookPayload, keys: string[]): s
   return null
 }
 
-export function splitAttendeeName(
-  name: string | null,
-  email: string,
-): { firstName: string; lastName: string } {
-  const cleaned = name?.replace(/\s+/g, ' ').trim()
-  if (cleaned) {
-    const parts = cleaned.split(' ')
-    return {
-      firstName: parts[0] ?? 'Unknown',
-      lastName: parts.slice(1).join(' ') || 'Unknown',
-    }
-  }
-
-  const localPart = email.split('@')[0]?.replace(/[._-]+/g, ' ').trim()
-  if (localPart) {
-    const parts = localPart.split(/\s+/)
-    return {
-      firstName: parts[0] ?? 'Unknown',
-      lastName: parts.slice(1).join(' ') || 'Unknown',
-    }
-  }
-
-  return { firstName: 'Unknown', lastName: 'Unknown' }
-}
-
 export function bookingStatusFor(triggerEvent: CalcomTriggerEvent): CalcomBookingStatus {
   if (triggerEvent === 'BOOKING_CANCELLED') return 'cancelled'
   if (triggerEvent === 'BOOKING_RESCHEDULED') return 'rescheduled'
@@ -98,17 +69,6 @@ export function resolveMeetingType(payload: CalcomWebhookPayload): SchedulingMee
     meetingTypeForCalSlug(stringValue(metadata.eventSlug)) ??
     meetingTypeForCalSlug(stringValue(payload.type))
   )
-}
-
-export function formatAppointmentDate(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 export interface ParsedCalcomBooking {

@@ -38,7 +38,5 @@ export interface CalcomWebhookBody {
   payload?: CalcomWebhookPayload
 }
 
-export interface LeadLookupRow {
-  id: string
-  lead_status: string | null
-}
+// Moved to lib/bookings/link.ts; re-exported until the Cal.com removal PR.
+export type { LeadLookupRow } from '@/lib/bookings/link'
