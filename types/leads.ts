@@ -18,6 +18,7 @@ export type LeadSourceChannel =
   | 'referral'
   | 'legal_plan'
   | 'calcom'
+  | 'calendly'
   | 'lawmatics_legacy'
   | 'manual'
 
@@ -135,6 +136,7 @@ export const LEAD_SOURCE_LABELS: Record<LeadSourceChannel, string> = {
   referral: 'Referral',
   legal_plan: 'Legal Plan',
   calcom: 'Cal.com',
+  calendly: 'Calendly',
   lawmatics_legacy: 'Lawmatics Legacy',
   manual: 'Manual',
 }

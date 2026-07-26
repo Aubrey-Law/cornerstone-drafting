@@ -214,8 +214,9 @@ describe('Cal.com webhook sync', () => {
     })
 
     expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
-      table: 'calcom_bookings',
+      table: 'external_bookings',
       values: expect.objectContaining({
+        provider: 'calcom',
         booking_uid: 'booking-1',
         event_key: 'signing_appointment',
         status: 'scheduled',
@@ -253,8 +254,9 @@ describe('Cal.com webhook sync', () => {
     })
 
     expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
-      table: 'calcom_bookings',
+      table: 'external_bookings',
       values: expect.objectContaining({
+        provider: 'calcom',
         booking_uid: 'booking-2',
         event_key: 'discovery_call',
         linked_lead_id: 'lead-1',
@@ -286,8 +288,9 @@ describe('Cal.com webhook sync', () => {
     })
 
     expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
-      table: 'calcom_bookings',
+      table: 'external_bookings',
       values: expect.objectContaining({
+        provider: 'calcom',
         booking_uid: 'booking-3',
         linked_lead_id: 'client_intake-1',
         linked_matter_id: null,
@@ -336,8 +339,9 @@ describe('Cal.com webhook sync', () => {
     })
 
     expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
-      table: 'calcom_bookings',
+      table: 'external_bookings',
       values: expect.objectContaining({
+        provider: 'calcom',
         booking_uid: 'booking-4',
         linked_lead_id: null,
         linked_matter_id: null,

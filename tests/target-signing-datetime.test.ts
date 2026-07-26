@@ -26,8 +26,8 @@ describe('target signing date', () => {
     expect(route).toContain('Invalid target signing date')
   })
 
-  it('preserves the appointment time when Cal.com schedules a signing', () => {
-    const sync = read('lib/calcom/sync.ts')
+  it('preserves the appointment time when a provider webhook schedules a signing', () => {
+    const sync = read('lib/bookings/sync.ts')
     expect(sync).toContain('scheduled_signing_date: startTimestamp')
     expect(sync).toContain('design_meeting_date: dateOnly')
   })
