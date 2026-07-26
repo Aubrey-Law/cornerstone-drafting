@@ -11,6 +11,7 @@ import {
   resolveLocationType,
   sanitizeCustomWeeklyHours,
   sanitizeLocationTypes,
+  type AppointmentType,
   type WeeklyHours,
 } from '@/lib/appointments/types'
 
@@ -282,7 +283,10 @@ describe('meeting formats', () => {
   })
 
   it('resolveLocationType honors an allowed choice and falls back otherwise', () => {
-    const type = { locationType: 'in_person', locationTypes: ['in_person', 'teams'] } as const
+    const type: Pick<AppointmentType, 'locationType' | 'locationTypes'> = {
+      locationType: 'in_person',
+      locationTypes: ['in_person', 'teams'],
+    }
     expect(resolveLocationType('teams', type)).toBe('teams')
     expect(resolveLocationType('phone', type)).toBe('in_person') // not offered
     expect(resolveLocationType(null, type)).toBe('in_person')

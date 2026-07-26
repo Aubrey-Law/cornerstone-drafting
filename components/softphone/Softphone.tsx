@@ -92,6 +92,9 @@ export default function Softphone() {
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [incomingFrom, setIncomingFrom] = useState('')
+  const [provider, setProvider] = useState<'twilio' | 'telnyx'>('twilio')
+  const [direction, setDirection] = useState<'inbound' | 'outbound'>('outbound')
+  const [participant, setParticipant] = useState('')
 
   // wrap-up
   const [wrapUp, setWrapUp] = useState<{
@@ -214,6 +217,7 @@ export default function Softphone() {
         const auth = await fetchToken()
         if (cancelled) return
         providerRef.current = auth.provider === 'telnyx' ? 'telnyx' : 'twilio'
+        setProvider(providerRef.current)
         callerNumberRef.current = auth.callerNumber ?? null
 
         if (auth.provider === 'telnyx') {
@@ -233,11 +237,16 @@ export default function Softphone() {
             const remote = call.options?.remoteCallerNumber || call.options?.destinationNumber || ''
             if (call.state === 'ringing' && call.direction === 'inbound') {
               directionRef.current = 'inbound'
+              setDirection('inbound')
               participantRef.current = remote
+              setParticipant(remote)
               setIncomingFrom(remote || 'Unknown caller')
               setStatus(STATUS.INCOMING)
             } else if (call.state === 'active') {
-              if (remote) participantRef.current = remote
+              if (remote) {
+                participantRef.current = remote
+                setParticipant(remote)
+              }
               markConnected()
             } else if (call.state === 'held') {
               setHeld(true)
@@ -287,7 +296,9 @@ export default function Softphone() {
           callRef.current = call
           const from = call.parameters?.From || ''
           directionRef.current = 'inbound'
+          setDirection('inbound')
           participantRef.current = from
+          setParticipant(from)
           setIncomingFrom(from || 'Unknown caller')
           setStatus(STATUS.INCOMING)
           wireTwilioCall(call)
@@ -325,7 +336,10 @@ export default function Softphone() {
     if (!device || dnd || last10(number).length < 10) return
     try {
       directionRef.current = 'outbound'
-      participantRef.current = toE164(number)
+      setDirection('outbound')
+      const participantNumber = toE164(number)
+      participantRef.current = participantNumber
+      setParticipant(participantNumber)
       setWrapUp(null)
       setStatus(STATUS.DIALING)
       if (providerRef.current === 'telnyx' && device instanceof TelnyxRTC) {
@@ -466,7 +480,7 @@ export default function Softphone() {
 
   const inCall = status === STATUS.ON_CALL || status === STATUS.DIALING
   const canDial = status === STATUS.IDLE && !dnd && last10(number).length >= 10
-  const activeEntry = directionRef.current === 'inbound' ? incomingEntry : dialedEntry
+  const activeEntry = direction === 'inbound' ? incomingEntry : dialedEntry
 
   const statusLabel: Record<SoftphoneStatus, string> = {
     [STATUS.CONNECTING]: 'Connecting',
@@ -490,7 +504,7 @@ export default function Softphone() {
         </span>
         <span className="text-left">
           <span className="block text-xs font-medium leading-tight">
-            {activeEntry?.name ?? formatPhone(participantRef.current) ?? 'Call'}
+            {activeEntry?.name ?? formatPhone(participant) ?? 'Call'}
           </span>
           <span className="block text-[10px] uppercase tracking-wider text-primary tabular-nums">
             {formatDuration(seconds)} · on call
@@ -688,10 +702,10 @@ export default function Softphone() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-lg leading-tight">
-                {activeEntry?.name ?? formatPhone(participantRef.current)}
+                {activeEntry?.name ?? formatPhone(participant)}
               </p>
               <p className="truncate text-[10px] text-muted-foreground">
-                {activeEntry?.matterNumber ?? formatPhone(participantRef.current)}
+                {activeEntry?.matterNumber ?? formatPhone(participant)}
               </p>
             </div>
             <span className="text-sm font-medium tabular-nums text-primary">{formatDuration(seconds)}</span>
@@ -716,8 +730,8 @@ export default function Softphone() {
               type="button"
               onClick={() => void toggleHold()}
               aria-pressed={held}
-              disabled={providerRef.current !== 'telnyx'}
-              title={providerRef.current !== 'telnyx' ? 'Hold requires the Telnyx line' : undefined}
+              disabled={provider !== 'telnyx'}
+              title={provider !== 'telnyx' ? 'Hold requires the Telnyx line' : undefined}
               className={cn(
                 'grid place-items-center gap-1 rounded-[10px] border py-2.5 disabled:opacity-40',
                 held ? 'border-primary text-primary' : 'border-border hover:bg-muted/50',

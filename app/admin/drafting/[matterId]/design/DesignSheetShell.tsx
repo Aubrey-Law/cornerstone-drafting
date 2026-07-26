@@ -224,15 +224,15 @@ function DesignSheetShellImpl({
     [summaries, visibleSections],
   )
   const resolvedSectionId = resolveDesignSectionId(sectionDefs, activeSectionId)
-  if (previousPageSectionIdRef.current !== resolvedSectionId) {
-    previousPageSectionIdRef.current = resolvedSectionId
-    pageScrollTopRef.current = 0
-  }
 
   useLayoutEffect(() => {
+    if (previousPageSectionIdRef.current !== resolvedSectionId) {
+      previousPageSectionIdRef.current = resolvedSectionId
+      pageScrollTopRef.current = 0
+    }
     const pageScrollContainer = pageScrollContainerRef.current
     if (pageScrollContainer) pageScrollContainer.scrollTop = pageScrollTopRef.current
-  })
+  }, [resolvedSectionId])
 
   const handlePageScroll = (event: UIEvent<HTMLElement>) => {
     pageScrollTopRef.current = event.currentTarget.scrollTop
