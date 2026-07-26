@@ -33,6 +33,9 @@ const routeMocks = vi.hoisted(() => {
     state.upserts = []
     state.inserts = []
     state.updates = []
+    // Declared below; cleared here so one test's claim cannot make the next
+    // test's identical booking look like a duplicate delivery.
+    claimedEvents.clear()
   }
 
   function builderFor(table: string) {
@@ -114,8 +117,26 @@ const routeMocks = vi.hoisted(() => {
     return builder
   }
 
+  // The route now claims each event before processing (migration
+  // 20260814000001) so a Cal.com retry cannot duplicate matter notes and lead
+  // activity. Model the ledger faithfully: first claim wins, repeats lose.
+  const claimedEvents = new Set<string>()
+
   const getAdminClient = vi.fn(() => ({
     from: vi.fn((table: string) => builderFor(table)),
+    rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      const key = `${args.p_provider}:${args.p_event_id}`
+      if (fn === 'claim_webhook_event') {
+        if (claimedEvents.has(key)) return { data: false, error: null }
+        claimedEvents.add(key)
+        return { data: true, error: null }
+      }
+      if (fn === 'release_webhook_event') {
+        claimedEvents.delete(key)
+        return { data: null, error: null }
+      }
+      return { data: null, error: null }
+    }),
   }))
 
   resetState()

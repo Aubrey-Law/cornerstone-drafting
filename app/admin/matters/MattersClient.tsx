@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, Suspense } from 'react'
+import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -117,6 +117,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const createRequestIdRef = useRef<string | null>(null)
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [clientPhone, setClientPhone] = useState('')
@@ -215,6 +216,14 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
       return
     }
 
+    // Idempotency key for this submission. Held across retries so a double-click
+    // or a retry after a lost response resolves to one matter, and cleared on
+    // success so a deliberate second matter for the same client still creates one.
+    if (!createRequestIdRef.current) {
+      createRequestIdRef.current =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : null
+    }
+
     setCreating(true)
     try {
       const res = await fetch('/api/admin/matters/create', {
@@ -228,6 +237,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
           clientEmail: email,
           clientPhone: clientPhone.trim() || null,
           planType,
+          requestId: createRequestIdRef.current,
         }),
       })
       const body = await res.json().catch(() => ({}))
@@ -247,6 +257,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
         if (!sendRes.ok) throw new Error(sendBody.error ?? 'Matter created but intake invite failed')
         if (typeof sendBody.url === 'string') intakeUrl = sendBody.url
       }
+      createRequestIdRef.current = null
       setCreatedMatterId(matterId)
       setCreatedIntakeUrl(intakeUrl)
       toast.success(sendIntakeOnCreate ? 'Matter created and intake invite sent' : 'Matter created')

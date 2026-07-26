@@ -5,6 +5,13 @@ import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Matter numbers are allocated by reading the current max and adding one, so a
+ *  concurrent create can take the same number. The unique index is the arbiter;
+ *  reallocate and retry rather than failing the attorney's request. */
+const MAX_NUMBER_ATTEMPTS = 3
+
 export async function POST(req: Request) {
   const { err, userId } = await requireAdmin(req)
   if (err) return err
@@ -15,6 +22,11 @@ export async function POST(req: Request) {
   const clientPhone = typeof body.clientPhone === 'string' ? body.clientPhone.trim() : null
   const planType = body.planType
 
+  // Idempotency key from the caller: the same submission retried (double-click,
+  // or a retry after a response we never received) resolves to one matter.
+  const requestId =
+    typeof body.requestId === 'string' && UUID_RE.test(body.requestId) ? body.requestId : null
+
   if (!clientName || !clientEmail) {
     return NextResponse.json({ error: 'clientName and clientEmail are required' }, { status: 400 })
   }
@@ -23,113 +35,76 @@ export async function POST(req: Request) {
   const practiceAreaName = practiceAreaLabel(practiceArea)
   const admin = getAdminClient()
 
-  const { data: clientUser } = await admin
+  const { data: clientUser, error: clientUserError } = await admin
     .from('users')
     .select('id')
     .eq('email', clientEmail)
     .maybeSingle()
 
+  if (clientUserError) {
+    return NextResponse.json(
+      { error: `Failed to look up client account: ${clientUserError.message}` },
+      { status: 500 },
+    )
+  }
+
   const nameParts = clientName.split(/\s+/)
   const first_name = nameParts[0] ?? clientName
   const last_name = nameParts.slice(1).join(' ') || null
 
-  const { data: intake, error: intakeError } = await admin
-    .from('client_intake')
-    .insert({
-      email: clientEmail,
-      first_name,
-      last_name,
-      full_name: clientName,
-      phone: clientPhone,
-      practice_area: practiceArea,
-      status: 'in_progress',
-      user_id: clientUser?.id ?? null,
-      client_user_id: clientUser?.id ?? null,
-    })
-    .select('id')
-    .single()
+  let lastError: { code?: string; message: string } | null = null
 
-  if (intakeError || !intake) {
-    return NextResponse.json(
-      { error: `Failed to create intake record: ${intakeError?.message ?? 'unknown'}` },
-      { status: 500 },
-    )
+  for (let attempt = 0; attempt < MAX_NUMBER_ATTEMPTS; attempt += 1) {
+    const matterNumber = await generateUniqueMatterNumber(admin, {
+      year: new Date().getFullYear(),
+      practiceArea,
+      clientLastName: last_name,
+      clientFirstName: first_name,
+    })
+
+    // One transaction: intake + matter + linkage + details + activity. Either the
+    // whole matter exists or none of it does.
+    const { data, error } = await admin.rpc('create_matter_with_client', {
+      p_client_name: clientName,
+      p_client_email: clientEmail,
+      p_first_name: first_name,
+      p_last_name: last_name,
+      p_client_phone: clientPhone,
+      p_practice_area: practiceArea,
+      p_matter_name: `${clientName} — ${practiceAreaName}`,
+      p_matter_number: matterNumber,
+      p_client_user_id: clientUser?.id ?? null,
+      p_actor_id: userId,
+      p_request_id: requestId,
+    })
+
+    if (!error) {
+      const row = Array.isArray(data) ? data[0] : data
+      if (!row?.matter_id) {
+        return NextResponse.json({ error: 'Matter create returned no row' }, { status: 500 })
+      }
+
+      // Best-effort and idempotent; a failure here must not fail the request or
+      // roll back a matter that already exists.
+      try {
+        await ensureDesignSheetSeededFromIntake(row.matter_id)
+      } catch (e) {
+        console.warn('design sheet seed on create skipped:', e)
+      }
+
+      return NextResponse.json({
+        matterId: row.matter_id,
+        matterNumber: row.matter_number,
+        created: row.created !== false,
+      })
+    }
+
+    lastError = error
+    if (error.code !== '23505') break
   }
 
-  const matterNumber = await generateUniqueMatterNumber(admin, {
-    year: new Date().getFullYear(),
-    practiceArea,
-    clientLastName: last_name,
-    clientFirstName: first_name,
-  })
-  const now = new Date().toISOString()
-
-  const { data: matter, error: matterError } = await admin
-    .from('matters')
-    .insert({
-      client_intake_id: intake.id,
-      client_id: clientUser?.id ?? null,
-      name: `${clientName} — ${practiceAreaName}`,
-      matter_number: matterNumber,
-      stage: 'intake',
-      status: 'active',
-      stage_entered_at: now,
-      track: 'DEFAULT',
-      relationship_status: 'hired',
-      hired_at: now,
-    })
-    .select('id')
-    .single()
-
-  if (matterError || !matter) {
-    return NextResponse.json(
-      { error: `Failed to create matter: ${matterError?.message ?? 'unknown'}` },
-      { status: 500 },
-    )
-  }
-
-  await admin
-    .from('client_intake')
-    .update({ matter_id: matter.id })
-    .eq('id', intake.id)
-
-  const { error: detailsError } = await admin.from('matter_details').upsert(
-    {
-      client_id: matter.id,
-      practice_area: practiceArea,
-      plan_type: 'TBD',
-      matter_status: 'Active',
-      client_status: 'active',
-      jurisdiction_state: 'MA',
-      matter_number: matterNumber,
-    },
-    { onConflict: 'client_id' },
+  return NextResponse.json(
+    { error: `Failed to create matter: ${lastError?.message ?? 'unknown'}` },
+    { status: 500 },
   )
-
-  if (detailsError) {
-    return NextResponse.json(
-      { error: `Failed to create matter details: ${detailsError.message}` },
-      { status: 500 },
-    )
-  }
-
-  try {
-    await ensureDesignSheetSeededFromIntake(matter.id)
-  } catch (e) {
-    console.warn('design sheet seed on create skipped:', e)
-  }
-
-  try {
-    await admin.from('matter_activity').insert({
-      matter_id: matter.id,
-      event_type: 'matter_created',
-      title: 'Matter created',
-      detail: `${clientName} (${clientEmail})`,
-      actor_id: userId,
-    })
-  } catch (e) {
-    console.warn('matter_activity skipped:', e)
-  }
-
-  return NextResponse.json({ matterId: matter.id, matterNumber })
 }
