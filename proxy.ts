@@ -34,11 +34,32 @@ function isPortalPath(pathname: string) {
   return PORTAL_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`))
 }
 
-function redirectToLogin(request: NextRequest, pathname: string) {
+function isApiPath(pathname: string) {
+  return pathname === '/api' || pathname.startsWith('/api/')
+}
+
+/**
+ * Deny an unauthenticated request. API paths get a JSON status code rather than
+ * a redirect: `fetch()` follows redirects transparently, so a 307 to the login
+ * page arrives as a 200 HTML body with `res.ok === true`, and call sites that do
+ * `await res.json().catch(() => [])` then render an empty list as if the data
+ * were genuinely empty instead of surfacing an expired session.
+ */
+function denyRequest(request: NextRequest, pathname: string, status: 401 | 403 = 401) {
+  if (isApiPath(pathname)) {
+    return NextResponse.json(
+      { error: status === 403 ? 'Forbidden' : 'Unauthorized' },
+      { status },
+    )
+  }
   const url = request.nextUrl.clone()
   url.pathname = '/auth/login'
   url.searchParams.set('redirectTo', pathname)
   return NextResponse.redirect(url)
+}
+
+function redirectToLogin(request: NextRequest, pathname: string) {
+  return denyRequest(request, pathname, 401)
 }
 
 function supabaseUnavailable(pathname: string) {
@@ -163,6 +184,7 @@ export async function proxy(request: NextRequest) {
     }
 
     if (isAdminPath(pathname) && (!role || !ADMIN_ROLES.includes(role))) {
+      if (isApiPath(pathname)) return denyRequest(request, pathname, 403)
       if (role === CLIENT_ROLE) {
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
@@ -170,6 +192,7 @@ export async function proxy(request: NextRequest) {
     }
 
     if (isPortalPath(pathname) && role !== CLIENT_ROLE) {
+      if (isApiPath(pathname)) return denyRequest(request, pathname, 403)
       if (role && ADMIN_ROLES.includes(role)) {
         return NextResponse.redirect(new URL(DEFAULT_ADMIN_HOME, request.url))
       }

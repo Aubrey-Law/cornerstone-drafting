@@ -7,7 +7,12 @@ const script = path.join(process.cwd(), 'scripts/vercel-should-build.sh')
 function run(env: Record<string, string>): number {
   try {
     execSync(`bash ${script}`, {
-      env: { ...process.env, ...env },
+      // The script falls back to `git rev-parse --abbrev-ref HEAD` when
+      // VERCEL_GIT_COMMIT_REF is unset, so without an explicit ref this test
+      // reports whatever branch the checkout happens to be on — it failed for
+      // everyone working on `main`. Default the ref so each case is hermetic;
+      // individual tests still override it.
+      env: { ...process.env, VERCEL_GIT_COMMIT_REF: 'test-branch', ...env },
       stdio: 'pipe',
     })
     return 0

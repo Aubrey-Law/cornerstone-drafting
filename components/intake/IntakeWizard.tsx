@@ -113,7 +113,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       required={required}
-      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+      className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
     />
   )
 }
@@ -141,7 +141,7 @@ function PhoneInput({
       value={value ?? ''}
       onChange={handleChange}
       placeholder={placeholder}
-      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+      className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
     />
   )
 }
@@ -249,7 +249,7 @@ function AddressSearch({ onSelect }: { onSelect: (addr: ParsedAddress) => void }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Start typing an address to search…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
         />
         {loading && (
           <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
@@ -301,7 +301,7 @@ function SelectInput({
       id={id}
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+      className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
     >
       {placeholder && <option value="">{placeholder}</option>}
       {options.map((o) => (
@@ -1538,7 +1538,7 @@ function AssetTotalsContent({ label, totals, onChange, clientName, spouseName }:
   clientName?: string
   spouseName?: string
 }) {
-  const inputCls = 'w-full rounded border border-gray-200 px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+  const inputCls = 'w-full rounded border border-gray-200 px-3 py-2 text-base focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm'
   const rows: { field: keyof AssetTotals; label: string }[] = [
     { field: 'client_total', label: clientName ? `${clientName}'s Total` : 'Client Total' },
     { field: 'spouse_total', label: spouseName ? `${spouseName}'s Total` : 'Spouse Total' },
@@ -1577,7 +1577,7 @@ function AssetTextContent({ label, value, onChange }: {
         onChange={e => onChange(e.target.value)}
         rows={6}
         placeholder={`Describe your ${label.toLowerCase()}…`}
-        className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+        className="w-full rounded-md border border-gray-200 px-3 py-2 text-base focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
       />
     </div>
   )
@@ -1782,7 +1782,7 @@ export function StepEstate({ data, update }: StepProps) {
                   onChange={(e) => updateCircumstanceDetail(c.value, e.target.value)}
                   rows={2}
                   placeholder="Please provide additional information…"
-                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
                 />
               )}
             </div>
@@ -1826,7 +1826,7 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           onChange={(e) => updateObj('why_choose_firm', e.target.value)}
           rows={3}
           placeholder="A referral, online search, prior experience…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
         />
         <WhyWeAsk>
           This helps us understand what mattered to you when choosing counsel and tailor your first conversation.
@@ -1839,7 +1839,7 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           onChange={(e) => updateObj('why_now', e.target.value)}
           rows={3}
           placeholder="A life event, peace of mind, a nudge from family…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
         />
         <WhyWeAsk>
           Your timing and motivation help your attorney focus the plan on what is driving you right now.
@@ -1852,7 +1852,7 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           onChange={(e) => updateObj('make_things_easy', e.target.value)}
           rows={2}
           placeholder="Most clients say yes — share anything specific you have in mind."
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
         />
         <WhyWeAsk>
           Many clients want to spare family from confusion, conflict, or extra court steps. Your answer shapes how we structure the plan.
@@ -1957,7 +1957,7 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
           value={(data.special_notes as string) ?? ''}
           onChange={(e) => update('special_notes', e.target.value)}
           rows={4}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
           placeholder="Any specific concerns, questions, or wishes you'd like to share..."
         />
       </FormField>
@@ -2573,6 +2573,7 @@ export function SaveStatusBadge({ status }: { status: SaveStatus }) {
     <div className="flex items-center gap-1.5 text-xs text-gray-500">
       {status === 'saving' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...</>}
       {status === 'saved' && <><Save className="h-3.5 w-3.5 text-green-500" /> Saved</>}
+      {status === 'dirty' && <><span className="h-2 w-2 rounded-full bg-amber-500" /> Unsaved changes</>}
       {status === 'error' && <><span className="h-2 w-2 rounded-full bg-red-500" /> Save error</>}
     </div>
   )

@@ -43,15 +43,20 @@ async function ensureBlankDesignSheet(
   if (matterError) throw new Error(matterError.message)
   if (!matter?.client_intake_id) return false
 
+  // ignoreDuplicates: a concurrent seeder winning the race is success, not an
+  // error — design_sheets_matter_id_version_key serializes us.
   const { error: insertError } = await admin
     .from('design_sheets')
-    .insert({
-      matter_id: matterId,
-      client_intake_id: matter.client_intake_id,
-      version: 1,
-      status: 'draft',
-      updated_at: new Date().toISOString(),
-    })
+    .upsert(
+      {
+        matter_id: matterId,
+        client_intake_id: matter.client_intake_id,
+        version: 1,
+        status: 'draft',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'matter_id,version', ignoreDuplicates: true },
+    )
 
   if (insertError) throw new Error(insertError.message)
   return true
@@ -117,14 +122,17 @@ export async function ensureDesignSheetSeededFromIntake(
 
   const { error: insertError } = await admin
     .from('design_sheets')
-    .insert({
-      matter_id: matterId,
-      client_intake_id: matter.client_intake_id,
-      version: 1,
-      status: 'draft',
-      ...insertSeedPayload,
-      updated_at: now,
-    })
+    .upsert(
+      {
+        matter_id: matterId,
+        client_intake_id: matter.client_intake_id,
+        version: 1,
+        status: 'draft',
+        ...insertSeedPayload,
+        updated_at: now,
+      },
+      { onConflict: 'matter_id,version', ignoreDuplicates: true },
+    )
 
   if (insertError) {
     console.error('design sheet seed insert failed:', insertError.message)

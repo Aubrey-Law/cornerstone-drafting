@@ -19,12 +19,11 @@ export async function ensureUserProfile(
 
   if (existingUser?.role) return existingUser.role
 
-  const nextRole = isFirmEmail(user.email) ? 'attorney' : 'client'
-  const { error } = await supabase.from('users').insert({
-    id: user.id,
-    email: user.email,
-    display_name: (user.user_metadata?.full_name as string | undefined) ?? null,
-    role: nextRole,
+  // The role must be derived from the verified email server-side. This RPC is
+  // SECURITY DEFINER and reads auth.users, so a caller cannot choose their own
+  // role — RLS forbids inserting anything but 'client' directly.
+  const { data: role, error } = await supabase.rpc('ensure_user_profile', {
+    p_display_name: (user.user_metadata?.full_name as string | undefined) ?? null,
   })
 
   if (error) {
@@ -36,5 +35,5 @@ export async function ensureUserProfile(
     return retry?.role ?? null
   }
 
-  return nextRole
+  return (role as string | null) ?? null
 }

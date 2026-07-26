@@ -20,22 +20,33 @@ export async function getMatterForUser(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<PortalMatter | null> {
-  const { data: intake } = await supabase
+  // `.maybeSingle()` errors when a user has more than one intake row or more
+  // than one hired matter — both legitimate states (re-invite, second
+  // engagement). That error surfaced as "no matter", so every portal page told
+  // the client their matter was still being set up and showed no documents or
+  // messages. Ordering matches findClientIntakeForUser.
+  const { data: intakes, error: intakeError } = await supabase
     .from('client_intake')
     .select('id')
     .or(`user_id.eq.${userId},client_user_id.eq.${userId}`)
-    .maybeSingle()
+    .order('created_at', { ascending: true })
+    .limit(1)
 
+  if (intakeError) throw new Error(intakeError.message)
+  const intake = intakes?.[0]
   if (!intake) return null
 
   const admin = getAdminClient()
-  const { data: matter } = await admin
+  const { data: matters, error: matterError } = await admin
     .from('matters')
     .select('id, status, stage')
     .eq('client_intake_id', intake.id)
     .eq('relationship_status', 'hired')
-    .maybeSingle()
+    .order('created_at', { ascending: true })
+    .limit(1)
 
+  if (matterError) throw new Error(matterError.message)
+  const matter = matters?.[0]
   if (!matter) return null
   return {
     id: matter.id as string,

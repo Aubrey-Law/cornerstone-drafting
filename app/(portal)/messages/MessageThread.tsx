@@ -1,12 +1,12 @@
 'use client'
 
-import { useRef, useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useRef, useEffect, useMemo, useState, useTransition } from 'react'
 import { sendMessage, type Message } from './actions'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
+import { useMessagesRealtime, type RealtimeMessageRow } from '@/lib/messages/useMessagesRealtime'
 import { Send } from 'lucide-react'
 
 const firm = getFirmConfig()
@@ -74,12 +74,18 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
-  useMessagesRealtime(matterId, message => {
+  // Must be referentially stable: useMessagesRealtime re-subscribes whenever the
+  // handler identity changes, so an inline arrow tore down and recreated the
+  // websocket channel on every render — including every keystroke in the draft —
+  // and inserts arriving during the gap were lost with no refetch.
+  const handleRealtimeInsert = useCallback((message: RealtimeMessageRow) => {
     setMessages(prev => {
       if (prev.some(row => row.id === message.id)) return prev
       return [...prev, message as Message]
     })
-  })
+  }, [])
+
+  useMessagesRealtime(matterId, handleRealtimeInsert)
 
   function handleSend() {
     const trimmed = draft.trim()
@@ -102,7 +108,16 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
     startTransition(async () => {
       try {
         const saved = await sendMessage(matterId, trimmed)
-        setMessages(prev => prev.map(m => (m.id === optimistic.id ? saved : m)))
+        // The realtime echo of this same insert often arrives before the action
+        // resolves (it commits mid-action, which then also sends a notification
+        // email). Mapping the optimistic row onto `saved` in that case produced a
+        // second bubble with a duplicate React key, so drop the placeholder and
+        // only append when the echo has not already landed.
+        setMessages(prev => {
+          const withoutOptimistic = prev.filter(m => m.id !== optimistic.id)
+          if (withoutOptimistic.some(m => m.id === saved.id)) return withoutOptimistic
+          return [...withoutOptimistic, saved]
+        })
       } catch (err) {
         console.error('Failed to send message:', err)
         setMessages(prev => prev.filter(m => m.id !== optimistic.id))
@@ -190,7 +205,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
             onKeyDown={handleKeyDown}
             placeholder="Write a message…"
             rows={2}
-            className="flex-1 resize-none text-sm"
+            className="flex-1 resize-none text-base md:text-sm"
             disabled={isPending}
           />
           <Button

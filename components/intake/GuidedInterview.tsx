@@ -585,7 +585,11 @@ export default function GuidedInterview({
           </main>
 
           {/* SUMMARY RAIL */}
-          <aside style={{ flex: 1, minWidth: 300, position: 'sticky', top: 26, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* min(300px, 100%) — a hard 300px floor cannot shrink inside the
+              ~280px content box at 320px viewports, which forced horizontal
+              page scroll and clipped this rail (it holds Review & submit). The
+              <main> above already uses this pattern. */}
+          <aside style={{ flex: 1, minWidth: 'min(300px, 100%)', position: 'sticky', top: 26, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {isAttorney && (
               <div style={guidedCardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>

@@ -467,7 +467,8 @@ export function useDesignSheetState({
 
   // ── LP-specific data ──────────────────────────────────────────────────────────
   const updateLpPatch = useCallback((patch: Record<string, unknown>) => {
-    const nextData = formatPhoneFieldsDeep({ ...(lpDataState?.li_design_sheet_data ?? {}), ...patch })
+    const previousData = lpDataState?.li_design_sheet_data ?? {}
+    const nextData = formatPhoneFieldsDeep({ ...previousData, ...patch })
     setLpDataState(prev => prev ? { ...prev, li_design_sheet_data: nextData } : prev)
     setSaveStatus('saving')
     startTransition(async () => {
@@ -477,7 +478,14 @@ export function useDesignSheetState({
         setLastSavedAt(new Date().toISOString())
       } catch (err) {
         console.error(err)
-        setSaveStatus('dirty')
+        // 'dirty' was misleading here: the sheet autosave loop persists the
+        // *regular* design sheet, succeeds, and flips the header back to
+        // "Saved" — so this LP-only failure was reported as a successful save
+        // and the edit was silently dropped on navigation. Roll the optimistic
+        // value back so the attorney sees the edit did not take, and surface it.
+        setLpDataState(prev => prev ? { ...prev, li_design_sheet_data: previousData } : prev)
+        setSaveStatus('error')
+        toast.error('Could not save that change. Please try again.')
       }
     })
   }, [matterId, lpDataState])

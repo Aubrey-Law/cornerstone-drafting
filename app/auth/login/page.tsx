@@ -15,8 +15,10 @@ import { toast } from 'sonner'
 
 const ADMIN_ROLES = ['attorney', 'admin'] as const
 
+// text-base on mobile (matching components/ui/input.tsx): iOS Safari auto-zooms
+// the page when focusing an input whose font-size is under 16px.
 const inputCls =
-  'mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-muted-foreground'
+  'mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-base md:text-sm text-foreground shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-muted-foreground'
 
 function GoogleIcon() {
   return (
@@ -183,6 +185,7 @@ function LoginForm() {
               id="login-email"
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               className={inputCls}
@@ -208,6 +211,7 @@ function LoginForm() {
               id="login-password"
               type="password"
               required
+              autoComplete="current-password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               className={inputCls}

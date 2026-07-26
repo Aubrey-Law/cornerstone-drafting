@@ -62,8 +62,10 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     router.push('/auth/login')
   }
 
+  // h-dvh, not h-screen: on iOS 100vh is the *large* viewport (toolbar hidden),
+  // which pushed the sticky message composer behind Safari's bottom toolbar.
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh bg-background">
       <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border bg-sidebar">
         <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           <Link href="/dashboard" className="text-sm font-semibold text-sidebar-foreground">

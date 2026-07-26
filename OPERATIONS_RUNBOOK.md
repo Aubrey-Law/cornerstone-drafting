@@ -287,6 +287,14 @@ this solo-attorney deployment, the revision author may complete that review.
    has zero active publications, so this gate remains red until the human legal
    review above is complete.
 
+   Because it is red by design, the gate is **opt-in** and does not run in the
+   default `npm test` (a permanently failing suite hides real regressions). Run
+   it deliberately at cutover time:
+
+   ```bash
+   ESTATE_CLAUSE_CUTOVER_GATE=1 npx vitest run tests/estate-clause-parity.test.ts
+   ```
+
 5. **Verify in preview.** Run the focused suite documented in the implementation
    plan. Set `ESTATE_CLAUSE_SOURCE=database` only in a preview deployment, then
    generate and inspect representative Massachusetts Will, Trust, durable POA,

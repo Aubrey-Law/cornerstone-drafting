@@ -35,13 +35,17 @@ export async function nextVersionNumber(
   admin: SupabaseClient,
   documentId: string,
 ): Promise<number> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from('document_versions')
     .select('version_number')
     .eq('document_id', documentId)
     .order('version_number', { ascending: false })
     .limit(1)
     .maybeSingle()
+  // Swallowing this error returned 1, which then collided with the existing
+  // version 1 on a document that already had history — turning a transient read
+  // failure into a guaranteed lost write.
+  if (error) throw new Error(`Could not determine next document version: ${error.message}`)
   return (data?.version_number ?? 0) + 1
 }
 
@@ -125,7 +129,6 @@ export async function createDocumentVersion(args: {
   setCurrent?: boolean
   folder?: string
 }): Promise<{ version: DocumentVersion } | { error: string }> {
-  const versionNumber = await nextVersionNumber(args.admin, args.documentId)
   const r2Key = versionR2Key({
     matterId: args.matterId,
     documentId: args.documentId,
@@ -139,25 +142,49 @@ export async function createDocumentVersion(args: {
     return { error: err instanceof Error ? err.message : 'R2 upload failed' }
   }
 
-  const { data, error } = await args.admin
-    .from('document_versions')
-    .insert({
-      document_id: args.documentId,
-      r2_key: r2Key,
-      source: args.source,
-      version_number: versionNumber,
-      filename: args.filename,
-      file_type: args.contentType,
-      size_bytes: args.bytes.byteLength,
-      created_by: args.createdBy,
-    })
-    .select(VERSION_COLUMNS)
-    .single()
+  // version_number is read-max-then-insert, guarded by
+  // UNIQUE (document_id, version_number). The bytes are already in R2 at this
+  // point, so a bare collision used to drop the attorney's edit and orphan the
+  // object. Retry with a recomputed number instead — r2Key is timestamp-based,
+  // not version-based, so the upload does not need repeating.
+  const MAX_ATTEMPTS = 3
+  let data: DocumentVersion | null = null
+  let lastError: string | null = null
 
-  if (error || !data) return { error: error?.message ?? 'version insert failed' }
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const versionNumber = await nextVersionNumber(args.admin, args.documentId)
+    const insertResult = await args.admin
+      .from('document_versions')
+      .insert({
+        document_id: args.documentId,
+        r2_key: r2Key,
+        source: args.source,
+        version_number: versionNumber,
+        filename: args.filename,
+        file_type: args.contentType,
+        size_bytes: args.bytes.byteLength,
+        created_by: args.createdBy,
+      })
+      .select(VERSION_COLUMNS)
+      .single()
+
+    if (insertResult.data) {
+      data = insertResult.data as unknown as DocumentVersion
+      break
+    }
+
+    lastError = insertResult.error?.message ?? 'version insert failed'
+    // 23505 = unique_violation: another writer took this number. Anything else
+    // will not be fixed by retrying.
+    if (insertResult.error?.code !== '23505') break
+  }
+
+  if (!data) return { error: lastError ?? 'version insert failed' }
 
   if (args.setCurrent !== false) {
-    await args.admin
+    // Unchecked, this could leave current_version_id pointing at the previous
+    // version while the new one exists — readers would silently serve stale bytes.
+    const { error: pointerError } = await args.admin
       .from('matter_documents')
       .update({
         current_version_id: data.id,
@@ -167,9 +194,13 @@ export async function createDocumentVersion(args: {
         content_type: args.contentType,
       })
       .eq('id', args.documentId)
+
+    if (pointerError) {
+      return { error: `version saved but could not be made current: ${pointerError.message}` }
+    }
   }
 
-  return { version: data as DocumentVersion }
+  return { version: data }
 }
 
 /** Create an initial version row pointing at an existing matter_documents.r2_key (no re-upload). */

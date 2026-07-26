@@ -62,6 +62,7 @@ function SaveStatusBadge({ status }: { status: SaveStatus }) {
     <div className="flex items-center gap-1.5 text-xs text-gray-500">
       {status === 'saving' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...</>}
       {status === 'saved' && <><Save className="h-3.5 w-3.5 text-green-500" /> Saved</>}
+      {status === 'dirty' && <><span className="h-2 w-2 rounded-full bg-amber-500" /> Unsaved changes</>}
       {status === 'error' && <><span className="h-2 w-2 rounded-full bg-red-500" /> Save error</>}
     </div>
   )

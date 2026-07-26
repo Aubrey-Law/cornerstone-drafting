@@ -1,4 +1,5 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { firmDateKey } from '@/lib/firmDate'
 import type { MeetingTypeKey } from '@/lib/scheduling'
 import {
   findLeadByEmail,
@@ -122,7 +123,9 @@ async function syncMatterBooking(input: {
     startTime
   ) {
     const startTimestamp = new Date(startTime).toISOString()
-    const dateOnly = startTimestamp.split('T')[0]
+    // design_meeting_date is a plain `date`; derive the day in the firm's
+    // timezone, not UTC, or evening bookings land on the following day.
+    const dateOnly = firmDateKey(startTimestamp)
     if (eventKey === 'signing_appointment') {
       await admin
         .from('matter_details')
@@ -130,7 +133,7 @@ async function syncMatterBooking(input: {
           { client_id: matterId, scheduled_signing_date: startTimestamp },
           { onConflict: 'client_id' },
         )
-    } else if (eventKey === 'pmps') {
+    } else if (eventKey === 'pmps' && dateOnly) {
       await admin
         .from('matter_details')
         .upsert(
