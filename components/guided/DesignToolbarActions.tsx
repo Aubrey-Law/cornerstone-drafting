@@ -1,6 +1,12 @@
 'use client'
 
-import { Copy, Download, Loader2, Upload } from 'lucide-react'
+import { ChevronDown, Copy, Download, Loader2, Upload } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { guidedSecondaryButtonStyle } from './styles'
 
 interface DesignToolbarActionsProps {
@@ -16,6 +22,11 @@ interface DesignToolbarActionsProps {
   saveDirty: boolean
   /** Autosave is primary; hide the manual action while the sheet is healthy. */
   showSave?: boolean
+  /**
+   * Collapses clone/import/export into a single `Import ▾` menu and drops the manual
+   * save button — the autosave pill is then the only save affordance.
+   */
+  collapsed?: boolean
 }
 
 export function DesignToolbarActions({
@@ -29,6 +40,7 @@ export function DesignToolbarActions({
   pending,
   saveDirty,
   showSave = true,
+  collapsed = false,
 }: DesignToolbarActionsProps) {
   const btnStyle = (emphasis = false) => ({
     ...guidedSecondaryButtonStyle,
@@ -40,6 +52,36 @@ export function DesignToolbarActions({
     border: emphasis ? 'none' : guidedSecondaryButtonStyle.border,
     opacity: pending ? 0.6 : 1,
   })
+
+  if (collapsed) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" disabled={pending} style={btnStyle()}>
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            Import
+            <ChevronDown size={14} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          {onClonePlan && (
+            <DropdownMenuItem onSelect={onClonePlan} className="text-xs">
+              <Copy size={14} />
+              Clone from another matter
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={onImport} className="text-xs">
+            <Upload size={14} />
+            Import design sheet
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onExport} disabled={exporting} className="text-xs">
+            <Download size={14} />
+            Export design sheet
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
 
   return (
     <>
