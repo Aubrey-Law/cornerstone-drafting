@@ -53,7 +53,9 @@ describe('drafting hub and workspace', () => {
     // (refactored in #297). Both are required before generation is allowed.
     expect(step).toContain('preflight.missing.length > 0 && (')
     expect(step).toContain('preflight.error || preflight.warnings.length > 0')
-    expect(step).toContain('disabled={!preflightReady || !preflight?.canGenerate')
+    expect(step).toContain(
+      'disabled={!authReady || !preflightReady || !preflight?.canGenerate || selectedCount === 0 || busy !== null}',
+    )
   })
 
   it('lets admins delete recent drafts through the audited document API', () => {
