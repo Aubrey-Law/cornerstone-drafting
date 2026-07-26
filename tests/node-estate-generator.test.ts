@@ -1540,10 +1540,16 @@ describe('node estate generator package generation', () => {
       },
       fiduciaries: {
         dpoa_primary: 'Paula Agent',
+        dpoa_successor: 'Drew Successor Agent',
         hcp_primary: 'Henry Healthcare',
+        hcp_successor: 'Avery Alternate',
         spouse_pr_primary: 'Spencer Spouse Executor',
         spouse_dpoa_primary: 'Sloane Spouse Agent',
         spouse_hcp_primary: 'Harper Spouse Proxy',
+        spouse_hcp_successor: 'Jamie Spouse Alternate',
+      },
+      hcp_provisions: {
+        client_anatomical_gift: 'no',
       },
     })
     const result = await generateNodeEstatePackage({
@@ -1561,8 +1567,38 @@ describe('node estate generator package generation', () => {
     expect(summaryXml).toContain('Your Revocable Living Trust')
     expect(summaryXml).toContain('Each of your Wills serves as a safety net')
     expect(summaryXml).toContain('JOHN EXAMPLE')
+    expect(summaryXml).toContain('Gifts from JANE EXAMPLE’s assets are expressly prohibited.')
+    expect(summaryXml).toContain('JANE EXAMPLE has elected to make no anatomical gift.')
+    expect(summaryXml).toContain('Alternate Agent: AVERY ALTERNATE')
+    expect(summaryXml).toContain('Alternate Agent: JAMIE SPOUSE ALTERNATE')
+    expect(summaryXml).not.toContain('Dianyuan')
+    expect(summaryXml).not.toContain('Items Requiring Completion Before Execution')
     expect(summaryXml).not.toContain('{{')
     expect(summaryXml).not.toContain('{%')
+  })
+
+  it('shows the completion warning section only when an included document lacks a successor', async () => {
+    const result = await generateNodeEstatePackage({
+      data: toEstateGeneratorData(draftPayload({
+        documents: {
+          include_dpoa: true,
+        },
+        fiduciaries: {
+          dpoa_primary: 'Paula Agent',
+          dpoa_successor: null,
+        },
+      })) as unknown as Record<string, unknown>,
+      packageName: 'estate-plan-summary',
+      state: 'MA',
+      root,
+      allowDraft: true,
+    })
+
+    if (!result.ok) throw new Error(result.error)
+
+    const summaryXml = xmlFromDocx(result.files[0].buffer)
+    expect(summaryXml).toContain('Items Requiring Completion Before Execution')
+    expect(summaryXml).toContain('No successor agent has been named')
   })
 
   it('renders scheduled execution fields separately from the agreement date in individual trusts', async () => {
@@ -2684,6 +2720,7 @@ describe('node estate generator package generation', () => {
     expect(result.missing).toEqual([])
 
     const xml = xmlFromDocx(result.files[0].buffer)
+    const summaryXml = xmlFromDocx(result.files[1].buffer)
     expect(xml).toContain('PARENTAL APPOINTMENT OF GUARDIAN')
     expect(xml).toContain('JANE EXAMPLE')
     expect(xml).toContain('ALEX EXAMPLE')
@@ -2694,6 +2731,12 @@ describe('node estate generator package generation', () => {
     expect(xml).not.toContain('{%')
     expect(xml).not.toContain('[CLIENT')
     expect(xml).not.toContain('[CHILD')
+    expect(summaryXml).not.toContain('[[ MISSING:')
+    expect(summaryXml).toContain('Guardian')
+    expect(summaryXml).toContain('GRACE GUARDIAN')
+    expect(summaryXml).not.toContain('Trustees: Who Is in Charge')
+    expect(summaryXml).not.toContain('Power of Attorney Agent')
+    expect(summaryXml).not.toContain('Health Care Agent')
     expect(result.warnings).toEqual([])
   })
 
@@ -2742,6 +2785,7 @@ describe('node estate generator package generation', () => {
     expect(result.missing).toEqual([])
 
     const xml = xmlFromDocx(result.files[0].buffer)
+    const summaryXml = xmlFromDocx(result.files[1].buffer)
     expect(xml).toContain('LAST WILL AND TESTAMENT OF ALEX EXAMPLE')
     expect(xml).toContain('JANE EXAMPLE and JOHN EXAMPLE')
     expect(xml).toContain('GENERAL DURABLE POWER OF ATTORNEY OF ALEX EXAMPLE')
@@ -2749,6 +2793,11 @@ describe('node estate generator package generation', () => {
     expect(xml).not.toContain('{{')
     expect(xml).not.toContain('{%')
     expect(xml).not.toContain('[[ MISSING:')
+    expect(summaryXml).not.toContain('[[ MISSING:')
+    expect(summaryXml).not.toContain('Your Key People at a Glance')
+    expect(summaryXml).not.toContain('Trustees: Who Is in Charge')
+    expect(summaryXml).not.toContain('Power of Attorney Agent')
+    expect(summaryXml).not.toContain('Health Care Agent')
   })
 
   it('generates the existing incapacity documents package without unresolved markers', async () => {
