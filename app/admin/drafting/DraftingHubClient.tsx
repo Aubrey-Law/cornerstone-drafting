@@ -12,7 +12,9 @@ import {
   type DraftingHubView,
   type HubReadinessFilter,
   type HubSortKey,
+  QUIET_DAYS,
   hubReadinessBucket,
+  isHubQuiet,
   matchesHubSearch,
   readDraftingHubView,
   sortHubMatters,
@@ -25,6 +27,15 @@ interface DraftingHubClientProps {
   matters: DraftingHubMatter[]
   loadError?: string | null
 }
+
+/** Readiness chips, in toolbar order. `tone` styles the unselected pill. */
+const READINESS_CHIPS: { value: HubReadinessFilter; label: string; tone: string }[] = [
+  { value: 'all', label: 'All', tone: 'bg-muted text-muted-foreground' },
+  { value: 'ready', label: 'Ready', tone: 'bg-green-bg text-green' },
+  { value: 'needs_design', label: 'Needs design', tone: 'bg-amber-bg text-amber' },
+  { value: 'needs_setup', label: 'Setup', tone: 'bg-amber-bg text-amber' },
+  { value: 'quiet', label: `Quiet ${QUIET_DAYS}d+`, tone: 'bg-red-bg text-red' },
+]
 
 export default function DraftingHubClient({ matters: initialMatters, loadError = null }: DraftingHubClientProps) {
   const router = useRouter()
@@ -42,7 +53,11 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
   }, [initialMatters])
 
   useEffect(() => {
-    setView(readDraftingHubView())
+    const stored = readDraftingHubView()
+    // Below md the board is too cramped, so default to the table without
+    // persisting the choice — kanban stays one click away.
+    const isNarrow = window.matchMedia('(max-width: 767px)').matches
+    setView(isNarrow && stored === 'kanban' ? 'table' : stored)
   }, [])
 
   const practiceAreas = useMemo(() => {
@@ -54,16 +69,38 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
     return Array.from(set).sort()
   }, [matters])
 
+  const searched = useMemo(
+    () => matters.filter(item => matchesHubSearch(item, search)),
+    [matters, search],
+  )
+
+  const readinessCounts = useMemo(() => {
+    const counts: Record<HubReadinessFilter, number> = {
+      all: searched.length,
+      ready: 0,
+      needs_design: 0,
+      needs_setup: 0,
+      quiet: 0,
+    }
+    for (const item of searched) {
+      counts[hubReadinessBucket(item)] += 1
+      if (isHubQuiet(item)) counts.quiet += 1
+    }
+    return counts
+  }, [searched])
+
   const filtered = useMemo(() => {
-    let list = matters.filter(item => matchesHubSearch(item, search))
-    if (readinessFilter !== 'all') {
+    let list = searched
+    if (readinessFilter === 'quiet') {
+      list = list.filter(isHubQuiet)
+    } else if (readinessFilter !== 'all') {
       list = list.filter(item => hubReadinessBucket(item) === readinessFilter)
     }
     if (practiceFilter !== 'all') {
       list = list.filter(item => item.matter.practice_area === practiceFilter)
     }
     return sortHubMatters(list, sortKey)
-  }, [matters, practiceFilter, readinessFilter, search, sortKey])
+  }, [practiceFilter, readinessFilter, searched, sortKey])
 
   useEffect(() => {
     setFocusedIndex(i => Math.min(i, Math.max(filtered.length - 1, 0)))
@@ -129,10 +166,10 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
-      <div className="space-y-3 border-b border-border bg-card px-4 py-3 md:px-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="mr-2 text-xl font-semibold tracking-tight">Drafting</h1>
-          <div className="flex max-w-md min-w-[14rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
+      <div className="border-b border-border bg-card px-4 py-3 md:px-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="mr-1 text-xl font-semibold tracking-tight">Drafting</h1>
+          <div className="flex max-w-xs min-w-[12rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
             <input
               ref={searchRef}
@@ -148,6 +185,53 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               </button>
             )}
           </div>
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Readiness filter">
+            {READINESS_CHIPS.map(chip => {
+              const selected = readinessFilter === chip.value
+              return (
+                <button
+                  key={chip.value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setReadinessFilter(chip.value)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
+                    selected ? 'bg-accent text-white' : cn(chip.tone, 'hover:opacity-80'),
+                  )}
+                >
+                  {chip.label}
+                  <span className="tabular-nums opacity-70">· {readinessCounts[chip.value]}</span>
+                </button>
+              )
+            })}
+          </div>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <ArrowDownAZ className="h-3 w-3" aria-hidden />
+            <span className="sr-only">Sort</span>
+            <select
+              value={sortKey}
+              onChange={e => setSortKey(e.target.value as HubSortKey)}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              aria-label="Sort matters"
+            >
+              <option value="updated">Last activity</option>
+              <option value="client">Client name</option>
+              <option value="stage">Stage</option>
+            </select>
+          </label>
+          {practiceAreas.length > 1 && (
+            <select
+              value={practiceFilter}
+              onChange={e => setPracticeFilter(e.target.value)}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              aria-label="Practice area"
+            >
+              <option value="all">All areas</option>
+              {practiceAreas.map(area => (
+                <option key={area} value={area}>{area}</option>
+              ))}
+            </select>
+          )}
           <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
             <Link href="/admin/pipeline/aging">
               <Clock className="h-3.5 w-3.5" aria-hidden />
@@ -178,50 +262,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               Table
             </button>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <ArrowDownAZ className="h-3 w-3" aria-hidden />
-            Sort
-            <select
-              value={sortKey}
-              onChange={e => setSortKey(e.target.value as HubSortKey)}
-              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-            >
-              <option value="updated">Last activity</option>
-              <option value="client">Client name</option>
-              <option value="stage">Stage</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            Status
-            <select
-              value={readinessFilter}
-              onChange={e => setReadinessFilter(e.target.value as HubReadinessFilter)}
-              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-            >
-              <option value="all">All</option>
-              <option value="ready">Ready to generate</option>
-              <option value="needs_design">Needs design sheet</option>
-              <option value="needs_setup">Setup needed</option>
-            </select>
-          </label>
-          {practiceAreas.length > 1 && (
-            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              Practice
-              <select
-                value={practiceFilter}
-                onChange={e => setPracticeFilter(e.target.value)}
-                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-              >
-                <option value="all">All areas</option>
-                {practiceAreas.map(area => (
-                  <option key={area} value={area}>{area}</option>
-                ))}
-              </select>
-            </label>
-          )}
-          <span className="text-[10px] text-muted-foreground">
+          <span className="hidden text-[10px] text-muted-foreground xl:inline">
             {view === 'table' ? '↑↓ navigate · Enter open · / search' : 'Drag cards to change stage · / search'}
           </span>
         </div>

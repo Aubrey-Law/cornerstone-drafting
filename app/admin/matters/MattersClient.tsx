@@ -14,6 +14,7 @@ import {
   type MatterSortKey,
   type MatterTableFilters,
 } from '@/lib/adminTables/matterTable'
+import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
@@ -63,9 +64,6 @@ const GROUP_LABELS: Record<StageGroup, string> = {
 }
 
 const GROUP_ORDER: StageGroup[] = ['early', 'active', 'work', 'done', 'closed']
-
-/** Days since a matter last moved, for the Last activity and quiet columns. */
-const QUIET_DAYS = 10
 
 function intakeStatusLabel(status: string | null | undefined) {
   return status?.replace(/_/g, ' ') || '—'
