@@ -20,6 +20,11 @@ import { linkifyText } from '@/lib/linkify'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
 import { CallsSection } from './calls'
 
+export interface SchedulingActionsProps {
+  onSendSchedulingLink: () => void
+  onBookForClient: () => void
+}
+
 type PortalMessage = {
   id: string
   body: string
@@ -298,7 +303,7 @@ export function EmailMessagesSection({
   )
 }
 
-export interface MatterCommunicationsTabProps extends MatterMessagesSectionsProps {
+export interface MatterCommunicationsTabProps extends MatterMessagesSectionsProps, SchedulingActionsProps {
   matterId: string
   channel: CommunicationChannel
   onChannelChange: (channel: CommunicationChannel) => void
@@ -308,15 +313,27 @@ export function MatterCommunicationsTab({
   matterId,
   channel,
   onChannelChange,
+  onSendSchedulingLink,
+  onBookForClient,
   ...messageProps
 }: MatterCommunicationsTabProps) {
   return (
     <TabsContent value="communications" className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold">Communications</h3>
-        <p className="text-xs text-muted-foreground">
-          Portal messages, SMS, email, and logged calls for this matter.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Communications</h3>
+          <p className="text-xs text-muted-foreground">
+            Portal messages, SMS, email, and logged calls for this matter.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={onSendSchedulingLink}>
+            Send scheduling link
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={onBookForClient}>
+            Book for client…
+          </Button>
+        </div>
       </div>
       <Tabs value={channel} onValueChange={v => onChannelChange(v as CommunicationChannel)} className="gap-4">
         <TabsList>

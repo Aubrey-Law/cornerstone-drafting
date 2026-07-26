@@ -104,6 +104,8 @@ import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
 import { MatterCommunicationsTab } from './tabs/messages'
+import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
+import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
@@ -400,6 +402,8 @@ function MatterDetailClientInner({
 
   const [deleteNoteTarget, setDeleteNoteTarget] = useState<LinkedMatterNote | null>(null)
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false)
+  const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
+  const [bookForClientOpen, setBookForClientOpen] = useState(false)
 
   const handleDeleteLeadNote = async (note: LinkedMatterNote) => {
     if (!note.leadId) return
@@ -1114,6 +1118,8 @@ function MatterDetailClientInner({
             onSendPortal={() => void sendPortalMessage()}
             onSendSms={() => void sendSms()}
             onSendEmail={() => void sendEmail()}
+            onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
+            onBookForClient={() => setBookForClientOpen(true)}
           />
 
           <MatterNotesTab
@@ -1178,6 +1184,18 @@ function MatterDetailClientInner({
           }}
         />
       )}
+
+      <SendSchedulingLinkDialog
+        target={{ kind: 'matter', id: matterId }}
+        open={schedulingLinkOpen}
+        onOpenChange={setSchedulingLinkOpen}
+      />
+
+      <BookCalendlyDialog
+        target={{ kind: 'matter', id: matterId }}
+        open={bookForClientOpen}
+        onOpenChange={setBookForClientOpen}
+      />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
