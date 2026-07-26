@@ -5,7 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* --font-sans and --font-serif are injected by next/font in app/layout.tsx (DM Sans + Lora). */
+  /* --font-sans (DM Sans) and --font-lora (Lora) are injected by next/font in app/layout.tsx.
+     Note: Tailwind's `font-serif` utility resolves via the theme bridge, which points at the
+     sans stack — use var(--font-lora) directly when you actually want the serif face. */
   --font-inter: var(--font-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -21,6 +23,10 @@
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+  .admin-root {
+    font-size: 13px;
+    line-height: 1.5;
   }
 }
 

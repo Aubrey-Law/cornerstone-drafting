@@ -171,10 +171,6 @@ function DesignSheetShellImpl({
       : { status: 'none', detail: 'no intake data' },
   }), [intakeSnapshot, sectionSummaries])
 
-  const pct = readinessTotal > 0
-    ? Math.round((readinessCompletedCount / readinessTotal) * 100)
-    : 0
-
   const lastName = (sheet.client_name ?? matter.client_name ?? '').trim().split(/\s+/).pop() ?? ''
   const includesTrust = documentInclusions.trust
 
@@ -325,6 +321,33 @@ function DesignSheetShellImpl({
   const allBlockers = useMemo(() => blockerDetails.flatMap(group => group.blockers), [blockerDetails])
   const nextRequired = findNextUnresolvedBlocker(allBlockers, resolvedSectionId)
 
+  const introSubtitle = `${readinessCompletedCount} of ${readinessTotal} sections done · ${allBlockers.length} item${allBlockers.length === 1 ? '' : 's'} need${allBlockers.length === 1 ? 's' : ''} a decision. Nothing blocks drafting.`
+
+  const accelerationControls = (variant: 'slim' | 'inline') => (
+    <DesignAccelerationBar
+      sheet={sheet}
+      updateField={updateField}
+      documentInclusions={documentInclusions}
+      nextRequired={nextRequired}
+      onNextRequired={(blocker) => navigateToSection(blocker.sectionId, blocker)}
+      showLayoutControls={false}
+      attorneyPreset={attorneyPreset}
+      onAttorneyPresetChange={handleAttorneyPresetChange}
+      variant={variant}
+    />
+  )
+
+  // Autosave owns persistence; Cmd/Ctrl+S stays wired as a manual fallback.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return
+      event.preventDefault()
+      handleSave()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleSave])
+
   return (
     <SharedFieldsProvider>
     <DesignValidationProvider value={validationValue}>
@@ -365,6 +388,7 @@ function DesignSheetShellImpl({
               dirtyLabel="Unsaved changes"
               actions={(
                 <DesignToolbarActions
+                  collapsed
                   onClonePlan={() => setCloneDialogOpen(true)}
                   onImport={() => setImportDialogOpen(true)}
                   onSave={handleSave}
@@ -374,7 +398,7 @@ function DesignSheetShellImpl({
                   exporting={exporting}
                   pending={isPending}
                   saveDirty={saveStatus === 'dirty'}
-                  showSave={saveStatus !== 'saved'}
+                  showSave={false}
                 />
               )}
             />
@@ -394,16 +418,7 @@ function DesignSheetShellImpl({
                 onScroll={handlePageScroll}
                 style={{ flex: 3, minWidth: 'min(520px, 100%)', display: 'flex', flexDirection: 'column', gap: 18, ...(embedded ? { minHeight: 0, overflowY: 'auto' } : {}) }}
               >
-                <DesignAccelerationBar
-                  sheet={sheet}
-                  updateField={updateField}
-                  documentInclusions={documentInclusions}
-                  nextRequired={nextRequired}
-                  onNextRequired={(blocker) => navigateToSection(blocker.sectionId, blocker)}
-                  showLayoutControls={false}
-                  attorneyPreset={attorneyPreset}
-                  onAttorneyPresetChange={handleAttorneyPresetChange}
-                />
+                {activeSection && accelerationControls('slim')}
                 {activeSection ? (
                   <DesignSectionPageView
                     section={activeSection}
@@ -422,22 +437,21 @@ function DesignSheetShellImpl({
                 ) : (
                   <DesignSectionOverview
                     title={introTitle}
-                    subtitle="Open one section at a time. Missing fields are flagged as you go but never block drafting — your selections control which drafts are produced."
-                    pct={pct}
+                    subtitle={introSubtitle}
+                    actions={accelerationControls('inline')}
                     groupedSections={groupedSections}
                     summaries={summaries}
                     summarySections={summarySections}
                     sectionHref={sectionHref}
                   />
                 )}
-                {!activeSection && (
+                {!activeSection && readinessComplete && (
                   <DesignFinalReview
                     sheet={sheet}
                     selectedDocKeys={selectedDocKeys}
                     blockerDetails={blockerDetails}
                     pendingFiduciaries={pendingFiduciaries}
                     readinessComplete={readinessComplete}
-                    onBlockerClick={(blocker) => navigateToSection(blocker.sectionId, blocker)}
                     onGenerate={onOpenDrafting}
                     attorneyPreset={attorneyPreset}
                   />
@@ -460,7 +474,6 @@ function DesignSheetShellImpl({
                   readinessTotal={readinessTotal}
                   blockerDetails={blockerDetails}
                   onSectionClick={navigateToSection}
-                  onBlockerClick={(blocker) => navigateToSection(blocker.sectionId, blocker)}
                   onGenerate={onOpenDrafting}
                   generateLabel="Generate drafts →"
                   pendingFiduciaries={pendingFiduciaries}
@@ -483,7 +496,6 @@ function DesignSheetShellImpl({
                 readinessTotal={readinessTotal}
                 blockerDetails={blockerDetails}
                 onSectionClick={navigateToSection}
-                onBlockerClick={(blocker) => navigateToSection(blocker.sectionId, blocker)}
                 onGenerate={onOpenDrafting}
                 generateLabel="Generate drafts →"
                 pendingFiduciaries={pendingFiduciaries}

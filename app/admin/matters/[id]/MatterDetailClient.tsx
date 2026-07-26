@@ -175,7 +175,7 @@ export default function MatterDetailClient(props: MatterDetailClientProps) {
 
 function MatterDetailShell({ matter }: MatterDetailClientProps) {
   return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
+    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-4 md:px-6">
         <h1 className="text-xl font-semibold tracking-tight">
           {matter.client_name || matter.matter_name || 'Matter'}
@@ -818,7 +818,7 @@ function MatterDetailClientInner({
       : 'border-green/40 bg-green-bg text-green'
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-[13px] text-foreground md:-mx-6 md:-mb-6">
+    <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-4 md:px-8">
         <div className="w-full">
         <div className="mb-3">

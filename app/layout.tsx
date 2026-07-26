@@ -11,10 +11,13 @@ const dmSans = DM_Sans({
   variable: '--font-sans',
 })
 
+// Exposed as `--font-lora`, not `--font-serif`: the Tailwind theme bridge
+// (styles/theme/tailwind-bridge.css) maps `--font-serif` to the sans stack, so
+// anything injected under that name is shadowed and never renders.
 const lora = Lora({
   subsets: ['latin'],
   display: 'swap',
-  variable: '--font-serif',
+  variable: '--font-lora',
 })
 
 export const viewport: Viewport = {

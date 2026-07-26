@@ -15,12 +15,11 @@ export interface DesignFinalReviewProps {
   blockerDetails: Array<{ id: string; label: string; blockers: DesignReadinessBlocker[] }>
   pendingFiduciaries: string[]
   readinessComplete: boolean
-  onBlockerClick: (blocker: DesignReadinessBlocker) => void
   onGenerate?: () => void
   attorneyPreset: AttorneyDesignPreset | null
 }
 
-export function DesignFinalReview({ sheet, selectedDocKeys, blockerDetails, pendingFiduciaries, readinessComplete, onBlockerClick, onGenerate, attorneyPreset }: DesignFinalReviewProps) {
+export function DesignFinalReview({ sheet, selectedDocKeys, blockerDetails, pendingFiduciaries, readinessComplete, onGenerate, attorneyPreset }: DesignFinalReviewProps) {
   const intakeOverrides = Object.keys(sheet.overrides ?? {})
   const appliedPresetFields = attorneyPreset
     ? Object.entries(attorneyPreset.fields)
@@ -47,13 +46,6 @@ export function DesignFinalReview({ sheet, selectedDocKeys, blockerDetails, pend
         <div><p className="font-semibold text-foreground">Applied standards</p><p className="mt-1 text-muted-foreground">{list(appliedPresetFields)}</p></div>
         <div><p className="font-semibold text-foreground">Pending client</p><p className="mt-1 text-muted-foreground">{list(pendingFiduciaries)}</p></div>
       </div>
-      {!readinessComplete && (
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {blockers.map(blocker => (
-            <button key={blocker.id} type="button" onClick={() => onBlockerClick(blocker)} className="rounded-full border border-warning/40 bg-warning/5 px-2.5 py-1 text-[11px] hover:bg-warning/10">{blocker.label}</button>
-          ))}
-        </div>
-      )}
       {onGenerate && <Button className="mt-4 w-full" disabled={!readinessComplete} onClick={onGenerate}>Generate drafts →</Button>}
     </section>
   )
