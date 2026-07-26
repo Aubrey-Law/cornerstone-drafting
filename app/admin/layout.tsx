@@ -41,13 +41,15 @@ export default async function AdminLayout({
 
   return (
     <AuthTokenProvider>
-      <AdminLayoutClient
-        userName={userName}
-        userInitials={userInitials}
-        voiceEnabled={isVoiceConfigured()}
-      >
-        {children}
-      </AdminLayoutClient>
+      <div className="admin-root">
+        <AdminLayoutClient
+          userName={userName}
+          userInitials={userInitials}
+          voiceEnabled={isVoiceConfigured()}
+        >
+          {children}
+        </AdminLayoutClient>
+      </div>
     </AuthTokenProvider>
   )
 }
