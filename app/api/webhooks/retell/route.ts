@@ -18,32 +18,8 @@ type ExistingCall = RetellCallRowInsert & {
   lead_id?: string | null
 }
 
-function mergeCallRow(
-  existing: ExistingCall | null,
-  incoming: RetellCallRowInsert,
-): RetellCallRowInsert {
-  if (!existing) return incoming
-
-  return {
-    ...incoming,
-    firm_user_email: incoming.firm_user_email ?? existing.firm_user_email,
-    firm_user_id: incoming.firm_user_id ?? existing.firm_user_id,
-    answered_at: incoming.answered_at ?? existing.answered_at,
-    ended_at: incoming.ended_at ?? existing.ended_at,
-    duration_seconds: incoming.duration_seconds ?? existing.duration_seconds,
-    recording_url: incoming.recording_url ?? existing.recording_url,
-    voicemail_url: incoming.voicemail_url ?? existing.voicemail_url,
-    transcript: incoming.transcript ?? existing.transcript,
-    summary: incoming.summary ?? existing.summary,
-    started_at: existing.started_at || incoming.started_at,
-    raw_payload: {
-      ...(typeof existing.raw_payload === 'object' && existing.raw_payload
-        ? existing.raw_payload
-        : {}),
-      ...incoming.raw_payload,
-    },
-  }
-}
+// The former mergeCallRow() lived here. It is now public.upsert_retell_call in
+// migration 20260814000001 — merging in SQL is what makes concurrent events safe.
 
 export async function POST(req: Request) {
   const apiKey = process.env.RETELL_API_KEY?.trim()
@@ -80,43 +56,52 @@ export async function POST(req: Request) {
 
   const admin = getAdminClient()
 
-  const { data: existing } = await admin
-    .from('calls')
-    .select(
-      'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload, matter_id, lead_id',
-    )
-    .eq('external_call_id', row.external_call_id)
-    .maybeSingle()
+  // Merge column-wise inside ON CONFLICT rather than read-modify-write here.
+  // Two events for the same call (call_ended + call_analyzed, or a provider
+  // retry racing itself) both used to read the same pre-write row, so whichever
+  // wrote last reinstated the other's fields as null — losing the recording of a
+  // client intake call. The RPC evaluates COALESCE against the current row under
+  // the conflict's row lock, so neither event can clobber the other.
+  const { data, error } = await admin.rpc('upsert_retell_call', { p_call: row })
 
-  if (existing && existing.provider && existing.provider !== 'retell') {
-    console.error('[retell] external_call_id owned by another provider', {
-      callId: row.external_call_id,
-      provider: existing.provider,
-    })
-    return NextResponse.json({ error: 'call id conflict' }, { status: 409 })
-  }
-
-  const existingRow = existing as ExistingCall | null
-  const merged = mergeCallRow(existingRow, row)
-
-  const { data: savedCall, error } = await admin
-    .from('calls')
-    .upsert(merged, { onConflict: 'external_call_id' })
-    .select('matter_id, lead_id')
-    .single()
   if (error) {
     console.error('[retell] upsert error', { callId: row.external_call_id, error })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  const result = (Array.isArray(data) ? data[0] : data) as
+    | { matter_id: string | null; lead_id: string | null; previous_summary: string | null; conflict: boolean }
+    | undefined
+
+  if (!result) {
+    return NextResponse.json({ error: 'call upsert returned no row' }, { status: 500 })
+  }
+
+  if (result.conflict) {
+    console.error('[retell] external_call_id owned by another provider', {
+      callId: row.external_call_id,
+    })
+    return NextResponse.json({ error: 'call id conflict' }, { status: 409 })
+  }
+
   if (payload.event === 'call_analyzed') {
+    // Read back the merged row so the notification sees the same complete state
+    // the database now holds (e.g. a recording_url that arrived on call_ended).
+    const { data: mergedRow } = await admin
+      .from('calls')
+      .select(
+        'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload, matter_id, lead_id',
+      )
+      .eq('external_call_id', row.external_call_id)
+      .maybeSingle()
+
     await notifyRetellCallAnalyzed(
       retellRowToNotifyInput({
-        ...merged,
-        matter_id: savedCall?.matter_id ?? existingRow?.matter_id ?? null,
-        lead_id: savedCall?.lead_id ?? existingRow?.lead_id ?? null,
+        ...(mergedRow as ExistingCall | null ?? row),
+        matter_id: result.matter_id,
+        lead_id: result.lead_id,
       }),
-      { previousSummary: existingRow?.summary ?? null },
+      { previousSummary: result.previous_summary ?? null },
     )
   }
 
