@@ -19,6 +19,7 @@
     "clauses:import": "tsx scripts/import-estate-clauses.ts",
     "prebuild:next": "npm run theme:generate",
     "validate-env": "node scripts/validateEnv.mjs",
+    "check:db-rpcs": "node scripts/checkDbRpcs.mjs",
     "supabase": "supabase",
     "supabase:status": "supabase status",
     "supabase:db:push": "supabase db push"
