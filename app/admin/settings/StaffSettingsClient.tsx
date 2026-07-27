@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { AiUsagePanel } from './AiUsagePanel'
 import { EmailSettingsSection } from './EmailSettingsSection'
 import { SchedulingSettingsSection } from './SchedulingSettingsSection'
+import { CalendlyLinksSection } from './CalendlyLinksSection'
 import { PipelineSlaSettings } from './PipelineSlaSettings'
 import { TemplateCenter } from './TemplateCenter'
 
@@ -656,7 +657,12 @@ export function StaffSettingsClient({
 
       {tab === 'email' && <EmailSettingsSection />}
 
-      {tab === 'scheduling' && <SchedulingSettingsSection />}
+      {tab === 'scheduling' && (
+        <div className="space-y-6">
+          <SchedulingSettingsSection />
+          <CalendlyLinksSection />
+        </div>
+      )}
 
       {tab === 'templates' && isAdministrator && <TemplateCenter currentUserId={currentUserId} />}
 

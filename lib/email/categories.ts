@@ -10,6 +10,7 @@ export const EMAIL_CATEGORIES = [
   'appointment_booked_alert',
   'appointment_reminder',
   'appointment_missed_followup',
+  'scheduling_link',
   'manual',
 ] as const
 
@@ -95,6 +96,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'appointment_missed_followup',
     label: 'Missed appointment follow-up',
     description: 'Sent to a client after staff marks an appointment as a no-show, with a rebook link.',
+    recipient: 'client',
+  },
+  scheduling_link: {
+    category: 'scheduling_link',
+    label: 'Scheduling link',
+    description: 'Sent to a client or lead with a Calendly link to book an appointment.',
     recipient: 'client',
   },
   manual: {

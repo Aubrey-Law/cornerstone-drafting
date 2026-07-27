@@ -33,6 +33,7 @@ interface PutBody {
     smsRemindersEnabled?: unknown
     autoIntakeInvite?: unknown
     dateOverrides?: unknown
+    calendlyUrls?: unknown
   }
   types?: Array<{
     id?: unknown
@@ -87,6 +88,7 @@ export async function PUT(req: NextRequest) {
         typeof s.smsRemindersEnabled === 'boolean' ? s.smsRemindersEnabled : undefined,
       autoIntakeInvite: typeof s.autoIntakeInvite === 'boolean' ? s.autoIntakeInvite : undefined,
       dateOverrides: 'dateOverrides' in s ? s.dateOverrides : undefined,
+      calendlyUrls: s.calendlyUrls,
       updatedBy: userId ?? null,
     })
   }

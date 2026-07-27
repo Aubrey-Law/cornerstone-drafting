@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { useMessagesRealtime, type RealtimeMessageRow } from '@/lib/messages/useMessagesRealtime'
+import { linkifyText } from '@/lib/linkify'
 import { Send } from 'lucide-react'
 
 const firm = getFirmConfig()
@@ -183,7 +184,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
                         : 'rounded-bl-sm bg-muted text-foreground',
                     )}
                   >
-                    {message.body}
+                    {linkifyText(message.body)}
                   </div>
                   <span className="px-1 text-[11px] text-muted-foreground">
                     {formatTime(message.created_at)}
