@@ -2,20 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { sendEmail } from '@/lib/email/send'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import {
+  emailTemplateHtmlToText,
+  sanitizeEmailHtml,
+  textToEmailHtml,
+} from '@/lib/email/templateShared'
 
 type Params = { params: Promise<{ id: string }> }
-
-function escapeHtml(text: string) {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { err, userId } = await requireAdmin(req)
   if (err) return err
   const { id } = await params
-  const body = await req.json().catch(() => null) as { subject?: unknown; text?: unknown } | null
+  const body = await req.json().catch(() => null) as {
+    subject?: unknown
+    text?: unknown
+    html?: unknown
+  } | null
   const subject = typeof body?.subject === 'string' ? body.subject.trim() : ''
-  const text = typeof body?.text === 'string' ? body.text.trim() : ''
+  const suppliedHtml = typeof body?.html === 'string' ? sanitizeEmailHtml(body.html).trim() : ''
+  const suppliedText = typeof body?.text === 'string' ? body.text.trim() : ''
+  const text = suppliedText || emailTemplateHtmlToText(suppliedHtml)
+  const html = suppliedHtml || textToEmailHtml(text)
   if (!subject || !text) {
     return NextResponse.json({ error: 'Subject and message are required' }, { status: 400 })
   }
@@ -37,7 +45,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     to,
     subject,
     text,
-    html: `<div style="white-space:pre-wrap">${escapeHtml(text)}</div>`,
+    html,
     useStoredTemplate: false,
     userId,
   })

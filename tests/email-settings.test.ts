@@ -18,6 +18,9 @@ describe('email settings and templates', () => {
     expect(send).toContain('getDefaultEmailTemplate')
     expect(send).toContain('applyEmailTemplate')
     expect(send).toContain('email_log')
+    expect(send).toContain("input.html !== undefined ? { html: input.html }")
+    const graph = fs.readFileSync(path.join(process.cwd(), 'lib/email/graphSend.ts'), 'utf8')
+    expect(graph).toContain("contentType: args.html ? 'HTML' : 'Text'")
   })
 
   it('exposes admin email settings API and UI tab', () => {

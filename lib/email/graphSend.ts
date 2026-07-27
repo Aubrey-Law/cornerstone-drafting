@@ -61,11 +61,11 @@ export async function sendViaGraph(args: GraphSendArgs): Promise<GraphSendResult
     )
   }
 
-  const bodyContent = args.text ?? args.html ?? ''
+  const bodyContent = args.html ?? args.text ?? ''
   const message = {
     message: {
       subject: args.subject,
-      body: { contentType: args.text ? 'Text' : 'HTML', content: bodyContent },
+      body: { contentType: args.html ? 'HTML' : 'Text', content: bodyContent },
       toRecipients: [recipient(args.to)],
       ccRecipients: args.cc && args.cc.length > 0 ? args.cc.map(recipient) : undefined,
       replyTo: args.replyTo ? [recipient(args.replyTo)] : undefined,
