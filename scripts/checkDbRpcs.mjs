@@ -86,7 +86,9 @@ async function fetchExposedRpcs(url, key) {
 loadEnvFile('.env.local')
 loadEnvFile('.env')
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+// SUPABASE_URL is accepted too: the NEXT_PUBLIC_ prefix is meaningless in CI,
+// where nothing is being bundled for a browser.
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const called = collectCalledRpcs()

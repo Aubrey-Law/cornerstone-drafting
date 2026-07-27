@@ -1,0 +1,49 @@
+name: Database RPC check
+
+# Verifies every Supabase RPC the app calls is actually resolvable.
+#
+# The scheduled run is the important one. The outage this guards against was not
+# caused by a code change — migration 20260812000000 was recorded as applied
+# while its SQL never executed, so the database lost two functions on its own and
+# nobody noticed until a lead edit failed in production. A pull_request trigger
+# alone would never have caught that; a daily run does.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 12:00 UTC on weekdays — early morning ET, before the workday starts.
+    - cron: '0 12 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-rpc-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rpc-drift:
+    name: RPCs called in code exist in the database
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # No `npm ci`: the script imports only node builtins and global fetch.
+      - name: Flag missing credentials
+        if: env.SUPABASE_SERVICE_ROLE_KEY == '' || env.NEXT_PUBLIC_SUPABASE_URL == ''
+        run: |
+          echo "::warning::Supabase secrets are not set, so the check will skip without verifying anything. Add the SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY repository secrets to enable it."
+
+      - name: Check RPCs
+        run: node scripts/checkDbRpcs.mjs
