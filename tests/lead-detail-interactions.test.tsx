@@ -147,12 +147,27 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)
     expect(screen.getAllByText('Lead · day 4')).toHaveLength(1)
     expect(screen.getByText('Estate Planning · Referral · 617 · jane@example.com')).toBeTruthy()
+    expect(screen.getByRole('button',{name:'Email'})).toBeTruthy()
+    expect(screen.getByRole('button',{name:'Text'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'Resume engagement'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'Hire matter'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'Mark lost'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'More actions'})).toBeTruthy()
     expect(screen.queryByRole('combobox')).toBeNull()
     expect(screen.queryByText(/Last touch/)).toBeNull()
+  })
+
+  it('opens one-off email and text composers with the lead contact details', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ok:true,json:async()=>({templates:[]})} as Response)
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    await user.click(screen.getByRole('button', { name: 'Email' }))
+    expect((await screen.findByRole('dialog')).textContent).toContain('jane@example.com')
+    expect(screen.getByLabelText('Template')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await user.click(screen.getByRole('button', { name: 'Text' }))
+    expect((await screen.findByRole('dialog')).textContent).toContain('617')
+    expect(screen.getByLabelText('Text message')).toBeTruthy()
   })
 
   it('renders the optional last-touch pill only when the timestamp prop is supplied', () => {
@@ -534,7 +549,7 @@ describe('lead detail page', () => {
     )
 
     expect(screen.queryByRole('button', { name: 'Call' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Email' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Email' })).toHaveLength(2)
 
     rerender(
       <LeadDetailClient
