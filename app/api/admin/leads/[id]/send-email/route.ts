@@ -10,13 +10,6 @@ import {
 
 type Params = { params: Promise<{ id: string }> }
 
-
-type Params = { params: Promise<{ id: string }> }
-
-function escapeHtml(text: string) {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
 export async function POST(req: NextRequest, { params }: Params) {
   const { err, userId } = await requireAdmin(req)
   if (err) return err
@@ -31,9 +24,6 @@ export async function POST(req: NextRequest, { params }: Params) {
   const suppliedText = typeof body?.text === 'string' ? body.text.trim() : ''
   const text = suppliedText || emailTemplateHtmlToText(suppliedHtml)
   const html = suppliedHtml || textToEmailHtml(text)
-  const body = await req.json().catch(() => null) as { subject?: unknown; text?: unknown } | null
-  const subject = typeof body?.subject === 'string' ? body.subject.trim() : ''
-  const text = typeof body?.text === 'string' ? body.text.trim() : ''
   if (!subject || !text) {
     return NextResponse.json({ error: 'Subject and message are required' }, { status: 400 })
   }
@@ -56,7 +46,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     subject,
     text,
     html,
-    html: `<div style="white-space:pre-wrap">${escapeHtml(text)}</div>`,
     useStoredTemplate: false,
     userId,
   })

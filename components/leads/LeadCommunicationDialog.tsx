@@ -16,7 +16,6 @@ import {
 } from '@/components/admin/RichTextEmailEditor'
 import {
   renderEmailTemplateBodyHtml, renderEmailTemplateText,
-  renderEmailTemplateBodyText, renderEmailTemplateText,
 } from '@/lib/email/templateShared'
 
 type Template = {
@@ -89,10 +88,6 @@ export function LeadCommunicationDialog(props: Props) {
     }
     setSubject(renderEmailTemplateText(template.subject, variables))
     setMessageHtml(renderEmailTemplateBodyHtml(template.body, variables))
-      lead_name: props.clientName,
-    }
-    setSubject(renderEmailTemplateText(template.subject, variables))
-    setMessage(renderEmailTemplateBodyText(template.body, variables))
   }
 
   async function send() {
@@ -109,7 +104,6 @@ export function LeadCommunicationDialog(props: Props) {
               text: emailHtmlToText(messageHtml),
               html: messageHtml,
             }
-          ? { subject: subject.trim(), text: message.trim() }
           : { body: message.trim() }),
       })
       const body = await response.json().catch(() => ({}))
@@ -127,7 +121,6 @@ export function LeadCommunicationDialog(props: Props) {
   const ready = email
     ? Boolean(subject.trim()) && !emailHtmlIsEmpty(messageHtml)
     : Boolean(message.trim())
-  const ready = message.trim() && (!email || subject.trim())
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -179,14 +172,6 @@ export function LeadCommunicationDialog(props: Props) {
                 <p className="text-right text-xs text-muted-foreground">{message.length}/1600</p>
               </>
             )}
-            <Textarea
-              id="lead-communication-body"
-              className="min-h-40"
-              maxLength={email ? undefined : 1600}
-              value={message}
-              onChange={event => setMessage(event.target.value)}
-            />
-            {!email && <p className="text-right text-xs text-muted-foreground">{message.length}/1600</p>}
           </div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </div>
