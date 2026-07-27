@@ -32,6 +32,7 @@ import {
 import { LeadDetailsCard } from '@/components/leads/LeadDetailsCard'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
+import { LeadCommunicationDialog } from '@/components/leads/LeadCommunicationDialog'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import { LeadIntakeCard } from './LeadIntakeCard'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
@@ -191,6 +192,7 @@ export function LeadDetailClient({
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
   const [bookForClientOpen, setBookForClientOpen] = useState(false)
+  const [communicationChannel, setCommunicationChannel] = useState<'email' | 'sms' | null>(null)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const [sendingIntake, setSendingIntake] = useState(false)
@@ -407,7 +409,7 @@ export function LeadDetailClient({
           window.dispatchEvent(new Event(OPEN_STAFF_SOFTPHONE_EVENT))
           return
         case 'email':
-          window.location.assign(`mailto:${lead.email ?? ''}`)
+          setCommunicationChannel('email')
           return
         case 'snooze':
           await snoozeNextAction(new Date(Date.now() + 7 * DAY_MS).toISOString())
@@ -543,6 +545,10 @@ export function LeadDetailClient({
             onStatusChange={handleTopStatusChange}
             onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
             onBookForClient={() => setBookForClientOpen(true)}
+            onEmail={() => setCommunicationChannel('email')}
+            onText={() => setCommunicationChannel('sms')}
+            hasEmail={Boolean(lead.email?.trim())}
+            hasPhone={Boolean(lead.phone?.trim())}
           />
         </div>
       </header>
@@ -620,6 +626,24 @@ export function LeadDetailClient({
         target={{ kind: 'lead', id: lead.id }}
         open={bookForClientOpen}
         onOpenChange={setBookForClientOpen}
+      />
+      <LeadCommunicationDialog
+        open={communicationChannel !== null}
+        channel={communicationChannel ?? 'email'}
+        leadId={lead.id}
+        clientName={clientName}
+        clientFirstName={lead.preferred_name?.trim() || lead.first_name?.trim() || clientName}
+        email={lead.email ?? ''}
+        phone={lead.phone ?? ''}
+        token={token}
+        onOpenChange={open => {
+          if (!open) setCommunicationChannel(null)
+        }}
+        onSent={async () => {
+          toast.success(communicationChannel === 'sms' ? 'Text sent' : 'Email sent')
+          recordTouch(new Date().toISOString())
+          await refreshActivityBestEffort()
+        }}
       />
 
       {intakeSheetOpen && (

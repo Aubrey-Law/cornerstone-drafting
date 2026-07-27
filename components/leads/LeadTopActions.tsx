@@ -24,6 +24,10 @@ type Props = {
   onStatusChange: (status: MutableLeadStatus) => void
   onSendSchedulingLink: () => void
   onBookForClient: () => void
+  onEmail: () => void
+  onText: () => void
+  hasEmail: boolean
+  hasPhone: boolean
 }
 
 export function LeadTopActions({
@@ -39,6 +43,10 @@ export function LeadTopActions({
   onStatusChange,
   onSendSchedulingLink,
   onBookForClient,
+  onEmail,
+  onText,
+  hasEmail,
+  hasPhone,
 }: Props) {
   const active = status === 'lead'
   const hired = status === 'hired'
@@ -48,6 +56,12 @@ export function LeadTopActions({
   return (
     <div className="space-y-2">
       <div aria-label="Lead actions" className="flex flex-wrap items-center justify-end gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={onEmail} disabled={busy || !hasEmail}>
+          Email
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onText} disabled={busy || !hasPhone}>
+          Text
+        </Button>
         <Button
           type="button"
           size="sm"
