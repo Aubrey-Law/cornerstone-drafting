@@ -170,6 +170,63 @@ describe('lead detail page', () => {
     expect(screen.getByLabelText('Text message')).toBeTruthy()
   })
 
+  it('preserves template links and resolves first_name when sending lead email', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
+      configurable: true,
+      value: () => false,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+      configurable: true,
+      value: () => undefined,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: () => undefined,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url.includes('/settings/email/templates')) {
+        return {
+          ok: true,
+          json: async () => ({
+            templates: [{
+              id: 'welcome',
+              name: 'Welcome',
+              subject: 'Welcome {{first_name}}',
+              body: '<p>Hi {{first_name}},</p><p><a href="https://example.com/intake">Open intake</a></p>',
+            }],
+          }),
+        } as Response
+      }
+      if (url.endsWith('/activity')) {
+        return { ok: true, json: async () => ({ activity: [] }) } as Response
+      }
+      if (init?.method === 'POST') {
+        return { ok: true, json: async () => ({ success: true }) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Email' }))
+    await user.click(screen.getByLabelText('Template'))
+    await user.click(await screen.findByRole('option', { name: 'Welcome' }))
+
+    expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('Welcome Jane')
+    const editor = screen.getByRole('textbox', { name: 'Message' })
+    expect(editor.innerHTML).toContain('Hi Jane')
+    expect(editor.innerHTML).toContain('href="https://example.com/intake"')
+
+    await user.click(screen.getByRole('button', { name: 'Send email' }))
+    const sendCall = fetchMock.mock.calls.find(([input, init]) =>
+      String(input).endsWith('/send-email') && init?.method === 'POST')
+    expect(JSON.parse(String(sendCall?.[1]?.body))).toMatchObject({
+      subject: 'Welcome Jane',
+      html: expect.stringContaining('href="https://example.com/intake"'),
+    })
+  })
+
   it('renders the optional last-touch pill only when the timestamp prop is supplied', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(

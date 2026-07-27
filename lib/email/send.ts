@@ -100,7 +100,7 @@ async function attemptResend(input: ResendAttemptInput): Promise<AttemptResult> 
       from: input.from,
       to: input.to,
       subject: input.subject,
-      ...(input.text !== undefined ? { text: input.text } : { html: input.html ?? '' }),
+      ...(input.html !== undefined ? { html: input.html } : { text: input.text ?? '' }),
       ...(input.isRedirect ? {} : input.ccList && input.ccList.length > 0 ? { cc: input.ccList } : {}),
       ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     })
