@@ -231,6 +231,12 @@ Optional: **Settings → Environment Variables** → **Enable access to System E
 
 ---
 
+## After applying database migrations
+
+Run `npm run check:db-rpcs` (needs `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`). It cross-checks every Supabase RPC the app calls against what PostgREST can actually resolve, and exits non-zero listing the call sites of anything missing.
+
+Worth running because migration history is not proof of application: a row in `supabase_migrations.schema_migrations` can exist even though its SQL never executed, and `supabase db push` then skips that migration forever. That is exactly how `update_lead_opportunity_field` went missing while every inline lead edit failed in production with `PGRST202`.
+
 ## Not used in this app
 
 - Lawmatics, DocuSeal / SignWell
