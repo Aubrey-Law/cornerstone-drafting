@@ -10,6 +10,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  emailHtmlIsEmpty,
+  emailHtmlToText,
+  RichTextEmailEditor,
+} from '@/components/admin/RichTextEmailEditor'
+import {
+  renderEmailTemplateBodyHtml, renderEmailTemplateText,
   renderEmailTemplateBodyText, renderEmailTemplateText,
 } from '@/lib/email/templateShared'
 
@@ -38,6 +44,7 @@ export function LeadCommunicationDialog(props: Props) {
   const [templateId, setTemplateId] = useState('none')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
+  const [messageHtml, setMessageHtml] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,6 +66,7 @@ export function LeadCommunicationDialog(props: Props) {
       setTemplateId('none')
       setSubject('')
       setMessage('')
+      setMessageHtml('')
       setError(null)
     }
   }, [props.open])
@@ -68,6 +76,7 @@ export function LeadCommunicationDialog(props: Props) {
     if (id === 'none') {
       setSubject('')
       setMessage('')
+      setMessageHtml('')
       return
     }
     const template = templates.find(row => row.id === id)
@@ -75,6 +84,11 @@ export function LeadCommunicationDialog(props: Props) {
     const variables = {
       client_name: props.clientName,
       client_first_name: props.clientFirstName,
+      first_name: props.clientFirstName,
+      lead_name: props.clientName,
+    }
+    setSubject(renderEmailTemplateText(template.subject, variables))
+    setMessageHtml(renderEmailTemplateBodyHtml(template.body, variables))
       lead_name: props.clientName,
     }
     setSubject(renderEmailTemplateText(template.subject, variables))
@@ -90,6 +104,11 @@ export function LeadCommunicationDialog(props: Props) {
         method: 'POST',
         headers: { Authorization: `Bearer ${props.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(props.channel === 'email'
+          ? {
+              subject: subject.trim(),
+              text: emailHtmlToText(messageHtml),
+              html: messageHtml,
+            }
           ? { subject: subject.trim(), text: message.trim() }
           : { body: message.trim() }),
       })
@@ -105,6 +124,9 @@ export function LeadCommunicationDialog(props: Props) {
   }
 
   const email = props.channel === 'email'
+  const ready = email
+    ? Boolean(subject.trim()) && !emailHtmlIsEmpty(messageHtml)
+    : Boolean(message.trim())
   const ready = message.trim() && (!email || subject.trim())
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -136,6 +158,27 @@ export function LeadCommunicationDialog(props: Props) {
           )}
           <div className="space-y-1.5">
             <Label htmlFor="lead-communication-body">{email ? 'Message' : 'Text message'}</Label>
+            {email ? (
+              <RichTextEmailEditor
+                id="lead-communication-body"
+                ariaLabel="Message"
+                valueHtml={messageHtml}
+                onChange={setMessageHtml}
+                disabled={sending}
+                placeholder="Write your message"
+              />
+            ) : (
+              <>
+                <Textarea
+                  id="lead-communication-body"
+                  className="min-h-40"
+                  maxLength={1600}
+                  value={message}
+                  onChange={event => setMessage(event.target.value)}
+                />
+                <p className="text-right text-xs text-muted-foreground">{message.length}/1600</p>
+              </>
+            )}
             <Textarea
               id="lead-communication-body"
               className="min-h-40"
