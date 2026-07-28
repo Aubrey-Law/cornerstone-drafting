@@ -15,7 +15,7 @@ export default async function LeadsPage() {
     .select(
       // The record side panel edits the same fields as the lead detail rail, so
       // the list loads the full detail shape rather than adding a lead API.
-      'id, full_name, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth, address_line1, address_line2, city, state, zip, county, marital_status, qualification_notes, has_minor_children, lead_source, practice_area, status, lead_status, matter_id, intake_status, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_urgency, taxable_estate, lead_next_action_snoozed_until, user_id, client_user_id, created_at, updated_at',
+      'id, full_name, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth, address_line1, address_line2, city, state, zip, county, marital_status, qualification_notes, has_minor_children, lead_source, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_urgency, taxable_estate, lead_next_action_snoozed_until, user_id, client_user_id, created_at, updated_at',
     )
     .not('lead_status', 'is', null)
     .order('created_at', { ascending: false })
