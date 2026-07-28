@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -35,7 +35,8 @@ import { Button } from '@/components/ui/button'
 import { SearchField } from '@/components/SearchField'
 import { PageHeader } from '@/components/PageHeader'
 import { FilterChip } from '@/components/FilterChip'
-import type { LeadListRow } from '@/lib/leads/viewTypes'
+import type { LeadListRow, LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import { LeadSidePanel } from '@/components/leads/LeadSidePanel'
 import { apiRequest } from '@/lib/clientApi'
 import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
 import { LeadEditorDialog, type LeadEditorForm } from '@/components/leads/LeadEditorDialog'
@@ -91,13 +92,17 @@ function matchesFilter(lead: LeadRow, filter: LeadFilter): boolean {
 
 export function LeadsClient({
   initialLeads,
+  spouses = {},
   esignEnabled,
 }: {
   initialLeads: LeadRow[]
+  spouses?: Record<string, LeadSpouseRecord>
   esignEnabled: boolean
 }) {
   const token = useAccessToken()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingLead, setEditingLead] = useState<LeadRow | null>(null)
   const [saving, setSaving] = useState(false)
@@ -130,6 +135,49 @@ export function LeadsClient({
     () => filterAndSortLeads(baseLeads, tableFilters, sortKey),
     [baseLeads, tableFilters, sortKey],
   )
+
+  const [openMenuLeadId, setOpenMenuLeadId] = useState<string | null>(null)
+  // Selection lives in the URL so the panel survives a refresh; local state
+  // mirrors it so a click opens the panel without a router round trip.
+  const urlLeadId = searchParams?.get('lead') ?? null
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(urlLeadId)
+  useEffect(() => { setSelectedLeadId(urlLeadId) }, [urlLeadId])
+  const selectedLead = useMemo(
+    () => filteredLeads.find(lead => lead.id === selectedLeadId) ?? null,
+    [filteredLeads, selectedLeadId],
+  )
+
+  const selectLead = useCallback((leadId: string | null) => {
+    setSelectedLeadId(leadId)
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    if (leadId) params.set('lead', leadId)
+    else params.delete('lead')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? ''), { scroll: false })
+  }, [pathname, router, searchParams])
+
+  const openFullRecord = useCallback(() => {
+    if (selectedLeadId) router.push(`/admin/leads/${selectedLeadId}`)
+  }, [router, selectedLeadId])
+
+  useEffect(() => {
+    if (!selectedLead) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      const target = event.target
+      if (target instanceof HTMLElement
+        && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      const index = filteredLeads.findIndex(lead => lead.id === selectedLead!.id)
+      if (index === -1) return
+      const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1
+      const next = filteredLeads[nextIndex]
+      if (!next) return
+      event.preventDefault()
+      selectLead(next.id)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [filteredLeads, selectLead, selectedLead])
 
   const hasTableFilters = Boolean(
     tableFilters.search.trim()
@@ -463,21 +511,40 @@ export function LeadsClient({
         </div>
       </div>
 
-      <LeadsTable
-        leads={filteredLeads}
-        hasAnyLeads={initialLeads.length > 0}
-        selected={selected}
-        allSelected={allSelected}
-        busyLeadId={busyLeadId}
-        esignEnabled={esignEnabled}
-        onToggleAll={toggleAll}
-        onToggleSelected={toggleSelected}
-        onEdit={openEdit}
-        onSendIntake={lead => void handleSendIntake(lead)}
-        onSendEngagement={setEngagementLead}
-        onHire={setConvertTarget}
-        onArchive={setDeleteTarget}
-      />
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <LeadsTable
+            leads={filteredLeads}
+            hasAnyLeads={initialLeads.length > 0}
+            selected={selected}
+            allSelected={allSelected}
+            busyLeadId={busyLeadId}
+            esignEnabled={esignEnabled}
+            activeLeadId={selectedLead?.id ?? null}
+            onActivate={lead => selectLead(lead.id)}
+            openMenuLeadId={openMenuLeadId}
+            onMenuOpenChange={(leadId, open) => setOpenMenuLeadId(open ? leadId : null)}
+            onToggleAll={toggleAll}
+            onToggleSelected={toggleSelected}
+            onEdit={openEdit}
+            onSendIntake={lead => void handleSendIntake(lead)}
+            onSendEngagement={setEngagementLead}
+            onHire={setConvertTarget}
+            onArchive={setDeleteTarget}
+          />
+        </div>
+        {selectedLead && (
+          <LeadSidePanel
+            key={selectedLead.id}
+            lead={selectedLead}
+            spouse={spouses[selectedLead.id] ?? null}
+            onClose={() => selectLead(null)}
+            onOpenFullRecord={openFullRecord}
+            onOpenRowMenu={() => setOpenMenuLeadId(selectedLead.id)}
+            onLeadSaved={() => router.refresh()}
+          />
+        )}
+      </div>
 
       <LeadEditorDialog
         open={dialogOpen}

@@ -4,15 +4,15 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
-import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { formatPhoneDisplay, phoneTelHref } from '@/lib/phone'
+import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
 import type { LeadEditableField } from '@/lib/leads/details'
+import { parseLeadTab, type LeadTab } from '@/lib/leads/leadPageTabs'
 import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
 import type {
   LeadTimelineCall,
@@ -30,9 +30,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { LeadDetailsCard } from '@/components/leads/LeadDetailsCard'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LeadFieldsRail } from '@/components/leads/LeadFieldsRail'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
+import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
+import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
+import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
 import { LeadCommunicationDialog } from '@/components/leads/LeadCommunicationDialog'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import { LeadIntakeCard } from './LeadIntakeCard'
@@ -135,6 +140,8 @@ export function LeadDetailClient({
 }: LeadDetailClientProps) {
   const token = useAccessToken()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [lead, setLead] = useState(initialLead)
   const [spouse, setSpouse] = useState(initialSpouse)
   const [activeField, setActiveField] = useState<LeadEditableField | null>(null)
@@ -142,6 +149,7 @@ export function LeadDetailClient({
   const [activity, setActivity] = useState(initialActivity)
   const [busy, setBusy] = useState(false)
   const [busyIntent, setBusyIntent] = useState<string | null>(null)
+  const [railOpen, setRailOpen] = useState(true)
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
@@ -160,6 +168,22 @@ export function LeadDetailClient({
     || activeField !== null
     || busyIntent !== null
   const interactionLockRef = useRef(false)
+  const { documents, loading: documentsLoading } = useLeadDocuments(lead.matter_id)
+
+  // The URL owns the tab, but the click applies immediately so the workspace
+  // never waits on a router round trip.
+  const urlTab = parseLeadTab(searchParams?.get('tab'))
+  const [activeTab, setActiveTab] = useState<LeadTab>(urlTab)
+  useEffect(() => { setActiveTab(urlTab) }, [urlTab])
+
+  function changeTab(tab: LeadTab) {
+    setActiveTab(tab)
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    if (tab === 'plan') params.delete('tab')
+    else params.set('tab', tab)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? ''), { scroll: false })
+  }
 
   function beginInteraction() {
     if (interactionBusy || interactionLockRef.current) return false
@@ -417,14 +441,7 @@ export function LeadDetailClient({
   }
 
   const clientName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Lead'
-  // The phone is rendered separately so it can be click-to-call.
-  const subtitleBefore = [
-    practiceAreaLabel(lead.practice_area),
-    lead.lead_source,
-  ].filter(Boolean).join(' · ')
-  const subtitleAfter = lead.email?.trim() ?? ''
-  const subtitle = [subtitleBefore, formatPhoneDisplay(lead.phone), subtitleAfter]
-    .filter(Boolean).join(' · ')
+  const clientInitial = clientName.trim().charAt(0).toUpperCase() || '—'
   const statusLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
   const leadDay = calendarDaysAgo(lead.created_at, firmTimezone) ?? 0
   const effectiveLastTouchAt = newestTimestamp([
@@ -436,6 +453,7 @@ export function LeadDetailClient({
     ...initialCalls.map(call => call.started_at),
   ])
   const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
+  const lastMeetingAt = newestTimestamp(initialMeetingNotes.map(note => note.date || note.createdAt))
   const computedAction = computeNextAction({
     leadStatus: lead.lead_status,
     intakeSentAt: lead.intake_sent_at ?? null,
@@ -464,94 +482,173 @@ export function LeadDetailClient({
     ? availableAction
     : null
 
+  const timelineCount = activity.length
+    + initialNotes.length
+    + initialMeetingNotes.length
+    + initialCalls.length
+  const documentsCount = documents.length + (activeAgreement ? 1 : 0)
+
+  const timeline = (
+    <LeadTimelineCard
+      leadId={lead.id}
+      leadPhone={lead.phone}
+      initialNotes={initialNotes}
+      initialMeetingNotes={initialMeetingNotes}
+      initialCalls={initialCalls}
+      initialActivity={activity}
+      actorNames={actorNames}
+      callsError={callsError}
+      actorError={actorError}
+      dataRefreshWarning={dataRefreshWarning}
+      activityRefreshWarning={activityRefreshWarning}
+      currentUser={currentUser}
+      onActivityChange={refreshActivity}
+      onCommittedTouch={recordTouch}
+      variant="plain"
+    />
+  )
+
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
-      <header className="border-b border-border bg-card px-4 py-4 md:px-6">
-        <div className="mb-3">
-          <Link href="/admin/leads" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Leads
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-[21px] font-semibold tracking-tight">{clientName}</h1>
-              <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {statusLabel} · day {leadDay}
-              </span>
-              {effectiveLastTouchAt !== null && lastTouchDays !== null && (
-                <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  Last touch {lastTouchDays}d ago
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {subtitle ? (
-                <>
-                  {subtitleBefore}
-                  {lead.phone?.trim() && (
-                    <>
-                      {subtitleBefore && ' · '}
-                      <CallPhoneLink phone={lead.phone} />
-                    </>
-                  )}
-                  {subtitleAfter && <>{(subtitleBefore || lead.phone?.trim()) && ' · '}{subtitleAfter}</>}
-                </>
-              ) : (
-                'Prospective client'
-              )}
-            </p>
-          </div>
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
+        <Link href="/admin/leads" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Leads
+        </Link>
+        <span aria-hidden className="text-xs text-muted-foreground">/</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span
+            aria-hidden
+            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-muted text-[10px] font-semibold text-muted-foreground"
+          >
+            {clientInitial}
+          </span>
+          <span className="truncate text-sm font-semibold">{clientName}</span>
+        </span>
+        <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground lg:inline">
+          {provisionalLeadNumber(lead)}
+        </span>
+        <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          {statusLabel} · day {leadDay}
+        </span>
+        {effectiveLastTouchAt !== null && lastTouchDays !== null && (
+          <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground md:inline">
+            Last touch {lastTouchDays}d ago
+          </span>
+        )}
+        <div className="ml-auto shrink-0">
           <LeadTopActions
             busy={interactionBusy}
             status={lead.lead_status}
             hasActiveAgreement={Boolean(activeAgreement)}
             snoozed={snoozed}
             matterId={lead.matter_id}
-            actionError={error}
             onDraft={handleTopDraft}
             onConvert={handleTopConvert}
             onClearSnooze={() => void clearNextActionSnooze()}
             onStatusChange={handleTopStatusChange}
             onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
             onBookForClient={() => setBookForClientOpen(true)}
+            onCall={() => openStaffSoftphone({ number: lead.phone ?? undefined })}
             onEmail={() => setCommunicationChannel('email')}
             onText={() => setCommunicationChannel('sms')}
+            onIntake={() => setIntakeSheetOpen(true)}
+            onToggleRail={() => setRailOpen(current => !current)}
+            railOpen={railOpen}
             hasEmail={Boolean(lead.email?.trim())}
             hasPhone={Boolean(lead.phone?.trim())}
           />
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto px-6 py-4">
-        <div className="space-y-4">
+      {error && (
+        <p role="alert" aria-live="polite" className="border-b border-border bg-card px-4 py-1.5 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+
+      <div className="flex min-h-0 flex-1">
+        {railOpen && (
+          <LeadFieldsRail
+            lead={lead}
+            spouse={spouse}
+            activeField={activeField}
+            onActiveFieldChange={changeActiveField}
+            onSaveField={saveField}
+            onRemoveSpouse={removeSpouse}
+            spouseRemovalError={spouseRemovalError}
+          />
+        )}
+
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4">
           {visibleAction && (
-            <LeadNextAction
-              action={visibleAction}
-              busy={interactionBusy}
-              onIntent={intent => void handleNextAction(intent)}
-            />
+            <div className="mb-4">
+              <LeadNextAction
+                action={visibleAction}
+                busy={interactionBusy}
+                onIntent={intent => void handleNextAction(intent)}
+              />
+            </div>
           )}
-          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.6fr_1fr]">
-            <div className="space-y-4">
-              <LeadDetailsCard
+
+          <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
+            <TabsList className="w-full justify-start overflow-x-auto bg-background">
+              <TabsTrigger value="plan">Plan</TabsTrigger>
+              <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
+              <TabsTrigger value="intake">Intake</TabsTrigger>
+              <TabsTrigger value="documents">Documents ({documentsCount})</TabsTrigger>
+              <TabsTrigger value="notes">Notes ({initialNotes.length})</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="plan" className="mt-4">
+              <LeadPlanTab
                 lead={lead}
                 spouse={spouse}
-                activeField={activeField}
-                onActiveFieldChange={changeActiveField}
-                onSaveField={saveField}
-                onRemoveSpouse={removeSpouse}
-                spouseRemovalError={spouseRemovalError}
+                nextAppointmentAt={nextAppointmentAt}
+                lastMeetingAt={lastMeetingAt}
+                hasActiveAgreement={Boolean(activeAgreement)}
+                agreementId={activeAgreement?.id ?? null}
+                busy={interactionBusy}
+                onDraft={handleTopDraft}
+                onPreviewAgreement={() => {
+                  if (activeAgreement) router.push(`/admin/engagements/${activeAgreement.id}?step=design`)
+                }}
+                onOpenField={field => {
+                  if (!railOpen) setRailOpen(true)
+                  changeActiveField(field)
+                }}
+                onOpenIntake={() => setIntakeSheetOpen(true)}
               />
+            </TabsContent>
+
+            <TabsContent value="timeline" className="mt-4">
+              {timeline}
+            </TabsContent>
+
+            <TabsContent value="intake" className="mt-4">
               <LeadIntakeCard
                 intake={lead}
                 intakeUrl={intakeUrl}
                 onOpen={() => setIntakeSheetOpen(true)}
                 onCopy={() => void copyIntakeUrl()}
               />
-            </div>
-            <div className="xl:sticky xl:top-4">
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => setImportIntakeOpen(true)}>
+                  Import intake — paste text or upload Word
+                </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="documents" className="mt-4">
+              <LeadDocumentsTab
+                documents={documents}
+                loading={documentsLoading}
+                matterId={lead.matter_id ?? null}
+                agreementId={activeAgreement?.id ?? null}
+              />
+            </TabsContent>
+
+            <TabsContent value="notes" className="mt-4">
               <LeadTimelineCard
                 leadId={lead.id}
                 leadPhone={lead.phone}
@@ -567,11 +664,13 @@ export function LeadDetailClient({
                 currentUser={currentUser}
                 onActivityChange={refreshActivity}
                 onCommittedTouch={recordTouch}
+                variant="plain"
+                lockedFilter="notes"
               />
-            </div>
-          </div>
-        </div>
-      </main>
+            </TabsContent>
+          </Tabs>
+        </main>
+      </div>
 
       <ImportIntakeDialog
         open={importIntakeOpen}

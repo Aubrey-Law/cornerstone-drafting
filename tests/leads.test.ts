@@ -61,13 +61,22 @@ describe('lead tracking source shape', () => {
 })
 
 describe('lead edit and delete source shape', () => {
-  it('renders editable lead details with completeness and no status field', () => {
-    const source = read('components/leads/LeadDetailsCard.tsx')
+  it('renders the editable field rail with grouped sections and no status field', () => {
+    const source = read('components/leads/LeadFieldsRail.tsx')
     expect(source).toContain('Lead details')
-    expect(source).toContain('lg:grid-cols-3')
-    expect(source).toContain('of 14 complete')
-    expect(source).toContain('+ Add {field.missingLabel}')
+    expect(source).toContain('w-[340px]')
+    expect(source).toContain('LEAD_FIELD_GROUPS')
+    expect(source).toContain('LeadReadinessDial')
+    expect(source).toContain('Enter to save · Esc to cancel')
     expect(source).not.toContain('Matter status')
+  })
+
+  it('scores readiness from the shared field predicates plus the intake and engagement gates', () => {
+    const source = read('lib/leads/readiness.ts')
+    expect(source).toContain('FIELD_DEFINITIONS')
+    expect(source).toContain('ENGAGEMENT_REQUIRED_FIELDS')
+    expect(source).toContain("key: 'intake'")
+    expect(source).toContain("key: 'engagement'")
   })
 
   it('edit/delete route exports PATCH and DELETE with a converted guard', () => {

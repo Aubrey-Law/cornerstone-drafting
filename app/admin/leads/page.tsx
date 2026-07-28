@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isEsignConfigured } from '@/lib/esign/firma'
+import type { LeadSpouseRecord } from '@/lib/leads/viewTypes'
 import { LeadsClient, type LeadRow } from './LeadsClient'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +13,9 @@ export default async function LeadsPage() {
   const { data, error } = await admin
     .from('client_intake')
     .select(
-      'id, full_name, first_name, last_name, email, phone, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_urgency, taxable_estate, created_at, updated_at',
+      // The record side panel edits the same fields as the lead detail rail, so
+      // the list loads the full detail shape rather than adding a lead API.
+      'id, full_name, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth, address_line1, address_line2, city, state, zip, county, marital_status, qualification_notes, has_minor_children, lead_source, practice_area, status, lead_status, matter_id, intake_status, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_urgency, taxable_estate, lead_next_action_snoozed_until, user_id, client_user_id, created_at, updated_at',
     )
     .not('lead_status', 'is', null)
     .order('created_at', { ascending: false })
@@ -53,6 +56,20 @@ export default async function LeadsPage() {
     }
   }
 
+  const spousesByLead = new Map<string, LeadSpouseRecord>()
+  if (leadIds.length > 0) {
+    const { data: spouses, error: spouseError } = await admin
+      .from('contacts')
+      .select('client_intake_id, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth')
+      .in('client_intake_id', leadIds)
+      .eq('relationship_type', 'spouse')
+    if (spouseError) console.error('Could not load lead spouses', { error: spouseError })
+    for (const row of spouses ?? []) {
+      const { client_intake_id: leadId, ...spouse } = row as { client_intake_id: string } & LeadSpouseRecord
+      if (!spousesByLead.has(leadId)) spousesByLead.set(leadId, spouse)
+    }
+  }
+
   const leadsWithActivity = leads.map(lead => ({
     ...lead,
     last_activity_at: latestActivity.get(lead.id) ?? null,
@@ -61,7 +78,11 @@ export default async function LeadsPage() {
   return (
     <div className="space-y-4">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-        <LeadsClient initialLeads={leadsWithActivity as LeadRow[]} esignEnabled={isEsignConfigured()} />
+        <LeadsClient
+          initialLeads={leadsWithActivity as LeadRow[]}
+          spouses={Object.fromEntries(spousesByLead)}
+          esignEnabled={isEsignConfigured()}
+        />
       </Suspense>
     </div>
   )

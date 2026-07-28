@@ -32,13 +32,23 @@ type NextStep =
   | { key: 'view_matter'; label: string; primary: false }
   | { key: 'hire_matter'; label: string; primary: false }
 
-export function leadListName(lead: LeadListRow): string {
+/** Structural subset so the lead detail record can reuse these labels. */
+export type LeadIdentityFields = {
+  full_name?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  email?: string | null
+  created_at?: string | null
+  practice_area?: string | null
+}
+
+export function leadListName(lead: LeadIdentityFields): string {
   return lead.full_name?.trim()
     || [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim()
     || lead.email
     || 'Lead'
 }
-export function provisionalLeadNumber(lead: LeadListRow): string {
+export function provisionalLeadNumber(lead: LeadIdentityFields): string {
   const year = lead.created_at ? new Date(lead.created_at).getFullYear() : new Date().getFullYear()
   return `${year}-${practiceAreaMatterCode(lead.practice_area)}-${clientNameMatterSlug(leadListName(lead))}`
 }
@@ -68,6 +78,11 @@ interface LeadsTableProps {
   allSelected: boolean
   busyLeadId: string | null
   esignEnabled: boolean
+  /** Row whose record side panel is open. */
+  activeLeadId?: string | null
+  onActivate?: (lead: LeadListRow) => void
+  openMenuLeadId?: string | null
+  onMenuOpenChange?: (leadId: string, open: boolean) => void
   onToggleAll: (selected: boolean) => void
   onToggleSelected: (leadId: string, selected: boolean) => void
   onEdit: (lead: LeadListRow) => void
@@ -84,6 +99,10 @@ export function LeadsTable({
   allSelected,
   busyLeadId,
   esignEnabled,
+  activeLeadId = null,
+  onActivate,
+  openMenuLeadId = null,
+  onMenuOpenChange,
   onToggleAll,
   onToggleSelected,
   onEdit,
@@ -136,7 +155,7 @@ export function LeadsTable({
             }
 
             return (
-              <TableRow key={lead.id}>
+              <TableRow key={lead.id} data-active={activeLeadId === lead.id || undefined} className={activeLeadId === lead.id ? 'bg-muted/60' : undefined}>
                 <TableCell>
                   <Checkbox
                     checked={Boolean(selected[lead.id])}
@@ -145,7 +164,18 @@ export function LeadsTable({
                   />
                 </TableCell>
                 <TableCell className="font-medium">
-                  <Link href={`/admin/leads/${lead.id}`} className="hover:underline">{leadListName(lead)}</Link>
+                  {/* Plain clicks open the record side panel; modified clicks keep the link. */}
+                  <Link
+                    href={`/admin/leads/${lead.id}`}
+                    className="hover:underline"
+                    onClick={event => {
+                      if (!onActivate || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+                      event.preventDefault()
+                      onActivate(lead)
+                    }}
+                  >
+                    {leadListName(lead)}
+                  </Link>
                   <div className="text-[11px] font-normal text-muted-foreground">
                     {provisionalLeadNumber(lead)}
                   </div>
@@ -172,7 +202,14 @@ export function LeadsTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  <DropdownMenu>
+                  <DropdownMenu
+                    {...(onMenuOpenChange
+                      ? {
+                          open: openMenuLeadId === lead.id,
+                          onOpenChange: (open: boolean) => onMenuOpenChange(lead.id, open),
+                        }
+                      : {})}
+                  >
                     <DropdownMenuTrigger asChild>
                       <Button
                         size="icon"

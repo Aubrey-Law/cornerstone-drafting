@@ -10,6 +10,7 @@ import type { MatterListRow } from '@/lib/queries/matters'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/admin/leads',
   useSearchParams: () => new URLSearchParams(),
 }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))

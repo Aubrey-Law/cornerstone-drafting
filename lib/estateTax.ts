@@ -26,6 +26,9 @@ function tentativeTax(adj: number): number {
   return 1082800 + (adj - 10040000) * 0.16
 }
 
+/** Estate value at which the $99,600 credit stops covering the tentative tax. */
+export const MA_ESTATE_TAX_EXEMPTION = 2_000_000
+
 export function calculateMAEstateTax(grossEstate: number): number {
   const adjusted = grossEstate - 60000
   if (adjusted <= 0) return 0
