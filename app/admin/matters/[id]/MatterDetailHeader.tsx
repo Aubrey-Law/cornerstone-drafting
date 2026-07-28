@@ -5,46 +5,42 @@ import {
   ClipboardList,
   Loader as Loader2,
   MoreHorizontal,
+  PanelRight,
   Trash2,
   Upload,
   Clock as UnlockIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { practiceAreaLabel } from '@/lib/practiceArea'
+import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
+import { cn } from '@/lib/utils'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
-import { stageLabel, STAGES, type MatterStage, type PipelineMatter } from '@/types/database'
-import type { MatterDetailsRow } from '@/types/matter-details'
+import { stageGroupColor, stageLabel, type PipelineMatter } from '@/types/database'
 
 interface MatterDetailHeaderProps {
   matter: PipelineMatter
   matterNumber: string | null
-  details: MatterDetailsRow | null
   agingSummary: MatterAgingSummary | null
-  stageSaving: boolean
   intakeCompleted: boolean
   intakeId: string | null
   unlocking: boolean
-  onStageChange: (stage: MatterStage) => void
+  /** True only when the blocker banner is absent, so the badge has somewhere to live. */
+  showHealthBadge: boolean
+  factsRailOpen: boolean
+  onToggleFactsRail: () => void
   onOpenIntake: () => void
   onImportIntake: () => void
   onUnlockIntake: () => void
   onDelete: () => void
 }
-function healthPresentation(summary: MatterAgingSummary | null) {
+
+export function healthPresentation(summary: MatterAgingSummary | null) {
   if (!summary || summary.isSnoozed) return null
   if (summary.health === 'red') {
     return {
@@ -67,120 +63,132 @@ function healthPresentation(summary: MatterAgingSummary | null) {
   return null
 }
 
+function clientInitial(matter: PipelineMatter): string {
+  const source = (matter.client_name || matter.matter_name || '').trim()
+  return source ? source[0].toUpperCase() : '—'
+}
+
 export function MatterDetailHeader({
   matter,
   matterNumber,
-  details,
   agingSummary,
-  stageSaving,
   intakeCompleted,
   intakeId,
   unlocking,
-  onStageChange,
+  showHealthBadge,
+  factsRailOpen,
+  onToggleFactsRail,
   onOpenIntake,
   onImportIntake,
   onUnlockIntake,
   onDelete,
 }: MatterDetailHeaderProps) {
-  const health = healthPresentation(agingSummary)
+  const health = showHealthBadge ? healthPresentation(agingSummary) : null
+  const stageColors = stageGroupColor(matter.stage)
+  const clientName = matter.client_name || matter.matter_name || 'Matter'
 
   return (
-    <div className="border-b border-border bg-card px-4 py-4 md:px-8">
-      <div className="w-full">
-        <div className="mb-3">
-          <Link
-            href="/admin/matters"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+    <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
+      <div className="flex min-w-0 items-center gap-2">
+        <Link
+          href="/admin/matters"
+          className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          Matters
+        </Link>
+        <span aria-hidden className="shrink-0 text-xs text-muted-foreground">/</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span
+            aria-hidden
+            className="flex size-[18px] shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold text-muted-foreground"
           >
-            <ArrowLeft className="size-3.5" />
-            Matters
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              {matter.client_name || matter.matter_name || 'Matter'}
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{matterNumber ? `#${matterNumber}` : 'Matter number —'}</span>
-              <span aria-hidden>·</span>
-              <span>{practiceAreaLabel(details?.practice_area ?? matter.practice_area)}</span>
-              {agingSummary && (
-                <>
-                  <span aria-hidden>·</span>
-                  <span>
-                    {agingSummary.daysInStage} business day{agingSummary.daysInStage === 1 ? '' : 's'} in{' '}
-                    {stageLabel(matter.stage)}
-                  </span>
-                </>
-              )}
-              {health && (
-                <Badge variant="outline" className={`text-[10px] ${health.className}`}>
-                  {health.label}
-                </Badge>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={matter.stage}
-              onValueChange={value => onStageChange(value as MatterStage)}
-              disabled={stageSaving}
-            >
-              <SelectTrigger size="sm" className="w-[150px]" aria-label="Matter stage">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STAGES.map(stage => (
-                  <SelectItem key={stage.key} value={stage.key}>{stage.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" size="sm" variant="outline" className="gap-1.5">
-                  <ClipboardList className="size-3.5" />
-                  Intake actions
-                  <ChevronDown className="size-3.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onOpenIntake}>
-                  <ClipboardList className="mr-2 size-3.5" />
-                  {intakeCompleted ? 'Edit intake' : intakeId ? 'Update intake' : 'Create intake'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onImportIntake}>
-                  <Upload className="mr-2 size-3.5" />
-                  Import intake — paste text or upload Word
-                </DropdownMenuItem>
-                {intakeCompleted && intakeId && (
-                  <DropdownMenuItem onClick={onUnlockIntake} disabled={unlocking}>
-                    {unlocking ? (
-                      <Loader2 className="mr-2 size-3.5 animate-spin text-muted-foreground" />
-                    ) : (
-                      <UnlockIcon className="mr-2 size-3.5 text-muted-foreground" />
-                    )}
-                    Unlock intake for client editing
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" size="sm" variant="outline" aria-label="More actions">
-                  <MoreHorizontal className="size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-                  <Trash2 className="mr-2 size-3.5" />
-                  Delete matter
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+            {clientInitial(matter)}
+          </span>
+          <span className="truncate text-sm font-semibold">{clientName}</span>
+        </span>
+        <Badge variant="outline" className="shrink-0 text-[10px] font-medium tabular-nums">
+          {matterNumber ? `#${matterNumber}` : 'No matter number'}
+        </Badge>
+        <span
+          className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
+          style={{ background: stageColors.bg, color: stageColors.text }}
+        >
+          {stageLabel(matter.stage)}
+          {agingSummary && ` · day ${agingSummary.daysInStage}`}
+        </span>
+        {health && (
+          <Badge variant="outline" className={cn('shrink-0 text-[10px]', health.className)}>
+            {health.label}
+          </Badge>
+        )}
       </div>
-    </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        {matter.client_phone && (
+          <CallPhoneLink
+            phone={matter.client_phone}
+            label="Call"
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'no-underline')}
+          />
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" size="sm" variant="outline" className="gap-1.5">
+              <ClipboardList className="size-3.5" />
+              Intake actions
+              <ChevronDown className="size-3.5 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onOpenIntake}>
+              <ClipboardList className="mr-2 size-3.5" />
+              {intakeCompleted ? 'Edit intake' : intakeId ? 'Update intake' : 'Create intake'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onImportIntake}>
+              <Upload className="mr-2 size-3.5" />
+              Import intake — paste text or upload Word
+            </DropdownMenuItem>
+            {intakeCompleted && intakeId && (
+              <DropdownMenuItem onClick={onUnlockIntake} disabled={unlocking}>
+                {unlocking ? (
+                  <Loader2 className="mr-2 size-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <UnlockIcon className="mr-2 size-3.5 text-muted-foreground" />
+                )}
+                Unlock intake for client editing
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button type="button" size="sm" asChild>
+          <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" size="sm" variant="outline" aria-label="More actions">
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+              <Trash2 className="mr-2 size-3.5" />
+              Delete matter
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onToggleFactsRail}
+          aria-pressed={factsRailOpen}
+          aria-label={factsRailOpen ? 'Hide matter facts' : 'Show matter facts'}
+          title={factsRailOpen ? 'Hide matter facts' : 'Show matter facts'}
+        >
+          <PanelRight className="size-3.5" />
+        </Button>
+      </div>
+    </header>
   )
 }
