@@ -12,6 +12,7 @@ import {
   isAllowed,
 } from './settings'
 import { GraphSendError, sendViaGraph } from './graphSend'
+import type { EmailAttachment } from './attachments'
 
 export interface SendEmailArgs {
   category: EmailCategory
@@ -27,6 +28,8 @@ export interface SendEmailArgs {
   from?: string
   /** Microsoft Graph mailbox owner for manual sends; falls back to any firm connection. */
   userId?: string | null
+  /** Files to send alongside the message. See lib/email/attachments.ts for the size cap. */
+  attachments?: EmailAttachment[]
 }
 
 export type SendEmailResult =
@@ -80,6 +83,7 @@ interface ResendAttemptInput {
   ccList: string[] | undefined
   replyTo: string | undefined
   isRedirect: boolean
+  attachments?: EmailAttachment[]
 }
 
 interface AttemptResult {
@@ -103,6 +107,15 @@ async function attemptResend(input: ResendAttemptInput): Promise<AttemptResult> 
       ...(input.html !== undefined ? { html: input.html } : { text: input.text ?? '' }),
       ...(input.isRedirect ? {} : input.ccList && input.ccList.length > 0 ? { cc: input.ccList } : {}),
       ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+      ...(input.attachments?.length
+        ? {
+            attachments: input.attachments.map(file => ({
+              filename: file.filename,
+              content: file.content,
+              ...(file.contentType ? { contentType: file.contentType } : {}),
+            })),
+          }
+        : {}),
     })
     if (error) {
       return { resendId: null, graphMessageId: null, fromAddress: input.from, error: error.message }
@@ -131,6 +144,7 @@ async function attemptGraph(
       text: input.text,
       replyTo: input.replyTo,
       userId,
+      attachments: input.attachments,
     })
     return { resendId: null, graphMessageId: messageId, fromAddress, error: null }
   } catch (err) {
@@ -247,6 +261,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     ccList,
     replyTo,
     isRedirect,
+    attachments: args.attachments,
   }
 
   let providerUsed: EmailProvider = provider
