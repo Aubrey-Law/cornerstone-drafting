@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getBearerUser } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import {
@@ -9,20 +9,9 @@ import {
   userCanAccessMatter,
 } from '@/lib/documentSecurity'
 
-async function getUser(req: Request) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-  const { data: { user } } = await sb.auth.getUser(token)
-  return user ?? null
-}
-
 // GET /api/documents?matterId=...&folder=...
 export async function GET(req: Request) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
@@ -55,7 +44,7 @@ export async function GET(req: Request) {
 // POST /api/documents
 // body: { matterId, r2Key, name, size, contentType, folder }
 export async function POST(req: Request) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { matterId, r2Key, name, size, contentType, folder = 'client', folderId = null } = await req.json()

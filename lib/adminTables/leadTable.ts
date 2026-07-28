@@ -1,5 +1,6 @@
 import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
+import { compareNullable, normalizeSearchText, stableSort, timestamp } from '@/lib/collections'
 
 export interface LeadTableRow {
   id: string
@@ -61,16 +62,14 @@ export function filterAndSortLeads<T extends LeadTableRow>(
   filters: LeadTableFilters,
   sortKey: LeadSortKey,
 ): T[] {
-  const search = normalize(filters.search)
-  const practice = normalize(filters.practice)
+  const search = normalizeSearchText(filters.search)
+  const practice = normalizeSearchText(filters.practice)
   const filtered = leads.filter(lead =>
     (practice === '' || practice === 'all' || normalize(lead.practice_area) === practice)
     && matchesSearch(lead, search)
     && matchesProgress(lead, filters.progress),
   )
-  const decorated = filtered.map((lead, index) => ({ lead, index }))
-  decorated.sort((a, b) => compareLeads(a.lead, b.lead, sortKey) || a.index - b.index)
-  return decorated.map(item => item.lead)
+  return stableSort(filtered, (left, right) => compareLeads(left, right, sortKey))
 }
 
 function matchesSearch(lead: LeadTableRow, search: string): boolean {
@@ -107,24 +106,11 @@ function compareLeads(left: LeadTableRow, right: LeadTableRow, sortKey: LeadSort
   return compareNullable(timestamp(left.last_activity_at), timestamp(right.last_activity_at), (a, b) => b - a)
 }
 
-function compareNullable<T>(left: T | null, right: T | null, compare: (a: T, b: T) => number): number {
-  if (left === null && right === null) return 0
-  if (left === null) return 1
-  if (right === null) return -1
-  return compare(left, right)
-}
-
 function displayNameValue(lead: LeadTableRow): string | null {
   const value = leadDisplayName(lead)
   return value === 'Lead' ? null : value
 }
 
-function timestamp(value: string | null): number | null {
-  if (!value) return null
-  const parsed = Date.parse(value)
-  return Number.isNaN(parsed) ? null : parsed
-}
-
 function normalize(value: string | null | undefined): string {
-  return value?.trim().toLocaleLowerCase() ?? ''
+  return normalizeSearchText(value)
 }

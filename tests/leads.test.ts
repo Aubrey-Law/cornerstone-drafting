@@ -97,10 +97,12 @@ describe('lead edit and delete source shape', () => {
 
   it('leads client has selection, bulk delete, and an edit dialog', () => {
     const source = read('app/admin/leads/LeadsClient.tsx')
-    expect(source).toContain('Checkbox')
+    const table = read('components/leads/LeadsTable.tsx')
+    const editor = read('components/leads/LeadEditorDialog.tsx')
+    expect(table).toContain('Checkbox')
     expect(source).toContain('bulk-delete')
     expect(source).toContain("method: 'PATCH'")
-    expect(source).toContain('Edit lead')
+    expect(editor).toContain('Edit lead')
   })
 })
 
@@ -150,13 +152,14 @@ describe('lead status pipeline source shape', () => {
 
   it('leads client has status filter tabs and a per-lead progress cell', () => {
     const source = read('app/admin/leads/LeadsClient.tsx')
-    expect(source).toContain('LeadProgress')
+    const table = read('components/leads/LeadsTable.tsx')
+    expect(table).toContain('LeadProgress')
     expect(source).toContain('FILTER_TABS')
-    expect(source).toContain('View matter')
+    expect(table).toContain('View matter')
   })
 
   it('leads client derives a single next step per lead', () => {
-    const source = read('app/admin/leads/LeadsClient.tsx')
+    const source = read('components/leads/LeadsTable.tsx')
     expect(source).toContain('function nextStep')
     expect(source).toContain('send_intake')
     expect(source).toContain('send_engagement')
@@ -181,7 +184,8 @@ describe('engagement send form + spouse', () => {
 
   it('leads client renders the send form and a provisional number', () => {
     const source = read('app/admin/leads/LeadsClient.tsx')
+    const table = read('components/leads/LeadsTable.tsx')
     expect(source).toContain('SendEngagementDialog')
-    expect(source).toContain('provisionalNumber')
+    expect(table).toContain('provisionalLeadNumber')
   })
 })

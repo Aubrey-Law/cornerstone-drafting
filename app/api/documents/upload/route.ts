@@ -1,5 +1,5 @@
 import { NextResponse, after } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getBearerUser } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
   isAdminUser,
@@ -20,20 +20,9 @@ import type { MatterDocument } from '@/types/database'
 
 const VALID_FOLDERS = new Set(['draft', 'final', 'client', 'review', 'signed', 'intake', 'meeting-notes'])
 
-async function getUser(req: Request) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-  const { data: { user } } = await sb.auth.getUser(token)
-  return user ?? null
-}
-
 // POST /api/documents/upload — multipart proxy upload (avoids browser → R2 CORS)
 export async function POST(req: Request) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let form: FormData

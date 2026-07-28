@@ -16,13 +16,13 @@ describe('matter overview frame', () => {
   })
 
   it('retains intake operations while exposing only one stage selector', () => {
-    const client = fs.readFileSync(path.join(routeDir, 'MatterDetailClient.tsx'), 'utf8')
+    const header = fs.readFileSync(path.join(routeDir, 'MatterDetailHeader.tsx'), 'utf8')
     const hero = fs.readFileSync(path.join(routeDir, 'MatterOverviewHero.tsx'), 'utf8')
 
-    expect(client).toContain('Intake actions')
-    expect(client).toContain('Import intake — paste text or upload Word')
-    expect(client).toContain('Unlock intake for client editing')
-    expect(client).toContain('aria-label="Matter stage"')
+    expect(header).toContain('Intake actions')
+    expect(header).toContain('Import intake — paste text or upload Word')
+    expect(header).toContain('Unlock intake for client editing')
+    expect(header).toContain('aria-label="Matter stage"')
     expect(hero).not.toContain('aria-label="Matter stage"')
     expect(hero).not.toContain('Matter Status: Hired')
     expect(hero).not.toContain('Aging {agingHealth}')

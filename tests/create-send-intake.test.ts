@@ -18,8 +18,9 @@ describe('create and send intake wizard', () => {
 
   it('keeps matter import and update controls after lead intake moves upstream', () => {
     const detail = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailClient.tsx'), 'utf8')
-    expect(detail).toContain('Import intake — paste text or upload Word')
-    expect(detail).toContain('Update intake')
+    const header = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailHeader.tsx'), 'utf8')
+    expect(header).toContain('Import intake — paste text or upload Word')
+    expect(header).toContain('Update intake')
     expect(detail).toContain('ImportIntakeDialog')
   })
 })

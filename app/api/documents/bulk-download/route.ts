@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getBearerUser } from '@/lib/apiAuth'
 import archiver from 'archiver'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { Readable } from 'node:stream'
@@ -15,17 +15,6 @@ import type { MatterDocument } from '@/types/database'
 export const runtime = 'nodejs'
 
 const MAX_BULK_DOWNLOAD_DOCUMENTS = 100
-
-async function getUser(req: Request) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-  const { data: { user } } = await sb.auth.getUser(token)
-  return user ?? null
-}
 
 function safeFilename(name: string) {
   return name.replace(/[\/\\:*?"<>|]+/g, '_').replace(/^\.+/, '') || 'document'
@@ -45,7 +34,7 @@ function archiveEntryName(doc: Pick<MatterDocument, 'name' | 'folder'>, seen: Ma
 // Streams a zip of specifically selected documents. Each included document is
 // permission-checked and audited before any bytes are returned.
 export async function POST(req: Request) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({})) as { docIds?: unknown }

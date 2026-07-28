@@ -7,43 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
 import type { LeadEditableField } from '@/lib/leads/details'
+import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 
-export type LeadRecord = {
-  [key: string]: unknown
-  id: string
-  first_name?: string | null
-  middle_name?: string | null
-  last_name?: string | null
-  preferred_name?: string | null
-  full_name?: string | null
-  email?: string | null
-  phone?: string | null
-  date_of_birth?: string | null
-  address_line1?: string | null
-  address_line2?: string | null
-  city?: string | null
-  state?: string | null
-  zip?: string | null
-  county?: string | null
-  marital_status?: string | null
-  practice_area?: string | null
-  lead_source?: string | null
-  engagement_fee_quoted?: number | null
-  lead_urgency?: string | null
-  taxable_estate?: number | null
-  has_minor_children?: boolean | null
-  qualification_notes?: string | null
-}
-
-export type LeadSpouse = {
-  first_name?: string | null
-  middle_name?: string | null
-  last_name?: string | null
-  preferred_name?: string | null
-  email?: string | null
-  phone?: string | null
-  date_of_birth?: string | null
-}
+export type LeadRecord = LeadDetailRecord
+export type LeadSpouse = LeadSpouseRecord
 
 type FieldDefinition = {
   key: LeadEditableField

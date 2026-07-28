@@ -44,11 +44,11 @@ const stepLoading = () => (
   </div>
 )
 
-const StepReferral = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepReferral), { loading: stepLoading })
-const StepPersonal = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepPersonal), { loading: stepLoading })
-const StepFamily = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepFamily), { loading: stepLoading })
-const StepSpouse = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepSpouse), { loading: stepLoading })
-const StepChildren = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepChildren), { loading: stepLoading })
+const StepReferral = dynamic<StepProps>(() => import('./IntakeReferralStep').then(mod => mod.StepReferral), { loading: stepLoading })
+const StepPersonal = dynamic<StepProps>(() => import('./IntakePersonalStep').then(mod => mod.StepPersonal), { loading: stepLoading })
+const StepFamily = dynamic<StepProps>(() => import('./IntakeFamilySteps').then(mod => mod.StepFamily), { loading: stepLoading })
+const StepSpouse = dynamic<StepProps>(() => import('./IntakeFamilySteps').then(mod => mod.StepSpouse), { loading: stepLoading })
+const StepChildren = dynamic<StepProps>(() => import('./IntakeChildrenStep').then(mod => mod.StepChildren), { loading: stepLoading })
 const StepEstate = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepEstate), { loading: stepLoading })
 const StepGoals = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepGoals), { loading: stepLoading })
 const StepAdditionalContacts = dynamic<StepProps>(() => import('./IntakeWizard').then(mod => mod.StepAdditionalContacts), { loading: stepLoading })

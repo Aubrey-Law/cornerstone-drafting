@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Briefcase, ChevronRight, Database, Plus, Search, Trash2, X } from 'lucide-react'
+import { Briefcase, ChevronRight, Database, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
@@ -32,6 +32,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { SearchField } from '@/components/SearchField'
+import { FilterChip } from '@/components/FilterChip'
 import {
   Select,
   SelectContent,
@@ -318,26 +320,13 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
       <div className="space-y-3 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="mr-2 text-xl font-semibold tracking-tight">Matters</h1>
-          <div className="flex max-w-md min-w-[14rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
-            <Search className="h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              value={filters.search}
-              onChange={e => updateFilter('search', e.target.value)}
-              placeholder="Search all fields…"
-              className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-              aria-label="Search matters"
-            />
-            {filters.search && (
-              <button
-                type="button"
-                onClick={() => updateFilter('search', '')}
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            value={filters.search}
+            onValueChange={value => updateFilter('search', value)}
+            placeholder="Search all fields…"
+            aria-label="Search matters"
+            containerClassName="max-w-md min-w-[14rem] flex-1"
+          />
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setLawmaticsOpen(true)}>
               <Database className="h-3.5 w-3.5" />
@@ -350,34 +339,26 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
+          <FilterChip
             onClick={() => updateFilter('stageGroup', 'all')}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              filters.stageGroup === 'all'
-                ? 'bg-accent text-accent-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
+            selected={filters.stageGroup === 'all'}
+            count={matters.length}
           >
-            All · {matters.length}
-          </button>
+            All
+          </FilterChip>
           {GROUP_ORDER.map(group => (
-            <button
+            <FilterChip
               key={group}
-              type="button"
               onClick={() => updateFilter('stageGroup', filters.stageGroup === group ? 'all' : group)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                filters.stageGroup === group
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
+              selected={filters.stageGroup === group}
+              count={groupCounts[group]}
             >
               <span
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ background: GROUP_COLORS[group].dot }}
               />
-              {GROUP_LABELS[group]} · {groupCounts[group]}
-            </button>
+              {GROUP_LABELS[group]}
+            </FilterChip>
           ))}
           <div className="ml-auto flex items-center gap-2">
             <Select

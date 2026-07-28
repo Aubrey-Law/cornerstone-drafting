@@ -1,13 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { MoreVertical, Plus, Search, Trash2, UserPlus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { normalizePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
-import { clientNameMatterSlug } from '@/lib/matterNumber'
+import { normalizePracticeArea, PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
 import {
   EMPTY_LEAD_TABLE_FILTERS,
   filterAndSortLeads,
@@ -34,14 +32,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { SearchField } from '@/components/SearchField'
+import { PageHeader } from '@/components/PageHeader'
+import { FilterChip } from '@/components/FilterChip'
+import type { LeadListRow } from '@/lib/leads/viewTypes'
+import { apiRequest } from '@/lib/clientApi'
+import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
+import { LeadEditorDialog, type LeadEditorForm } from '@/components/leads/LeadEditorDialog'
 import {
   Dialog,
   DialogContent,
@@ -50,7 +47,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -58,45 +54,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 
-export interface LeadRow {
-  id: string
-  full_name: string | null
-  first_name: string | null
-  last_name: string | null
-  email: string | null
-  phone: string | null
-  practice_area: string | null
-  status: string | null
-  lead_status: string | null
-  matter_id: string | null
-  intake_sent_at: string | null
-  intake_completed_at: string | null
-  engagement_status: string | null
-  engagement_sent_at: string | null
-  engagement_signed_at: string | null
-  engagement_fee_quoted: number | null
-  created_at: string | null
-  updated_at: string | null
-  lead_urgency: string | null
-  taxable_estate: number | null
-  last_activity_at: string | null
-}
+export type LeadRow = LeadListRow
 
 type LeadFilter = 'open' | 'lost' | 'all'
-
-const LEAD_STATUS_OPTIONS = [
-  { value: 'lead', label: 'Lead' },
-  { value: 'lost', label: 'Lost' },
-] as const
 
 const FILTER_TABS: { value: LeadFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
@@ -128,115 +89,6 @@ function matchesFilter(lead: LeadRow, filter: LeadFilter): boolean {
   return lead.lead_status === filter
 }
 
-function leadName(lead: LeadRow): string {
-  return (
-    lead.full_name?.trim() ||
-    [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim() ||
-    lead.email ||
-    'Lead'
-  )
-}
-
-/** Provisional lead number, e.g. 2026-EP-Smith; becomes 2026-EP-Smith-001 on conversion. */
-function provisionalNumber(lead: LeadRow): string {
-  const year = lead.created_at ? new Date(lead.created_at).getFullYear() : new Date().getFullYear()
-  const code = practiceAreaMatterCode(lead.practice_area)
-  const slug = clientNameMatterSlug(leadName(lead))
-  return `${year}-${code}-${slug}`
-}
-
-function intakeDone(lead: LeadRow): boolean {
-  return Boolean(lead.intake_completed_at) || lead.status === 'completed'
-}
-
-type NextStep =
-  | { key: 'send_intake'; label: string; primary: true }
-  | { key: 'remind_intake'; label: string; primary: false }
-  | { key: 'send_engagement'; label: string; primary: true }
-  | { key: 'resend_engagement'; label: string; primary: false }
-  | { key: 'view_matter'; label: string; primary: false }
-  | { key: 'hire_matter'; label: string; primary: false }
-
-/** The single action a lead is waiting on, derived from its intake/engagement state. */
-function nextStep(lead: LeadRow, esignEnabled: boolean): NextStep {
-  if (lead.lead_status === 'hired' && lead.matter_id) {
-    return { key: 'view_matter', label: 'View matter', primary: false }
-  }
-  if (!lead.intake_sent_at && !intakeDone(lead)) {
-    return { key: 'send_intake', label: 'Send intake', primary: true }
-  }
-  if (!intakeDone(lead)) {
-    return { key: 'remind_intake', label: 'Remind client', primary: false }
-  }
-  if (esignEnabled && lead.engagement_status !== 'signed') {
-    if (!lead.engagement_sent_at) {
-      return { key: 'send_engagement', label: 'Send engagement', primary: true }
-    }
-    return { key: 'resend_engagement', label: 'Resend engagement', primary: false }
-  }
-  return { key: 'hire_matter', label: 'Hire matter', primary: false }
-}
-
-type StepState = 'done' | 'pending' | 'todo'
-
-/** Whole days since an ISO timestamp, for the "sent 6d" sub-label. */
-function daysSince(iso: string): number {
-  return Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 86_400_000))
-}
-
-function intakeStep(lead: LeadRow): { state: StepState; label: string } {
-  if (intakeDone(lead)) return { state: 'done', label: 'Intake' }
-  if (lead.intake_sent_at) {
-    return { state: 'pending', label: `Intake · sent ${daysSince(lead.intake_sent_at)}d` }
-  }
-  return { state: 'todo', label: 'Intake' }
-}
-
-function engagementStep(lead: LeadRow): { state: StepState; label: string } {
-  if (lead.engagement_status === 'signed') return { state: 'done', label: 'Engagement' }
-  if (lead.engagement_status === 'declined') return { state: 'pending', label: 'Engagement · declined' }
-  if (lead.engagement_sent_at) {
-    return { state: 'pending', label: `Engagement · sent ${daysSince(lead.engagement_sent_at)}d` }
-  }
-  return { state: 'todo', label: 'Engagement' }
-}
-
-const STEP_DOT: Record<StepState, string> = {
-  done: 'bg-green border-green',
-  pending: 'bg-amber-orange border-amber-orange',
-  todo: 'border-border-strong bg-transparent',
-}
-
-const STEP_TEXT: Record<StepState, string> = {
-  done: 'text-green',
-  pending: 'text-amber',
-  todo: 'text-muted-foreground',
-}
-
-function Step({ state, label }: { state: StepState; label: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1 ${STEP_TEXT[state]}`}>
-      <span className={`h-2 w-2 rounded-full border-[1.5px] ${STEP_DOT[state]}`} />
-      {label}
-    </span>
-  )
-}
-
-function LeadProgress({ lead }: { lead: LeadRow }) {
-  const intake = intakeStep(lead)
-  const engagement = engagementStep(lead)
-  const hired: StepState = lead.lead_status === 'hired' ? 'done' : 'todo'
-  return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px]">
-      <Step state={intake.state} label={intake.label} />
-      <span className="h-px w-3 bg-border" />
-      <Step state={engagement.state} label={engagement.label} />
-      <span className="h-px w-3 bg-border" />
-      <Step state={hired} label="Hired" />
-    </span>
-  )
-}
-
 export function LeadsClient({
   initialLeads,
   esignEnabled,
@@ -250,7 +102,7 @@ export function LeadsClient({
   const [editingLead, setEditingLead] = useState<LeadRow | null>(null)
   const [saving, setSaving] = useState(false)
   const [busyLeadId, setBusyLeadId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
+  const [form, setForm] = useState<LeadEditorForm>({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
   const [filter, setFilter] = useState<LeadFilter>('open')
   const [cardFilter, setCardFilter] = useState<LeadCardFilter | null>(null)
   const [tableFilters, setTableFilters] = useState<LeadTableFilters>(EMPTY_LEAD_TABLE_FILTERS)
@@ -334,7 +186,7 @@ export function LeadsClient({
 
   async function authedPost(path: string, body?: unknown): Promise<Record<string, unknown>> {
     if (!token) throw new Error('Not signed in')
-    const res = await fetch(path, {
+    return apiRequest<Record<string, unknown>>(path, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -342,9 +194,6 @@ export function LeadsClient({
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Request failed')
-    return json
   }
 
   const openCreate = () => {
@@ -496,24 +345,21 @@ export function LeadsClient({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Leads</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Prospective matters before hiring — send the intake and engagement agreement from here.
-            Signing promotes the existing opportunity to a hired matter.
-          </p>
-        </div>
-        <div className="flex flex-none gap-2">
-          <Button size="sm" variant="outline" onClick={() => setLawmaticsOpen(true)}>
-            Import from Lawmatics
-          </Button>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            Create lead matter
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Leads"
+        description="Prospective matters before hiring — send the intake and engagement agreement from here. Signing promotes the existing opportunity to a hired matter."
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={() => setLawmaticsOpen(true)}>
+              Import from Lawmatics
+            </Button>
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              Create lead matter
+            </Button>
+          </>
+        }
+      />
 
       <LeadPipelineInsights
         leads={initialLeads}
@@ -524,18 +370,14 @@ export function LeadsClient({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1">
           {FILTER_TABS.map(tab => (
-            <button
+            <FilterChip
               key={tab.value}
-              type="button"
               onClick={() => setFilter(tab.value)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                filter === tab.value
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
+              selected={filter === tab.value}
+              count={counts[tab.value]}
             >
-              {tab.label} ({counts[tab.value]})
-            </button>
+              {tab.label}
+            </FilterChip>
           ))}
         </div>
         {selectedIds.length > 0 && (
@@ -559,17 +401,13 @@ export function LeadsClient({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-52 flex-1 items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 focus-within:border-accent">
-          <Search className="h-3.5 w-3.5 text-muted-foreground" />
-          <input
-            type="search"
-            value={tableFilters.search}
-            onChange={event => setTableFilters(current => ({ ...current, search: event.target.value }))}
-            placeholder="Search leads…"
-            className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-            aria-label="Search leads"
-          />
-        </div>
+        <SearchField
+          value={tableFilters.search}
+          onValueChange={value => setTableFilters(current => ({ ...current, search: value }))}
+          placeholder="Search leads…"
+          aria-label="Search leads"
+          containerClassName="min-w-52 flex-1 bg-card"
+        />
         <Select
           value={tableFilters.practice}
           onValueChange={value => setTableFilters(current => ({ ...current, practice: value }))}
@@ -625,223 +463,31 @@ export function LeadsClient({
         </div>
       </div>
 
-      {filteredLeads.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card py-12 text-center">
-          <UserPlus className="h-6 w-6 text-muted-foreground" aria-hidden />
-          <p className="text-sm text-muted-foreground">
-            {initialLeads.length === 0
-              ? 'No leads yet. Add one to send the intake and engagement agreement.'
-              : 'No leads in this view.'}
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={checked => toggleAll(checked === true)}
-                    aria-label="Select all visible leads"
-                  />
-                </TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Practice</TableHead>
-                <TableHead>Fee</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead className="text-right">Next step</TableHead>
-                <TableHead className="w-10" aria-label="More actions" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLeads.map(lead => {
-                const busy = busyLeadId === lead.id
-                const step = nextStep(lead, esignEnabled)
-                const hired = lead.lead_status === 'hired'
-                const runStep = () => {
-                  switch (step.key) {
-                    case 'send_intake':
-                    case 'remind_intake':
-                      void handleSendIntake(lead)
-                      return
-                    case 'send_engagement':
-                    case 'resend_engagement':
-                      setEngagementLead(lead)
-                      return
-                    default:
-                      setConvertTarget(lead)
-                  }
-                }
-                return (
-                  <TableRow key={lead.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={Boolean(selected[lead.id])}
-                        onCheckedChange={checked => toggleSelected(lead.id, checked === true)}
-                        aria-label={`Select ${leadName(lead)}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <Link href={`/admin/leads/${lead.id}`} className="hover:underline">{leadName(lead)}</Link>
-                      <div className="text-[11px] font-normal text-muted-foreground">
-                        {provisionalNumber(lead)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{lead.email}</TableCell>
-                    <TableCell>{practiceAreaLabel(lead.practice_area)}</TableCell>
-                    <TableCell>
-                      {lead.engagement_fee_quoted != null
-                        ? `$${lead.engagement_fee_quoted.toLocaleString('en-US')}`
-                        : '—'}
-                    </TableCell>
-                    <TableCell><LeadProgress lead={lead} /></TableCell>
-                    <TableCell className="text-right">
-                      {step.key === 'view_matter' && lead.matter_id ? (
-                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" asChild>
-                          <Link href={`/admin/matters/${lead.matter_id}`}>{step.label}</Link>
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant={step.primary ? 'default' : 'outline'}
-                          className="h-7 px-2.5 text-xs"
-                          disabled={busy}
-                          onClick={runStep}
-                        >
-                          {step.label}
-                        </Button>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            disabled={busy}
-                            aria-label={`More actions for ${leadName(lead)}`}
-                          >
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onSelect={() => openEdit(lead)}>Edit</DropdownMenuItem>
-                          {!hired && (
-                            <DropdownMenuItem onSelect={() => void handleSendIntake(lead)}>
-                              {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
-                            </DropdownMenuItem>
-                          )}
-                          {!hired && esignEnabled && lead.engagement_status !== 'signed' && (
-                            <DropdownMenuItem onSelect={() => setEngagementLead(lead)}>
-                              {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
-                            </DropdownMenuItem>
-                          )}
-                          {!hired && (
-                            <DropdownMenuItem onSelect={() => setConvertTarget(lead)}>
-                              Hire matter
-                            </DropdownMenuItem>
-                          )}
-                          {!hired && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onSelect={() => setDeleteTarget(lead)}
-                              >
-                                Archive lead
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <LeadsTable
+        leads={filteredLeads}
+        hasAnyLeads={initialLeads.length > 0}
+        selected={selected}
+        allSelected={allSelected}
+        busyLeadId={busyLeadId}
+        esignEnabled={esignEnabled}
+        onToggleAll={toggleAll}
+        onToggleSelected={toggleSelected}
+        onEdit={openEdit}
+        onSendIntake={lead => void handleSendIntake(lead)}
+        onSendEngagement={setEngagementLead}
+        onHire={setConvertTarget}
+        onArchive={setDeleteTarget}
+      />
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingLead ? 'Edit lead' : 'New lead'}</DialogTitle>
-            <DialogDescription>
-              A prospective matter becomes Hired when the engagement agreement is signed.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              placeholder="Client name"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            />
-            <Input
-              type="email"
-              placeholder="Email"
-              value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            />
-            <Input
-              placeholder="Phone (optional)"
-              value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-            />
-            <Select
-              value={form.practiceArea}
-              onValueChange={value => setForm(f => ({ ...f, practiceArea: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRACTICE_AREA_OPTIONS.map(option => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {editingLead && (
-              <Select
-                value={form.status}
-                onValueChange={value => setForm(f => ({ ...f, status: value }))}
-              >
-                <SelectTrigger aria-label="Matter status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LEAD_STATUS_OPTIONS.map(option => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder="Quoted flat fee (optional)"
-              value={form.fee}
-              onChange={e => setForm(f => ({ ...f, fee: e.target.value }))}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={() => void handleSave()} disabled={saving}>
-              {saving ? 'Saving…' : editingLead ? 'Save changes' : 'Add lead'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <LeadEditorDialog
+        open={dialogOpen}
+        editingLead={editingLead}
+        form={form}
+        saving={saving}
+        onOpenChange={setDialogOpen}
+        onFormChange={setForm}
+        onSave={() => void handleSave()}
+      />
       <LawmaticsImportDialog open={lawmaticsOpen} onOpenChange={setLawmaticsOpen} defaultTarget="lead" />
 
       <Dialog open={deleteTarget !== null} onOpenChange={open => !open && setDeleteTarget(null)}>

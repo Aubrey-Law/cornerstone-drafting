@@ -2,30 +2,16 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import {
-  ArrowLeft,
-  ChevronDown,
-  ClipboardList,
-  Loader as Loader2,
-  MoreHorizontal,
-  Trash2,
-  Upload,
-  Clock as UnlockIcon,
-} from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { listDocuments } from '@/lib/documents'
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import {
   stageLabel,
-  STAGES,
   type MatterActivity,
   type MatterContact,
-  type MatterDocument,
   type MatterStage,
   type PipelineMatter,
 } from '@/types/database'
@@ -50,20 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import {
   type CommunicationChannel,
@@ -75,7 +48,6 @@ import {
   mergeUnreviewedCounts,
   type UnreviewedUploadCounts,
 } from '@/lib/matter/unreviewedUploads'
-import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 import {
   resolveMatterIntake,
   unlockIntake,
@@ -106,6 +78,9 @@ import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/
 import { MatterCommunicationsTab } from './tabs/messages'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
+import { MatterDetailHeader } from './MatterDetailHeader'
+import { useMatterCommunications } from './useMatterCommunications'
+import { useMatterDocuments } from './useMatterDocuments'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
@@ -144,27 +119,6 @@ interface MatterDetailClientProps {
   emailSendEnabled?: boolean
   esignEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
-}
-
-type PortalMessage = {
-  id: string
-  body: string
-  sender_role: string
-  created_at: string
-  read_at: string | null
-}
-
-type SmsMessage = {
-  id: string
-  direction: string
-  recipient_role: string | null
-  recipient_name: string | null
-  body: string
-  status: string
-  from_number: string | null
-  to_number: string | null
-  created_at: string
-  actor_name: string | null
 }
 
 export default function MatterDetailClient(props: MatterDetailClientProps) {
@@ -232,8 +186,7 @@ function MatterDetailClientInner({
   const [stageSaving, setStageSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
-  const [documents, setDocuments] = useState<MatterDocument[]>([])
-  const [docsLoading, setDocsLoading] = useState(false)
+  const { documents, loading: docsLoading, reload: loadDocuments } = useMatterDocuments(matter.matter_id)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
@@ -242,21 +195,34 @@ function MatterDetailClientInner({
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
 
-  const [portalMessages, setPortalMessages] = useState<PortalMessage[]>([])
-  const [portalLoading, setPortalLoading] = useState(false)
-  const [portalDraft, setPortalDraft] = useState('')
-  const [portalSending, setPortalSending] = useState(false)
-
-  const [smsMessages, setSmsMessages] = useState<SmsMessage[]>([])
-  const [smsLoading, setSmsLoading] = useState(false)
-  const [smsDraft, setSmsDraft] = useState('')
-  const [smsRecipient, setSmsRecipient] = useState<'client' | 'spouse'>('client')
-  const [smsSending, setSmsSending] = useState(false)
-
-  const [emailTo, setEmailTo] = useState(initialMatter.client_email || '')
-  const [emailSubject, setEmailSubject] = useState('')
-  const [emailBody, setEmailBody] = useState('')
-  const [emailSending, setEmailSending] = useState(false)
+  const {
+    portalMessages,
+    portalLoading,
+    portalDraft,
+    portalSending,
+    smsMessages,
+    smsLoading,
+    smsDraft,
+    smsRecipient,
+    smsSending,
+    emailTo,
+    emailSubject,
+    emailBody,
+    emailSending,
+    setPortalDraft,
+    setSmsDraft,
+    setSmsRecipient,
+    setEmailTo,
+    setEmailSubject,
+    setEmailBody,
+    sendPortalMessage,
+    sendSms,
+    sendEmail,
+  } = useMatterCommunications({
+    matterId: matter.matter_id,
+    token,
+    initialEmailTo: initialMatter.client_email || '',
+  })
 
   const [activity, setActivity] = useState<MatterActivity[]>(initialActivity)
   const activityLoading = false
@@ -337,7 +303,6 @@ function MatterDetailClientInner({
 
   useEffect(() => {
     setMatter(initialMatter)
-    setEmailTo(initialMatter.client_email || '')
   }, [initialMatter])
 
   useEffect(() => {
@@ -504,144 +469,6 @@ function MatterDetailClientInner({
     }
   }, [handleMarkPortalUploadsReviewed, openIntakeSheet, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
 
-  const loadPortalMessages = useCallback(async () => {
-    if (!token) return
-    setPortalLoading(true)
-    try {
-      const res = await fetch(`/api/messages?matter_id=${encodeURIComponent(matter.matter_id)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const body = await res.json().catch(() => [])
-      if (res.ok) setPortalMessages(Array.isArray(body) ? body : [])
-    } catch {
-      /* ignore */
-    } finally {
-      setPortalLoading(false)
-    }
-  }, [token, matter.matter_id])
-
-  const loadSmsMessages = useCallback(async () => {
-    if (!token) return
-    setSmsLoading(true)
-    try {
-      const res = await fetch(`/api/admin/matters/${matter.matter_id}/sms-messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const body = await res.json().catch(() => [])
-      if (res.ok) setSmsMessages(Array.isArray(body) ? body : [])
-    } catch {
-      /* ignore */
-    } finally {
-      setSmsLoading(false)
-    }
-  }, [token, matter.matter_id])
-
-  useEffect(() => {
-    void loadPortalMessages()
-    void loadSmsMessages()
-  }, [loadPortalMessages, loadSmsMessages])
-
-  const handlePortalMessageInsert = useCallback((message: PortalMessage) => {
-    setPortalMessages(current => {
-      if (current.some(row => row.id === message.id)) return current
-      return [...current, message]
-    })
-  }, [])
-
-  useMessagesRealtime(matter.matter_id, handlePortalMessageInsert)
-
-  const sendPortalMessage = async () => {
-    if (!token || !portalDraft.trim()) return
-    setPortalSending(true)
-    try {
-      const res = await fetch('/api/messages', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ matter_id: matter.matter_id, body: portalDraft.trim() }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Send failed')
-      setPortalDraft('')
-      toast.success('Message sent')
-      await loadPortalMessages()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not send message')
-    } finally {
-      setPortalSending(false)
-    }
-  }
-
-  const sendSms = async () => {
-    if (!token || !smsDraft.trim()) return
-    setSmsSending(true)
-    try {
-      const res = await fetch(`/api/admin/matters/${matter.matter_id}/send-sms`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ recipient: smsRecipient, body: smsDraft.trim() }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'SMS failed')
-      setSmsDraft('')
-      toast.success('Text sent')
-      await loadSmsMessages()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not send SMS')
-    } finally {
-      setSmsSending(false)
-    }
-  }
-
-  const sendEmail = async () => {
-    if (!token || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return
-    setEmailSending(true)
-    try {
-      const res = await fetch(`/api/admin/matters/${matter.matter_id}/send-email`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: emailTo.trim(),
-          subject: emailSubject.trim(),
-          text: emailBody.trim(),
-        }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Email failed')
-      setEmailSubject('')
-      setEmailBody('')
-      toast.success(body.provider === 'graph' ? 'Email sent via Outlook' : 'Email sent')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not send email')
-    } finally {
-      setEmailSending(false)
-    }
-  }
-
-  const loadDocuments = useCallback(async () => {
-    setDocsLoading(true)
-    try {
-      const docs = await listDocuments(matter.matter_id)
-      setDocuments(docs)
-    } catch {
-      setDocuments([])
-    } finally {
-      setDocsLoading(false)
-    }
-  }, [matter.matter_id])
-
-  useEffect(() => {
-    void loadDocuments()
-  }, [loadDocuments])
-
   const handleStageChange = async (stage: MatterStage) => {
     if (!token || stage === matter.stage) return
     setStageSaving(true)
@@ -806,118 +633,23 @@ function MatterDetailClientInner({
   )
   const lastPortalMessage = portalMessages.length > 0 ? portalMessages[portalMessages.length - 1] : null
 
-  const healthLabel = agingSummary?.isSnoozed
-    ? null
-    : agingSummary?.health === 'red'
-      ? 'Stalled'
-      : agingSummary?.health === 'amber'
-        ? 'Needs attention'
-        : agingSummary?.health === 'green'
-          ? 'On track'
-          : null
-  const healthClass = agingSummary?.health === 'red'
-    ? 'border-red-strong-border bg-red-strong-bg text-red-strong'
-    : agingSummary?.health === 'amber'
-      ? 'border-amber-border bg-amber-bg text-amber'
-      : 'border-green/40 bg-green-bg text-green'
-
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
-      <div className="border-b border-border bg-card px-4 py-4 md:px-8">
-        <div className="w-full">
-        <div className="mb-3">
-          <Link
-            href="/admin/matters"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Matters
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              {matter.client_name || matter.matter_name || 'Matter'}
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{matterNum ? `#${matterNum}` : 'Matter number —'}</span>
-              <span aria-hidden>·</span>
-              <span>{practiceAreaLabel(matterDetails?.practice_area ?? matter.practice_area)}</span>
-              {agingSummary && (
-                <>
-                  <span aria-hidden>·</span>
-                  <span>{agingSummary.daysInStage} business day{agingSummary.daysInStage === 1 ? '' : 's'} in {stageLabel(matter.stage)}</span>
-                </>
-              )}
-              {healthLabel && (
-                <Badge variant="outline" className={`text-[10px] ${healthClass}`}>{healthLabel}</Badge>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={matter.stage}
-              onValueChange={value => void handleStageChange(value as MatterStage)}
-              disabled={stageSaving}
-            >
-              <SelectTrigger size="sm" className="w-[150px]" aria-label="Matter stage">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STAGES.map(stage => (
-                  <SelectItem key={stage.key} value={stage.key}>{stage.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" size="sm" variant="outline" className="gap-1.5">
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  Intake actions
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => void openIntakeSheet()}>
-                  <ClipboardList className="mr-2 h-3.5 w-3.5" />
-                  {intakeCompleted ? 'Edit intake' : liveIntakeId ? 'Update intake' : 'Create intake'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setImportIntakeOpen(true)}>
-                  <Upload className="mr-2 h-3.5 w-3.5" />
-                  Import intake — paste text or upload Word
-                </DropdownMenuItem>
-                {intakeCompleted && liveIntakeId && (
-                  <DropdownMenuItem onClick={() => void handleUnlockIntake()} disabled={unlocking}>
-                    {unlocking ? (
-                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                    ) : (
-                      <UnlockIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                    Unlock intake for client editing
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" size="sm" variant="outline" aria-label="More actions">
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Delete matter
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        </div>
-      </div>
+      <MatterDetailHeader
+        matter={matter}
+        matterNumber={matterNum}
+        details={matterDetails}
+        agingSummary={agingSummary}
+        stageSaving={stageSaving}
+        intakeCompleted={intakeCompleted}
+        intakeId={liveIntakeId}
+        unlocking={unlocking}
+        onStageChange={stage => void handleStageChange(stage)}
+        onOpenIntake={() => void openIntakeSheet()}
+        onImportIntake={() => setImportIntakeOpen(true)}
+        onUnlockIntake={() => void handleUnlockIntake()}
+        onDelete={() => setDeleteOpen(true)}
+      />
 
       <div className="border-b border-border bg-background px-4 py-3 md:px-8">
         <div className="w-full">

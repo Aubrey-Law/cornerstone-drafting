@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getBearerUser } from '@/lib/apiAuth'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -17,22 +17,11 @@ import {
 
 const VALID_FOLDERS = new Set(['draft', 'final', 'client', 'review', 'signed', 'intake', 'meeting-notes'])
 
-async function getUser(req: Request) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-  const { data: { user } } = await sb.auth.getUser(token)
-  return user ?? null
-}
-
 // POST /api/documents/upload-url
 // body: { matterId, filename, contentType, folder }
 // returns: { uploadUrl, r2Key }
 export async function POST(req: Request) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { matterId, filename, contentType, folder = 'client', contentLength } = await req.json()

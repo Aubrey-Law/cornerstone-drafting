@@ -33,6 +33,12 @@ async function userFromBearer(token: string) {
   return user
 }
 
+/** Resolve an authenticated bearer user without imposing an admin role. */
+export async function getBearerUser(req: Request) {
+  const token = getBearerToken(req)
+  return token ? userFromBearer(token) : null
+}
+
 // Verifies the user against Supabase Auth (remote hop) AND checks role.
 export async function requireAdmin(_req: Request) {
   const token = getBearerToken(_req)

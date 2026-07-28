@@ -1,5 +1,6 @@
 import type { MatterListRow } from '@/lib/queries/matters'
 import { stageInfo, type StageGroup } from '@/types/database'
+import { compareNullable, normalizeSearchText, stableSort, timestamp } from '@/lib/collections'
 
 export type MatterTableFilters = {
   search: string
@@ -33,16 +34,10 @@ export function filterAndSortMatters(
   filters: MatterTableFilters,
   sortKey: MatterSortKey,
 ): MatterListRow[] {
-  const search = normalize(filters.search)
-  const practice = normalize(filters.practice)
-  const decorated = matters
-    .filter(matter => matchesMatter(matter, search, practice, filters.stageGroup))
-    .map((matter, index) => ({ matter, index }))
-
-  decorated.sort((left, right) =>
-    compareMatters(left.matter, right.matter, sortKey) || left.index - right.index,
-  )
-  return decorated.map(({ matter }) => matter)
+  const search = normalizeSearchText(filters.search)
+  const practice = normalizeSearchText(filters.practice)
+  const filtered = matters.filter(matter => matchesMatter(matter, search, practice, filters.stageGroup))
+  return stableSort(filtered, (left, right) => compareMatters(left, right, sortKey))
 }
 
 function matchesMatter(
@@ -89,19 +84,6 @@ function matterNumber(matter: MatterListRow): string | null {
   return value || null
 }
 
-function compareNullable<T>(left: T | null, right: T | null, compare: (a: T, b: T) => number): number {
-  if (left === null && right === null) return 0
-  if (left === null) return 1
-  if (right === null) return -1
-  return compare(left, right)
-}
-
-function timestamp(value: string | null | undefined): number | null {
-  if (!value) return null
-  const parsed = Date.parse(value)
-  return Number.isNaN(parsed) ? null : parsed
-}
-
 function normalize(value: string | null | undefined): string {
-  return value?.trim().toLocaleLowerCase() ?? ''
+  return normalizeSearchText(value)
 }

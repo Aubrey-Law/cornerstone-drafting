@@ -19,28 +19,11 @@ import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import { linkifyText } from '@/lib/linkify'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
 import { CallsSection } from './calls'
+import type { PortalMessage, SmsMessage } from '../useMatterCommunications'
 
 export interface SchedulingActionsProps {
   onSendSchedulingLink: () => void
   onBookForClient: () => void
-}
-
-type PortalMessage = {
-  id: string
-  body: string
-  sender_role: string
-  created_at: string
-  read_at: string | null
-}
-
-type SmsMessage = {
-  id: string
-  direction: string
-  recipient_role: string | null
-  recipient_name: string | null
-  body: string
-  status: string
-  created_at: string
 }
 
 export interface MatterMessagesSectionsProps {

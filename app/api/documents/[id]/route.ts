@@ -1,5 +1,5 @@
 import { NextResponse, after } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getBearerUser } from '@/lib/apiAuth'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -15,20 +15,9 @@ import { isPdfDocument } from '@/lib/documents'
 import { isFirmSharedFolder, wordDocShareBlockReason } from '@/lib/documentSharing'
 import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
 
-async function getUser(req: Request) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-  const { data: { user } } = await sb.auth.getUser(token)
-  return user ?? null
-}
-
 // GET /api/documents/[id]  →  { url: signedDownloadUrl, document: MatterDocument }
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const action = new URL(req.url).searchParams.get('action') === 'view' ? 'view' : 'download'
@@ -77,7 +66,7 @@ const INTERNAL_SOURCE_FOLDERS: ReadonlySet<DocFolder> = new Set(['draft', 'meeti
 // rolled back and the request fails — promotion without an audit trail is
 // not allowed.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
@@ -273,7 +262,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 // schedule the R2 cleanup last (any remaining R2 object is invisible to the
 // app and only costs storage).
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params

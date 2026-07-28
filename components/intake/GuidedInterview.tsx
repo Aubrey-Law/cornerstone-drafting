@@ -65,10 +65,10 @@ const stepLoading = () => (
 
 const STEP_COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
   referral: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepReferral), { loading: stepLoading }),
-  personal: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepPersonal), { loading: stepLoading }),
-  family: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepFamily), { loading: stepLoading }),
-  spouse: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepSpouse), { loading: stepLoading }),
-  children: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepChildren), { loading: stepLoading }),
+  personal: dynamic<StepProps>(() => import('./IntakePersonalStep').then((m) => m.StepPersonal), { loading: stepLoading }),
+  family: dynamic<StepProps>(() => import('./IntakeFamilySteps').then((m) => m.StepFamily), { loading: stepLoading }),
+  spouse: dynamic<StepProps>(() => import('./IntakeFamilySteps').then((m) => m.StepSpouse), { loading: stepLoading }),
+  children: dynamic<StepProps>(() => import('./IntakeChildrenStep').then((m) => m.StepChildren), { loading: stepLoading }),
   estate: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepEstate), { loading: stepLoading }),
   goals: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepGoals), { loading: stepLoading }),
   additional_contacts: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepAdditionalContacts), { loading: stepLoading }),

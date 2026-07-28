@@ -1,23 +1,12 @@
 import { GetObjectCommand } from '@aws-sdk/client-s3'
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getBearerUser } from '@/lib/apiAuth'
 import { auditDocumentAccess, userCanReadDocument } from '@/lib/documentSecurity'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-
-async function getUser(req: Request) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-  const { data: { user } } = await sb.auth.getUser(token)
-  return user ?? null
-}
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Buffer[] = []
@@ -28,7 +17,7 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getUser(req)
+  const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params

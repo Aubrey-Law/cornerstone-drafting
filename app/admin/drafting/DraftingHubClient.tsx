@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDownAZ, Clock, Columns3, RefreshCw, Search, Table2, X } from 'lucide-react'
+import { ArrowDownAZ, Clock, Columns3, RefreshCw, Table2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SearchField } from '@/components/SearchField'
 import MatterPipelineKanban from '@/app/admin/drafting/MatterPipelineKanban'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
 import { cn } from '@/lib/utils'
@@ -169,22 +170,14 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
       <div className="border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-1 text-xl font-semibold tracking-tight">Drafting</h1>
-          <div className="flex max-w-xs min-w-[12rem] flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 focus-within:border-accent">
-            <Search className="h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              ref={searchRef}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search by client, matter number, email, plan type…"
-              className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-              aria-label="Search matters"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="text-muted-foreground hover:text-foreground" aria-label="Clear search">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            ref={searchRef}
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search by client, matter number, email, plan type…"
+            aria-label="Search matters"
+            containerClassName="max-w-xs min-w-[12rem] flex-1"
+          />
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Readiness filter">
             {READINESS_CHIPS.map(chip => {
               const selected = readinessFilter === chip.value
