@@ -2,7 +2,27 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ArrowUp, ClipboardCopy, FileText, FileType2, NotebookPen, Square, Trash2, X } from 'lucide-react'
+import Link from 'next/link'
+import {
+  ArrowUp,
+  BookOpen,
+  Calculator,
+  CheckCircle2,
+  ClipboardCopy,
+  ClipboardList,
+  FileText,
+  FileType2,
+  HeartPulse,
+  Info,
+  MessageSquareText,
+  NotebookPen,
+  ScrollText,
+  Sparkles,
+  Square,
+  Trash2,
+  Users,
+  type LucideIcon,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -27,15 +47,12 @@ import type {
 
 interface ChatPanelProps {
   open: boolean
-  onClose: () => void
   pendingAction?: CornerstoneChatOpenDetail | null
   onPendingActionHandled?: () => void
   matterDisplayName?: string | null
+  /** Resolved from `resolveFirmModel('assistant')` in the admin layout. */
+  assistantModelLabel?: string | null
 }
-
-const ASSISTANT_TITLE = process.env.NEXT_PUBLIC_FIRM_NAME
-  ? `${process.env.NEXT_PUBLIC_FIRM_NAME} Assistant`
-  : 'AI Assistant'
 
 const suggestedPrompts: Record<ChatContextType['type'], string[]> = {
   matter: [
@@ -55,6 +72,21 @@ const suggestedPrompts: Record<ChatContextType['type'], string[]> = {
     'Gather trust drafting details',
     'Create incapacity design sheet',
   ],
+}
+
+/** Leading glyph for each empty-state action row; unmapped prompts fall back to Sparkles. */
+const promptIcons: Record<string, LucideIcon> = {
+  'Summarize the design sheet for Claude drafting': ClipboardList,
+  'Analyze MA estate tax exposure': Calculator,
+  'Summarize contacts and fiduciary roles': Users,
+  'Create incapacity design sheet': HeartPulse,
+  'Create a matter note for the file': NotebookPen,
+  "Summarize this client's situation": FileText,
+  'Draft follow-up questions for the client': MessageSquareText,
+  'Gather trust drafting details': ScrollText,
+  "What's the MA estate tax threshold?": Calculator,
+  'Explain per stirpes distribution': BookOpen,
+  'Draft a client follow-up for a stalled matter': MessageSquareText,
 }
 
 type DesignSheetChatProposal = {
@@ -92,6 +124,12 @@ function contextLabel(context: ChatContextType, matterDisplayName?: string | nul
 function contextIcon(context: ChatContextType) {
   if (context.type === 'matter') return 'Matter'
   return 'Firm'
+}
+
+/** Pill text for the context strip: `Matter · Whitfield` / bare `Firm`. */
+function contextPillText(context: ChatContextType, matterDisplayName?: string | null) {
+  if (context.type === 'general') return contextIcon(context)
+  return `${contextIcon(context)} · ${contextLabel(context, matterDisplayName)}`
 }
 
 function makeMessage(role: FloatingChatMessage['role'], content: string, context: ChatContextType): FloatingChatMessage {
@@ -142,7 +180,13 @@ function storeMessages(messages: FloatingChatMessage[]) {
   }
 }
 
-export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled, matterDisplayName = null }: ChatPanelProps) {
+export function ChatPanel({
+  open,
+  pendingAction,
+  onPendingActionHandled,
+  matterDisplayName = null,
+  assistantModelLabel = null,
+}: ChatPanelProps) {
   const detectedContext = useChatContext()
   const [overrideGeneral, setOverrideGeneral] = useState(false)
   const [messages, setMessages] = useState<FloatingChatMessage[]>([])
@@ -152,6 +196,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
   const [error, setError] = useState<string | null>(null)
   const [actionStatus, setActionStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [savingNote, setSavingNote] = useState(false)
+  const [savedNote, setSavedNote] = useState<{ matterId: string; noteType: MatterNoteSaveType } | null>(null)
   const [saveNoteType, setSaveNoteType] = useState<MatterNoteSaveType>('internal')
   const [designSheetProposal, setDesignSheetProposal] = useState<DesignSheetChatProposal | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
@@ -180,6 +225,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
       setOverrideGeneral(false)
       setActionStatus(null)
       setSavingNote(false)
+      setSavedNote(null)
       setDesignSheetProposal(null)
     }
     wasOpenRef.current = open
@@ -456,6 +502,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
 
     setSavingNote(true)
     setActionStatus(null)
+    setSavedNote(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const response = await fetch('/api/admin/chat/save-note', {
@@ -475,8 +522,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
         const json = await response.json().catch(() => null) as { error?: string } | null
         throw new Error(json?.error ?? 'Failed to save note')
       }
-      const savedAs = saveNoteType === 'client_comm' ? 'matter client comm.' : 'matter internal'
-      flashStatus('success', `Saved chat to ${savedAs} notes.`)
+      setSavedNote({ matterId: chatContext.id, noteType: saveNoteType })
     } catch (err) {
       flashStatus('error', (err as Error).message || 'Failed to save note.')
     } finally {
@@ -540,6 +586,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     setMessages([])
     setError(null)
     setActionStatus(null)
+    setSavedNote(null)
     setDesignSheetProposal(null)
   }
 
@@ -568,15 +615,11 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
     })
   }
 
+  const contextWord = chatContext.type === 'matter' ? 'Matter' : 'Firm'
+  const savedNoteLabel = savedNote?.noteType === 'client_comm' ? 'Client comm.' : 'Internal'
+
   return (
-    <aside
-      aria-label={ASSISTANT_TITLE}
-      aria-hidden={!open}
-      className={cn(
-        'fixed bottom-0 right-0 top-0 z-[49] flex w-[min(420px,100vw)] flex-col border-l border-border bg-card text-card-foreground shadow-[-4px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-200 ease-out',
-        open ? 'translate-x-0' : 'translate-x-full',
-      )}
-    >
+    <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground">
       {designSheetProposal && (
         <DesignSheetImportDialog
           open={Boolean(designSheetProposal)}
@@ -593,47 +636,32 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           }}
         />
       )}
-      <div className="flex min-h-[72px] items-center justify-between gap-4 border-b border-border px-4 py-3">
-        <div>
-          <div className="admin-section-title text-foreground">
-            {ASSISTANT_TITLE}
-          </div>
-          <div
-            className={cn(
-              'mt-2 inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold',
-              chatContext.type === 'general'
-                ? 'bg-muted text-muted-foreground'
-                : 'bg-accent text-accent-foreground',
-            )}
-          >
-            {contextIcon(chatContext)} · {contextLabel(chatContext, matterDisplayName)}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close AI assistant"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <X size={18} />
-        </button>
-      </div>
 
-      {detectedContext.type !== 'general' && !overrideGeneral && (
-        <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 py-2.5 text-[13px] text-foreground">
-          <span>Answering about: {detectedContext.label}</span>
+      {/* Context strip — what the assistant is answering about, and the escape hatch. */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <span
+          className={cn(
+            'inline-flex min-w-0 items-center rounded-full px-2 py-1 text-[11px] font-semibold',
+            chatContext.type === 'general'
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-accent text-accent-foreground',
+          )}
+        >
+          <span className="truncate">{contextPillText(chatContext, matterDisplayName)}</span>
+        </span>
+        {detectedContext.type !== 'general' && !overrideGeneral && (
           <button
             type="button"
             onClick={() => setOverrideGeneral(true)}
-            className="whitespace-nowrap rounded-sm text-[13px] font-semibold text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="shrink-0 whitespace-nowrap rounded-sm text-[11px] font-semibold text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Switch to general
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {hasContent && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background/40 px-4 py-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border bg-background/40 px-3 py-2">
           {chatContext.type === 'matter' && (
             <>
               <div className="flex gap-1" role="group" aria-label="Note type when saving">
@@ -646,7 +674,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
                     type="button"
                     onClick={() => setSaveNoteType(option.key)}
                     className={cn(
-                      'rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors',
+                      'inline-flex h-6 items-center rounded-full px-2 text-[10px] font-semibold transition-colors',
                       saveNoteType === option.key
                         ? option.key === 'internal'
                           ? 'bg-brand-navy text-white'
@@ -662,9 +690,9 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
                 type="button"
                 onClick={() => void handleSaveNote()}
                 disabled={!canSaveNote}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <NotebookPen size={14} />
+                <NotebookPen size={12} />
                 {savingNote ? 'Saving…' : 'Save to matter notes'}
               </button>
             </>
@@ -673,9 +701,9 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
             <button
               type="button"
               onClick={() => void handleCopyLastResponse()}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <ClipboardCopy size={14} />
+              <ClipboardCopy size={12} />
               Copy last response
             </button>
           )}
@@ -683,27 +711,27 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
             type="button"
             onClick={() => void handleExportDocx()}
             disabled={!hasContent}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <FileType2 size={14} />
+            <FileType2 size={12} />
             Export as Word
           </button>
           <button
             type="button"
             onClick={handleExportText}
             disabled={!hasContent}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <FileText size={14} />
+            <FileText size={12} />
             Export as text
           </button>
           <button
             type="button"
             onClick={() => void handleClearConversation()}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Trash2 size={14} />
+            <Trash2 size={12} />
             Clear chat
           </button>
           {actionStatus && (
@@ -711,7 +739,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
               role="status"
               className={cn(
                 'ml-auto text-[11px] font-medium',
-                actionStatus.kind === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+                actionStatus.kind === 'success' ? 'text-green' : 'text-destructive',
               )}
             >
               {actionStatus.text}
@@ -720,15 +748,47 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
         </div>
       )}
 
-      <div
-        ref={threadRef}
-        className="flex-1 overflow-y-auto bg-card px-4 py-4"
-      >
+      <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {historyLoading && messages.length === 0 ? (
           <div className="text-sm leading-relaxed text-muted-foreground">Loading history…</div>
         ) : messages.length === 0 ? (
-          <div className="text-sm leading-relaxed text-muted-foreground">
-            Ask me anything about this matter, your pipeline, or Massachusetts estate planning.
+          <div className="flex h-full flex-col justify-end">
+            <p className="text-sm font-semibold text-foreground">What can I help you with?</p>
+            <ul className="mt-2">
+              {prompts.map((prompt, index) => {
+                const PromptIcon = promptIcons[prompt] ?? Sparkles
+                return (
+                  <li key={prompt}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const resolved = resolveSuggestedPrompt(prompt)
+                        if (resolved.noteType) setSaveNoteType(resolved.noteType)
+                        if (resolved.send !== false && !resolved.prefill) {
+                          void sendMessage(resolved.text)
+                          return
+                        }
+                        if (resolved.prefill) {
+                          activityDraftPromptRef.current = resolved.text
+                          setInput(resolved.prefill)
+                          textareaRef.current?.focus()
+                          return
+                        }
+                        setInput(resolved.text)
+                        textareaRef.current?.focus()
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 py-2 text-left text-sm text-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        index < prompts.length - 1 && 'border-b border-muted',
+                      )}
+                    >
+                      <PromptIcon className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+                      <span className="min-w-0 flex-1">{prompt}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         ) : (
           messages.map(message => (
@@ -758,40 +818,44 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           </div>
         )}
 
-        {!historyLoading && messages.length === 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {prompts.map(prompt => (
-              <button
-                key={prompt}
-                type="button"
-                onClick={() => {
-                  const resolved = resolveSuggestedPrompt(prompt)
-                  if (resolved.noteType) setSaveNoteType(resolved.noteType)
-                  if (resolved.send !== false && !resolved.prefill) {
-                    void sendMessage(resolved.text)
-                    return
-                  }
-                  if (resolved.prefill) {
-                    activityDraftPromptRef.current = resolved.text
-                    setInput(resolved.prefill)
-                    textareaRef.current?.focus()
-                    return
-                  }
-                  setInput(resolved.text)
-                  textareaRef.current?.focus()
-                }}
-                className="rounded-full border border-border bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {prompt}
-              </button>
-            ))}
+        {savedNote && (
+          <div
+            role="status"
+            className="mt-2.5 rounded-lg border border-green bg-green-bg px-3 py-2.5 text-[13px] text-green"
+          >
+            <div className="flex items-center gap-1.5 font-semibold">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+              Saved to matter notes · {savedNoteLabel}
+            </div>
+            <p className="mt-1 text-[12px] opacity-90">
+              This conversation is now part of the matter file and shows in the notes timeline.
+            </p>
+            <Link
+              href={`/admin/matters/${savedNote.matterId}?tab=notes`}
+              className="mt-1.5 inline-block text-[12px] font-semibold underline underline-offset-2"
+            >
+              View
+            </Link>
           </div>
         )}
       </div>
 
+      {/* Model + context provenance, immediately above the composer. */}
+      {assistantModelLabel ? (
+        <div className="flex shrink-0 items-start gap-1.5 border-t border-amber-border bg-amber-bg px-3 py-1.5 text-[11px] text-amber">
+          <Info className="mt-px h-3 w-3 shrink-0" aria-hidden />
+          <span>{assistantModelLabel} · {contextWord} context loaded · answers are drafts, not filed advice</span>
+        </div>
+      ) : (
+        <div className="flex shrink-0 items-start gap-1.5 border-t border-destructive/25 bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
+          <Info className="mt-px h-3 w-3 shrink-0" aria-hidden />
+          <span>No assistant model is configured for this workspace.</span>
+        </div>
+      )}
+
       <form
         onSubmit={handleSubmit}
-        className="flex min-h-[72px] items-end gap-2.5 border-t border-border bg-card p-3"
+        className="flex shrink-0 items-end gap-2 border-t border-border bg-card p-3"
       >
         <textarea
           ref={textareaRef}
@@ -800,7 +864,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           onKeyDown={handleKeyDown}
           placeholder={chatContext.type === 'matter' ? 'Ask about this matter...' : 'Ask anything...'}
           rows={1}
-          className="max-h-28 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="h-10 max-h-28 min-h-10 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
         />
         {loading ? (
           <button
@@ -808,7 +872,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
             onClick={() => abortRef.current?.abort()}
             aria-label="Stop generating"
             title="Stop generating"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Square size={16} />
           </button>
@@ -817,7 +881,7 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
             type="submit"
             disabled={!input.trim()}
             aria-label="Send message"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowUp size={18} />
           </button>
@@ -829,6 +893,6 @@ export function ChatPanel({ open, onClose, pendingAction, onPendingActionHandled
           50% { transform: translateY(-3px); opacity: 0.9; }
         }
       `}</style>
-    </aside>
+    </div>
   )
 }

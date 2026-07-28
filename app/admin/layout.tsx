@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { isVoiceConfigured } from '@/lib/communications/config'
+import { resolveFirmModel } from '@/lib/firmModels'
+import { ANTHROPIC_MODEL_OPTIONS } from '@/lib/userPreferences'
 import AdminLayoutClient from './AdminLayoutClient'
 import { AuthTokenProvider } from '@/lib/auth/AuthTokenProvider'
 
@@ -13,6 +15,14 @@ function initialsFor(name: string): string {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
   return name.slice(0, 2).toUpperCase()
+}
+
+/** Friendly name for the model the assistant actually runs on — never hardcoded. */
+async function assistantModelLabel(): Promise<string | null> {
+  const model = (await resolveFirmModel('assistant'))?.trim()
+  if (!model) return null
+  const known = ANTHROPIC_MODEL_OPTIONS.find(option => option.id === model)
+  return known ? known.label.replace(' (default)', '') : model
 }
 
 export default async function AdminLayout({
@@ -46,6 +56,7 @@ export default async function AdminLayout({
           userName={userName}
           userInitials={userInitials}
           voiceEnabled={isVoiceConfigured()}
+          assistantModelLabel={await assistantModelLabel()}
         >
           {children}
         </AdminLayoutClient>

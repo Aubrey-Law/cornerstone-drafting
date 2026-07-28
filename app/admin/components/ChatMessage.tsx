@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, ClipboardList, Copy } from 'lucide-react'
+import Link from 'next/link'
+import { Check, ClipboardList, Copy, FilePenLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import type {
@@ -166,6 +167,93 @@ function ToolEventCard({
   )
 }
 
+/**
+ * Skill handoff blocks the assistant emits at the end of the trust / incapacity
+ * intake interviews (see docs/ai-chat-design-prompts.md). They are structured
+ * drafting input, not prose, so they get their own panel instead of markdown.
+ */
+const HANDOFF_PATTERN = /=== (TRUST|INCAPACITY) DRAFTING SKILL INPUT ===[\s\S]*?=== END ===/g
+
+type MessageSegment =
+  | { type: 'text'; content: string }
+  | { type: 'handoff'; kind: 'trust' | 'incapacity'; content: string }
+
+export function splitHandoffBlocks(content: string): MessageSegment[] {
+  const segments: MessageSegment[] = []
+  let cursor = 0
+
+  for (const match of content.matchAll(HANDOFF_PATTERN)) {
+    if (match.index === undefined) continue
+    let start = match.index
+    let end = start + match[0].length
+
+    // Claude emits the block fenced; swallow the fence so no stray ``` is left behind.
+    const openFence = content.slice(cursor, start).match(/```[\w-]*[ \t]*\r?\n[ \t]*$/)
+    if (openFence) start -= openFence[0].length
+    const closeFence = content.slice(end).match(/^[ \t]*\r?\n[ \t]*```/)
+    if (closeFence) end += closeFence[0].length
+
+    const leading = content.slice(cursor, start)
+    if (leading.trim()) segments.push({ type: 'text', content: leading })
+    segments.push({
+      type: 'handoff',
+      kind: match[1] === 'TRUST' ? 'trust' : 'incapacity',
+      content: match[0],
+    })
+    cursor = end
+  }
+
+  const trailing = content.slice(cursor)
+  if (trailing.trim()) segments.push({ type: 'text', content: trailing })
+  return segments
+}
+
+function HandoffBlock({
+  segment,
+  matterId,
+}: {
+  segment: Extract<MessageSegment, { type: 'handoff' }>
+  matterId?: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  return (
+    <div className="my-2">
+      <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-brand-navy p-3 text-[11px] leading-relaxed text-sidebar-foreground">
+        {segment.content}
+      </pre>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {matterId ? (
+          <Link
+            href={`/admin/drafting/${matterId}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
+          >
+            <FilePenLine className="h-3.5 w-3.5" aria-hidden />
+            Send to drafting
+          </Link>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">
+            Open this from a matter to send it to drafting.
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard.writeText(segment.content).then(() => {
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1500)
+            })
+          }}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? 'Copied' : 'Copy block'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function CopyMessageButton({ content }: { content: string }) {
   const [copied, setCopied] = useState(false)
   return (
@@ -190,18 +278,30 @@ function CopyMessageButton({ content }: { content: string }) {
 export function ChatMessage({ message, onReviewDesignSheetImport }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const hasToolEvents = !isUser && (message.toolEvents?.length ?? 0) > 0
+  const segments = isUser ? null : splitHandoffBlocks(message.content)
+  const hasHandoff = segments?.some(segment => segment.type === 'handoff') ?? false
+  const matterId = message.contextSnapshot?.type === 'matter' ? message.contextSnapshot.id : undefined
 
   return (
     <div className={cn('mb-3 flex flex-col', isUser ? 'items-end' : 'items-start')}>
       <div
         className={cn(
-          'max-w-[82%] break-words px-3 py-2.5 text-sm leading-relaxed shadow-xs',
+          'break-words px-3 py-2.5 text-sm leading-relaxed shadow-xs',
+          hasHandoff ? 'w-full' : 'max-w-[82%]',
           isUser
             ? 'whitespace-pre-wrap rounded-[12px_12px_2px_12px] bg-accent text-accent-foreground'
             : 'rounded-[12px_12px_12px_2px] border border-border bg-muted text-foreground',
         )}
       >
-        {isUser ? message.content : <ChatMarkdown content={message.content} />}
+        {isUser
+          ? message.content
+          : segments!.map((segment, index) =>
+              segment.type === 'handoff' ? (
+                <HandoffBlock key={`handoff-${index}`} segment={segment} matterId={matterId} />
+              ) : (
+                <ChatMarkdown key={`text-${index}`} content={segment.content} />
+              ),
+            )}
         {hasToolEvents && (
           <div className="mt-1">
             {message.toolEvents!.map(event => (

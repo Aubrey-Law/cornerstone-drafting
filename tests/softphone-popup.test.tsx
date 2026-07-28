@@ -5,6 +5,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const routerRefresh = vi.hoisted(() => vi.fn())
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: routerRefresh, push: vi.fn() }),
+}))
+
 type Handler = (...args: unknown[]) => void
 
 const voiceSdk = vi.hoisted(() => {
@@ -83,6 +88,17 @@ vi.mock('@telnyx/webrtc', () => ({
 }))
 
 import Softphone from '@/components/softphone/Softphone'
+import { SoftphoneProvider } from '@/components/softphone/SoftphoneProvider'
+
+/** The dialer lives in the admin rail, under the softphone provider. */
+function renderPhone(extra?: React.ReactNode) {
+  return render(
+    <SoftphoneProvider voiceEnabled>
+      {extra}
+      <Softphone />
+    </SoftphoneProvider>,
+  )
+}
 
 /** Routes the softphone's fetches: token, directory, and wrap-up save. */
 function mockFetch() {
@@ -108,13 +124,14 @@ describe('Softphone pop-up', () => {
     voiceSdk.reset()
   })
 
-  it('keeps DND from dialing and only allows minimizing active calls', async () => {
+  it('keeps DND from dialing', async () => {
     mockFetch()
     const user = userEvent.setup()
 
-    render(<Softphone />)
+    renderPhone()
 
     await screen.findByText('Ready')
+    // Minimize is the rail's control now, never the pane's.
     expect(screen.queryByRole('button', { name: /minimize/i })).toBeNull()
 
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '7815551212' } })
@@ -130,12 +147,7 @@ describe('Softphone pop-up', () => {
     mockFetch()
     const user = userEvent.setup()
 
-    render(
-      <>
-        <input aria-label="Matters search" />
-        <Softphone />
-      </>,
-    )
+    renderPhone(<input aria-label="Matters search" />)
 
     await screen.findByText('Ready')
     await user.click(screen.getByLabelText('Matters search'))
@@ -149,7 +161,7 @@ describe('Softphone pop-up', () => {
     const fetchMock = mockFetch()
     const user = userEvent.setup()
 
-    render(<Softphone />)
+    renderPhone()
 
     await screen.findByText('Ready')
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '7815551212' } })
@@ -160,12 +172,6 @@ describe('Softphone pop-up', () => {
     )
     voiceSdk.getLastCall()?.emit('accept')
     await screen.findByText('00:00')
-
-    // minimize collapses to the timer chip; the active-call controls disappear
-    await user.click(screen.getByRole('button', { name: /minimize/i }))
-    expect(screen.getByText(/00:00 · on call/i)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /^keypad$/i })).toBeNull()
-    await user.click(screen.getByRole('button', { name: /open active call/i }))
 
     // DTMF goes through the in-call keypad
     await user.click(screen.getByRole('button', { name: /^keypad$/i }))

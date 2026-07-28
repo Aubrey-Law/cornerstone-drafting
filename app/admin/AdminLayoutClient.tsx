@@ -13,6 +13,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeft,
+  PanelRight,
   Phone,
   Settings,
   Sparkles,
@@ -26,11 +27,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 import dynamic from 'next/dynamic'
-import { FloatingChatButton } from './components/FloatingChatButton'
-import {
-  CORNERSTONE_CHAT_OPEN_EVENT,
-  type CornerstoneChatOpenDetail,
-} from './components/adminChatEvents'
+import { AdminRail, RailToggleButton, useAdminRail } from '@/components/rail/AdminRail'
+import { SoftphoneProvider } from '@/components/softphone/SoftphoneProvider'
 import { useMatterDisplayName } from './components/useMatterDisplayName'
 import {
   EMPTY_SIDEBAR_COUNTS,
@@ -40,18 +38,8 @@ import {
 } from '@/lib/sidebarBadges'
 import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsClient'
 
-const StaffSoftphone = dynamic(
-  () => import('./components/StaffSoftphone').then((m) => m.StaffSoftphone),
-  { ssr: false },
-)
-
 const GlobalSearch = dynamic(
   () => import('@/components/GlobalSearch').then(m => ({ default: m.GlobalSearch })),
-  { ssr: false },
-)
-
-const ChatPanel = dynamic(
-  () => import('./components/ChatPanel').then(m => m.ChatPanel),
   { ssr: false },
 )
 
@@ -75,6 +63,7 @@ interface AdminLayoutClientProps {
   userName: string
   userInitials: string
   voiceEnabled?: boolean
+  assistantModelLabel?: string | null
 }
 
 export default function AdminLayoutClient({
@@ -82,14 +71,14 @@ export default function AdminLayoutClient({
   userName,
   userInitials,
   voiceEnabled = false,
+  assistantModelLabel = null,
 }: AdminLayoutClientProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [badgeCounts, setBadgeCounts] = useState<SidebarCounts>(EMPTY_SIDEBAR_COUNTS)
-  const [chatOpen, setChatOpen] = useState(false)
-  const [pendingChatAction, setPendingChatAction] = useState<CornerstoneChatOpenDetail | null>(null)
+  const rail = useAdminRail({ voiceEnabled })
   const matterDisplayName = useMatterDisplayName()
 
   useEffect(() => {
@@ -134,17 +123,6 @@ export default function AdminLayoutClient({
     } catch {
       /* ignore */
     }
-  }, [])
-
-  useEffect(() => {
-    function handleOpenChat(event: Event) {
-      const detail = (event as CustomEvent<CornerstoneChatOpenDetail>).detail
-      setPendingChatAction(detail ?? {})
-      setChatOpen(true)
-    }
-
-    window.addEventListener(CORNERSTONE_CHAT_OPEN_EVENT, handleOpenChat)
-    return () => window.removeEventListener(CORNERSTONE_CHAT_OPEN_EVENT, handleOpenChat)
   }, [])
 
   const setSidebarCollapsed = (next: boolean) => {
@@ -220,7 +198,10 @@ export default function AdminLayoutClient({
   )
 
   return (
-    <div className="flex min-h-screen bg-background">
+    // h-screen + overflow-hidden so <main> owns the scroll and the docked rail
+    // can be a full-height column beside it instead of floating over content.
+    <SoftphoneProvider voiceEnabled={voiceEnabled}>
+    <div className="flex h-screen overflow-hidden bg-background">
       <aside
         className={cn(
           'hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 md:flex md:flex-col',
@@ -274,6 +255,7 @@ export default function AdminLayoutClient({
           </div>
           <div className="hidden md:block md:flex-1" />
           <div className="flex items-center gap-2">
+            <RailToggleButton rail={rail} />
             <ThemeToggle variant="default" />
             <div className="hidden text-right sm:block">
               <p className="text-xs font-medium">{userName}</p>
@@ -286,7 +268,15 @@ export default function AdminLayoutClient({
             </Button>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+        <div className="flex min-h-0 flex-1">
+          <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">{children}</main>
+          <AdminRail
+            rail={rail}
+            voiceEnabled={voiceEnabled}
+            matterDisplayName={matterDisplayName}
+            assistantModelLabel={assistantModelLabel}
+          />
+        </div>
       </div>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -301,17 +291,7 @@ export default function AdminLayoutClient({
         </SheetContent>
       </Sheet>
 
-      {voiceEnabled ? <StaffSoftphone /> : null}
-      <FloatingChatButton isOpen={chatOpen} onOpen={() => setChatOpen(true)} />
-      {chatOpen && (
-        <ChatPanel
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          pendingAction={pendingChatAction}
-          onPendingActionHandled={() => setPendingChatAction(null)}
-          matterDisplayName={matterDisplayName}
-        />
-      )}
     </div>
+    </SoftphoneProvider>
   )
 }

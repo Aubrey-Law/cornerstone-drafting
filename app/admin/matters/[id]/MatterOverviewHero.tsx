@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowRight, TriangleAlert as AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import type { MatterNextAction } from '@/lib/matterNextAction'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel } from '@/lib/matter/unreviewedUploads'
@@ -38,7 +39,12 @@ function ContactLine({ label, name, email, phone }: { label: string; name: strin
     <p className="text-xs text-muted-foreground">
       <span className="font-medium text-foreground">{name || `${label} —`}</span>
       {email && <> · {email}</>}
-      {phone && <> · {phone}</>}
+      {phone && (
+        <>
+          {' · '}
+          <CallPhoneLink phone={phone} />
+        </>
+      )}
     </p>
   )
 }
