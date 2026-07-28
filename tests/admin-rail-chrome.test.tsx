@@ -16,6 +16,9 @@ const hangUpSpy = vi.hoisted(() => ({ mute: vi.fn(), hangUp: vi.fn() }))
 vi.mock('@/app/admin/components/ChatPanel', () => ({
   ChatPanel: ({ open }: { open: boolean }) => <div data-testid="chat-panel">assistant open: {String(open)}</div>,
 }))
+vi.mock('@/components/rail/RailEmailPane', () => ({
+  RailEmailPane: () => <div data-testid="email-pane">compose</div>,
+}))
 // A stand-in dialer that publishes a live call through the real provider hook,
 // so the rail's call bar is exercised without the Twilio/Telnyx SDKs.
 vi.mock('@/components/softphone/Softphone', async () => {
@@ -76,6 +79,7 @@ describe('admin rail chrome', () => {
 
     expect(screen.getByRole('button', { name: /Assistant/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Phone/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Email/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Activity/ })).toBeTruthy()
     expect((await screen.findByTestId('chat-panel')).textContent).toContain('assistant open: true')
   })
@@ -162,5 +166,19 @@ describe('admin rail chrome', () => {
     await userEvent.click(within(bar).getByRole('button', { name: 'Open active call' }))
     expect(screen.getByRole('button', { name: /Phone/ }).getAttribute('aria-current')).toBe('page')
     expect(screen.queryByRole('group', { name: 'Active call' })).toBeNull()
+  })
+
+  it('opens the email pane with ⌘⇧E and keeps the draft mounted afterwards', async () => {
+    render(<Harness />)
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', metaKey: true, shiftKey: true }))
+    })
+
+    expect(screen.getByRole('button', { name: /Email/ }).getAttribute('aria-current')).toBe('page')
+    expect(await screen.findByTestId('email-pane')).toBeTruthy()
+
+    // Switching away hides the pane but keeps the unsent draft mounted.
+    await userEvent.click(screen.getByRole('button', { name: /Activity/ }))
+    expect(screen.getByTestId('email-pane')).toBeTruthy()
   })
 })
