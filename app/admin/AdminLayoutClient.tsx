@@ -45,6 +45,17 @@ const GlobalSearch = dynamic(
 
 const SIDEBAR_COLLAPSED_KEY = 'cornerstone.admin.sidebarCollapsed'
 
+/**
+ * Record-first routes that run the nav as a bare icon rail so the page owns the
+ * horizontal budget. `/admin/matters/[id]` only — the design sub-route and the
+ * matters list keep the user's own sidebar preference.
+ */
+const ICON_RAIL_ROUTES = [/^\/admin\/matters\/(?!new$)[^/]+$/]
+
+function isIconRailRoute(pathname: string): boolean {
+  return ICON_RAIL_ROUTES.some(pattern => pattern.test(pathname))
+}
+
 const navItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
@@ -64,6 +75,13 @@ interface AdminLayoutClientProps {
   userInitials: string
   voiceEnabled?: boolean
   assistantModelLabel?: string | null
+  /**
+   * Forces the compact icon rail and hides the collapse toggle without writing
+   * to localStorage, so the user's own preference survives the visit. Left
+   * undefined it falls back to the route match — `app/admin/layout.tsx` is a
+   * server component and cannot read the pathname to pass this itself.
+   */
+  forceCollapsed?: boolean
 }
 
 export default function AdminLayoutClient({
@@ -72,6 +90,7 @@ export default function AdminLayoutClient({
   userInitials,
   voiceEnabled = false,
   assistantModelLabel = null,
+  forceCollapsed,
 }: AdminLayoutClientProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -124,6 +143,11 @@ export default function AdminLayoutClient({
       /* ignore */
     }
   }, [])
+
+  const railForced = forceCollapsed ?? isIconRailRoute(pathname)
+  // Forced collapse is presentational only — `collapsed` (and localStorage)
+  // still holds the preference the user gets back on every other route.
+  const compact = railForced || collapsed
 
   const setSidebarCollapsed = (next: boolean) => {
     setCollapsed(next)
@@ -205,16 +229,16 @@ export default function AdminLayoutClient({
       <aside
         className={cn(
           'hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 md:flex md:flex-col',
-          collapsed ? 'w-14' : 'w-56',
+          compact ? 'w-14' : 'w-56',
         )}
       >
         <div
           className={cn(
             'flex h-14 items-center border-b border-border',
-            collapsed ? 'justify-center px-1' : 'justify-between gap-1 px-3',
+            compact ? 'justify-center px-1' : 'justify-between gap-1 px-3',
           )}
         >
-          {!collapsed ? (
+          {!compact ? (
             <Link href="/admin" className="flex min-w-0 items-center gap-2">
               <Image src="/favicon.svg" alt="" width={28} height={28} />
               <span className="truncate text-sm font-semibold">Cornerstone</span>
@@ -224,21 +248,23 @@ export default function AdminLayoutClient({
               <Image src="/favicon.svg" alt="" width={24} height={24} />
             </Link>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0"
-            onClick={() => setSidebarCollapsed(!collapsed)}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </Button>
+          {!railForced && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => setSidebarCollapsed(!collapsed)}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </Button>
+          )}
         </div>
-        {nav(collapsed)}
-        <div className={cn('mt-auto border-t border-border p-2', collapsed && 'flex justify-center')}>
-          <ThemeToggle collapsed={collapsed} variant="sidebar" />
+        {nav(compact)}
+        <div className={cn('mt-auto border-t border-border p-2', compact && 'flex justify-center')}>
+          <ThemeToggle collapsed={compact} variant="sidebar" />
         </div>
       </aside>
 

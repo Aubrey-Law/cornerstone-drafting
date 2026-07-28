@@ -46,6 +46,23 @@ export interface DesignSheetReadiness {
   sectionSummaries: Record<string, DesignSectionSummary>
 }
 
+/**
+ * The serializable slice of readiness a server component can hand to a client
+ * one — counts and blockers, without the section summaries or inclusion map.
+ */
+export type MatterDesignReadiness = Pick<
+  DesignSheetReadiness,
+  'completedCount' | 'total' | 'blockers'
+>
+
+export function toMatterDesignReadiness(readiness: DesignSheetReadiness): MatterDesignReadiness {
+  return {
+    completedCount: readiness.completedCount,
+    total: readiness.total,
+    blockers: readiness.blockers,
+  }
+}
+
 export const DESIGN_SECTION_LABELS: Record<string, string> = {
   [DESIGN_SECTION_IDS.intakeReview]: 'Intake Review',
   [DESIGN_SECTION_IDS.clientInformation]: 'Client Information',

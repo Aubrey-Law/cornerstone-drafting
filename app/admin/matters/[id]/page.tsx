@@ -9,6 +9,8 @@ import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
+import { computeDesignSheetReadiness, toMatterDesignReadiness } from '@/lib/designSheetReadiness'
+import { normalizePracticeArea } from '@/lib/practiceArea'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -175,6 +177,30 @@ async function loadClientIntakeShell(admin: ReturnType<typeof getAdminClient>, i
   return normalizeClientIntakeShell(base.data as Partial<ClientIntakeShellRow> | null)
 }
 
+/**
+ * Legal-plan design data lives on `matters`, and readiness only consults it for
+ * EP-LP matters. Missing columns must not take the matter page down, so a
+ * failed read degrades to "no LP data" rather than throwing.
+ */
+async function loadLpDataOptional(
+  admin: ReturnType<typeof getAdminClient>,
+  matterId: string,
+  isLP: boolean,
+): Promise<{ li_design_sheet_data: Record<string, unknown> } | null> {
+  if (!isLP) return null
+  const { data, error } = await admin
+    .from('matters')
+    .select('li_design_sheet_data')
+    .eq('id', matterId)
+    .maybeSingle()
+
+  if (error) {
+    console.warn('Legal-plan design data unavailable; scoring readiness without it:', error.message)
+    return null
+  }
+  return { li_design_sheet_data: (data?.li_design_sheet_data as Record<string, unknown>) ?? {} }
+}
+
 async function loadIntakeSnapshotOptional(matterId: string): Promise<IntakeSnapshot | null> {
   try {
     return await fetchIntakeForMatter(matterId)
@@ -271,6 +297,26 @@ export default async function MatterDetailPage({ params }: Params) {
       }).filter(row => row.selected && row.currentDisplay !== row.proposedDisplay).length
     : 0
 
+  // Score readiness with the same helper the drafting workspace uses, so the
+  // dial and the workspace can never disagree about what is still required.
+  const isLP = normalizePracticeArea(detailsRow?.practice_area ?? matter.practice_area) === 'EP-LP'
+  const designReadiness = designSheet
+    ? toMatterDesignReadiness(computeDesignSheetReadiness({
+        sheet: designSheet,
+        matter,
+        isLP,
+        lpData: await loadLpDataOptional(admin, id, isLP),
+      }))
+    : null
+
+  // The design sheet carries the client's actual domicile; matter_details only
+  // records the jurisdiction the matter is filed in.
+  const clientLocation = {
+    city: designSheet?.city ?? null,
+    county: designSheet?.county ?? detailsRow?.jurisdiction_county ?? null,
+    state: designSheet?.state ?? detailsRow?.jurisdiction_state ?? null,
+  }
+
   const portalUploadsReviewedAt = (matterRow?.portal_uploads_reviewed_at ?? null) as string | null
   const unreviewedUploadCounts = await fetchUnreviewedUploadCounts(
     admin,
@@ -292,6 +338,8 @@ export default async function MatterDetailPage({ params }: Params) {
       matterNumberManual={matterNumberManual}
       matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
+      designReadiness={designReadiness}
+      clientLocation={clientLocation}
       initialEstateSnapshot={initialEstateSnapshot}
       unreviewedUploadCounts={unreviewedUploadCounts}
       initialNotes={notes as MatterNoteRow[]}
