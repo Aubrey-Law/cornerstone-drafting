@@ -20,6 +20,25 @@ export interface LeadListRow {
   lead_urgency: string | null
   taxable_estate: number | null
   last_activity_at: string | null
+  // Loaded so the index record side panel can edit the same fields as the lead
+  // detail rail. Optional because narrower callers still build LeadListRow.
+  middle_name?: string | null
+  preferred_name?: string | null
+  date_of_birth?: string | null
+  address_line1?: string | null
+  address_line2?: string | null
+  city?: string | null
+  state?: string | null
+  zip?: string | null
+  county?: string | null
+  marital_status?: string | null
+  qualification_notes?: string | null
+  has_minor_children?: boolean | null
+  lead_source?: string | null
+  intake_status?: string | null
+  lead_next_action_snoozed_until?: string | null
+  user_id?: string | null
+  client_user_id?: string | null
 }
 
 /**
@@ -58,6 +77,9 @@ export interface LeadDetailRecord {
   intake_sent_at?: string | null
   intake_completed_at?: string | null
   intake_status?: string | null
+  engagement_status?: string | null
+  engagement_sent_at?: string | null
+  engagement_signed_at?: string | null
   lead_next_action_snoozed_until?: string | null
   user_id?: string | null
   client_user_id?: string | null

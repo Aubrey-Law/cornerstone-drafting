@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }))
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }))
+const searchParams = vi.hoisted(() => ({ current: new URLSearchParams() }))
 const toastError = vi.hoisted(() => vi.fn())
-vi.mock('next/navigation', () => ({ useRouter: () => router }))
+vi.mock('next/navigation', () => ({
+  useRouter: () => router,
+  usePathname: () => '/admin/leads/l1',
+  useSearchParams: () => searchParams.current,
+}))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
@@ -16,7 +21,22 @@ import { LeadIntakeCard } from '@/app/admin/leads/[id]/LeadIntakeCard'
 const lead = { id:'l1', first_name:'Jane', middle_name:null, last_name:'Doe', preferred_name:null, full_name:'Jane Doe', email:'jane@example.com', phone:'617', date_of_birth:null, address_line1:'1 Main', address_line2:null, city:'Boston', state:'MA', zip:'02108', county:'Suffolk', marital_status:'married', practice_area:'EP', lead_source:'Referral', lead_status:'lead', engagement_fee_quoted:4500, created_at:'2026-07-21T12:00:00Z', updated_at:'2026-07-25T10:00:00Z', intake_sent_at:null, intake_completed_at:null, lead_next_action_snoozed_until:null }
 const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred_name:null, email:'john@example.com', phone:null, date_of_birth:null }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); toastError.mockReset() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset() })
+
+/** The workspace is tabbed; most assertions need their tab on screen first. */
+function showTab(name: 'Plan' | 'Timeline' | 'Intake' | 'Documents' | 'Notes') {
+  // Radix tabs activate on mouse down, not click.
+  act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) })) })
+}
+
+/** Overflow actions moved off the 48px header row into the More menu. */
+async function openOverflow(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'More actions' }))
+}
+
+function header() {
+  return screen.getByLabelText('Lead actions')
+}
 
 describe('lead detail page', () => {
   it('renders the intake status strip without duplicate next actions', () => {
@@ -32,7 +52,7 @@ describe('lead detail page', () => {
     }
   })
 
-  it('renders one next-action ribbon before the full-width two-column workflow', () => {
+  it('pins one next-action ribbon above the tabbed workspace beside the field rail', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
@@ -44,23 +64,25 @@ describe('lead detail page', () => {
     for (const action of ['Send intake', 'Fill it myself', 'Import', 'Snooze']) {
       expect(screen.getAllByRole('button', { name: action })).toHaveLength(1)
     }
-    expect(main?.className).toContain('px-6')
-    expect(main?.querySelector('.xl\\:grid-cols-\\[1\\.6fr_1fr\\]')).toBeTruthy()
-    expect(main?.querySelector('.xl\\:sticky')).toBeTruthy()
-    expect(main?.querySelector('.max-w-6xl')).toBeNull()
+    // The rail is a sibling of the workspace, not a column inside it.
+    expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
+    expect(main?.previousElementSibling).toBe(screen.getByRole('complementary', { name: 'Lead details' }))
+    expect(main?.querySelector('.xl\\:grid-cols-\\[1\\.6fr_1fr\\]')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Plan' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Plan' }).getAttribute('data-state')).toBe('active')
+    expect(screen.queryByRole('region', { name: 'Lead intake' })).toBeNull()
+
+    showTab('Intake')
     expect(screen.getByRole('region', { name: 'Lead intake' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open intake' })).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByRole('heading', { name: 'Timeline' })).toBeTruthy()
-    for (const retiredHeading of ['Notes', 'Calls', 'Activity']) {
-      expect(screen.queryByRole('heading', { name: retiredHeading })).toBeNull()
-    }
   })
 
   it('refreshes intake progress when the server supplies a newer intake record', () => {
     const { rerender } = render(
       <LeadDetailClient lead={{ ...lead, updated_at: '2026-07-25T00:00:00Z', status: 'draft' }} spouse={spouse} initialActivity={[]} />,
     )
+    showTab('Intake')
     expect(screen.getByText('Never sent · nothing submitted · 0 of 7 sections')).toBeTruthy()
 
     rerender(
@@ -78,6 +100,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     await user.click(screen.getByRole('button', { name: 'Send intake' }))
+    showTab('Intake')
     expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
@@ -96,17 +119,22 @@ describe('lead detail page', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send intake' }))
 
+    showTab('Intake')
     expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
+    showTab('Timeline')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
-  it('keeps the mobile order as ribbon, details, intake, then timeline', () => {
-    const { container } = render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    const text = container.textContent ?? ''
-    expect(text.indexOf('Send intake')).toBeLessThan(text.indexOf('Lead details'))
-    expect(text.indexOf('Lead details')).toBeLessThan(text.indexOf('Never sent'))
-    expect(text.indexOf('Never sent')).toBeLessThan(text.indexOf('Timeline'))
+  it('keeps the rail ahead of the workspace and the ribbon ahead of the tabs', () => {
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    const ribbon = screen.getByRole('status')
+    const tabs = screen.getByRole('tablist')
+    const precedes = (first: Element, second: Element) =>
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(precedes(rail, ribbon)).toBe(true)
+    expect(precedes(ribbon, tabs)).toBe(true)
   })
 
   it('integrates every supplied activity row into the unified timeline', () => {
@@ -118,6 +146,7 @@ describe('lead detail page', () => {
       created_at: `2026-07-${String(13 - index).padStart(2, '0')}T12:00:00Z`,
     }))
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={rows} />)
+    showTab('Timeline')
     expect(screen.getByText('Event 9')).toBeTruthy()
   })
 
@@ -137,31 +166,45 @@ describe('lead detail page', () => {
       />,
     )
 
+    showTab('Timeline')
     expect(screen.getByText('Actor names unavailable: actor lookup failed')).toBeTruthy()
     expect(screen.getByText('Phone updated')).toBeTruthy()
     expect(screen.getByText(/System ·/)).toBeTruthy()
   })
 
-  it('renders the one visible status, complete subtitle, and top action set without a status selector', () => {
+  it('renders one record header row with the status pill and the action set, no subtitle', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
+    const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)
     expect(screen.getAllByText('Lead · day 4')).toHaveLength(1)
-    // The phone is its own element now (click-to-call), so match on the line's text.
-    expect(
-      screen.getByText(
-        (_content, element) =>
-          element?.tagName === 'P' &&
-          element.textContent === 'Estate Planning · Referral · 617 · jane@example.com',
-      ),
-    ).toBeTruthy()
-    expect(screen.getByRole('button',{name:'Email'})).toBeTruthy()
-    expect(screen.getByRole('button',{name:'Text'})).toBeTruthy()
-    expect(screen.getByRole('button',{name:'Resume engagement'})).toBeTruthy()
-    expect(screen.getByRole('button',{name:'Hire matter'})).toBeTruthy()
-    expect(screen.getByRole('button',{name:'Mark lost'})).toBeTruthy()
-    expect(screen.getByRole('button',{name:'More actions'})).toBeTruthy()
+    // The two-row header and its subtitle paragraph are gone.
+    expect(screen.queryByText(/Estate Planning · Referral/)).toBeNull()
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    expect(within(header()).getByRole('button', { name: 'Call' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'Email' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'Text' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'Intake' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'Resume engagement' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'More actions' })).toBeTruthy()
+    expect(within(header()).getByRole('button', { name: 'Toggle details rail' })).toBeTruthy()
     expect(screen.queryByRole('combobox')).toBeNull()
     expect(screen.queryByText(/Last touch/)).toBeNull()
+
+    await openOverflow(user)
+    expect(screen.getByRole('menuitem', { name: 'Hire matter' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Mark lost' })).toBeTruthy()
+  })
+
+  it('collapses and restores the field rail from the header toggle', async () => {
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Toggle details rail' }))
+    expect(screen.queryByRole('complementary', { name: 'Lead details' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Toggle details rail' }))
+    expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
   })
 
   it('opens one-off email and text composers with the lead contact details', async () => {
@@ -319,6 +362,7 @@ describe('lead detail page', () => {
       />,
     )
 
+    showTab('Timeline')
     expect(screen.getByText('Discussed planning goals.')).toBeTruthy()
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/calls'))).toBe(false)
   })
@@ -380,6 +424,7 @@ describe('lead detail page', () => {
       body: JSON.stringify({ nextActionSnoozedUntil: null }),
     }))
     expect(await screen.findByText('Send intake to get the facts')).toBeTruthy()
+    showTab('Timeline')
     expect(screen.getByText('Next action snooze cleared')).toBeTruthy()
   })
 
@@ -463,7 +508,7 @@ describe('lead detail page', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Call' }))
+    await user.click(within(screen.getByRole('status')).getByRole('button', { name: 'Call' }))
 
     expect(openPhone).toHaveBeenCalledTimes(1)
     window.removeEventListener('cornerstone:open-softphone', openPhone)
@@ -492,7 +537,7 @@ describe('lead detail page', () => {
     expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ status: 'lead' })
   })
 
-  it('marks the lead lost from the top row and removes its next action', async () => {
+  it('marks the lead lost from the header overflow and removes its next action', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, _init) => {
       if (String(input).endsWith('/activity')) {
@@ -506,7 +551,8 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Mark lost' }))
+    await openOverflow(user)
+    await user.click(await screen.findByRole('menuitem', { name: 'Mark lost' }))
 
     const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')
     expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ status: 'lost' })
@@ -531,10 +577,12 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
-    await user.click(screen.getByRole('button', { name: 'Mark lost' }))
+    await openOverflow(user)
+    await user.click(await screen.findByRole('menuitem', { name: 'Mark lost' }))
 
     expect(await screen.findByText('Lost · day 4')).toBeTruthy()
     expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
+    showTab('Timeline')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
@@ -596,8 +644,9 @@ describe('lead detail page', () => {
       method: 'PATCH',
       body: JSON.stringify({ nextActionSnoozedUntil: until }),
     }))
-    expect(await screen.findByText('Next action snoozed')).toBeTruthy()
     expect(screen.queryByText('Send intake to get the facts')).toBeNull()
+    showTab('Timeline')
+    expect(await screen.findByText('Next action snoozed')).toBeTruthy()
   })
 
   it('filters unavailable follow-up channels and suppresses an empty follow-up ribbon', () => {
@@ -612,7 +661,9 @@ describe('lead detail page', () => {
       />,
     )
 
-    expect(screen.queryByRole('button', { name: 'Call' })).toBeNull()
+    // The header keeps its own disabled Call; the ribbon drops the channel.
+    expect(within(screen.getByRole('status')).queryByRole('button', { name: 'Call' })).toBeNull()
+    expect((within(header()).getByRole('button', { name: 'Call' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.getAllByRole('button', { name: 'Email' })).toHaveLength(2)
 
     rerender(
@@ -628,10 +679,11 @@ describe('lead detail page', () => {
     expect(screen.queryByText('Follow up with this lead')).toBeNull()
   })
 
-  it('converts from the top row and navigates to the returned matter', async () => {
+  it('converts from the header overflow and navigates to the returned matter', async () => {
     vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:true,json:async()=>({matterId:'m1'})} as Response)
     const user=userEvent.setup();render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    await user.click(screen.getByRole('button',{name:'Hire matter'}))
+    await openOverflow(user)
+    await user.click(await screen.findByRole('menuitem',{name:'Hire matter'}))
     expect(globalThis.fetch).toHaveBeenCalledTimes(1)
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/admin/leads/l1/convert',expect.objectContaining({method:'POST'}))
     expect(router.push).toHaveBeenCalledWith('/admin/matters/m1')
@@ -640,38 +692,41 @@ describe('lead detail page', () => {
   it('announces a conversion error and remains on the lead', async () => {
     vi.spyOn(globalThis,'fetch').mockResolvedValue({ok:false,json:async()=>({error:'Conversion failed'})} as Response)
     const user=userEvent.setup();render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
-    await user.click(screen.getByRole('button',{name:'Hire matter'}))
+    await openOverflow(user)
+    await user.click(await screen.findByRole('menuitem',{name:'Hire matter'}))
     expect((await screen.findByRole('alert')).textContent).toContain('Conversion failed')
     expect(router.push).not.toHaveBeenCalled()
   })
 
-  it('renders populated values, all missing chips, the exact meter, and no whole-card controls or placeholders', () => {
+  it('renders the readiness dial, grouped rows and dashed add pills instead of the meter and chip row', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
-    expect(screen.getByText('9 of 14 complete')).toBeTruthy()
-    expect(screen.getByRole('progressbar', { name: 'Lead details completeness' }).getAttribute('aria-valuenow')).toBe('9')
-    expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617')
-    expect(screen.queryByText('Date of birth')).toBeNull()
-    expect(screen.queryByText('Matter status')).toBeNull()
-    expect(screen.queryByText('—')).toBeNull()
+    // 9 of 14 fields plus the intake and engagement gates.
+    expect(screen.getByLabelText('Lead readiness 56 percent').textContent).toBe('Not ready yet')
+    expect(screen.getByText('Missing Intake')).toBeTruthy()
+    expect(screen.queryByText('9 of 14 complete')).toBeNull()
+    expect(screen.queryByRole('progressbar', { name: 'Lead details completeness' })).toBeNull()
+
+    const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    for (const group of ['Contact', 'Household', 'Qualification']) {
+      expect(within(rail).getByRole('heading', { name: group })).toBeTruthy()
+    }
+    expect(within(rail).getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617')
+    // Empty fields keep their row and offer a dashed pill rather than a chip row.
+    for (const label of ['Date of birth', 'Urgency', 'Estimated estate value', 'Minor children', 'Qualification notes']) {
+      expect(within(rail).getByRole('button', { name: `Add ${label}` }).textContent).toBe('+ Add')
+    }
     for (const control of ['Edit', 'Save', 'Cancel']) {
       expect(screen.queryByRole('button', { name: control })).toBeNull()
     }
 
-    expect(screen.getAllByRole('button', { name: /^\+ Add / }).map(button => button.textContent)).toEqual([
-      '+ Add Estate value',
-      '+ Add Minor children',
-      '+ Add Urgency',
-      '+ Add DOB',
-      '+ Add Qualification notes',
-    ])
-    expect(screen.getByText('Intake answers land here automatically — you rarely need to type these.')).toBeTruthy()
+    expect(within(rail).getByText('Intake answers land here automatically — you rarely need to type these.')).toBeTruthy()
     for (const prompt of ['Summarize intake', 'Analyze MA estate tax', 'Draft a pre-call email']) {
-      expect(screen.getByRole('button', { name: prompt })).toBeTruthy()
+      expect(within(rail).getByRole('button', { name: prompt })).toBeTruthy()
     }
   })
 
-  it('orders priority chips before remaining incomplete fields and renders each incomplete unit once', () => {
+  it('renders one add pill per incomplete field in rail group order', () => {
     const sparseLead = {
       ...lead,
       phone: null,
@@ -689,18 +744,21 @@ describe('lead detail page', () => {
     }
     render(<LeadDetailClient lead={sparseLead} spouse={null} initialActivity={[]} />)
 
-    expect(screen.getAllByRole('button', { name: /^\+ Add / }).map(button => button.textContent)).toEqual([
-      '+ Add Address',
-      '+ Add Spouse',
-      '+ Add Estate value',
-      '+ Add Minor children',
-      '+ Add Quoted fee',
-      '+ Add Urgency',
-      '+ Add DOB',
-      '+ Add Phone',
-      '+ Add Practice area',
-      '+ Add Lead source',
-      '+ Add Qualification notes',
+    const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    expect(within(rail).getAllByRole('button', { name: /^Add / })
+      .map(button => button.getAttribute('aria-label'))).toEqual([
+      'Add Middle name',
+      'Add Preferred name',
+      'Add Phone',
+      'Add Date of birth',
+      'Add Spouse',
+      'Add Minor children',
+      'Add Practice area',
+      'Add Lead source',
+      'Add Quoted fee',
+      'Add Urgency',
+      'Add Estimated estate value',
+      'Add Qualification notes',
     ])
   })
 
@@ -716,9 +774,8 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={missingLastNameLead} spouse={spouse} initialActivity={[]} />)
 
-    expect(screen.getAllByRole('button', { name: '+ Add Name' })).toHaveLength(1)
-    expect(screen.queryByRole('button', { name: 'Add Last name' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: '+ Add Name' }))
+    expect(screen.getAllByRole('button', { name: 'Add Last name' })).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Add Last name' }))
     const lastName = screen.getByRole('textbox', { name: 'Last name' })
     await user.type(lastName, 'Doe{Enter}')
 
@@ -768,6 +825,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={hydratedLead} spouse={spouse} initialActivity={[]} />)
 
+    showTab('Intake')
     expect(screen.getByLabelText('Household: complete')).toBeTruthy()
     expect(screen.getByLabelText('Fiduciaries: complete')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Edit Spouse' }))
@@ -806,7 +864,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
-    expect(screen.queryByText('—')).toBeNull()
+    expect(within(screen.getByRole('complementary', { name: 'Lead details' })).queryByText('—')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Add Middle name' }))
     await user.type(screen.getByRole('textbox', { name: 'Middle name' }), 'Quincy{Enter}')
 
@@ -827,7 +885,7 @@ describe('lead detail page', () => {
     const user = userEvent.setup()
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
-    expect(screen.queryByText('—')).toBeNull()
+    expect(within(screen.getByRole('complementary', { name: 'Lead details' })).queryByText('—')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Add Preferred name' }))
     await user.type(screen.getByRole('textbox', { name: 'Preferred name' }), 'Janie{Enter}')
 
@@ -907,6 +965,7 @@ describe('lead detail page', () => {
     expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617-555-0111')
     expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
     expect(screen.queryByText('Follow up with this lead')).toBeNull()
+    showTab('Timeline')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
     expect(toastError).not.toHaveBeenCalled()
   })
@@ -936,6 +995,8 @@ describe('lead detail page', () => {
     await user.clear(phone)
     await user.type(phone, '617-555-0111{Enter}')
 
+    await waitFor(() => expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saved'))
+    showTab('Timeline')
     expect(await screen.findByText(
       'Lead data refresh unavailable: Saved, but refreshed spouse data is unavailable.',
     )).toBeTruthy()
@@ -993,7 +1054,7 @@ describe('lead detail page', () => {
     await user.type(phone, '999')
 
     const emailTrigger = screen.getByRole('button', { name: 'Edit Email' }) as HTMLButtonElement
-    const dobChip = screen.getByRole('button', { name: '+ Add DOB' }) as HTMLButtonElement
+    const dobChip = screen.getByRole('button', { name: 'Add Date of birth' }) as HTMLButtonElement
     expect(emailTrigger.disabled).toBe(true)
     expect(dobChip.disabled).toBe(true)
     await user.click(emailTrigger)
@@ -1040,12 +1101,8 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit Phone' }))
-    const topControls = [
-      screen.getByRole('button', { name: 'Draft engagement' }),
-      screen.getByRole('button', { name: 'Hire matter' }),
-      screen.getByRole('button', { name: 'Mark lost' }),
-      screen.getByRole('button', { name: 'More actions' }),
-    ] as HTMLButtonElement[]
+    const topControls = ['Call', 'Email', 'Text', 'Intake', 'Draft engagement', 'More actions']
+      .map(name => within(header()).getByRole('button', { name })) as HTMLButtonElement[]
     const ribbonControls = ['Send intake', 'Fill it myself', 'Import', 'Snooze']
       .map(name => screen.getByRole('button', { name })) as HTMLButtonElement[]
     for (const control of topControls) expect(control.disabled).toBe(true)
@@ -1098,8 +1155,8 @@ describe('lead detail page', () => {
 
     await user.click(screen.getByRole('button', { name: 'Snooze' }))
 
-    for (const name of ['Draft engagement', 'Hire matter', 'Mark lost', 'More actions']) {
-      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    for (const name of ['Call', 'Email', 'Text', 'Intake', 'Draft engagement', 'More actions']) {
+      expect((within(header()).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
     }
 
     resolveSnooze({
@@ -1115,6 +1172,10 @@ describe('lead detail page', () => {
         },
       }),
     } as Response)
+    await waitFor(() => expect(
+      (within(header()).getByRole('button', { name: 'More actions' }) as HTMLButtonElement).disabled,
+    ).toBe(false))
+    showTab('Timeline')
     expect(await screen.findByText('Next action snoozed')).toBeTruthy()
   })
 

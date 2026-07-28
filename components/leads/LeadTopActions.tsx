@@ -1,6 +1,13 @@
 'use client'
 
-import { MoreHorizontal } from 'lucide-react'
+import {
+  ClipboardList,
+  Mail,
+  MessageSquare,
+  MoreHorizontal,
+  PanelRight,
+  Phone,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,15 +24,18 @@ type Props = {
   hasActiveAgreement: boolean
   snoozed: boolean
   matterId?: string | null
-  actionError?: string | null
   onDraft: () => void
   onConvert: () => void
   onClearSnooze: () => void
   onStatusChange: (status: MutableLeadStatus) => void
   onSendSchedulingLink: () => void
   onBookForClient: () => void
+  onCall: () => void
   onEmail: () => void
   onText: () => void
+  onIntake: () => void
+  onToggleRail: () => void
+  railOpen: boolean
   hasEmail: boolean
   hasPhone: boolean
 }
@@ -36,15 +46,18 @@ export function LeadTopActions({
   hasActiveAgreement,
   snoozed,
   matterId,
-  actionError,
   onDraft,
   onConvert,
   onClearSnooze,
   onStatusChange,
   onSendSchedulingLink,
   onBookForClient,
+  onCall,
   onEmail,
   onText,
+  onIntake,
+  onToggleRail,
+  railOpen,
   hasEmail,
   hasPhone,
 }: Props) {
@@ -54,80 +67,85 @@ export function LeadTopActions({
   const canViewMatter = hired && Boolean(matterId)
 
   return (
-    <div className="space-y-2">
-      <div aria-label="Lead actions" className="flex flex-wrap items-center justify-end gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={onEmail} disabled={busy || !hasEmail}>
-          Email
+    <div aria-label="Lead actions" className="flex items-center gap-1">
+      <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onCall} disabled={busy || !hasPhone}>
+        <Phone className="h-3.5 w-3.5" aria-hidden />
+        Call
+      </Button>
+      <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onEmail} disabled={busy || !hasEmail}>
+        <Mail className="h-3.5 w-3.5" aria-hidden />
+        Email
+      </Button>
+      <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onText} disabled={busy || !hasPhone}>
+        <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+        Text
+      </Button>
+      <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs" onClick={onIntake} disabled={busy}>
+        <ClipboardList className="h-3.5 w-3.5" aria-hidden />
+        Intake
+      </Button>
+      {canViewMatter ? (
+        <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={onConvert} disabled={busy}>
+          View matter
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onText} disabled={busy || !hasPhone}>
-          Text
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={onDraft}
-          disabled={busy || !active}
-        >
+      ) : (
+        <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={onDraft} disabled={busy || !active}>
           {hasActiveAgreement ? 'Resume engagement' : 'Draft engagement'}
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={onConvert}
-          disabled={busy || (!active && !canViewMatter)}
-        >
-          {canViewMatter ? 'View matter' : 'Hire matter'}
-        </Button>
-        {active && (
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => onStatusChange('lost')}
+            className="h-7 px-2"
+            aria-label="More actions"
             disabled={busy}
           >
-            Mark lost
+            <MoreHorizontal className="h-3.5 w-3.5" />
           </Button>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              aria-label="More actions"
-              disabled={busy}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onSendSchedulingLink}>
-              Send scheduling link
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onSendSchedulingLink}>
+            Send scheduling link
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onBookForClient}>
+            Book for client…
+          </DropdownMenuItem>
+          {!canViewMatter && (
+            <DropdownMenuItem disabled={!active} onClick={onConvert}>
+              Hire matter
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onBookForClient}>
-              Book for client…
+          )}
+          {active && (
+            <DropdownMenuItem onClick={() => onStatusChange('lost')}>
+              Mark lost
             </DropdownMenuItem>
-            {active && snoozed && (
-              <DropdownMenuItem onClick={onClearSnooze}>
-                Clear snooze
-              </DropdownMenuItem>
-            )}
-            {lost && (
-              <DropdownMenuItem onClick={() => onStatusChange('lead')}>
-                Reactivate
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {actionError && (
-        <p role="alert" aria-live="polite" className="text-right text-xs text-destructive">
-          {actionError}
-        </p>
-      )}
+          )}
+          {active && snoozed && (
+            <DropdownMenuItem onClick={onClearSnooze}>
+              Clear snooze
+            </DropdownMenuItem>
+          )}
+          {lost && (
+            <DropdownMenuItem onClick={() => onStatusChange('lead')}>
+              Reactivate
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2"
+        aria-label="Toggle details rail"
+        aria-pressed={railOpen}
+        onClick={onToggleRail}
+      >
+        <PanelRight className="h-3.5 w-3.5" />
+      </Button>
     </div>
   )
 }

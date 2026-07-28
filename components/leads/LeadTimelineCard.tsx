@@ -60,6 +60,10 @@ type Props = {
   currentUser: { id: string; role: string }
   onActivityChange?: () => void | Promise<void>
   onCommittedTouch?: (timestamp: string) => void
+  /** `plain` drops the card chrome so the workspace tab owns the frame. */
+  variant?: 'card' | 'plain'
+  /** Pins the timeline to one filter and hides the filter row (Notes tab). */
+  lockedFilter?: LeadTimelineFilter
 }
 
 const FILTERS: Array<{ value: LeadTimelineFilter; label: string }> = [
@@ -114,11 +118,13 @@ export function LeadTimelineCard({
   currentUser,
   onActivityChange,
   onCommittedTouch,
+  variant = 'card',
+  lockedFilter,
 }: Props) {
   const token = useAccessToken()
   const [notes, setNotes] = useState(() => sortNotes(initialNotes))
   const [meetings, setMeetings] = useState(() => sortMeetings(initialMeetingNotes))
-  const [filter, setFilter] = useState<LeadTimelineFilter>('all')
+  const [filter, setFilter] = useState<LeadTimelineFilter>(lockedFilter ?? 'all')
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null)
   const [body, setBody] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
@@ -131,6 +137,7 @@ export function LeadTimelineCard({
   const [localActivityRefreshWarning, setLocalActivityRefreshWarning] = useState<string | null>(null)
   const hasCallablePhone = phoneTelHref(leadPhone) !== null
 
+  const effectiveFilter = lockedFilter ?? filter
   const items = useMemo(() => buildLeadTimeline({
     notes,
     meetings,
@@ -138,7 +145,7 @@ export function LeadTimelineCard({
     activity: initialActivity,
     actorNames,
   }), [notes, meetings, initialCalls, initialActivity, actorNames])
-  const visibleItems = filterLeadTimeline(items, filter)
+  const visibleItems = filterLeadTimeline(items, effectiveFilter)
 
   async function call(url: string, method: string, payload?: unknown) {
     const response = await fetch(url, {
@@ -241,11 +248,11 @@ export function LeadTimelineCard({
   }
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 md:p-5">
+    <section className={variant === 'card' ? 'rounded-lg border border-border bg-card p-4 md:p-5' : ''}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Timeline</h2>
-          <p className="text-[11px] text-muted-foreground">Internal only</p>
+          <h2 className={variant === 'card' ? 'text-sm font-semibold' : 'sr-only'}>Timeline</h2>
+          {variant === 'card' && <p className="text-[11px] text-muted-foreground">Internal only</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => setGranolaOpen(true)}>
@@ -309,20 +316,22 @@ export function LeadTimelineCard({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2" aria-label="Timeline filters">
-        {FILTERS.map(option => (
-          <Button
-            key={option.value}
-            type="button"
-            size="sm"
-            variant={filter === option.value ? 'secondary' : 'ghost'}
-            aria-pressed={filter === option.value}
-            onClick={() => setFilter(option.value)}
-          >
-            {option.label}
-          </Button>
-        ))}
-      </div>
+      {!lockedFilter && (
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Timeline filters">
+          {FILTERS.map(option => (
+            <Button
+              key={option.value}
+              type="button"
+              size="sm"
+              variant={filter === option.value ? 'secondary' : 'ghost'}
+              aria-pressed={filter === option.value}
+              onClick={() => setFilter(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       <div aria-label="Lead timeline" className="mt-5 space-y-0">
         {visibleItems.map((item, index) => {
