@@ -40,18 +40,21 @@ export function MatterOverviewFactsRail({
   details,
   designSheetPlanType,
   estate,
+  className = 'h-fit rounded-lg border border-border bg-card p-4 md:p-5',
 }: {
   matterId: string
   details: MatterDetailsRow | null
   designSheetPlanType: string | null
   estate: MatterEstateSnapshot
+  /** Overrides the card chrome so the block can sit flush inside the facts rail. */
+  className?: string
 }) {
   const updatedLabel = estate.latestAssetUpdatedAt
     ? new Date(estate.latestAssetUpdatedAt).toLocaleDateString()
     : 'No asset inventory'
 
   return (
-    <aside className="h-fit rounded-lg border border-border bg-card p-4 md:p-5">
+    <aside className={className}>
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">Matter facts</h3>
         <Link
