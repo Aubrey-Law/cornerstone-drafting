@@ -3,8 +3,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Device, Call as TwilioCall } from '@twilio/voice-sdk'
 import { TelnyxRTC, type Call as TelnyxCall } from '@telnyx/webrtc'
-import { Delete, Mic, MicOff, Minus, Moon, Pause, Play, Grid3x3, Briefcase, PhoneOff } from 'lucide-react'
+import {
+  Delete,
+  Mic,
+  MicOff,
+  Moon,
+  Pause,
+  Play,
+  Grid3x3,
+  Briefcase,
+  PhoneOff,
+  Search,
+  Sparkles,
+} from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
+import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
+import { openCornerstoneAssistant } from '@/app/admin/components/adminChatEvents'
+import {
+  OPEN_STAFF_SOFTPHONE_EVENT,
+  type OpenSoftphoneDetail,
+} from '@/app/admin/components/softphoneEvents'
+import type { CallBriefing } from '@/lib/phoneContext'
+import { openItemsSentence } from '@/lib/phoneContext'
+import { usePublishSoftphoneCall } from './SoftphoneProvider'
 import { usePhoneDirectory, type DirectoryEntry } from './usePhoneDirectory'
 
 /**
@@ -87,7 +110,6 @@ export default function Softphone() {
   const [muted, setMuted] = useState(false)
   const [held, setHeld] = useState(false)
   const [dnd, setDnd] = useState(false)
-  const [minimized, setMinimized] = useState(false)
   const [showKeypad, setShowKeypad] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -95,6 +117,7 @@ export default function Softphone() {
   const [provider, setProvider] = useState<'twilio' | 'telnyx'>('twilio')
   const [direction, setDirection] = useState<'inbound' | 'outbound'>('outbound')
   const [participant, setParticipant] = useState('')
+  const [outboundNumber, setOutboundNumber] = useState<string | null>(null)
 
   // wrap-up
   const [wrapUp, setWrapUp] = useState<{
@@ -107,6 +130,14 @@ export default function Softphone() {
   const [wrapUpNotes, setWrapUpNotes] = useState('')
   const [wrapUpOutcome, setWrapUpOutcome] = useState<Outcome>('Reached')
   const [saving, setSaving] = useState(false)
+  const [summaryDrafted, setSummaryDrafted] = useState(false)
+  const [checkedFollowUps, setCheckedFollowUps] = useState<string[]>([])
+
+  // Directory search + per-call briefing
+  const [search, setSearch] = useState('')
+  const [searchIndex, setSearchIndex] = useState(0)
+  const [briefing, setBriefing] = useState<CallBriefing | null>(null)
+  const [wrapUpBriefing, setWrapUpBriefing] = useState<CallBriefing | null>(null)
 
   const providerRef = useRef<'twilio' | 'telnyx'>('twilio')
   const deviceRef = useRef<Device | TelnyxRTC | null>(null)
@@ -119,8 +150,23 @@ export default function Softphone() {
   const connectedRef = useRef(false)
   const directionRef = useRef<'inbound' | 'outbound'>('outbound')
   const participantRef = useRef('')
+  // Read by cleanupCall. Kept in a ref because cleanupCall is a dependency of
+  // the device-setup effect — making it depend on briefing state would tear
+  // the Twilio/Telnyx device down and rebuild it mid-call.
+  const briefingRef = useRef<CallBriefing | null>(null)
+  const statusRef = useRef<SoftphoneStatus>(STATUS.CONNECTING)
+  // Read by the summary-draft effect, which must not re-run as the operator types.
+  const wrapUpNotesRef = useRef('')
+  const wrapUpOutcomeRef = useRef<Outcome>('Reached')
 
-  const { lookup } = usePhoneDirectory()
+  const router = useRouter()
+
+  useEffect(() => {
+    wrapUpNotesRef.current = wrapUpNotes
+    wrapUpOutcomeRef.current = wrapUpOutcome
+  }, [wrapUpNotes, wrapUpOutcome])
+
+  const { entries, lookup } = usePhoneDirectory()
 
   const dialedEntry = useMemo(() => {
     const digits = last10(number)
@@ -158,9 +204,11 @@ export default function Softphone() {
         externalCallId: externalCallId(callRef.current, providerRef.current),
         entry: digits ? lookup(digits) : null,
       })
+      setWrapUpBriefing(briefingRef.current)
       setWrapUpNotes('')
       setWrapUpOutcome('Reached')
-      setMinimized(false)
+      setSummaryDrafted(false)
+      setCheckedFollowUps([])
     }
     connectedRef.current = false
     secondsRef.current = 0
@@ -219,6 +267,8 @@ export default function Softphone() {
         providerRef.current = auth.provider === 'telnyx' ? 'telnyx' : 'twilio'
         setProvider(providerRef.current)
         callerNumberRef.current = auth.callerNumber ?? null
+        setOutboundNumber(auth.callerNumber ? formatPhone(auth.callerNumber) : null)
+        setOutboundNumber(auth.callerNumber ? formatPhone(auth.callerNumber) : null)
 
         if (auth.provider === 'telnyx') {
           const telnyx = new TelnyxRTC({ login_token: auth.token })
@@ -450,9 +500,81 @@ export default function Softphone() {
     return () => window.removeEventListener('keydown', onKey)
   }, [dnd, placeCall, pressKey, status])
 
+  // The wrap-up form shows the instant the call ends; the drafted summary
+  // arrives afterwards and only fills a textarea the operator hasn't touched.
+  useEffect(() => {
+    if (!wrapUp) return
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/phone/call-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            direction: wrapUp.direction,
+            durationSeconds: wrapUp.durationSeconds,
+            participantName: wrapUp.entry?.name ?? null,
+            outcome: wrapUpOutcomeRef.current,
+            notes: wrapUpNotesRef.current,
+            matterId: wrapUp.entry?.matterId ?? null,
+            leadId: wrapUp.entry?.leadId ?? null,
+            openItems: briefingRef.current?.openItems ?? [],
+          }),
+        })
+        if (!res.ok) return
+        const data = (await res.json()) as { draft?: string }
+        const draft = data.draft?.trim()
+        if (cancelled || !draft) return
+        // Never clobber notes the operator typed while waiting.
+        setWrapUpNotes(prev => (prev.trim() ? prev : draft))
+        setSummaryDrafted(true)
+      } catch {
+        /* silent: an empty textarea is the documented failure mode */
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [wrapUp])
+
+  /** Follow-ups reuse the endpoints the record pages already post to. */
+  const runFollowUps = useCallback(async (summary: string) => {
+    const followUps = wrapUpBriefing?.followUps ?? []
+    const selected = followUps.filter(item => checkedFollowUps.includes(item.id))
+    if (selected.length === 0 || !summary.trim() || !wrapUpBriefing) return
+
+    for (const followUp of selected) {
+      try {
+        if (followUp.kind === 'lead_note') {
+          await fetch(`/api/admin/leads/${wrapUpBriefing.recordId}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body: summary }),
+          })
+        } else {
+          await fetch('/api/admin/chat/save-note', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              context_type: 'matter',
+              context_id: wrapUpBriefing.recordId,
+              content: summary,
+              note_type: 'client_comm',
+            }),
+          })
+        }
+      } catch {
+        /* the call itself is already saved; a failed follow-up isn't fatal */
+      }
+    }
+  }, [checkedFollowUps, wrapUpBriefing])
+
   const saveWrapUp = useCallback(async () => {
     if (!wrapUp) return
     setSaving(true)
+    const notes = wrapUpNotes.trim()
     try {
       const res = await fetch('/api/admin/phone/call-log', {
         method: 'POST',
@@ -463,23 +585,30 @@ export default function Softphone() {
           direction: wrapUp.direction,
           durationSeconds: wrapUp.durationSeconds,
           outcome: wrapUpOutcome,
-          notes: wrapUpNotes.trim() || null,
+          notes: notes || null,
           matterId: wrapUp.entry?.matterId ?? null,
           leadId: wrapUp.entry?.leadId ?? null,
         }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Could not save the call')
+      await runFollowUps(notes)
+      // Same refresh the record pages run after their own mutations, so the
+      // call and any follow-up note appear in the timeline without a reload.
+      invalidateSidebarCountsClient()
+      router.refresh()
       setWrapUp(null)
+      setWrapUpBriefing(null)
       setNumber('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the call')
     } finally {
       setSaving(false)
     }
-  }, [wrapUp, wrapUpNotes, wrapUpOutcome])
+  }, [router, runFollowUps, wrapUp, wrapUpNotes, wrapUpOutcome])
 
   const inCall = status === STATUS.ON_CALL || status === STATUS.DIALING
   const canDial = status === STATUS.IDLE && !dnd && last10(number).length >= 10
+
   const activeEntry = direction === 'inbound' ? incomingEntry : dialedEntry
 
   const statusLabel: Record<SoftphoneStatus, string> = {
@@ -491,84 +620,115 @@ export default function Softphone() {
     [STATUS.OFFLINE]: 'Offline',
   }
 
-  if (minimized && inCall) {
-    return (
-      <button
-        type="button"
-        onClick={() => setMinimized(false)}
-        aria-label="Open active call"
-        className="flex items-center gap-2.5 rounded-full border border-border bg-card py-2 pl-3 pr-4 shadow-lg transition-shadow hover:shadow-xl"
-      >
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground">
-          <Mic size={13} aria-hidden />
-        </span>
-        <span className="text-left">
-          <span className="block text-xs font-medium leading-tight">
-            {activeEntry?.name ?? formatPhone(participant) ?? 'Call'}
-          </span>
-          <span className="block text-[10px] uppercase tracking-wider text-primary tabular-nums">
-            {formatDuration(seconds)} · on call
-          </span>
-        </span>
-      </button>
-    )
-  }
+  // ── call context ──────────────────────────────────────────────────
+  // One read when a call arrives or is placed — never per keystroke. The
+  // briefing is cleared the moment the matched record changes so a new call
+  // can never show the previous caller's open items.
+  const briefingKey =
+    status === STATUS.INCOMING || inCall
+      ? activeEntry?.matterId
+        ? `matter:${activeEntry.matterId}`
+        : activeEntry?.leadId
+          ? `lead:${activeEntry.leadId}`
+          : null
+      : null
+
+  useEffect(() => {
+    setBriefing(null)
+    briefingRef.current = null
+    if (!briefingKey) return
+
+    const [type, id] = briefingKey.split(':')
+    const query = type === 'matter' ? `matterId=${id}` : `leadId=${id}`
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/phone/context?${query}`)
+        if (!res.ok) return
+        const data = (await res.json()) as { briefing?: CallBriefing | null }
+        if (cancelled || !data.briefing) return
+        setBriefing(data.briefing)
+        briefingRef.current = data.briefing
+      } catch {
+        /* the briefing is an enhancement — the call works without it */
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [briefingKey])
+
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
+
+  // ── directory search ──────────────────────────────────────────────
+  const searchResults = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (query.length < 2) return []
+    const queryDigits = query.replace(/\D/g, '')
+    return entries
+      .filter(entry =>
+        entry.name.toLowerCase().includes(query) ||
+        (entry.matterNumber?.toLowerCase().includes(query) ?? false) ||
+        (queryDigits.length >= 3 && entry.digits.includes(queryDigits)),
+      )
+      .slice(0, 6)
+  }, [entries, search])
+
+  useEffect(() => {
+    setSearchIndex(0)
+  }, [search])
+
+  const selectDirectoryEntry = useCallback((entry: DirectoryEntry) => {
+    setNumber(formatPhone(entry.digits))
+    setSearch('')
+    numberInputRef.current?.focus()
+  }, [])
+
+  // Click-to-call from a lead or matter record lands here.
+  useEffect(() => {
+    function onOpen(event: Event) {
+      const detail = (event as CustomEvent<OpenSoftphoneDetail>).detail
+      const digits = last10(detail?.number ?? '')
+      if (!digits || statusRef.current !== STATUS.IDLE) return
+      setNumber(formatPhone(digits))
+      setSearch('')
+    }
+    window.addEventListener(OPEN_STAFF_SOFTPHONE_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, onOpen)
+  }, [])
+
+  const callName = activeEntry?.name ?? formatPhone(participant) ?? ''
+  const callSnapshot = useMemo(
+    () => ({
+      active: inCall,
+      connected: status === STATUS.ON_CALL,
+      muted,
+      held,
+      seconds,
+      name: callName,
+      statusLabel: statusLabel[status],
+      wrapUpPending: Boolean(wrapUp),
+    }),
+    // statusLabel is rebuilt every render; status/dnd/held already cover it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inCall, status, muted, held, seconds, callName, dnd, wrapUp],
+  )
+  usePublishSoftphoneCall(callSnapshot, { toggleMute, hangUp })
+
+  const liveAssistSentence = briefing ? openItemsSentence(briefing) : null
 
   return (
     <div
       ref={rootRef}
-      className="w-[328px] overflow-hidden rounded-[14px] border border-border bg-card text-card-foreground shadow-lg"
+      className="flex h-full min-h-0 flex-col bg-card text-card-foreground"
     >
       <audio ref={remoteAudioRef} autoPlay />
 
-      <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            aria-hidden
-            className={cn(
-              'h-[7px] w-[7px] shrink-0 rounded-full',
-              status === STATUS.OFFLINE && 'bg-destructive',
-              dnd && status !== STATUS.OFFLINE && 'bg-destructive',
-              !dnd && status === STATUS.IDLE && 'bg-emerald-600 dark:bg-emerald-400',
-              !dnd && (status === STATUS.ON_CALL || status === STATUS.DIALING || status === STATUS.INCOMING) &&
-                'bg-primary motion-safe:animate-pulse',
-              status === STATUS.CONNECTING && 'bg-muted-foreground motion-safe:animate-pulse',
-            )}
-          />
-          <span className="truncate text-[11px] font-medium uppercase tracking-[0.1em]">
-            {statusLabel[status]}
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {!inCall && (
-            <button
-              type="button"
-              onClick={() => setDnd(prev => !prev)}
-              aria-pressed={dnd}
-              aria-label={dnd ? 'Disable do not disturb' : 'Enable do not disturb'}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-medium tracking-[0.1em]',
-                dnd ? 'border-destructive text-destructive' : 'border-border text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <Moon size={10} aria-hidden />
-              {dnd ? 'ON' : 'OFF'}
-            </button>
-          )}
-          <span className="text-[11px] text-muted-foreground">Cornerstone</span>
-          {inCall && (
-            <button
-              type="button"
-              onClick={() => setMinimized(true)}
-              aria-label="Minimize active call"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Minus size={15} aria-hidden />
-            </button>
-          )}
-        </div>
-      </header>
-
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {/* ── wrap-up (replaces the body so notes can't be lost) ───────── */}
       {wrapUp && (
         <section className="px-4 py-4" aria-label="Call wrap-up">
@@ -605,7 +765,13 @@ export default function Softphone() {
             ))}
           </div>
 
-          <label className="mt-3 block">
+          {summaryDrafted && (
+            <p className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Sparkles size={11} aria-hidden className="text-accent" />
+              Drafted by the assistant — edit before saving
+            </p>
+          )}
+          <label className={cn('block', summaryDrafted ? 'mt-1' : 'mt-3')}>
             <span className="sr-only">Call notes</span>
             <textarea
               value={wrapUpNotes}
@@ -615,6 +781,31 @@ export default function Softphone() {
               className="w-full resize-y rounded-[10px] border border-border bg-muted/40 px-3 py-2.5 text-[11px] leading-relaxed outline-none focus:border-primary"
             />
           </label>
+
+          {(wrapUpBriefing?.followUps.length ?? 0) > 0 && (
+            <fieldset className="mt-3">
+              <legend className="text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Follow-ups
+              </legend>
+              {wrapUpBriefing!.followUps.map(followUp => (
+                <label key={followUp.id} className="mt-1.5 flex items-start gap-2 text-[11px] leading-snug">
+                  <input
+                    type="checkbox"
+                    checked={checkedFollowUps.includes(followUp.id)}
+                    onChange={e =>
+                      setCheckedFollowUps(prev =>
+                        e.target.checked
+                          ? [...prev, followUp.id]
+                          : prev.filter(id => id !== followUp.id),
+                      )
+                    }
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--primary)]"
+                  />
+                  <span>{followUp.label}</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
 
           <div className="mt-3 flex gap-2">
             <button
@@ -654,6 +845,23 @@ export default function Softphone() {
               {incomingEntry.practiceArea ? ` · ${incomingEntry.practiceArea}` : ''}
             </p>
           )}
+          {briefing && (
+            <div
+              className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-left"
+              aria-label="Before you answer"
+            >
+              <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Before you answer
+              </p>
+              <p className="mt-1 text-xs font-medium leading-snug">{briefing.headline}</p>
+              {briefing.lines.map(line => (
+                <p key={line} className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                  {line}
+                </p>
+              ))}
+            </div>
+          )}
+
           <div className="mt-5 flex gap-2">
             <button
               type="button"
@@ -786,6 +994,28 @@ export default function Softphone() {
             </div>
           )}
 
+          {briefing && liveAssistSentence && (
+            <div className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5" aria-label="Live assist">
+              <p className="flex items-center gap-1.5 text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                <Sparkles size={11} aria-hidden className="text-accent" />
+                Live assist
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed">{liveAssistSentence}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {briefing.assistPrompts.map(prompt => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => openCornerstoneAssistant({ prompt })}
+                    className="rounded-full border border-border bg-background px-2 py-1 text-[10px] font-medium hover:border-accent hover:text-accent"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={hangUp}
@@ -800,7 +1030,68 @@ export default function Softphone() {
       {/* ── idle: dial pad ───────────────────────────────────────────── */}
       {!wrapUp && (status === STATUS.IDLE || status === STATUS.CONNECTING || status === STATUS.OFFLINE) && (
         <section className="px-4 pb-4 pt-4">
-          <div className="flex items-baseline gap-2 border-b border-border pb-2.5">
+          <div className="relative">
+            <Search
+              size={13}
+              aria-hidden
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => {
+                const result = contactPickerKeyAction(e.key, searchIndex, searchResults.length, true)
+                if (result.preventDefault) e.preventDefault()
+                setSearchIndex(result.activeIndex)
+                if (result.selectIndex !== null && searchResults[result.selectIndex]) {
+                  selectDirectoryEntry(searchResults[result.selectIndex])
+                }
+                if (!result.open) setSearch('')
+              }}
+              placeholder="Search the firm directory…"
+              aria-label="Search the firm directory"
+              role="combobox"
+              aria-expanded={searchResults.length > 0}
+              aria-controls="softphone-directory-results"
+              className="h-8 w-full rounded-[10px] border border-border bg-background pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground focus:border-primary"
+            />
+          </div>
+
+          {searchResults.length > 0 && (
+            <div
+              id="softphone-directory-results"
+              className="mt-1.5 overflow-hidden rounded-[10px] border border-border"
+              role="listbox"
+              aria-label="Directory results"
+            >
+              {searchResults.map((entry, index) => (
+                <button
+                  key={`${entry.digits}-${entry.name}`}
+                  type="button"
+                  role="option"
+                  aria-selected={index === searchIndex}
+                  onMouseEnter={() => setSearchIndex(index)}
+                  onClick={() => selectDirectoryEntry(entry)}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 px-2.5 py-2 text-left',
+                    index === searchIndex ? 'bg-muted' : 'hover:bg-muted/60',
+                  )}
+                >
+                  <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                    {initials(entry.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-medium">{entry.name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {entry.matterNumber ?? 'Lead'}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 flex items-baseline gap-2 border-b border-border pb-2.5">
             <input
               ref={numberInputRef}
               className="min-h-[29px] min-w-0 flex-1 border-0 bg-transparent p-0 text-2xl outline-none placeholder:text-lg placeholder:text-muted-foreground"
@@ -879,15 +1170,53 @@ export default function Softphone() {
         </section>
       )}
 
+      </div>
+
       {error && (
         <p
           role="alert"
           onClick={() => setError(null)}
-          className="cursor-pointer border-t border-border bg-destructive/10 px-4 py-2 text-center text-[11px] text-destructive"
+          className="shrink-0 cursor-pointer border-t border-border bg-destructive/10 px-4 py-2 text-center text-[11px] text-destructive"
         >
           {error} — tap to dismiss
         </p>
       )}
+
+      {/* ── rail footer: line status, outbound number, DND ───────────── */}
+      <div className="flex shrink-0 items-center gap-2 border-t border-border px-4 py-2">
+        <span
+          aria-hidden
+          className={cn(
+            'h-[7px] w-[7px] shrink-0 rounded-full',
+            status === STATUS.OFFLINE && 'bg-destructive',
+            dnd && status !== STATUS.OFFLINE && 'bg-destructive',
+            !dnd && status === STATUS.IDLE && 'bg-success',
+            !dnd && (status === STATUS.ON_CALL || status === STATUS.DIALING || status === STATUS.INCOMING) &&
+              'bg-primary motion-safe:animate-pulse',
+            status === STATUS.CONNECTING && 'bg-muted-foreground motion-safe:animate-pulse',
+          )}
+        />
+        <span className="truncate text-[11px] font-medium uppercase tracking-[0.1em]">
+          {statusLabel[status]}
+        </span>
+        {outboundNumber && (
+          <span className="truncate text-[11px] text-muted-foreground">· {outboundNumber}</span>
+        )}
+        <button
+          type="button"
+          onClick={() => setDnd(prev => !prev)}
+          disabled={inCall}
+          aria-pressed={dnd}
+          aria-label={dnd ? 'Disable do not disturb' : 'Enable do not disturb'}
+          className={cn(
+            'ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-medium tracking-[0.1em] disabled:opacity-40',
+            dnd ? 'border-destructive text-destructive' : 'border-border text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Moon size={10} aria-hidden />
+          {dnd ? 'ON' : 'OFF'}
+        </button>
+      </div>
     </div>
   )
 }

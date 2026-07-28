@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 
-import { OPEN_STAFF_SOFTPHONE_EVENT, StaffSoftphone } from '@/app/admin/components/StaffSoftphone'
+import { OPEN_STAFF_SOFTPHONE_EVENT, type OpenSoftphoneDetail } from '@/app/admin/components/StaffSoftphone'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 
 const notes = [
@@ -156,7 +156,7 @@ describe('lead notes', () => {
     expect(screen.queryByText('Note added')).toBeNull()
   })
 
-  it('dispatches the softphone open event without phone-number detail', async () => {
+  it('dispatches the softphone open event carrying the lead phone number', async () => {
     const openPhone = vi.fn()
     window.addEventListener(OPEN_STAFF_SOFTPHONE_EVENT, openPhone)
     const user = userEvent.setup()
@@ -165,7 +165,9 @@ describe('lead notes', () => {
     await user.click(screen.getByRole('button', { name: 'Log call' }))
 
     expect(openPhone).toHaveBeenCalledTimes(1)
-    expect((openPhone.mock.calls[0][0] as CustomEvent).detail).toBeUndefined()
+    expect((openPhone.mock.calls[0][0] as CustomEvent<OpenSoftphoneDetail>).detail).toEqual({
+      number: '+16175551212',
+    })
     window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, openPhone)
   })
 
@@ -178,19 +180,30 @@ describe('lead notes', () => {
     expect(logCall.getAttribute('title')).toBe('Add a lead phone number before logging a call')
   })
 
-  it('opens the staff softphone when Log call dispatches the shared event', async () => {
+  it('keeps Log call disabled for a nonblank malformed phone number', () => {
+    render(<LeadTimelineCard leadId="l1" leadPhone="unknown" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />)
+
+    const logCall = screen.getByRole('button', { name: 'Log call' }) as HTMLButtonElement
+    expect(logCall.disabled).toBe(true)
+    expect(logCall.getAttribute('aria-describedby')).toBe('lead-log-call-help')
+    expect(logCall.getAttribute('title')).toBe('Add a lead phone number before logging a call')
+  })
+
+  it('focuses the rail phone with the lead number when Log call is clicked', async () => {
     const user = userEvent.setup()
+    const detail: OpenSoftphoneDetail[] = []
+    const listener = (event: Event) => {
+      detail.push((event as CustomEvent<OpenSoftphoneDetail>).detail)
+    }
+    window.addEventListener(OPEN_STAFF_SOFTPHONE_EVENT, listener)
+
     render(
-      <>
-        <StaffSoftphone />
-        <LeadTimelineCard leadId="l1" leadPhone="+16175551212" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />
-      </>,
+      <LeadTimelineCard leadId="l1" leadPhone="+16175551212" initialNotes={[]} initialMeetingNotes={[]} currentUser={{ id: 'u1', role: 'attorney' }} />,
     )
-    expect(screen.getByLabelText('Softphone').getAttribute('aria-hidden')).toBe('true')
-
     await user.click(screen.getByRole('button', { name: 'Log call' }))
+    window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, listener)
 
-    expect(screen.getByRole('dialog', { name: 'Softphone' }).getAttribute('aria-hidden')).toBe('false')
+    expect(detail).toEqual([{ number: '+16175551212' }])
   })
 
   it('omits an empty duration marker while retaining real call durations', () => {

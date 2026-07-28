@@ -19,6 +19,9 @@ describe('admin chat drafting summary prompt', () => {
   it('opens the assistant with note prompts from matter note surfaces', () => {
     const events = fs.readFileSync(path.join(process.cwd(), 'app/admin/components/adminChatEvents.ts'), 'utf8')
     const matterNotes = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/tabs/notes.tsx'), 'utf8')
+    // The assistant is hosted by the docked admin rail, which owns the
+    // open-chat listener and forwards the pending action to ChatPanel.
+    const rail = fs.readFileSync(path.join(process.cwd(), 'components/rail/AdminRail.tsx'), 'utf8')
     const layout = fs.readFileSync(path.join(process.cwd(), 'app/admin/AdminLayoutClient.tsx'), 'utf8')
 
     expect(events).toContain('MATTER_NOTE_ASSISTANT_PROMPT')
@@ -27,9 +30,10 @@ describe('admin chat drafting summary prompt', () => {
     expect(events).toContain('openCornerstoneAssistant')
     expect(events).toContain('CORNERSTONE_CHAT_OPEN_EVENT')
     expect(matterNotes).toContain('AssistantNotePromptButton')
-    expect(layout).toContain('CORNERSTONE_CHAT_OPEN_EVENT')
-    expect(layout).toContain('pendingChatAction')
-    expect(layout).toContain('FloatingChatButton')
+    expect(rail).toContain('CORNERSTONE_CHAT_OPEN_EVENT')
+    expect(rail).toContain('pendingChatAction')
+    expect(rail).toContain('ChatPanel')
+    expect(layout).toContain('AdminRail')
   })
 
   it('handles drafting-summary requests directly from the normalized payload', () => {

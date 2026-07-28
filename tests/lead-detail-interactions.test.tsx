@@ -146,7 +146,14 @@ describe('lead detail page', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-25T12:00:00Z'))
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} activeAgreement={{id:'a1'}} />)
     expect(screen.getAllByText('Lead · day 4')).toHaveLength(1)
-    expect(screen.getByText('Estate Planning · Referral · 617 · jane@example.com')).toBeTruthy()
+    // The phone is its own element now (click-to-call), so match on the line's text.
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName === 'P' &&
+          element.textContent === 'Estate Planning · Referral · 617 · jane@example.com',
+      ),
+    ).toBeTruthy()
     expect(screen.getByRole('button',{name:'Email'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'Text'})).toBeTruthy()
     expect(screen.getByRole('button',{name:'Resume engagement'})).toBeTruthy()

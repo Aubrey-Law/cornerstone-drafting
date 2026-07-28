@@ -6,7 +6,8 @@ import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/StaffSoftphone'
+import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
+import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatPhoneDisplay, phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
@@ -359,7 +360,7 @@ export function LeadDetailClient({
           await action(`/api/admin/leads/${lead.id}/engagement-draft`)()
           return
         case 'call':
-          window.dispatchEvent(new Event(OPEN_STAFF_SOFTPHONE_EVENT))
+          openStaffSoftphone({ number: lead.phone ?? undefined })
           return
         case 'email':
           setCommunicationChannel('email')
@@ -416,12 +417,14 @@ export function LeadDetailClient({
   }
 
   const clientName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Lead'
-  const subtitle = [
+  // The phone is rendered separately so it can be click-to-call.
+  const subtitleBefore = [
     practiceAreaLabel(lead.practice_area),
     lead.lead_source,
-    formatPhoneDisplay(lead.phone),
-    lead.email?.trim(),
   ].filter(Boolean).join(' · ')
+  const subtitleAfter = lead.email?.trim() ?? ''
+  const subtitle = [subtitleBefore, formatPhoneDisplay(lead.phone), subtitleAfter]
+    .filter(Boolean).join(' · ')
   const statusLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
   const leadDay = calendarDaysAgo(lead.created_at, firmTimezone) ?? 0
   const effectiveLastTouchAt = newestTimestamp([
@@ -483,7 +486,22 @@ export function LeadDetailClient({
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{subtitle || 'Prospective client'}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {subtitle ? (
+                <>
+                  {subtitleBefore}
+                  {lead.phone?.trim() && (
+                    <>
+                      {subtitleBefore && ' · '}
+                      <CallPhoneLink phone={lead.phone} />
+                    </>
+                  )}
+                  {subtitleAfter && <>{(subtitleBefore || lead.phone?.trim()) && ' · '}{subtitleAfter}</>}
+                </>
+              ) : (
+                'Prospective client'
+              )}
+            </p>
           </div>
           <LeadTopActions
             busy={interactionBusy}

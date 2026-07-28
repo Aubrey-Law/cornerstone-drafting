@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ageInYearsFromDob, formatDateOnly } from '@/lib/dob'
-import { formatPhoneDisplay } from '@/lib/phone'
+import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import type { MatterContact } from '@/types/database'
 import type { ContactProfile } from '@/lib/designSheet/fiduciaryDocumentInclusions'
 import { formatContactRelationshipLine } from '@/lib/kinship/relationshipLabels'
@@ -49,7 +49,6 @@ export function PersonContactCard({
   ].filter((value): value is string => Boolean(value))
   const details = [
     contact.address?.trim() || null,
-    formatPhoneDisplay(contact.phone) || null,
     contact.email?.trim() || null,
   ].filter((value): value is string => Boolean(value))
   const age = ageInYearsFromDob(contact.date_of_birth)
@@ -71,9 +70,10 @@ export function PersonContactCard({
             </span>
           ))}
         </div>
-        {(details.length > 0 || dob) && (
+        {(details.length > 0 || contact.phone || dob) && (
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {details.map(detail => <span key={detail}>{detail}</span>)}
+            <CallPhoneLink phone={contact.phone} />
             {dob && <span>{dob}</span>}
           </div>
         )}
