@@ -31,10 +31,16 @@ export type LeadReadiness = {
   ready: boolean
 }
 
+const SUBMITTED_INTAKE_STATUSES = ['submitted', 'approved', 'completed']
+
 export function intakeCompleted(lead: LeadDetailRecord): boolean {
   if (hasText(lead.intake_completed_at)) return true
-  const status = typeof lead.intake_status === 'string' ? lead.intake_status.toLowerCase() : ''
-  return status === 'submitted' || status === 'approved' || status === 'completed'
+  // `client_intake.status` is the intake's own status column. `intake_status`
+  // is not a column on that table — it only exists as the optimistic local
+  // value the detail client sets after sending an intake.
+  return [lead.status, lead.intake_status]
+    .map(value => (typeof value === 'string' ? value.toLowerCase() : ''))
+    .some(value => SUBMITTED_INTAKE_STATUSES.includes(value))
 }
 
 export function engagementStarted(lead: LeadDetailRecord): boolean {
