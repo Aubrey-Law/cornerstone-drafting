@@ -3,6 +3,8 @@ import { fetchMatterAging, type MatterAgingRow } from '@/lib/queries/pipelineAgi
 import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
 import { computeMatterNextAction, type MatterNextActionKind } from '@/lib/matterNextAction'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import { fetchTasks } from '@/lib/queries/tasks'
+import { taskDueGroup, type TaskRow } from '@/lib/tasks/types'
 import type { PipelineMatter } from '@/types/database'
 
 export interface TodayUnreadThread {
@@ -50,6 +52,10 @@ export interface TodayData {
   intakeToSend: PipelineMatter[]
   /** Matters with an appointment today (firm timezone), soonest first. */
   appointmentsToday: TodayAppointment[]
+  /** Open tasks whose effective due date has passed, soonest first. */
+  overdueTasks: TaskRow[]
+  /** Open tasks due today (firm timezone). */
+  tasksDueToday: TaskRow[]
   /** Calls not yet linked to a lead or matter. */
   unassignedCallCount: number
   activeMatterCount: number
@@ -87,7 +93,7 @@ function decorateRow(row: MatterAgingRow, matterById: Map<string, PipelineMatter
 export async function fetchTodayData(): Promise<TodayData> {
   const admin = getAdminClient()
 
-  const [aging, mattersRes, unreadRes, callsRes] = await Promise.all([
+  const [aging, mattersRes, unreadRes, callsRes, openTasks] = await Promise.all([
     fetchMatterAging(),
     admin
       .from('v_matter_pipeline')
@@ -105,6 +111,7 @@ export async function fetchTodayData(): Promise<TodayData> {
       .select('id', { count: 'exact', head: true })
       .is('matter_id', null)
       .is('lead_id', null),
+    fetchTasks({ status: 'open', limit: 500 }),
   ])
 
   if (mattersRes.error) console.error('fetchTodayData matters error:', mattersRes.error)
@@ -155,6 +162,9 @@ export async function fetchTodayData(): Promise<TodayData> {
     }))
     .sort((a, b) => a.next_appointment.localeCompare(b.next_appointment))
 
+  const overdueTasks = openTasks.filter(task => taskDueGroup(task) === 'overdue')
+  const tasksDueToday = openTasks.filter(task => taskDueGroup(task) === 'today')
+
   return {
     atRisk,
     waitingOnYou,
@@ -164,10 +174,13 @@ export async function fetchTodayData(): Promise<TodayData> {
     intakeReview,
     intakeToSend,
     appointmentsToday,
+    overdueTasks,
+    tasksDueToday,
     unassignedCallCount: callsRes.count ?? 0,
     activeMatterCount: matters.length,
     needsYou:
-      waitingOnYou.length + unreadThreads.length + intakeReview.length + intakeToSend.length,
+      overdueTasks.length + tasksDueToday.length + waitingOnYou.length + unreadThreads.length
+      + intakeReview.length + intakeToSend.length,
     overdueCount: atRisk.filter(r => r.health === 'red').length,
   }
 }

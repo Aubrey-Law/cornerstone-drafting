@@ -1,5 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchMatterAgingTiles } from '@/lib/queries/pipelineAging'
+import { fetchTaskCounts } from '@/lib/queries/tasks'
 import { type SidebarCounts } from '@/lib/sidebarBadges'
 
 interface CountResult {
@@ -67,11 +68,19 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     console.error('sidebar counts aging error:', error)
   }
 
+  let tasksOverdueCount = 0
+  try {
+    tasksOverdueCount = (await fetchTaskCounts()).overdue
+  } catch (error) {
+    console.error('sidebar counts tasks error:', error)
+  }
+
   return {
     intakeReviewCount,
     draftingNeedsDesignCount,
     agingRedCount,
     agingAmberCount,
     unassignedCallsCount,
+    tasksOverdueCount,
   }
 }

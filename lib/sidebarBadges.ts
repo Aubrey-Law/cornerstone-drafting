@@ -4,6 +4,7 @@ export interface SidebarCounts {
   agingRedCount: number
   agingAmberCount: number
   unassignedCallsCount: number
+  tasksOverdueCount: number
 }
 
 export type SidebarBadgeTone = 'destructive' | 'accent'
@@ -19,6 +20,7 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   agingRedCount: 0,
   agingAmberCount: 0,
   unassignedCallsCount: 0,
+  tasksOverdueCount: 0,
 }
 
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
@@ -30,6 +32,9 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
     if (counts.agingRedCount > 0) return { value: counts.agingRedCount, tone: 'destructive' }
     if (counts.draftingNeedsDesignCount > 0) return { value: counts.draftingNeedsDesignCount, tone: 'accent' }
     if (counts.agingAmberCount > 0) return { value: counts.agingAmberCount, tone: 'accent' }
+  }
+  if (href === '/admin/tasks' && counts.tasksOverdueCount > 0) {
+    return { value: counts.tasksOverdueCount, tone: 'destructive' }
   }
   if (href === '/admin/calls' && counts.unassignedCallsCount > 0) {
     return { value: counts.unassignedCallsCount, tone: 'accent' }
@@ -48,5 +53,6 @@ export function mergeSidebarCounts(
     agingRedCount: next.agingRedCount ?? prev.agingRedCount,
     agingAmberCount: next.agingAmberCount ?? prev.agingAmberCount,
     unassignedCallsCount: next.unassignedCallsCount ?? prev.unassignedCallsCount,
+    tasksOverdueCount: next.tasksOverdueCount ?? prev.tasksOverdueCount,
   }
 }

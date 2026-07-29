@@ -59,6 +59,8 @@ import {
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { MatterEngineStageTaskCard } from '@/components/admin/MatterEngineStageTaskCard'
+import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
+import { useRecordTaskCounts, type RecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import { MatterOverviewHero } from './MatterOverviewHero'
 import { MatterEssentialsCard } from './MatterEssentialsCard'
 import { MatterLegalPlanCard } from './MatterLegalPlanCard'
@@ -128,6 +130,7 @@ interface MatterDetailClientProps {
   emailSendEnabled?: boolean
   esignEnabled?: boolean
   unreviewedUploadCounts?: UnreviewedUploadCounts
+  initialTaskCounts?: RecordTaskCounts
 }
 
 export default function MatterDetailClient(props: MatterDetailClientProps) {
@@ -261,6 +264,7 @@ function MatterDetailClientInner({
   emailSendEnabled = false,
   esignEnabled = false,
   unreviewedUploadCounts: initialUnreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
+  initialTaskCounts = { open: 0, overdue: 0 },
 }: MatterDetailClientProps) {
   const token = useAccessToken()
   const router = useRouter()
@@ -484,7 +488,10 @@ function MatterDetailClientInner({
   const {
     currentEngineStageTask,
     handleEngineStageTaskUpdated,
+    refreshEngineStageTask,
   } = useMatterEngineStageTask(matterId, matter.stage)
+
+  const taskCounts = useRecordTaskCounts(matterId, initialTaskCounts)
 
   const handleUnlockIntake = useCallback(() => {
     if (!liveIntakeId || unlocking) return
@@ -832,6 +839,14 @@ function MatterDetailClientInner({
             >
               <TabsList className="sticky top-0 z-10 w-full justify-start overflow-x-auto bg-background">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="tasks" className="gap-1.5">
+                  Tasks
+                  {taskCounts.overdue > 0 && (
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
+                      {taskCounts.overdue}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="people">People</TabsTrigger>
                 <TabsTrigger value="assets">Assets</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -938,6 +953,16 @@ function MatterDetailClientInner({
                   onOpened={() => void handleMarkPortalUploadsReviewed()}
                 />
                 </div>
+              </TabsContent>
+
+              <TabsContent value="tasks">
+                <RecordTasksTab
+                  recordId={matterId}
+                  recordKind="matter"
+                  recordName={matter.client_name ?? null}
+                  onStageTaskCompleted={() => void refreshEngineStageTask()}
+                  onTasksChanged={() => void taskCounts.refresh()}
+                />
               </TabsContent>
 
               <MatterPeopleTab

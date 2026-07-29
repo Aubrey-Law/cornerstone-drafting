@@ -1,5 +1,6 @@
 export const MATTER_TABS = [
   'overview',
+  'tasks',
   'people',
   'assets',
   'documents',
@@ -18,7 +19,6 @@ const LEGACY_TAB_MAP: Record<string, MatterTab> = {
   contacts: 'people',
   messages: 'communications',
   calls: 'communications',
-  tasks: 'overview',
 }
 
 export function parseMatterTab(value: string | null | undefined): MatterTab {

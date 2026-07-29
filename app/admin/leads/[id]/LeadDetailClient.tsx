@@ -32,6 +32,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
+import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
+import { useRecordTaskCounts, type RecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import { LeadFieldsRail } from '@/components/leads/LeadFieldsRail'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
@@ -71,6 +74,7 @@ type LeadDetailClientProps = {
   actorError?: string | null
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
+  initialTaskCounts?: RecordTaskCounts
 }
 
 type LeadPatchResponse = {
@@ -137,6 +141,7 @@ export function LeadDetailClient({
   actorError = null,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
+  initialTaskCounts = { open: 0, overdue: 0 },
 }: LeadDetailClientProps) {
   const token = useAccessToken()
   const router = useRouter()
@@ -169,6 +174,7 @@ export function LeadDetailClient({
     || busyIntent !== null
   const interactionLockRef = useRef(false)
   const { documents, loading: documentsLoading } = useLeadDocuments(lead.matter_id)
+  const taskCounts = useRecordTaskCounts(lead.id, initialTaskCounts)
 
   // The URL owns the tab, but the click applies immediately so the workspace
   // never waits on a router round trip.
@@ -594,6 +600,14 @@ export function LeadDetailClient({
           <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
             <TabsList className="w-full justify-start overflow-x-auto bg-background">
               <TabsTrigger value="plan">Plan</TabsTrigger>
+              <TabsTrigger value="tasks" className="gap-1.5">
+                Tasks
+                {taskCounts.overdue > 0 && (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
+                    {taskCounts.overdue}
+                  </Badge>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
               <TabsTrigger value="documents">Documents ({documentsCount})</TabsTrigger>
@@ -618,6 +632,15 @@ export function LeadDetailClient({
                   changeActiveField(field)
                 }}
                 onOpenIntake={() => setIntakeSheetOpen(true)}
+              />
+            </TabsContent>
+
+            <TabsContent value="tasks" className="mt-4">
+              <RecordTasksTab
+                recordId={lead.id}
+                recordKind="lead"
+                recordName={clientName}
+                onTasksChanged={() => void taskCounts.refresh()}
               />
             </TabsContent>
 

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { engineStageLabel } from '@/lib/stage-engine/labels'
 import { stageTaskProgress } from '@/lib/stage-engine/stageTaskProgress'
 import type { StageTaskRow } from '@/lib/queries/stageTasks'
+import { formatTaskDate } from '@/lib/tasks/types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 
@@ -16,8 +17,8 @@ function dueTone(task: StageTaskRow): 'red' | 'amber' | 'muted' {
 }
 
 const DUE_CLASS: Record<'red' | 'amber' | 'muted', string> = {
-  red: 'text-red-600',
-  amber: 'text-amber-600',
+  red: 'text-red-strong',
+  amber: 'text-amber-orange',
   muted: 'text-muted-foreground',
 }
 
@@ -37,7 +38,7 @@ export function MatterEngineStageTaskCard({
 
   async function patch(body: Record<string, unknown>) {
     setError(null)
-    const res = await fetch(`/api/admin/stage-tasks/${task.id}`, {
+    const res = await fetch(`/api/admin/tasks/${task.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -74,7 +75,7 @@ export function MatterEngineStageTaskCard({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            SLA task · {engineStageLabel(task.stage_key)}
+            SLA task · {engineStageLabel(task.stage_key ?? '')}
           </p>
           <p className="mt-1 text-sm font-medium text-foreground">{task.title}</p>
           {task.batch_tag && (
@@ -86,9 +87,7 @@ export function MatterEngineStageTaskCard({
             {progress.done}/{progress.total}
           </p>
           {task.hard_due_at && (
-            <p className={cn('mt-0.5', DUE_CLASS[tone])}>
-              SLA {new Date(task.hard_due_at).toLocaleDateString()}
-            </p>
+            <p className={cn('mt-0.5', DUE_CLASS[tone])}>SLA {formatTaskDate(task.hard_due_at)}</p>
           )}
         </div>
       </div>
