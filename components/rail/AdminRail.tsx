@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   ChevronUp,
+  Mail,
   Mic,
   MicOff,
   Minus,
@@ -23,6 +24,7 @@ import {
 import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/softphoneEvents'
 import { useSoftphoneCall } from '@/components/softphone/SoftphoneProvider'
 import { RailActivityPane } from './RailActivityPane'
+import { RailEmailPane } from './RailEmailPane'
 
 const ChatPanel = dynamic(
   () => import('@/app/admin/components/ChatPanel').then(m => m.ChatPanel),
@@ -44,7 +46,7 @@ function formatCallDuration(totalSeconds: number): string {
   return `${minutes}:${seconds}`
 }
 
-export type RailTab = 'assistant' | 'phone' | 'activity'
+export type RailTab = 'assistant' | 'phone' | 'email' | 'activity'
 
 const RAIL_STORAGE_KEY = 'cornerstone.admin.rail'
 
@@ -55,7 +57,7 @@ interface StoredRailState {
 }
 
 function isRailTab(value: unknown): value is RailTab {
-  return value === 'assistant' || value === 'phone' || value === 'activity'
+  return value === 'assistant' || value === 'phone' || value === 'email' || value === 'activity'
 }
 
 export interface AdminRailController {
@@ -68,6 +70,8 @@ export interface AdminRailController {
   clearPendingChatAction: () => void
   /** True once the assistant has been opened at least once this page life. */
   assistantMounted: boolean
+  /** Same for the email pane, so an unsent draft survives a tab switch. */
+  emailMounted: boolean
   openTab: (tab: RailTab) => void
   setTab: (tab: RailTab) => void
   toggle: () => void
@@ -85,6 +89,7 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
   const [minimized, setMinimized] = useState(false)
   const [tab, setTabState] = useState<RailTab>('assistant')
   const [assistantMounted, setAssistantMounted] = useState(false)
+  const [emailMounted, setEmailMounted] = useState(false)
   const [pendingChatAction, setPendingChatAction] = useState<CornerstoneChatOpenDetail | null>(null)
   // State, not a ref: the persist effect must not fire until the restored
   // values have landed, or it would write the defaults back over them.
@@ -119,10 +124,13 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     if (!voiceEnabled && tab === 'phone') setTabState('assistant')
   }, [voiceEnabled, tab])
 
-  // The assistant mounts lazily on first view, then stays mounted for the rest
-  // of the page life so its thread survives tab switches and minimize/close.
+  // The assistant and email panes mount lazily on first view, then stay mounted
+  // for the rest of the page life so the chat thread and an unsent email draft
+  // survive tab switches and minimize/close.
   useEffect(() => {
-    if (open && !minimized && tab === 'assistant') setAssistantMounted(true)
+    if (!open || minimized) return
+    if (tab === 'assistant') setAssistantMounted(true)
+    if (tab === 'email') setEmailMounted(true)
   }, [open, minimized, tab])
 
   const openTab = useCallback((next: RailTab) => {
@@ -186,6 +194,11 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
       if (key === 'p' && voiceEnabled) {
         event.preventDefault()
         openTab('phone')
+        return
+      }
+      if (key === 'e') {
+        event.preventDefault()
+        openTab('email')
       }
     }
 
@@ -203,6 +216,7 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     pendingChatAction,
     clearPendingChatAction,
     assistantMounted,
+    emailMounted,
     openTab,
     setTab,
     toggle,
@@ -210,7 +224,7 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     close,
   }), [
     open, minimized, tab, pendingChatAction,
-    clearPendingChatAction, assistantMounted, openTab, setTab, toggle, minimize, close,
+    clearPendingChatAction, assistantMounted, emailMounted, openTab, setTab, toggle, minimize, close,
   ])
 }
 
@@ -244,6 +258,7 @@ export function AdminRail({
   const tabs: { key: RailTab; label: string; icon: typeof Sparkles; dot?: boolean }[] = [
     { key: 'assistant', label: 'Assistant', icon: Sparkles },
     ...(voiceEnabled ? [{ key: 'phone' as const, label: 'Phone', icon: Phone, dot: call.active }] : []),
+    { key: 'email', label: 'Email', icon: Mail },
     { key: 'activity', label: 'Activity', icon: Activity },
   ]
 
@@ -322,6 +337,16 @@ export function AdminRail({
             matterDisplayName={matterDisplayName}
             assistantModelLabel={assistantModelLabel}
           />
+        </div>
+      )}
+
+      {/*
+        Email keeps its draft while the operator looks something up, so it is
+        hidden rather than unmounted once it has been opened.
+      */}
+      {rail.emailMounted && (
+        <div className={cn('min-h-0 flex-1', visible && tab === 'email' ? 'flex flex-col' : 'hidden')}>
+          <RailEmailPane />
         </div>
       )}
 

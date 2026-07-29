@@ -3,6 +3,7 @@ import {
   getMicrosoftConnectionForUser,
   hasMailSendScope,
 } from '@/lib/microsoftCalendar'
+import type { EmailAttachment } from './attachments'
 
 export class GraphSendError extends Error {
   readonly kind: 'no_connection' | 'missing_scope' | 'graph_error'
@@ -16,11 +17,13 @@ export class GraphSendError extends Error {
 export interface GraphSendArgs {
   to: string
   cc?: string[]
+  bcc?: string[]
   subject: string
   html?: string
   text?: string
   replyTo?: string
   userId?: string | null
+  attachments?: EmailAttachment[]
 }
 
 export interface GraphSendResult {
@@ -62,13 +65,23 @@ export async function sendViaGraph(args: GraphSendArgs): Promise<GraphSendResult
   }
 
   const bodyContent = args.html ?? args.text ?? ''
+  // Graph inlines attachments in the sendMail body, which caps the whole
+  // request at ~4MB. lib/email/attachments.ts keeps the total under that.
+  const attachments = (args.attachments ?? []).map(file => ({
+    '@odata.type': '#microsoft.graph.fileAttachment',
+    name: file.filename,
+    contentType: file.contentType ?? 'application/octet-stream',
+    contentBytes: file.content.toString('base64'),
+  }))
   const message = {
     message: {
       subject: args.subject,
       body: { contentType: args.html ? 'HTML' : 'Text', content: bodyContent },
       toRecipients: [recipient(args.to)],
       ccRecipients: args.cc && args.cc.length > 0 ? args.cc.map(recipient) : undefined,
+      bccRecipients: args.bcc && args.bcc.length > 0 ? args.bcc.map(recipient) : undefined,
       replyTo: args.replyTo ? [recipient(args.replyTo)] : undefined,
+      ...(attachments.length > 0 ? { attachments } : {}),
     },
     saveToSentItems: true,
   }
