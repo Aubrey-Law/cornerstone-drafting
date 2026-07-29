@@ -1,0 +1,199 @@
+'use client'
+
+import Link from 'next/link'
+import { Paperclip, Repeat } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
+  TASK_PRIORITY_DOT,
+  TASK_PRIORITY_LABEL,
+  TASK_SOURCE_LABEL,
+  TASK_SOURCE_PILL,
+  effectiveDueAt,
+  formatEstimate,
+  formatTaskDue,
+  initialsFor,
+  isTaskOverdue,
+  taskProgress,
+  taskRecordHref,
+  type TaskRow,
+} from '@/lib/tasks/types'
+
+export function TaskSourcePill({ source, className }: { source: TaskRow['source']; className?: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium',
+        TASK_SOURCE_PILL[source],
+        className,
+      )}
+    >
+      {TASK_SOURCE_LABEL[source]}
+    </span>
+  )
+}
+
+export function TaskPriorityDot({ priority }: { priority: TaskRow['priority'] }) {
+  return (
+    <span
+      aria-label={TASK_PRIORITY_LABEL[priority]}
+      title={TASK_PRIORITY_LABEL[priority]}
+      className={cn('size-1.5 shrink-0 rounded-full', TASK_PRIORITY_DOT[priority])}
+    />
+  )
+}
+
+export function TaskAssigneeAvatar({ name }: { name: string | null | undefined }) {
+  if (!name) return null
+  return (
+    <span
+      title={name}
+      className="grid size-5 shrink-0 place-items-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground"
+    >
+      {initialsFor(name)}
+    </span>
+  )
+}
+
+/** Right-aligned due cell — red once the effective due date has passed. */
+export function TaskDueCell({ task, className }: { task: TaskRow; className?: string }) {
+  const due = effectiveDueAt(task)
+  if (!due) return null
+  const overdue = isTaskOverdue(task)
+  return (
+    <span
+      title={new Date(due).toLocaleString()}
+      className={cn(
+        'shrink-0 text-xs tabular-nums',
+        overdue ? 'font-medium text-red-strong' : 'text-muted-foreground',
+        className,
+      )}
+    >
+      {formatTaskDue(due)}
+    </span>
+  )
+}
+
+/** Checkbox styled as a plain circle so long lists stay quiet. */
+export function TaskCheckbox({
+  checked,
+  disabled,
+  label,
+  onToggle,
+}: {
+  checked: boolean
+  disabled?: boolean
+  label: string
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={checked ? `Reopen ${label}` : `Complete ${label}`}
+      disabled={disabled}
+      onClick={onToggle}
+      className={cn(
+        'grid size-4 shrink-0 place-items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+        checked
+          ? 'border-transparent bg-primary text-primary-foreground'
+          : 'border-muted-foreground/40 hover:border-foreground',
+      )}
+    >
+      {checked && (
+        <svg viewBox="0 0 12 12" className="size-2.5" aria-hidden fill="none" stroke="currentColor" strokeWidth={2.5}>
+          <path d="M2 6.5 4.6 9 10 3.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+/** The record link + source pill + subtask count line under a task title. */
+export function TaskMetaLine({ task, showRecord = true }: { task: TaskRow; showRecord?: boolean }) {
+  const href = taskRecordHref(task)
+  const progress = taskProgress(task)
+  const showSubtasks = task.task_type === 'checklist' && task.checklist.length > 0
+
+  return (
+    <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      {showRecord && href && task.record_name && (
+        <>
+          <Link href={href} className="truncate hover:text-foreground hover:underline">
+            {task.record_name}
+          </Link>
+          <span aria-hidden>·</span>
+        </>
+      )}
+      <TaskSourcePill source={task.source} />
+      {showSubtasks && (
+        <>
+          <span aria-hidden>·</span>
+          <span className="shrink-0 tabular-nums">
+            {progress.done}/{progress.total} subtasks
+          </span>
+        </>
+      )}
+    </span>
+  )
+}
+
+interface TaskRowProps {
+  task: TaskRow
+  focused?: boolean
+  pending?: boolean
+  showRecord?: boolean
+  onComplete: () => void
+  /** Trailing controls (snooze menu, overflow) rendered after the due cell. */
+  actions?: React.ReactNode
+}
+
+/**
+ * One task in a list: checkbox → priority dot → title → meta line → estimate →
+ * assignee → due. Shared by the Tasks page, the record tab and Today.
+ */
+export function TaskListRow({
+  task,
+  focused = false,
+  pending = false,
+  showRecord = true,
+  onComplete,
+  actions,
+}: TaskRowProps) {
+  const done = task.status === 'done'
+  const estimate = formatEstimate(task.estimate_minutes)
+
+  return (
+    <li
+      id={`task-row-${task.id}`}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50',
+        focused && 'bg-muted shadow-[inset_3px_0_0] shadow-primary',
+        pending && 'opacity-60',
+      )}
+    >
+      <TaskCheckbox checked={done} disabled={pending} label={task.title} onToggle={onComplete} />
+      <TaskPriorityDot priority={task.priority} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={cn('truncate text-sm text-foreground', done && 'text-muted-foreground line-through')}>
+            {task.title}
+          </span>
+          {task.recurrence && (
+            <Repeat className="size-3 shrink-0 text-muted-foreground" aria-label="Repeats" />
+          )}
+          {task.document_id && (
+            <Paperclip className="size-3 shrink-0 text-muted-foreground" aria-label="Has an attachment" />
+          )}
+        </span>
+        <TaskMetaLine task={task} showRecord={showRecord} />
+      </span>
+      {estimate && (
+        <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">{estimate}</span>
+      )}
+      <TaskAssigneeAvatar name={task.assignee_name} />
+      <TaskDueCell task={task} className="w-16 text-right" />
+      {actions}
+    </li>
+  )
+}

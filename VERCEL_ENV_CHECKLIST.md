@@ -30,6 +30,10 @@ Python fallback uses the venv created by `npm run estate-generator:setup` during
 | Variable | Purpose |
 |----------|---------|
 | `NEXT_PUBLIC_APP_URL` | Canonical public origin (e.g. `https://cornerstone.aubreylegal.com`). Used when resolving post-login redirects behind proxies. |
+| `NEXT_PUBLIC_PORTAL_URL` | Optional dedicated client-facing origin. Standing intake links use this first and fall back to `NEXT_PUBLIC_APP_URL`. |
+| `INTAKE_LINK_SIGNING_SECRET` | Server-only random secret used to sign stable, revocable intake URLs. Required in production; rotate only as an intentional invalidation of every standing link. |
+| `TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key rendered by the server on the public `/intake/start` page. |
+| `TURNSTILE_SECRET_KEY` | Server-only Cloudflare Turnstile verification secret for public intake registration. |
 
 Supabase Dashboard → Authentication → URL Configuration must include every deployed host:
 

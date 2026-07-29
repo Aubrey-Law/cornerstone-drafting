@@ -13,6 +13,8 @@ import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterActivity } from '@/types/database'
+import { fetchTasksForMatter } from '@/lib/queries/tasks'
+import { recordTaskCounts } from '@/lib/tasks/types'
 import MatterDetailClient from './MatterDetailClient'
 import { mapMatterNoteRows } from './tabs/noteLinks'
 import { buildLinkedMatterActivity } from '@/lib/leads/activity'
@@ -280,10 +282,13 @@ export default async function MatterDetailPage({ params }: Params) {
     portalUploadsReviewedAt,
   ).catch(() => ({ intake: 0, portal: 0, total: 0 }))
 
+  const initialTaskCounts = recordTaskCounts(await fetchTasksForMatter(id, 'open'))
+
   return (
     <MatterDetailClient
       matter={matter}
       matterId={id}
+      initialTaskCounts={initialTaskCounts}
       contacts={contacts}
       agingSummary={agingSummary}
       intakeId={intakeId}

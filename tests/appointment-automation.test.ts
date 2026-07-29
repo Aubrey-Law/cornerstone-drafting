@@ -125,7 +125,8 @@ describe('runPostBookingAutomation', () => {
       autoIntakeInvite: true,
     })
     expect(state.emails).toEqual([{ category: 'intake_invite', to: 'pat@example.com' }])
-    expect(state.intakeUpdates[0].intake_token_hash).toBeTruthy()
+    expect(state.intakeUpdates.some(update => Boolean(update.intake_link_version))).toBe(true)
+    expect(state.intakeUpdates.some(update => Boolean(update.intake_sent_at))).toBe(true)
     expect(state.activityInserts.find(i => i.table === 'lead_activity')).toBeDefined()
   })
 

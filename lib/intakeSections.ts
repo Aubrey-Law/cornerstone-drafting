@@ -88,7 +88,8 @@ export const INTAKE_STEPS: IntakeStep[] = [
     subtitle: 'Trustees, agents & proxies',
     timeEstimate: 7,
     isComplete: (r) =>
-      allFiduciariesNamed(r, ['fid_personal_rep_client', 'fid_poa_client', 'fid_hcp_client', 'fid_trustee_client']),
+      allFiduciariesNamed(r, ['fid_personal_rep_client', 'fid_poa_client', 'fid_hcp_client', 'fid_trustee_client']) ||
+      hasReviewChoice(r, 'fiduciaries'),
   },
   {
     id: 'spouse_fiduciaries',
@@ -97,7 +98,8 @@ export const INTAKE_STEPS: IntakeStep[] = [
     timeEstimate: 5,
     condition: (r) => r.marital_status === 'married',
     isComplete: (r) =>
-      allFiduciariesNamed(r, ['fid_personal_rep_spouse', 'fid_poa_spouse', 'fid_hcp_spouse']),
+      allFiduciariesNamed(r, ['fid_personal_rep_spouse', 'fid_poa_spouse', 'fid_hcp_spouse']) ||
+      hasReviewChoice(r, 'spouse_fiduciaries'),
   },
   {
     id: 'guardian',
@@ -105,7 +107,8 @@ export const INTAKE_STEPS: IntakeStep[] = [
     subtitle: 'Care for minor children',
     timeEstimate: 2,
     condition: (r) => r.has_minor_children === true,
-    isComplete: (r) => allFiduciariesNamed(r, ['fid_guardian_client']),
+    isComplete: (r) =>
+      allFiduciariesNamed(r, ['fid_guardian_client']) || hasReviewChoice(r, 'guardian'),
   },
   {
     id: 'review',
@@ -277,6 +280,7 @@ export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIss
       ]
     }
     case 'guardian':
+      if (hasReviewChoice(data, 'guardian')) return []
       return requiredFiduciaryIssue(
         data,
         'fid_guardian_client',
@@ -389,6 +393,12 @@ function hasNamedEntry(entries: Record<string, unknown>[]): boolean {
 // submission gating — see isReadyToReview, which stays errors-only.
 function allFiduciariesNamed(data: IntakeRow, keys: string[]): boolean {
   return keys.every((key) => hasNamedEntry(getFiduciaryList(data, key)))
+}
+
+function hasReviewChoice(data: IntakeRow, key: string): boolean {
+  const localChoice = recordText(nestedRecord(data, '_review_choices'), key)
+  const choice = localChoice || recordText(nestedRecord(data, 'review_choices'), key)
+  return choice === 'discuss_with_attorney' || choice === 'not_provided_yet'
 }
 
 function requiredFiduciaryIssue(

@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { formatPhoneInput } from '@/lib/phone'
 import {
   Select,
   SelectContent,
@@ -59,7 +60,7 @@ export function LeadEditorDialog({
         <div className="space-y-3">
           <Input placeholder="Client name" value={form.name} onChange={event => update({ name: event.target.value })} />
           <Input type="email" placeholder="Email" value={form.email} onChange={event => update({ email: event.target.value })} />
-          <Input placeholder="Phone (optional)" value={form.phone} onChange={event => update({ phone: event.target.value })} />
+          <Input type="tel" placeholder="(555) 555-5555" value={formatPhoneInput(form.phone)} onChange={event => update({ phone: formatPhoneInput(event.target.value) })} />
           <Select value={form.practiceArea} onValueChange={practiceArea => update({ practiceArea })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>

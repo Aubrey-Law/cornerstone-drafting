@@ -1,4 +1,8 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import {
+  createStandingIntakeVersion,
+  standingIntakeUrl,
+} from '@/lib/intake/standingLinks'
 import { parsePracticeArea, type PracticeAreaCode } from '@/lib/practiceArea'
 
 export interface CreateLeadInput {
@@ -7,6 +11,7 @@ export interface CreateLeadInput {
   clientPhone?: string | null
   practiceArea?: string | null
   feeQuoted?: number | null
+  clientUserId?: string | null
 }
 
 export interface CreatedLead {
@@ -14,6 +19,7 @@ export interface CreatedLead {
   clientName: string
   clientEmail: string
   practiceArea: PracticeAreaCode
+  intakeUrl: string
 }
 
 export async function createLead(input: CreateLeadInput): Promise<CreatedLead> {
@@ -30,6 +36,8 @@ export async function createLead(input: CreateLeadInput): Promise<CreatedLead> {
       : null
   const nameParts = clientName.split(/\s+/)
   const admin = getAdminClient()
+  const intakeLinkVersion = createStandingIntakeVersion()
+  const intakeLinkCreatedAt = new Date().toISOString()
   const { data: lead, error } = await admin
     .from('client_intake')
     .insert({
@@ -42,6 +50,11 @@ export async function createLead(input: CreateLeadInput): Promise<CreatedLead> {
       status: 'in_progress',
       lead_status: 'lead',
       engagement_fee_quoted: feeQuoted,
+      client_user_id: input.clientUserId ?? null,
+      user_id: input.clientUserId ?? null,
+      intake_link_version: intakeLinkVersion,
+      intake_link_created_at: intakeLinkCreatedAt,
+      intake_link_revoked_at: null,
     })
     .select('id')
     .single()
@@ -53,5 +66,6 @@ export async function createLead(input: CreateLeadInput): Promise<CreatedLead> {
     clientName,
     clientEmail,
     practiceArea,
+    intakeUrl: standingIntakeUrl(lead.id, intakeLinkVersion),
   }
 }

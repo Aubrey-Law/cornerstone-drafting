@@ -23,6 +23,7 @@ type Template = {
   name: string
   subject: string
   body: string
+  category?: string
 }
 
 type Props = {
@@ -36,6 +37,8 @@ type Props = {
   token: string | null
   onOpenChange: (open: boolean) => void
   onSent: () => void | Promise<void>
+  intakeUrl?: string | null
+  initialMessage?: string
 }
 
 export function LeadCommunicationDialog(props: Props) {
@@ -49,13 +52,17 @@ export function LeadCommunicationDialog(props: Props) {
 
   useEffect(() => {
     if (!props.open || props.channel !== 'email' || !props.token) return
-    void fetch('/api/admin/settings/email/templates?category=manual&active=true', {
-      headers: { Authorization: `Bearer ${props.token}` },
-    })
-      .then(async response => {
-        const body = await response.json()
-        if (!response.ok) throw new Error(body.error || 'Could not load email templates')
-        setTemplates(Array.isArray(body.templates) ? body.templates : [])
+    void Promise.all(['manual', 'intake_invite'].map(async category => {
+      const response = await fetch(`/api/admin/settings/email/templates?category=${category}&active=true`, {
+        headers: { Authorization: `Bearer ${props.token}` },
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || 'Could not load email templates')
+      return Array.isArray(body.templates) ? body.templates as Template[] : []
+    }))
+      .then(groups => {
+        const unique = new Map(groups.flat().map(template => [template.id, template]))
+        setTemplates([...unique.values()])
       })
       .catch(caught => setError(caught instanceof Error ? caught.message : 'Could not load email templates'))
   }, [props.channel, props.open, props.token])
@@ -67,8 +74,10 @@ export function LeadCommunicationDialog(props: Props) {
       setMessage('')
       setMessageHtml('')
       setError(null)
+    } else if (props.channel === 'sms' && props.initialMessage) {
+      setMessage(props.initialMessage)
     }
-  }, [props.open])
+  }, [props.channel, props.initialMessage, props.open])
 
   function chooseTemplate(id: string) {
     setTemplateId(id)
@@ -85,6 +94,8 @@ export function LeadCommunicationDialog(props: Props) {
       client_first_name: props.clientFirstName,
       first_name: props.clientFirstName,
       lead_name: props.clientName,
+      intake_link: props.intakeUrl,
+      intakeUrl: props.intakeUrl,
     }
     setSubject(renderEmailTemplateText(template.subject, variables))
     setMessageHtml(renderEmailTemplateBodyHtml(template.body, variables))

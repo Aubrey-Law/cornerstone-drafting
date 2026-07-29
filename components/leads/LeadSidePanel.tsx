@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { Maximize2, Minimize2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -23,7 +23,7 @@ import { leadListName } from '@/components/leads/LeadsTable'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type { LeadEditableField } from '@/lib/leads/details'
 import { computeNextAction } from '@/lib/leads/nextAction'
-import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
+import { calendarDayDifference, cn, FIRM_TIMEZONE } from '@/lib/utils'
 import type { LeadDetailRecord, LeadListRow, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 
 type LeadSidePanelProps = {
@@ -37,6 +37,9 @@ type LeadSidePanelProps = {
 
 const PANEL_TABS = ['home', 'plan', 'intake', 'timeline', 'notes', 'files'] as const
 type PanelTab = (typeof PANEL_TABS)[number]
+
+/** Remembered so the panel opens at the width the user last worked in. */
+const WIDE_STORAGE_KEY = 'cornerstone.leadPanelWide'
 
 function EmptyTab({ children }: { children: React.ReactNode }) {
   return (
@@ -61,6 +64,7 @@ export function LeadSidePanel({
 }: LeadSidePanelProps) {
   const token = useAccessToken()
   const [tab, setTab] = useState<PanelTab>('home')
+  const [wide, setWide] = useState(false)
   const [activeField, setActiveField] = useState<LeadEditableField | null>(null)
   const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
   const [removeSpouseOpen, setRemoveSpouseOpen] = useState(false)
@@ -71,6 +75,18 @@ export function LeadSidePanel({
     setTab('home')
     setActiveField(null)
   }, [lead.id])
+
+  useEffect(() => {
+    setWide(window.localStorage.getItem(WIDE_STORAGE_KEY) === '1')
+  }, [])
+
+  function toggleWide() {
+    setWide(current => {
+      const next = !current
+      window.localStorage.setItem(WIDE_STORAGE_KEY, next ? '1' : '0')
+      return next
+    })
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -126,7 +142,14 @@ export function LeadSidePanel({
   return (
     <aside
       aria-label={`${name} record`}
-      className="sticky top-4 flex max-h-[calc(100vh-7rem)] w-[500px] shrink-0 flex-col rounded-lg border border-l border-border bg-card shadow"
+      className={cn(
+        // A container so the rail and the plan gates lay out against the panel
+        // width rather than the viewport.
+        '@container/panel sticky top-4 flex h-[calc(100vh-6rem)] shrink-0 flex-col rounded-lg border border-l border-border bg-card shadow',
+        wide
+          ? 'w-[min(60rem,58vw)]'
+          : 'w-[440px] lg:w-[520px] xl:w-[580px] 2xl:w-[640px]',
+      )}
     >
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <span
@@ -144,6 +167,17 @@ export function LeadSidePanel({
           size="sm"
           variant="ghost"
           className="ml-auto h-7 px-2"
+          aria-label={wide ? 'Collapse record panel' : 'Expand record panel'}
+          aria-pressed={wide}
+          onClick={toggleWide}
+        >
+          {wide ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2"
           aria-label="Close record panel"
           onClick={onClose}
         >

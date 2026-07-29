@@ -18,6 +18,7 @@ import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
+import { formatPhoneInput } from '@/lib/phone'
 import { GROUP_COLORS, stageInfo, stageLabel, type StageGroup } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -613,7 +614,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                 id="create-client-phone"
                 type="tel"
                 value={clientPhone}
-                onChange={e => setClientPhone(e.target.value)}
+                onChange={e => setClientPhone(formatPhoneInput(e.target.value))}
                 placeholder="(555) 555-5555"
               />
             </div>

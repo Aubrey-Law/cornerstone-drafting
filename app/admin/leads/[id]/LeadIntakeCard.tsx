@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, Circle, ClipboardList, Copy } from 'lucide-react'
+import { CheckCircle2, Circle, ClipboardList, Copy, Mail, MessageSquare, RefreshCw, ShieldX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { type IntakeRow } from '@/lib/intakeSections'
 import { getLeadIntakeProgress } from '@/lib/leads/intakeProgress'
@@ -10,6 +10,11 @@ interface LeadIntakeCardProps {
   intakeUrl: string | null
   onOpen: () => void
   onCopy: () => void
+  onEmail?: () => void
+  onText?: () => void
+  onRotate?: () => void
+  onRevoke?: () => void
+  busy?: boolean
 }
 
 function stateLine(intake: IntakeRow, completed: number): string {
@@ -19,7 +24,9 @@ function stateLine(intake: IntakeRow, completed: number): string {
   return `${sent ? 'Sent' : 'Never sent'} · ${submitted ? 'submitted' : 'nothing submitted'} · ${completed} of 7 sections`
 }
 
-export function LeadIntakeCard({ intake, intakeUrl, onOpen, onCopy }: LeadIntakeCardProps) {
+export function LeadIntakeCard({
+  intake, intakeUrl, onOpen, onCopy, onEmail, onText, onRotate, onRevoke, busy = false,
+}: LeadIntakeCardProps) {
   const segments = getLeadIntakeProgress(intake)
   const completed = segments.filter((segment) => segment.complete).length
 
@@ -40,12 +47,32 @@ export function LeadIntakeCard({ intake, intakeUrl, onOpen, onCopy }: LeadIntake
             size="sm"
             variant="outline"
             onClick={onCopy}
-            disabled={!intakeUrl}
+            disabled={!intakeUrl || busy}
             aria-describedby={!intakeUrl ? 'intake-link-unavailable' : undefined}
           >
             <Copy className="h-3.5 w-3.5" />
             Copy link
           </Button>
+          {onEmail && (
+            <Button type="button" size="sm" variant="outline" onClick={onEmail} disabled={!intakeUrl || busy}>
+              <Mail className="h-3.5 w-3.5" /> Email link
+            </Button>
+          )}
+          {onText && (
+            <Button type="button" size="sm" variant="outline" onClick={onText} disabled={!intakeUrl || busy}>
+              <MessageSquare className="h-3.5 w-3.5" /> Text link
+            </Button>
+          )}
+          {onRotate && (
+            <Button type="button" size="sm" variant="ghost" onClick={onRotate} disabled={busy}>
+              <RefreshCw className="h-3.5 w-3.5" /> {intakeUrl ? 'Replace' : 'Prepare link'}
+            </Button>
+          )}
+          {onRevoke && (
+            <Button type="button" size="sm" variant="ghost" onClick={onRevoke} disabled={!intakeUrl || busy}>
+              <ShieldX className="h-3.5 w-3.5" /> Revoke
+            </Button>
+          )}
         </div>
       </div>
       {!intakeUrl && <p id="intake-link-unavailable" className="sr-only">An intake link is not available to copy yet.</p>}

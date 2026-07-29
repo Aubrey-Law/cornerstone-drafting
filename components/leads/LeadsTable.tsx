@@ -1,14 +1,8 @@
 import Link from 'next/link'
-import { MoreVertical, UserPlus } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { LeadActionsMenu } from '@/components/leads/LeadActionsMenu'
 import {
   Table,
   TableBody,
@@ -24,7 +18,7 @@ import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
 import type { LeadListRow } from '@/lib/leads/viewTypes'
 
-type NextStep =
+export type NextStep =
   | { key: 'send_intake'; label: string; primary: true }
   | { key: 'remind_intake'; label: string; primary: false }
   | { key: 'send_engagement'; label: string; primary: true }
@@ -53,7 +47,7 @@ export function provisionalLeadNumber(lead: LeadIdentityFields): string {
   return `${year}-${practiceAreaMatterCode(lead.practice_area)}-${clientNameMatterSlug(leadListName(lead))}`
 }
 
-function nextStep(lead: LeadListRow, esignEnabled: boolean): NextStep {
+export function nextStep(lead: LeadListRow, esignEnabled: boolean): NextStep {
   if (lead.lead_status === 'hired' && lead.matter_id) {
     return { key: 'view_matter', label: 'View matter', primary: false }
   }
@@ -147,7 +141,6 @@ export function LeadsTable({
           {leads.map(lead => {
             const busy = busyLeadId === lead.id
             const step = nextStep(lead, esignEnabled)
-            const hired = lead.lead_status === 'hired'
             const runStep = () => {
               if (step.key === 'send_intake' || step.key === 'remind_intake') onSendIntake(lead)
               else if (step.key === 'send_engagement' || step.key === 'resend_engagement') onSendEngagement(lead)
@@ -202,48 +195,22 @@ export function LeadsTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  <DropdownMenu
+                  <LeadActionsMenu
+                    lead={lead}
+                    esignEnabled={esignEnabled}
+                    busy={busy}
                     {...(onMenuOpenChange
                       ? {
                           open: openMenuLeadId === lead.id,
                           onOpenChange: (open: boolean) => onMenuOpenChange(lead.id, open),
                         }
                       : {})}
-                  >
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-7"
-                        disabled={busy}
-                        aria-label={`More actions for ${leadListName(lead)}`}
-                      >
-                        <MoreVertical className="size-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onSelect={() => onEdit(lead)}>Edit</DropdownMenuItem>
-                      {!hired && (
-                        <DropdownMenuItem onSelect={() => onSendIntake(lead)}>
-                          {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
-                        </DropdownMenuItem>
-                      )}
-                      {!hired && esignEnabled && lead.engagement_status !== 'signed' && (
-                        <DropdownMenuItem onSelect={() => onSendEngagement(lead)}>
-                          {lead.engagement_sent_at ? 'Resend engagement' : 'Send engagement'}
-                        </DropdownMenuItem>
-                      )}
-                      {!hired && <DropdownMenuItem onSelect={() => onHire(lead)}>Hire matter</DropdownMenuItem>}
-                      {!hired && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" onSelect={() => onArchive(lead)}>
-                            Archive lead
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    onEdit={onEdit}
+                    onSendIntake={onSendIntake}
+                    onSendEngagement={onSendEngagement}
+                    onHire={onHire}
+                    onArchive={onArchive}
+                  />
                 </TableCell>
               </TableRow>
             )

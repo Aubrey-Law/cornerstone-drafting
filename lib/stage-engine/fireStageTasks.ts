@@ -13,6 +13,7 @@ type TaskTemplate = {
     type: 'single' | 'checklist'
     soft_lead_days: number
     sla_days: number
+    priority?: 'high' | 'normal' | 'low'
     checklist?: string[]
     batch_tag?: string
   }
@@ -39,8 +40,8 @@ const ATTORNEY_ENGINE_STAGES = new Set([
 ])
 
 /**
- * Create a stage_tasks row when a matter enters an attorney-owned engine stage.
- * Idempotent on (matter_id, stage_key, stage_entered_at).
+ * Create a `tasks` row (source = 'stage') when a matter enters an attorney-owned
+ * engine stage. Idempotent on (matter_id, stage_key, stage_entered_at).
  */
 export async function fireEngineStageTask(
   admin: SupabaseClient,
@@ -78,15 +79,19 @@ export async function fireEngineStageTask(
 
   const checklist = (template.task.checklist ?? []).map(text => ({ text, done: false }))
 
-  const { error } = await admin.from('stage_tasks').upsert(
+  const { error } = await admin.from('tasks').upsert(
     {
       matter_id: args.matterId,
+      source: 'stage',
       stage_key: engineStage,
       stage_entered_at: matter.stage_entered_at,
       title,
       task_type: template.task.type,
       soft_due_at: softDue.toISOString(),
       hard_due_at: hardDue.toISOString(),
+      // Stage tasks work off their soft date; hard_due_at stays the SLA badge.
+      due_at: softDue.toISOString(),
+      priority: template.task.priority ?? 'normal',
       status: 'open',
       batch_tag: template.task.batch_tag ?? null,
       checklist,
@@ -105,9 +110,10 @@ export async function archiveEngineStageTasks(
   engineStage: string,
 ): Promise<void> {
   await admin
-    .from('stage_tasks')
+    .from('tasks')
     .update({ status: 'archived' })
     .eq('matter_id', matterId)
+    .eq('source', 'stage')
     .eq('stage_key', engineStage)
     .eq('status', 'open')
 }

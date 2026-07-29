@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { formatPhoneDisplay } from '@/lib/phone'
+import { formatPhoneDisplay, formatPhoneInput } from '@/lib/phone'
 import { PRONOUN_OPTIONS } from '@/lib/sharedFields/options'
 
 export type FamilyMemberRole = 'client' | 'spouse' | 'child'
@@ -207,7 +207,7 @@ export function FamilyMemberDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
-              <Input type="tel" value={clientForm.phone} onChange={e => setClientForm(d => ({ ...d, phone: e.target.value }))} />
+              <Input type="tel" value={clientForm.phone} onChange={e => setClientForm(d => ({ ...d, phone: formatPhoneInput(e.target.value) }))} placeholder="(555) 555-5555" />
             </div>
             <div className="space-y-1.5">
               <Label>Street</Label>
@@ -275,7 +275,7 @@ export function FamilyMemberDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
-              <Input type="tel" value={contactForm.phone} onChange={e => setContactForm(d => ({ ...d, phone: e.target.value }))} />
+              <Input type="tel" value={contactForm.phone} onChange={e => setContactForm(d => ({ ...d, phone: formatPhoneInput(e.target.value) }))} placeholder="(555) 555-5555" />
             </div>
             <div className="space-y-1.5">
               <Label>Address</Label>

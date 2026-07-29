@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import type { User } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { hashIntakeInviteToken, isIntakeInviteExpired } from '@/lib/intakeInviteTokens'
+import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 
 type AdminClient = ReturnType<typeof getAdminClient>
 
@@ -13,26 +13,9 @@ export async function resolveIntakeUploadAccess(
   const publicToken = req.headers.get('x-intake-token')
 
   if (publicToken) {
-    const tokenHash = hashIntakeInviteToken(publicToken)
-    let { data: intake } = await admin
-      .from('client_intake')
-      .select('id, intake_token_expires_at')
-      .eq('intake_token_hash', tokenHash)
-      .maybeSingle()
+    const intake = await resolveIntakeByInviteToken(admin, publicToken)
 
-    if (!intake) {
-      const legacy = await admin
-        .from('client_intake')
-        .select('id, intake_token_expires_at')
-        .eq('intake_token', publicToken)
-        .maybeSingle()
-      intake = legacy.data
-    }
-
-    if (!intake || intake.id !== intakeId) {
-      return { ok: false, status: 401, error: 'Invalid or expired intake token' }
-    }
-    if (isIntakeInviteExpired(intake.intake_token_expires_at as string | null | undefined)) {
+    if (!intake || intake.id !== intakeId || intake.user_id || intake.client_user_id) {
       return { ok: false, status: 401, error: 'Invalid or expired intake token' }
     }
     return { ok: true, user: null, admin }

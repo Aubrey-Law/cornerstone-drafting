@@ -8,7 +8,7 @@ import { intakePayloadTouchesLead, syncLeadFromIntake } from '@/lib/syncLeadFrom
 import { getSubmissionErrors, type IntakeRow } from '@/lib/intakeSections'
 import { getIntakeReadinessFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { seedDesignSheetAndJobs } from '@/lib/intakeSeed'
-import { hashIntakeInviteToken, isIntakeInviteExpired } from '@/lib/intakeInviteTokens'
+import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
 import { reconcileHouseholdChildren } from '@/lib/contacts/reconcileHouseholdChildren'
@@ -25,10 +25,8 @@ import {
   intakeExcludedGuardianTextFromRequestBody,
   overlayRequestContactIntakeData,
 } from '@/lib/intakeContactHydration'
-import {
-  findClientIntakeForUser,
-  getOrCreateClientIntakeForUser,
-} from '@/lib/intake/getOrCreateClientIntake'
+import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
+import { optionalDateOrNull } from '@/lib/intakeRequestValues'
 import { getBearerToken } from '@/lib/apiAuth'
 
 const ADMIN_NOTIFY_EMAIL = ADMIN_EMAIL
@@ -90,35 +88,6 @@ function normalizeStep(val: unknown): string | undefined {
   return undefined
 }
 
-async function findIntakeByPublicToken(admin: SupabaseAdminClient, publicIntakeToken: string) {
-  const tokenHash = hashIntakeInviteToken(publicIntakeToken)
-  const { data: hashedRow } = await admin
-    .from('client_intake')
-    .select('*')
-    .eq('intake_token_hash', tokenHash)
-    .maybeSingle()
-
-  if (hashedRow) {
-    const expiresAt = hashedRow.intake_token_expires_at as string | null | undefined
-    if (isIntakeInviteExpired(expiresAt)) return null
-    return hashedRow
-  }
-
-  const { data: legacyRow } = await admin
-    .from('client_intake')
-    .select('*')
-    .eq('intake_token', publicIntakeToken)
-    .maybeSingle()
-
-  // Apply the same expiry rule to legacy plaintext tokens. A null expiry is
-  // treated as expired (isIntakeInviteExpired returns true) so pre-expiry-column
-  // tokens are no longer immortal — closing the long-lived-token hole.
-  if (legacyRow && !isIntakeInviteExpired(legacyRow.intake_token_expires_at as string | null | undefined)) {
-    return legacyRow
-  }
-  return null
-}
-
 async function recordInviteUse(
   admin: SupabaseAdminClient,
   intakeId: string,
@@ -174,10 +143,13 @@ export async function POST(req: Request) {
   // Validates the invite token against the DB; no Supabase user session needed.
   if (publicIntakeToken) {
     const admin = getAdminClient()
-    const tokenRow = await findIntakeByPublicToken(admin, publicIntakeToken)
+    const tokenRow = await resolveIntakeByInviteToken(admin, publicIntakeToken)
 
     if (!tokenRow) {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
+    }
+    if (tokenRow.user_id || tokenRow.client_user_id) {
+      return NextResponse.json({ error: 'Sign in to continue this intake' }, { status: 401 })
     }
     await recordInviteUse(admin, tokenRow.id as string, 'api_token_save', req)
 
@@ -192,10 +164,6 @@ export async function POST(req: Request) {
     const existingId: string = tokenRow.id  // always use the row found by token
     const excludedGuardian = intakeExcludedGuardianTextFromRequestBody(body)
 
-    function dateOrNull(val: unknown) {
-      return typeof val === 'string' && val.trim() ? val : null
-    }
-
     // Build payload — omit user_id (already set on the row)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawPayload: Record<string, any> = {
@@ -209,7 +177,7 @@ export async function POST(req: Request) {
       preferred_name:           body.preferred_name,
       preferred_pronoun:        body.preferred_pronoun,
       full_name:                body.full_name,
-      date_of_birth:            dateOrNull(body.date_of_birth),
+      date_of_birth:            optionalDateOrNull(body.date_of_birth),
       is_us_citizen:            body.is_us_citizen,
       phone:                    body.phone,
       email:                    body.email,
@@ -222,7 +190,7 @@ export async function POST(req: Request) {
       marital_status:           body.marital_status,
       has_children:             body.has_children,
       has_minor_children:       body.has_minor_children,
-      date_of_marriage:         dateOrNull(body.date_of_marriage),
+      date_of_marriage:         optionalDateOrNull(body.date_of_marriage),
       estate_value:             body.estate_value,
       has_real_property:        body.has_real_property,
       has_retirement:           body.has_retirement,
@@ -239,7 +207,9 @@ export async function POST(req: Request) {
       planning_goals:           body.planning_goals ?? body.goals,
       planning_objectives:      body.planning_objectives,
       fiduciaries:              body.fiduciaries,
-      review_choices:           body.review_choices ?? null,
+      // Omitted on the status-only final submit request. Leave it undefined so
+      // validation and the update preserve the choices saved by autosave.
+      review_choices:           body.review_choices,
       spouse_as_fiduciary:      body.spouse_as_fiduciary,
       excluded_guardian:        excludedGuardian,
       excluded_guardian_2:      body.excluded_guardian_2,
@@ -310,7 +280,7 @@ export async function POST(req: Request) {
         preferred_name:     typeof body.spouse_preferred_name === 'string' ? body.spouse_preferred_name : null,
         prior_names:        typeof body.spouse_prior_names    === 'string' ? body.spouse_prior_names    : null,
         preferred_pronoun:  typeof body.spouse_preferred_pronoun === 'string' ? body.spouse_preferred_pronoun : null,
-        date_of_birth:      dateOrNull(body.spouse_date_of_birth),
+        date_of_birth:      optionalDateOrNull(body.spouse_date_of_birth),
         is_us_citizen:      typeof body.spouse_is_us_citizen === 'boolean' ? body.spouse_is_us_citizen : null,
         email:              typeof body.spouse_email === 'string' ? body.spouse_email : null,
         phone:              typeof body.spouse_phone === 'string' ? body.spouse_phone : null,
@@ -421,10 +391,6 @@ export async function POST(req: Request) {
   /** Invited questionnaires link the client via `client_user_id`; drafts may use `user_id` alone. */
   const ownedOrClause = `user_id.eq.${user.id},client_user_id.eq.${user.id}`
 
-  function dateOrNull(val: unknown) {
-    return typeof val === 'string' && val.trim() ? val : null
-  }
-
   const payload = {
     user_id:                  user.id,
     status:                   body.status,
@@ -440,7 +406,7 @@ export async function POST(req: Request) {
     preferred_name:           body.preferred_name,
     preferred_pronoun:        body.preferred_pronoun,
     full_name:                body.full_name,
-    date_of_birth:            dateOrNull(body.date_of_birth),
+    date_of_birth:            optionalDateOrNull(body.date_of_birth),
     is_us_citizen:            body.is_us_citizen,
     phone:                    body.phone,
     email:                    body.email,
@@ -461,7 +427,7 @@ export async function POST(req: Request) {
     // NOTE: all spouse fields (including spouse_name) are no longer written to
     // client_intake. Spouse data is stored exclusively in `contacts` via
     // saveHouseholdContact (see below).
-    date_of_marriage:         dateOrNull(body.date_of_marriage),
+    date_of_marriage:         optionalDateOrNull(body.date_of_marriage),
 
     // ── Estate ───────────────────────────────────────────────────────────────
     // NOTE: add these columns to client_intake if not present:
@@ -493,7 +459,9 @@ export async function POST(req: Request) {
 
     // ── Fiduciaries ──────────────────────────────────────────────────────────
     fiduciaries:              body.fiduciaries,
-    review_choices:           body.review_choices ?? null,
+    // Omitted on the status-only final submit request. Leave it undefined so
+    // validation and the update preserve the choices saved by autosave.
+    review_choices:           body.review_choices,
     spouse_as_fiduciary:      body.spouse_as_fiduciary,
 
     // ── Guardian ─────────────────────────────────────────────────────────────
@@ -715,7 +683,7 @@ export async function POST(req: Request) {
           preferred_name:     typeof body.spouse_preferred_name    === 'string' ? body.spouse_preferred_name    : null,
           prior_names:        typeof body.spouse_prior_names       === 'string' ? body.spouse_prior_names       : null,
           preferred_pronoun:  typeof body.spouse_preferred_pronoun === 'string' ? body.spouse_preferred_pronoun : null,
-          date_of_birth:      dateOrNull(body.spouse_date_of_birth),
+          date_of_birth:      optionalDateOrNull(body.spouse_date_of_birth),
           is_us_citizen:      typeof body.spouse_is_us_citizen === 'boolean' ? body.spouse_is_us_citizen : null,
           email:              typeof body.spouse_email === 'string' ? body.spouse_email : null,
           phone:              typeof body.spouse_phone === 'string' ? body.spouse_phone : null,

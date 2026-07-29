@@ -24,6 +24,7 @@ export function portalUrl(path = ''): string {
   const base = trimTrailingSlash(
     process.env.NEXT_PUBLIC_PORTAL_URL ??
       process.env.NEXT_PUBLIC_SITE_URL ??
+      process.env.NEXT_PUBLIC_APP_URL ??
       DEFAULT_LOCAL,
   )
   return `${base}${normalizePath(path)}`

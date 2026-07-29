@@ -2,6 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createIntakeInviteToken, hashIntakeInviteToken, isIntakeInviteExpired } from '@/lib/intakeInviteTokens'
+import {
+  createStandingIntakeToken,
+  createStandingIntakeVersion,
+  standingIntakeUrl,
+} from '@/lib/intake/standingLinks'
 
 describe('intake client auth', () => {
   it('exposes public signup route and intake auth page', () => {
@@ -15,6 +20,8 @@ describe('intake client auth', () => {
     const proxy = fs.readFileSync(path.join(process.cwd(), 'proxy.ts'), 'utf8')
     expect(proxy).toContain('/intake/auth')
     expect(proxy).toContain('/api/intake/signup')
+    expect(proxy).toContain('/intake/start')
+    expect(proxy).toContain('/api/intake/register')
   })
 
   it('send intake returns invite URL not generic login', () => {
@@ -22,8 +29,8 @@ describe('intake client auth', () => {
       path.join(process.cwd(), 'app/api/admin/intake/send/route.ts'),
       'utf8',
     )
-    expect(send).toContain('createIntakeInviteToken')
-    expect(send).toContain('/intake/auth?invite=')
+    expect(send).toContain('ensureStandingIntakeLink')
+    expect(send).toContain('intake_link: url')
     expect(send).not.toContain('/auth/login?redirectTo=/intake')
   })
 
@@ -38,6 +45,19 @@ describe('intake client auth', () => {
     expect(page).toContain('if (!submitted)')
     expect(fs.existsSync(path.join(process.cwd(), 'components/intake/IntakeWizard.tsx'))).toBe(true)
     expect(fs.existsSync(path.join(process.cwd(), 'lib/intakeSections.ts'))).toBe(true)
+  })
+})
+
+describe('standing intake links', () => {
+  it('creates stable signed tokens that change when their version rotates', () => {
+    process.env.INTAKE_LINK_SIGNING_SECRET = 'test-standing-link-secret'
+    const firstVersion = createStandingIntakeVersion()
+    const secondVersion = createStandingIntakeVersion()
+    const first = createStandingIntakeToken('intake-1', firstVersion)
+    expect(createStandingIntakeToken('intake-1', firstVersion)).toBe(first)
+    expect(createStandingIntakeToken('intake-1', secondVersion)).not.toBe(first)
+    expect(first).toMatch(/^si1\./)
+    expect(standingIntakeUrl('intake-1', firstVersion)).toContain('/intake/auth?invite=')
   })
 })
 
