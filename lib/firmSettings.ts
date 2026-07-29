@@ -13,6 +13,9 @@ export interface FullFirmSettings extends FirmConfig {
   specialization: string
   /** Global toggle: wrap stored-template emails with the firm header/footer. */
   emailLogoHeader: boolean
+  /** Sanitized firm-wide signature appended only to opted-in manual sends. */
+  emailSignatureHtml: string
+  emailSignatureDefault: boolean
 }
 
 interface FirmSettingsRow {
@@ -30,6 +33,8 @@ interface FirmSettingsRow {
   admitted: string | null
   specialization: string | null
   email_logo_header: boolean | null
+  email_signature_html: string | null
+  email_signature_default: boolean | null
 }
 
 let cache: { value: FullFirmSettings; at: number } | null = null
@@ -48,6 +53,8 @@ function defaults(): FullFirmSettings {
     admitted: '',
     specialization: 'Estate Planning & Probate',
     emailLogoHeader: true,
+    emailSignatureHtml: '',
+    emailSignatureDefault: true,
   }
 }
 
@@ -78,6 +85,8 @@ export async function loadFirmSettings(force = false): Promise<FullFirmSettings>
           admitted: row.admitted ?? base.admitted,
           specialization: row.specialization ?? base.specialization,
           emailLogoHeader: row.email_logo_header ?? base.emailLogoHeader,
+          emailSignatureHtml: row.email_signature_html ?? base.emailSignatureHtml,
+          emailSignatureDefault: row.email_signature_default ?? base.emailSignatureDefault,
         }
       : base
     cache = { value: merged, at: Date.now() }

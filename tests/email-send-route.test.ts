@@ -128,23 +128,24 @@ describe('POST /api/admin/email/send', () => {
     expect(insert).not.toHaveBeenCalled()
   })
 
-  it('forwards a valid cc list and drops anything malformed', async () => {
+  it('rejects a malformed cc address instead of silently dropping it', async () => {
     const { POST } = await import('@/app/api/admin/email/send/route')
-    await POST(formRequest({ ...BASE, cc: ['cpa@example.com', 'nope', 'para@example.com'] }))
+    const response = await POST(formRequest({ ...BASE, cc: ['cpa@example.com', 'nope', 'para@example.com'] }))
 
-    expect(sendEmail.mock.calls[0][0].cc).toEqual(['cpa@example.com', 'para@example.com'])
+    expect(response.status).toBe(400)
+    expect(sendEmail).not.toHaveBeenCalled()
   })
 
-  it('omits cc entirely when none survives validation', async () => {
+  it('rejects a malformed cc-only list', async () => {
     const { POST } = await import('@/app/api/admin/email/send/route')
-    await POST(formRequest({ ...BASE, cc: ['nope'] }))
+    const response = await POST(formRequest({ ...BASE, cc: ['nope'] }))
 
-    expect(sendEmail.mock.calls[0][0].cc).toBeUndefined()
+    expect(response.status).toBe(400)
   })
 
-  it('forwards bcc separately from cc', async () => {
+  it('forwards valid bcc separately from cc', async () => {
     const { POST } = await import('@/app/api/admin/email/send/route')
-    await POST(formRequest({ ...BASE, cc: ['cpa@example.com'], bcc: ['file@example.com', 'bad'] }))
+    await POST(formRequest({ ...BASE, cc: ['cpa@example.com'], bcc: ['file@example.com'] }))
 
     expect(sendEmail.mock.calls[0][0].cc).toEqual(['cpa@example.com'])
     expect(sendEmail.mock.calls[0][0].bcc).toEqual(['file@example.com'])

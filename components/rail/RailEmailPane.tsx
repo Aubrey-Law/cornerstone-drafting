@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Loader2, Paperclip, Send, Upload, X } from 'lucide-react'
+import { Eye, FileText, Loader2, Paperclip, Send, Trash2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
@@ -15,6 +15,11 @@ import {
   renderEmailTemplateText,
 } from '@/lib/email/templateShared'
 import { railRecordForPath } from './RailActivityPane'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 
 /**
  * Compose pane for the admin rail: a one-off email or one started from a
@@ -51,6 +56,14 @@ interface ComposeContext {
 /** Mirrors MAX_TOTAL_ATTACHMENT_BYTES on the server. */
 const MAX_TOTAL_BYTES = 10 * 1024 * 1024
 const ONE_OFF = 'none'
+const VARIABLE_OPTIONS = [
+  { key: 'first_name', label: 'First name' },
+  { key: 'client_name', label: 'Client name' },
+  { key: 'client_first_name', label: 'Client first name' },
+  { key: 'lead_name', label: 'Lead name' },
+  { key: 'intake_link', label: 'Intake link' },
+]
+const UNRESOLVED_RE = /\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/g
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -112,9 +125,25 @@ function AddressField({
   )
 }
 
-export function RailEmailPane() {
+interface ManualEmailComposerProps {
+  recordOverride?: { type: 'matter' | 'lead'; id: string } | null
+  templateCategories?: string[]
+  onSent?: () => void | Promise<void>
+  embedded?: boolean
+  variableValues?: Record<string, string | null | undefined>
+  initialContext?: ComposeContext
+}
+
+export function ManualEmailComposer({
+  recordOverride,
+  templateCategories = ['manual'],
+  onSent,
+  embedded = false,
+  variableValues = {},
+  initialContext,
+}: ManualEmailComposerProps = {}) {
   const pathname = usePathname()
-  const record = railRecordForPath(pathname)
+  const record = recordOverride === undefined ? railRecordForPath(pathname) : recordOverride
   const token = useAccessToken()
 
   const [context, setContext] = useState<ComposeContext | null>(null)
@@ -133,12 +162,38 @@ export function RailEmailPane() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sentNotice, setSentNotice] = useState<string | null>(null)
+  const [includeSignature, setIncludeSignature] = useState(true)
+  const [hasSignature, setHasSignature] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState('')
+  const [previewing, setPreviewing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const draftExistedRef = useRef(false)
 
   const recordType = record?.type ?? null
   const recordId = record?.id ?? null
+  const templateCategoryKey = templateCategories.join(',')
+  const firstName = context?.recipientName?.trim().split(/\s+/)[0] ?? ''
+  const resolvedVariables: Record<string, string | null | undefined> = {
+    client_name: context?.recipientName ?? '',
+    client_first_name: firstName,
+    first_name: firstName,
+    lead_name: context?.recipientName ?? '',
+    ...variableValues,
+  }
+  const resolvedVariableOptions = VARIABLE_OPTIONS.map(option => ({
+    ...option,
+    value: resolvedVariables[option.key] ?? undefined,
+  }))
 
   useEffect(() => {
+    if (initialContext) {
+      setContext(initialContext)
+      setTo(value => value || initialContext.recipientEmail || '')
+      return
+    }
     if (!recordType || !recordId) {
       setContext(null)
       return
@@ -161,18 +216,22 @@ export function RailEmailPane() {
     return () => {
       cancelled = true
     }
-  }, [recordType, recordId, token])
+  }, [initialContext, recordType, recordId, token])
 
   useEffect(() => {
     if (!token) return
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetch('/api/admin/settings/email/templates?category=manual&active=true', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const body = (await res.json()) as { templates?: EmailTemplate[] }
-        if (!cancelled && Array.isArray(body.templates)) setTemplates(body.templates)
+        const groups = await Promise.all(templateCategoryKey.split(',').filter(Boolean).map(async category => {
+          const res = await fetch(`/api/admin/settings/email/templates?category=${category}&active=true`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          const body = (await res.json()) as { templates?: EmailTemplate[] }
+          return Array.isArray(body.templates) ? body.templates : []
+        }))
+        const unique = new Map(groups.flat().map(template => [template.id, template]))
+        if (!cancelled) setTemplates([...unique.values()])
       } catch {
         /* templates are optional — a one-off email still works */
       }
@@ -180,7 +239,66 @@ export function RailEmailPane() {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [templateCategoryKey, token])
+
+  const draftContextType = recordType ?? 'general'
+  const draftQuery = `contextType=${draftContextType}${recordId ? `&contextId=${encodeURIComponent(recordId)}` : ''}`
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    setDraftReady(false)
+    setTo('')
+    setCc('')
+    setBcc('')
+    setShowCc(false)
+    setShowBcc(false)
+    setTemplateId(ONE_OFF)
+    setSubject('')
+    setBodyHtml('')
+    setSelectedDocumentIds([])
+    setFiles([])
+    void Promise.all([
+      fetch('/api/admin/settings/email/signature', { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.json()),
+      fetch(`/api/admin/email/draft?${draftQuery}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.json()),
+    ]).then(([signatureBody, draftBody]) => {
+      if (cancelled) return
+      const signature = signatureBody.signature as { html?: string; includeByDefault?: boolean } | undefined
+      setHasSignature(Boolean(signature?.html?.trim()))
+      const draft = draftBody.draft as {
+        to?: string; cc?: string[]; bcc?: string[]; templateId?: string | null; subject?: string
+        bodyHtml?: string; documentIds?: string[]; includeSignature?: boolean
+      } | null
+      if (draft) {
+        draftExistedRef.current = true
+        setTo(draft.to ?? '')
+        setCc((draft.cc ?? []).join(', '))
+        setBcc((draft.bcc ?? []).join(', '))
+        setShowCc((draft.cc?.length ?? 0) > 0)
+        setShowBcc((draft.bcc?.length ?? 0) > 0)
+        setTemplateId(draft.templateId ?? ONE_OFF)
+        setSubject(draft.subject ?? '')
+        setBodyHtml(draft.bodyHtml ?? '')
+        setSelectedDocumentIds(draft.documentIds ?? [])
+        setIncludeSignature(draft.includeSignature !== false)
+        setDraftStatus('saved')
+      } else {
+        draftExistedRef.current = false
+        setTo(value => value || initialContext?.recipientEmail || '')
+        setIncludeSignature(signature?.includeByDefault !== false)
+        setDraftStatus('idle')
+      }
+      setDraftReady(true)
+    }).catch(() => {
+      if (!cancelled) {
+        setDraftReady(true)
+        setDraftStatus('error')
+      }
+    })
+    return () => { cancelled = true }
+  }, [draftQuery, initialContext?.recipientEmail, token])
 
   // Switching records swaps the recipient and clears anything matter-scoped.
   useEffect(() => {
@@ -197,15 +315,8 @@ export function RailEmailPane() {
     }
     const template = templates.find(row => row.id === id)
     if (!template) return
-    const firstName = context?.recipientName?.trim().split(/\s+/)[0] ?? ''
-    const variables = {
-      client_name: context?.recipientName ?? '',
-      client_first_name: firstName,
-      first_name: firstName,
-      lead_name: context?.recipientName ?? '',
-    }
-    setSubject(renderEmailTemplateText(template.subject, variables))
-    setBodyHtml(renderEmailTemplateBodyHtml(template.body, variables))
+    setSubject(renderEmailTemplateText(template.subject, resolvedVariables))
+    setBodyHtml(renderEmailTemplateBodyHtml(template.body, resolvedVariables))
   }
 
   const selectedDocuments = useMemo(
@@ -223,14 +334,85 @@ export function RailEmailPane() {
   const bccList = useMemo(() => parseAddressList(bcc), [bcc])
   const invalidCc = ccList.filter(address => !isEmail(address))
   const invalidBcc = bccList.filter(address => !isEmail(address))
+  const unresolved = [...new Set(`${subject}\n${bodyHtml}`.match(UNRESOLVED_RE) ?? [])]
+  const mentionsAttachment = /\battach(?:ed|ment|ments|ing)?\b/i.test(emailHtmlToText(bodyHtml))
+  const hasDraftContent = Boolean(cc || bcc || subject || !emailHtmlIsEmpty(bodyHtml) || selectedDocumentIds.length)
 
   const ready =
-    Boolean(to.trim()) &&
+    isEmail(to.trim()) &&
     Boolean(subject.trim()) &&
     !emailHtmlIsEmpty(bodyHtml) &&
     !overLimit &&
     invalidCc.length === 0 &&
-    invalidBcc.length === 0
+    invalidBcc.length === 0 &&
+    unresolved.length === 0
+
+  useEffect(() => {
+    if (!token || !draftReady || sending) return
+    if (!hasDraftContent) {
+      if (draftExistedRef.current) {
+        void fetch(`/api/admin/email/draft?${draftQuery}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(() => {
+          draftExistedRef.current = false
+          setDraftStatus('idle')
+        }).catch(() => setDraftStatus('error'))
+      }
+      return
+    }
+    setDraftStatus('saving')
+    const timeout = window.setTimeout(() => {
+      void fetch(`/api/admin/email/draft?${draftQuery}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to, cc: ccList, bcc: bccList, templateId, subject, bodyHtml,
+          documentIds: selectedDocumentIds, includeSignature,
+        }),
+      }).then(res => {
+        if (res.ok) draftExistedRef.current = true
+        setDraftStatus(res.ok ? 'saved' : 'error')
+      }).catch(() => setDraftStatus('error'))
+    }, 800)
+    return () => window.clearTimeout(timeout)
+  }, [
+    bccList, bodyHtml, ccList, draftQuery, draftReady, hasDraftContent, includeSignature,
+    selectedDocumentIds, sending, subject, templateId, to, token,
+  ])
+
+  async function discardDraft() {
+    if (!token || !window.confirm('Discard this email draft?')) return
+    await fetch(`/api/admin/email/draft?${draftQuery}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    draftExistedRef.current = false
+    setTo(context?.recipientEmail ?? '')
+    setCc(''); setBcc(''); setSubject(''); setBodyHtml(''); setTemplateId(ONE_OFF)
+    setSelectedDocumentIds([]); setFiles([]); setDraftStatus('idle')
+  }
+
+  async function preview() {
+    if (!token) return
+    setPreviewing(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/email/preview', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject, html: bodyHtml, text: emailHtmlToText(bodyHtml), includeSignature }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error || 'Could not build preview')
+      setPreviewHtml(body.html ?? '')
+      setPreviewOpen(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not build preview')
+    } finally {
+      setPreviewing(false)
+    }
+  }
 
   async function send() {
     if (!ready || sending) return
@@ -251,6 +433,7 @@ export function RailEmailPane() {
           matterId: context?.recordType === 'matter' ? context.recordId : undefined,
           leadId: context?.recordType === 'lead' ? context.recordId : undefined,
           documentIds: selectedDocumentIds,
+          includeSignature,
         }),
       )
       for (const file of files) form.append('files', file)
@@ -262,6 +445,10 @@ export function RailEmailPane() {
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string; status?: string }
       if (!res.ok) throw new Error(body.error || 'Could not send the email')
+      if (body.status !== 'sent' && body.status !== 'redirected') {
+        setSentNotice(`Email was ${body.status ?? 'not sent'}; the draft was retained.`)
+        return
+      }
 
       setSentNotice(
         attachmentCount > 0
@@ -277,6 +464,15 @@ export function RailEmailPane() {
       setShowBcc(false)
       setFiles([])
       setSelectedDocumentIds([])
+      setDraftStatus('idle')
+      if (token) {
+        await fetch(`/api/admin/email/draft?${draftQuery}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      }
+      draftExistedRef.current = false
+      await onSent?.()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not send the email')
     } finally {
@@ -285,7 +481,7 @@ export function RailEmailPane() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className={cn('flex min-h-0 flex-col', embedded ? 'max-h-[75dvh]' : 'h-full')}>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
@@ -321,6 +517,9 @@ export function RailEmailPane() {
             placeholder="name@example.com"
             className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring"
           />
+          {to.trim() && !isEmail(to.trim()) && (
+            <p role="alert" className="text-[11px] text-destructive">Enter a valid recipient address.</p>
+          )}
           {(context?.alternateEmails.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-1 pt-0.5">
               {context!.alternateEmails.map(option => (
@@ -394,9 +593,24 @@ export function RailEmailPane() {
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="rail-email-subject" className="text-[11px] font-medium text-muted-foreground">
-            Subject
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="rail-email-subject" className="text-[11px] font-medium text-muted-foreground">
+              Subject
+            </label>
+            <select
+              aria-label="Insert subject variable"
+              defaultValue=""
+              onChange={event => {
+                const option = resolvedVariableOptions.find(item => item.key === event.target.value)
+                if (option) setSubject(value => `${value}${option.value || `{{${option.key}}}`}`)
+                event.target.value = ''
+              }}
+              className="h-6 rounded border border-input bg-background px-1 text-[10px]"
+            >
+              <option value="">Insert variable…</option>
+              {resolvedVariableOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
+            </select>
+          </div>
           <input
             id="rail-email-subject"
             value={subject}
@@ -414,7 +628,30 @@ export function RailEmailPane() {
             onChange={setBodyHtml}
             disabled={sending}
             placeholder="Write your message"
+            variableOptions={resolvedVariableOptions}
           />
+        </div>
+
+        {unresolved.length > 0 && (
+          <p role="alert" className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+            Resolve or remove: {unresolved.join(', ')}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className={cn('flex items-center gap-2 text-xs', !hasSignature && 'text-muted-foreground')}>
+            <Checkbox
+              checked={includeSignature}
+              disabled={!hasSignature}
+              onCheckedChange={checked => setIncludeSignature(checked === true)}
+            />
+            Include signature
+          </label>
+          {!hasSignature && <span className="text-[10px] text-muted-foreground">Configure it in Settings → Templates.</span>}
+          <Button type="button" variant="outline" size="sm" className="ml-auto h-7 text-xs" disabled={previewing || emailHtmlIsEmpty(bodyHtml)} onClick={() => void preview()}>
+            {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+            Preview
+          </Button>
         </div>
 
         <div className="space-y-1.5">
@@ -541,6 +778,16 @@ export function RailEmailPane() {
               Attachments total {formatBytes(totalBytes)} — the limit is {formatBytes(MAX_TOTAL_BYTES)}.
             </p>
           )}
+          {files.length > 0 && (
+            <p className="text-[10px] text-muted-foreground">
+              Files from this computer must be reattached after a refresh. Linked matter documents are restored.
+            </p>
+          )}
+          {mentionsAttachment && attachmentCount === 0 && (
+            <p className="text-[11px] text-amber-700">
+              This message mentions an attachment, but none is selected.
+            </p>
+          )}
         </div>
 
         {error && (
@@ -557,12 +804,22 @@ export function RailEmailPane() {
 
       <div className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
         <span className="truncate text-[11px] text-muted-foreground">
-          {context?.recordType === 'matter'
-            ? 'Logs to the matter timeline'
-            : context?.recordType === 'lead'
-              ? 'Logs to the lead timeline'
-              : 'Not linked to a record'}
+          <span>
+            {context?.recordType === 'matter'
+              ? 'Logs to the matter timeline'
+              : context?.recordType === 'lead'
+                ? 'Logs to the lead timeline'
+                : 'Not linked to a record'}
+          </span>
+          {draftStatus !== 'idle' && (
+            <span>{draftStatus === 'saving' ? ' · Saving…' : draftStatus === 'saved' ? ' · Draft saved' : ' · Draft save failed'}</span>
+          )}
         </span>
+        {hasDraftContent && (
+          <button type="button" onClick={() => void discardDraft()} aria-label="Discard email draft" className="text-muted-foreground hover:text-destructive">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void send()}
@@ -570,9 +827,27 @@ export function RailEmailPane() {
           className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
           {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          {sending ? 'Sending…' : 'Send'}
+          {sending ? 'Sending…' : embedded ? 'Send email' : 'Send'}
         </button>
       </div>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Email preview</DialogTitle>
+            <DialogDescription>{subject || 'No subject'}</DialogDescription>
+          </DialogHeader>
+          <iframe
+            title="Rendered email preview"
+            srcDoc={previewHtml}
+            sandbox=""
+            className="h-[60dvh] w-full rounded-md border border-border bg-white"
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+export function RailEmailPane() {
+  return <ManualEmailComposer />
 }

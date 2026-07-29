@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Edit2, Eye, EyeOff, Plus, Save, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -96,6 +96,10 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
   const [saving, setSaving] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<EmailTemplateRow | null>(null)
+  const [signatureHtml, setSignatureHtml] = useState('')
+  const [signatureDefault, setSignatureDefault] = useState(true)
+  const [signatureSaving, setSignatureSaving] = useState(false)
+  const [showSignaturePreview, setShowSignaturePreview] = useState(false)
 
   const groupedTemplates = useMemo(() => {
     const map = new Map<EmailCategory, EmailTemplateRow[]>()
@@ -107,7 +111,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
     return map
   }, [templates])
 
-  async function loadTemplates() {
+  const loadTemplates = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetch('/api/admin/settings/email/templates', {
@@ -122,9 +126,42 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
     } finally {
       setLoading(false)
     }
-  }
+  }, [authHeaders])
 
-  useEffect(() => { void loadTemplates() }, [])
+  useEffect(() => {
+    void loadTemplates()
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/settings/email/signature', { cache: 'no-store', headers: authHeaders })
+        const json = await res.json().catch(() => ({})) as {
+          signature?: { html?: string; includeByDefault?: boolean }
+        }
+        if (!res.ok) throw new Error('Could not load email signature')
+        setSignatureHtml(json.signature?.html ?? '')
+        setSignatureDefault(json.signature?.includeByDefault !== false)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not load email signature')
+      }
+    })()
+  }, [authHeaders, loadTemplates])
+
+  async function saveSignature() {
+    setSignatureSaving(true)
+    try {
+      const res = await fetch('/api/admin/settings/email/signature', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(authHeaders ?? {}) },
+        body: JSON.stringify({ html: signatureHtml, includeByDefault: signatureDefault }),
+      })
+      const json = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) throw new Error(json.error ?? 'Could not save email signature')
+      toast.success(signatureHtml.trim() ? 'Email signature saved' : 'Email signature cleared')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save email signature')
+    } finally {
+      setSignatureSaving(false)
+    }
+  }
 
   function editTemplate(template: EmailTemplateRow) {
     setForm({
@@ -195,6 +232,53 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
 
   return (
     <div className="mt-8 border-t border-border pt-6">
+      <div className="mb-6 space-y-3 rounded-md border border-border bg-card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-foreground">Email Signature</h3>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              Firm-wide signature offered on manual emails. Automated notices are unchanged.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-pressed={showSignaturePreview}
+            onClick={() => setShowSignaturePreview(value => !value)}
+          >
+            {showSignaturePreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showSignaturePreview ? 'Hide preview' : 'Preview'}
+          </Button>
+        </div>
+        <RichTextEmailEditor
+          id="email-signature"
+          ariaLabel="Firm email signature"
+          valueHtml={signatureHtml}
+          onChange={setSignatureHtml}
+          placeholder="Attorney name, title, phone, and website"
+        />
+        {showSignaturePreview && (
+          <div
+            className="rounded-md border border-border bg-muted/30 p-3 text-sm leading-relaxed [&_a]:text-accent [&_a]:underline"
+            dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(signatureHtml) || '<span>No signature configured.</span>' }}
+          />
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={signatureDefault} onCheckedChange={checked => setSignatureDefault(checked === true)} />
+            Include this signature by default
+          </label>
+          <Button type="button" variant="outline" size="sm" onClick={() => setSignatureHtml('')}>
+            Clear
+          </Button>
+          <Button type="button" size="sm" className="ml-auto" disabled={signatureSaving} onClick={saveSignature}>
+            <Save className="h-3.5 w-3.5" />
+            {signatureSaving ? 'Saving...' : 'Save signature'}
+          </Button>
+        </div>
+      </div>
+
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h3 className="text-[11px] font-semibold uppercase tracking-wide text-foreground">Email Templates</h3>

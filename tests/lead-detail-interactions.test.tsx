@@ -260,8 +260,8 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     await user.click(screen.getByRole('button', { name: 'Email' }))
-    await user.click(screen.getByLabelText('Template'))
-    await user.click(await screen.findByRole('option', { name: 'Welcome' }))
+    await screen.findByRole('option', { name: 'Welcome' })
+    await user.selectOptions(screen.getByLabelText('Template'), 'welcome')
 
     expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('Welcome Jane')
     const editor = screen.getByRole('textbox', { name: 'Message' })
@@ -270,8 +270,9 @@ describe('lead detail page', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send email' }))
     const sendCall = fetchMock.mock.calls.find(([input, init]) =>
-      String(input).endsWith('/send-email') && init?.method === 'POST')
-    expect(JSON.parse(String(sendCall?.[1]?.body))).toMatchObject({
+      String(input).endsWith('/api/admin/email/send') && init?.method === 'POST')
+    const form = sendCall?.[1]?.body as FormData
+    expect(JSON.parse(String(form.get('payload')))).toMatchObject({
       subject: 'Welcome Jane',
       html: expect.stringContaining('href="https://example.com/intake"'),
     })

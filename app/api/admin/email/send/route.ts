@@ -31,6 +31,7 @@ interface Payload {
   matterId?: unknown
   leadId?: unknown
   documentIds?: unknown
+  includeSignature?: unknown
 }
 
 function cleanString(value: unknown): string {
@@ -102,7 +103,7 @@ export async function POST(req: Request) {
       ? value
           .filter((entry): entry is string => typeof entry === 'string')
           .map(entry => entry.trim())
-          .filter(isEmail)
+          .filter(Boolean)
       : []
   const cc = addressList(payload.cc)
   const bcc = addressList(payload.bcc)
@@ -110,8 +111,15 @@ export async function POST(req: Request) {
   if (!to || !isEmail(to)) {
     return NextResponse.json({ error: 'A valid recipient address is required' }, { status: 400 })
   }
+  const invalidCopies = [...cc, ...bcc].filter(address => !isEmail(address))
+  if (invalidCopies.length > 0) {
+    return NextResponse.json({ error: `Invalid CC/BCC address: ${invalidCopies.join(', ')}` }, { status: 400 })
+  }
   if (!subject) return NextResponse.json({ error: 'Subject is required' }, { status: 400 })
   if (!text) return NextResponse.json({ error: 'Message body is required' }, { status: 400 })
+  if (/\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/.test(`${subject}\n${suppliedHtml || suppliedText}`)) {
+    return NextResponse.json({ error: 'Resolve or remove all template variables before sending' }, { status: 400 })
+  }
 
   const matterId = cleanString(payload.matterId) || null
   const leadId = cleanString(payload.leadId) || null
@@ -160,6 +168,7 @@ export async function POST(req: Request) {
     useStoredTemplate: false,
     userId,
     attachments: attachments.length > 0 ? attachments : undefined,
+    includeSignature: payload.includeSignature === true,
   })
 
   if (!result.ok) {

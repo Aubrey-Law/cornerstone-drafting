@@ -18,6 +18,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     subject?: unknown
     text?: unknown
     html?: unknown
+    includeSignature?: unknown
   } | null
   const subject = typeof body?.subject === 'string' ? body.subject.trim() : ''
   const suppliedHtml = typeof body?.html === 'string' ? sanitizeEmailHtml(body.html).trim() : ''
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const html = suppliedHtml || textToEmailHtml(text)
   if (!subject || !text) {
     return NextResponse.json({ error: 'Subject and message are required' }, { status: 400 })
+  }
+  if (/\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/.test(`${subject}\n${suppliedHtml || suppliedText}`)) {
+    return NextResponse.json({ error: 'Resolve or remove all template variables before sending' }, { status: 400 })
   }
 
   const admin = getAdminClient()
@@ -48,6 +52,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     html,
     useStoredTemplate: false,
     userId,
+    includeSignature: body?.includeSignature === true,
   })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 })
 
