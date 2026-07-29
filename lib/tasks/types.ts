@@ -74,6 +74,14 @@ export interface TaskCounts {
   unassigned: number
 }
 
+/** Open/overdue counts for one record — the Tasks tab trigger badge. */
+export interface RecordTaskCounts {
+  open: number
+  overdue: number
+}
+
+export const EMPTY_RECORD_TASK_COUNTS: RecordTaskCounts = { open: 0, overdue: 0 }
+
 export const EMPTY_TASK_COUNTS: TaskCounts = {
   overdue: 0,
   today: 0,
@@ -123,6 +131,15 @@ export function taskDueGroup(task: TaskDueFields, now: Date = new Date()): TaskD
 
 export function isTaskOverdue(task: TaskDueFields, now: Date = new Date()): boolean {
   return taskDueGroup(task, now) === 'overdue'
+}
+
+/**
+ * Reduce a record's open tasks to its badge counts. Lives here, not next to the
+ * hook that consumes it: the server pages seed the badge, and a `'use client'`
+ * module cannot be called during a server render.
+ */
+export function recordTaskCounts(tasks: TaskDueFields[], now: Date = new Date()): RecordTaskCounts {
+  return { open: tasks.length, overdue: tasks.filter(task => isTaskOverdue(task, now)).length }
 }
 
 /** Sort key: soonest effective due first, undated last, then priority. */
