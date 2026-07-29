@@ -73,7 +73,7 @@ async function logSend(row: Record<string, unknown>): Promise<string | null> {
   try {
     const { data, error } = await insertRow(row)
     if (!error) return (data?.id as string | undefined) ?? null
-    // email_log.bcc arrives in 20260817000000. On a database that hasn't run
+    // email_log.bcc arrives in 20260729014420. On a database that hasn't run
     // that migration, log the send without bcc rather than losing the row.
     if ('bcc' in row) {
       const { bcc: _bcc, ...withoutBcc } = row
