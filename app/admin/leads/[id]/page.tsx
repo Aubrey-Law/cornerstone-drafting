@@ -5,6 +5,8 @@ import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
 import { fetchTasksForLead } from '@/lib/queries/tasks'
+import { recordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
+import { standingIntakeUrl } from '@/lib/intake/standingLinks'
 import { recordTaskCounts } from '@/lib/tasks/types'
 import { LeadDetailClient } from './LeadDetailClient'
 
@@ -147,6 +149,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ])
 
   const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
+  let initialIntakeUrl: string | null = null
+  if (lead.intake_link_version && !lead.intake_link_revoked_at) {
+    initialIntakeUrl = standingIntakeUrl(lead.id, lead.intake_link_version)
+  }
   const schedulingSettings = await getSchedulingSettings()
   const initialTaskCounts = recordTaskCounts(await fetchTasksForLead(id, 'open'))
   const { data: agreement } = lead.matter_id
@@ -157,6 +163,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     <LeadDetailClient
       lead={hydratedLead}
       initialTaskCounts={initialTaskCounts}
+      initialIntakeUrl={initialIntakeUrl}
       spouse={spouse}
       initialActivity={activityRows}
       initialNotes={noteRows.map(mapNote)}

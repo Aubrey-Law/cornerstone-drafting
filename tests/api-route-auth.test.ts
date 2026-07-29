@@ -15,6 +15,9 @@ const PUBLIC_ROUTE_SUFFIXES = [
   // Client account creation: gated on a hashed, expiring intake invite token
   // and the account email must match the invited email.
   'intake/signup/route.ts',
+  // Public firm-wide onboarding: Cloudflare Turnstile, per-IP + per-email rate
+  // limits, duplicate-safe responses, and server-only Auth/lead creation.
+  'intake/register/route.ts',
   // Address-autocomplete proxy used by anonymous intake clients: same-origin
   // guard + per-IP rate limit protect the Google Places quota.
   'places/route.ts',

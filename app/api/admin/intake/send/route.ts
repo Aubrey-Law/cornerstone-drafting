@@ -2,18 +2,8 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { sendEmail } from '@/lib/email/send'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { createIntakeInviteToken } from '@/lib/intakeInviteTokens'
+import { ensureStandingIntakeLink } from '@/lib/intake/standingLinks'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-
-function resolveOrigin(req: Request): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
-  if (process.env.SUPABASE_AUTH_SITE_URL) return process.env.SUPABASE_AUTH_SITE_URL.replace(/\/$/, '')
-  const proto = req.headers.get('x-forwarded-proto') ?? 'http'
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
-  if (host) return `${proto}://${host}`
-  return new URL(req.url).origin
-}
 
 export async function POST(req: Request) {
   const { err, userId, user } = await requireAdmin(req)
@@ -59,15 +49,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Client has no email address on file' }, { status: 400 })
   }
 
-  const invite = createIntakeInviteToken()
   const now = new Date().toISOString()
+  const link = await ensureStandingIntakeLink(admin, intakeId)
 
   const { error: intakeError } = await admin
     .from('client_intake')
     .update({
       intake_sent_at: now,
-      intake_token_hash: invite.tokenHash,
-      intake_token_expires_at: invite.expiresAt,
     })
     .eq('id', intakeId)
 
@@ -75,8 +63,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: intakeError.message }, { status: 500 })
   }
 
-  const origin = resolveOrigin(req)
-  const url = `${origin}/intake/auth?invite=${encodeURIComponent(invite.token)}`
+  const url = link.url
+  if (!url) {
+    return NextResponse.json({ error: 'Could not prepare intake link' }, { status: 500 })
+  }
 
   const firm = getFirmConfig()
   const firstName = (intakeRow.first_name as string | null) ?? 'there'
@@ -90,14 +80,17 @@ export async function POST(req: Request) {
 <p>Hi {{firstName}},</p>
 <p>Please use the secure link below to create your portal password and complete your intake questionnaire.</p>
 <p><a href="{{intakeUrl}}" style="color:#2a7d70;font-weight:600;">Start intake</a></p>
-<p style="font-size:13px;color:#6b7280;">This link expires in 14 days. If it stops working, ask us to resend from your matter.</p>
+<p style="font-size:13px;color:#6b7280;">You may return to this link until our office revokes or replaces it.</p>
 <p>— {{attorneyShortName}}<br/>{{firmName}}</p>
 </body></html>`,
     replyTo: firm.email,
     useStoredTemplate: true,
     templateVariables: {
       firstName,
+      first_name: firstName,
+      client_name: [intakeRow.first_name, intakeRow.last_name].filter(Boolean).join(' '),
       intakeUrl: url,
+      intake_link: url,
       firmName: firm.firmName,
       attorneyShortName: firm.attorneyShortName,
     },

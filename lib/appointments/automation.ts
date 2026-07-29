@@ -1,10 +1,9 @@
 import 'server-only'
 import { sendEmail } from '@/lib/email/send'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { createIntakeInviteToken } from '@/lib/intakeInviteTokens'
+import { ensureStandingIntakeLink } from '@/lib/intake/standingLinks'
 import { fireEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { appUrl } from '@/lib/urls'
 import { stageLabel, type MatterStage } from '@/types/database'
 import type { AppointmentType } from './types'
 
@@ -62,22 +61,20 @@ async function maybeSendIntakeInvite(intakeId: string): Promise<void> {
   if (row.intake_sent_at) return
   if (row.status === 'submitted' || row.status === 'approved') return
 
-  const invite = createIntakeInviteToken()
   const now = new Date().toISOString()
+  const link = await ensureStandingIntakeLink(admin, intakeId)
+  if (!link.url) return
 
   const { error } = await admin
     .from('client_intake')
     .update({
       intake_sent_at: now,
-      intake_token_hash: invite.tokenHash,
-      intake_token_expires_at: invite.expiresAt,
     })
     .eq('id', intakeId)
-    .is('intake_token_hash', null)
   if (error) throw error
 
   const firm = getFirmConfig()
-  const url = appUrl(`/intake/auth?invite=${encodeURIComponent(invite.token)}`)
+  const url = link.url
 
   await sendEmail({
     to: row.email,
@@ -87,14 +84,17 @@ async function maybeSendIntakeInvite(intakeId: string): Promise<void> {
 <p>Hi {{firstName}},</p>
 <p>Thanks for booking your discovery call. To make the most of our time together, please use the secure link below to create your portal password and complete your intake questionnaire.</p>
 <p><a href="{{intakeUrl}}" style="color:#2a7d70;font-weight:600;">Start intake</a></p>
-<p style="font-size:13px;color:#6b7280;">This link expires in 14 days. If it stops working, just reply to this email.</p>
+<p style="font-size:13px;color:#6b7280;">You may return to this link until our office revokes or replaces it.</p>
 <p>— {{attorneyShortName}}<br/>{{firmName}}</p>
 </body></html>`,
     replyTo: firm.email,
     useStoredTemplate: true,
     templateVariables: {
       firstName: row.first_name ?? 'there',
+      first_name: row.first_name ?? 'there',
+      client_name: row.first_name ?? 'Client',
       intakeUrl: url,
+      intake_link: url,
       firmName: firm.firmName,
       attorneyShortName: firm.attorneyShortName,
     },
