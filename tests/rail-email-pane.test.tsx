@@ -320,4 +320,65 @@ describe('rail email pane', () => {
     await screen.findByText('Sent to margaret@example.com.')
     expect(screen.queryByLabelText('Cc')).toBeNull()
   })
+
+  it('hides Bcc until asked for, then sends it separately from Cc', async () => {
+    const fetchMock = mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+    expect(screen.queryByLabelText('Bcc')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Cc' }))
+    await user.type(screen.getByLabelText('Cc'), 'paralegal@example.com')
+    await user.click(screen.getByRole('button', { name: 'Bcc' }))
+    await user.type(screen.getByLabelText('Bcc'), 'file@example.com, archive@example.com')
+
+    await user.type(screen.getByLabelText('Subject'), 'Blind copy')
+    await typeBody(user, 'Copying the file.')
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+
+    await waitFor(() => {
+      const send = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/admin/email/send'))
+      const payload = JSON.parse(String((send![1]!.body as FormData).get('payload')))
+      expect(payload.cc).toEqual(['paralegal@example.com'])
+      expect(payload.bcc).toEqual(['file@example.com', 'archive@example.com'])
+    })
+  })
+
+  it('blocks sending on a malformed Bcc address', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.type(screen.getByLabelText('Subject'), 'Bad bcc')
+    await typeBody(user, 'Body.')
+    await user.click(screen.getByRole('button', { name: 'Bcc' }))
+    await user.type(screen.getByLabelText('Bcc'), 'oops@')
+
+    expect(await screen.findByText('Not a valid address: oops@')).toBeTruthy()
+    expect((screen.getByRole('button', { name: /^send$/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('clears Bcc after a successful send', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Bcc' }))
+    await user.type(screen.getByLabelText('Bcc'), 'file@example.com')
+    await user.type(screen.getByLabelText('Subject'), 'Done')
+    await typeBody(user, 'All set.')
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+
+    await screen.findByText('Sent to margaret@example.com.')
+    expect(screen.queryByLabelText('Bcc')).toBeNull()
+  })
 })

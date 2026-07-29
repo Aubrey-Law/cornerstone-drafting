@@ -141,4 +141,12 @@ describe('POST /api/admin/email/send', () => {
 
     expect(sendEmail.mock.calls[0][0].cc).toBeUndefined()
   })
+
+  it('forwards bcc separately from cc', async () => {
+    const { POST } = await import('@/app/api/admin/email/send/route')
+    await POST(formRequest({ ...BASE, cc: ['cpa@example.com'], bcc: ['file@example.com', 'bad'] }))
+
+    expect(sendEmail.mock.calls[0][0].cc).toEqual(['cpa@example.com'])
+    expect(sendEmail.mock.calls[0][0].bcc).toEqual(['file@example.com'])
+  })
 })
