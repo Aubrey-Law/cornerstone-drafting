@@ -74,14 +74,34 @@ const TEMPLATES = [
   },
 ]
 
-function mockFetch(options: { context?: unknown; sendError?: string } = {}) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+function mockFetch(options: {
+  context?: unknown
+  sendError?: string
+  sendStatus?: string
+  draft?: unknown
+  signature?: { html: string; includeByDefault: boolean }
+} = {}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.includes('/api/admin/email/compose-context')) {
       return { ok: true, json: async () => ({ context: options.context ?? MATTER_CONTEXT }) } as Response
     }
     if (url.includes('/api/admin/settings/email/templates')) {
       return { ok: true, json: async () => ({ templates: TEMPLATES }) } as Response
+    }
+    if (url.includes('/api/admin/settings/email/signature')) {
+      return {
+        ok: true,
+        json: async () => ({ signature: options.signature ?? { html: '', includeByDefault: true } }),
+      } as Response
+    }
+    if (url.includes('/api/admin/email/draft')) {
+      if (init?.method === 'PUT') return { ok: true, json: async () => ({ draft: JSON.parse(String(init.body)) }) } as Response
+      if (init?.method === 'DELETE') return { ok: true, json: async () => ({ ok: true }) } as Response
+      return { ok: true, json: async () => ({ draft: options.draft ?? null }) } as Response
+    }
+    if (url.includes('/api/admin/email/preview')) {
+      return { ok: true, json: async () => ({ html: '<p>Rendered preview</p>', unresolved: [] }) } as Response
     }
     if (url.includes('/api/admin/email/directory')) {
       return { ok: true, json: async () => ({ entries: DIRECTORY }) } as Response
@@ -93,7 +113,7 @@ function mockFetch(options: { context?: unknown; sendError?: string } = {}) {
       if (options.sendError) {
         return { ok: false, json: async () => ({ error: options.sendError }) } as Response
       }
-      return { ok: true, json: async () => ({ success: true, status: 'sent' }) } as Response
+      return { ok: true, json: async () => ({ success: true, status: options.sendStatus ?? 'sent' }) } as Response
     }
     return { ok: true, json: async () => ({}) } as Response
   })
@@ -416,6 +436,69 @@ describe('rail email pane', () => {
 
     await screen.findByText('Sent to margaret@example.com.')
     expect(screen.queryByLabelText('Bcc')).toBeNull()
+  })
+
+  it('restores a durable draft for the current record', async () => {
+    mockFetch({
+      signature: { html: '<p>Aubrey Law</p>', includeByDefault: true },
+      draft: {
+        to: 'saved@example.com',
+        cc: ['cpa@example.com'],
+        bcc: [],
+        templateId: null,
+        subject: 'Saved subject',
+        bodyHtml: '<p>Saved message</p>',
+        documentIds: ['d1'],
+        includeSignature: false,
+      },
+    })
+    render(<RailEmailPane />)
+
+    await waitFor(() => expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('Saved subject'))
+    expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('saved@example.com')
+    expect(screen.getByLabelText('Message').textContent).toContain('Saved message')
+    expect(screen.getByText('Trust draft.docx')).toBeTruthy()
+    expect((screen.getByRole('checkbox', { name: 'Include signature' }) as HTMLButtonElement).dataset.state).toBe('unchecked')
+  })
+
+  it('autosaves the shared composer and retains a suppressed draft', async () => {
+    const fetchMock = mockFetch({ sendStatus: 'suppressed' })
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() => expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'))
+
+    await user.type(screen.getByLabelText('Subject'), 'Keep this draft')
+    await typeBody(user, 'This should survive suppression.')
+    await waitFor(() => {
+      const save = fetchMock.mock.calls.find(([url, init]) =>
+        String(url).includes('/api/admin/email/draft') && init?.method === 'PUT')
+      expect(save).toBeTruthy()
+    }, { timeout: 2500 })
+
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+    expect(await screen.findByText('Email was suppressed; the draft was retained.')).toBeTruthy()
+    expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('Keep this draft')
+    expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).includes('/api/admin/email/draft') && init?.method === 'DELETE')).toBe(false)
+  })
+
+  it('uses the configured signature default and includes the choice in the send payload', async () => {
+    const fetchMock = mockFetch({
+      signature: { html: '<p>Aubrey Law</p>', includeByDefault: true },
+    })
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Include signature' }).getAttribute('data-state')).toBe('checked'))
+
+    await user.type(screen.getByLabelText('Subject'), 'Signature')
+    await typeBody(user, 'Hello.')
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+
+    await waitFor(() => {
+      const send = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/admin/email/send'))
+      const payload = JSON.parse(String((send![1]!.body as FormData).get('payload')))
+      expect(payload.includeSignature).toBe(true)
+    })
   })
 
   it('re-derives the recipient when the rail moves to another record', async () => {

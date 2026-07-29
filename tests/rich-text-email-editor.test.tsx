@@ -1,0 +1,87 @@
+// @vitest-environment jsdom
+
+import React from 'react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { RichTextEmailEditor } from '@/components/admin/RichTextEmailEditor'
+
+afterEach(cleanup)
+
+describe('RichTextEmailEditor links', () => {
+  it('populates and edits both fields when an existing link is clicked', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <RichTextEmailEditor
+        ariaLabel="Message"
+        valueHtml='<p>Complete your <a href="https://old.example.com">intake form</a>.</p>'
+        onChange={onChange}
+      />,
+    )
+
+    const anchor = screen.getByRole('link', { name: 'intake form' })
+    fireEvent.click(anchor)
+
+    const textInput = screen.getByLabelText('Link text')
+    const urlInput = screen.getByLabelText('Link URL')
+    expect((textInput as HTMLInputElement).value).toBe('intake form')
+    expect((urlInput as HTMLInputElement).value).toBe('https://old.example.com')
+
+    await user.clear(textInput)
+    await user.type(textInput, 'start your intake')
+    await user.clear(urlInput)
+    await user.type(urlInput, 'portal.example.com/intake')
+    await user.click(screen.getByRole('button', { name: 'Save link' }))
+
+    expect(anchor.textContent).toBe('start your intake')
+    expect(anchor.getAttribute('href')).toBe('https://portal.example.com/intake')
+    expect(onChange).toHaveBeenLastCalledWith(
+      '<p>Complete your <a href="https://portal.example.com/intake" target="_blank" rel="noopener noreferrer">start your intake</a>.</p>',
+    )
+  })
+
+  it('uses selected text when inserting a new link', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<RichTextEmailEditor ariaLabel="Message" valueHtml="<p>Open the portal</p>" onChange={onChange} />)
+
+    const editor = screen.getByLabelText('Message')
+    const textNode = editor.querySelector('p')?.firstChild
+    expect(textNode).toBeTruthy()
+    const range = document.createRange()
+    range.setStart(textNode!, 9)
+    range.setEnd(textNode!, 15)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    await user.click(screen.getByRole('button', { name: 'Insert or edit link' }))
+    expect((screen.getByLabelText('Link text') as HTMLInputElement).value).toBe('portal')
+    await user.type(screen.getByLabelText('Link URL'), 'https://example.com/portal')
+    await user.click(screen.getByRole('button', { name: 'Insert link' }))
+
+    expect(screen.getByRole('link', { name: 'portal' }).getAttribute('href')).toBe('https://example.com/portal')
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('removes an existing link without deleting its visible text', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <RichTextEmailEditor
+        ariaLabel="Message"
+        valueHtml='<p>Open the <a href="https://example.com">client portal</a>.</p>'
+        onChange={onChange}
+      />,
+    )
+
+    await user.click(screen.getByRole('link', { name: 'client portal' }))
+    await user.click(screen.getByRole('button', { name: 'Remove link' }))
+
+    expect(screen.queryByRole('link', { name: 'client portal' })).toBeNull()
+    expect(screen.getByLabelText('Message').textContent).toContain('Open the client portal.')
+    expect(onChange).toHaveBeenLastCalledWith('<p>Open the client portal.</p>')
+  })
+})

@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { sendEmail } from '@/lib/email/send'
 
 type Params = { params: Promise<{ id: string }> }
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function escapeHtml(text: string): string {
   return text
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const replyTo =
     typeof body.replyTo === 'string' && body.replyTo.trim() ? body.replyTo.trim() : undefined
 
-  if (!to || !subject || !text.trim()) {
+  if (!to || !EMAIL_RE.test(to) || !subject || !text.trim()) {
     return NextResponse.json({ error: 'to, subject, and body/text are required' }, { status: 400 })
   }
 
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     replyTo,
     useStoredTemplate: false,
     userId,
+    includeSignature: body.includeSignature === true,
   })
 
   if (!result.ok) {

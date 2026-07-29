@@ -56,4 +56,26 @@ describe('email settings and templates', () => {
     expect(migration).toContain('email_templates')
     expect(migration).not.toContain('email_triage')
   })
+
+  it('defines firm signatures and owner-scoped durable email drafts', () => {
+    const migration = fs.readFileSync(
+      path.join(process.cwd(), 'supabase/migrations/20260729173000_email_signatures_and_drafts.sql'),
+      'utf8',
+    )
+    expect(migration).toContain('email_signature_html')
+    expect(migration).toContain('email_signature_default')
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.email_drafts')
+    expect(migration).toContain('user_id = auth.uid()')
+    const signatureRoute = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/settings/email/signature/route.ts'),
+      'utf8',
+    )
+    const draftRoute = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/email/draft/route.ts'),
+      'utf8',
+    )
+    expect(signatureRoute).toContain('requireAdministrator')
+    expect(signatureRoute).toContain('sanitizeEmailHtml')
+    expect(draftRoute).toContain(".eq('user_id', userId)")
+  })
 })

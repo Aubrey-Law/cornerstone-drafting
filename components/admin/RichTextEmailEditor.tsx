@@ -4,6 +4,16 @@ import { useEffect, useRef, useState } from 'react'
 import DOMPurify from 'isomorphic-dompurify'
 import { Bold, Italic, Link as LinkIcon, List, ListOrdered, Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
 // Tags/attributes we keep in the composed email HTML. execCommand can emit a
@@ -45,6 +55,7 @@ interface RichTextEmailEditorProps {
   placeholder?: string
   id?: string
   ariaLabel?: string
+  variableOptions?: Array<{ key: string; label: string; value?: string }>
 }
 
 /**
@@ -59,9 +70,16 @@ export function RichTextEmailEditor({
   placeholder,
   id,
   ariaLabel,
+  variableOptions = [],
 }: RichTextEmailEditorProps) {
   const editorRef = useRef<HTMLDivElement | null>(null)
+  const selectedRangeRef = useRef<Range | null>(null)
+  const editedAnchorRef = useRef<HTMLAnchorElement | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false)
+  const [editingLink, setEditingLink] = useState(false)
+  const [linkText, setLinkText] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
 
   // Reflect external value changes (template applied, cleared on open) without
   // clobbering the caret mid-type: only write when the incoming HTML differs
@@ -86,13 +104,88 @@ export function RichTextEmailEditor({
     emit()
   }
 
-  function insertLink() {
+  function openLinkEditor(anchor?: HTMLAnchorElement | null) {
     if (disabled) return
-    const url = window.prompt('Link URL', 'https://')?.trim()
-    if (!url) return
+
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null
+    const selectionAnchor = range?.commonAncestorContainer
+    const selectionElement = selectionAnchor instanceof Element ? selectionAnchor : selectionAnchor?.parentElement
+    const selectedAnchor = anchor ?? selectionElement?.closest<HTMLAnchorElement>('a') ?? null
+    const anchorInEditor = selectedAnchor && editor?.contains(selectedAnchor) ? selectedAnchor : null
+    const rangeInEditor = range && editor?.contains(range.commonAncestorContainer) ? range.cloneRange() : null
+
+    editedAnchorRef.current = anchorInEditor
+    selectedRangeRef.current = rangeInEditor
+    setEditingLink(Boolean(anchorInEditor))
+    setLinkText(anchorInEditor?.textContent ?? rangeInEditor?.toString() ?? '')
+    setLinkUrl(anchorInEditor?.getAttribute('href') ?? '')
+    setLinkEditorOpen(true)
+  }
+
+  function saveLink() {
+    const editor = editorRef.current
+    const text = linkText.trim()
+    const url = linkUrl.trim()
+    if (!editor || !text || !url) return
+
     const href = /^(https?:|mailto:)/i.test(url) ? url : `https://${url}`
-    editorRef.current?.focus()
-    document.execCommand('createLink', false, href)
+    const existingAnchor = editedAnchorRef.current
+
+    if (existingAnchor && editor.contains(existingAnchor)) {
+      existingAnchor.textContent = text
+      existingAnchor.setAttribute('href', href)
+      existingAnchor.setAttribute('target', '_blank')
+      existingAnchor.setAttribute('rel', 'noopener noreferrer')
+    } else {
+      const anchor = document.createElement('a')
+      anchor.href = href
+      anchor.target = '_blank'
+      anchor.rel = 'noopener noreferrer'
+      anchor.textContent = text
+
+      const range = selectedRangeRef.current
+      if (range && editor.contains(range.commonAncestorContainer)) {
+        range.deleteContents()
+        range.insertNode(anchor)
+      } else {
+        editor.append(anchor)
+      }
+    }
+
+    emit()
+    setLinkEditorOpen(false)
+    editedAnchorRef.current = null
+    selectedRangeRef.current = null
+    requestAnimationFrame(() => editor.focus())
+  }
+
+  function removeLink() {
+    const editor = editorRef.current
+    const anchor = editedAnchorRef.current
+    if (!editor || !anchor || !editor.contains(anchor)) return
+    anchor.replaceWith(document.createTextNode(anchor.textContent ?? ''))
+    emit()
+    setLinkEditorOpen(false)
+    editedAnchorRef.current = null
+    selectedRangeRef.current = null
+    requestAnimationFrame(() => editor.focus())
+  }
+
+  function insertVariable(key: string) {
+    if (!key || disabled) return
+    const editor = editorRef.current
+    editor?.focus()
+    const range = selectedRangeRef.current
+    if (range && editor?.contains(range.commonAncestorContainer)) {
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+    }
+    const option = variableOptions.find(item => item.key === key)
+    document.execCommand('insertText', false, option?.value || `{{${key}}}`)
+    selectedRangeRef.current = null
     emit()
   }
 
@@ -111,9 +204,33 @@ export function RichTextEmailEditor({
         <ToolbarButton onClick={() => exec('insertOrderedList')} disabled={disabled} title="Numbered list">
           <ListOrdered className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton onClick={insertLink} disabled={disabled} title="Insert link">
+        <ToolbarButton onClick={() => openLinkEditor()} disabled={disabled} title="Insert or edit link">
           <LinkIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
+        {variableOptions.length > 0 && (
+          <select
+            aria-label="Insert variable"
+            defaultValue=""
+            disabled={disabled}
+            onMouseDown={() => {
+              const selection = window.getSelection()
+              const range = selection?.rangeCount ? selection.getRangeAt(0) : null
+              if (range && editorRef.current?.contains(range.commonAncestorContainer)) {
+                selectedRangeRef.current = range.cloneRange()
+              }
+            }}
+            onChange={event => {
+              insertVariable(event.target.value)
+              event.target.value = ''
+            }}
+            className="ml-1 h-7 max-w-32 rounded border border-input bg-background px-1 text-[11px]"
+          >
+            <option value="">Insert variable…</option>
+            {variableOptions.map(option => (
+              <option key={option.key} value={option.key}>{option.label}</option>
+            ))}
+          </select>
+        )}
         <div className="ml-auto">
           <ToolbarButton
             onClick={() => setExpanded(prev => !prev)}
@@ -135,6 +252,13 @@ export function RichTextEmailEditor({
         data-placeholder={placeholder}
         onInput={emit}
         onBlur={emit}
+        onClick={event => {
+          const target = event.target
+          const anchor = target instanceof Element ? target.closest<HTMLAnchorElement>('a') : null
+          if (!anchor) return
+          event.preventDefault()
+          openLinkEditor(anchor)
+        }}
         className={cn(
           'overflow-y-auto px-3 py-2 text-sm leading-relaxed outline-none',
           expanded ? 'min-h-[20rem] max-h-[60dvh]' : 'min-h-[9rem] max-h-[40dvh]',
@@ -143,6 +267,55 @@ export function RichTextEmailEditor({
           disabled && 'opacity-60',
         )}
       />
+      <Dialog open={linkEditorOpen} onOpenChange={setLinkEditorOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingLink ? 'Edit link' : 'Insert link'}</DialogTitle>
+            <DialogDescription>Set the text readers will see and the address it opens.</DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={event => {
+              event.preventDefault()
+              saveLink()
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor={`${id ?? 'email-body'}-link-text`}>Link text</Label>
+              <Input
+                id={`${id ?? 'email-body'}-link-text`}
+                value={linkText}
+                onChange={event => setLinkText(event.target.value)}
+                placeholder="View our intake form"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`${id ?? 'email-body'}-link-url`}>Link URL</Label>
+              <Input
+                id={`${id ?? 'email-body'}-link-url`}
+                value={linkUrl}
+                onChange={event => setLinkUrl(event.target.value)}
+                placeholder="https://example.com"
+                inputMode="url"
+              />
+            </div>
+            <DialogFooter>
+              {editingLink && (
+                <Button type="button" variant="destructive" onClick={removeLink}>
+                  Remove link
+                </Button>
+              )}
+              <Button type="button" variant="outline" onClick={() => setLinkEditorOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!linkText.trim() || !linkUrl.trim()}>
+                {editingLink ? 'Save link' : 'Insert link'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

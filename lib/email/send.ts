@@ -13,6 +13,7 @@ import {
 } from './settings'
 import { GraphSendError, sendViaGraph } from './graphSend'
 import type { EmailAttachment } from './attachments'
+import { assembleManualEmail } from './manualAssembly'
 
 export interface SendEmailArgs {
   category: EmailCategory
@@ -31,6 +32,8 @@ export interface SendEmailArgs {
   userId?: string | null
   /** Files to send alongside the message. See lib/email/attachments.ts for the size cap. */
   attachments?: EmailAttachment[]
+  /** Append the current firm signature. Honored only for manual sends. */
+  includeSignature?: boolean
 }
 
 export type SendEmailResult =
@@ -196,6 +199,15 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         }
       }
     }
+  }
+  if (category === 'manual' && !useStoredTemplate) {
+    const assembled = await assembleManualEmail({
+      html,
+      text,
+      includeSignature: args.includeSignature,
+    })
+    html = assembled.html
+    text = assembled.text
   }
 
   const body = text ?? html
