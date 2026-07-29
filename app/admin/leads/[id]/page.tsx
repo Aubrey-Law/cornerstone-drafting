@@ -5,7 +5,7 @@ import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
 import { fetchTasksForLead } from '@/lib/queries/tasks'
-import { recordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
+import { recordTaskCounts } from '@/lib/tasks/types'
 import { LeadDetailClient } from './LeadDetailClient'
 
 export const dynamic = 'force-dynamic'
