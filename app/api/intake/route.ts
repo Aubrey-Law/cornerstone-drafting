@@ -29,6 +29,7 @@ import {
   findClientIntakeForUser,
   getOrCreateClientIntakeForUser,
 } from '@/lib/intake/getOrCreateClientIntake'
+import { optionalDateOrNull } from '@/lib/intakeRequestValues'
 import { getBearerToken } from '@/lib/apiAuth'
 
 const ADMIN_NOTIFY_EMAIL = ADMIN_EMAIL
@@ -192,10 +193,6 @@ export async function POST(req: Request) {
     const existingId: string = tokenRow.id  // always use the row found by token
     const excludedGuardian = intakeExcludedGuardianTextFromRequestBody(body)
 
-    function dateOrNull(val: unknown) {
-      return typeof val === 'string' && val.trim() ? val : null
-    }
-
     // Build payload — omit user_id (already set on the row)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawPayload: Record<string, any> = {
@@ -209,7 +206,7 @@ export async function POST(req: Request) {
       preferred_name:           body.preferred_name,
       preferred_pronoun:        body.preferred_pronoun,
       full_name:                body.full_name,
-      date_of_birth:            dateOrNull(body.date_of_birth),
+      date_of_birth:            optionalDateOrNull(body.date_of_birth),
       is_us_citizen:            body.is_us_citizen,
       phone:                    body.phone,
       email:                    body.email,
@@ -222,7 +219,7 @@ export async function POST(req: Request) {
       marital_status:           body.marital_status,
       has_children:             body.has_children,
       has_minor_children:       body.has_minor_children,
-      date_of_marriage:         dateOrNull(body.date_of_marriage),
+      date_of_marriage:         optionalDateOrNull(body.date_of_marriage),
       estate_value:             body.estate_value,
       has_real_property:        body.has_real_property,
       has_retirement:           body.has_retirement,
@@ -312,7 +309,7 @@ export async function POST(req: Request) {
         preferred_name:     typeof body.spouse_preferred_name === 'string' ? body.spouse_preferred_name : null,
         prior_names:        typeof body.spouse_prior_names    === 'string' ? body.spouse_prior_names    : null,
         preferred_pronoun:  typeof body.spouse_preferred_pronoun === 'string' ? body.spouse_preferred_pronoun : null,
-        date_of_birth:      dateOrNull(body.spouse_date_of_birth),
+        date_of_birth:      optionalDateOrNull(body.spouse_date_of_birth),
         is_us_citizen:      typeof body.spouse_is_us_citizen === 'boolean' ? body.spouse_is_us_citizen : null,
         email:              typeof body.spouse_email === 'string' ? body.spouse_email : null,
         phone:              typeof body.spouse_phone === 'string' ? body.spouse_phone : null,
@@ -423,10 +420,6 @@ export async function POST(req: Request) {
   /** Invited questionnaires link the client via `client_user_id`; drafts may use `user_id` alone. */
   const ownedOrClause = `user_id.eq.${user.id},client_user_id.eq.${user.id}`
 
-  function dateOrNull(val: unknown) {
-    return typeof val === 'string' && val.trim() ? val : null
-  }
-
   const payload = {
     user_id:                  user.id,
     status:                   body.status,
@@ -442,7 +435,7 @@ export async function POST(req: Request) {
     preferred_name:           body.preferred_name,
     preferred_pronoun:        body.preferred_pronoun,
     full_name:                body.full_name,
-    date_of_birth:            dateOrNull(body.date_of_birth),
+    date_of_birth:            optionalDateOrNull(body.date_of_birth),
     is_us_citizen:            body.is_us_citizen,
     phone:                    body.phone,
     email:                    body.email,
@@ -463,7 +456,7 @@ export async function POST(req: Request) {
     // NOTE: all spouse fields (including spouse_name) are no longer written to
     // client_intake. Spouse data is stored exclusively in `contacts` via
     // saveHouseholdContact (see below).
-    date_of_marriage:         dateOrNull(body.date_of_marriage),
+    date_of_marriage:         optionalDateOrNull(body.date_of_marriage),
 
     // ── Estate ───────────────────────────────────────────────────────────────
     // NOTE: add these columns to client_intake if not present:
@@ -719,7 +712,7 @@ export async function POST(req: Request) {
           preferred_name:     typeof body.spouse_preferred_name    === 'string' ? body.spouse_preferred_name    : null,
           prior_names:        typeof body.spouse_prior_names       === 'string' ? body.spouse_prior_names       : null,
           preferred_pronoun:  typeof body.spouse_preferred_pronoun === 'string' ? body.spouse_preferred_pronoun : null,
-          date_of_birth:      dateOrNull(body.spouse_date_of_birth),
+          date_of_birth:      optionalDateOrNull(body.spouse_date_of_birth),
           is_us_citizen:      typeof body.spouse_is_us_citizen === 'boolean' ? body.spouse_is_us_citizen : null,
           email:              typeof body.spouse_email === 'string' ? body.spouse_email : null,
           phone:              typeof body.spouse_phone === 'string' ? body.spouse_phone : null,

@@ -13,4 +13,14 @@ describe('intake submission route review choices', () => {
     expect(source).not.toContain('body.review_choices ?? null')
     expect(source.match(/review_choices:\s+body\.review_choices,/g)).toHaveLength(2)
   })
+
+  it('preserves saved dates when a status-only submit omits them', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/intake/route.ts'),
+      'utf8',
+    )
+
+    expect(source).not.toContain('function dateOrNull')
+    expect(source.match(/optionalDateOrNull\(body\.[a-z_]+\)/g)).toHaveLength(6)
+  })
 })
