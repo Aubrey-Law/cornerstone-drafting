@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Trash2 } from 'lucide-react'
+import { Columns3, Plus, Table2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { normalizePracticeArea, PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
@@ -39,6 +39,9 @@ import type { LeadListRow, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 import { LeadSidePanel } from '@/components/leads/LeadSidePanel'
 import { apiRequest } from '@/lib/clientApi'
 import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
+import { LeadsBoard } from '@/components/leads/LeadsBoard'
+import { groupLeadsByBoardColumn, LEAD_BOARD_COLUMNS } from '@/lib/leads/board'
+import { cn } from '@/lib/utils'
 import { LeadEditorDialog, type LeadEditorForm } from '@/components/leads/LeadEditorDialog'
 import {
   Dialog,
@@ -59,6 +62,7 @@ import {
 export type LeadRow = LeadListRow
 
 type LeadFilter = 'open' | 'lost' | 'all'
+type LeadView = 'table' | 'board'
 
 const FILTER_TABS: { value: LeadFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
@@ -147,18 +151,41 @@ export function LeadsClient({
     [filteredLeads, selectedLeadId],
   )
 
-  const selectLead = useCallback((leadId: string | null) => {
-    setSelectedLeadId(leadId)
+  const writeParam = useCallback((key: string, value: string | null) => {
     const params = new URLSearchParams(searchParams?.toString() ?? '')
-    if (leadId) params.set('lead', leadId)
-    else params.delete('lead')
+    if (value) params.set(key, value)
+    else params.delete(key)
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : (pathname ?? ''), { scroll: false })
   }, [pathname, router, searchParams])
 
+  const selectLead = useCallback((leadId: string | null) => {
+    setSelectedLeadId(leadId)
+    writeParam('lead', leadId)
+  }, [writeParam])
+
+  // The view lives in the URL alongside the selection so a refresh or a shared
+  // link lands on the same board or table.
+  const urlView: LeadView = searchParams?.get('view') === 'board' ? 'board' : 'table'
+  const [view, setView] = useState<LeadView>(urlView)
+  useEffect(() => { setView(urlView) }, [urlView])
+  const selectView = useCallback((next: LeadView) => {
+    setView(next)
+    // Only the table can show or change a selection, so it does not travel.
+    setSelected({})
+    writeParam('view', next === 'board' ? 'board' : null)
+  }, [writeParam])
+
   const openFullRecord = useCallback(() => {
     if (selectedLeadId) router.push(`/admin/leads/${selectedLeadId}`)
   }, [router, selectedLeadId])
+
+  /** Arrow keys walk the reading order, which the board groups by column. */
+  const navigationOrder = useMemo(() => {
+    if (view !== 'board') return filteredLeads
+    const grouped = groupLeadsByBoardColumn(filteredLeads)
+    return LEAD_BOARD_COLUMNS.flatMap(column => grouped.get(column.key) ?? [])
+  }, [filteredLeads, view])
 
   useEffect(() => {
     if (!selectedLead) return
@@ -167,17 +194,17 @@ export function LeadsClient({
       const target = event.target
       if (target instanceof HTMLElement
         && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
-      const index = filteredLeads.findIndex(lead => lead.id === selectedLead!.id)
+      const index = navigationOrder.findIndex(lead => lead.id === selectedLead!.id)
       if (index === -1) return
       const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1
-      const next = filteredLeads[nextIndex]
+      const next = navigationOrder[nextIndex]
       if (!next) return
       event.preventDefault()
       selectLead(next.id)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [filteredLeads, selectLead, selectedLead])
+  }, [navigationOrder, selectLead, selectedLead])
 
   const hasTableFilters = Boolean(
     tableFilters.search.trim()
@@ -367,6 +394,26 @@ export function LeadsClient({
     }
   }
 
+  /** Board drops onto Lost / New flip the opportunity status in place. */
+  const handleStatusChange = async (lead: LeadRow, status: 'lead' | 'lost') => {
+    setBusyLeadId(lead.id)
+    try {
+      const res = await fetch(`/api/admin/leads/${lead.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Could not update lead')
+      toast.success(status === 'lost' ? 'Lead marked lost' : 'Lead reopened')
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update lead')
+    } finally {
+      setBusyLeadId(null)
+    }
+  }
+
   const closeSigning = () => {
     setSigningUrl(null)
     // The webhook converts the lead → matter on completion; refresh to reflect it.
@@ -503,6 +550,36 @@ export function LeadsClient({
               ))}
             </SelectContent>
           </Select>
+          <div
+            className="inline-flex rounded-md border border-border bg-background p-0.5"
+            role="group"
+            aria-label="View mode"
+          >
+            <button
+              type="button"
+              aria-pressed={view === 'table'}
+              onClick={() => selectView('table')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                view === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Table2 className="h-3.5 w-3.5" aria-hidden />
+              Table
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === 'board'}
+              onClick={() => selectView('board')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                view === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Columns3 className="h-3.5 w-3.5" aria-hidden />
+              Board
+            </button>
+          </div>
           {hasTableFilters && (
             <Button type="button" variant="ghost" size="sm" onClick={clearTableFilters}>
               Clear filters
@@ -511,27 +588,54 @@ export function LeadsClient({
         </div>
       </div>
 
+      {view === 'board' && (
+        <p className="text-[11px] text-muted-foreground">
+          Drag a card onto a column to run that step — Intake sent emails the intake, Engagement opens
+          the send form, Hired creates the matter, and Lost closes the lead out.
+        </p>
+      )}
+
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <LeadsTable
-            leads={filteredLeads}
-            hasAnyLeads={initialLeads.length > 0}
-            selected={selected}
-            allSelected={allSelected}
-            busyLeadId={busyLeadId}
-            esignEnabled={esignEnabled}
-            activeLeadId={selectedLead?.id ?? null}
-            onActivate={lead => selectLead(lead.id)}
-            openMenuLeadId={openMenuLeadId}
-            onMenuOpenChange={(leadId, open) => setOpenMenuLeadId(open ? leadId : null)}
-            onToggleAll={toggleAll}
-            onToggleSelected={toggleSelected}
-            onEdit={openEdit}
-            onSendIntake={lead => void handleSendIntake(lead)}
-            onSendEngagement={setEngagementLead}
-            onHire={setConvertTarget}
-            onArchive={setDeleteTarget}
-          />
+          {view === 'board' ? (
+            <LeadsBoard
+              leads={filteredLeads}
+              hasAnyLeads={initialLeads.length > 0}
+              busyLeadId={busyLeadId}
+              esignEnabled={esignEnabled}
+              activeLeadId={selectedLead?.id ?? null}
+              onActivate={lead => selectLead(lead.id)}
+              openMenuLeadId={openMenuLeadId}
+              onMenuOpenChange={(leadId, open) => setOpenMenuLeadId(open ? leadId : null)}
+              onEdit={openEdit}
+              onSendIntake={lead => void handleSendIntake(lead)}
+              onSendEngagement={setEngagementLead}
+              onHire={setConvertTarget}
+              onArchive={setDeleteTarget}
+              onMarkLost={lead => void handleStatusChange(lead, 'lost')}
+              onReopen={lead => void handleStatusChange(lead, 'lead')}
+            />
+          ) : (
+            <LeadsTable
+              leads={filteredLeads}
+              hasAnyLeads={initialLeads.length > 0}
+              selected={selected}
+              allSelected={allSelected}
+              busyLeadId={busyLeadId}
+              esignEnabled={esignEnabled}
+              activeLeadId={selectedLead?.id ?? null}
+              onActivate={lead => selectLead(lead.id)}
+              openMenuLeadId={openMenuLeadId}
+              onMenuOpenChange={(leadId, open) => setOpenMenuLeadId(open ? leadId : null)}
+              onToggleAll={toggleAll}
+              onToggleSelected={toggleSelected}
+              onEdit={openEdit}
+              onSendIntake={lead => void handleSendIntake(lead)}
+              onSendEngagement={setEngagementLead}
+              onHire={setConvertTarget}
+              onArchive={setDeleteTarget}
+            />
+          )}
         </div>
         {selectedLead && (
           <LeadSidePanel

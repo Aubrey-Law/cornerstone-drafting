@@ -365,7 +365,12 @@ export function LeadFieldsRail({
 
     return (
       <div
-        className="flex min-h-[30px] items-start gap-2 border-b border-muted py-1.5 last:border-b-0"
+        className={cn(
+          'flex min-h-[30px] items-start gap-2 border-b border-muted py-1.5 last:border-b-0',
+          // Editors (address, spouse) need the full row even in the two-column
+          // layout the rail uses once it is wide enough.
+          active && '@2xl/rail:col-span-2',
+        )}
         key={field.key}
       >
         <span className="w-[118px] shrink-0 pt-1 text-xs text-muted-foreground">{field.label}</span>
@@ -415,7 +420,7 @@ export function LeadFieldsRail({
     <aside
       aria-label="Lead details"
       className={cn(
-        'flex w-[340px] shrink-0 flex-col overflow-y-auto border-r border-border bg-card p-4',
+        '@container/rail flex w-[340px] shrink-0 flex-col overflow-y-auto border-r border-border bg-card p-4',
         className,
       )}
       onPointerDownCapture={event => {
@@ -432,7 +437,7 @@ export function LeadFieldsRail({
             <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               {group.title}
             </h3>
-            <div className="mt-1">
+            <div className="mt-1 @2xl/rail:grid @2xl/rail:grid-cols-2 @2xl/rail:gap-x-6">
               {group.keys
                 .map(key => leadFieldDefinition(key))
                 .filter((definition): definition is LeadFieldDefinition => Boolean(definition))

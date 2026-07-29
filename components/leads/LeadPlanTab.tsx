@@ -147,8 +147,13 @@ export function LeadPlanTab({
   const overThreshold = estate !== null && estate > MA_ESTATE_TAX_EXEMPTION
 
   return (
-    <div className="space-y-4">
-      <ol aria-label="Lead pipeline gates" className="grid grid-cols-5 gap-2">
+    // A container so the tab reflows against its own width — it renders both in
+    // the index side panel and full width on the record page.
+    <div className="@container/plan space-y-4">
+      <ol
+        aria-label="Lead pipeline gates"
+        className="grid grid-cols-2 gap-2 @md/plan:grid-cols-3 @2xl/plan:grid-cols-5"
+      >
         {gates.map(gate => (
           <li
             key={gate.key}
@@ -166,7 +171,7 @@ export function LeadPlanTab({
         ))}
       </ol>
 
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+      <div className="flex flex-col gap-4 @3xl/plan:flex-row @3xl/plan:items-start">
         <section aria-label="What the engagement needs" className="flex-1 rounded-lg border border-border bg-card p-4">
           <h3 className="text-sm font-semibold">What the engagement needs</h3>
           <ul className="mt-3 space-y-1.5">
@@ -232,7 +237,7 @@ export function LeadPlanTab({
 
         <section
           aria-label="Estate tax at a glance"
-          className="rounded-lg border border-border bg-card p-4 xl:w-[320px] xl:shrink-0"
+          className="rounded-lg border border-border bg-card p-4 @3xl/plan:w-[320px] @3xl/plan:shrink-0"
         >
           <h3 className="text-sm font-semibold">Estate tax at a glance</h3>
           {estate === null ? (
