@@ -75,6 +75,7 @@ type LeadDetailClientProps = {
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
   initialTaskCounts?: RecordTaskCounts
+  initialIntakeUrl?: string | null
 }
 
 type LeadPatchResponse = {
@@ -142,6 +143,7 @@ export function LeadDetailClient({
   currentUser = { id: '', role: '' },
   activeAgreement = null,
   initialTaskCounts = { open: 0, overdue: 0 },
+  initialIntakeUrl = null,
 }: LeadDetailClientProps) {
   const token = useAccessToken()
   const router = useRouter()
@@ -161,8 +163,10 @@ export function LeadDetailClient({
   const [bookForClientOpen, setBookForClientOpen] = useState(false)
   const [communicationChannel, setCommunicationChannel] = useState<'email' | 'sms' | null>(null)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
-  const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
+  const [intakeUrl, setIntakeUrl] = useState<string | null>(initialIntakeUrl)
   const [sendingIntake, setSendingIntake] = useState(false)
+  const [intakeLinkBusy, setIntakeLinkBusy] = useState(false)
+  const [communicationInitialMessage, setCommunicationInitialMessage] = useState<string | undefined>()
   const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
   const [dataRefreshWarning, setDataRefreshWarning] = useState<string | null>(null)
   const [activityRefreshWarning, setActivityRefreshWarning] = useState<string | null>(null)
@@ -284,6 +288,36 @@ export function LeadDetailClient({
       setError(null)
     } catch {
       setError('Could not copy intake link')
+    }
+  }
+
+  async function rotateIntakeUrl() {
+    if (!window.confirm('Replace this intake link? The previous link will stop working immediately.')) return
+    setIntakeLinkBusy(true)
+    try {
+      const json = await call<{ url: string }>('/api/admin/intake/link', { intakeId: lead.id })
+      setIntakeUrl(json.url)
+      toast.success('Intake link replaced')
+      await refreshActivityBestEffort()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not replace intake link')
+    } finally {
+      setIntakeLinkBusy(false)
+    }
+  }
+
+  async function revokeIntakeUrl() {
+    if (!window.confirm('Revoke this intake link? It will stop working until a new link is prepared.')) return
+    setIntakeLinkBusy(true)
+    try {
+      await call('/api/admin/intake/link', { intakeId: lead.id }, 'DELETE')
+      setIntakeUrl(null)
+      toast.success('Intake link revoked')
+      await refreshActivityBestEffort()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not revoke intake link')
+    } finally {
+      setIntakeLinkBusy(false)
     }
   }
 
@@ -654,6 +688,14 @@ export function LeadDetailClient({
                 intakeUrl={intakeUrl}
                 onOpen={() => setIntakeSheetOpen(true)}
                 onCopy={() => void copyIntakeUrl()}
+                onEmail={() => void sendIntake()}
+                onText={() => {
+                  setCommunicationInitialMessage(`Please complete your secure intake: ${intakeUrl}`)
+                  setCommunicationChannel('sms')
+                }}
+                onRotate={() => void rotateIntakeUrl()}
+                onRevoke={() => void revokeIntakeUrl()}
+                busy={sendingIntake || intakeLinkBusy}
               />
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button type="button" size="sm" variant="outline" onClick={() => setImportIntakeOpen(true)}>
@@ -728,9 +770,14 @@ export function LeadDetailClient({
         clientFirstName={lead.preferred_name?.trim() || lead.first_name?.trim() || clientName}
         email={lead.email ?? ''}
         phone={lead.phone ?? ''}
+        intakeUrl={intakeUrl}
+        initialMessage={communicationInitialMessage}
         token={token}
         onOpenChange={open => {
-          if (!open) setCommunicationChannel(null)
+          if (!open) {
+            setCommunicationChannel(null)
+            setCommunicationInitialMessage(undefined)
+          }
         }}
         onSent={async () => {
           toast.success(communicationChannel === 'sms' ? 'Text sent' : 'Email sent')

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { MIN_CLIENT_PASSWORD_LENGTH } from '@/lib/auth/clientPassword'
-import { hashIntakeInviteToken, isIntakeInviteExpired } from '@/lib/intakeInviteTokens'
+import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export async function POST(req: Request) {
@@ -25,19 +25,16 @@ export async function POST(req: Request) {
   }
 
   const admin = getAdminClient()
-  const tokenHash = hashIntakeInviteToken(inviteToken)
-
-  const { data: intake } = await admin
-    .from('client_intake')
-    .select('id, email, intake_token_expires_at')
-    .eq('intake_token_hash', tokenHash)
-    .maybeSingle()
+  const intake = await resolveIntakeByInviteToken(admin, inviteToken)
 
   if (!intake) {
     return NextResponse.json({ error: 'Invalid or expired invite link' }, { status: 401 })
   }
-  if (isIntakeInviteExpired(intake.intake_token_expires_at as string | null | undefined)) {
-    return NextResponse.json({ error: 'This intake link has expired' }, { status: 401 })
+  if (intake.client_user_id || intake.user_id || intake.status === 'submitted' || intake.status === 'approved') {
+    return NextResponse.json(
+      { error: 'This intake already has an account. Sign in instead.' },
+      { status: 409 },
+    )
   }
 
   const invitedEmail = typeof intake.email === 'string' ? intake.email.trim().toLowerCase() : ''

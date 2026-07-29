@@ -8,7 +8,7 @@ import { intakePayloadTouchesLead, syncLeadFromIntake } from '@/lib/syncLeadFrom
 import { getSubmissionErrors, type IntakeRow } from '@/lib/intakeSections'
 import { getIntakeReadinessFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import { seedDesignSheetAndJobs } from '@/lib/intakeSeed'
-import { hashIntakeInviteToken, isIntakeInviteExpired } from '@/lib/intakeInviteTokens'
+import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
 import { reconcileHouseholdChildren } from '@/lib/contacts/reconcileHouseholdChildren'
@@ -25,10 +25,7 @@ import {
   intakeExcludedGuardianTextFromRequestBody,
   overlayRequestContactIntakeData,
 } from '@/lib/intakeContactHydration'
-import {
-  findClientIntakeForUser,
-  getOrCreateClientIntakeForUser,
-} from '@/lib/intake/getOrCreateClientIntake'
+import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { optionalDateOrNull } from '@/lib/intakeRequestValues'
 import { getBearerToken } from '@/lib/apiAuth'
 
@@ -91,35 +88,6 @@ function normalizeStep(val: unknown): string | undefined {
   return undefined
 }
 
-async function findIntakeByPublicToken(admin: SupabaseAdminClient, publicIntakeToken: string) {
-  const tokenHash = hashIntakeInviteToken(publicIntakeToken)
-  const { data: hashedRow } = await admin
-    .from('client_intake')
-    .select('*')
-    .eq('intake_token_hash', tokenHash)
-    .maybeSingle()
-
-  if (hashedRow) {
-    const expiresAt = hashedRow.intake_token_expires_at as string | null | undefined
-    if (isIntakeInviteExpired(expiresAt)) return null
-    return hashedRow
-  }
-
-  const { data: legacyRow } = await admin
-    .from('client_intake')
-    .select('*')
-    .eq('intake_token', publicIntakeToken)
-    .maybeSingle()
-
-  // Apply the same expiry rule to legacy plaintext tokens. A null expiry is
-  // treated as expired (isIntakeInviteExpired returns true) so pre-expiry-column
-  // tokens are no longer immortal — closing the long-lived-token hole.
-  if (legacyRow && !isIntakeInviteExpired(legacyRow.intake_token_expires_at as string | null | undefined)) {
-    return legacyRow
-  }
-  return null
-}
-
 async function recordInviteUse(
   admin: SupabaseAdminClient,
   intakeId: string,
@@ -175,10 +143,13 @@ export async function POST(req: Request) {
   // Validates the invite token against the DB; no Supabase user session needed.
   if (publicIntakeToken) {
     const admin = getAdminClient()
-    const tokenRow = await findIntakeByPublicToken(admin, publicIntakeToken)
+    const tokenRow = await resolveIntakeByInviteToken(admin, publicIntakeToken)
 
     if (!tokenRow) {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
+    }
+    if (tokenRow.user_id || tokenRow.client_user_id) {
+      return NextResponse.json({ error: 'Sign in to continue this intake' }, { status: 401 })
     }
     await recordInviteUse(admin, tokenRow.id as string, 'api_token_save', req)
 

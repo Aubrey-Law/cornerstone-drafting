@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import IntakeAuthForm from './IntakeAuthForm'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { hashIntakeInviteToken, isIntakeInviteExpired } from '@/lib/intakeInviteTokens'
+import { resolveIntakeByInviteToken } from '@/lib/intake/standingLinks'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -32,14 +32,9 @@ export default async function IntakeAuthPage({
   }
 
   const admin = getAdminClient()
-  const tokenHash = hashIntakeInviteToken(inviteToken)
-  const { data: intake } = await admin
-    .from('client_intake')
-    .select('id, email, intake_token_expires_at')
-    .eq('intake_token_hash', tokenHash)
-    .maybeSingle()
+  const intake = await resolveIntakeByInviteToken(admin, inviteToken)
 
-  if (!intake || isIntakeInviteExpired(intake.intake_token_expires_at as string | null | undefined)) {
+  if (!intake) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4 dark">
         <p className="max-w-md text-center text-sm text-muted-foreground">
@@ -78,6 +73,28 @@ export default async function IntakeAuthPage({
     await admin.from('matters').update({ client_id: user.id }).eq('client_intake_id', intake.id).eq('relationship_status', 'hired')
 
     redirect('/intake')
+  }
+
+  const alreadyRegistered = Boolean(intake.client_user_id || intake.user_id)
+  const submitted = intake.status === 'submitted' || intake.status === 'approved'
+  if (alreadyRegistered || submitted) {
+    const redirectTo = encodeURIComponent('/intake')
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 dark">
+        <div className="w-full max-w-md rounded-lg border bg-card p-8 text-center shadow-sm">
+          <h1 className="text-lg font-medium text-foreground">Continue your intake</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This intake already has a portal account. Sign in to continue or review its status.
+          </p>
+          <Link
+            href={`/auth/login?redirectTo=${redirectTo}`}
+            className="mt-5 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          >
+            Sign in
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (

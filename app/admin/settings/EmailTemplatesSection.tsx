@@ -291,6 +291,9 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
               )}
               <p className="mt-2 text-[10px] text-muted-foreground">
                 Formatting is preserved — <span className="font-mono">{'{{placeholders}}'}</span> are filled in when the email is sent.
+                {' '}Intake invitations support <span className="font-mono">{'{{first_name}}'}</span>,{' '}
+                <span className="font-mono">{'{{client_name}}'}</span>, and{' '}
+                <span className="font-mono">{'{{intake_link}}'}</span>.
               </p>
             </div>
           )}
