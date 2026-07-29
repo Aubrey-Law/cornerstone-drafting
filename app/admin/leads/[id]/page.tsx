@@ -7,6 +7,7 @@ import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
 import { fetchTasksForLead } from '@/lib/queries/tasks'
 import { recordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
+import { recordTaskCounts } from '@/lib/tasks/types'
 import { LeadDetailClient } from './LeadDetailClient'
 
 export const dynamic = 'force-dynamic'

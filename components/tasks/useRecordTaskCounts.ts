@@ -2,17 +2,15 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { isTaskOverdue, type TaskRow } from '@/lib/tasks/types'
-
-export interface RecordTaskCounts {
-  open: number
-  overdue: number
-}
+import { recordTaskCounts, type RecordTaskCounts, type TaskRow } from '@/lib/tasks/types'
 
 /**
  * Open/overdue counts for one record, for the Tasks tab trigger badge. The tab
  * body unmounts when another tab is active, so the badge keeps its own count —
  * seeded on the server, then re-read only after the tab changes something.
+ *
+ * `recordTaskCounts` deliberately lives in `lib/tasks/types` rather than here:
+ * the server pages seed this badge, and they cannot call into a client module.
  */
 export function useRecordTaskCounts(recordId: string, initial: RecordTaskCounts) {
   const token = useAccessToken()
@@ -31,17 +29,11 @@ export function useRecordTaskCounts(recordId: string, initial: RecordTaskCounts)
       })
       if (!res.ok) return
       const json = await res.json()
-      const tasks = (json.tasks ?? []) as TaskRow[]
-      setCounts({ open: tasks.length, overdue: tasks.filter(t => isTaskOverdue(t)).length })
+      setCounts(recordTaskCounts((json.tasks ?? []) as TaskRow[]))
     } catch {
       // A stale badge is not worth surfacing an error for.
     }
   }, [recordId, authHeaders])
 
   return { ...counts, refresh }
-}
-
-/** Server-side helper: the counts shape the badge expects. */
-export function recordTaskCounts(tasks: Array<Pick<TaskRow, 'status' | 'due_at' | 'soft_due_at' | 'hard_due_at'>>): RecordTaskCounts {
-  return { open: tasks.length, overdue: tasks.filter(t => isTaskOverdue(t)).length }
 }
