@@ -25,7 +25,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   TASK_SOURCES,
@@ -41,6 +40,7 @@ import { TaskComposer, type TaskComposerHandle } from '@/components/tasks/TaskCo
 import { TaskListRow } from '@/components/tasks/TaskPrimitives'
 import { useTaskActions } from '@/components/tasks/useTaskActions'
 import { OPEN_TASK_CAPTURE_EVENT } from '@/components/tasks/taskEvents'
+import { TaskTemplateSheet, type TaskTemplate } from '@/components/tasks/TaskTemplateSheet'
 
 type ScopeKey = 'mine' | 'team' | 'unassigned'
 
@@ -49,18 +49,11 @@ interface Assignee {
   name: string
 }
 
-interface TemplateSummary {
-  id: string
-  name: string
-  description: string | null
-  items: Array<{ text: string }>
-}
-
 interface TasksClientProps {
   initialOpenTasks: TaskRow[]
   initialDoneToday: TaskRow[]
   assignees: Assignee[]
-  templates: TemplateSummary[]
+  templates: TaskTemplate[]
   viewerId: string | null
 }
 
@@ -165,6 +158,7 @@ export function TasksClient({
   const [focusId, setFocusId] = useState<string | null>(null)
   const [snoozeMenuId, setSnoozeMenuId] = useState<string | null>(null)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [templateList, setTemplateList] = useState(templates)
   const [composerOpen, setComposerOpen] = useState(false)
   const composerRef = useRef<TaskComposerHandle>(null)
 
@@ -542,37 +536,12 @@ export function TasksClient({
         </div>
       )}
 
-      <Sheet open={templatesOpen} onOpenChange={setTemplatesOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>Task templates</SheetTitle>
-            <SheetDescription>
-              Apply a template from a matter or lead’s Tasks tab, or type <strong>/</strong> in quick capture.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-3 overflow-auto px-4 pb-4">
-            {templates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No templates yet.</p>
-            ) : (
-              templates.map(template => (
-                <div key={template.id} className="rounded-lg border border-border bg-card p-3">
-                  <p className="text-sm font-medium text-foreground">{template.name}</p>
-                  {template.description && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{template.description}</p>
-                  )}
-                  <ul className="mt-2 space-y-1">
-                    {template.items.map((item, index) => (
-                      <li key={index} className="text-xs text-muted-foreground">
-                        · {item.text}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <TaskTemplateSheet
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        templates={templateList}
+        onTemplatesChange={setTemplateList}
+      />
     </div>
   )
 }
