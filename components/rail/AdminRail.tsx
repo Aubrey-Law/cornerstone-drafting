@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   ChevronUp,
+  ListTodo,
   Mail,
   Mic,
   MicOff,
@@ -25,6 +26,7 @@ import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/softphoneEven
 import { useSoftphoneCall } from '@/components/softphone/SoftphoneProvider'
 import { RailActivityPane } from './RailActivityPane'
 import { RailEmailPane } from './RailEmailPane'
+import { RailTasksPane } from './RailTasksPane'
 
 const ChatPanel = dynamic(
   () => import('@/app/admin/components/ChatPanel').then(m => m.ChatPanel),
@@ -46,7 +48,7 @@ function formatCallDuration(totalSeconds: number): string {
   return `${minutes}:${seconds}`
 }
 
-export type RailTab = 'assistant' | 'phone' | 'email' | 'activity'
+export type RailTab = 'assistant' | 'phone' | 'email' | 'tasks' | 'activity'
 
 const RAIL_STORAGE_KEY = 'cornerstone.admin.rail'
 
@@ -56,8 +58,10 @@ interface StoredRailState {
   tab?: RailTab
 }
 
+const RAIL_TABS: readonly RailTab[] = ['assistant', 'phone', 'email', 'tasks', 'activity']
+
 function isRailTab(value: unknown): value is RailTab {
-  return value === 'assistant' || value === 'phone' || value === 'email' || value === 'activity'
+  return typeof value === 'string' && (RAIL_TABS as readonly string[]).includes(value)
 }
 
 export interface AdminRailController {
@@ -72,6 +76,10 @@ export interface AdminRailController {
   assistantMounted: boolean
   /** Same for the email pane, so an unsent draft survives a tab switch. */
   emailMounted: boolean
+  /** And the tasks pane, so a half-typed capture survives a tab switch. */
+  tasksMounted: boolean
+  /** Bumped by ⌘⇧T so the tasks pane knows to focus its capture input. */
+  taskCaptureRequestId: number
   openTab: (tab: RailTab) => void
   setTab: (tab: RailTab) => void
   toggle: () => void
@@ -90,6 +98,8 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
   const [tab, setTabState] = useState<RailTab>('assistant')
   const [assistantMounted, setAssistantMounted] = useState(false)
   const [emailMounted, setEmailMounted] = useState(false)
+  const [tasksMounted, setTasksMounted] = useState(false)
+  const [taskCaptureRequestId, setTaskCaptureRequestId] = useState(0)
   const [pendingChatAction, setPendingChatAction] = useState<CornerstoneChatOpenDetail | null>(null)
   // State, not a ref: the persist effect must not fire until the restored
   // values have landed, or it would write the defaults back over them.
@@ -124,13 +134,14 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     if (!voiceEnabled && tab === 'phone') setTabState('assistant')
   }, [voiceEnabled, tab])
 
-  // The assistant and email panes mount lazily on first view, then stay mounted
-  // for the rest of the page life so the chat thread and an unsent email draft
-  // survive tab switches and minimize/close.
+  // The assistant, email and tasks panes mount lazily on first view, then stay
+  // mounted for the rest of the page life so the chat thread, an unsent email
+  // draft and a half-typed task capture survive tab switches and minimize/close.
   useEffect(() => {
     if (!open || minimized) return
     if (tab === 'assistant') setAssistantMounted(true)
     if (tab === 'email') setEmailMounted(true)
+    if (tab === 'tasks') setTasksMounted(true)
   }, [open, minimized, tab])
 
   const openTab = useCallback((next: RailTab) => {
@@ -199,6 +210,20 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
       if (key === 'e') {
         event.preventDefault()
         openTab('email')
+        return
+      }
+      if (key === 'k') {
+        event.preventDefault()
+        openTab('tasks')
+        return
+      }
+      if (key === 't') {
+        // The Tasks page owns ⌘⇧T for its own composer; everywhere else quick
+        // capture belongs to the rail.
+        if (window.location.pathname.startsWith('/admin/tasks')) return
+        event.preventDefault()
+        openTab('tasks')
+        setTaskCaptureRequestId(id => id + 1)
       }
     }
 
@@ -217,14 +242,16 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     clearPendingChatAction,
     assistantMounted,
     emailMounted,
+    tasksMounted,
+    taskCaptureRequestId,
     openTab,
     setTab,
     toggle,
     minimize,
     close,
   }), [
-    open, minimized, tab, pendingChatAction,
-    clearPendingChatAction, assistantMounted, emailMounted, openTab, setTab, toggle, minimize, close,
+    open, minimized, tab, pendingChatAction, clearPendingChatAction, assistantMounted, emailMounted,
+    tasksMounted, taskCaptureRequestId, openTab, setTab, toggle, minimize, close,
   ])
 }
 
@@ -233,6 +260,8 @@ interface AdminRailProps {
   voiceEnabled: boolean
   matterDisplayName?: string | null
   assistantModelLabel?: string | null
+  /** Overdue task count for the Tasks tab badge, from the sidebar counts. */
+  tasksOverdue?: number
 }
 
 export function AdminRail({
@@ -240,6 +269,7 @@ export function AdminRail({
   voiceEnabled,
   matterDisplayName = null,
   assistantModelLabel = null,
+  tasksOverdue = 0,
 }: AdminRailProps) {
   const { visible, tab } = rail
   const { call } = useSoftphoneCall()
@@ -255,10 +285,11 @@ export function AdminRail({
     if (wrapUpPending && voiceEnabled) openTab('phone')
   }, [wrapUpPending, voiceEnabled, openTab])
 
-  const tabs: { key: RailTab; label: string; icon: typeof Sparkles; dot?: boolean }[] = [
+  const tabs: { key: RailTab; label: string; icon: typeof Sparkles; dot?: boolean; count?: number }[] = [
     { key: 'assistant', label: 'Assistant', icon: Sparkles },
     ...(voiceEnabled ? [{ key: 'phone' as const, label: 'Phone', icon: Phone, dot: call.active }] : []),
     { key: 'email', label: 'Email', icon: Mail },
+    { key: 'tasks', label: 'Tasks', icon: ListTodo, count: tasksOverdue },
     { key: 'activity', label: 'Activity', icon: Activity },
   ]
 
@@ -272,6 +303,10 @@ export function AdminRail({
     >
       {visible && (
         <div className="flex h-11 shrink-0 items-center border-b border-border pl-1 pr-1.5">
+          {/*
+            Five tabs do not fit 460px with labels, so only the active tab keeps
+            its text; the rest are 34px icon buttons with a title tooltip.
+          */}
           {tabs.map(item => {
             const Icon = item.icon
             const active = tab === item.key
@@ -281,22 +316,39 @@ export function AdminRail({
                 type="button"
                 onClick={() => rail.setTab(item.key)}
                 aria-current={active ? 'page' : undefined}
+                aria-label={item.label}
+                title={item.label}
                 className={cn(
-                  'relative inline-flex h-11 items-center gap-1.5 border-b-2 px-2.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'relative inline-flex h-11 items-center border-b-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   active
-                    ? 'border-accent font-semibold text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                    ? 'gap-1.5 border-accent px-2.5 font-semibold text-foreground'
+                    : 'w-[34px] justify-center border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
                 <Icon className="h-3.5 w-3.5" aria-hidden />
-                {item.label}
+                {active && item.label}
                 {item.dot && (
                   <span
                     aria-label="Call in progress"
                     role="status"
-                    className="h-1.5 w-1.5 rounded-full bg-success motion-safe:animate-pulse"
+                    className={cn(
+                      'rounded-full bg-success motion-safe:animate-pulse',
+                      active ? 'h-1.5 w-1.5' : 'absolute right-1 top-2 h-1.5 w-1.5',
+                    )}
                   />
                 )}
+                {!item.dot && item.count ? (
+                  <span
+                    className={cn(
+                      'rounded-full bg-destructive/15 font-medium tabular-nums text-destructive',
+                      active
+                        ? 'px-1.5 py-0.5 text-[10px]'
+                        : 'absolute right-0.5 top-1.5 min-w-3.5 px-1 text-[9px] leading-[14px]',
+                    )}
+                  >
+                    {item.count}
+                  </span>
+                ) : null}
               </button>
             )
           })}
@@ -347,6 +399,13 @@ export function AdminRail({
       {rail.emailMounted && (
         <div className={cn('min-h-0 flex-1', visible && tab === 'email' ? 'flex flex-col' : 'hidden')}>
           <RailEmailPane />
+        </div>
+      )}
+
+      {/* Kept mounted like the email pane so a half-typed capture survives. */}
+      {rail.tasksMounted && (
+        <div className={cn('min-h-0 flex-1', visible && tab === 'tasks' ? 'flex flex-col' : 'hidden')}>
+          <RailTasksPane captureRequestId={rail.taskCaptureRequestId} />
         </div>
       )}
 

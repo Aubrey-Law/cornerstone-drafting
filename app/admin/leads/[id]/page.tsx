@@ -4,6 +4,8 @@ import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
+import { fetchTasksForLead } from '@/lib/queries/tasks'
+import { recordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import { LeadDetailClient } from './LeadDetailClient'
 
 export const dynamic = 'force-dynamic'
@@ -146,6 +148,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
   const schedulingSettings = await getSchedulingSettings()
+  const initialTaskCounts = recordTaskCounts(await fetchTasksForLead(id, 'open'))
   const { data: agreement } = lead.matter_id
     ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
@@ -153,6 +156,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   return (
     <LeadDetailClient
       lead={hydratedLead}
+      initialTaskCounts={initialTaskCounts}
       spouse={spouse}
       initialActivity={activityRows}
       initialNotes={noteRows.map(mapNote)}

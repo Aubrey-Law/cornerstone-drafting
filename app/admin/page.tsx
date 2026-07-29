@@ -33,6 +33,7 @@ export default async function AdminTodayPage() {
   }).format(new Date())
 
   const allClear = [
+    today.overdueTasks.length === 0 && 'No overdue tasks',
     today.unreadThreads.length === 0 && 'No unread client messages',
     today.intakeReview.length === 0 && 'No intakes waiting on review',
     today.intakeToSend.length === 0 && 'Every open matter has its intake out',
@@ -44,14 +45,13 @@ export default async function AdminTodayPage() {
       <header className="mb-4">
         <h1 className="text-xl font-semibold text-foreground">{dateLabel}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {today.activeMatterCount} active matter{today.activeMatterCount === 1 ? '' : 's'}
+          {today.overdueTasks.length} task{today.overdueTasks.length === 1 ? '' : 's'} overdue
+          {' · '}
+          {today.tasksDueToday.length} due today
+          {' · '}
+          {today.overdueCount} matter{today.overdueCount === 1 ? '' : 's'} over SLA
           {' · '}
           {today.appointmentsToday.length} appointment{today.appointmentsToday.length === 1 ? '' : 's'}
-          {' · '}
-          {today.overdueCount} overdue
-          {today.needsYou === 0
-            ? ' · nothing is waiting on you'
-            : ` · ${today.needsYou} item${today.needsYou === 1 ? '' : 's'} waiting on you`}
         </p>
       </header>
 
@@ -64,6 +64,8 @@ export default async function AdminTodayPage() {
             unreadThreads={today.unreadThreads}
             intakeReview={today.intakeReview.map(toMatterItem)}
             intakeToSend={today.intakeToSend.map(toMatterItem)}
+            overdueTasks={today.overdueTasks}
+            tasksDueToday={today.tasksDueToday}
             unassignedCallCount={today.unassignedCallCount}
           />
         </div>

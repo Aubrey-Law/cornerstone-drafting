@@ -22,6 +22,9 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
 import { engineStageLabel } from '@/lib/stage-engine/labels'
 import type { TodayQueueRow, TodayUnreadThread } from '@/lib/queries/today'
+import { compareTasks, type TaskRow } from '@/lib/tasks/types'
+import { TaskListRow } from '@/components/tasks/TaskPrimitives'
+import { useTaskActions } from '@/components/tasks/useTaskActions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,6 +53,8 @@ interface TodayQueueProps {
   unreadThreads: TodayUnreadThread[]
   intakeReview: TodayMatterItem[]
   intakeToSend: TodayMatterItem[]
+  overdueTasks: TaskRow[]
+  tasksDueToday: TaskRow[]
   unassignedCallCount: number
 }
 
@@ -106,13 +111,14 @@ function focusClass(focused: boolean) {
   return focused ? 'bg-muted shadow-[inset_3px_0_0] shadow-primary' : undefined
 }
 
-/** One keyboard-focusable row: what E, S, N, and W do when it has the ring. */
+/** One keyboard-focusable row: what E, S, N, W, and X do when it has the ring. */
 interface FocusTarget {
   key: string
   run?: () => void
   snoozeRow?: TodayQueueRow
   nudge?: () => void
   wake?: () => void
+  complete?: () => void
 }
 
 function GroupHeader({ title, count }: { title: string; count: number }) {
@@ -320,6 +326,8 @@ export function TodayQueue({
   unreadThreads,
   intakeReview,
   intakeToSend,
+  overdueTasks,
+  tasksDueToday,
   unassignedCallCount,
 }: TodayQueueProps) {
   const router = useRouter()
@@ -331,6 +339,8 @@ export function TodayQueue({
   const [focusKey, setFocusKey] = useState<string | null>(null)
   const [snoozeMenuKey, setSnoozeMenuKey] = useState<string | null>(null)
   const [nudging, setNudging] = useState(false)
+  // Completed tasks leave the queue immediately; router.refresh() confirms it.
+  const [completedTaskIds, setCompletedTaskIds] = useState<ReadonlySet<string>>(new Set())
 
   const authHeaders = useCallback(
     (): HeadersInit => ({
@@ -517,6 +527,50 @@ export function TodayQueue({
     [router, nudgeRow],
   )
 
+  const taskActions = useTaskActions()
+
+  const overdueTaskRows = useMemo(
+    () => overdueTasks.filter(t => !completedTaskIds.has(t.id)).sort(compareTasks),
+    [overdueTasks, completedTaskIds],
+  )
+  const dueTodayTaskRows = useMemo(
+    () => tasksDueToday.filter(t => !completedTaskIds.has(t.id)).sort(compareTasks),
+    [tasksDueToday, completedTaskIds],
+  )
+
+  // Fresh server rows already exclude what was completed, so the optimistic
+  // hide has to clear or a re-opened task would stay invisible.
+  useEffect(() => {
+    setCompletedTaskIds(prev => (prev.size === 0 ? prev : new Set()))
+  }, [overdueTasks, tasksDueToday])
+
+  const completeTask = useCallback(
+    async (task: TaskRow) => {
+      setCompletedTaskIds(prev => new Set(prev).add(task.id))
+      const updated = await taskActions.complete(task)
+      if (!updated) {
+        setCompletedTaskIds(prev => {
+          const next = new Set(prev)
+          next.delete(task.id)
+          return next
+        })
+        return
+      }
+      announceCleared()
+      router.refresh()
+    },
+    [taskActions, router],
+  )
+
+  const snoozeTask = useCallback(
+    async (task: TaskRow, days: number, label: string) => {
+      setSnoozeMenuKey(null)
+      const updated = await taskActions.snooze(task, days, label)
+      if (updated) router.refresh()
+    },
+    [taskActions, router],
+  )
+
   const copyBookingLink = useCallback(() => {
     const url = `${window.location.origin}/book`
     void navigator.clipboard
@@ -542,7 +596,21 @@ export function TodayQueue({
         snoozeRow: row,
         nudge: () => void nudgeRow(row),
       }))
+      const taskTargets = [...overdueTaskRows, ...dueTodayTaskRows].map(task => ({
+        key: `task:${task.id}`,
+        run: () => {
+          const href = task.matter_id
+            ? `/admin/matters/${task.matter_id}?tab=tasks`
+            : task.lead_id
+              ? `/admin/leads/${task.lead_id}?tab=tasks`
+              : '/admin/tasks'
+          router.push(href)
+        },
+        complete: () => void completeTask(task),
+      }))
       return [
+        // Tasks lead the queue: they are the most specific thing owed today.
+        ...taskTargets,
         ...agingTargets,
         ...unreadThreads.map(t => ({
           key: `unread:${t.matter_id}`,
@@ -586,6 +654,9 @@ export function TodayQueue({
     unreadThreads,
     intakeReview,
     intakeToSend,
+    overdueTaskRows,
+    dueTodayTaskRows,
+    completeTask,
     unassignedCallCount,
     router,
     runPrimary,
@@ -658,6 +729,13 @@ export function TodayQueue({
             focused.wake()
           }
           break
+        case 'x':
+        case 'X':
+          if (focused?.complete) {
+            e.preventDefault()
+            focused.complete()
+          }
+          break
         case '1':
           e.preventDefault()
           setTab('you')
@@ -690,7 +768,44 @@ export function TodayQueue({
     return () => window.removeEventListener('keydown', handler)
   }, [focusKey, tab, focusTargets])
 
-  const youCount = mineAll.length + unreadThreads.length + intakeReview.length + intakeToSend.length
+  const youCount =
+    overdueTaskRows.length + dueTodayTaskRows.length + mineAll.length + unreadThreads.length
+    + intakeReview.length + intakeToSend.length
+
+  const taskRow = (task: TaskRow) => (
+    <TaskListRow
+      key={task.id}
+      task={task}
+      focused={focusKey === `task:${task.id}`}
+      pending={taskActions.isPending(task.id)}
+      onComplete={() => void completeTask(task)}
+      actions={
+        <DropdownMenu
+          open={snoozeMenuKey === `task:${task.id}`}
+          onOpenChange={open => setSnoozeMenuKey(open ? `task:${task.id}` : null)}
+        >
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 text-xs">
+              <PauseCircle className="h-3.5 w-3.5" />
+              Snooze
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel className="text-xs font-medium">Push due date</DropdownMenuLabel>
+            {snoozeOptions().map(opt => (
+              <DropdownMenuItem
+                key={opt.label}
+                onSelect={() => void snoozeTask(task, opt.days, opt.dateLabel)}
+              >
+                <span>{opt.label}</span>
+                <span className="ml-auto text-xs text-muted-foreground">{opt.dateLabel}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+    />
+  )
 
   return (
     <div>
@@ -715,6 +830,8 @@ export function TodayQueue({
             move
             <kbd className="rounded border border-border bg-muted px-1">E</kbd>
             act
+            <kbd className="rounded border border-border bg-muted px-1">X</kbd>
+            complete
             <kbd className="rounded border border-border bg-muted px-1">S</kbd>
             snooze
             <kbd className="rounded border border-border bg-muted px-1">N</kbd>
@@ -731,6 +848,24 @@ export function TodayQueue({
 
       {tab === 'you' && (
         <div>
+          {overdueTaskRows.length > 0 && (
+            <>
+              <GroupHeader title="Overdue tasks — do first" count={overdueTaskRows.length} />
+              <ul className="divide-y divide-border rounded-lg border border-border border-l-[3px] border-l-destructive bg-card">
+                {overdueTaskRows.map(taskRow)}
+              </ul>
+            </>
+          )}
+
+          {dueTodayTaskRows.length > 0 && (
+            <>
+              <GroupHeader title="Due today" count={dueTodayTaskRows.length} />
+              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+                {dueTodayTaskRows.map(taskRow)}
+              </ul>
+            </>
+          )}
+
           {blocking.length > 0 && (
             <>
               <GroupHeader title="Blocking a client — do first" count={blocking.length} />

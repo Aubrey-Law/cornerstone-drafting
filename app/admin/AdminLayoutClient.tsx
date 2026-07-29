@@ -9,6 +9,7 @@ import {
   BookOpen,
   CalendarDays,
   FilePenLine,
+  ListTodo,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -61,6 +62,7 @@ const navItems: { href: string; label: string; icon: React.ElementType; exact?: 
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
   { href: '/admin/leads', label: 'Leads', icon: UserPlus },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
+  { href: '/admin/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
   { href: '/admin/assistant', label: 'Assistant', icon: Sparkles },
   { href: '/admin/works', label: 'Library', icon: BookOpen },
@@ -301,6 +303,7 @@ export default function AdminLayoutClient({
             voiceEnabled={voiceEnabled}
             matterDisplayName={matterDisplayName}
             assistantModelLabel={assistantModelLabel}
+            tasksOverdue={badgeCounts.tasksOverdueCount}
           />
         </div>
       </div>
