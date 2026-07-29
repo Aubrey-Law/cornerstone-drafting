@@ -21,6 +21,7 @@ export interface SendEmailArgs {
   html?: string
   text?: string
   cc?: string | string[]
+  bcc?: string | string[]
   replyTo?: string
   templateVariables?: EmailTemplateVariables
   /** Defaults to true for automated categories and false for manual one-off sends. */
@@ -39,11 +40,11 @@ export type SendEmailResult =
   | { ok: true; status: 'logged'; reason: 'no_api_key'; logId: string | null }
   | { ok: false; status: 'error'; error: string; logId: string | null }
 
-function ccArray(cc: string | string[] | undefined): string[] | undefined {
-  if (!cc) return undefined
-  const list = Array.isArray(cc)
-    ? cc
-    : cc.split(',').map(s => s.trim()).filter(Boolean)
+function addressArray(value: string | string[] | undefined): string[] | undefined {
+  if (!value) return undefined
+  const list = Array.isArray(value)
+    ? value
+    : value.split(',').map(s => s.trim()).filter(Boolean)
   return list.length > 0 ? list : undefined
 }
 
@@ -62,13 +63,24 @@ function injectTestNoticeText(text: string, intendedTo: string): string {
 }
 
 async function logSend(row: Record<string, unknown>): Promise<string | null> {
-  try {
-    const { data } = await getAdminClient()
+  const insertRow = (payload: Record<string, unknown>) =>
+    getAdminClient()
       .from('email_log')
-      .insert({ sent_at: new Date().toISOString(), ...row })
+      .insert({ sent_at: new Date().toISOString(), ...payload })
       .select('id')
       .single()
-    return (data?.id as string | undefined) ?? null
+
+  try {
+    const { data, error } = await insertRow(row)
+    if (!error) return (data?.id as string | undefined) ?? null
+    // email_log.bcc arrives in 20260817000000. On a database that hasn't run
+    // that migration, log the send without bcc rather than losing the row.
+    if ('bcc' in row) {
+      const { bcc: _bcc, ...withoutBcc } = row
+      const retry = await insertRow(withoutBcc)
+      return (retry.data?.id as string | undefined) ?? null
+    }
+    return null
   } catch {
     return null
   }
@@ -81,6 +93,7 @@ interface ResendAttemptInput {
   html?: string
   text?: string
   ccList: string[] | undefined
+  bccList: string[] | undefined
   replyTo: string | undefined
   isRedirect: boolean
   attachments?: EmailAttachment[]
@@ -106,6 +119,7 @@ async function attemptResend(input: ResendAttemptInput): Promise<AttemptResult> 
       subject: input.subject,
       ...(input.html !== undefined ? { html: input.html } : { text: input.text ?? '' }),
       ...(input.isRedirect ? {} : input.ccList && input.ccList.length > 0 ? { cc: input.ccList } : {}),
+      ...(input.isRedirect ? {} : input.bccList && input.bccList.length > 0 ? { bcc: input.bccList } : {}),
       ...(input.replyTo ? { replyTo: input.replyTo } : {}),
       ...(input.attachments?.length
         ? {
@@ -139,6 +153,7 @@ async function attemptGraph(
     const { fromAddress, messageId } = await sendViaGraph({
       to: input.to,
       cc: input.isRedirect ? undefined : input.ccList,
+      bcc: input.isRedirect ? undefined : input.bccList,
       subject: input.subject,
       html: input.html,
       text: input.text,
@@ -156,7 +171,7 @@ async function attemptGraph(
 }
 
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
-  const { category, to, cc, replyTo, userId } = args
+  const { category, to, cc, bcc, replyTo, userId } = args
   let subject = args.subject
   let html = args.html
   let text = args.text
@@ -189,7 +204,8 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   }
 
   const resendFrom = args.from ?? await getResendFromAsync()
-  const ccList = ccArray(cc)
+  const ccList = addressArray(cc)
+  const bccList = addressArray(bcc)
 
   if (envEmailsHardKilled()) {
     const logId = await logSend({
@@ -200,6 +216,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       subject,
       reply_to: replyTo ?? null,
       cc: ccList ? ccList.join(', ') : null,
+      bcc: bccList ? bccList.join(', ') : null,
       html: body,
       status: 'suppressed',
       error: 'env:EMAILS_ENABLED=false',
@@ -218,6 +235,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       subject,
       reply_to: replyTo ?? null,
       cc: ccList ? ccList.join(', ') : null,
+      bcc: bccList ? bccList.join(', ') : null,
       html: body,
       status: 'suppressed',
       error: `category:${category} mode=off`,
@@ -234,6 +252,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       subject,
       reply_to: replyTo ?? null,
       cc: ccList ? ccList.join(', ') : null,
+      bcc: bccList ? bccList.join(', ') : null,
       html: body,
       status: 'suppressed',
       error: 'allowlist',
@@ -259,6 +278,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     html: finalHtml,
     text: finalText,
     ccList,
+    bccList,
     replyTo,
     isRedirect,
     attachments: args.attachments,
@@ -280,6 +300,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         subject: finalSubject,
         reply_to: replyTo ?? null,
         cc: ccList ? ccList.join(', ') : null,
+      bcc: bccList ? bccList.join(', ') : null,
         html: finalBody,
         provider: 'graph',
         status: 'error',
@@ -307,6 +328,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       subject: finalSubject,
       reply_to: replyTo ?? null,
       cc: ccList ? ccList.join(', ') : null,
+      bcc: bccList ? bccList.join(', ') : null,
       html: finalBody,
       status: 'logged',
       error: 'no_api_key',
@@ -322,6 +344,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     subject: finalSubject,
     reply_to: replyTo ?? null,
     cc: ccList ? ccList.join(', ') : null,
+    bcc: bccList ? bccList.join(', ') : null,
     html: finalBody,
     resend_id: result.resendId,
     provider: providerUsed,

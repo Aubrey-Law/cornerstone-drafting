@@ -70,6 +70,48 @@ function parseAddressList(value: string): string[] {
     .filter(Boolean)
 }
 
+function AddressField({
+  id,
+  label,
+  value,
+  onChange,
+  invalid,
+  hint,
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (next: string) => void
+  invalid: string[]
+  hint?: string
+}) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className="text-[11px] font-medium text-muted-foreground">
+        {label}
+      </label>
+      <input
+        id={id}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder="Separate addresses with commas"
+        aria-invalid={invalid.length > 0}
+        className={cn(
+          'h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-ring',
+          invalid.length > 0 ? 'border-destructive' : 'border-input',
+        )}
+      />
+      {invalid.length > 0 ? (
+        <p role="alert" className="text-[11px] text-destructive">
+          Not a valid address: {invalid.join(', ')}
+        </p>
+      ) : (
+        hint && <p className="text-[10px] text-muted-foreground">{hint}</p>
+      )}
+    </div>
+  )
+}
+
 export function RailEmailPane() {
   const pathname = usePathname()
   const record = railRecordForPath(pathname)
@@ -80,7 +122,9 @@ export function RailEmailPane() {
   const [templateId, setTemplateId] = useState(ONE_OFF)
   const [to, setTo] = useState('')
   const [cc, setCc] = useState('')
+  const [bcc, setBcc] = useState('')
   const [showCc, setShowCc] = useState(false)
+  const [showBcc, setShowBcc] = useState(false)
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
@@ -176,14 +220,17 @@ export function RailEmailPane() {
   const attachmentCount = files.length + selectedDocuments.length
 
   const ccList = useMemo(() => parseAddressList(cc), [cc])
+  const bccList = useMemo(() => parseAddressList(bcc), [bcc])
   const invalidCc = ccList.filter(address => !isEmail(address))
+  const invalidBcc = bccList.filter(address => !isEmail(address))
 
   const ready =
     Boolean(to.trim()) &&
     Boolean(subject.trim()) &&
     !emailHtmlIsEmpty(bodyHtml) &&
     !overLimit &&
-    invalidCc.length === 0
+    invalidCc.length === 0 &&
+    invalidBcc.length === 0
 
   async function send() {
     if (!ready || sending) return
@@ -197,6 +244,7 @@ export function RailEmailPane() {
         JSON.stringify({
           to: to.trim(),
           cc: ccList,
+          bcc: bccList,
           subject: subject.trim(),
           html: bodyHtml,
           text: emailHtmlToText(bodyHtml),
@@ -224,7 +272,9 @@ export function RailEmailPane() {
       setBodyHtml('')
       setTemplateId(ONE_OFF)
       setCc('')
+      setBcc('')
       setShowCc(false)
+      setShowBcc(false)
       setFiles([])
       setSelectedDocumentIds([])
     } catch (caught) {
@@ -242,15 +292,26 @@ export function RailEmailPane() {
             <label htmlFor="rail-email-to" className="text-[11px] font-medium text-muted-foreground">
               To
             </label>
-            {!showCc && (
-              <button
-                type="button"
-                onClick={() => setShowCc(true)}
-                className="text-[11px] font-medium text-muted-foreground hover:text-accent"
-              >
-                Cc
-              </button>
-            )}
+            <span className="flex items-center gap-2">
+              {!showCc && (
+                <button
+                  type="button"
+                  onClick={() => setShowCc(true)}
+                  className="text-[11px] font-medium text-muted-foreground hover:text-accent"
+                >
+                  Cc
+                </button>
+              )}
+              {!showBcc && (
+                <button
+                  type="button"
+                  onClick={() => setShowBcc(true)}
+                  className="text-[11px] font-medium text-muted-foreground hover:text-accent"
+                >
+                  Bcc
+                </button>
+              )}
+            </span>
           </div>
           <input
             id="rail-email-to"
@@ -293,27 +354,24 @@ export function RailEmailPane() {
         </div>
 
         {showCc && (
-          <div className="space-y-1">
-            <label htmlFor="rail-email-cc" className="text-[11px] font-medium text-muted-foreground">
-              Cc
-            </label>
-            <input
-              id="rail-email-cc"
-              value={cc}
-              onChange={event => setCc(event.target.value)}
-              placeholder="Separate addresses with commas"
-              aria-invalid={invalidCc.length > 0}
-              className={cn(
-                'h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-ring',
-                invalidCc.length > 0 ? 'border-destructive' : 'border-input',
-              )}
-            />
-            {invalidCc.length > 0 && (
-              <p role="alert" className="text-[11px] text-destructive">
-                Not a valid address: {invalidCc.join(', ')}
-              </p>
-            )}
-          </div>
+          <AddressField
+            id="rail-email-cc"
+            label="Cc"
+            value={cc}
+            onChange={setCc}
+            invalid={invalidCc}
+          />
+        )}
+
+        {showBcc && (
+          <AddressField
+            id="rail-email-bcc"
+            label="Bcc"
+            value={bcc}
+            onChange={setBcc}
+            invalid={invalidBcc}
+            hint="Blind recipients — the other recipients will not see these."
+          />
         )}
 
         <div className="space-y-1">

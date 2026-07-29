@@ -17,6 +17,7 @@ export class GraphSendError extends Error {
 export interface GraphSendArgs {
   to: string
   cc?: string[]
+  bcc?: string[]
   subject: string
   html?: string
   text?: string
@@ -78,6 +79,7 @@ export async function sendViaGraph(args: GraphSendArgs): Promise<GraphSendResult
       body: { contentType: args.html ? 'HTML' : 'Text', content: bodyContent },
       toRecipients: [recipient(args.to)],
       ccRecipients: args.cc && args.cc.length > 0 ? args.cc.map(recipient) : undefined,
+      bccRecipients: args.bcc && args.bcc.length > 0 ? args.bcc.map(recipient) : undefined,
       replyTo: args.replyTo ? [recipient(args.replyTo)] : undefined,
       ...(attachments.length > 0 ? { attachments } : {}),
     },

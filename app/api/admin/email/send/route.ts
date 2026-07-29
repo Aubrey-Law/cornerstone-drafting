@@ -24,6 +24,7 @@ export const maxDuration = 60
 interface Payload {
   to?: unknown
   cc?: unknown
+  bcc?: unknown
   subject?: unknown
   html?: unknown
   text?: unknown
@@ -96,9 +97,15 @@ export async function POST(req: Request) {
   const suppliedText = cleanString(payload.text)
   const text = suppliedText || emailTemplateHtmlToText(suppliedHtml)
   const html = suppliedHtml || textToEmailHtml(text)
-  const cc = Array.isArray(payload.cc)
-    ? payload.cc.filter((value): value is string => typeof value === 'string' && isEmail(value.trim()))
-    : []
+  const addressList = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? value
+          .filter((entry): entry is string => typeof entry === 'string')
+          .map(entry => entry.trim())
+          .filter(isEmail)
+      : []
+  const cc = addressList(payload.cc)
+  const bcc = addressList(payload.bcc)
 
   if (!to || !isEmail(to)) {
     return NextResponse.json({ error: 'A valid recipient address is required' }, { status: 400 })
@@ -146,6 +153,7 @@ export async function POST(req: Request) {
     category: 'manual',
     to,
     cc: cc.length > 0 ? cc : undefined,
+    bcc: bcc.length > 0 ? bcc : undefined,
     subject,
     html,
     text,
