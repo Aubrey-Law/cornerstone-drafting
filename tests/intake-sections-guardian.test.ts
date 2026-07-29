@@ -49,6 +49,18 @@ describe('guardian intake validation', () => {
     },
   )
 
+  it.each(['discuss_with_attorney', 'not_provided_yet'])(
+    'allows server-side submission validation with persisted choice %s',
+    (choice) => {
+      const data = {
+        has_minor_children: true,
+        review_choices: { guardian: choice },
+      }
+
+      expect(getStepErrors('guardian', data)).toEqual([])
+    },
+  )
+
   it('still requires an intentional response when no guardian or deferral choice is provided', () => {
     const data = { has_minor_children: true }
 

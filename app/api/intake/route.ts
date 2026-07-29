@@ -239,7 +239,9 @@ export async function POST(req: Request) {
       planning_goals:           body.planning_goals ?? body.goals,
       planning_objectives:      body.planning_objectives,
       fiduciaries:              body.fiduciaries,
-      review_choices:           body.review_choices ?? null,
+      // Omitted on the status-only final submit request. Leave it undefined so
+      // validation and the update preserve the choices saved by autosave.
+      review_choices:           body.review_choices,
       spouse_as_fiduciary:      body.spouse_as_fiduciary,
       excluded_guardian:        excludedGuardian,
       excluded_guardian_2:      body.excluded_guardian_2,
@@ -493,7 +495,9 @@ export async function POST(req: Request) {
 
     // ── Fiduciaries ──────────────────────────────────────────────────────────
     fiduciaries:              body.fiduciaries,
-    review_choices:           body.review_choices ?? null,
+    // Omitted on the status-only final submit request. Leave it undefined so
+    // validation and the update preserve the choices saved by autosave.
+    review_choices:           body.review_choices,
     spouse_as_fiduciary:      body.spouse_as_fiduciary,
 
     // ── Guardian ─────────────────────────────────────────────────────────────

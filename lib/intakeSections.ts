@@ -396,7 +396,8 @@ function allFiduciariesNamed(data: IntakeRow, keys: string[]): boolean {
 }
 
 function hasReviewChoice(data: IntakeRow, key: string): boolean {
-  const choice = recordText(nestedRecord(data, '_review_choices'), key)
+  const localChoice = recordText(nestedRecord(data, '_review_choices'), key)
+  const choice = localChoice || recordText(nestedRecord(data, 'review_choices'), key)
   return choice === 'discuss_with_attorney' || choice === 'not_provided_yet'
 }
 
