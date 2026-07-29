@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MIN_CLIENT_PASSWORD_LENGTH, validateNewClientPassword } from '@/lib/auth/clientPassword'
+import { formatPhoneInput } from '@/lib/phone'
 import { supabase } from '@/lib/supabaseClient'
 import { TurnstileWidget } from './TurnstileWidget'
 
@@ -74,7 +75,7 @@ export function PublicIntakeStartForm({ siteKey }: { siteKey: string }) {
       </div>
       <div>
         <Label htmlFor="public-intake-phone">Phone number</Label>
-        <Input id="public-intake-phone" type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} />
+        <Input id="public-intake-phone" type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} placeholder="(555) 555-5555" />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>

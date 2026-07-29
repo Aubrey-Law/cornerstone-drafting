@@ -913,7 +913,7 @@ describe('lead detail page', () => {
     expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saving')
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/leads/l1', expect.objectContaining({
       method: 'PATCH',
-      body: JSON.stringify({ field: 'phone', value: '617-555-0111' }),
+      body: JSON.stringify({ field: 'phone', value: '(617) 555-0111' }),
     }))
 
     resolvePatch({ ok: true, json: async () => ({ lead: { ...lead, phone: '617-555-0111' }, spouse }) } as Response)
@@ -1020,7 +1020,7 @@ describe('lead detail page', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/leads/l1', expect.objectContaining({
       method: 'PATCH',
-      body: JSON.stringify({ field: 'phone', value: '781' }),
+      body: JSON.stringify({ field: 'phone', value: '(781' }),
     })))
   })
 
@@ -1060,7 +1060,7 @@ describe('lead detail page', () => {
     await user.click(emailTrigger)
     await user.click(dobChip)
 
-    expect((screen.getByRole('textbox', { name: 'Phone' }) as HTMLInputElement).value).toBe('999')
+    expect((screen.getByRole('textbox', { name: 'Phone' }) as HTMLInputElement).value).toBe('(999')
     expect(screen.queryByRole('textbox', { name: 'Email' })).toBeNull()
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0)
   })
@@ -1086,7 +1086,7 @@ describe('lead detail page', () => {
     await waitFor(() => {
       const patches = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')
       expect(patches).toHaveLength(1)
-      expect(patches[0]?.[1]?.body).toBe(JSON.stringify({ field: 'phone', value: '999' }))
+      expect(patches[0]?.[1]?.body).toBe(JSON.stringify({ field: 'phone', value: '(999' }))
     })
   })
 

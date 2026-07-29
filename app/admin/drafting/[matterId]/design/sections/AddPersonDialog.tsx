@@ -27,7 +27,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+import { formatPhoneDisplay, formatPhoneForStorage, formatPhoneInput } from '@/lib/phone'
 import type { MatterContact } from '@/types/database'
 import {
   BENEFICIARY_TYPE_OPTIONS,
@@ -309,7 +309,8 @@ export function AddPersonDialog({
               <Input
                 type="tel"
                 value={form.phone ?? ''}
-                onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
+                onChange={e => setForm(prev => ({ ...prev, phone: formatPhoneInput(e.target.value) }))}
+                placeholder="(555) 555-5555"
               />
             </div>
             <div className="space-y-1.5">

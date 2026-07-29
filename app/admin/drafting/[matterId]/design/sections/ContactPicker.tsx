@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useId, type Dispatch, type KeyboardEvent, 
 import { Loader2, Pencil, Search, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+import { formatPhoneDisplay, formatPhoneForStorage, formatPhoneInput } from '@/lib/phone'
 import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -376,7 +376,7 @@ function ContactFormFields({
         </div>
       </div>
       <div className="space-y-1"><Label className="text-xs">Relationship</Label><Input value={form.relationship ?? ''} onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))} placeholder="e.g. Brother, Friend" /></div>
-      <div className="space-y-1"><Label className="text-xs">Phone</Label><Input type="tel" value={form.phone ?? ''} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
+      <div className="space-y-1"><Label className="text-xs">Phone</Label><Input type="tel" value={form.phone ?? ''} onChange={e => setForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} placeholder="(555) 555-5555" /></div>
       <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
       <div className="space-y-1"><Label className="text-xs">Address <span className="text-muted-foreground">(if HCP agent)</span></Label><Input value={form.address ?? ''} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} /></div>
     </div>

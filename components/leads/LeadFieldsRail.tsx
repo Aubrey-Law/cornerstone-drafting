@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { formatPhoneInput } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import { LeadReadinessDial } from '@/components/leads/LeadReadinessDial'
 import type { LeadEditableField } from '@/lib/leads/details'
@@ -89,7 +90,10 @@ export function LeadFieldsRail({
 
   useEffect(() => {
     if (!activeField) return
-    const persisted = valueForLeadField(activeField, lead, spouse)
+    const rawPersisted = valueForLeadField(activeField, lead, spouse)
+    const persisted = activeField === 'phone'
+      ? formatPhoneInput(String(rawPersisted ?? ''))
+      : rawPersisted
     lastPersistedRef.current = persisted
     setDraft(persisted)
   }, [activeField, lead, spouse])
@@ -226,7 +230,7 @@ export function LeadFieldsRail({
           </div>
           <label className="space-y-1"><FieldLabel>Spouse email</FieldLabel><Input aria-label="Spouse email" disabled={disabled} type="email" value={spouseDraft.email} onChange={event => update('email', event.target.value)} /></label>
           <div className="grid grid-cols-2 gap-2">
-            <label className="space-y-1"><FieldLabel>Spouse phone</FieldLabel><Input aria-label="Spouse phone" disabled={disabled} value={spouseDraft.phone} onChange={event => update('phone', event.target.value)} /></label>
+            <label className="space-y-1"><FieldLabel>Spouse phone</FieldLabel><Input type="tel" aria-label="Spouse phone" disabled={disabled} value={spouseDraft.phone} onChange={event => update('phone', formatPhoneInput(event.target.value))} placeholder="(555) 555-5555" /></label>
             <label className="space-y-1"><FieldLabel>Spouse date of birth</FieldLabel><Input aria-label="Spouse date of birth" disabled={disabled} type="date" value={spouseDraft.dateOfBirth} onChange={event => update('dateOfBirth', event.target.value)} /></label>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -294,7 +298,9 @@ export function LeadFieldsRail({
           min={field.input === 'number' ? 0 : undefined}
           type={field.input}
           value={String(draft ?? '')}
-          onChange={event => setDraft(event.target.value)}
+          onChange={event => setDraft(
+            field.key === 'phone' ? formatPhoneInput(event.target.value) : event.target.value,
+          )}
         />
       </div>
     )

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { formatPhoneInput } from '@/lib/phone'
 
 type LocationType = 'phone' | 'teams' | 'in_person'
 
@@ -65,7 +66,7 @@ export default function BookingWidget({
   const [locationType, setLocationType] = useState<LocationType>(locationOptions[0])
   const [name, setName] = useState(defaultName)
   const [email, setEmail] = useState(defaultEmail)
-  const [phone, setPhone] = useState(defaultPhone)
+  const [phone, setPhone] = useState(() => formatPhoneInput(defaultPhone))
   const [includeSpouse, setIncludeSpouse] = useState(false)
   const [spouseName, setSpouseName] = useState('')
   const [spouseEmail, setSpouseEmail] = useState('')
@@ -218,7 +219,8 @@ export default function BookingWidget({
                 type="tel"
                 required={locationType === 'phone'}
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
+                onChange={e => setPhone(formatPhoneInput(e.target.value))}
+                placeholder="(555) 555-5555"
               />
             </div>
             <div className="sm:col-span-2">

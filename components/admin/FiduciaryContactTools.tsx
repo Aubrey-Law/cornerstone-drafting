@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { PRONOUN_OPTIONS } from '@/lib/sharedFields/options'
+import { formatPhoneInput } from '@/lib/phone'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -175,9 +176,9 @@ export function FiduciaryContactTools({ onSubmit }: FiduciaryContactToolsProps) 
             <Input
               type="tel"
               value={draft.phone}
-              onChange={event => update('phone', event.target.value)}
+              onChange={event => update('phone', formatPhoneInput(event.target.value))}
               className="h-8 text-[13px]"
-              placeholder="Phone"
+              placeholder="(555) 555-5555"
             />
           </div>
           <Input
