@@ -105,7 +105,8 @@ export const INTAKE_STEPS: IntakeStep[] = [
     subtitle: 'Care for minor children',
     timeEstimate: 2,
     condition: (r) => r.has_minor_children === true,
-    isComplete: (r) => allFiduciariesNamed(r, ['fid_guardian_client']),
+    isComplete: (r) =>
+      allFiduciariesNamed(r, ['fid_guardian_client']) || hasReviewChoice(r, 'guardian'),
   },
   {
     id: 'review',
@@ -277,6 +278,7 @@ export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIss
       ]
     }
     case 'guardian':
+      if (hasReviewChoice(data, 'guardian')) return []
       return requiredFiduciaryIssue(
         data,
         'fid_guardian_client',
@@ -389,6 +391,11 @@ function hasNamedEntry(entries: Record<string, unknown>[]): boolean {
 // submission gating — see isReadyToReview, which stays errors-only.
 function allFiduciariesNamed(data: IntakeRow, keys: string[]): boolean {
   return keys.every((key) => hasNamedEntry(getFiduciaryList(data, key)))
+}
+
+function hasReviewChoice(data: IntakeRow, key: string): boolean {
+  const choice = recordText(nestedRecord(data, '_review_choices'), key)
+  return choice === 'discuss_with_attorney' || choice === 'not_provided_yet'
 }
 
 function requiredFiduciaryIssue(
