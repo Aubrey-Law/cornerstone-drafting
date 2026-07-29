@@ -88,7 +88,8 @@ export const INTAKE_STEPS: IntakeStep[] = [
     subtitle: 'Trustees, agents & proxies',
     timeEstimate: 7,
     isComplete: (r) =>
-      allFiduciariesNamed(r, ['fid_personal_rep_client', 'fid_poa_client', 'fid_hcp_client', 'fid_trustee_client']),
+      allFiduciariesNamed(r, ['fid_personal_rep_client', 'fid_poa_client', 'fid_hcp_client', 'fid_trustee_client']) ||
+      hasReviewChoice(r, 'fiduciaries'),
   },
   {
     id: 'spouse_fiduciaries',
@@ -97,7 +98,8 @@ export const INTAKE_STEPS: IntakeStep[] = [
     timeEstimate: 5,
     condition: (r) => r.marital_status === 'married',
     isComplete: (r) =>
-      allFiduciariesNamed(r, ['fid_personal_rep_spouse', 'fid_poa_spouse', 'fid_hcp_spouse']),
+      allFiduciariesNamed(r, ['fid_personal_rep_spouse', 'fid_poa_spouse', 'fid_hcp_spouse']) ||
+      hasReviewChoice(r, 'spouse_fiduciaries'),
   },
   {
     id: 'guardian',
