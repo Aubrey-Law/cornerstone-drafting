@@ -58,6 +58,18 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function isEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+
+/** Cc accepts a comma- or semicolon-separated list. */
+function parseAddressList(value: string): string[] {
+  return value
+    .split(/[,;]/)
+    .map(entry => entry.trim())
+    .filter(Boolean)
+}
+
 export function RailEmailPane() {
   const pathname = usePathname()
   const record = railRecordForPath(pathname)
@@ -67,6 +79,8 @@ export function RailEmailPane() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [templateId, setTemplateId] = useState(ONE_OFF)
   const [to, setTo] = useState('')
+  const [cc, setCc] = useState('')
+  const [showCc, setShowCc] = useState(false)
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
@@ -161,8 +175,15 @@ export function RailEmailPane() {
   const overLimit = totalBytes > MAX_TOTAL_BYTES
   const attachmentCount = files.length + selectedDocuments.length
 
+  const ccList = useMemo(() => parseAddressList(cc), [cc])
+  const invalidCc = ccList.filter(address => !isEmail(address))
+
   const ready =
-    Boolean(to.trim()) && Boolean(subject.trim()) && !emailHtmlIsEmpty(bodyHtml) && !overLimit
+    Boolean(to.trim()) &&
+    Boolean(subject.trim()) &&
+    !emailHtmlIsEmpty(bodyHtml) &&
+    !overLimit &&
+    invalidCc.length === 0
 
   async function send() {
     if (!ready || sending) return
@@ -175,6 +196,7 @@ export function RailEmailPane() {
         'payload',
         JSON.stringify({
           to: to.trim(),
+          cc: ccList,
           subject: subject.trim(),
           html: bodyHtml,
           text: emailHtmlToText(bodyHtml),
@@ -201,6 +223,8 @@ export function RailEmailPane() {
       setSubject('')
       setBodyHtml('')
       setTemplateId(ONE_OFF)
+      setCc('')
+      setShowCc(false)
       setFiles([])
       setSelectedDocumentIds([])
     } catch (caught) {
@@ -214,9 +238,20 @@ export function RailEmailPane() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <div className="space-y-1">
-          <label htmlFor="rail-email-to" className="text-[11px] font-medium text-muted-foreground">
-            To
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="rail-email-to" className="text-[11px] font-medium text-muted-foreground">
+              To
+            </label>
+            {!showCc && (
+              <button
+                type="button"
+                onClick={() => setShowCc(true)}
+                className="text-[11px] font-medium text-muted-foreground hover:text-accent"
+              >
+                Cc
+              </button>
+            )}
+          </div>
           <input
             id="rail-email-to"
             type="email"
@@ -228,18 +263,58 @@ export function RailEmailPane() {
           {(context?.alternateEmails.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-1 pt-0.5">
               {context!.alternateEmails.map(option => (
-                <button
-                  key={option.email}
-                  type="button"
-                  onClick={() => setTo(option.email)}
-                  className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:border-accent hover:text-accent"
-                >
-                  {option.label}
-                </button>
+                <span key={option.email} className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setTo(option.email)}
+                    className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:border-accent hover:text-accent"
+                  >
+                    {option.label}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Cc ${option.label}`}
+                    onClick={() => {
+                      setShowCc(true)
+                      setCc(prev =>
+                        parseAddressList(prev).includes(option.email)
+                          ? prev
+                          : [...parseAddressList(prev), option.email].join(', '),
+                      )
+                    }}
+                    className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-accent hover:text-accent"
+                  >
+                    +cc
+                  </button>
+                </span>
               ))}
             </div>
           )}
         </div>
+
+        {showCc && (
+          <div className="space-y-1">
+            <label htmlFor="rail-email-cc" className="text-[11px] font-medium text-muted-foreground">
+              Cc
+            </label>
+            <input
+              id="rail-email-cc"
+              value={cc}
+              onChange={event => setCc(event.target.value)}
+              placeholder="Separate addresses with commas"
+              aria-invalid={invalidCc.length > 0}
+              className={cn(
+                'h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-ring',
+                invalidCc.length > 0 ? 'border-destructive' : 'border-input',
+              )}
+            />
+            {invalidCc.length > 0 && (
+              <p role="alert" className="text-[11px] text-destructive">
+                Not a valid address: {invalidCc.join(', ')}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-1">
           <label htmlFor="rail-email-template" className="text-[11px] font-medium text-muted-foreground">

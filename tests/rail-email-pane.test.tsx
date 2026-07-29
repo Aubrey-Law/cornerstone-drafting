@@ -248,4 +248,76 @@ describe('rail email pane', () => {
     expect(within(alert).getByText(/the limit is 10\.0 MB/)).toBeTruthy()
     expect((screen.getByRole('button', { name: /^send$/i }) as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('hides Cc until asked for, then sends the parsed list', async () => {
+    const fetchMock = mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+    expect(screen.queryByLabelText('Cc')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Cc' }))
+    await user.type(screen.getByLabelText('Cc'), 'paralegal@example.com, cpa@example.com')
+
+    await user.type(screen.getByLabelText('Subject'), 'Copying the team')
+    await typeBody(user, 'Looping in the team.')
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+
+    await waitFor(() => {
+      const send = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/admin/email/send'))
+      const payload = JSON.parse(String((send![1]!.body as FormData).get('payload')))
+      expect(payload.cc).toEqual(['paralegal@example.com', 'cpa@example.com'])
+    })
+  })
+
+  it('blocks sending on a malformed Cc address instead of dropping it', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.type(screen.getByLabelText('Subject'), 'Bad cc')
+    await typeBody(user, 'Body.')
+    await user.click(screen.getByRole('button', { name: 'Cc' }))
+    await user.type(screen.getByLabelText('Cc'), 'not-an-address')
+
+    expect(await screen.findByText('Not a valid address: not-an-address')).toBeTruthy()
+    expect((screen.getByRole('button', { name: /^send$/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('adds the spouse to Cc from the +cc chip without touching To', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Cc Harold Whitfield' }))
+
+    expect((screen.getByLabelText('Cc') as HTMLInputElement).value).toBe('harold@example.com')
+    expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com')
+  })
+
+  it('clears Cc after a successful send', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Cc' }))
+    await user.type(screen.getByLabelText('Cc'), 'paralegal@example.com')
+    await user.type(screen.getByLabelText('Subject'), 'Done')
+    await typeBody(user, 'All set.')
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+
+    await screen.findByText('Sent to margaret@example.com.')
+    expect(screen.queryByLabelText('Cc')).toBeNull()
+  })
 })
