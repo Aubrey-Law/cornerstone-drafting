@@ -18,6 +18,9 @@ export interface EmailComposeContext {
   recordId: string
   recipientName: string | null
   recipientEmail: string | null
+  /** Spouse, when the record has one — drives the {{spouse_*}} template variables. */
+  spouseName: string | null
+  spouseEmail: string | null
   /** Second address worth offering — the spouse on a matter. */
   alternateEmails: { label: string; email: string }[]
   /** Matter documents available to attach. Empty for leads. */
@@ -62,14 +65,17 @@ export async function GET(req: Request) {
       if (pipeline.error) throw new Error(pipeline.error.message)
       if (!pipeline.data) return NextResponse.json({ context: null })
 
-      const spouseEmail = (pipeline.data.spouse_email as string | null)?.trim()
+      const spouseEmail = (pipeline.data.spouse_email as string | null)?.trim() || null
+      const spouseName = (pipeline.data.spouse_name as string | null)?.trim() || null
       const context: EmailComposeContext = {
         recordType: 'matter',
         recordId: matterId,
         recipientName: (pipeline.data.client_name as string | null) ?? null,
         recipientEmail: (pipeline.data.client_email as string | null)?.trim() || null,
+        spouseName,
+        spouseEmail,
         alternateEmails: spouseEmail
-          ? [{ label: (pipeline.data.spouse_name as string | null)?.trim() || 'Spouse', email: spouseEmail }]
+          ? [{ label: spouseName || 'Spouse', email: spouseEmail }]
           : [],
         documents: (documents.data ?? []).map(row => ({
           id: row.id as string,
@@ -90,6 +96,23 @@ export async function GET(req: Request) {
     if (error) throw new Error(error.message)
     if (!data) return NextResponse.json({ context: null })
 
+    // A lead's spouse lives in `contacts`, not on the intake row.
+    const { data: spouse } = await admin
+      .from('contacts')
+      .select('first_name, last_name, preferred_name, email')
+      .eq('client_intake_id', leadId!)
+      .eq('relationship_type', 'spouse')
+      .maybeSingle()
+    const spouseName = spouse
+      ? [
+          (spouse.preferred_name as string | null)?.trim() || (spouse.first_name as string | null)?.trim(),
+          (spouse.last_name as string | null)?.trim(),
+        ]
+          .filter(Boolean)
+          .join(' ') || null
+      : null
+    const spouseEmail = (spouse?.email as string | null)?.trim() || null
+
     const name =
       (data.full_name as string | null)?.trim() ||
       `${(data.first_name as string | null) ?? ''} ${(data.last_name as string | null) ?? ''}`.trim() ||
@@ -100,7 +123,9 @@ export async function GET(req: Request) {
       recordId: leadId!,
       recipientName: name,
       recipientEmail: (data.email as string | null)?.trim() || null,
-      alternateEmails: [],
+      spouseName,
+      spouseEmail,
+      alternateEmails: spouseEmail ? [{ label: spouseName || 'Spouse', email: spouseEmail }] : [],
       // Leads have no matter document library yet — computer uploads only.
       documents: [],
     }

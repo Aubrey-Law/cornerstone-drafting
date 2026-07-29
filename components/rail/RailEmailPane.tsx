@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, FileText, Loader2, Paperclip, Send, Trash2, Upload, X } from 'lucide-react'
+import { CalendarPlus, Eye, FileText, Loader2, Paperclip, Send, Trash2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
@@ -14,6 +14,7 @@ import {
   renderEmailTemplateBodyHtml,
   renderEmailTemplateText,
 } from '@/lib/email/templateShared'
+import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
 import { railRecordForPath } from './RailActivityPane'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -49,8 +50,23 @@ interface ComposeContext {
   recordId: string
   recipientName: string | null
   recipientEmail: string | null
+  spouseName: string | null
+  spouseEmail: string | null
   alternateEmails: { label: string; email: string }[]
   documents: ComposeDocument[]
+}
+
+interface DirectoryEntry {
+  email: string
+  name: string
+  detail: string | null
+}
+
+interface SchedulingType {
+  key: string
+  label: string
+  configured: boolean
+  links: { email: string; sms: string; portal: string } | null
 }
 
 /** Mirrors MAX_TOTAL_ATTACHMENT_BYTES on the server. */
@@ -61,6 +77,8 @@ const VARIABLE_OPTIONS = [
   { key: 'client_name', label: 'Client name' },
   { key: 'client_first_name', label: 'Client first name' },
   { key: 'lead_name', label: 'Lead name' },
+  { key: 'spouse_name', label: 'Spouse name' },
+  { key: 'spouse_first_name', label: 'Spouse first name' },
   { key: 'intake_link', label: 'Intake link' },
 ]
 const UNRESOLVED_RE = /\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/g
@@ -69,6 +87,10 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function escapeHtmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function isEmail(value: string): boolean {
@@ -83,6 +105,30 @@ function parseAddressList(value: string): string[] {
     .filter(Boolean)
 }
 
+/** Matches directory entries against the address fragment being typed. */
+function matchDirectory(
+  directory: DirectoryEntry[],
+  fragment: string,
+  exclude: string[],
+): DirectoryEntry[] {
+  const query = fragment.trim().toLowerCase()
+  if (query.length < 2) return []
+  const taken = new Set(exclude.map(address => address.toLowerCase()))
+  return directory
+    .filter(
+      entry =>
+        !taken.has(entry.email) &&
+        (entry.name.toLowerCase().includes(query) ||
+          entry.email.includes(query) ||
+          (entry.detail?.toLowerCase().includes(query) ?? false)),
+    )
+    .slice(0, 6)
+}
+
+/**
+ * One recipient field. `mode: 'single'` replaces the value on pick (To);
+ * `mode: 'list'` appends to a comma-separated list (Cc/Bcc).
+ */
 function AddressField({
   id,
   label,
@@ -90,6 +136,9 @@ function AddressField({
   onChange,
   invalid,
   hint,
+  hideLabel = false,
+  directory,
+  mode,
 }: {
   id: string
   label: string
@@ -97,23 +146,98 @@ function AddressField({
   onChange: (next: string) => void
   invalid: string[]
   hint?: string
+  hideLabel?: boolean
+  directory: DirectoryEntry[]
+  mode: 'single' | 'list'
 }) {
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  // In list mode only the fragment after the last separator is being typed.
+  const parts = value.split(/[,;]/)
+  const fragment = mode === 'single' ? value : (parts[parts.length - 1] ?? '')
+  const committed = mode === 'single' ? [] : parts.slice(0, -1).map(part => part.trim()).filter(Boolean)
+  const matches = open ? matchDirectory(directory, fragment, committed) : []
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [value])
+
+  function choose(entry: DirectoryEntry) {
+    onChange(mode === 'single' ? entry.email : [...committed, entry.email].join(', ') + ', ')
+    setOpen(false)
+  }
+
   return (
-    <div className="space-y-1">
-      <label htmlFor={id} className="text-[11px] font-medium text-muted-foreground">
+    <div className="relative space-y-1">
+      <label
+        htmlFor={id}
+        className={cn('text-[11px] font-medium text-muted-foreground', hideLabel && 'sr-only')}
+      >
         {label}
       </label>
       <input
         id={id}
         value={value}
-        onChange={event => onChange(event.target.value)}
-        placeholder="Separate addresses with commas"
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={matches.length > 0}
+        aria-controls={`${id}-results`}
+        onChange={event => {
+          onChange(event.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onKeyDown={event => {
+          if (matches.length === 0) return
+          const result = contactPickerKeyAction(event.key, activeIndex, matches.length, true)
+          if (result.preventDefault) event.preventDefault()
+          setActiveIndex(result.activeIndex)
+          if (result.selectIndex !== null && matches[result.selectIndex]) {
+            choose(matches[result.selectIndex])
+          }
+          if (!result.open) setOpen(false)
+        }}
+        placeholder={mode === 'single' ? 'name@example.com' : 'Separate addresses with commas'}
         aria-invalid={invalid.length > 0}
         className={cn(
           'h-8 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-ring',
           invalid.length > 0 ? 'border-destructive' : 'border-input',
         )}
       />
+
+      {matches.length > 0 && (
+        <div
+          id={`${id}-results`}
+          role="listbox"
+          aria-label={`${label} contact suggestions`}
+          className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-md border border-border bg-card shadow-lg"
+        >
+          {matches.map((entry, index) => (
+            <button
+              key={entry.email}
+              type="button"
+              role="option"
+              aria-selected={index === activeIndex}
+              onMouseDown={event => event.preventDefault()}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => choose(entry)}
+              className={cn(
+                'block w-full px-2.5 py-1.5 text-left',
+                index === activeIndex ? 'bg-muted' : 'hover:bg-muted/60',
+              )}
+            >
+              <span className="block truncate text-xs font-medium">{entry.name}</span>
+              <span className="block truncate text-[10px] text-muted-foreground">
+                {entry.email}
+                {entry.detail ? ` · ${entry.detail}` : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {invalid.length > 0 ? (
         <p role="alert" className="text-[11px] text-destructive">
           Not a valid address: {invalid.join(', ')}
@@ -159,6 +283,9 @@ export function ManualEmailComposer({
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [showDocumentPicker, setShowDocumentPicker] = useState(false)
+  const [directory, setDirectory] = useState<DirectoryEntry[]>([])
+  const [schedulingTypes, setSchedulingTypes] = useState<SchedulingType[]>([])
+  const [showSchedulingPicker, setShowSchedulingPicker] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sentNotice, setSentNotice] = useState<string | null>(null)
@@ -171,16 +298,21 @@ export function ManualEmailComposer({
   const [previewing, setPreviewing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftExistedRef = useRef(false)
+  const defaultRecipientRef = useRef('')
 
   const recordType = record?.type ?? null
   const recordId = record?.id ?? null
   const templateCategoryKey = templateCategories.join(',')
   const firstName = context?.recipientName?.trim().split(/\s+/)[0] ?? ''
+  const spouseName = context?.spouseName ?? ''
+  const spouseFirstName = spouseName.trim().split(/\s+/)[0] ?? ''
   const resolvedVariables: Record<string, string | null | undefined> = {
     client_name: context?.recipientName ?? '',
     client_first_name: firstName,
     first_name: firstName,
     lead_name: context?.recipientName ?? '',
+    spouse_name: spouseName,
+    spouse_first_name: spouseFirstName,
     ...variableValues,
   }
   const resolvedVariableOptions = VARIABLE_OPTIONS.map(option => ({
@@ -191,6 +323,7 @@ export function ManualEmailComposer({
   useEffect(() => {
     if (initialContext) {
       setContext(initialContext)
+      defaultRecipientRef.current = initialContext.recipientEmail ?? ''
       setTo(value => value || initialContext.recipientEmail || '')
       return
     }
@@ -208,7 +341,10 @@ export function ManualEmailComposer({
         const body = (await res.json()) as { context?: ComposeContext | null }
         if (cancelled || !body.context) return
         setContext(body.context)
-        setTo(prev => prev || body.context!.recipientEmail || '')
+        defaultRecipientRef.current = body.context.recipientEmail ?? ''
+        // Always re-derive: the pane stays mounted across records, so a stale
+        // `to` from the last matter would otherwise stick to the next one.
+        setTo(body.context.recipientEmail ?? '')
       } catch {
         /* the pane still works as a blank one-off */
       }
@@ -286,7 +422,7 @@ export function ManualEmailComposer({
         setDraftStatus('saved')
       } else {
         draftExistedRef.current = false
-        setTo(value => value || initialContext?.recipientEmail || '')
+        setTo(value => value || defaultRecipientRef.current)
         setIncludeSignature(signature?.includeByDefault !== false)
         setDraftStatus('idle')
       }
@@ -300,11 +436,64 @@ export function ManualEmailComposer({
     return () => { cancelled = true }
   }, [draftQuery, initialContext?.recipientEmail, token])
 
-  // Switching records swaps the recipient and clears anything matter-scoped.
+  // Switching records swaps the recipients and clears anything record-scoped.
+  // Subject and body are the operator's own words, so they survive the move.
   useEffect(() => {
     setSelectedDocumentIds([])
     setShowDocumentPicker(false)
+    setShowSchedulingPicker(false)
+    setCc('')
+    setBcc('')
+    setShowCc(false)
+    setShowBcc(false)
+    setSentNotice(null)
+    if (!recordId) setTo('')
   }, [recordId])
+
+  // Firm-wide address book for the To/Cc/Bcc typeahead.
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/email/directory', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const body = (await res.json()) as { entries?: DirectoryEntry[] }
+        if (!cancelled && Array.isArray(body.entries)) setDirectory(body.entries)
+      } catch {
+        /* the fields still accept a typed address without the directory */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  // Scheduling links for the record in context, so a booking URL can be
+  // dropped into the body without leaving the pane.
+  useEffect(() => {
+    setSchedulingTypes([])
+    if (!recordType || !recordId || !token) return
+    let cancelled = false
+    const query = recordType === 'matter' ? `matterId=${recordId}` : `leadId=${recordId}`
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/scheduling-links/send?${query}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const body = (await res.json()) as { types?: SchedulingType[] }
+        if (cancelled || !Array.isArray(body.types)) return
+        setSchedulingTypes(body.types.filter(type => type.configured && type.links))
+      } catch {
+        /* scheduling links are optional */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [recordType, recordId, token])
 
   function chooseTemplate(id: string) {
     setTemplateId(id)
@@ -319,6 +508,21 @@ export function ManualEmailComposer({
     setBodyHtml(renderEmailTemplateBodyHtml(template.body, resolvedVariables))
   }
 
+  function insertSchedulingLink(type: SchedulingType) {
+    const url = type.links?.email
+    if (!url) return
+    // The URL is the anchor text, not just the href: the plain-text alternative
+    // is produced by stripping tags, so a worded link would arrive with no
+    // address at all for anyone reading text/plain. `&` is entity-escaped so the
+    // html-to-text pass restores it intact.
+    const safeUrl = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    const anchor = `<p>Schedule your ${escapeHtmlText(type.label.toLowerCase())}: <a href="${safeUrl}">${safeUrl}</a></p>`
+    setBodyHtml(prev => (prev?.trim() ? `${prev}${anchor}` : anchor))
+    setShowSchedulingPicker(false)
+  }
+
+
+
   const selectedDocuments = useMemo(
     () => (context?.documents ?? []).filter(doc => selectedDocumentIds.includes(doc.id)),
     [context, selectedDocumentIds],
@@ -332,6 +536,7 @@ export function ManualEmailComposer({
 
   const ccList = useMemo(() => parseAddressList(cc), [cc])
   const bccList = useMemo(() => parseAddressList(bcc), [bcc])
+  const invalidTo = to.trim() && !isEmail(to.trim()) ? [to.trim()] : []
   const invalidCc = ccList.filter(address => !isEmail(address))
   const invalidBcc = bccList.filter(address => !isEmail(address))
   const unresolved = [...new Set(`${subject}\n${bodyHtml}`.match(UNRESOLVED_RE) ?? [])]
@@ -509,17 +714,16 @@ export function ManualEmailComposer({
               )}
             </span>
           </div>
-          <input
+          <AddressField
             id="rail-email-to"
-            type="email"
+            label="To"
+            hideLabel
             value={to}
-            onChange={event => setTo(event.target.value)}
-            placeholder="name@example.com"
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring"
+            onChange={setTo}
+            invalid={invalidTo}
+            directory={directory}
+            mode="single"
           />
-          {to.trim() && !isEmail(to.trim()) && (
-            <p role="alert" className="text-[11px] text-destructive">Enter a valid recipient address.</p>
-          )}
           {(context?.alternateEmails.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-1 pt-0.5">
               {context!.alternateEmails.map(option => (
@@ -559,6 +763,8 @@ export function ManualEmailComposer({
             value={cc}
             onChange={setCc}
             invalid={invalidCc}
+            directory={directory}
+            mode="list"
           />
         )}
 
@@ -569,6 +775,8 @@ export function ManualEmailComposer({
             value={bcc}
             onChange={setBcc}
             invalid={invalidBcc}
+            directory={directory}
+            mode="list"
             hint="Blind recipients — the other recipients will not see these."
           />
         )}
@@ -620,7 +828,36 @@ export function ManualEmailComposer({
         </div>
 
         <div className="space-y-1">
-          <span className="text-[11px] font-medium text-muted-foreground">Message</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-medium text-muted-foreground">Message</span>
+            {schedulingTypes.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowSchedulingPicker(prev => !prev)}
+                  aria-expanded={showSchedulingPicker}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-accent"
+                >
+                  <CalendarPlus className="h-3.5 w-3.5" />
+                  Scheduling link
+                </button>
+                {showSchedulingPicker && (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-md border border-border bg-card shadow-lg">
+                    {schedulingTypes.map(type => (
+                      <button
+                        key={type.key}
+                        type="button"
+                        onClick={() => insertSchedulingLink(type)}
+                        className="block w-full px-2.5 py-1.5 text-left text-[11px] hover:bg-muted"
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <RichTextEmailEditor
             id="rail-email-body"
             ariaLabel="Message"

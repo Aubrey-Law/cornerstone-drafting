@@ -19,6 +19,8 @@ const MATTER_CONTEXT = {
   recordId: 'm1',
   recipientName: 'Margaret Whitfield',
   recipientEmail: 'margaret@example.com',
+  spouseName: 'Harold Whitfield',
+  spouseEmail: 'harold@example.com',
   alternateEmails: [{ label: 'Harold Whitfield', email: 'harold@example.com' }],
   documents: [
     { id: 'd1', name: 'Trust draft.docx', size: 24_000, folder: 'drafts' },
@@ -31,9 +33,31 @@ const LEAD_CONTEXT = {
   recordId: 'l1',
   recipientName: 'Harold Pike',
   recipientEmail: 'harold.pike@example.com',
+  spouseName: null,
+  spouseEmail: null,
   alternateEmails: [],
   documents: [],
 }
+
+const DIRECTORY = [
+  { email: 'margaret@example.com', name: 'Margaret Whitfield', detail: '2026-EP-0142' },
+  { email: 'cpa@northshore.example.com', name: 'Dana Okafor', detail: 'Accountant' },
+  { email: 'harold.pike@example.com', name: 'Harold Pike', detail: 'Lead' },
+]
+
+const SCHEDULING_TYPES = [
+  {
+    key: 'consultation',
+    label: 'Initial consultation',
+    configured: true,
+    links: {
+      email: 'https://calendly.com/firm/consult?utm=email&name=Margaret',
+      sms: 'https://calendly.com/firm/consult?utm=sms',
+      portal: 'https://calendly.com/firm/consult?utm=portal',
+    },
+  },
+  { key: 'signing', label: 'Signing', configured: false, links: null },
+]
 
 const TEMPLATES = [
   {
@@ -41,6 +65,12 @@ const TEMPLATES = [
     name: 'Intake follow-up',
     subject: 'Following up, {{client_first_name}}',
     body: 'Hi {{client_first_name}}, checking in on your intake.',
+  },
+  {
+    id: 't2',
+    name: 'Both spouses',
+    subject: '{{client_first_name}} and {{spouse_first_name}}',
+    body: 'Hi {{client_first_name}} and {{spouse_first_name}} — {{spouse_name}} should sign too.',
   },
 ]
 
@@ -72,6 +102,12 @@ function mockFetch(options: {
     }
     if (url.includes('/api/admin/email/preview')) {
       return { ok: true, json: async () => ({ html: '<p>Rendered preview</p>', unresolved: [] }) } as Response
+    }
+    if (url.includes('/api/admin/email/directory')) {
+      return { ok: true, json: async () => ({ entries: DIRECTORY }) } as Response
+    }
+    if (url.includes('/api/admin/scheduling-links/send')) {
+      return { ok: true, json: async () => ({ types: SCHEDULING_TYPES }) } as Response
     }
     if (url.includes('/api/admin/email/send')) {
       if (options.sendError) {
@@ -463,5 +499,160 @@ describe('rail email pane', () => {
       const payload = JSON.parse(String((send![1]!.body as FormData).get('payload')))
       expect(payload.includeSignature).toBe(true)
     })
+  })
+
+  it('re-derives the recipient when the rail moves to another record', async () => {
+    // Regression: the pane stays mounted, so a sent-to address used to stick
+    // to the next matter instead of the new client's.
+    const user = userEvent.setup()
+    mockFetch()
+    const { rerender } = render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.type(screen.getByLabelText('Subject'), 'Anything')
+    await typeBody(user, 'Body.')
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+    await screen.findByText('Sent to margaret@example.com.')
+
+    // Same mounted pane, now pointed at a lead.
+    pathname.current = '/admin/leads/l1'
+    mockFetch({ context: LEAD_CONTEXT })
+    rerender(<RailEmailPane />)
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('harold.pike@example.com'),
+    )
+  })
+
+  it('clears Cc and Bcc when the record changes', async () => {
+    const user = userEvent.setup()
+    mockFetch()
+    const { rerender } = render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+    await user.click(screen.getByRole('button', { name: 'Cc' }))
+    await user.type(screen.getByLabelText('Cc'), 'cpa@northshore.example.com')
+
+    pathname.current = '/admin/leads/l1'
+    mockFetch({ context: LEAD_CONTEXT })
+    rerender(<RailEmailPane />)
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('harold.pike@example.com'),
+    )
+    expect(screen.queryByLabelText('Cc')).toBeNull()
+  })
+
+  it('suggests directory contacts in To and replaces the address on pick', async () => {
+    const user = userEvent.setup()
+    mockFetch()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    const toField = screen.getByLabelText('To')
+    await user.clear(toField)
+    await user.type(toField, 'okaf')
+
+    const option = await screen.findByRole('option', { name: /Dana Okafor/ })
+    expect(option.textContent).toContain('Accountant')
+    await user.click(option)
+
+    expect((toField as HTMLInputElement).value).toBe('cpa@northshore.example.com')
+  })
+
+  it('appends directory picks to Cc rather than replacing the list', async () => {
+    const user = userEvent.setup()
+    mockFetch()
+    render(<RailEmailPane />)
+    await screen.findByRole('button', { name: 'Cc' })
+
+    await user.click(screen.getByRole('button', { name: 'Cc' }))
+    const ccField = screen.getByLabelText('Cc')
+    await user.type(ccField, 'margaret@example.com, okaf')
+    await user.click(await screen.findByRole('option', { name: /Dana Okafor/ }))
+
+    expect((ccField as HTMLInputElement).value).toBe(
+      'margaret@example.com, cpa@northshore.example.com, ',
+    )
+  })
+
+  it('does not suggest an address already committed to the list', async () => {
+    const user = userEvent.setup()
+    mockFetch()
+    render(<RailEmailPane />)
+    await screen.findByRole('button', { name: 'Cc' })
+
+    await user.click(screen.getByRole('button', { name: 'Cc' }))
+    await user.type(screen.getByLabelText('Cc'), 'cpa@northshore.example.com, okaf')
+
+    expect(screen.queryByRole('option', { name: /Dana Okafor/ })).toBeNull()
+  })
+
+  it('fills spouse variables from the record', async () => {
+    const user = userEvent.setup()
+    mockFetch()
+    render(<RailEmailPane />)
+    await screen.findByRole('option', { name: 'Both spouses' })
+
+    await user.selectOptions(screen.getByLabelText('Template'), 't2')
+
+    expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('Margaret and Harold')
+    expect(screen.getByLabelText('Message').textContent).toContain(
+      'Hi Margaret and Harold — Harold Whitfield should sign too.',
+    )
+  })
+
+  it('inserts a scheduling link that survives the plain-text conversion', async () => {
+    const fetchMock = mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.click(await screen.findByRole('button', { name: /scheduling link/i }))
+    // Only configured meeting types are offered.
+    expect(screen.queryByRole('button', { name: 'Signing' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Initial consultation' }))
+
+    await user.type(screen.getByLabelText('Subject'), 'Book a time')
+    await user.click(screen.getByRole('button', { name: /^send$/i }))
+
+    await waitFor(() => {
+      const send = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/admin/email/send'))
+      const payload = JSON.parse(String((send![1]!.body as FormData).get('payload')))
+      expect(payload.html).toContain('href="https://calendly.com/firm/consult?utm=email&amp;name=Margaret"')
+      // The URL must be readable in the text alternative, not just the href.
+      expect(payload.text).toContain('https://calendly.com/firm/consult?utm=email&name=Margaret')
+    })
+  })
+
+  it('offers no scheduling link when the record has none configured', async () => {
+    mockFetch({ context: LEAD_CONTEXT })
+    pathname.current = '/admin/leads/l1'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/api/admin/email/compose-context')) {
+          return { ok: true, json: async () => ({ context: LEAD_CONTEXT }) } as Response
+        }
+        if (url.includes('/api/admin/scheduling-links/send')) {
+          return { ok: true, json: async () => ({ types: [SCHEDULING_TYPES[1]] }) } as Response
+        }
+        return { ok: true, json: async () => ({}) } as Response
+      }),
+    )
+    render(<RailEmailPane />)
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('harold.pike@example.com'),
+    )
+    expect(screen.queryByRole('button', { name: /scheduling link/i })).toBeNull()
   })
 })

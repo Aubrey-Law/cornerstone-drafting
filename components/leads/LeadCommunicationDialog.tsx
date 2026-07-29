@@ -76,6 +76,8 @@ export function LeadCommunicationDialog(props: Props) {
               recordId: props.leadId,
               recipientName: props.clientName,
               recipientEmail: props.email,
+              spouseName: null,
+              spouseEmail: null,
               alternateEmails: [],
               documents: [],
             }}
