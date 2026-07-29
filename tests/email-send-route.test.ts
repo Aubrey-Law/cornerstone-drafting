@@ -127,4 +127,18 @@ describe('POST /api/admin/email/send', () => {
     expect(await response.json()).toEqual({ error: 'Mailbox full' })
     expect(insert).not.toHaveBeenCalled()
   })
+
+  it('forwards a valid cc list and drops anything malformed', async () => {
+    const { POST } = await import('@/app/api/admin/email/send/route')
+    await POST(formRequest({ ...BASE, cc: ['cpa@example.com', 'nope', 'para@example.com'] }))
+
+    expect(sendEmail.mock.calls[0][0].cc).toEqual(['cpa@example.com', 'para@example.com'])
+  })
+
+  it('omits cc entirely when none survives validation', async () => {
+    const { POST } = await import('@/app/api/admin/email/send/route')
+    await POST(formRequest({ ...BASE, cc: ['nope'] }))
+
+    expect(sendEmail.mock.calls[0][0].cc).toBeUndefined()
+  })
 })
