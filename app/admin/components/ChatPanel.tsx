@@ -7,6 +7,7 @@ import {
   ArrowUp,
   BookOpen,
   Calculator,
+  CalendarDays,
   CheckCircle2,
   ClipboardCopy,
   ClipboardList,
@@ -18,6 +19,7 @@ import {
   NotebookPen,
   ScrollText,
   Sparkles,
+  Clock3,
   Square,
   Trash2,
   Users,
@@ -56,6 +58,10 @@ interface ChatPanelProps {
 
 const suggestedPrompts: Record<ChatContextType['type'], string[]> = {
   matter: [
+    'Plan my day',
+    'Plan my week',
+    "What's at risk this week?",
+    'Find me 90 minutes',
     'Create a matter note for the file',
     "Summarize this client's situation",
     'Analyze MA estate tax exposure',
@@ -66,6 +72,10 @@ const suggestedPrompts: Record<ChatContextType['type'], string[]> = {
     'Create incapacity design sheet',
   ],
   general: [
+    'Plan my day',
+    'Plan my week',
+    "What's at risk this week?",
+    'Find me 90 minutes',
     "What's the MA estate tax threshold?",
     'Explain per stirpes distribution',
     'Draft a client follow-up for a stalled matter',
@@ -87,6 +97,10 @@ const promptIcons: Record<string, LucideIcon> = {
   "What's the MA estate tax threshold?": Calculator,
   'Explain per stirpes distribution': BookOpen,
   'Draft a client follow-up for a stalled matter': MessageSquareText,
+  'Plan my day': CalendarDays,
+  'Plan my week': CalendarDays,
+  "What's at risk this week?": Clock3,
+  'Find me 90 minutes': Clock3,
 }
 
 type DesignSheetChatProposal = {
@@ -371,6 +385,7 @@ export function ChatPanel({
                 task_id?: string
                 title?: string
                 target?: 'matter' | 'lead'
+                proposal?: unknown
               }
             }
             if (parsed.error && !parsed.tool) throw new Error(parsed.error)
@@ -394,6 +409,9 @@ export function ChatPanel({
                 taskTitle: parsed.result?.title,
                 preview,
                 proposed,
+                proposal: Array.isArray(parsed.result?.proposal)
+                  ? parsed.result.proposal as ToolEvent['proposal']
+                  : undefined,
                 error: parsed.status === 'error' ? parsed.error : undefined,
               }
               setMessages(prev => prev.map(message => {

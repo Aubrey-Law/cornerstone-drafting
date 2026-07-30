@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, ClipboardList, Copy, FilePenLine } from 'lucide-react'
+import { Check, ClipboardList, Copy, Eye, FilePenLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown'
 import type {
@@ -24,7 +24,79 @@ export interface ToolEvent {
   taskTitle?: string
   preview?: DesignSheetImportPreviewRow[]
   proposed?: DesignSheetImportProposal
+  proposal?: Array<{
+    id: string
+    title: string
+    rationale: string
+    kind: 'create_hold' | 'propose_reschedule'
+    payload: Record<string, unknown>
+  }>
   error?: string
+}
+
+function CalendarProposalCard({ event }: { event: ToolEvent }) {
+  const [accepted, setAccepted] = useState<Set<string>>(new Set())
+  const [acting, setActing] = useState(false)
+  const rows = event.proposal ?? []
+  if (event.status === 'running') return <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">Preparing calendar proposal…</div>
+  if (event.status === 'error') return <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">Calendar proposal failed: {event.error ?? 'Unknown error'}</div>
+
+  async function accept(row: typeof rows[number]) {
+    setActing(true)
+    try {
+      const response = await fetch('/api/admin/calendar/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: row.kind, payload: row.payload }),
+      })
+      if (response.ok) {
+        const body = await response.json().catch(() => ({}))
+        setAccepted(current => new Set(current).add(row.id))
+        if (body.draftOnly) window.dispatchEvent(new Event('cornerstone:email-open'))
+      }
+    } finally {
+      setActing(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 overflow-hidden rounded-md border border-border bg-card text-xs text-foreground">
+      {rows.map(row => (
+        <div key={row.id} className="border-b border-border px-3 py-2 last:border-0">
+          <div className="font-semibold">{row.title}</div>
+          <div className="mt-0.5 text-muted-foreground">{row.rationale}</div>
+          <div className="mt-2 flex gap-1.5">
+            <button
+              type="button"
+              disabled={acting || accepted.has(row.id)}
+              onClick={() => void accept(row)}
+              className="rounded-md bg-primary px-2 py-1 font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {accepted.has(row.id) ? 'Accepted' : row.kind === 'propose_reschedule' ? 'Prepare email' : 'Accept'}
+            </button>
+            <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-muted">Alternative</button>
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2">
+        <button
+          type="button"
+          disabled={acting || rows.every(row => accepted.has(row.id))}
+          onClick={() => void Promise.all(rows.filter(row => !accepted.has(row.id)).map(accept))}
+          className="font-semibold text-primary disabled:opacity-50"
+        >
+          Accept all {rows.length}
+        </button>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('calendar:preview-proposals', { detail: rows }))}
+          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+        >
+          <Eye className="h-3.5 w-3.5" /> Preview on calendar
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export interface FloatingChatMessage {
@@ -99,6 +171,10 @@ function ToolEventCard({
         onReviewDesignSheetImport={onReviewDesignSheetImport}
       />
     )
+  }
+
+  if (event.tool === 'create_hold' || event.tool === 'propose_reschedule') {
+    return <CalendarProposalCard event={event} />
   }
 
   if (event.tool === 'create_task') {
