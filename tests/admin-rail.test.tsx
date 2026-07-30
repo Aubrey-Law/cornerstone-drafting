@@ -129,11 +129,83 @@ describe('ChatPanel as a rail pane', () => {
     })
   })
 
-  it('uses the general prompt list when the route has no matter', async () => {
+  it('loads lead context and sends the open lead id from a lead route', async () => {
     pathname.current = '/admin/leads/lead-1'
     renderPanel()
-    expect(await screen.findByText('Firm')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /What's the MA estate tax threshold\?/ })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Summarize contacts and fiduciary roles/ })).toBeNull()
+    expect(await screen.findByText('Lead · Lead context loaded')).toBeTruthy()
+    const action = screen.getByRole('button', { name: /Summarize this client's situation/ })
+
+    await userEvent.click(action)
+
+    await waitFor(() => {
+      const chatCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+        .find(call => String(call[0]).includes('/api/admin/chat'))
+      expect(chatCall).toBeTruthy()
+      const body = JSON.parse(String((chatCall![1] as RequestInit).body))
+      expect(body.context_type).toBe('lead')
+      expect(body.context_id).toBe('lead-1')
+    })
+  })
+
+  it('isolates record turns when switching from a matter to a lead', async () => {
+    const view = renderPanel()
+    await screen.findByText('Matter · Whitfield Family Trust')
+    await userEvent.click(screen.getByRole('button', { name: /Summarize contacts and fiduciary roles/ }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Summarize contacts and fiduciary roles')).toBeTruthy()
+    })
+
+    pathname.current = '/admin/leads/lead-2'
+    view.rerender(
+      <ChatPanel
+        open
+        matterDisplayName="Whitfield Family Trust"
+        assistantModelLabel="Claude Opus 4.8"
+      />,
+    )
+
+    expect(await screen.findByText('Lead · Lead context loaded')).toBeTruthy()
+    expect(screen.queryByText('Summarize contacts and fiduciary roles')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /Summarize this client's situation/ }))
+
+    await waitFor(() => {
+      const chatCalls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+        .filter(call => String(call[0]).includes('/api/admin/chat'))
+      const body = JSON.parse(String((chatCalls.at(-1)![1] as RequestInit).body))
+      expect(body).toMatchObject({ context_type: 'lead', context_id: 'lead-2' })
+      expect(body.messages).toEqual([
+        { role: 'user', content: "Summarize this client's situation" },
+      ])
+    })
+  })
+
+  it('retains a lead thread when the assistant rail closes and reopens', async () => {
+    pathname.current = '/admin/leads/lead-3'
+    const view = renderPanel()
+    await screen.findByText('Lead · Lead context loaded')
+    await userEvent.click(screen.getByRole('button', { name: /Summarize this client's situation/ }))
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem('cornerstone-admin-chat-messages:lead:lead-3')).toContain(
+        "Summarize this client's situation",
+      )
+    })
+
+    view.rerender(
+      <ChatPanel
+        open={false}
+        matterDisplayName="Whitfield Family Trust"
+        assistantModelLabel="Claude Opus 4.8"
+      />,
+    )
+    view.rerender(
+      <ChatPanel
+        open
+        matterDisplayName="Whitfield Family Trust"
+        assistantModelLabel="Claude Opus 4.8"
+      />,
+    )
+
+    expect(await screen.findByText("Summarize this client's situation")).toBeTruthy()
   })
 })

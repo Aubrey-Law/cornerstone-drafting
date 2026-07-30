@@ -22,7 +22,7 @@ import {
   incapacityDesignSheetInstructions,
 } from '@/lib/adminChat/prompts'
 
-export type ChatContextType = 'matter' | 'general'
+export type ChatContextType = 'matter' | 'lead' | 'general'
 
 export interface MatterContext {
   systemPrompt: string
@@ -210,10 +210,87 @@ Respond in plain, concise attorney-facing language. You may draft text (emails, 
   }
 }
 
+export async function loadLeadContext(contextId: string): Promise<MatterContext> {
+  const admin = getAdminClient()
+  const [leadRes, notesRes, meetingsRes, activityRes, assetsRes] = await Promise.all([
+    admin.from('client_intake').select('*').eq('id', contextId).maybeSingle(),
+    admin.from('lead_notes').select('created_at, body').eq('lead_id', contextId).order('created_at', { ascending: false }).limit(10),
+    admin.from('lead_meeting_notes').select('meeting_date, title, body').eq('lead_id', contextId).order('meeting_date', { ascending: false }).limit(5),
+    admin.from('lead_activity').select('created_at, title, detail').eq('lead_id', contextId).order('created_at', { ascending: false }).limit(10),
+    admin.from('asset_intake').select('category, description, value, ownership').eq('client_intake_id', contextId).order('category'),
+  ])
+
+  if (leadRes.error) throw new Error(`client_intake: ${leadRes.error.message}`)
+  const rawLead = leadRes.data as Row | null
+  if (!rawLead || !rawLead.lead_status) throw new Error('Lead not found')
+
+  for (const [label, result] of [
+    ['lead_notes', notesRes],
+    ['lead_meeting_notes', meetingsRes],
+    ['lead_activity', activityRes],
+    ['asset_intake', assetsRes],
+  ] as const) {
+    if (result.error) {
+      console.warn(`[admin chat] lead context: ${label} query failed`, {
+        leadId: contextId,
+        error: result.error.message,
+      })
+    }
+  }
+
+  const spouse = await loadSpouseContact(admin, contextId)
+  const children = await loadHouseholdChildren(admin, contextId)
+  const lead: Row = {
+    ...rawLead,
+    spouse_first_name: spouse?.first_name ?? null,
+    spouse_last_name: spouse?.last_name ?? null,
+    spouse_name: spouse
+      ? [spouse.first_name, spouse.last_name].filter(Boolean).join(' ') || null
+      : null,
+    spouse_email: spouse?.email ?? null,
+    spouse_phone: spouse?.phone ?? null,
+    spouse_date_of_birth: spouse?.date_of_birth ?? null,
+    children,
+  }
+  const timeline = [
+    ...((notesRes.data ?? []) as Row[]).map(row => `${text(row.created_at)} [note] ${text(row.body)}`),
+    ...((meetingsRes.data ?? []) as Row[]).map(row => `${text(row.meeting_date)} [meeting: ${text(row.title)}] ${text(row.body)}`),
+    ...((activityRes.data ?? []) as Row[]).map(row => `${text(row.created_at)} [activity: ${text(row.title)}] ${text(row.detail)}`),
+  ].sort().reverse().slice(0, 12).map(line => `- ${line}`).join('\n') || '-'
+
+  const firm = getFirmConfig()
+  const systemPrompt = `You are an AI legal assistant for ${firm.attorneyShortName}, a Massachusetts estate planning attorney at ${firm.firmName}.
+
+You have full context for this prospective client lead:
+
+LEAD: ${fullName(lead)}
+LEAD STATUS: ${text(lead.lead_status)}
+PRACTICE AREA: ${text(lead.practice_area)}
+SOURCE: ${text(lead.lead_source)}
+URGENCY: ${text(lead.lead_urgency)}
+QUALIFICATION NOTES: ${text(lead.qualification_notes)}
+ENGAGEMENT: ${text(lead.engagement_status)}; quoted fee ${text(lead.engagement_fee_quoted)}
+${formatIntakeQuestionnaire(lead)}
+ASSETS:
+${summarizeAssets(lead, null, (assetsRes.data ?? []) as Row[])}
+FAMILY:
+${summarizeFamily(lead, null)}
+RECENT LEAD TIMELINE:
+${timeline}
+
+Respond in plain, concise attorney-facing language. Treat this record as a lead, not an active matter. You may draft text when asked. Always flag uncertainty and missing intake facts. Do not invent facts.`
+
+  return { systemPrompt, matterLabel: fullName(lead) }
+}
+
 export async function buildContext(contextType: ChatContextType, contextId?: string): Promise<MatterContext> {
   if (contextType === 'matter') {
     if (!contextId) throw new Error('context_id required for matter chat')
     return loadMatterContext(contextId)
+  }
+  if (contextType === 'lead') {
+    if (!contextId) throw new Error('context_id required for lead chat')
+    return loadLeadContext(contextId)
   }
   return {
     systemPrompt: await generalSystemPrompt(),

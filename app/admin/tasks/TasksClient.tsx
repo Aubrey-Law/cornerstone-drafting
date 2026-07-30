@@ -41,6 +41,7 @@ import { TaskListRow } from '@/components/tasks/TaskPrimitives'
 import { useTaskActions } from '@/components/tasks/useTaskActions'
 import { OPEN_TASK_CAPTURE_EVENT } from '@/components/tasks/taskEvents'
 import { TaskTemplateSheet, type TaskTemplate } from '@/components/tasks/TaskTemplateSheet'
+import { TaskDetailSheet } from '@/components/tasks/TaskDetailSheet'
 
 type ScopeKey = 'mine' | 'team' | 'unassigned'
 
@@ -160,6 +161,7 @@ export function TasksClient({
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [templateList, setTemplateList] = useState(templates)
   const [composerOpen, setComposerOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null)
   const composerRef = useRef<TaskComposerHandle>(null)
 
   useEffect(() => {
@@ -198,6 +200,14 @@ export function TasksClient({
   const snoozeTask = useCallback(
     async (task: TaskRow, days: number, label: string) => {
       const updated = await actions.snooze(task, days, label)
+      if (updated) applyUpdate(updated)
+    },
+    [actions, applyUpdate],
+  )
+
+  const toggleSubtask = useCallback(
+    async (task: TaskRow, index: number, done: boolean) => {
+      const updated = await actions.toggleChecklistItem(task, index, done)
       if (updated) applyUpdate(updated)
     },
     [actions, applyUpdate],
@@ -334,6 +344,8 @@ export function TasksClient({
       focused={focusId === task.id}
       pending={actions.isPending(task.id)}
       onComplete={() => void toggleTask(task)}
+      onToggleSubtask={(index, done) => void toggleSubtask(task, index, done)}
+      onOpen={task.source === 'stage' ? undefined : () => setSelectedTask(task)}
       actions={
         task.status === 'done' ? undefined : (
           <DropdownMenu
@@ -540,7 +552,27 @@ export function TasksClient({
         open={templatesOpen}
         onOpenChange={setTemplatesOpen}
         templates={templateList}
+        assignees={assignees}
         onTemplatesChange={setTemplateList}
+      />
+      <TaskDetailSheet
+        task={selectedTask}
+        assignees={assignees}
+        open={Boolean(selectedTask)}
+        onOpenChange={open => {
+          if (!open) setSelectedTask(null)
+        }}
+        onUpdated={updated => {
+          applyUpdate(updated)
+          setSelectedTask(updated)
+          router.refresh()
+        }}
+        onDeleted={deleted => {
+          setOpenTasks(current => current.filter(task => task.id !== deleted.id))
+          setDoneToday(current => current.filter(task => task.id !== deleted.id))
+          setSelectedTask(null)
+          router.refresh()
+        }}
       />
     </div>
   )

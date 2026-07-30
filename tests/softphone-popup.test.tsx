@@ -3,7 +3,7 @@
 import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const routerRefresh = vi.hoisted(() => vi.fn())
 vi.mock('next/navigation', () => ({
@@ -118,10 +118,24 @@ function mockFetch() {
 }
 
 describe('Softphone pop-up', () => {
+  beforeEach(() => {
+    const values = new Map<string, string>()
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        removeItem: (key: string) => values.delete(key),
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    })
+  })
+
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
     voiceSdk.reset()
+    window.localStorage.clear()
   })
 
   it('keeps DND from dialing', async () => {
@@ -141,6 +155,23 @@ describe('Softphone pop-up', () => {
     expect(callButton.disabled).toBe(true)
     await user.click(callButton)
     expect(voiceSdk.getLastDevice()?.connect).not.toHaveBeenCalled()
+  })
+
+  it('keeps DND enabled after the softphone remounts', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+
+    renderPhone()
+
+    await screen.findByText('Ready')
+    await user.click(screen.getByRole('button', { name: /enable do not disturb/i }))
+    expect(screen.getByRole('button', { name: /disable do not disturb/i })).toBeTruthy()
+
+    cleanup()
+    renderPhone()
+
+    await screen.findByText('Do not disturb')
+    expect(screen.getByRole('button', { name: /disable do not disturb/i })).toBeTruthy()
   })
 
   it('ignores digit keys typed outside the softphone', async () => {

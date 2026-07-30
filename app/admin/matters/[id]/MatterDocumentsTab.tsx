@@ -138,6 +138,7 @@ interface MatterDocumentsTabProps {
   onReviewIntakeUploads?: () => void | Promise<void>
   clientName?: string | null
   deepLinkedDocumentId?: string | null
+  recordLabel?: 'matter' | 'lead'
 }
 
 export function MatterDocumentsTab({
@@ -150,6 +151,7 @@ export function MatterDocumentsTab({
   onReviewIntakeUploads,
   clientName,
   deepLinkedDocumentId,
+  recordLabel = 'matter',
 }: MatterDocumentsTabProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -477,9 +479,11 @@ export function MatterDocumentsTab({
       <section className="rounded-lg border border-border bg-card">
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-sm font-semibold">Matter documents</h3>
+            <h3 className="text-sm font-semibold">
+              {recordLabel === 'lead' ? 'Lead documents' : 'Matter documents'}
+            </h3>
             <p className="text-xs text-muted-foreground">
-              Upload, review, share, and organize every file tied to this matter.
+              Upload, review, share, and organize every file tied to this {recordLabel}.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

@@ -44,9 +44,15 @@ Telnyx portal:
 
 - Create a TeXML/Programmable Voice application.
 - Set its inbound TeXML URL to the production Cornerstone inbound route.
-- Set its event callback URL to the existing Telnyx voice webhook.
+- Set its signed form call-progress callback URL to the Cornerstone TeXML
+  callback route.
 - Assign the firm's number to this application.
 - Keep Scott's generated telephony credential under the existing credential connection.
+- Set the parent credential connection's `sip_uri_calling_preference` to
+  `internal`.
+- Associate an enabled Outbound Voice Profile with the TeXML application and
+  parent credential connection so the sequential SIP and PSTN Dial legs are
+  authorized.
 
 No Telnyx API secret or SIP password is exposed to the browser.
 
@@ -75,10 +81,19 @@ Replace the incompatible SDK unwrap call with verification of the exact raw requ
 - a five-minute timestamp tolerance.
 
 Only verified payloads proceed to idempotent event storage and call-log normalization.
+The existing messaging and credential-connection voice routes continue to
+accept Telnyx API-v2 JSON. The TeXML application's call-progress callback uses a
+separate content-type-aware route for signed
+`application/x-www-form-urlencoded` fields such as `CallSid`, `CallStatus`, and
+`SequenceNumber`.
 
 ### Existing softphone
 
-No UI redesign is required. The existing Telnyx notification handler already recognizes an inbound ringing call, presents Answer/Decline controls, and uses the Telnyx call object to answer it. The softphone remains mounted while its panel is closed, preserving WebRTC registration.
+No UI redesign is required. The existing Telnyx notification handler recognizes
+an inbound ringing call and uses the Telnyx call object to answer it. The
+softphone remains mounted while its panel is closed, preserving WebRTC
+registration. Incoming state is published to the admin rail so a closed,
+minimized, or non-phone rail opens directly to visible Answer/Decline controls.
 
 ## Failure Handling
 

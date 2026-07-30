@@ -81,13 +81,15 @@ export default async function AdminTodayPage() {
             ) : (
               <ul className="divide-y divide-border">
                 {today.appointmentsToday.map(appt => (
-                  <li key={appt.matter_id}>
+                  <li key={appt.id}>
                     <Link
-                      href={`/admin/matters/${appt.matter_id}`}
+                      href={appt.href}
                       className="block px-3 py-2 text-sm hover:bg-muted/50"
                     >
                       <span className="font-medium tabular-nums text-foreground">
-                        {APPOINTMENT_TIME.format(new Date(appt.next_appointment))}
+                        {appt.is_all_day
+                          ? 'All day'
+                          : APPOINTMENT_TIME.format(new Date(appt.next_appointment))}
                       </span>
                       <span className="text-foreground"> · {appt.client_name ?? 'Unnamed matter'}</span>
                       {appt.next_appointment_type && (

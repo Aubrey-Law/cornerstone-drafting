@@ -15,6 +15,7 @@ import { isDraftingSummaryRequest, formatClaudeDraftingSkillInput } from '@/lib/
 import { designSheetImportExecutor } from '@/lib/adminChat/designSheetTool'
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
 import { createLeadToolExecutor, leadSystemPromptNote } from '@/lib/adminChat/leadTools'
+import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
 
 export const maxDuration = 120
 
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
   }
 
   const contextType = body.context_type
-  if (!['matter', 'general'].includes(contextType)) {
+  if (!['matter', 'lead', 'general'].includes(contextType)) {
     return NextResponse.json({ error: 'Invalid context_type' }, { status: 400 })
   }
 
@@ -113,10 +114,11 @@ export async function POST(req: Request) {
     createLeadToolExecutor,
     ...(contextMatterId ? [designSheetImportExecutor(contextMatterId, adminUserId ?? null)] : []),
     ...workflowToolExecutors({ userId: adminUserId ?? '', email: user?.email ?? null }),
+    ...calendarPlanningToolExecutors(),
   ]
 
   return createAdminChatStream({
-    system: context.systemPrompt + workflowSystemPromptNote() + leadSystemPromptNote(),
+    system: context.systemPrompt + workflowSystemPromptNote() + leadSystemPromptNote() + calendarPlanningSystemPromptNote(),
     messages: requestMessages.map(message => ({ role: message.role, content: message.content })),
     tools,
     maxIterations: 4,

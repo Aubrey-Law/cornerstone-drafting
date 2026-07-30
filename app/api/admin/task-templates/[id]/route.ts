@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/queries/tasks'
-import { TASK_PRIORITIES, type TaskPriority } from '@/lib/tasks/types'
+import { normalizeTemplateItems } from '@/lib/tasks/templateItems'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -10,23 +10,6 @@ interface PatchBody {
   name?: unknown
   description?: unknown
   items?: unknown
-}
-
-function normalizeItems(value: unknown) {
-  if (!Array.isArray(value)) return []
-  return value.flatMap(item => {
-    const raw = (typeof item === 'object' && item ? item : {}) as Record<string, unknown>
-    const text = typeof item === 'string' ? item : typeof raw.text === 'string' ? raw.text : ''
-    if (!text.trim()) return []
-    const offset = Number(raw.offset_days)
-    return [{
-      text: text.trim(),
-      offset_days: Number.isFinite(offset) ? Math.round(offset) : 0,
-      priority: TASK_PRIORITIES.includes(raw.priority as TaskPriority)
-        ? (raw.priority as TaskPriority)
-        : 'normal',
-    }]
-  })
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -50,7 +33,7 @@ export async function PATCH(req: Request, { params }: Params) {
       : null
   }
   if (body.items !== undefined) {
-    const items = normalizeItems(body.items)
+    const items = normalizeTemplateItems(body.items)
     if (items.length === 0) {
       return NextResponse.json({ error: 'A template needs at least one task' }, { status: 400 })
     }
