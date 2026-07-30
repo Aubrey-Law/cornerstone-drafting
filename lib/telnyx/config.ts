@@ -1,5 +1,8 @@
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
-import { telnyxInboundRouteConfig } from '@/lib/telnyx/inbound'
+import {
+  telnyxInboundRouteConfig,
+  telnyxInboundRoutingIssues,
+} from '@/lib/telnyx/inbound'
 
 export function telnyxAppBaseUrl(): string {
   return (
@@ -30,10 +33,7 @@ export function isTelnyxSmsConfigured(): boolean {
 }
 
 export function isTelnyxVoiceConfigured(): boolean {
-  const credentialsConfigured = Boolean(
-    process.env.TELNYX_TELEPHONY_CREDENTIAL_IDS?.trim() ||
-    process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim(),
-  )
+  const credentialsConfigured = !telnyxCredentialConfigurationIssue()
   return voiceProvider() === 'telnyx' &&
     Boolean(
       process.env.TELNYX_API_KEY?.trim() &&
@@ -43,12 +43,26 @@ export function isTelnyxVoiceConfigured(): boolean {
     )
 }
 
+function telnyxCredentialConfigurationIssue(): string | null {
+  if (
+    process.env.TELNYX_TELEPHONY_CREDENTIAL_IDS?.trim() ||
+    process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim()
+  ) return null
+  return 'TELNYX_TELEPHONY_CREDENTIAL_IDS or TELNYX_TELEPHONY_CREDENTIAL_ID'
+}
+
 export function telnyxConfigStatus() {
   const missing = (names: string[]) => names.filter(name => !process.env[name]?.trim())
-  const inboundMissing = missing([
-    'TELNYX_INBOUND_AGENT_SIP_URI',
-    'TELNYX_INBOUND_FALLBACK_DESTINATION',
-  ])
+  const credentialIssue = telnyxCredentialConfigurationIssue()
+  const voiceMissing = [
+    ...missing(['TELNYX_API_KEY', 'TELNYX_PUBLIC_KEY', 'TELNYX_CONNECTION_ID']),
+    ...(credentialIssue ? [credentialIssue] : []),
+  ]
+  const inboundMissing = Array.from(new Set([
+    ...(voiceProvider() === 'telnyx' ? [] : ['VOICE_PROVIDER=telnyx']),
+    ...voiceMissing,
+    ...telnyxInboundRoutingIssues(),
+  ]))
   return {
     provider: 'telnyx' as const,
     smsConfigured: isTelnyxSmsConfigured(),
@@ -56,19 +70,14 @@ export function telnyxConfigStatus() {
     inboundVoiceConfigured: inboundMissing.length === 0 && Boolean(telnyxInboundRouteConfig()),
     missing: {
       sms: missing(['TELNYX_API_KEY', 'TELNYX_PUBLIC_KEY', 'TELNYX_PHONE_NUMBER', 'TELNYX_MESSAGING_PROFILE_ID']),
-      voice: [
-        ...missing(['TELNYX_API_KEY', 'TELNYX_PUBLIC_KEY', 'TELNYX_CONNECTION_ID']),
-        ...(!process.env.TELNYX_TELEPHONY_CREDENTIAL_IDS?.trim() &&
-        !process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim()
-          ? ['TELNYX_TELEPHONY_CREDENTIAL_IDS or TELNYX_TELEPHONY_CREDENTIAL_ID']
-          : []),
-      ],
+      voice: voiceMissing,
       inboundVoice: inboundMissing,
     },
     webhooks: {
       messaging: `${telnyxAppBaseUrl()}/api/webhooks/telnyx/messaging`,
       voice: `${telnyxAppBaseUrl()}/api/webhooks/telnyx/voice`,
       inboundTeXML: `${telnyxAppBaseUrl()}/api/voice/telnyx/inbound`,
+      texmlStatus: `${telnyxAppBaseUrl()}/api/webhooks/telnyx/texml`,
     },
   }
 }

@@ -24,6 +24,8 @@ import {
 export interface SoftphoneCallSnapshot {
   /** True while dialing or connected — the window in which a pill makes sense. */
   active: boolean
+  /** True while an inbound call is ringing and requires an Answer/Decline decision. */
+  incoming: boolean
   connected: boolean
   muted: boolean
   held: boolean
@@ -42,6 +44,7 @@ export interface SoftphoneControls {
 
 export const EMPTY_CALL_SNAPSHOT: SoftphoneCallSnapshot = {
   active: false,
+  incoming: false,
   connected: false,
   muted: false,
   held: false,
@@ -71,6 +74,7 @@ const SoftphoneContext = createContext<SoftphoneContextValue>({
 function sameSnapshot(a: SoftphoneCallSnapshot, b: SoftphoneCallSnapshot): boolean {
   return (
     a.active === b.active &&
+    a.incoming === b.incoming &&
     a.connected === b.connected &&
     a.muted === b.muted &&
     a.held === b.held &&

@@ -7,7 +7,10 @@ import {
   buildTelnyxInboundTexml,
   telnyxInboundRouteConfig,
 } from '@/lib/telnyx/inbound'
-import { telnyxVoiceEventToRow } from '@/lib/telnyx/voice'
+import {
+  mergeTelnyxCallRows,
+  telnyxVoiceEventToRow,
+} from '@/lib/telnyx/voice'
 import {
   unwrapTelnyxWebhook,
   verifyTelnyxWebhookSignature,
@@ -27,6 +30,17 @@ function signedTelnyxFixture() {
     privateKey,
   ).toString('base64')
   return { rawBody, signature, timestamp, publicKey: rawPublicKey.toString('base64') }
+}
+
+function stubCompleteTelnyxInboundEnv() {
+  vi.stubEnv('VOICE_PROVIDER', 'telnyx')
+  vi.stubEnv('TELNYX_API_KEY', 'KEY_TEST')
+  vi.stubEnv('TELNYX_PUBLIC_KEY', Buffer.alloc(32, 1).toString('base64'))
+  vi.stubEnv('TELNYX_CONNECTION_ID', 'connection-1')
+  vi.stubEnv('TELNYX_TELEPHONY_CREDENTIAL_IDS', '{"scott":"credential-1"}')
+  vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
+  vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+  vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '25')
 }
 
 describe('Telnyx communications migration', () => {
@@ -97,26 +111,42 @@ describe('Telnyx communications migration', () => {
   })
 
   it('reports inbound voice configuration separately from outbound voice', () => {
-    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
-    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
-    vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '25')
+    stubCompleteTelnyxInboundEnv()
     expect(telnyxConfigStatus()).toMatchObject({
       inboundVoiceConfigured: true,
       missing: { inboundVoice: [] },
       webhooks: {
         inboundTeXML: expect.stringContaining('/api/voice/telnyx/inbound'),
+        texmlStatus: expect.stringContaining('/api/webhooks/telnyx/texml'),
       },
     })
   })
 
-  it('does not report inbound voice ready for invalid routing values', () => {
-    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'not-a-sip-uri')
-    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+  it('requires the active Telnyx provider and outbound WebRTC readiness for inbound voice', () => {
+    stubCompleteTelnyxInboundEnv()
+    vi.stubEnv('VOICE_PROVIDER', 'twilio')
+    vi.stubEnv('TELNYX_CONNECTION_ID', '')
 
     expect(telnyxConfigStatus()).toMatchObject({
       inboundVoiceConfigured: false,
-      missing: { inboundVoice: [] },
+      missing: {
+        inboundVoice: expect.arrayContaining([
+          'VOICE_PROVIDER=telnyx',
+          'TELNYX_CONNECTION_ID',
+        ]),
+      },
     })
+  })
+
+  it('reports invalid present inbound routing values as actionable status issues', () => {
+    stubCompleteTelnyxInboundEnv()
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'not-a-sip-uri')
+
+    const status = telnyxConfigStatus()
+    expect(status.inboundVoiceConfigured).toBe(false)
+    expect(status.missing.inboundVoice).toContain(
+      'TELNYX_INBOUND_AGENT_SIP_URI (expected sip:gencred...@sip.telnyx.com)',
+    )
   })
 
   it('normalizes Telnyx voice events into existing call history', () => {
@@ -141,6 +171,31 @@ describe('Telnyx communications migration', () => {
       participant_digits: '16175550100',
       answered_at: '2026-07-24T14:30:00Z',
     })
+  })
+
+  it('does not regress a terminal Telnyx call when an older event arrives', () => {
+    expect(mergeTelnyxCallRows(
+      {
+        external_call_id: 'call-1',
+        status: 'completed',
+        ended_at: '2026-07-24T14:35:00Z',
+      },
+      {
+        external_call_id: 'call-1',
+        status: 'ringing',
+        ended_at: null,
+      },
+    )).toMatchObject({
+      status: 'completed',
+      ended_at: '2026-07-24T14:35:00Z',
+    })
+  })
+
+  it('keeps the existing initiated fallback for an unknown first voice event', () => {
+    expect(mergeTelnyxCallRows(null, {
+      external_call_id: 'call-unknown',
+      status: 'unknown',
+    })).toMatchObject({ status: 'initiated' })
   })
 
   it('adds Telnyx database providers and idempotency storage', () => {
@@ -203,6 +258,21 @@ describe('Telnyx communications migration', () => {
     expect(await response.text()).toBe(
       '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
     )
+  })
+
+  it('rejects SIP targets outside the generated-credential Telnyx host', () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@attacker.example')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+
+    expect(telnyxInboundRouteConfig()).toBeNull()
+  })
+
+  it('requires a strict decimal ring timeout before clamping', () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+    vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '7seconds')
+
+    expect(telnyxInboundRouteConfig()).toMatchObject({ ringTimeoutSeconds: 25 })
   })
 
   it('caps the inbound ring timeout at the TeXML maximum of 120 seconds', () => {

@@ -170,13 +170,29 @@ Set `SMS_PROVIDER=telnyx` and/or `VOICE_PROVIDER=telnyx` to activate Telnyx.
 | `TELNYX_INBOUND_FALLBACK_DESTINATION` | Environment-configurable fallback; production value: `+13392381012` |
 
 Configure the Messaging Profile webhook as `/api/webhooks/telnyx/messaging` and
-the Credential Connection voice webhook as `/api/webhooks/telnyx/voice`. Each
-staff softphone user needs a distinct telephony credential. For inbound calling,
-assign the Telnyx number to a TeXML application. Set that application's Voice URL
-to `/api/voice/telnyx/inbound` and its event callback URL to
-`/api/webhooks/telnyx/voice`, and select the Telnyx API v2 webhook format for
-both callbacks. The admin-safe audit endpoint is
-`GET /api/admin/communications/status`.
+the Credential Connection voice webhook as `/api/webhooks/telnyx/voice`. Those
+two endpoints receive signed Telnyx API-v2 JSON events. Each staff softphone
+user needs a distinct generated telephony credential.
+
+Inbound calling uses a separate TeXML application:
+
+1. On Scott's parent Credential Connection, set **Receive SIP URI Calls** to
+   **From connections in this account** (`sip_uri_calling_preference:
+   "internal"`). Do not use unrestricted SIP URI calling.
+2. Associate an enabled Outbound Voice Profile with both the TeXML application
+   and Scott's parent Credential Connection so the TeXML application's Dial can
+   reach the generated SIP credential and the fallback PSTN number.
+3. Assign the firm's Telnyx number to the TeXML application.
+4. Set the TeXML application's Voice URL to
+   `/api/voice/telnyx/inbound` using POST.
+5. Set its call-progress/status callback to
+   `/api/webhooks/telnyx/texml` using POST. TeXML status callbacks are signed
+   `application/x-www-form-urlencoded` bodies; do not point them at the
+   API-v2 JSON voice endpoint or label them API v2.
+
+The admin-safe audit endpoint is `GET /api/admin/communications/status`.
+Inbound readiness is true only when `VOICE_PROVIDER=telnyx`, outbound Telnyx
+voice is ready, and the fixed SIP/fallback routing values validate.
 
 ## Optional — Microsoft Graph (Outlook send)
 

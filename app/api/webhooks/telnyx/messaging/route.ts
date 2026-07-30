@@ -36,21 +36,40 @@ const STATUS_RANK: Record<string, number> = {
   failed: 4,
 }
 
+const SUPPORTED_MESSAGE_EVENTS = new Set([
+  'message.received',
+  'message.sent',
+  'message.finalized',
+])
+
 export async function POST(req: Request) {
   const rawBody = await req.text()
-  let event: TelnyxMessageEvent
+  let parsed: unknown
   try {
-    event = await unwrapTelnyxWebhook<TelnyxMessageEvent>(req, rawBody)
+    parsed = await unwrapTelnyxWebhook<unknown>(req, rawBody)
   } catch {
     return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
   }
 
-  const admin = getAdminClient()
+  if (!parsed || typeof parsed !== 'object') {
+    return NextResponse.json({ error: 'invalid messaging event' }, { status: 400 })
+  }
+  const event = parsed as TelnyxMessageEvent
   const eventId = event.data?.id
   const eventType = event.data?.event_type
-  if (!eventId || !eventType) {
-    return NextResponse.json({ error: 'invalid event' }, { status: 400 })
+  if (
+    typeof eventId !== 'string' ||
+    !eventId.trim() ||
+    typeof eventType !== 'string' ||
+    !SUPPORTED_MESSAGE_EVENTS.has(eventType) ||
+    !event.data?.payload ||
+    typeof event.data.payload !== 'object' ||
+    Array.isArray(event.data.payload)
+  ) {
+    return NextResponse.json({ error: 'invalid messaging event' }, { status: 400 })
   }
+
+  const admin = getAdminClient()
   const { error: claimError } = await admin.from('telephony_webhook_events').insert({
     provider: 'telnyx',
     provider_event_id: eventId,

@@ -50,11 +50,15 @@ export function verifyTelnyxWebhookSignature(
   if (!valid) throw new Error('Invalid Telnyx webhook signature')
 }
 
-export async function unwrapTelnyxWebhook<T>(req: Request, rawBody: string): Promise<T> {
+export function verifyTelnyxWebhookRequest(req: Request, rawBody: string): void {
   const publicKey = process.env.TELNYX_PUBLIC_KEY?.trim()
   if (!publicKey) throw new Error('TELNYX_PUBLIC_KEY is not configured.')
   const signature = req.headers.get('telnyx-signature-ed25519') ?? ''
   const timestamp = req.headers.get('telnyx-timestamp') ?? ''
   verifyTelnyxWebhookSignature(rawBody, signature, timestamp, publicKey)
+}
+
+export async function unwrapTelnyxWebhook<T>(req: Request, rawBody: string): Promise<T> {
+  verifyTelnyxWebhookRequest(req, rawBody)
   return JSON.parse(rawBody) as T
 }

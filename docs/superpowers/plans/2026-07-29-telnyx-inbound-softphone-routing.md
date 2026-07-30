@@ -4,7 +4,7 @@
 
 **Goal:** Ring Scott's existing Telnyx browser softphone for 25 seconds and then forward declined, offline, failed, or unanswered calls to `+13392381012`.
 
-**Architecture:** Keep the existing credential connection and generated credential for WebRTC registration and outbound calls. Assign the firm's number to a Telnyx TeXML application whose inbound URL returns a sequential `<Dial>` for Scott's SIP URI followed by the fallback number; separately replace the incompatible webhook SDK unwrap path with direct Ed25519 verification over the raw Telnyx payload.
+**Architecture:** Keep the existing credential connection and generated credential for WebRTC registration and outbound calls. Assign the firm's number to a Telnyx TeXML application whose inbound URL returns a sequential `<Dial>` for Scott's SIP URI followed by the fallback number. Preserve the existing signed API-v2 JSON messaging and credential-connection voice callbacks, and send the TeXML application's signed form-encoded call-progress callbacks to a separate content-type-aware endpoint. Verify every callback against its exact raw body before channel validation, idempotency, or call-history normalization.
 
 **Tech Stack:** Next.js 16 App Router, TypeScript 5.7, Node.js crypto, Telnyx TeXML, Telnyx WebRTC, Vitest 4, Vercel
 
@@ -26,7 +26,10 @@
 - Create `app/api/voice/telnyx/inbound/route.ts`: serve the fixed TeXML document for Telnyx GET or POST requests.
 - Modify `lib/telnyx/client.ts`: verify Telnyx Ed25519 callbacks against the exact raw body before parsing JSON.
 - Modify `lib/telnyx/config.ts`: report inbound voice readiness without hiding the otherwise-working outbound softphone.
+- Modify `lib/telnyx/voice.ts`: normalize both JSON voice events and TeXML form callbacks with monotonic call-state merging.
+- Create `app/api/webhooks/telnyx/texml/route.ts`: receive verified TeXML `application/x-www-form-urlencoded` call-progress callbacks.
 - Modify `tests/telnyx-communications.test.ts`: cover TeXML routing, configuration, and real Ed25519 verification.
+- Create `tests/telnyx-webhook-routes.test.ts`: execute callback channel, idempotency, form-normalization, and monotonic-state boundaries.
 - Modify `VERCEL_ENV_CHECKLIST.md`: document the inbound SIP URI and TeXML application setup.
 
 ### Task 1: Deterministic inbound TeXML route
@@ -420,6 +423,11 @@ Add:
 
 ```ts
 it('reports inbound voice configuration separately from outbound voice', () => {
+  vi.stubEnv('VOICE_PROVIDER', 'telnyx')
+  vi.stubEnv('TELNYX_API_KEY', 'KEY_TEST')
+  vi.stubEnv('TELNYX_PUBLIC_KEY', validPublicKey)
+  vi.stubEnv('TELNYX_CONNECTION_ID', 'connection-1')
+  vi.stubEnv('TELNYX_TELEPHONY_CREDENTIAL_IDS', '{"scott":"credential-1"}')
   vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
   vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
   vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '25')
@@ -428,6 +436,7 @@ it('reports inbound voice configuration separately from outbound voice', () => {
     missing: { inboundVoice: [] },
     webhooks: {
       inboundTeXML: expect.stringContaining('/api/voice/telnyx/inbound'),
+      texmlStatus: expect.stringContaining('/api/webhooks/telnyx/texml'),
     },
   })
 })
@@ -441,23 +450,28 @@ Run:
 npx vitest run tests/telnyx-communications.test.ts
 ```
 
-Expected: FAIL because `inboundVoiceConfigured`, `missing.inboundVoice`, and `webhooks.inboundTeXML` do not exist.
+Expected: FAIL until inbound readiness requires the active Telnyx provider,
+outbound voice readiness, valid fixed routing, and publishes both TeXML route
+URLs.
 
 - [ ] **Step 3: Add inbound readiness without changing outbound readiness**
 
-Modify `telnyxConfigStatus()`:
+Build `inboundMissing` from provider activation, outbound voice requirements,
+and actionable routing validation:
 
 ```ts
-const inboundMissing = missing([
-  'TELNYX_INBOUND_AGENT_SIP_URI',
-  'TELNYX_INBOUND_FALLBACK_DESTINATION',
-])
+const inboundMissing = Array.from(new Set([
+  ...(voiceProvider() === 'telnyx' ? [] : ['VOICE_PROVIDER=telnyx']),
+  ...voiceMissing,
+  ...telnyxInboundRoutingIssues(),
+]))
 ```
 
 Return:
 
 ```ts
-inboundVoiceConfigured: inboundMissing.length === 0,
+inboundVoiceConfigured:
+  inboundMissing.length === 0 && Boolean(telnyxInboundRouteConfig()),
 missing: {
   // existing sms and voice entries
   inboundVoice: inboundMissing,
@@ -465,6 +479,7 @@ missing: {
 webhooks: {
   // existing messaging and voice entries
   inboundTeXML: `${telnyxAppBaseUrl()}/api/voice/telnyx/inbound`,
+  texmlStatus: `${telnyxAppBaseUrl()}/api/webhooks/telnyx/texml`,
 },
 ```
 
@@ -475,7 +490,7 @@ Add `TELNYX_INBOUND_AGENT_SIP_URI` to the Telnyx environment table. Clarify that
 - `TELNYX_CONNECTION_ID` remains the credential connection for Scott's JWT.
 - the number must be assigned to a TeXML application;
 - the TeXML application's Voice URL is `/api/voice/telnyx/inbound`;
-- its event callback URL is `/api/webhooks/telnyx/voice`;
+- its signed form call-progress callback URL is `/api/webhooks/telnyx/texml`;
 - `TELNYX_INBOUND_RING_TIMEOUT=25`;
 - `TELNYX_INBOUND_FALLBACK_DESTINATION=+13392381012`.
 
@@ -485,10 +500,10 @@ Run:
 
 ```bash
 npx vitest run tests/telnyx-communications.test.ts
-git diff --check
+git diff --check origin/main...HEAD
 ```
 
-Expected: tests pass and `git diff --check` exits 0.
+Expected: tests pass and the committed-range whitespace check exits 0.
 
 - [ ] **Step 6: Commit configuration readiness**
 
@@ -497,7 +512,7 @@ git add lib/telnyx/config.ts tests/telnyx-communications.test.ts VERCEL_ENV_CHEC
 git commit -m "Document Telnyx inbound voice configuration"
 ```
 
-### Task 4: Full focused verification and production rollout
+### Task 4: Full focused verification and re-review-gated production rollout
 
 **Files:**
 - Verify all changed files.
@@ -506,7 +521,9 @@ git commit -m "Document Telnyx inbound voice configuration"
 
 **Interfaces:**
 - Consumes: production route `/api/voice/telnyx/inbound`
-- Consumes: production route `/api/webhooks/telnyx/voice`
+- Consumes: production JSON routes `/api/webhooks/telnyx/voice` and
+  `/api/webhooks/telnyx/messaging`
+- Consumes: production TeXML form route `/api/webhooks/telnyx/texml`
 - Produces: live inbound ringing and fallback behavior
 
 - [ ] **Step 1: Run the complete focused verification set**
@@ -516,18 +533,31 @@ Run:
 ```bash
 npx vitest run \
   tests/telnyx-communications.test.ts \
+  tests/telnyx-webhook-routes.test.ts \
   tests/softphone-popup.test.tsx \
   tests/softphone-rail-pane.test.tsx \
+  tests/admin-rail-chrome.test.tsx \
   tests/api-route-auth.test.ts \
   tests/webhook-idempotency.test.ts
 npx eslint \
+  components/rail/AdminRail.tsx \
+  components/softphone/Softphone.tsx \
+  components/softphone/SoftphoneProvider.tsx \
   lib/telnyx/client.ts \
   lib/telnyx/config.ts \
   lib/telnyx/inbound.ts \
+  lib/telnyx/voice.ts \
   app/api/voice/telnyx/inbound/route.ts \
-  tests/telnyx-communications.test.ts
+  app/api/webhooks/telnyx/messaging/route.ts \
+  app/api/webhooks/telnyx/texml/route.ts \
+  app/api/webhooks/telnyx/voice/route.ts \
+  tests/admin-rail-chrome.test.tsx \
+  tests/api-route-auth.test.ts \
+  tests/softphone-rail-pane.test.tsx \
+  tests/telnyx-communications.test.ts \
+  tests/telnyx-webhook-routes.test.ts
 npm run typecheck
-git diff --check
+git diff --check origin/main...HEAD
 ```
 
 Expected: focused tests and changed-file ESLint pass; typecheck is evaluated against the repository's documented baseline failures without treating unrelated `tests/*.test.ts` errors as regressions.
@@ -544,15 +574,19 @@ git diff origin/main...HEAD
 
 Confirm the diff contains only the approved inbound Telnyx routing, verification, readiness, tests, and documentation.
 
-- [ ] **Step 3: Push the implementation**
+- [ ] **Step 3: Publish the exact reviewed candidate**
 
 Run:
 
 ```bash
-git push origin main
+git rev-parse HEAD
+git push origin HEAD:refs/heads/codex/telnyx-inbound-softphone
 ```
 
-Expected: the new commits are accepted and the production deployment begins.
+Record the printed commit as `REVIEWED_COMMIT`. Expected: that exact commit is
+available on the feature branch for scoped re-review. Do not push the feature
+branch to `main`, merge it, or begin a production deployment until the fix diff
+passes the required scoped re-review.
 
 - [ ] **Step 4: Configure Vercel production**
 
@@ -564,7 +598,9 @@ TELNYX_INBOUND_RING_TIMEOUT=25
 TELNYX_INBOUND_FALLBACK_DESTINATION=+13392381012
 ```
 
-Redeploy the exact pushed commit so the new environment revision is active.
+After scoped re-review approval, deploy `REVIEWED_COMMIT` exactly and record the
+Vercel deployment's Git commit SHA. Do not accept a deployment whose source SHA
+differs from `REVIEWED_COMMIT`.
 
 - [ ] **Step 5: Configure Telnyx**
 
@@ -572,22 +608,47 @@ In Mission Control:
 
 1. Create or select a TeXML application.
 2. Set the Voice URL to `https://cornerstone.aubreylegal.com/api/voice/telnyx/inbound` using POST.
-3. Set the event callback URL to `https://cornerstone.aubreylegal.com/api/webhooks/telnyx/voice`.
-4. Select API v2 webhook format.
-5. Assign the firm's Telnyx number to the TeXML application.
-6. Leave Scott's generated credential and its parent credential connection intact.
+3. Set the TeXML call-progress/status callback URL to
+   `https://cornerstone.aubreylegal.com/api/webhooks/telnyx/texml` using POST.
+   Telnyx sends signed `application/x-www-form-urlencoded` callbacks here; do
+   not select or expect API-v2 JSON for this callback.
+4. Keep the Credential Connection voice callback at
+   `https://cornerstone.aubreylegal.com/api/webhooks/telnyx/voice` with API-v2
+   JSON format, and keep Messaging Profile JSON callbacks at
+   `/api/webhooks/telnyx/messaging`.
+5. On Scott's parent Credential Connection, set
+   `sip_uri_calling_preference: "internal"` (portal label: receive SIP URI
+   calls from connections in this account).
+6. Associate an enabled Outbound Voice Profile with both the TeXML application
+   and Scott's parent Credential Connection.
+7. Assign the firm's Telnyx number to the TeXML application.
+8. Leave Scott's generated credential and its parent credential connection
+   otherwise intact.
 
 - [ ] **Step 6: Verify production endpoints**
 
-Confirm:
+Confirm the status codes and bodies/provider state:
 
 ```text
-GET /api/token -> 200 while Scott is authenticated
-POST /api/webhooks/telnyx/voice -> 200 for authentic Telnyx callbacks
-GET /api/voice/telnyx/inbound -> 200 and Content-Type text/xml
+Authenticated GET /api/token
+  -> 200, JSON provider == "telnyx", and token is a non-empty string
+Authenticated GET /api/admin/communications/status
+  -> 200, providers.voice == "telnyx", telnyx.voiceConfigured == true,
+     telnyx.inboundVoiceConfigured == true, missing.inboundVoice == []
+GET /api/voice/telnyx/inbound
+  -> 200, Content-Type text/xml, Cache-Control no-store, and the XML contains
+     answerOnBridge="true", sequential="true", timeout="25",
+     Scott's approved sip:gencred...@sip.telnyx.com first, then +13392381012
+POST /api/webhooks/telnyx/voice with an authentic API-v2 JSON callback
+  -> 200 and {"ok":true}; a tampered signature -> 401 and no event row
+POST /api/webhooks/telnyx/texml with an authentic form callback
+  -> 200 and {"ok":true}; a tampered signature -> 401 and no event row
 ```
 
-Use Vercel runtime logs to confirm the prior repeated webhook 401 responses stop.
+Use Telnyx delivery inspection, the call-history row, and Vercel runtime logs to
+confirm the authentic JSON/form callbacks succeed and the prior repeated 401
+responses stop. A bare status-code probe without body/provider assertions is
+not rollout evidence.
 
 - [ ] **Step 7: Perform the two live call tests**
 
@@ -599,8 +660,11 @@ Use Vercel runtime logs to confirm the prior repeated webhook 401 responses stop
 
 Record:
 
-- pushed commit SHA;
+- `REVIEWED_COMMIT` and feature-branch remote SHA;
 - Vercel deployment ID and READY state;
+- Vercel deployment Git commit SHA equal to `REVIEWED_COMMIT`;
+- inbound TeXML response body assertions (destination order and timeout);
+- authenticated token/status provider assertions;
 - webhook response status;
 - answered-browser call result;
 - declined-call fallback result;
