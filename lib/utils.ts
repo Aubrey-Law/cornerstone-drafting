@@ -85,3 +85,30 @@ export function formatDateDetail(dateString: string, timeZone: string = FIRM_TIM
     ? formatDate(dateString)
     : formatDateTime(dateString, timeZone)
 }
+
+/** Calendar helpers shared by the calendar client and its route handlers. */
+export function calendarDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+export function calendarStartOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+export function calendarAddDays(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+}
+
+export function calendarStartOfWeek(date: Date): Date {
+  return calendarAddDays(calendarStartOfDay(date), -date.getDay())
+}
+
+/** Wide UTC bounds containing one firm-local date, including DST transition days. */
+export function firmDateUtcSearchBounds(dateKey: string): { from: string; to: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error('Invalid calendar date')
+  const noon = Date.parse(`${dateKey}T12:00:00Z`)
+  return {
+    from: new Date(noon - 18 * 60 * 60 * 1000).toISOString(),
+    to: new Date(noon + 18 * 60 * 60 * 1000).toISOString(),
+  }
+}

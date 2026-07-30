@@ -178,12 +178,17 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     function handleOpenPhone() {
       openTab('phone')
     }
+    function handleOpenEmail() {
+      openTab('email')
+    }
 
     window.addEventListener(CORNERSTONE_CHAT_OPEN_EVENT, handleOpenChat)
     window.addEventListener(OPEN_STAFF_SOFTPHONE_EVENT, handleOpenPhone)
+    window.addEventListener('cornerstone:email-open', handleOpenEmail)
     return () => {
       window.removeEventListener(CORNERSTONE_CHAT_OPEN_EVENT, handleOpenChat)
       window.removeEventListener(OPEN_STAFF_SOFTPHONE_EVENT, handleOpenPhone)
+      window.removeEventListener('cornerstone:email-open', handleOpenEmail)
     }
   }, [openTab])
 

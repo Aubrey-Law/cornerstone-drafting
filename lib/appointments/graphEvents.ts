@@ -38,6 +38,36 @@ export interface CreatedEvent {
   onlineMeetingUrl: string | null
 }
 
+/** Create an attorney-only planning hold. No attendees means no client email. */
+export async function createCalendarHold(input: {
+  title: string
+  startIso: string
+  endIso: string
+  matterId?: string | null
+}): Promise<CreatedEvent> {
+  const conn = await getMicrosoftConnectionForUser(null)
+  if (!conn) throw new Error('Microsoft Outlook is not connected')
+  const token = await getAccessToken(conn.user_id)
+  const r = await graphFetch(`${GRAPH_BASE}/me/events`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      subject: `BLOCK · ${input.title}`,
+      body: {
+        contentType: 'Text',
+        content: input.matterId ? `Cornerstone matter: ${input.matterId}` : 'Cornerstone planning hold',
+      },
+      start: { dateTime: input.startIso, timeZone: 'UTC' },
+      end: { dateTime: input.endIso, timeZone: 'UTC' },
+      showAs: 'busy',
+      categories: ['Cornerstone'],
+    }),
+  })
+  const json = await r.json().catch(() => ({})) as { id?: string; error?: { message?: string } }
+  if (!r.ok || !json.id) throw new Error(json.error?.message || `Graph hold create failed (${r.status})`)
+  return { eventId: json.id, onlineMeetingUrl: null }
+}
+
 function eventBodyHtml(input: CreateEventInput): string {
   const lines: string[] = [`<p>${input.type.label} with ${input.attendeeName}.</p>`]
   if (input.type.locationType === 'phone' && input.attendeePhone) {
@@ -131,6 +161,40 @@ export interface OutlookCalendarEvent {
   isAllDay: boolean
   /** Outlook free/busy status: free | tentative | busy | oof | workingElsewhere. */
   showAs: string
+}
+
+export interface OutlookAttendee {
+  name: string
+  email: string
+  status: string
+}
+
+/** RSVP state for one Outlook event. Failure is allowed to degrade at the caller. */
+export async function getCalendarEventAttendees(eventId: string): Promise<OutlookAttendee[]> {
+  const conn = await getMicrosoftConnectionForUser(null)
+  if (!conn) throw new Error('Microsoft Outlook is not connected')
+  const token = await getAccessToken(conn.user_id)
+  const params = new URLSearchParams({ '$select': 'attendees' })
+  const r = await graphFetch(`${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const json = await r.json().catch(() => ({})) as {
+    attendees?: Array<{
+      emailAddress?: { name?: string; address?: string }
+      status?: { response?: string }
+    }>
+    error?: { message?: string }
+  }
+  if (!r.ok) throw new Error(json.error?.message || `Graph event lookup failed (${r.status})`)
+  return (json.attendees ?? []).flatMap(attendee => {
+    const email = attendee.emailAddress?.address?.trim()
+    if (!email) return []
+    return [{
+      name: attendee.emailAddress?.name?.trim() || email,
+      email,
+      status: attendee.status?.response ?? 'none',
+    }]
+  })
 }
 
 interface RawGraphViewEvent {

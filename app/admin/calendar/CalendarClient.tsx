@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Plus, Settings } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Settings } from 'lucide-react'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,38 +14,23 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-
-type LocationType = 'phone' | 'teams' | 'in_person'
-
-const LOCATION_LABEL: Record<LocationType, string> = {
-  phone: 'Phone call',
-  teams: 'Virtual meeting',
-  in_person: 'In person',
-}
-
-interface CalendarAppointment {
-  id: string
-  startTime: string
-  endTime: string
-  status: 'scheduled' | 'cancelled' | 'rescheduled' | 'no_show'
-  locationType: LocationType | null
-  secondAttendeeName: string | null
-  secondAttendeeEmail: string | null
-  attendeeName: string
-  attendeeEmail: string
-  attendeePhone: string | null
-  notes: string | null
-  typeLabel: string
-  source: string
-  outlookSynced: boolean
-  linkedMatterId: string | null
-  linkedMatterNumber: string | null
-  linkedLeadId: string | null
-}
-
-type EventCategory = 'discovery' | 'meeting' | 'draft' | 'signing' | 'internal'
+import { DayAgenda } from './DayAgenda'
+import { EventPrepDrawer } from './EventPrepDrawer'
+import { PlanView } from './PlanView'
+import { QuickBookPopover } from './QuickBookPopover'
+import {
+  type AttentionItem,
+  type BookableType,
+  type CalendarAppointment,
+  type CalendarRailData,
+  type CalendarView,
+  type EventCategory,
+  type OutlookEvent,
+  type PlanData,
+  LOCATION_LABEL,
+  allowedFormats,
+} from './types'
 
 /**
  * Appointments carry a `typeLabel`; Outlook events only ever have a subject,
@@ -89,22 +74,6 @@ function isBlock(e: OutlookEvent): boolean {
 function shortMatterLabel(matterNumber: string): string {
   return matterNumber.split('-').slice(-2).join('-')
 }
-
-interface BookableType {
-  id: string
-  label: string
-  durationMinutes: number
-  locationType: LocationType
-  locationTypes: LocationType[]
-  active: boolean
-}
-
-function allowedFormats(type: BookableType | undefined): LocationType[] {
-  if (!type) return ['phone']
-  return type.locationTypes.length > 0 ? type.locationTypes : [type.locationType]
-}
-
-type CalendarView = 'month' | 'week' | 'day'
 
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** Time-grid bounds for day/week views (minutes from midnight, local). */
@@ -166,33 +135,11 @@ function minutesOfDay(iso: string): number {
   return d.getHours() * 60 + d.getMinutes()
 }
 
-interface BookingDraft {
-  typeId: string
-  locationType: LocationType
-  date: string
-  time: string
-  attendeeName: string
-  attendeeEmail: string
-  attendeePhone: string
-  secondAttendeeName: string
-  secondAttendeeEmail: string
-  notes: string
-}
-
 interface RescheduleDraft {
   id: string
   label: string
   date: string
   time: string
-}
-
-interface OutlookEvent {
-  id: string
-  subject: string
-  startIso: string
-  endIso: string
-  isAllDay: boolean
-  showAs: string
 }
 
 /**
@@ -234,14 +181,19 @@ export function CalendarClient() {
   const [types, setTypes] = useState<BookableType[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState<string>(dayKey(today))
-  const [draft, setDraft] = useState<BookingDraft | null>(null)
-  const [booking, setBooking] = useState(false)
+  const [quickBookOpen, setQuickBookOpen] = useState(false)
+  const [quickBookPrefill, setQuickBookPrefill] = useState<string | null>(null)
   const [reschedule, setReschedule] = useState<RescheduleDraft | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [acting, setActing] = useState(false)
   const [showOutlook, setShowOutlook] = useState(true)
   const [outlookEvents, setOutlookEvents] = useState<OutlookEvent[]>([])
   const [outlookConnected, setOutlookConnected] = useState(true)
+  const [attention, setAttention] = useState<AttentionItem[]>([])
+  const [rail, setRail] = useState<CalendarRailData>({ datesThisWeek: [], followUps: [], openSlots: [] })
+  const [planData, setPlanData] = useState<PlanData | null>(null)
+  const [selectedAppointment, setSelectedAppointment] = useState<CalendarAppointment | null>(null)
+  const [previewEvents, setPreviewEvents] = useState<OutlookEvent[]>([])
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined
@@ -254,6 +206,7 @@ export function CalendarClient() {
       const from = startOfWeek(anchor)
       return { from, to: addDays(from, 7) }
     }
+    if (view === 'plan') return { from: startOfDay(anchor), to: addDays(anchor, 16) }
     const grid = monthGrid(anchor.getFullYear(), anchor.getMonth())
     return { from: grid[0], to: addDays(grid[41], 1) }
   }, [view, anchor])
@@ -293,6 +246,53 @@ export function CalendarClient() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setQuickBookPrefill(null)
+        setQuickBookOpen(open => !open)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const rows = (event as CustomEvent<Array<{ id: string; title: string; payload: Record<string, unknown> }>>).detail
+      if (!Array.isArray(rows)) return
+      const ghosts = rows.flatMap(row => {
+        const start = typeof row.payload.start === 'string'
+          ? row.payload.start
+          : typeof row.payload.new_start === 'string'
+            ? row.payload.new_start
+            : ''
+        const end = typeof row.payload.end === 'string'
+          ? row.payload.end
+          : start
+            ? new Date(Date.parse(start) + 60 * 60_000).toISOString()
+            : ''
+        if (!Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end))) return []
+        return [{
+          id: `preview:${row.id}`,
+          subject: `Proposed · ${row.title}`,
+          startIso: new Date(start).toISOString(),
+          endIso: new Date(end).toISOString(),
+          isAllDay: false,
+          showAs: 'tentative',
+        }]
+      })
+      setPreviewEvents(ghosts)
+      if (ghosts[0]) {
+        setAnchor(startOfDay(new Date(ghosts[0].startIso)))
+        setSelectedDay(dayKey(new Date(ghosts[0].startIso)))
+      }
+    }
+    window.addEventListener('calendar:preview-proposals', handler)
+    return () => window.removeEventListener('calendar:preview-proposals', handler)
+  }, [])
+
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarAppointment[]>()
     for (const a of appointments) {
@@ -305,8 +305,8 @@ export function CalendarClient() {
   }, [appointments])
 
   const outlookByDay = useMemo(
-    () => outlookEventsByDay(showOutlook ? outlookEvents : []),
-    [outlookEvents, showOutlook],
+    () => outlookEventsByDay(showOutlook ? [...outlookEvents, ...previewEvents] : previewEvents),
+    [outlookEvents, previewEvents, showOutlook],
   )
 
   function shift(delta: number) {
@@ -317,20 +317,14 @@ export function CalendarClient() {
     }
   }
 
-  function openBookingDialog(prefill?: { date?: Date; time?: string }) {
-    const date = prefill?.date ?? startOfDay(today)
-    setDraft({
-      typeId: types[0]?.id ?? '',
-      locationType: allowedFormats(types[0])[0],
-      date: toDateInputValue(date),
-      time: prefill?.time ?? '09:00',
-      attendeeName: '',
-      attendeeEmail: '',
-      attendeePhone: '',
-      secondAttendeeName: '',
-      secondAttendeeEmail: '',
-      notes: '',
-    })
+  function openQuickBook(prefill?: { date?: Date; time?: string; iso?: string }) {
+    let iso = prefill?.iso ?? null
+    if (!iso && prefill?.date) {
+      const time = prefill.time ?? '09:00'
+      iso = new Date(`${toDateInputValue(prefill.date)}T${time}`).toISOString()
+    }
+    setQuickBookPrefill(iso)
+    setQuickBookOpen(true)
   }
 
   const patchAppointment = useCallback(
@@ -360,56 +354,14 @@ export function CalendarClient() {
     [authHeaders, load],
   )
 
-  async function submitBooking() {
-    if (!draft) return
-    if (!draft.typeId || !draft.attendeeName.trim() || !draft.attendeeEmail.trim()) {
-      toast.error('Type, name, and email are required')
-      return
-    }
-    const start = new Date(`${draft.date}T${draft.time}`)
-    if (!Number.isFinite(start.getTime())) {
-      toast.error('Invalid date or time')
-      return
-    }
-    setBooking(true)
-    try {
-      const res = await fetch('/api/admin/scheduling/appointments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({
-          typeId: draft.typeId,
-          locationType: draft.locationType,
-          startIso: start.toISOString(),
-          attendeeName: draft.attendeeName.trim(),
-          attendeeEmail: draft.attendeeEmail.trim(),
-          attendeePhone: draft.attendeePhone.trim() || undefined,
-          secondAttendeeName: draft.secondAttendeeName.trim() || undefined,
-          secondAttendeeEmail: draft.secondAttendeeEmail.trim() || undefined,
-          notes: draft.notes.trim() || undefined,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast.error(json.error ?? 'Failed to book the appointment')
-        return
-      }
-      toast.success('Appointment booked — confirmation email sent')
-      setSelectedDay(draft.date)
-      setDraft(null)
-      void load()
-    } catch {
-      toast.error('Failed to book the appointment')
-    } finally {
-      setBooking(false)
-    }
-  }
-
   const heading =
     view === 'month'
       ? anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       : view === 'week'
         ? `${startOfWeek(anchor).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${addDays(startOfWeek(anchor), 6).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-        : fmtDayHeading(anchor)
+        : view === 'plan'
+          ? 'Planning horizon'
+          : fmtDayHeading(anchor)
 
   const todayKey = dayKey(today)
   const selectedAppointments = byDay.get(selectedDay) ?? []
@@ -420,6 +372,68 @@ export function CalendarClient() {
 
   const selectedOutlook = outlookByDay.get(selectedDay) ?? []
   const selectedBlocks = selectedOutlook.filter(isBlock)
+
+  useEffect(() => {
+    if (view !== 'day') return
+    let stale = false
+    void (async () => {
+      const response = await fetch(`/api/admin/calendar/attention?date=${selectedDay}`, { headers: authHeaders() })
+      const body = response.ok ? await response.json() : { items: [], rail: { datesThisWeek: [], followUps: [], openSlots: [] } }
+      if (stale) return
+      setAttention(body.items ?? [])
+      let nextRail = body.rail ?? { datesThisWeek: [], followUps: [], openSlots: [] }
+      const firstType = types[0]
+      if (firstType) {
+        const from = new Date(`${selectedDay}T00:00:00`)
+        const to = addDays(from, 1)
+        const params = new URLSearchParams({
+          typeId: firstType.id,
+          locationType: allowedFormats(firstType)[0],
+          from: from.toISOString(),
+          to: to.toISOString(),
+        })
+        const slotsResponse = await fetch(`/api/admin/scheduling/slots?${params}`, { headers: authHeaders() })
+        const slotsBody = slotsResponse.ok ? await slotsResponse.json() : { slots: [] }
+        nextRail = { ...nextRail, openSlots: slotsBody.slots ?? [] }
+      }
+      if (!stale) setRail(nextRail)
+    })()
+    return () => { stale = true }
+  }, [view, selectedDay, types, authHeaders])
+
+  useEffect(() => {
+    if (view !== 'plan') return
+    let stale = false
+    setPlanData(null)
+    void fetch(`/api/admin/calendar/plan?from=${encodeURIComponent(anchor.toISOString())}`, { headers: authHeaders() })
+      .then(response => response.ok ? response.json() : null)
+      .then(body => { if (!stale) setPlanData(body) })
+    return () => { stale = true }
+  }, [view, anchor, authHeaders])
+
+  async function dismissAttention(id: string) {
+    setAttention(items => items.filter(item => item.id !== id))
+    const response = await fetch('/api/admin/calendar/attention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ itemId: id, date: selectedDay }),
+    })
+    if (!response.ok) {
+      toast.error('Could not save that dismissal')
+      const refreshed = await fetch(`/api/admin/calendar/attention?date=${selectedDay}`, { headers: authHeaders() })
+      if (refreshed.ok) setAttention((await refreshed.json()).items ?? [])
+    }
+  }
+
+  function beginReschedule(a: CalendarAppointment) {
+    const start = new Date(a.startTime)
+    setReschedule({
+      id: a.id,
+      label: `${a.typeLabel} — ${a.attendeeName}`,
+      date: dayKey(start),
+      time: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+    })
+  }
 
   const dayPanel = (
     <section className="rounded-lg border border-border p-4">
@@ -592,11 +606,14 @@ export function CalendarClient() {
         <h1 className="text-xl font-semibold text-foreground">Calendar</h1>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-md border border-border p-0.5">
-            {(['month', 'week', 'day'] as const).map(v => (
+            {(['day', 'week', 'month', 'plan'] as const).map(v => (
               <button
                 key={v}
                 type="button"
-                onClick={() => setView(v)}
+                onClick={() => {
+                  if (v === 'day') setAnchor(selectedDate)
+                  setView(v)
+                }}
                 className={cn(
                   'rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors',
                   view === v
@@ -643,10 +660,14 @@ export function CalendarClient() {
               <span className="text-amber-700">⚠ not connected</span>
             )}
           </label>
-          <Button size="sm" onClick={() => openBookingDialog({ date: selectedDate })}>
-            <Plus className="mr-1 h-4 w-4" />
-            New appointment
-          </Button>
+          <QuickBookPopover
+            open={quickBookOpen}
+            onOpenChange={setQuickBookOpen}
+            types={types}
+            prefillIso={quickBookPrefill}
+            authHeaders={authHeaders}
+            onBooked={() => void load()}
+          />
           <Button asChild variant="ghost" size="sm" title="Scheduling settings">
             <Link href="/admin/settings?tab=scheduling">
               <Settings className="h-4 w-4" />
@@ -689,174 +710,59 @@ export function CalendarClient() {
               todayKey={todayKey}
               selectedDay={selectedDay}
               onSelectDay={setSelectedDay}
+              onEventClick={setSelectedAppointment}
             />
-          ) : (
+          ) : view === 'week' ? (
             <TimeGrid
-              days={
-                view === 'week'
-                  ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))
-                  : [startOfDay(anchor)]
-              }
+              days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))}
               byDay={byDay}
               outlookByDay={outlookByDay}
               todayKey={todayKey}
-              onSlotClick={(date, time) => openBookingDialog({ date, time })}
-              onEventClick={a => setSelectedDay(dayKey(new Date(a.startTime)))}
+              onSlotClick={(date, time) => openQuickBook({ date, time })}
+              onEventClick={setSelectedAppointment}
+            />
+          ) : view === 'day' ? (
+            <DayAgenda
+              date={selectedDate}
+              appointments={selectedAppointments}
+              outlookEvents={selectedOutlook}
+              attention={attention}
+              rail={rail}
+              categoryStyle={CATEGORY_STYLE}
+              categorize={categorize}
+              blockHatch={BLOCK_HATCH}
+              onDismissAttention={id => void dismissAttention(id)}
+              onOpenAppointment={setSelectedAppointment}
+              onReschedule={beginReschedule}
+              onBookSlot={iso => openQuickBook(iso ? { iso } : { date: selectedDate })}
+            />
+          ) : (
+            <PlanView
+              data={planData}
+              onBook={(date, duration) => openQuickBook({
+                date: date ? new Date(date) : selectedDate,
+                time: duration ? '09:00' : undefined,
+              })}
+              onAskAssistant={prompt => window.dispatchEvent(new CustomEvent('cornerstone:chat-open', { detail: { prompt } }))}
             />
           )}
         </div>
         {view === 'week' && <div className="w-[300px] shrink-0">{dayPanel}</div>}
       </div>
 
-      {view !== 'week' && dayPanel}
+      {view === 'month' && dayPanel}
 
-      <Dialog open={draft !== null} onOpenChange={open => !open && setDraft(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>New appointment</DialogTitle>
-          </DialogHeader>
-          {draft && (
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="book-type">Appointment type</Label>
-                <select
-                  id="book-type"
-                  className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                  value={draft.typeId}
-                  onChange={e => {
-                    const next = types.find(t => t.id === e.target.value)
-                    setDraft({
-                      ...draft,
-                      typeId: e.target.value,
-                      // Keep the format if the new type also offers it.
-                      locationType: allowedFormats(next).includes(draft.locationType)
-                        ? draft.locationType
-                        : allowedFormats(next)[0],
-                    })
-                  }}
-                >
-                  {types.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.label} ({t.durationMinutes} min)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="book-format">Meeting format</Label>
-                <select
-                  id="book-format"
-                  className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                  value={draft.locationType}
-                  onChange={e => setDraft({ ...draft, locationType: e.target.value as LocationType })}
-                >
-                  {allowedFormats(types.find(t => t.id === draft.typeId)).map(f => (
-                    <option key={f} value={f}>
-                      {LOCATION_LABEL[f]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="book-date">Date</Label>
-                  <Input
-                    id="book-date"
-                    className="mt-1"
-                    type="date"
-                    value={draft.date}
-                    onChange={e => setDraft({ ...draft, date: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="book-time">Time</Label>
-                  <Input
-                    id="book-time"
-                    className="mt-1"
-                    type="time"
-                    value={draft.time}
-                    onChange={e => setDraft({ ...draft, time: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="book-name">Client name</Label>
-                <Input
-                  id="book-name"
-                  className="mt-1"
-                  value={draft.attendeeName}
-                  onChange={e => setDraft({ ...draft, attendeeName: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="book-spouse-name">Spouse name (optional)</Label>
-                  <Input
-                    id="book-spouse-name"
-                    className="mt-1"
-                    value={draft.secondAttendeeName}
-                    onChange={e => setDraft({ ...draft, secondAttendeeName: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="book-spouse-email">Spouse email (optional)</Label>
-                  <Input
-                    id="book-spouse-email"
-                    className="mt-1"
-                    type="email"
-                    value={draft.secondAttendeeEmail}
-                    onChange={e => setDraft({ ...draft, secondAttendeeEmail: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="book-email">Email</Label>
-                  <Input
-                    id="book-email"
-                    className="mt-1"
-                    type="email"
-                    value={draft.attendeeEmail}
-                    onChange={e => setDraft({ ...draft, attendeeEmail: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="book-phone">Phone (optional)</Label>
-                  <Input
-                    id="book-phone"
-                    className="mt-1"
-                    value={draft.attendeePhone}
-                    onChange={e => setDraft({ ...draft, attendeePhone: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="book-notes">Notes (optional)</Label>
-                <Textarea
-                  id="book-notes"
-                  className="mt-1"
-                  rows={2}
-                  value={draft.notes}
-                  onChange={e => setDraft({ ...draft, notes: e.target.value })}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Books on your Outlook calendar and emails the client a confirmation.
-                Staff bookings can use any time that is free — client-facing hours and
-                notice rules do not apply.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setDraft(null)} disabled={booking}>
-                  Cancel
-                </Button>
-                <Button onClick={() => void submitBooking()} disabled={booking}>
-                  {booking ? 'Booking…' : 'Book appointment'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <EventPrepDrawer
+        appointment={selectedAppointment}
+        open={selectedAppointment !== null}
+        onOpenChange={open => !open && setSelectedAppointment(null)}
+        authHeaders={authHeaders}
+        onReschedule={beginReschedule}
+        onBookNext={appointment => {
+          setSelectedAppointment(null)
+          openQuickBook({ date: addDays(new Date(appointment.startTime), 7) })
+        }}
+      />
 
       <Dialog open={reschedule !== null} onOpenChange={open => !open && setReschedule(null)}>
         <DialogContent className="sm:max-w-sm">
@@ -932,8 +838,9 @@ function MonthGrid(props: {
   todayKey: string
   selectedDay: string
   onSelectDay: (key: string) => void
+  onEventClick: (appointment: CalendarAppointment) => void
 }) {
-  const { anchor, byDay, outlookByDay, todayKey, selectedDay, onSelectDay } = props
+  const { anchor, byDay, outlookByDay, todayKey, selectedDay, onSelectDay, onEventClick } = props
   const grid = monthGrid(anchor.getFullYear(), anchor.getMonth())
 
   return (
@@ -960,9 +867,8 @@ function MonthGrid(props: {
           const hiddenCount =
             dayAppointments.length - shown.length + dayOutlook.length - outlookShown.length
           return (
-            <button
+            <div
               key={key}
-              type="button"
               onClick={() => onSelectDay(key)}
               className={cn(
                 'flex min-h-24 flex-col items-stretch gap-1 border-border p-1.5 text-left align-top transition-colors',
@@ -972,7 +878,9 @@ function MonthGrid(props: {
                 key === selectedDay ? 'bg-primary/5 ring-1 ring-inset ring-primary' : 'hover:bg-muted/50',
               )}
             >
-              <span
+              <button
+                type="button"
+                onClick={() => onSelectDay(key)}
                 className={cn(
                   'self-start rounded-full px-1.5 text-xs leading-5',
                   key === todayKey
@@ -983,7 +891,7 @@ function MonthGrid(props: {
                 )}
               >
                 {date.getDate()}
-              </span>
+              </button>
               {blocks.length > 0 && (
                 <span
                   className="truncate rounded px-1 text-[10px] leading-4 text-muted-foreground"
@@ -996,10 +904,15 @@ function MonthGrid(props: {
               {shown.map(a => {
                 const style = CATEGORY_STYLE[categorize(a.typeLabel)]
                 return (
-                  <span
+                  <button
                     key={a.id}
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation()
+                      onEventClick(a)
+                    }}
                     className={cn(
-                      'truncate rounded px-1 py-0.5 text-[11px] leading-4',
+                      'truncate rounded px-1 py-0.5 text-left text-[11px] leading-4',
                       a.status === 'cancelled' && 'bg-muted text-muted-foreground line-through',
                     )}
                     style={
@@ -1010,7 +923,7 @@ function MonthGrid(props: {
                     title={`${fmtTime(a.startTime)} ${a.typeLabel} — ${a.attendeeName}`}
                   >
                     {fmtTime(a.startTime)} {a.attendeeName}
-                  </span>
+                  </button>
                 )
               })}
               {outlookShown.map(e => {
@@ -1029,7 +942,7 @@ function MonthGrid(props: {
               {hiddenCount > 0 && (
                 <span className="px-1 text-[11px] text-muted-foreground">+{hiddenCount} more</span>
               )}
-            </button>
+            </div>
           )
         })}
       </div>

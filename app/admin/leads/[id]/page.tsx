@@ -5,6 +5,7 @@ import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
 import { fetchTasksForLead } from '@/lib/queries/tasks'
+import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
 import { recordTaskCounts } from '@/lib/tasks/types'
 import { LeadDetailClient } from './LeadDetailClient'
@@ -154,6 +155,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   }
   const schedulingSettings = await getSchedulingSettings()
   const initialTaskCounts = recordTaskCounts(await fetchTasksForLead(id, 'open'))
+  const [peopleMatter, initialPeopleContacts] = lead.matter_id
+    ? await Promise.all([
+        fetchMatter(lead.matter_id),
+        fetchMatterContacts(lead.matter_id),
+      ])
+    : [null, []]
   const { data: agreement } = lead.matter_id
     ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
@@ -175,6 +182,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       callsError={callsError?.message ?? null}
       actorError={actorResult.error?.message ?? null}
       activeAgreement={agreement}
+      peopleMatter={peopleMatter}
+      initialPeopleContacts={initialPeopleContacts}
       currentUser={{
         id: user?.id ?? '',
         role: user ? await getCachedUserRole(user.id) ?? '' : '',
