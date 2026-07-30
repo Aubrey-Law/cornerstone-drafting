@@ -18,6 +18,7 @@ interface MatterPeopleTabProps {
   matterId: string
   matter: PipelineMatter
   initialContacts: MatterContact[]
+  recordLabel?: 'matter' | 'lead'
 }
 
 export type PersonAddKind = 'spouse' | 'child' | 'fiduciary' | 'beneficiary'
@@ -26,7 +27,12 @@ export interface PersonAddRequest {
   nonce: number
 }
 
-export function MatterPeopleTab({ matterId, matter, initialContacts }: MatterPeopleTabProps) {
+export function MatterPeopleTab({
+  matterId,
+  matter,
+  initialContacts,
+  recordLabel = 'matter',
+}: MatterPeopleTabProps) {
   const [addRequest, setAddRequest] = useState<PersonAddRequest | null>(null)
   const requestAdd = (kind: PersonAddKind) => {
     setAddRequest({ kind, nonce: Date.now() })
@@ -38,7 +44,7 @@ export function MatterPeopleTab({ matterId, matter, initialContacts }: MatterPeo
         <div>
           <h3 className="text-sm font-semibold">People</h3>
           <p className="text-xs text-muted-foreground">
-            Household, fiduciary, and beneficiary roles for this matter.
+            Household, fiduciary, and beneficiary roles for this {recordLabel}.
           </p>
         </div>
         <DropdownMenu>
