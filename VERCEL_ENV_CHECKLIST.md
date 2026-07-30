@@ -160,18 +160,39 @@ Set `SMS_PROVIDER=telnyx` and/or `VOICE_PROVIDER=telnyx` to activate Telnyx.
 | `TELNYX_PUBLIC_KEY` | Ed25519 webhook verification key |
 | `TELNYX_PHONE_NUMBER` | New Telnyx number in E.164 format |
 | `TELNYX_MESSAGING_PROFILE_ID` | Messaging Profile assigned to the number |
-| `TELNYX_CONNECTION_ID` | Credential Connection assigned to the number |
+| `TELNYX_CONNECTION_ID` | Credential Connection used to mint Scott's softphone JWT (separate from inbound number routing) |
 | `TELNYX_TELEPHONY_CREDENTIAL_IDS` | JSON map of Supabase user UUID to Telnyx telephony credential ID |
 | `TELNYX_TELEPHONY_CREDENTIAL_ID` | Optional single-user credential fallback |
 | `TELNYX_WEBHOOK_BASE_URL` | Optional public callback base; defaults to `NEXT_PUBLIC_APP_URL` |
 | `TELNYX_RECORD_CALLS` | Optional `true` recording flag for portal routing configuration |
-| `TELNYX_INBOUND_RING_TIMEOUT` | Optional unanswered ring timeout |
-| `TELNYX_INBOUND_FALLBACK_DESTINATION` | Optional Retell phone number or SIP destination |
+| `TELNYX_INBOUND_AGENT_SIP_URI` | Scott's inbound SIP target: `sip:gencredjEk3vUT63zmO3jSdGMWCDzKk5OzKUOAoUkomgBgGVX@sip.telnyx.com` |
+| `TELNYX_INBOUND_RING_TIMEOUT` | `25` seconds before the fallback destination |
+| `TELNYX_INBOUND_FALLBACK_DESTINATION` | Environment-configurable fallback; production value: `+13392381012` |
 
 Configure the Messaging Profile webhook as `/api/webhooks/telnyx/messaging` and
-the Credential Connection voice webhook as `/api/webhooks/telnyx/voice`. Each
-staff softphone user needs a distinct telephony credential. The admin-safe audit
-endpoint is `GET /api/admin/communications/status`.
+the Credential Connection voice webhook as `/api/webhooks/telnyx/voice`. Those
+two endpoints receive signed Telnyx API-v2 JSON events. Each staff softphone
+user needs a distinct generated telephony credential.
+
+Inbound calling uses a separate TeXML application:
+
+1. On Scott's parent Credential Connection, set **Receive SIP URI Calls** to
+   **From connections in this account** (`sip_uri_calling_preference:
+   "internal"`). Do not use unrestricted SIP URI calling.
+2. Associate an enabled Outbound Voice Profile with both the TeXML application
+   and Scott's parent Credential Connection so the TeXML application's Dial can
+   reach the generated SIP credential and the fallback PSTN number.
+3. Assign the firm's Telnyx number to the TeXML application.
+4. Set the TeXML application's Voice URL to
+   `/api/voice/telnyx/inbound` using POST.
+5. Set its call-progress/status callback to
+   `/api/webhooks/telnyx/texml` using POST. TeXML status callbacks are signed
+   `application/x-www-form-urlencoded` bodies; do not point them at the
+   API-v2 JSON voice endpoint or label them API v2.
+
+The admin-safe audit endpoint is `GET /api/admin/communications/status`.
+Inbound readiness is true only when `VOICE_PROVIDER=telnyx`, outbound Telnyx
+voice is ready, and the fixed SIP/fallback routing values validate.
 
 ## Optional — Microsoft Graph (Outlook send)
 

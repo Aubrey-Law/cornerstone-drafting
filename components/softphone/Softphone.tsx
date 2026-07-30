@@ -705,6 +705,7 @@ export default function Softphone() {
   const callSnapshot = useMemo(
     () => ({
       active: inCall,
+      incoming: status === STATUS.INCOMING,
       connected: status === STATUS.ON_CALL,
       muted,
       held,
@@ -875,7 +876,7 @@ export default function Softphone() {
               onClick={acceptCall}
               className="flex-1 rounded-[10px] bg-primary py-3 text-[10px] font-medium uppercase tracking-[0.14em] text-primary-foreground hover:opacity-90"
             >
-              Accept
+              Answer
             </button>
           </div>
         </section>

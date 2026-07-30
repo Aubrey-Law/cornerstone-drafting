@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -65,11 +65,74 @@ vi.mock('@twilio/voice-sdk', () => ({
   Device: voiceSdk.FakeDevice,
   Call: { Codec: { Opus: 'opus', PCMU: 'pcmu' } },
 }))
-vi.mock('@telnyx/webrtc', () => ({ TelnyxRTC: class {} }))
+
+const telnyxSdk = vi.hoisted(() => {
+  type Handler = (...args: unknown[]) => void
+
+  class FakeCall {
+    state = 'ringing'
+    direction = 'inbound'
+    options = {
+      remoteCallerNumber: '+16175550100',
+      destinationNumber: '+17815550100',
+    }
+    answer = vi.fn(async () => {})
+    hangup = vi.fn(async () => {})
+    muteAudio = vi.fn()
+    unmuteAudio = vi.fn()
+    hold = vi.fn(async () => {})
+    unhold = vi.fn(async () => {})
+    dtmf = vi.fn()
+  }
+
+  class FakeTelnyxRTC {
+    static latest: FakeTelnyxRTC | null = null
+    handlers = new Map<string, Handler[]>()
+    options: { login_token: string }
+    remoteElement: HTMLAudioElement | null = null
+    connect = vi.fn(async () => this.emit('telnyx.ready'))
+    disconnect = vi.fn(async () => {})
+    newCall = vi.fn(() => new FakeCall())
+
+    constructor(options: { login_token: string }) {
+      this.options = options
+      FakeTelnyxRTC.latest = this
+    }
+
+    on(event: string, handler: Handler) {
+      this.handlers.set(event, [...(this.handlers.get(event) ?? []), handler])
+    }
+
+    emit(event: string, ...args: unknown[]) {
+      for (const handler of this.handlers.get(event) ?? []) handler(...args)
+    }
+  }
+
+  let lastCall: FakeCall | null = null
+
+  return {
+    FakeTelnyxRTC,
+    emitIncoming: () => {
+      lastCall = new FakeCall()
+      FakeTelnyxRTC.latest?.emit('telnyx.notification', {
+        type: 'callUpdate',
+        call: lastCall,
+      })
+      return lastCall
+    },
+    reset: () => {
+      FakeTelnyxRTC.latest = null
+      lastCall = null
+    },
+  }
+})
+
+vi.mock('@telnyx/webrtc', () => ({ TelnyxRTC: telnyxSdk.FakeTelnyxRTC }))
 
 import Softphone from '@/components/softphone/Softphone'
 import { SoftphoneProvider } from '@/components/softphone/SoftphoneProvider'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
+import { AdminRail, useAdminRail } from '@/components/rail/AdminRail'
 
 const DIRECTORY = [
   {
@@ -106,11 +169,18 @@ const BRIEFING = {
   ],
 }
 
-function mockFetch(overrides: { summary?: string | null } = {}) {
+function mockFetch(overrides: { summary?: string | null; provider?: 'twilio' | 'telnyx' } = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = String(input)
     if (url.includes('/api/token')) {
-      return { ok: true, json: async () => ({ provider: 'twilio', token: 't', callerNumber: '+17815550000' }) } as Response
+      return {
+        ok: true,
+        json: async () => ({
+          provider: overrides.provider ?? 'twilio',
+          token: 't',
+          callerNumber: '+17815550000',
+        }),
+      } as Response
     }
     if (url.includes('/api/admin/phone/directory')) {
       return { ok: true, json: async () => ({ entries: DIRECTORY }) } as Response
@@ -139,8 +209,28 @@ function renderPhone() {
   )
 }
 
+function RailHarness() {
+  const rail = useAdminRail({ voiceEnabled: true })
+  return (
+    <SoftphoneProvider voiceEnabled>
+      <AdminRail rail={rail} voiceEnabled />
+    </SoftphoneProvider>
+  )
+}
+
 beforeEach(() => {
   routerRefresh.mockClear()
+  const values = new Map<string, string>()
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    },
+  })
+  window.localStorage.clear()
 })
 
 afterEach(() => {
@@ -148,9 +238,30 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   voiceSdk.reset()
+  telnyxSdk.reset()
 })
 
 describe('softphone rail pane', () => {
+  it('opens the closed assistant rail to Answer and Decline an incoming Telnyx call', async () => {
+    mockFetch({ provider: 'telnyx' })
+    render(<RailHarness />)
+
+    expect(screen.queryByRole('button', { name: 'Phone' })).toBeNull()
+    await waitFor(() => expect(telnyxSdk.FakeTelnyxRTC.latest?.connect).toHaveBeenCalled())
+
+    let incomingCall: ReturnType<typeof telnyxSdk.emitIncoming>
+    await act(async () => {
+      incomingCall = telnyxSdk.emitIncoming()
+    })
+
+    expect(await screen.findByRole('button', { name: 'Answer' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Phone' }).getAttribute('aria-current')).toBe('page')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Answer' }))
+    expect(incomingCall!.answer).toHaveBeenCalledTimes(1)
+  })
+
   it('shows the line status and outbound number in the footer', async () => {
     mockFetch()
     renderPhone()

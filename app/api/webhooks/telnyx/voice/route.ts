@@ -1,19 +1,41 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { unwrapTelnyxWebhook } from '@/lib/telnyx/client'
-import { telnyxVoiceEventToRow, type TelnyxVoiceEvent } from '@/lib/telnyx/voice'
+import {
+  mergeTelnyxCallRows,
+  telnyxVoiceEventToRow,
+  type TelnyxVoiceEvent,
+} from '@/lib/telnyx/voice'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function isTelnyxVoiceEvent(value: unknown): value is TelnyxVoiceEvent {
+  if (!value || typeof value !== 'object') return false
+  const data = (value as { data?: unknown }).data
+  if (!data || typeof data !== 'object') return false
+  const candidate = data as Record<string, unknown>
+  return typeof candidate.id === 'string' &&
+    Boolean(candidate.id.trim()) &&
+    typeof candidate.event_type === 'string' &&
+    candidate.event_type.startsWith('call.') &&
+    Boolean(candidate.payload) &&
+    typeof candidate.payload === 'object' &&
+    !Array.isArray(candidate.payload)
+}
+
 export async function POST(req: Request) {
   const rawBody = await req.text()
-  let event: TelnyxVoiceEvent
+  let parsed: unknown
   try {
-    event = await unwrapTelnyxWebhook<TelnyxVoiceEvent>(req, rawBody)
+    parsed = await unwrapTelnyxWebhook<unknown>(req, rawBody)
   } catch {
     return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
   }
+  if (!isTelnyxVoiceEvent(parsed)) {
+    return NextResponse.json({ error: 'invalid voice event' }, { status: 400 })
+  }
+  const event = parsed
 
   const admin = getAdminClient()
   const { error: claimError } = await admin.from('telephony_webhook_events').insert({
@@ -50,14 +72,7 @@ export async function POST(req: Request) {
           .select('*')
           .eq('external_call_id', incoming.external_call_id)
           .maybeSingle()
-        const row = {
-          ...(existing ?? {}),
-          ...incoming,
-          answered_at: incoming.answered_at ?? existing?.answered_at ?? null,
-          ended_at: incoming.ended_at ?? existing?.ended_at ?? null,
-          duration_seconds: incoming.duration_seconds ?? existing?.duration_seconds ?? null,
-          status: incoming.status === 'unknown' ? existing?.status ?? 'initiated' : incoming.status,
-        }
+        const row = mergeTelnyxCallRows(existing, incoming)
         const { error } = await admin.from('calls').upsert(row, { onConflict: 'external_call_id' })
         if (error) throw error
       }

@@ -277,17 +277,20 @@ export function AdminRail({
   // A live call keeps its bar on screen whenever the dialer isn't docked.
   const showCallBar = voiceEnabled && !phoneDocked && call.active
 
-  // A finished call leaves a wrap-up form the operator has to deal with —
-  // bring the rail back rather than stranding it behind a collapsed panel.
+  // Incoming and finished calls require an operator decision. Bring the phone
+  // forward even when the rail was closed, minimized, or on another tab.
   const { openTab } = rail
+  const incoming = call.incoming
   const wrapUpPending = call.wrapUpPending
   useEffect(() => {
-    if (wrapUpPending && voiceEnabled) openTab('phone')
-  }, [wrapUpPending, voiceEnabled, openTab])
+    if ((incoming || wrapUpPending) && voiceEnabled) openTab('phone')
+  }, [incoming, wrapUpPending, voiceEnabled, openTab])
 
   const tabs: { key: RailTab; label: string; icon: typeof Sparkles; dot?: boolean; count?: number }[] = [
     { key: 'assistant', label: 'Assistant', icon: Sparkles },
-    ...(voiceEnabled ? [{ key: 'phone' as const, label: 'Phone', icon: Phone, dot: call.active }] : []),
+    ...(voiceEnabled
+      ? [{ key: 'phone' as const, label: 'Phone', icon: Phone, dot: call.active || call.incoming }]
+      : []),
     { key: 'email', label: 'Email', icon: Mail },
     { key: 'tasks', label: 'Tasks', icon: ListTodo, count: tasksOverdue },
     { key: 'activity', label: 'Activity', icon: Activity },
@@ -329,7 +332,7 @@ export function AdminRail({
                 {active && item.label}
                 {item.dot && (
                   <span
-                    aria-label="Call in progress"
+                    aria-label={call.incoming ? 'Incoming call' : 'Call in progress'}
                     role="status"
                     className={cn(
                       'rounded-full bg-success motion-safe:animate-pulse',
@@ -503,7 +506,7 @@ export function RailToggleButton({ rail }: { rail: AdminRailController }) {
       className="relative"
     >
       <PanelRight className="h-4 w-4" />
-      {call.active && (
+      {(call.active || call.incoming) && (
         <span
           aria-hidden="true"
           className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-success"
