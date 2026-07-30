@@ -2,7 +2,12 @@ import fs from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
 import { telnyxCredentialIdForUser } from '@/lib/telnyx/config'
+import {
+  buildTelnyxInboundTexml,
+  telnyxInboundRouteConfig,
+} from '@/lib/telnyx/inbound'
 import { telnyxVoiceEventToRow } from '@/lib/telnyx/voice'
+import { GET as getTelnyxInboundTexml } from '@/app/api/voice/telnyx/inbound/route'
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -54,5 +59,58 @@ describe('Telnyx communications migration', () => {
     expect(sql).toContain("provider in ('twilio', 'telnyx', 'retell')")
     expect(sql).toContain('telephony_webhook_events')
     expect(sql).toContain('unique (provider, provider_event_id)')
+  })
+
+  it('routes inbound calls to Scott for 25 seconds before the fallback number', () => {
+    const xml = buildTelnyxInboundTexml({
+      agentSipUri: 'sip:gencredScott@sip.telnyx.com',
+      fallbackDestination: '+13392381012',
+      ringTimeoutSeconds: 25,
+    })
+
+    expect(xml).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Response><Dial answerOnBridge="true" sequential="true" timeout="25">' +
+      '<Sip>sip:gencredScott@sip.telnyx.com</Sip>' +
+      '<Number>+13392381012</Number>' +
+      '</Dial></Response>',
+    )
+    expect(xml.indexOf('<Sip>')).toBeLessThan(xml.indexOf('<Number>'))
+  })
+
+  it('escapes configured TeXML destinations', () => {
+    const xml = buildTelnyxInboundTexml({
+      agentSipUri: 'sip:agent&desk@sip.telnyx.com',
+      fallbackDestination: '+13392381012',
+      ringTimeoutSeconds: 25,
+    })
+    expect(xml).toContain('<Sip>sip:agent&amp;desk@sip.telnyx.com</Sip>')
+  })
+
+  it('returns a safe hangup document when inbound routing is incomplete', () => {
+    expect(buildTelnyxInboundTexml(null)).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
+    )
+  })
+
+  it('reads and validates inbound routing configuration', () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+    vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '25')
+    expect(telnyxInboundRouteConfig()).toEqual({
+      agentSipUri: 'sip:gencredScott@sip.telnyx.com',
+      fallbackDestination: '+13392381012',
+      ringTimeoutSeconds: 25,
+    })
+  })
+
+  it('serves inbound TeXML without caching', () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+    vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '25')
+    const response = getTelnyxInboundTexml()
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('text/xml; charset=utf-8')
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 })
