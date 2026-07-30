@@ -1,4 +1,4 @@
-export const LEAD_TABS = ['plan', 'tasks', 'timeline', 'intake', 'documents', 'notes'] as const
+export const LEAD_TABS = ['plan', 'tasks', 'timeline', 'intake', 'people', 'assets', 'documents', 'notes'] as const
 
 export type LeadTab = (typeof LEAD_TABS)[number]
 

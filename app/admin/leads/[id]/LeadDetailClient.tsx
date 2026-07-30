@@ -52,9 +52,15 @@ import type {
   LeadDetailRecord,
   LeadSpouseRecord,
 } from '@/lib/leads/viewTypes'
+import type { MatterContact, PipelineMatter } from '@/types/database'
+import { MatterPeopleTab } from '@/app/admin/matters/[id]/MatterPeopleTab'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
+const MatterAssetsTab = dynamic(
+  () => import('@/app/admin/matters/[id]/tabs/assets').then(module => ({ default: module.MatterAssetsTab })),
+  { ssr: false, loading: () => <p className="text-xs text-muted-foreground">Loading assets…</p> },
+)
 
 type LeadRecord = LeadDetailRecord
 type LeadSpouse = LeadSpouseRecord
@@ -75,6 +81,8 @@ type LeadDetailClientProps = {
   actorError?: string | null
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
+  peopleMatter?: PipelineMatter | null
+  initialPeopleContacts?: MatterContact[]
   initialTaskCounts?: RecordTaskCounts
   initialIntakeUrl?: string | null
 }
@@ -143,6 +151,8 @@ export function LeadDetailClient({
   actorError = null,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
+  peopleMatter = null,
+  initialPeopleContacts = [],
   initialTaskCounts = { open: 0, overdue: 0 },
   initialIntakeUrl = null,
 }: LeadDetailClientProps) {
@@ -178,7 +188,11 @@ export function LeadDetailClient({
     || activeField !== null
     || busyIntent !== null
   const interactionLockRef = useRef(false)
-  const { documents, loading: documentsLoading } = useLeadDocuments(lead.matter_id)
+  const {
+    documents,
+    loading: documentsLoading,
+    reload: reloadDocuments,
+  } = useLeadDocuments(lead.matter_id)
   const taskCounts = useRecordTaskCounts(lead.id, initialTaskCounts)
 
   // The URL owns the tab, but the click applies immediately so the workspace
@@ -645,6 +659,8 @@ export function LeadDetailClient({
               </TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
+              <TabsTrigger value="people">People</TabsTrigger>
+              <TabsTrigger value="assets">Assets</TabsTrigger>
               <TabsTrigger value="documents">Documents ({documentsCount})</TabsTrigger>
               <TabsTrigger value="notes">Notes ({initialNotes.length})</TabsTrigger>
             </TabsList>
@@ -705,12 +721,42 @@ export function LeadDetailClient({
               </div>
             </TabsContent>
 
+            {peopleMatter && lead.matter_id ? (
+              <MatterPeopleTab
+                matterId={lead.matter_id}
+                matter={peopleMatter}
+                initialContacts={initialPeopleContacts}
+                recordLabel="lead"
+              />
+            ) : (
+              <TabsContent value="people" className="mt-4">
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  People are unavailable because this lead is not linked to an opportunity record.
+                </p>
+              </TabsContent>
+            )}
+
+            <TabsContent value="assets" className="mt-4">
+              <MatterAssetsTab
+                matterId={lead.matter_id ?? undefined}
+                intakeId={liveIntakeId}
+                clientName={clientName}
+                spouseName={spouse
+                  ? [spouse.first_name, spouse.last_name].filter(Boolean).join(' ') || null
+                  : null}
+                maritalStatus={lead.marital_status}
+                accessToken={token}
+              />
+            </TabsContent>
+
             <TabsContent value="documents" className="mt-4">
               <LeadDocumentsTab
                 documents={documents}
                 loading={documentsLoading}
                 matterId={lead.matter_id ?? null}
                 agreementId={activeAgreement?.id ?? null}
+                clientName={clientName}
+                onDocumentsChanged={reloadDocuments}
               />
             </TabsContent>
 

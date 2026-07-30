@@ -3,7 +3,8 @@
 import { memo, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import { Calendar, Check, Pencil, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { FormattedNote } from '@/components/notes/FormattedNote'
+import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
 import { TabsContent } from '@/components/ui/tabs'
 import { cn, formatDateTime } from '@/lib/utils'
 import { AssistantNotePromptButton } from '@/app/admin/components/AssistantNotePromptButton'
@@ -149,12 +150,11 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                         </button>
                       ))}
                     </div>
-                    <Textarea
-                      aria-label="Edit note body"
+                    <FormattedNoteEditor
+                      ariaLabel="Edit note body"
                       value={editingNoteText}
-                      onChange={event => setEditingNoteText(event.target.value)}
+                      onChange={setEditingNoteText}
                       rows={3}
-                      className="resize-none text-sm"
                       onKeyDown={event => {
                         if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                           event.preventDefault()
@@ -164,7 +164,9 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                     />
                   </div>
                 ) : (
-                  <p className={cn('whitespace-pre-wrap text-sm', isSystem ? 'text-text-secondary' : 'text-text-primary')}>{displayContent}</p>
+                  <FormattedNote className={isSystem ? 'text-text-secondary' : 'text-text-primary'}>
+                    {displayContent}
+                  </FormattedNote>
                 )}
               </div>
             )
@@ -177,13 +179,13 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
           <p className="text-[11px] font-medium text-muted-foreground">AI assistant</p>
           <AssistantNotePromptButton />
         </div>
-        <Textarea
-          ref={textareaRef}
+        <FormattedNoteEditor
+          textareaRef={textareaRef}
+          ariaLabel="New matter note"
           placeholder="Add a note... (Cmd+Enter to save)"
           value={noteText}
-          onChange={event => setNoteText(event.target.value)}
+          onChange={setNoteText}
           rows={3}
-          className="resize-none text-sm"
           onKeyDown={event => {
             if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
               event.preventDefault()

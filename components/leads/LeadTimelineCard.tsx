@@ -7,6 +7,8 @@ import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { CallRow } from '@/components/calls/CallRow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { FormattedNote } from '@/components/notes/FormattedNote'
+import { FormattedNoteEditor } from '@/components/notes/FormattedNoteEditor'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { phoneTelHref } from '@/lib/phone'
 import {
@@ -236,7 +238,7 @@ export function LeadTimelineCard({
       if (!meetingNote || expandedMeetingId !== meetingNote.id) return null
       return (
         <div className="mt-2 space-y-1 text-sm">
-          <p className="whitespace-pre-wrap">{meetingNote.body}</p>
+          <FormattedNote>{meetingNote.body}</FormattedNote>
           <p className="text-xs text-muted-foreground">
             Meeting date: {formatDateDetail(meetingNote.date)}
             {meetingNote.attendees.length > 0 ? ` · ${meetingNote.attendees.join(', ')}` : ''}
@@ -244,7 +246,10 @@ export function LeadTimelineCard({
         </div>
       )
     }
-    return item.body ? <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{item.body}</p> : null
+    if (!item.body) return null
+    return item.kind === 'note'
+      ? <FormattedNote className="mt-1 text-muted-foreground">{item.body}</FormattedNote>
+      : <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{item.body}</p>
   }
 
   return (
@@ -280,13 +285,15 @@ export function LeadTimelineCard({
         </div>
       </div>
 
-      <div className="mt-4 flex gap-2">
-        <Input
-          aria-label="New note"
+      <div className="mt-4 flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <FormattedNoteEditor
+          ariaLabel="New note"
           value={body}
-          onChange={event => setBody(event.target.value)}
+          onChange={setBody}
           placeholder="Add an internal note"
-        />
+          />
+        </div>
         <Button type="button" disabled={pending || !body.trim()} onClick={() => void addNote()}>
           Add note
         </Button>
@@ -300,7 +307,11 @@ export function LeadTimelineCard({
           <Input autoFocus aria-label="Meeting title" value={meeting.title} onChange={event => setMeeting(current => ({ ...current, title: event.target.value }))} />
           <Input aria-label="Meeting date" type="date" value={meeting.date} onChange={event => setMeeting(current => ({ ...current, date: event.target.value }))} />
           <Input aria-label="Attendees" value={meeting.attendees} onChange={event => setMeeting(current => ({ ...current, attendees: event.target.value }))} />
-          <textarea aria-label="Meeting notes" className="w-full rounded-md border p-2" value={meeting.body} onChange={event => setMeeting(current => ({ ...current, body: event.target.value }))} />
+          <FormattedNoteEditor
+            ariaLabel="Meeting notes"
+            value={meeting.body}
+            onChange={value => setMeeting(current => ({ ...current, body: value }))}
+          />
           <div className="flex gap-2">
             <Button
               type="button"
@@ -370,8 +381,10 @@ export function LeadTimelineCard({
                 </div>
 
                 {note && editingNoteId === note.id ? (
-                  <div className="mt-2 flex gap-2">
-                    <Input aria-label="Edit note body" value={editBody} onChange={event => setEditBody(event.target.value)} />
+                  <div className="mt-2 flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <FormattedNoteEditor ariaLabel="Edit note body" value={editBody} onChange={setEditBody} />
+                    </div>
                     <Button type="button" size="sm" disabled={pending || !editBody.trim()} onClick={() => void saveNote(note.id)}>
                       Save note
                     </Button>
