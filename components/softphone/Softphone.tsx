@@ -52,6 +52,7 @@ type SoftphoneStatus = (typeof STATUS)[keyof typeof STATUS]
 type Outcome = 'Reached' | 'Voicemail' | 'No answer'
 
 const OUTCOMES: Outcome[] = ['Reached', 'Voicemail', 'No answer']
+const DND_STORAGE_KEY = 'cornerstone.softphone.dnd'
 
 const KEYPAD: [string, string][] = [
   ['1', ''], ['2', 'ABC'], ['3', 'DEF'],
@@ -160,6 +161,26 @@ export default function Softphone() {
   const wrapUpOutcomeRef = useRef<Outcome>('Reached')
 
   const router = useRouter()
+
+  useEffect(() => {
+    try {
+      setDnd(window.localStorage.getItem(DND_STORAGE_KEY) === '1')
+    } catch {
+      // Storage can be unavailable in hardened browser contexts.
+    }
+  }, [])
+
+  const toggleDnd = useCallback(() => {
+    setDnd(previous => {
+      const next = !previous
+      try {
+        window.localStorage.setItem(DND_STORAGE_KEY, next ? '1' : '0')
+      } catch {
+        // DND still works for this session when storage is unavailable.
+      }
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     wrapUpNotesRef.current = wrapUpNotes
@@ -1209,7 +1230,7 @@ export default function Softphone() {
         )}
         <button
           type="button"
-          onClick={() => setDnd(prev => !prev)}
+          onClick={toggleDnd}
           disabled={inCall}
           aria-pressed={dnd}
           aria-label={dnd ? 'Disable do not disturb' : 'Enable do not disturb'}
