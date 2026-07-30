@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { Plus, Repeat, X } from 'lucide-react'
+import { ListPlus, Plus, Repeat, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { parseCapture } from '@/lib/tasks/parseCapture'
@@ -125,6 +125,9 @@ export function TaskComposer({
   const [assignee, setAssignee] = useState<AssigneeOption | null>(null)
   const [priority, setPriority] = useState<TaskPriority | null>(null)
   const [recurrence, setRecurrence] = useState<TaskRecurrence | null>(null)
+  const [subtasks, setSubtasks] = useState<string[]>([])
+  const [subtaskDraft, setSubtaskDraft] = useState('')
+  const [subtasksOpen, setSubtasksOpen] = useState(false)
   const [records, setRecords] = useState<RecordOption[]>([])
   const [templates, setTemplates] = useState<TemplateOption[]>([])
   const [assignees, setAssignees] = useState<AssigneeOption[]>([])
@@ -208,8 +211,18 @@ export function TaskComposer({
     setPriority(null)
     setRecurrence(null)
     setAssignee(null)
+    setSubtasks([])
+    setSubtaskDraft('')
+    setSubtasksOpen(false)
     if (!lockRecord) setRecord(defaultRecord)
   }, [defaultRecord, lockRecord])
+
+  const addSubtask = useCallback(() => {
+    const text = subtaskDraft.trim()
+    if (!text) return
+    setSubtasks(current => [...current, text])
+    setSubtaskDraft('')
+  }, [subtaskDraft])
 
   const submit = useCallback(async () => {
     const title = parsed.title.trim()
@@ -224,12 +237,13 @@ export function TaskComposer({
         lead_id: record?.kind === 'lead' ? record.id : null,
         assignee_id: assignee?.id ?? null,
         recurrence,
+        checklist: subtasks.map(text => ({ text, done: false })),
       })
       if (created) reset()
     } finally {
       setSaving(false)
     }
-  }, [parsed, saving, onCreate, effectivePriority, record, assignee, recurrence, reset])
+  }, [parsed, saving, onCreate, effectivePriority, record, assignee, recurrence, subtasks, reset])
 
   const canSubmit = parsed.title.trim().length > 0 && !saving
 
@@ -390,7 +404,69 @@ export function TaskComposer({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+
+            <button
+              type="button"
+              onClick={() => setSubtasksOpen(open => !open)}
+              className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-expanded={subtasksOpen}
+            >
+              <Chip dashed={subtasks.length === 0}>
+                <ListPlus className="size-3" aria-hidden />
+                {subtasks.length > 0
+                  ? `${subtasks.length} subtask${subtasks.length === 1 ? '' : 's'}`
+                  : 'Subtasks'}
+              </Chip>
+            </button>
           </div>
+
+          {subtasksOpen && (
+            <div className="rounded-md border border-border bg-muted/30 p-2">
+              {subtasks.length > 0 && (
+                <ul className="mb-2 space-y-1">
+                  {subtasks.map((subtask, index) => (
+                    <li key={`${subtask}-${index}`} className="flex items-center gap-2 text-xs">
+                      <span className="size-3 shrink-0 rounded-full border border-muted-foreground/40" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate text-foreground">{subtask}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSubtasks(current => current.filter((_, itemIndex) => itemIndex !== index))}
+                        aria-label={`Remove subtask ${subtask}`}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  value={subtaskDraft}
+                  onChange={event => setSubtaskDraft(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      addSubtask()
+                    }
+                  }}
+                  placeholder="Add a subtask"
+                  aria-label="Subtask title"
+                  className="h-7 min-w-0 flex-1 rounded border border-border bg-card px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  disabled={!subtaskDraft.trim()}
+                  onClick={addSubtask}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-muted-foreground">

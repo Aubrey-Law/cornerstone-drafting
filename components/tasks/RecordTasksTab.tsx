@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { TaskComposer } from './TaskComposer'
+import { TaskDetailSheet, type TaskAssigneeOption } from './TaskDetailSheet'
 import { TaskCheckbox, TaskDueCell, TaskPriorityDot, TaskSourcePill } from './TaskPrimitives'
 import { useTaskActions } from './useTaskActions'
 
@@ -67,6 +68,8 @@ export function RecordTasksTab({
   const [sourceFilter, setSourceFilter] = useState<TaskSource | 'all'>('all')
   const [composerOpen, setComposerOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null)
+  const [assignees, setAssignees] = useState<TaskAssigneeOption[]>([])
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
@@ -98,6 +101,13 @@ export function RecordTasksTab({
       .then(res => (res.ok ? res.json() : { templates: [] }))
       .then(json => setTemplates((json.templates ?? []) as TemplateOption[]))
       .catch(() => setTemplates([]))
+  }, [authHeaders])
+
+  useEffect(() => {
+    void fetch('/api/admin/tasks/assignees', { headers: authHeaders })
+      .then(res => (res.ok ? res.json() : { assignees: [] }))
+      .then(json => setAssignees((json.assignees ?? []) as TaskAssigneeOption[]))
+      .catch(() => setAssignees([]))
   }, [authHeaders])
 
   const actions = useTaskActions(() => {
@@ -279,12 +289,33 @@ export function RecordTasksTab({
                 />
                 <TaskPriorityDot priority={task.priority} />
                 <span className="min-w-0 flex-1">
-                  <span className={cn('flex items-center gap-1.5 truncate text-sm text-foreground', task.status === 'done' && 'text-muted-foreground line-through')}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTask(task)}
+                    className={cn('flex items-center gap-1.5 truncate text-left text-sm text-foreground hover:underline', task.status === 'done' && 'text-muted-foreground line-through')}
+                  >
                     {task.title}
                     {task.recurrence && <Repeat className="size-3 shrink-0 text-muted-foreground" aria-label="Repeats" />}
-                  </span>
+                  </button>
                   {task.description && (
                     <span className="block truncate text-xs text-muted-foreground">{task.description}</span>
+                  )}
+                  {task.checklist.length > 0 && (
+                    <ul className="mt-1.5 space-y-1">
+                      {task.checklist.map((item, index) => (
+                        <li key={index} className="flex items-center gap-2 text-xs">
+                          <TaskCheckbox
+                            checked={item.done}
+                            disabled={actions.isPending(task.id)}
+                            label={item.text}
+                            onToggle={() => void toggleChecklistItem(task, index, !item.done)}
+                          />
+                          <span className={cn('truncate text-foreground', item.done && 'text-muted-foreground line-through')}>
+                            {item.text}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </span>
                 <TaskSourcePill source={task.source} />
@@ -403,6 +434,24 @@ export function RecordTasksTab({
           )}
         </RailCard>
       </aside>
+      <TaskDetailSheet
+        task={selectedTask}
+        assignees={assignees}
+        open={Boolean(selectedTask)}
+        onOpenChange={open => {
+          if (!open) setSelectedTask(null)
+        }}
+        onUpdated={updated => {
+          setTasks(current => current.map(task => task.id === updated.id ? updated : task))
+          setSelectedTask(updated)
+          onTasksChanged?.()
+        }}
+        onDeleted={deleted => {
+          setTasks(current => current.filter(task => task.id !== deleted.id))
+          setSelectedTask(null)
+          onTasksChanged?.()
+        }}
+      />
     </div>
   )
 }

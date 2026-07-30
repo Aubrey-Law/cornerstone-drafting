@@ -144,6 +144,8 @@ interface TaskRowProps {
   pending?: boolean
   showRecord?: boolean
   onComplete: () => void
+  onToggleSubtask?: (index: number, done: boolean) => void
+  onOpen?: () => void
   /** Trailing controls (snooze menu, overflow) rendered after the due cell. */
   actions?: React.ReactNode
 }
@@ -158,6 +160,8 @@ export function TaskListRow({
   pending = false,
   showRecord = true,
   onComplete,
+  onToggleSubtask,
+  onOpen,
   actions,
 }: TaskRowProps) {
   const done = task.status === 'done'
@@ -167,33 +171,61 @@ export function TaskListRow({
     <li
       id={`task-row-${task.id}`}
       className={cn(
-        'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50',
+        'transition-colors hover:bg-muted/50',
         focused && 'bg-muted shadow-[inset_3px_0_0] shadow-primary',
         pending && 'opacity-60',
       )}
     >
-      <TaskCheckbox checked={done} disabled={pending} label={task.title} onToggle={onComplete} />
-      <TaskPriorityDot priority={task.priority} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className={cn('truncate text-sm text-foreground', done && 'text-muted-foreground line-through')}>
-            {task.title}
+      <div className="flex items-center gap-3 px-3 py-2">
+        <TaskCheckbox checked={done} disabled={pending} label={task.title} onToggle={onComplete} />
+        <TaskPriorityDot priority={task.priority} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onOpen}
+              disabled={!onOpen}
+              className={cn(
+                'truncate text-left text-sm text-foreground disabled:cursor-default',
+                onOpen && 'hover:underline',
+                done && 'text-muted-foreground line-through',
+              )}
+            >
+              {task.title}
+            </button>
+            {task.recurrence && (
+              <Repeat className="size-3 shrink-0 text-muted-foreground" aria-label="Repeats" />
+            )}
+            {task.document_id && (
+              <Paperclip className="size-3 shrink-0 text-muted-foreground" aria-label="Has an attachment" />
+            )}
           </span>
-          {task.recurrence && (
-            <Repeat className="size-3 shrink-0 text-muted-foreground" aria-label="Repeats" />
-          )}
-          {task.document_id && (
-            <Paperclip className="size-3 shrink-0 text-muted-foreground" aria-label="Has an attachment" />
-          )}
+          <TaskMetaLine task={task} showRecord={showRecord} />
         </span>
-        <TaskMetaLine task={task} showRecord={showRecord} />
-      </span>
-      {estimate && (
-        <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">{estimate}</span>
+        {estimate && (
+          <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">{estimate}</span>
+        )}
+        <TaskAssigneeAvatar name={task.assignee_name} />
+        <TaskDueCell task={task} className="w-16 text-right" />
+        {actions}
+      </div>
+      {task.checklist.length > 0 && (
+        <ul className="space-y-1 pb-2 pl-12 pr-3">
+          {task.checklist.map((item, index) => (
+            <li key={index} className="flex items-center gap-2 text-xs">
+              <TaskCheckbox
+                checked={item.done}
+                disabled={pending || !onToggleSubtask}
+                label={item.text}
+                onToggle={() => onToggleSubtask?.(index, !item.done)}
+              />
+              <span className={cn('min-w-0 truncate text-foreground', item.done && 'text-muted-foreground line-through')}>
+                {item.text}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
-      <TaskAssigneeAvatar name={task.assignee_name} />
-      <TaskDueCell task={task} className="w-16 text-right" />
-      {actions}
     </li>
   )
 }
