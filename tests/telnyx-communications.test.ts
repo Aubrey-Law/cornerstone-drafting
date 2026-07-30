@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { generateKeyPairSync, sign } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
 import { telnyxCredentialIdForUser } from '@/lib/telnyx/config'
@@ -7,11 +8,77 @@ import {
   telnyxInboundRouteConfig,
 } from '@/lib/telnyx/inbound'
 import { telnyxVoiceEventToRow } from '@/lib/telnyx/voice'
+import {
+  unwrapTelnyxWebhook,
+  verifyTelnyxWebhookSignature,
+} from '@/lib/telnyx/client'
 import { GET as getTelnyxInboundTexml } from '@/app/api/voice/telnyx/inbound/route'
 
 afterEach(() => vi.unstubAllEnvs())
 
+function signedTelnyxFixture() {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519')
+  const rawPublicKey = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32)
+  const timestamp = String(Math.floor(Date.now() / 1000))
+  const rawBody = '{"data":{"id":"event-1","event_type":"call.initiated","payload":{}}}'
+  const signature = sign(
+    null,
+    Buffer.from(`${timestamp}|${rawBody}`),
+    privateKey,
+  ).toString('base64')
+  return { rawBody, signature, timestamp, publicKey: rawPublicKey.toString('base64') }
+}
+
 describe('Telnyx communications migration', () => {
+  it('accepts an authentic Telnyx Ed25519 webhook', async () => {
+    const fixture = signedTelnyxFixture()
+    vi.stubEnv('TELNYX_API_KEY', 'KEY_TEST')
+    vi.stubEnv('TELNYX_PUBLIC_KEY', fixture.publicKey)
+    const request = new Request('https://example.test/webhook', {
+      method: 'POST',
+      headers: {
+        'telnyx-signature-ed25519': fixture.signature,
+        'telnyx-timestamp': fixture.timestamp,
+      },
+      body: fixture.rawBody,
+    })
+    await expect(unwrapTelnyxWebhook(request, fixture.rawBody)).resolves.toMatchObject({
+      data: { id: 'event-1', event_type: 'call.initiated' },
+    })
+  })
+
+  it('rejects a changed Telnyx webhook payload', () => {
+    const fixture = signedTelnyxFixture()
+    expect(() => verifyTelnyxWebhookSignature(
+      `${fixture.rawBody} `,
+      fixture.signature,
+      fixture.timestamp,
+      fixture.publicKey,
+    )).toThrow('Invalid Telnyx webhook signature')
+  })
+
+  it('rejects a stale Telnyx webhook timestamp', () => {
+    const fixture = signedTelnyxFixture()
+    expect(() => verifyTelnyxWebhookSignature(
+      fixture.rawBody,
+      fixture.signature,
+      fixture.timestamp,
+      fixture.publicKey,
+      Number(fixture.timestamp) + 301,
+    )).toThrow('Telnyx webhook timestamp is outside the allowed tolerance')
+  })
+
+  it('rejects a Telnyx webhook with missing signature headers', async () => {
+    const fixture = signedTelnyxFixture()
+    vi.stubEnv('TELNYX_PUBLIC_KEY', fixture.publicKey)
+    const request = new Request('https://example.test/webhook', {
+      method: 'POST',
+      body: fixture.rawBody,
+    })
+    await expect(unwrapTelnyxWebhook(request, fixture.rawBody))
+      .rejects.toThrow('Missing Telnyx webhook signature headers')
+  })
+
   it('selects SMS and voice independently and defaults safely to Twilio', () => {
     expect(smsProvider()).toBe('twilio')
     expect(voiceProvider()).toBe('twilio')
