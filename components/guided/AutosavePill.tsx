@@ -20,30 +20,23 @@ export function AutosavePill({
       : saveStatus === 'dirty'
         ? dirtyLabel
         : savedLabel
-  const color = saveStatus === 'error' ? '#b91c1c' : saveStatus === 'dirty' ? '#92400e' : '#15803d'
-  const bg = saveStatus === 'error' ? '#fef2f2' : saveStatus === 'dirty' ? '#fffbeb' : '#f0fdf4'
-  const border = saveStatus === 'error' ? '#fecaca' : saveStatus === 'dirty' ? '#fcd34d' : '#a7f3d0'
-  const dot = saveStatus === 'error' ? '#dc2626' : saveStatus === 'dirty' ? '#d97706' : '#16a34a'
+  const tone = saveStatus === 'error'
+    ? 'border-destructive/30 bg-destructive/10 text-destructive'
+    : saveStatus === 'dirty'
+      ? 'border-warning/30 bg-warning/10 text-warning'
+      : 'border-success/30 bg-success/10 text-success'
+  const dot = saveStatus === 'error'
+    ? 'bg-destructive'
+    : saveStatus === 'dirty'
+      ? 'bg-warning'
+      : 'bg-success'
 
   return (
-    <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 7,
-      font: '600 12px/1 var(--gi-sans)',
-      color,
-      background: bg,
-      border: `1px solid ${border}`,
-      padding: '6px 12px',
-      borderRadius: 999,
-    }}>
-      <span style={{
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        background: dot,
-        animation: saveStatus === 'saving' ? 'gi-pulse 2s ease-in-out infinite' : undefined,
-      }} />
+    <span className={`inline-flex items-center gap-[7px] rounded-full border px-3 py-1.5 text-xs font-semibold leading-none ${tone}`}>
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${dot}`}
+        style={{ animation: saveStatus === 'saving' ? 'gi-pulse 2s ease-in-out infinite' : undefined }}
+      />
       {label}
     </span>
   )

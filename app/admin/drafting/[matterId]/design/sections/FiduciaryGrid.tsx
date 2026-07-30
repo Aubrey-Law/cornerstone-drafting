@@ -213,7 +213,7 @@ export function FiduciaryGrid({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-[#e5e7eb]">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <div
           className="grid min-w-[648px]"
           style={{
@@ -222,7 +222,7 @@ export function FiduciaryGrid({
               : `168px repeat(${displayedRoles.length}, minmax(96px, 1fr))`,
           }}
         >
-          <div className="border-b border-r border-[#e5e7eb] bg-muted/40 p-3 text-xs font-semibold text-[#1f2d5a]">
+          <div className="border-b border-r border-border bg-muted/40 p-3 text-xs font-semibold text-foreground">
             Contact roster
           </div>
           {displayedRoles.map(role => {
@@ -236,19 +236,19 @@ export function FiduciaryGrid({
                 id={designFieldTargetId(String(slotFields[role.id]))}
                 tabIndex={-1}
                 className={cn(
-                  'border-b border-r border-[#e5e7eb] bg-muted/40 p-2 last:border-r-0',
+                  'border-b border-r border-border bg-muted/40 p-2 last:border-r-0',
                   !role.applicable && 'opacity-45 grayscale-[20%]',
                 )}
               >
-                <p className="text-[11px] font-semibold leading-tight text-[#1f2d5a]">{role.label}</p>
+                <p className="text-[11px] font-semibold leading-tight text-foreground">{role.label}</p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">{role.document}</p>
                 <span className={cn(
                   'mt-2 inline-flex rounded-full border px-1.5 py-0.5 text-[9px] font-semibold',
                   count === 0 && required
-                    ? 'border-[#fcd34d] bg-[#fffbeb] text-[#92400e]'
+                    ? 'border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] text-[var(--gi-amber)]'
                     : count === 1
-                      ? 'border-[#e5e7eb] bg-white text-muted-foreground'
-                      : 'border-teal-200 bg-teal-50 text-[#1a6b72]',
+                      ? 'border-border bg-card text-muted-foreground'
+                      : 'border-[var(--gi-teal)] bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]',
                 )}>
                   {status}
                 </span>
@@ -258,7 +258,7 @@ export function FiduciaryGrid({
 
           {roster.map(contact => (
             <div key={contact.id} className="contents">
-              <div className="border-b border-r border-[#e5e7eb] p-3">
+              <div className="border-b border-r border-border p-3">
                 <p className="truncate text-xs font-medium text-foreground">{contactName(contact)}</p>
                 <p className="truncate text-[10px] text-muted-foreground">{contact.relationship || 'Contact'}</p>
               </div>
@@ -275,13 +275,15 @@ export function FiduciaryGrid({
                     aria-pressed={selected}
                     onClick={() => writeSlots(field, current => toggleFiduciaryGridContact(current, contact.id))}
                     className={cn(
-                      'flex min-h-14 items-center justify-center border-b border-r border-[#e5e7eb] p-2 last:border-r-0',
-                      selected ? 'bg-teal-50 text-[#1a6b72]' : 'bg-white text-muted-foreground hover:bg-muted/40',
+                      'flex min-h-14 items-center justify-center border-b border-r border-border p-2 last:border-r-0',
+                      selected
+                        ? 'bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
+                        : 'bg-card text-muted-foreground hover:bg-muted/40',
                       !role.applicable && 'opacity-45 grayscale-[20%]',
                     )}
                   >
                     {selected ? (
-                      <span className="rounded-full border border-[#1a6b72] px-2 py-1 text-[11px] font-semibold">
+                      <span className="rounded-full border border-[var(--gi-teal)] px-2 py-1 text-[11px] font-semibold">
                         {order + 1}{order === 0 ? 'st' : order === 1 ? 'nd' : order === 2 ? 'rd' : 'th'}
                       </span>
                     ) : (

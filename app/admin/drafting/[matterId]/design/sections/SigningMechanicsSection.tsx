@@ -45,7 +45,7 @@ export function SigningMechanicsSection({ sheet, onChange }: SectionProps) {
   }
 
   return (
-    <section className="mt-4 overflow-hidden rounded-xl border border-dashed border-[#e5e7eb] bg-white">
+    <section className="mt-4 overflow-hidden rounded-xl border border-dashed border-border bg-card">
       <button
         type="button"
         className="flex w-full items-center gap-3 px-5 py-4 text-left"
@@ -57,14 +57,14 @@ export function SigningMechanicsSection({ sheet, onChange }: SectionProps) {
           ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
           : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-[#1f2d5a]">Signing mechanics</span>
+          <span className="block text-sm font-semibold text-foreground">Signing mechanics</span>
           <span className="block text-xs text-muted-foreground">Completed at the signing meeting</span>
         </span>
-        <span className="rounded-full border border-[#e5e7eb] bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
+        <span className="rounded-full border border-border bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
           Deferred
         </span>
       </button>
-      <div id="signing-mechanics-content" className={open ? 'border-t border-[#e5e7eb] p-5' : 'hidden'}>
+      <div id="signing-mechanics-content" className={open ? 'border-t border-border p-5' : 'hidden'}>
         <div className={sectionFieldGrid3}>
           <DecisionRow
             question="Signing type"

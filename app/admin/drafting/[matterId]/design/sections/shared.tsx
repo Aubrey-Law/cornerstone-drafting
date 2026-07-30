@@ -159,16 +159,16 @@ export function DecisionRow<T extends string>({
       id={fieldId(fieldName)}
       data-design-field={fieldName ? String(fieldName) : undefined}
       className={cn(
-        'grid gap-3 border-b border-[#e5e7eb] py-4 last:border-b-0 md:grid-cols-[232px_minmax(0,1fr)]',
+        'grid gap-3 border-b border-border py-4 last:border-b-0 md:grid-cols-[232px_minmax(0,1fr)]',
         showError && 'rounded-md bg-destructive/5 px-3',
       )}
       onBlur={onBlur}
     >
       <div>
-        <p className="text-sm font-semibold text-[#1f2d5a]">{question}</p>
+        <p className="text-sm font-semibold text-foreground">{question}</p>
         {help ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{help}</p> : null}
         {blocking ? (
-          <span className="mt-2 inline-flex rounded-full border border-[#fcd34d] bg-[#fffbeb] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#92400e]">
+          <span className="mt-2 inline-flex rounded-full border border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--gi-amber)]">
             Blocks drafting
           </span>
         ) : null}
@@ -186,8 +186,8 @@ export function DecisionRow<T extends string>({
               className={cn(
                 'rounded-lg border px-3 py-2 text-left text-xs transition-colors',
                 selected
-                  ? 'border-[#1a6b72] bg-[rgba(26,107,114,.08)] font-semibold text-[#155a60]'
-                  : 'border-[#e5e7eb] bg-white text-foreground hover:border-[#1a6b72]',
+                  ? 'border-[var(--gi-teal)] bg-[color-mix(in_srgb,var(--gi-teal)_10%,transparent)] font-semibold text-[var(--gi-teal-deep)]'
+                  : 'border-border bg-card text-foreground hover:border-[var(--gi-teal)]',
                 option.disabled && 'cursor-not-allowed opacity-50',
               )}
             >
@@ -578,7 +578,7 @@ export function GroupCard({
   return (
     <section
       id={id}
-      className="mb-4 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm"
+      className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm"
       style={{ scrollMarginTop }}
     >
       <div className="flex items-center gap-3 px-5 py-4">
@@ -589,7 +589,7 @@ export function GroupCard({
           aria-controls={`${id}-content`}
           onClick={() => onCollapsedChange(!collapsed)}
         >
-          <span className="block text-sm font-semibold text-[#1f2d5a]">{title}</span>
+          <span className="block text-sm font-semibold text-foreground">{title}</span>
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">{summary}</span>
         </button>
         {headerAction}
@@ -597,8 +597,8 @@ export function GroupCard({
           <span className={cn(
             'rounded-full border px-2 py-1 text-[10px] font-semibold',
             blockingCount > 0
-              ? 'border-[#fcd34d] bg-[#fffbeb] text-[#92400e]'
-              : 'border-[#e5e7eb] bg-muted text-muted-foreground',
+              ? 'border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] text-[var(--gi-amber)]'
+              : 'border-border bg-muted text-muted-foreground',
           )}>
             {openCount} {openLabel}
           </span>
@@ -623,7 +623,7 @@ export function GroupCard({
       </div>
       <div
         id={`${id}-content`}
-        className={cn('border-t border-[#e5e7eb] px-5 py-5', collapsed && 'hidden')}
+        className={cn('border-t border-border px-5 py-5', collapsed && 'hidden')}
         aria-hidden={collapsed}
       >
         <GroupCardContext.Provider value>

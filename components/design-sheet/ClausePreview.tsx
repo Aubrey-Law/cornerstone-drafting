@@ -15,11 +15,11 @@ interface ClausePreviewProps {
 
 function ClausePart({ part }: { part: ClausePreviewPart }) {
   if (part.kind === 'value') {
-    return <span className="font-semibold text-[#1a6b72]">{part.text}</span>
+    return <span className="font-semibold text-[var(--gi-teal)]">{part.text}</span>
   }
   if (part.kind === 'hole') {
     return (
-      <span className="rounded-sm border border-[#fcd34d] bg-[#fffbeb] px-1 text-[#92400e]">
+      <span className="rounded-sm border border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] px-1 text-[var(--gi-amber)]">
         [ {part.label} ]
       </span>
     )
@@ -75,14 +75,14 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
     <div className="h-full overflow-y-auto bg-muted/20 px-4 py-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-[#1f2d5a]">Clause preview</h2>
+          <h2 className="text-sm font-semibold text-foreground">Clause preview</h2>
           <p className="text-[11px] text-muted-foreground">Live drafting language · read only</p>
         </div>
         {loading ? <span className="text-[10px] text-muted-foreground">Updating…</span> : null}
       </div>
 
       {error ? (
-        <div className="rounded-md border border-[#fcd34d] bg-[#fffbeb] p-3 text-xs text-[#92400e]">
+        <div className="rounded-md border border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] p-3 text-xs text-[var(--gi-amber)]">
           {error}
         </div>
       ) : null}
@@ -95,11 +95,11 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
 
       <div className="space-y-3">
         {clauses.map(clause => (
-          <article key={clause.id} className="rounded-lg border border-[#e5e7eb] bg-card p-3 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a6b72]">
+          <article key={clause.id} className="rounded-lg border border-border bg-card p-3 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--gi-teal)]">
               {clause.document}
             </p>
-            <h3 className="mt-0.5 text-xs font-semibold text-[#1f2d5a]">{clause.section}</h3>
+            <h3 className="mt-0.5 text-xs font-semibold text-foreground">{clause.section}</h3>
             <p
               className="mt-3 text-[15px] leading-6 text-foreground"
               style={{ fontFamily: 'var(--font-eb-garamond), Georgia, serif' }}
@@ -107,7 +107,7 @@ export function ClausePreview({ matterId, sheet }: ClausePreviewProps) {
               {clause.parts.map((part, index) => <ClausePart key={`${clause.id}-${index}`} part={part} />)}
             </p>
             {clause.annotation ? (
-              <p className="mt-3 border-t border-[#e5e7eb] pt-2 text-[11px] leading-4 text-[#92400e]">
+              <p className="mt-3 border-t border-border pt-2 text-[11px] leading-4 text-[var(--gi-amber)]">
                 {clause.annotation}
               </p>
             ) : null}
