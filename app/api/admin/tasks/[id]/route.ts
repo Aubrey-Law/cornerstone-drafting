@@ -25,6 +25,7 @@ interface PatchBody {
   estimate_minutes?: unknown
   remind_at?: unknown
   recurrence?: unknown
+  checklist?: unknown
   /** Toggle one checklist item: index + done. */
   checklist_index?: unknown
   done?: unknown
@@ -34,6 +35,18 @@ function optionalTimestamp(value: unknown): string | null {
   if (typeof value !== 'string' || !value) return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+function normalizeChecklist(value: unknown): ChecklistItem[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    if (typeof item === 'string') return item.trim() ? [{ text: item.trim(), done: false }] : []
+    if (!item || typeof item !== 'object') return []
+    const raw = item as Record<string, unknown>
+    return typeof raw.text === 'string' && raw.text.trim()
+      ? [{ text: raw.text.trim(), done: raw.done === true }]
+      : []
+  })
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -133,6 +146,24 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   if (body.recurrence !== undefined) {
     patch.recurrence = body.recurrence === null ? null : parseRecurrence(body.recurrence)
+  }
+  if (body.checklist !== undefined) {
+    const checklist = normalizeChecklist(body.checklist)
+    patch.checklist = checklist
+    patch.task_type = checklist.length > 0 ? 'checklist' : 'single'
+
+    const allDone = checklist.length > 0 && checklist.every(item => item.done)
+    if (allDone && existing.status !== 'done') {
+      patch.status = 'done'
+      patch.completed_at = new Date().toISOString()
+      patch.completed_by = auth.userId
+      completing = true
+    } else if (!allDone && existing.status === 'done') {
+      patch.status = 'open'
+      patch.completed_at = null
+      patch.completed_by = null
+      completing = false
+    }
   }
 
   if (Object.keys(patch).length === 0) {

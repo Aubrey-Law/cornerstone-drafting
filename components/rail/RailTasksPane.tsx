@@ -18,6 +18,7 @@ import {
 } from '@/lib/tasks/types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { TaskComposer, type TaskComposerHandle } from '@/components/tasks/TaskComposer'
+import { TaskDetailSheet, type TaskAssigneeOption } from '@/components/tasks/TaskDetailSheet'
 import { TaskCheckbox, TaskDueCell, TaskSourcePill } from '@/components/tasks/TaskPrimitives'
 import { useTaskActions } from '@/components/tasks/useTaskActions'
 import { railRecordForPath } from './RailActivityPane'
@@ -41,6 +42,8 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
   const [scope, setScope] = useState<ScopeKey>(record ? 'record' : 'mine')
   const [doneOpen, setDoneOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [assignees, setAssignees] = useState<TaskAssigneeOption[]>([])
+  const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null)
 
   const recordId = record?.id ?? null
   const recordType = record?.type ?? null
@@ -79,6 +82,7 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
       if (meRes.ok) {
         const meJson = await meRes.json()
         setViewerId((meJson.viewerId ?? null) as string | null)
+        setAssignees((meJson.assignees ?? []) as TaskAssigneeOption[])
       }
       if (recordRes?.ok) {
         const recordJson = await recordRes.json()
@@ -211,7 +215,13 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
                   onToggle={() => void toggle(task)}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] text-foreground">{task.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTask(task)}
+                    className="block w-full truncate text-left text-[13px] text-foreground hover:underline"
+                  >
+                    {task.title}
+                  </button>
                   <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <TaskSourcePill source={task.source} />
                     {task.assignee_name && <span>{initialsFor(task.assignee_name)}</span>}
@@ -270,6 +280,22 @@ export function RailTasksPane({ captureRequestId }: RailTasksPaneProps) {
           <ArrowRight className="size-3.5" aria-hidden />
         </Link>
       </div>
+      <TaskDetailSheet
+        task={selectedTask}
+        assignees={assignees}
+        open={Boolean(selectedTask)}
+        onOpenChange={open => {
+          if (!open) setSelectedTask(null)
+        }}
+        onUpdated={updated => {
+          setSelectedTask(updated)
+          void load()
+        }}
+        onDeleted={() => {
+          setSelectedTask(null)
+          void load()
+        }}
+      />
     </div>
   )
 }
