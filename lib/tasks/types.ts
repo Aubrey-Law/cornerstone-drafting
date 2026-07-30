@@ -1,4 +1,5 @@
 import { FIRM_TIMEZONE, firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import type { TaskTemplateItem } from '@/lib/tasks/templateItems'
 
 export const TASK_STATUSES = ['open', 'in_progress', 'blocked', 'done', 'archived'] as const
 export const TASK_PRIORITIES = ['high', 'normal', 'low'] as const
@@ -61,7 +62,7 @@ export interface TaskTemplateRow {
   id: string
   name: string
   description: string | null
-  items: Array<{ text: string; offset_days?: number; priority?: TaskPriority }>
+  items: TaskTemplateItem[]
   created_at: string
 }
 

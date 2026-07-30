@@ -552,6 +552,7 @@ export function TasksClient({
         open={templatesOpen}
         onOpenChange={setTemplatesOpen}
         templates={templateList}
+        assignees={assignees}
         onTemplatesChange={setTemplateList}
       />
       <TaskDetailSheet

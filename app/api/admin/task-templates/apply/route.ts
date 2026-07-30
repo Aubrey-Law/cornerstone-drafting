@@ -3,19 +3,14 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { TASK_COLUMNS, isUuid } from '@/lib/queries/tasks'
 import { addBusinessDays } from '@/lib/stage-engine/businessDays'
-import type { TaskPriority, TaskRow } from '@/lib/tasks/types'
+import { normalizeTemplateItems } from '@/lib/tasks/templateItems'
+import type { TaskRow } from '@/lib/tasks/types'
 
 interface ApplyBody {
   template_id?: unknown
   matter_id?: unknown
   lead_id?: unknown
   assignee_id?: unknown
-}
-
-interface TemplateItem {
-  text: string
-  offset_days?: number
-  priority?: TaskPriority
 }
 
 /** Create one task per template item on a matter or lead. */
@@ -49,7 +44,7 @@ export async function POST(req: Request) {
   if (templateError) return NextResponse.json({ error: templateError.message }, { status: 500 })
   if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 })
 
-  const items = (template.items ?? []) as TemplateItem[]
+  const items = normalizeTemplateItems(template.items)
   if (items.length === 0) {
     return NextResponse.json({ error: 'That template has no tasks' }, { status: 400 })
   }
@@ -59,16 +54,19 @@ export async function POST(req: Request) {
     .filter(item => typeof item.text === 'string' && item.text.trim())
     .map(item => ({
       title: item.text.trim(),
+      description: item.description ?? null,
       status: 'open',
       priority: item.priority ?? 'normal',
       source: 'template',
-      task_type: 'single',
-      checklist: [],
+      task_type: item.checklist?.length ? 'checklist' : 'single',
+      checklist: item.checklist ?? [],
       matter_id: matterId,
       lead_id: leadId,
       // Offsets are business days so a template lands on working days.
       due_at: item.offset_days ? addBusinessDays(now, item.offset_days).toISOString() : null,
-      assignee_id: assigneeId,
+      assignee_id: item.assignee_id ?? assigneeId,
+      estimate_minutes: item.estimate_minutes ?? null,
+      recurrence: item.recurrence ?? null,
       template_id: template.id,
       created_by: auth.userId,
     }))
