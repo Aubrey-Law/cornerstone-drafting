@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   let query = getAdminClient()
     .from('appointments')
     .select(
-      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, source, created_at',
+      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, online_meeting_url, source, created_at',
     )
 
   if (hasRange) {
@@ -61,13 +61,21 @@ export async function GET(req: NextRequest) {
     new Set(rows.map(row => row.linked_matter_id).filter((id): id is string => Boolean(id))),
   )
   const matterNumberById = new Map<string, string>()
+  const matterContextById = new Map<string, { stage: string | null; planType: string | null }>()
   if (linkedMatterIds.length > 0) {
-    const { data: linkedMatters } = await getAdminClient()
-      .from('matters')
-      .select('id, matter_number')
-      .in('id', linkedMatterIds)
+    const [linkedMattersResult, pipelineResult] = await Promise.all([
+      getAdminClient().from('matters').select('id, matter_number').in('id', linkedMatterIds),
+      getAdminClient()
+        .from('v_matter_pipeline')
+        .select('matter_id, stage, plan_type')
+        .in('matter_id', linkedMatterIds),
+    ])
+    const linkedMatters = linkedMattersResult.data
     for (const row of linkedMatters ?? []) {
       if (row.matter_number) matterNumberById.set(row.id, row.matter_number)
+    }
+    for (const row of pipelineResult.data ?? []) {
+      matterContextById.set(row.matter_id, { stage: row.stage, planType: row.plan_type })
     }
   }
 
@@ -97,11 +105,18 @@ export async function GET(req: NextRequest) {
       linkedMatterNumber: row.linked_matter_id
         ? matterNumberById.get(row.linked_matter_id) ?? null
         : null,
+      linkedMatterStage: row.linked_matter_id
+        ? matterContextById.get(row.linked_matter_id)?.stage ?? null
+        : null,
+      linkedMatterPlanType: row.linked_matter_id
+        ? matterContextById.get(row.linked_matter_id)?.planType ?? null
+        : null,
       source: row.source,
       typeLabel: typeById.get(row.appointment_type_id ?? '')?.label ?? 'Unknown',
       // Null after a successful booking means the Outlook event failed to
       // create — surfaced in the admin list as a warning.
       outlookSynced: Boolean(row.microsoft_event_id),
+      onlineMeetingUrl: row.online_meeting_url ?? null,
     })),
   })
 }

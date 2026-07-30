@@ -16,6 +16,8 @@ export interface FullFirmSettings extends FirmConfig {
   /** Sanitized firm-wide signature appended only to opted-in manual sends. */
   emailSignatureHtml: string
   emailSignatureDefault: boolean
+  /** Calendar Plan view workload target for one working day. */
+  calendarDailyTargetMinutes: number
 }
 
 interface FirmSettingsRow {
@@ -35,6 +37,7 @@ interface FirmSettingsRow {
   email_logo_header: boolean | null
   email_signature_html: string | null
   email_signature_default: boolean | null
+  calendar_daily_target_minutes: number | null
 }
 
 let cache: { value: FullFirmSettings; at: number } | null = null
@@ -55,6 +58,7 @@ function defaults(): FullFirmSettings {
     emailLogoHeader: true,
     emailSignatureHtml: '',
     emailSignatureDefault: true,
+    calendarDailyTargetMinutes: 360,
   }
 }
 
@@ -87,6 +91,7 @@ export async function loadFirmSettings(force = false): Promise<FullFirmSettings>
           emailLogoHeader: row.email_logo_header ?? base.emailLogoHeader,
           emailSignatureHtml: row.email_signature_html ?? base.emailSignatureHtml,
           emailSignatureDefault: row.email_signature_default ?? base.emailSignatureDefault,
+          calendarDailyTargetMinutes: row.calendar_daily_target_minutes ?? base.calendarDailyTargetMinutes,
         }
       : base
     cache = { value: merged, at: Date.now() }

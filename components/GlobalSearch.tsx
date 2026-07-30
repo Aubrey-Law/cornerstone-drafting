@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Briefcase,
   BookOpen,
@@ -52,17 +52,20 @@ export function GlobalSearch() {
   const [searchError, setSearchError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        // Calendar owns ⌘K for Quick book while that working surface is active.
+        if (pathname === '/admin/calendar') return
         e.preventDefault()
         setOpen(prev => !prev)
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [])
+  }, [pathname])
 
   const searchWork = useCallback(async (q: string) => {
     const trimmed = q.trim()
