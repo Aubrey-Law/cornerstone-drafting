@@ -1,6 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
-export type AssistantChatContextType = 'general' | 'matter'
+export type AssistantChatContextType = 'general' | 'matter' | 'lead'
 
 export interface AssistantChatRow {
   id: string
@@ -58,7 +58,9 @@ export async function createAssistantChat(
       user_id: userId,
       title: input.title ?? null,
       context_type: input.contextType ?? 'general',
-      context_id: input.contextType === 'matter' ? input.contextId ?? null : null,
+      context_id: input.contextType === 'matter' || input.contextType === 'lead'
+        ? input.contextId ?? null
+        : null,
     })
     .select('*')
     .single()

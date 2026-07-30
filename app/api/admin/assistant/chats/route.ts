@@ -20,9 +20,13 @@ export async function POST(req: Request) {
     context_type?: unknown
     context_id?: unknown
   }
-  const contextType: AssistantChatContextType = body.context_type === 'matter' ? 'matter' : 'general'
-  if (contextType === 'matter' && (typeof body.context_id !== 'string' || !body.context_id.trim())) {
-    return NextResponse.json({ error: 'context_id is required for matter chats' }, { status: 400 })
+  if (body.context_type !== undefined && !['general', 'matter', 'lead'].includes(String(body.context_type))) {
+    return NextResponse.json({ error: 'Invalid context_type' }, { status: 400 })
+  }
+  const contextType: AssistantChatContextType =
+    body.context_type === 'matter' || body.context_type === 'lead' ? body.context_type : 'general'
+  if (contextType !== 'general' && (typeof body.context_id !== 'string' || !body.context_id.trim())) {
+    return NextResponse.json({ error: `context_id is required for ${contextType} chats` }, { status: 400 })
   }
   try {
     const chat = await createAssistantChat(auth.userId, {

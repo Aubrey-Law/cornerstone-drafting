@@ -71,7 +71,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
     const detail = error instanceof Error ? error.message : String(error)
     console.error('[admin assistant] context fetch failed', { chatId, error: detail })
     context = { systemPrompt: await generalSystemPrompt(), matterLabel: null }
-    contextLoadNote = `Note: I wasn't able to load full matter context (${detail}) - answering from general knowledge.\n\n`
+    contextLoadNote = `Note: I wasn't able to load full ${chat.context_type} context (${detail}) - answering from general knowledge.\n\n`
   }
 
   const contextMatterId = chat.context_type === 'matter' ? chat.context_id : null

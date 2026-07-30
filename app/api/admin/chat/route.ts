@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   }
 
   const contextType = body.context_type
-  if (!['matter', 'general'].includes(contextType)) {
+  if (!['matter', 'lead', 'general'].includes(contextType)) {
     return NextResponse.json({ error: 'Invalid context_type' }, { status: 400 })
   }
 

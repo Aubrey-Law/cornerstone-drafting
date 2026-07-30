@@ -47,9 +47,8 @@ const EVENT_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
 const FALLBACK_ICON = { icon: Info, tone: 'text-muted-foreground bg-muted' }
 
 /**
- * The rail's record scope is intentionally separate from `useChatContext`:
- * the assistant only understands matter/general, but activity also exists for
- * leads, and widening the chat context would change what the chat API is sent.
+ * Shared route-to-record scope for rail activity, email, and tasks. Keep this
+ * aligned with the assistant's matter/lead context detection.
  */
 export function railRecordForPath(pathname: string): RailRecord | null {
   const matter = pathname.match(/^\/admin\/(?:matters|drafting)\/([a-zA-Z0-9-]+)/)

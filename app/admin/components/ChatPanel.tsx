@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import {
@@ -65,6 +65,12 @@ const suggestedPrompts: Record<ChatContextType['type'], string[]> = {
     'Gather trust drafting details',
     'Create incapacity design sheet',
   ],
+  lead: [
+    "Summarize this client's situation",
+    'Analyze MA estate tax exposure',
+    'Draft a pre-call email for this lead',
+    'Draft follow-up questions for this lead',
+  ],
   general: [
     "What's the MA estate tax threshold?",
     'Explain per stirpes distribution',
@@ -118,11 +124,13 @@ function contextLabel(context: ChatContextType, matterDisplayName?: string | nul
   if (context.type === 'matter') {
     return matterDisplayName?.trim() || 'Matter context loaded'
   }
+  if (context.type === 'lead') return 'Lead context loaded'
   return 'General firm context'
 }
 
 function contextIcon(context: ChatContextType) {
   if (context.type === 'matter') return 'Matter'
+  if (context.type === 'lead') return 'Lead'
   return 'Firm'
 }
 
@@ -149,10 +157,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // Conversation survives close/reopen within the browser session.
 const CHAT_STORAGE_KEY = 'cornerstone-admin-chat-messages'
 
-function loadStoredMessages(): FloatingChatMessage[] {
+function storageKeyForThread(threadKey: string) {
+  return threadKey === 'general' ? CHAT_STORAGE_KEY : `${CHAT_STORAGE_KEY}:${threadKey}`
+}
+
+function loadStoredMessages(threadKey = 'general'): FloatingChatMessage[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = window.sessionStorage.getItem(CHAT_STORAGE_KEY)
+    const raw = window.sessionStorage.getItem(storageKeyForThread(threadKey))
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
@@ -168,12 +180,13 @@ function loadStoredMessages(): FloatingChatMessage[] {
   }
 }
 
-function storeMessages(messages: FloatingChatMessage[]) {
+function storeMessages(messages: FloatingChatMessage[], threadKey = 'general') {
   try {
+    const storageKey = storageKeyForThread(threadKey)
     if (messages.length === 0) {
-      window.sessionStorage.removeItem(CHAT_STORAGE_KEY)
+      window.sessionStorage.removeItem(storageKey)
     } else {
-      window.sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages))
+      window.sessionStorage.setItem(storageKey, JSON.stringify(messages))
     }
   } catch {
     // sessionStorage may be unavailable (private mode, quota) — chat still works.
@@ -211,10 +224,20 @@ export function ChatPanel({
   useEffect(() => () => abortRef.current?.abort(), [])
 
   const chatContext = overrideGeneral ? ({ type: 'general' } as const) : detectedContext
+  const contextType = chatContext.type
+  const contextId = chatContext.type === 'general' ? null : chatContext.id
   const prompts = useMemo(() => suggestedPrompts[chatContext.type], [chatContext.type])
   // Matter threads are shared with the Draft assistant via matter_assistant_messages;
   // the general thread stays in sessionStorage.
-  const threadKey = chatContext.type === 'matter' ? chatContext.id : 'general'
+  const threadKey = chatContext.type === 'general' ? 'general' : `${chatContext.type}:${chatContext.id}`
+
+  // Isolate record threads before paint. This prevents the previous record's
+  // visible turns from being submitted with a newly detected context.
+  useLayoutEffect(() => {
+    loadedThreadRef.current = null
+    setMessages([])
+    setHistoryLoading(contextType === 'matter')
+  }, [contextType, threadKey])
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
@@ -233,9 +256,15 @@ export function ChatPanel({
 
   useEffect(() => {
     if (!open) return
-    if (threadKey === 'general') {
-      setMessages(loadStoredMessages())
+    if (contextType === 'general') {
+      setMessages(loadStoredMessages('general'))
       loadedThreadRef.current = 'general'
+      return
+    }
+    if (contextType === 'lead') {
+      setMessages(loadStoredMessages(threadKey))
+      loadedThreadRef.current = threadKey
+      setHistoryLoading(false)
       return
     }
     let stale = false
@@ -244,7 +273,7 @@ export function ChatPanel({
       let loaded: FloatingChatMessage[] = []
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch(`/api/admin/matters/${threadKey}/assistant`, {
+        const res = await fetch(`/api/admin/matters/${contextId}/assistant`, {
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
         })
         const body = await res.json().catch(() => ({})) as {
@@ -256,7 +285,7 @@ export function ChatPanel({
             role: turn.role === 'user' ? 'user' as const : 'assistant' as const,
             content: turn.content,
             timestamp: turn.createdAt ?? new Date().toISOString(),
-            contextSnapshot: { type: 'matter', id: threadKey },
+            contextSnapshot: { type: 'matter', id: contextId ?? undefined },
           }))
         }
       } catch {
@@ -270,12 +299,13 @@ export function ChatPanel({
     return () => {
       stale = true
     }
-  }, [open, threadKey])
+  }, [contextId, contextType, open, threadKey])
 
   useEffect(() => {
-    if (threadKey !== 'general' || loadedThreadRef.current !== 'general') return
-    storeMessages(messages)
-  }, [messages, threadKey])
+    if (loadedThreadRef.current !== threadKey) return
+    if (contextType !== 'general' && contextType !== 'lead') return
+    storeMessages(messages, threadKey)
+  }, [contextType, messages, threadKey])
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
@@ -290,6 +320,10 @@ export function ChatPanel({
   async function sendMessage(content: string) {
     let trimmed = content.trim()
     if (!trimmed || loading) return
+    if (loadedThreadRef.current !== threadKey) {
+      setError('This record context is still loading. Please try again.')
+      return
+    }
 
     if (activityDraftPromptRef.current) {
       trimmed = `${activityDraftPromptRef.current}\n\nDetails: ${trimmed}`
@@ -615,7 +649,7 @@ export function ChatPanel({
     })
   }
 
-  const contextWord = chatContext.type === 'matter' ? 'Matter' : 'Firm'
+  const contextWord = chatContext.type === 'matter' ? 'Matter' : chatContext.type === 'lead' ? 'Lead' : 'Firm'
   const savedNoteLabel = savedNote?.noteType === 'client_comm' ? 'Client comm.' : 'Internal'
 
   return (
@@ -862,7 +896,13 @@ export function ChatPanel({
           value={input}
           onChange={event => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={chatContext.type === 'matter' ? 'Ask about this matter...' : 'Ask anything...'}
+          placeholder={
+            chatContext.type === 'matter'
+              ? 'Ask about this matter...'
+              : chatContext.type === 'lead'
+                ? 'Ask about this lead...'
+                : 'Ask anything...'
+          }
           rows={1}
           className="h-10 max-h-28 min-h-10 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
         />

@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 export interface AssistantChatSummary {
   id: string
   title: string | null
-  context_type: 'general' | 'matter'
+  context_type: 'general' | 'matter' | 'lead'
   updated_at: string
 }
 

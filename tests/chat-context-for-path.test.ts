@@ -18,6 +18,12 @@ describe('chatContextForPath', () => {
     })
   })
 
+  it('scopes to the lead on a lead detail page', () => {
+    expect(chatContextForPath('/admin/leads/lead-123')).toEqual({
+      type: 'lead', id: 'lead-123', label: 'This lead',
+    })
+  })
+
   it('falls back to general elsewhere, including the drafting hub', () => {
     expect(chatContextForPath('/admin/drafting')).toEqual({ type: 'general' })
     expect(chatContextForPath('/admin/matters')).toEqual({ type: 'general' })
