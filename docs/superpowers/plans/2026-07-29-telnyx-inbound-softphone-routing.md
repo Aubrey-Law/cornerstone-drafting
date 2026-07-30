@@ -136,7 +136,7 @@ export interface TelnyxInboundRouteConfig {
 
 const DEFAULT_RING_TIMEOUT_SECONDS = 25
 const MIN_RING_TIMEOUT_SECONDS = 5
-const MAX_RING_TIMEOUT_SECONDS = 600
+const MAX_RING_TIMEOUT_SECONDS = 120
 
 function escapeXml(value: string): string {
   return value
@@ -151,10 +151,11 @@ export function telnyxInboundRouteConfig(): TelnyxInboundRouteConfig | null {
   const agentSipUri = process.env.TELNYX_INBOUND_AGENT_SIP_URI?.trim()
   const fallbackDestination = process.env.TELNYX_INBOUND_FALLBACK_DESTINATION?.trim()
   if (!agentSipUri || !fallbackDestination) return null
-  if (!/^sip:[^\s]+@[^\s]+$/i.test(agentSipUri)) return null
+  if (!/^sip:gencred[A-Za-z0-9]+@sip\.telnyx\.com$/i.test(agentSipUri)) return null
   if (!/^\+[1-9]\d{7,14}$/.test(fallbackDestination)) return null
 
-  const parsedTimeout = Number.parseInt(process.env.TELNYX_INBOUND_RING_TIMEOUT ?? '', 10)
+  const timeout = process.env.TELNYX_INBOUND_RING_TIMEOUT?.trim() ?? ''
+  const parsedTimeout = /^\d+$/.test(timeout) ? Number(timeout) : Number.NaN
   const ringTimeoutSeconds = Number.isFinite(parsedTimeout)
     ? Math.min(MAX_RING_TIMEOUT_SECONDS, Math.max(MIN_RING_TIMEOUT_SECONDS, parsedTimeout))
     : DEFAULT_RING_TIMEOUT_SECONDS
