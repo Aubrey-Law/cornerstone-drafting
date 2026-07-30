@@ -3,7 +3,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { BookOpen, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { deriveTrustName, deriveSpouseTrustName } from '@/lib/designSheetDefaults'
@@ -20,7 +19,6 @@ import {
   setTrustDetails,
   setTrustNameFormat,
   STAGGERED_DISTRIBUTION_PRESETS,
-  type InitialTrusteeNomination,
   type RepresentationType,
   type ResidualBeneficiaryMethod,
   type ResiduaryAfterDeath,
@@ -28,16 +26,14 @@ import {
   type TrustCoTrusteeDecision,
   type TrusteeCompensation,
 } from '@/lib/designSheetTrustDetails'
-import { applyTrusteeNominationsFromSheet, nominationOptionsForContext } from '@/lib/designSheet/initialTrusteeNomination'
 import type { DesignSheet, MatterContact, PetCareDetails, PipelineMatter, StaggeredTier } from '@/types/database'
 import DesignContactPicker, { type Contact as PickerContact } from './ContactPicker'
 import type { SectionProps } from './shared'
 import {
   AttorneyInput,
-  AttorneySelect,
   ClientDecisionCallout,
+  DecisionRow,
   DesignSheetCheckboxOption,
-  FieldHelpLabel,
   FieldLabel,
   DesignSectionContent,
   PrefilledInput,
@@ -45,14 +41,8 @@ import {
   toYesNo,
   yesNoField,
 } from './shared'
-import {
-  SegControl,
-  findClientContact,
-  findSpouseContact,
-  isMarriedSheet as isMarried,
-} from './fiduciary-blocks'
+import { isMarriedSheet as isMarried } from './fiduciary-blocks'
 import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
-import { TrustFiduciarySections } from './documentFiduciarySections'
 
 interface DocumentSectionProps extends SectionProps {
   contacts: MatterContact[]
@@ -107,20 +97,15 @@ function TrustNameFormatFields({
 
   return (
     <div className="space-y-3">
-      <FieldHelpLabel help="Controls how the trust name will appear on deeds and other transfer documents.">
-        Trust Name Format
-      </FieldHelpLabel>
-      <DesignSheetCheckboxOption
-        label='Use "U/A dated"'
-        description='e.g., THE SMITH TRUST, U/A dated January 15, 2025'
-        checked={format.date_style === 'ua_dated'}
-        onChange={checked => { if (checked) update({ date_style: 'ua_dated' }) }}
-      />
-      <DesignSheetCheckboxOption
-        label='Use "dated" only'
-        description='e.g., THE SMITH TRUST dated January 15, 2025'
-        checked={format.date_style === 'dated_only'}
-        onChange={checked => { if (checked) update({ date_style: 'dated_only' }) }}
+      <DecisionRow
+        question="Trust Name Format"
+        help="Controls how the trust name will appear on deeds and other transfer documents."
+        value={format.date_style}
+        options={[
+          { value: 'ua_dated', label: 'Use “U/A dated”', description: 'e.g., THE SMITH TRUST, U/A dated January 15, 2025' },
+          { value: 'dated_only', label: 'Use “dated” only', description: 'e.g., THE SMITH TRUST dated January 15, 2025' },
+        ]}
+        onChange={dateStyle => update({ date_style: dateStyle })}
       />
       <DesignSheetCheckboxOption
         label='Append "and any amendments thereto"'
@@ -160,8 +145,6 @@ function TrustNameQuickFill({
 export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'client' | 'spouse' }) {
   const { sheet, onChange, contacts, matter, scope = 'client' } = props
   const { onAddContact, onUpdateContact } = props
-  const clientContact = findClientContact(contacts, matter, sheet)
-  const spouseContact = isMarried(sheet) ? findSpouseContact(contacts, matter, sheet) : null
   const original = (field: string) => sheet.overrides?.[field]?.original
   const derivedTrustName = deriveTrustName(sheet, matter)
   const derivedSpouseTrustName = deriveSpouseTrustName(sheet, matter)
@@ -188,35 +171,9 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   }, [trustDetails.protect_us_trust_status])
 
   if (scope === 'spouse') {
-    const spouseNominationOptions = nominationOptionsForContext({
-      married,
-      jointTrust: Boolean(sheet.is_joint),
-      scope: 'spouse',
-      clientFirst,
-      spouseFirst,
-    })
-
-    const handleSpouseNominationChange = (value: string) => {
-      const nomination = (value || null) as InitialTrusteeNomination | null
-      onChange('decisions', prevSheet => setTrustDetails(prevSheet, { spouse_initial_trustee_nomination: nomination }))
-      onChange('spouse_trustee_slots', prevSheet => {
-        const nextTrustDetails = {
-          ...getTrustDetails(prevSheet),
-          spouse_initial_trustee_nomination: nomination,
-        }
-        const slotPatch = applyTrusteeNominationsFromSheet(
-          prevSheet,
-          nextTrustDetails,
-          clientContact,
-          spouseContact,
-        )
-        return slotPatch.spouse_trustee_slots ?? prevSheet.spouse_trustee_slots
-      })
-    }
-
     return (
       <DesignSectionContent>
-        <SectionHelp>Configure the spouse&apos;s separate trust name and trustee nominations.</SectionHelp>
+        <SectionHelp>Configure the spouse&apos;s separate trust name.</SectionHelp>
         <SectionBlock title="Trust Name">
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             <div>
@@ -239,58 +196,8 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           </div>
         </SectionBlock>
 
-        {separate && (
-          <SectionBlock title="Trustee Provisions">
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-              <AttorneySelect
-                label={`${spouseFirst || 'Spouse'}'s Initial Trustee Nomination Structure`}
-                value={trustDetails.spouse_initial_trustee_nomination ?? ''}
-                placeholder="Select…"
-                options={spouseNominationOptions}
-                onChange={handleSpouseNominationChange}
-              />
-            </div>
-            <div className="mt-4">
-              <TrustFiduciarySections {...props} scope="spouse" trusteesOnly />
-            </div>
-          </SectionBlock>
-        )}
-
-        {!separate && <TrustFiduciarySections {...props} scope="spouse" />}
       </DesignSectionContent>
     )
-  }
-
-  const nominationLabel = married
-    ? sheet.is_joint
-      ? 'Initial Trustee Nomination Structure'
-      : `${clientFirst || 'Client'}'s Initial Trustee Nomination Structure`
-    : `${clientFirst || 'Client'} Initial Trustee Nomination Structure`
-
-  const nominationOptions = nominationOptionsForContext({
-    married,
-    jointTrust: Boolean(sheet.is_joint),
-    scope: married ? 'client' : 'single',
-    clientFirst,
-    spouseFirst,
-  })
-
-  const handleClientNominationChange = (value: string) => {
-    const nomination = (value || null) as InitialTrusteeNomination | null
-    onChange('decisions', prevSheet => setTrustDetails(prevSheet, { initial_trustee_nomination: nomination }))
-    onChange('trustee_slots', prevSheet => {
-      const nextTrustDetails = {
-        ...getTrustDetails(prevSheet),
-        initial_trustee_nomination: nomination,
-      }
-      const slotPatch = applyTrusteeNominationsFromSheet(
-        prevSheet,
-        nextTrustDetails,
-        clientContact,
-        spouseContact,
-      )
-      return slotPatch.trustee_slots ?? prevSheet.trustee_slots
-    })
   }
 
   const pickerContacts = contacts as unknown as PickerContact[]
@@ -342,31 +249,26 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       <SectionHelp>Configure the trust structure, name, protector, trustees, and how the residuary is distributed.</SectionHelp>
 
       <SectionBlock title="Trust Structure">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <div>
-            <FieldLabel>Joint Trust?</FieldLabel>
-            <SegControl value={sheet.is_joint ? 'yes' : 'no'} options={YES_NO} onChange={v => onChange('is_joint', v === 'yes')} />
-          </div>
-        </div>
+        <DecisionRow
+          question="Joint or separate trusts?"
+          help="Choose whether the spouses share one trust or use separate trusts."
+          fieldName="is_joint"
+          blocking
+          value={sheet.is_joint == null ? null : sheet.is_joint ? 'yes' : 'no'}
+          options={[
+            { value: 'yes', label: 'Joint trust' },
+            { value: 'no', label: 'Separate trusts' },
+          ]}
+          onChange={v => onChange('is_joint', v === 'yes')}
+        />
         {married && !sheet.is_joint && (
-          <div className="mt-4 space-y-3">
-            <FieldLabel>Spousal Trust Funding</FieldLabel>
-            {SPOUSAL_TRUST_FUNDING_OPTIONS.map(option => (
-              <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                <Checkbox
-                  checked={spousalFunding === option.value}
-                  onCheckedChange={checked => {
-                    if (checked) onChange('decisions', prevSheet => setTrustPlanningType(prevSheet, option.value))
-                  }}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-foreground">{option.label}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
-                </span>
-              </label>
-            ))}
-          </div>
+          <DecisionRow
+            question="Spousal Trust Funding"
+            help="Choose how the surviving spouse receives or holds the residuary estate."
+            value={spousalFunding}
+            options={SPOUSAL_TRUST_FUNDING_OPTIONS}
+            onChange={value => onChange('decisions', prevSheet => setTrustPlanningType(prevSheet, value))}
+          />
         )}
       </SectionBlock>
 
@@ -408,27 +310,26 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       </SectionBlock>
 
       <SectionBlock title="Restatement">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Restatement"
-            value={sheet.restatement ? 'yes' : 'no'}
-            options={[
-              { value: 'yes', label: 'Yes - Restating existing trust' },
-              { value: 'no', label: 'No - New trust' },
-            ]}
-            onChange={v => onChange('restatement', v === 'yes')}
-          />
-        </div>
+        <DecisionRow
+          question="Restatement"
+          value={sheet.restatement ? 'yes' : 'no'}
+          options={[
+            { value: 'yes', label: 'Yes — restating existing trust' },
+            { value: 'no', label: 'No — new trust' },
+          ]}
+          onChange={v => onChange('restatement', v === 'yes')}
+        />
       </SectionBlock>
 
       <SectionBlock title="Trust Protector">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Include Trust Protector"
-            value={sheet.trust_protector ? 'yes' : 'no'}
-            options={YES_NO}
-            onChange={v => onChange('trust_protector', v === 'yes')}
-          />
+        <DecisionRow
+          question="Include a trust protector?"
+          help="A trust protector may provide additional governance flexibility."
+          value={sheet.trust_protector ? 'yes' : 'no'}
+          options={YES_NO}
+          onChange={v => onChange('trust_protector', v === 'yes')}
+        />
+        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
           {sheet.trust_protector && (
             <AttorneyInput
               label="Trust Protector Full Name"
@@ -439,61 +340,12 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
         </div>
       </SectionBlock>
 
-      <SectionBlock title="Trustee Provisions" subtitle="Drives how trustee slots are nominated in the trust">
-        <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-          <AttorneySelect
-            label={nominationLabel}
-            value={trustDetails.initial_trustee_nomination ?? ''}
-            placeholder="Select…"
-            options={nominationOptions}
-            onChange={handleClientNominationChange}
-          />
-        </div>
-
-        <div className="mt-4">
-          <TrustFiduciarySections {...props} scope="client" trusteesOnly />
-        </div>
-
-        {separate && (
-          <div className="mt-4 space-y-4">
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-              <AttorneySelect
-                label={`${spouseFirst || 'Spouse'}'s Initial Trustee Nomination Structure`}
-                value={trustDetails.spouse_initial_trustee_nomination ?? ''}
-                placeholder="Select…"
-                options={nominationOptionsForContext({
-                  married,
-                  jointTrust: false,
-                  scope: 'spouse',
-                  clientFirst,
-                  spouseFirst,
-                })}
-                onChange={value => {
-                  const nomination = (value || null) as InitialTrusteeNomination | null
-                  onChange('decisions', prevSheet => setTrustDetails(prevSheet, { spouse_initial_trustee_nomination: nomination }))
-                  onChange('spouse_trustee_slots', prevSheet => {
-                    const nextTrustDetails = {
-                      ...getTrustDetails(prevSheet),
-                      spouse_initial_trustee_nomination: nomination,
-                    }
-                    const slotPatch = applyTrusteeNominationsFromSheet(
-                      prevSheet,
-                      nextTrustDetails,
-                      clientContact,
-                      spouseContact,
-                    )
-                    return slotPatch.spouse_trustee_slots ?? prevSheet.spouse_trustee_slots
-                  })
-                }}
-              />
-            </div>
-            <TrustFiduciarySections {...props} scope="spouse" trusteesOnly />
-          </div>
-        )}
-
-        <div className="mt-6 space-y-3">
-          <FieldLabel>If the trust ever has co-trustees, how should they make decisions?</FieldLabel>
-          {([
+      <SectionBlock title="Trustee Provisions">
+        <div className="mt-6">
+          <DecisionRow
+            question="If the trust ever has co-trustees, how should they make decisions?"
+            value={trustDetails.co_trustee_decision ?? 'joint_majority'}
+            options={[
             {
               value: 'joint_majority',
               label: 'Co-trustees must act jointly',
@@ -514,48 +366,24 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
               label: 'Settlors act separately, others jointly',
               description: 'While both settlors are serving as co-trustees, either settlor may act alone. Once either settlor stops serving, a majority of the remaining co-trustees must agree.',
             },
-          ] as const).map(option => (
-            <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-              <Checkbox
-                checked={(trustDetails.co_trustee_decision ?? 'joint_majority') === option.value}
-                onCheckedChange={checked => {
-                  if (checked) updateTrustDetails({ co_trustee_decision: option.value as TrustCoTrusteeDecision })
-                }}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="block text-sm font-medium text-foreground">{option.label}</span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
-              </span>
-            </label>
-          ))}
+            ]}
+            onChange={value => updateTrustDetails({ co_trustee_decision: value as TrustCoTrusteeDecision })}
+          />
         </div>
 
         <div className="mt-6">
-          <FieldLabel>Trustee Compensation</FieldLabel>
-          <div className="space-y-3">
-            {([
+          <DecisionRow
+            question="Trustee compensation"
+            value={trustDetails.trustee_compensation ?? 'reasonable'}
+            options={[
               { value: 'prevailing_corporate', label: 'Prevailing Rate for Corporate Trustees', description: 'In the range of then-prevailing rates charged by corporate trustees.' },
               { value: 'prevailing_professional', label: 'Prevailing Rate for Professional Fiduciaries', description: 'In the range of then-prevailing rates charged by professional fiduciaries.' },
               { value: 'reasonable', label: 'Reasonable Compensation', description: 'Reasonable fee based on time and effort.' },
               { value: 'based_on_trustee_type', label: 'Based on Trustee Type', description: 'If corporate trustee, benchmark to prevailing rates for corporate trustees. If professional fiduciary, benchmark to rates charged by professional fiduciaries. Otherwise, reasonable fee.' },
               { value: 'none', label: 'No Compensation', description: 'Trustee may not receive compensation.' },
-            ] as const).map(option => (
-              <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                <Checkbox
-                  checked={(trustDetails.trustee_compensation ?? 'reasonable') === option.value}
-                  onCheckedChange={checked => {
-                    if (checked) updateTrustDetails({ trustee_compensation: option.value as TrusteeCompensation })
-                  }}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-foreground">{option.label}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
-                </span>
-              </label>
-            ))}
-          </div>
+            ]}
+            onChange={value => updateTrustDetails({ trustee_compensation: value as TrusteeCompensation })}
+          />
         </div>
 
         <div className="mt-6 space-y-3">
@@ -642,11 +470,9 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
         </div>
 
         <div className="mt-6 space-y-3">
-          <FieldLabel>Filling a Vacancy</FieldLabel>
-          <AttorneySelect
-            label="Successor Trustee Vacancy"
+          <DecisionRow
+            question="Successor Trustee Vacancy"
             value={trustDetails.successor_trustee_vacancy ?? ''}
-            placeholder="Select…"
             options={[
               { value: 'income_beneficiaries_any', label: 'Majority of income beneficiaries may appoint any successor trustee' },
               { value: 'income_beneficiaries_professional', label: 'Majority of income beneficiaries may appoint a professional fiduciary or corporate trustee only' },
@@ -654,7 +480,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
               { value: 'resigning_professional', label: 'Resigning trustee may appoint a professional fiduciary or corporate trustee only' },
               { value: 'settlor_or_court', label: 'Only the settlor(s) may appoint; if unable, court petition' },
             ]}
-            onChange={v => updateTrustDetails({ successor_trustee_vacancy: (v || null) as SuccessorTrusteeVacancy | null })}
+            onChange={v => updateTrustDetails({ successor_trustee_vacancy: v as SuccessorTrusteeVacancy })}
           />
         </div>
       </SectionBlock>
@@ -669,20 +495,19 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       />
 
       <SectionBlock title="Tangible Personal Property">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            fieldName="tangible_property_distribution"
-            label="Distribution of Tangible Property"
-            value={sheet.tangible_property_distribution ?? ''}
-            placeholder="Select..."
-            options={[
-              { value: 'spouse_then_children', label: 'Spouse, then children' },
-              { value: 'children_then_descendants', label: 'Children, then descendants' },
-              { value: 'named_then_children', label: 'Named individual, then children' },
-              { value: 'memorandum', label: 'Personal property memorandum' },
-            ]}
-            onChange={v => onChange('tangible_property_distribution', v || null)}
-          />
+        <DecisionRow
+          question="Distribution of tangible property"
+          fieldName="tangible_property_distribution"
+          value={sheet.tangible_property_distribution}
+          options={[
+            { value: 'spouse_then_children', label: 'Spouse, then children' },
+            { value: 'children_then_descendants', label: 'Children, then descendants' },
+            { value: 'named_then_children', label: 'Named individual, then children' },
+            { value: 'memorandum', label: 'Personal property memorandum' },
+          ]}
+          onChange={v => onChange('tangible_property_distribution', v)}
+        />
+        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
           {sheet.tangible_property_distribution === 'named_then_children' && (
             <AttorneyInput
               fieldName="tangible_property_named_individual"
@@ -695,25 +520,24 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       </SectionBlock>
 
       <SectionBlock title="Pet Care Provisions">
-        <AttorneySelect
-          label="Pet Care Provision"
+        <DecisionRow
+          question="Pet care provision"
           value={sheet.pet_care_option ?? 'omit'}
           options={[
             { value: 'omit', label: 'Omit (no pets)' },
             { value: 'direct_bequest', label: 'Direct bequest of pet + cash gift to caretaker' },
             { value: 'pet_trust', label: 'Statutory pet trust under M.G.L. c. 203E §408' },
           ]}
-          onChange={v => onChange('pet_care_option', v as 'omit' | 'direct_bequest' | 'pet_trust')}
+          onChange={v => onChange('pet_care_option', v)}
         />
 
         {sheet.pet_care_option && sheet.pet_care_option !== 'omit' && (
-          <div className="mt-4 grid grid-cols-2 gap-x-6">
-            <AttorneySelect
-              label="In document"
-              value={pet.document ?? ''}
-              placeholder="Select..."
+          <div className="mt-4">
+            <DecisionRow
+              question="Include pet care provision in"
+              value={pet.document}
               options={documentOptions}
-              onChange={v => updatePet({ document: (v || null) as PetCareDetails['document'] })}
+              onChange={v => updatePet({ document: v as PetCareDetails['document'] })}
             />
           </div>
         )}
@@ -758,57 +582,47 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       </SectionBlock>
 
       <SectionBlock title="Residuary Distribution">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Residual Beneficiary"
-            value={sheet.residual_beneficiary ?? ''}
-            placeholder="Select..."
-            options={[
-              { value: 'children', label: 'Children' },
-              { value: 'descendants', label: 'Descendants' },
-              { value: 'named', label: 'Named individuals' },
-            ]}
-            onChange={v => onChange('residual_beneficiary', v || null)}
-          />
-          <AttorneySelect
-            label="Residual Beneficiary Method"
-            value={residualMethod ?? ''}
-            placeholder="Select..."
-            options={[
-              { value: 'outright', label: 'Outright' },
-              { value: 'staggered', label: 'Staggered (e.g. 1/3 at 25, 30, 35)' },
-              { value: 'trust-for-life', label: 'Held in trust for lifetime' },
-              { value: 'custom', label: 'Custom distribution schedule' },
-            ]}
-            onChange={v => {
-              const method = (v || null) as ResidualBeneficiaryMethod | null
-              updateTrustDetails({ residual_beneficiary_method: method })
-              onChange('distribution_method', method)
-            }}
-          />
-        </div>
+        <DecisionRow
+          question="Residual beneficiary"
+          value={sheet.residual_beneficiary}
+          options={[
+            { value: 'children', label: 'Children' },
+            { value: 'descendants', label: 'Descendants' },
+            { value: 'named', label: 'Named individuals' },
+          ]}
+          onChange={v => onChange('residual_beneficiary', v)}
+        />
+        <DecisionRow
+          question="Residual Beneficiary Method"
+          help="Choose how the residuary share is distributed or held."
+          fieldName="distribution_method"
+          blocking
+          value={residualMethod}
+          options={[
+            { value: 'outright', label: 'Outright' },
+            { value: 'staggered', label: 'Staggered', description: 'For example, distributions at ages 25, 30, and 35.' },
+            { value: 'trust-for-life', label: 'Held in trust for lifetime' },
+            { value: 'custom', label: 'Custom distribution schedule' },
+          ]}
+          onChange={v => {
+            const method = v as ResidualBeneficiaryMethod
+            updateTrustDetails({ residual_beneficiary_method: method })
+            onChange('distribution_method', method)
+          }}
+        />
 
         <div className="mt-4">
-          <FieldLabel>{deathLabel}</FieldLabel>
-          <div className="space-y-3">
-            {([
+          <DecisionRow
+            question={deathLabel}
+            value={trustDetails.residuary_after_death}
+            options={[
               { value: 'descendants_outright_per_stirpes', label: 'Distributed outright to descendants, per stirpes.' },
               { value: 'descendants_shares_outright_children_trusts_others', label: "Divided into shares for descendants, per stirpes, to be distributed outright to children of the Grantor and held in trusts for others." },
               { value: 'descendants_shares_all_trusts', label: "Divided into shares, per stirpes, each share held in trust. State the terms of the trust once and apply to all descendants' trusts." },
               { value: 'named_beneficiaries_separate_terms', label: 'Divided into shares for named beneficiaries. Separately state terms of administration and distribution for each beneficiary.' },
-            ] as const).map(option => (
-              <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                <Checkbox
-                  checked={trustDetails.residuary_after_death === option.value}
-                  onCheckedChange={checked => {
-                    if (checked) updateTrustDetails({ residuary_after_death: option.value as ResiduaryAfterDeath })
-                  }}
-                  className="mt-0.5"
-                />
-                <span className="text-sm leading-relaxed text-foreground">{option.label}</span>
-              </label>
-            ))}
-          </div>
+            ]}
+            onChange={value => updateTrustDetails({ residuary_after_death: value as ResiduaryAfterDeath })}
+          />
         </div>
 
         {sheet.residual_beneficiary === 'named' && (
@@ -1008,28 +822,17 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
             checked={trustDetails.prorate_estate_taxes}
             onChange={checked => updateTrustDetails({ prorate_estate_taxes: checked })}
           />
-          <div>
-            <FieldLabel>Representation Type</FieldLabel>
-            <p className="mb-2 text-xs text-muted-foreground">How shares pass to descendants when a beneficiary predeceases.</p>
-            <div className="space-y-3">
-              {([
+          <DecisionRow
+            question="Representation type"
+            help="How shares pass to descendants when a beneficiary predeceases."
+            value={trustDetails.representation_type}
+            options={[
                 { value: 'by_representation', label: 'By right of representation' },
                 { value: 'per_stirpes', label: 'Per stirpes' },
                 { value: 'per_capita_each_generation', label: 'Per capita at each generation' },
-              ] as const).map(option => (
-                <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                  <Checkbox
-                    checked={trustDetails.representation_type === option.value}
-                    onCheckedChange={checked => {
-                      if (checked) updateTrustDetails({ representation_type: option.value as RepresentationType })
-                    }}
-                    className="mt-0.5"
-                  />
-                  <span className="text-sm text-foreground">{option.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+            ]}
+            onChange={value => updateTrustDetails({ representation_type: value as RepresentationType })}
+          />
           <AttorneyInput
             label="Survivorship Requirement (days)"
             value={trustDetails.survivorship_requirement_days?.toString() ?? ''}

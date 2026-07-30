@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseUserPreferences, resolveDesignView } from '@/lib/userPreferences'
+import {
+  parseUserPreferences,
+  resolveClausePreviewOpen,
+  resolveDesignView,
+  resolveSinglePageDesignSheet,
+} from '@/lib/userPreferences'
 
 describe('resolveDesignView', () => {
   it('prefers URL param over stored preferences', () => {
@@ -56,5 +61,22 @@ describe('resolveDesignView', () => {
       version: 1,
       fields: { bond: 'no_bond', supervision: 'unsupervised' },
     })
+  })
+
+  it('defaults the single-page design sheet off and preserves an explicit opt-in', () => {
+    expect(resolveSinglePageDesignSheet(parseUserPreferences({}))).toBe(false)
+    expect(resolveSinglePageDesignSheet(parseUserPreferences({
+      drafting: { singlePageDesignSheet: true },
+    }))).toBe(true)
+    expect(resolveSinglePageDesignSheet(parseUserPreferences({
+      drafting: { singlePageDesignSheet: 'true' },
+    }))).toBe(false)
+  })
+
+  it('defaults the clause preview open and preserves an explicit dismissal', () => {
+    expect(resolveClausePreviewOpen(parseUserPreferences({}))).toBe(true)
+    expect(resolveClausePreviewOpen(parseUserPreferences({
+      drafting: { clausePreviewOpen: false },
+    }))).toBe(false)
   })
 })

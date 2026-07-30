@@ -17,9 +17,10 @@ export function findNextUnresolvedBlocker(
   blockers: DesignReadinessBlocker[],
   activeSectionId?: string | null,
 ) {
-  if (blockers.length === 0) return null
-  if (!activeSectionId) return blockers[0]
-  const activeSectionEnd = blockers.findLastIndex(item => item.sectionId === activeSectionId)
-  if (activeSectionEnd === -1) return blockers[0]
-  return blockers.slice(activeSectionEnd + 1).find(item => item.sectionId !== activeSectionId) ?? blockers[0]
+  const blocking = blockers.filter(item => item.blocking)
+  if (blocking.length === 0) return null
+  if (!activeSectionId) return blocking[0]
+  const activeSectionEnd = blocking.findLastIndex(item => item.sectionId === activeSectionId)
+  if (activeSectionEnd === -1) return blocking[0]
+  return blocking.slice(activeSectionEnd + 1).find(item => item.sectionId !== activeSectionId) ?? blocking[0]
 }

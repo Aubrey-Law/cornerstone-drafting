@@ -161,14 +161,15 @@ describe('drafting hub and workspace', () => {
     expect(state).not.toContain('propsSheetStampRef.current = savedAt')
   })
 
-  it('keeps design sheet state above Guided/Express switches in the drafting workspace', () => {
+  it('keeps design sheet state above the single-page sheet in the drafting workspace', () => {
     const workspace = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/drafting/[matterId]/DraftingWorkspace.tsx'),
       'utf8',
     )
     expect(workspace).toContain('useDesignSheetState({')
     expect(workspace).toContain('designState={designState}')
-    expect(workspace).toContain('Do not override an existing localStorage/URL choice')
+    expect(workspace).toContain('<DesignSheetPage')
+    expect(workspace).not.toContain('<ExpressDesignSheet')
   })
 
   it('offers a direct path back to the matter from the drafting workspace', () => {

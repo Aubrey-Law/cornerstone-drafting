@@ -7,19 +7,15 @@ import type { SectionProps } from './shared'
 import {
   AttorneyInput,
   AttorneySelect,
+  DecisionRow,
   DesignSectionContent,
   FieldLabel,
   SectionBlock,
 } from './shared'
-import { SegControl } from './fiduciary-blocks'
 import { DpoaProvisionsSection } from './DpoaProvisionsSection'
 import { HealthCareDesignSection } from './HealthCareDesignSection'
 import { WillPersonalRepresentativePowersSection } from './WillPersonalRepresentativePowersSection'
 import { WillProvisionsSection } from './WillProvisionsSection'
-import {
-  DpoaFiduciarySections,
-  WillFiduciarySections,
-} from './documentFiduciarySections'
 import {
   TrustDetailsSection,
   TrustDetailsSpouseSection,
@@ -52,8 +48,7 @@ export function WillDocumentSection(props: DocumentSectionProps) {
 
   return (
     <DesignSectionContent>
-      <SectionHelp>Configure will-specific provisions and nominate personal representatives and guardians here.</SectionHelp>
-      <WillFiduciarySections {...props} />
+      <SectionHelp>Configure will-specific provisions here. Fiduciary nominations are managed in the Fiduciaries grid.</SectionHelp>
       <WillPersonalRepresentativePowersSection sheet={sheet} onChange={onChange} />
       <WillProvisionsSection sheet={sheet} onChange={onChange} scope="will" />
     </DesignSectionContent>
@@ -68,7 +63,6 @@ export function DpoaDocumentSection(props: DocumentSectionProps) {
       <SectionHelp>
         The options in this section apply to all power of attorney documents created as part of this package.
       </SectionHelp>
-      <DpoaFiduciarySections {...props} />
       <DpoaProvisionsSection sheet={sheet} onChange={onChange} />
     </DesignSectionContent>
   )
@@ -78,7 +72,7 @@ export function HealthCareDocumentSection(props: DocumentSectionProps) {
   return (
     <DesignSectionContent>
       <SectionHelp>
-        Nominate health care agents, make anatomical gift elections, and configure HIPAA and advance directive choices here.
+        Make anatomical gift elections and configure HIPAA and advance directive choices here. Agent nominations are managed in the Fiduciaries grid.
       </SectionHelp>
       <HealthCareDesignSection {...props} />
     </DesignSectionContent>
@@ -111,10 +105,12 @@ export function DeedDocumentSection({ sheet, onChange }: SectionProps) {
       <SectionHelp>Track whether real property needs to be transferred into the trust.</SectionHelp>
       <SectionBlock title="Deed Work">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <div>
-            <FieldLabel>Deed Work Needed?</FieldLabel>
-            <SegControl value={deed.needed === false ? 'no' : 'yes'} options={YES_NO} onChange={v => updateDeed('needed', v === 'yes')} />
-          </div>
+          <DecisionRow
+            question="Deed work needed?"
+            value={deed.needed === false ? 'no' : 'yes'}
+            options={YES_NO}
+            onChange={v => updateDeed('needed', v === 'yes')}
+          />
           <AttorneySelect
             label="Deed Status"
             value={typeof deed.status === 'string' ? deed.status : 'not_started'}
@@ -128,10 +124,12 @@ export function DeedDocumentSection({ sheet, onChange }: SectionProps) {
             ]}
             onChange={v => updateDeed('status', v)}
           />
-          <div>
-            <FieldLabel>Existing Deed Requested / Received?</FieldLabel>
-            <SegControl value={deed.existing_deed_received ? 'yes' : 'no'} options={YES_NO} onChange={v => updateDeed('existing_deed_received', v === 'yes')} />
-          </div>
+          <DecisionRow
+            question="Existing deed requested or received?"
+            value={deed.existing_deed_received ? 'yes' : 'no'}
+            options={YES_NO}
+            onChange={v => updateDeed('existing_deed_received', v === 'yes')}
+          />
           <AttorneyInput
             label="Recording County"
             value={typeof deed.recording_county === 'string' ? deed.recording_county : ''}

@@ -2,16 +2,23 @@
 
 import type { ReactNode } from 'react'
 import { Scale } from 'lucide-react'
-import type { SummarySectionItem } from '@/components/guided'
-import type { DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
-import type { DesignSectionSummary } from '@/lib/designSheetReadiness'
 import {
+  getDocumentInclusions,
+  type DesignDocumentInclusions,
+} from '@/lib/designSheetDocumentInclusions'
+import {
+  designPlanTypeIncludesRevocableTrust,
+  planTypeDisallowsRevocableTrustDocument,
+} from '@/lib/designPlanType'
+import {
+  DESIGN_SHEET_GROUP_IDS,
   DESIGN_SECTION_IDS,
-  normalizeDesignSectionId,
+  designSectionAnchorId,
+  type DesignSheetGroupId,
 } from '@/lib/designSheet/sectionIds'
 import {
+  getAllDesignSectionNavItems,
   getDesignSectionNavItems,
-  type DesignSectionNavItem,
 } from '@/lib/designSheet/designSectionNav'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
@@ -29,8 +36,6 @@ import {
   TrustDetailsSection,
   WillDocumentSection,
 } from './sections/DocumentSections'
-import { IntakeSection } from './sections/IntakeSection'
-import { ContactsFiduciariesSection } from './sections/ContactsFiduciariesSection'
 import { TransfersAssignmentsSection } from './sections/TransfersAssignmentsSection'
 
 export interface DesignSectionDef {
@@ -39,6 +44,53 @@ export interface DesignSectionDef {
   subtitle?: string
   render: () => ReactNode
   visible?: boolean
+  appliesWhen?: (sheet: DesignSheet) => boolean
+  applicable?: boolean
+}
+
+export interface DesignSheetGroupDef {
+  id: DesignSheetGroupId
+  title: string
+  subtitle: string
+  sections: DesignSectionDef[]
+  render: () => ReactNode
+}
+
+const DESIGN_SHEET_GROUP_CATALOG: Array<{
+  id: DesignSheetGroupId
+  title: string
+  subtitle: string
+}> = [
+  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Facts from intake', subtitle: 'Client, family, and asset facts' },
+  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Family', subtitle: 'Will terms and family distributions' },
+  { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Contacts, trustees, personal representatives, agents, and guardians' },
+  { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Plan structure', subtitle: 'Plan type, documents, and execution mechanics' },
+  { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust terms', subtitle: 'Trust structure, beneficiaries, and provisions' },
+  { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers' },
+  { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives' },
+  { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning' },
+  { id: DESIGN_SHEET_GROUP_IDS.notes, title: 'Attorney notes', subtitle: 'Goals, concerns, and drafting notes' },
+]
+
+export function buildDesignSheetGroups(sections: DesignSectionDef[]): DesignSheetGroupDef[] {
+  return DESIGN_SHEET_GROUP_CATALOG.map(group => {
+    const groupSections = sections.filter(section => designSectionAnchorId(section.id) === group.id)
+    return {
+      ...group,
+      sections: groupSections,
+      render: () => groupSections.length > 0
+        ? groupSections.map(section => (
+            <div
+              key={section.id}
+              id={`design-section-${section.id}`}
+              className={section.applicable === false ? 'opacity-45 grayscale-[20%]' : undefined}
+            >
+              {section.render()}
+            </div>
+          ))
+        : <p className="text-sm text-muted-foreground">Not included in this plan.</p>,
+    }
+  })
 }
 
 export interface BuildDesignSectionsArgs {
@@ -59,11 +111,35 @@ export interface BuildDesignSectionsArgs {
   handleAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   handleUpdateContact: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   handleRemoveContact: (id: string) => void
+  showInapplicable?: boolean
+}
+
+export function designSectionAppliesWhen(sectionId: string, sheet: DesignSheet): boolean {
+  const inclusions = getDocumentInclusions(sheet)
+  const revocableTrustPlan = designPlanTypeIncludesRevocableTrust(sheet.plan_type)
+  const disallowsRevocableTrust = planTypeDisallowsRevocableTrustDocument(sheet.plan_type)
+  const revocableTrustApplicable = sheet.plan_type == null || sheet.plan_type === ''
+    ? inclusions.trust
+    : inclusions.trust && revocableTrustPlan && !disallowsRevocableTrust
+  switch (sectionId) {
+    case DESIGN_SECTION_IDS.trustDetails:
+    case DESIGN_SECTION_IDS.assetSchedules:
+      return revocableTrustApplicable
+    case DESIGN_SECTION_IDS.willDetails:
+      return inclusions.will
+    case DESIGN_SECTION_IDS.financialPoa:
+      return inclusions.dpoa
+    case DESIGN_SECTION_IDS.healthcareDirectives:
+      return inclusions.healthcare
+    case DESIGN_SECTION_IDS.transfersAssignments:
+      return inclusions.deed
+    default:
+      return true
+  }
 }
 
 export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSectionDef[] {
   const {
-    matterId,
     sheet,
     matter,
     contacts,
@@ -76,16 +152,21 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     updateLpPatch,
     handleAddContact,
     handleUpdateContact,
-    handleRemoveContact,
+    showInapplicable,
   } = args
 
-  const navItems = getDesignSectionNavItems({
+  const navArgs = {
     intakeSnapshot,
     documentInclusions,
     maritalStatus: sheet.marital_status,
     spouseName: sheet.spouse_name ?? matter.spouse_name,
     isJointTrust: sheet.is_joint,
-  })
+    planType: sheet.plan_type,
+  }
+  const navItems = (showInapplicable === undefined
+    ? getDesignSectionNavItems(navArgs)
+    : getAllDesignSectionNavItems(navArgs))
+    .filter(item => item.id !== DESIGN_SECTION_IDS.intakeReview)
 
   const common = {
     sheet,
@@ -98,9 +179,6 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
   const docCommon = { ...common, matter }
 
   const renderers: Record<string, () => ReactNode> = {
-    [DESIGN_SECTION_IDS.intakeReview]: () => (
-      <IntakeSection intake={intakeSnapshot!} matterId={matterId} />
-    ),
     [DESIGN_SECTION_IDS.clientInformation]: () => (
       <ClientInformationSection sheet={sheet} onChange={updateField} />
     ),
@@ -111,18 +189,6 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         contacts={contacts}
         onAddContact={handleAddContact}
         onUpdateContact={handleUpdateContact}
-      />
-    ),
-    [DESIGN_SECTION_IDS.contactsFiduciaries]: () => (
-      <ContactsFiduciariesSection
-        sheet={sheet}
-        onChange={updateField}
-        contacts={contacts}
-        matter={matter}
-        matterId={matterId}
-        onAddContact={handleAddContact}
-        onUpdateContact={handleUpdateContact}
-        onRemoveContact={handleRemoveContact}
       />
     ),
     [DESIGN_SECTION_IDS.fiduciaries]: () => (
@@ -136,10 +202,11 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         matter={matter}
         onAddContact={handleAddContact}
         onUpdateContact={handleUpdateContact}
+        showInapplicable={Boolean(showInapplicable)}
       />
     ),
     [DESIGN_SECTION_IDS.estatePlanDesign]: () => (
-      <PlanDesignSection {...common} />
+      <PlanDesignSection {...common} showInapplicable={Boolean(showInapplicable)} />
     ),
     [DESIGN_SECTION_IDS.trustDetails]: () => <TrustDetailsSection {...docCommon} scope="client" />,
     [DESIGN_SECTION_IDS.willDetails]: () => (
@@ -182,68 +249,17 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     [DESIGN_SECTION_IDS.transfersAssignments]: 'Deed, trustee certificate & realty trust',
   }
 
-  const titles: Partial<Record<string, string>> = {
-    [DESIGN_SECTION_IDS.contactsFiduciaries]: 'Fiduciaries & Additional Contacts',
-  }
-
-  return navItems.map(item => ({
+  return navItems
+    .filter(item => item.id !== DESIGN_SECTION_IDS.intakeReview)
+    .map(item => ({
     id: item.id,
-    title: titles[item.id] ?? item.label,
+    title: item.label,
     subtitle: subtitles[item.id],
     render: renderers[item.id] ?? (() => null),
-  }))
+    appliesWhen: currentSheet => designSectionAppliesWhen(item.id, currentSheet),
+    }))
 }
 
 export function visibleDesignSections(sections: DesignSectionDef[]): DesignSectionDef[] {
   return sections.filter(section => section.visible !== false)
 }
-
-export function buildSummarySectionItems(
-  summaries: Record<string, DesignSectionSummary>,
-  documentInclusions: DesignDocumentInclusions,
-  intakeSnapshot: IntakeSnapshot | null,
-  sheet: Pick<DesignSheet, 'marital_status' | 'spouse_name' | 'is_joint'>,
-  matter: Pick<PipelineMatter, 'spouse_name'>,
-): SummarySectionItem[] {
-  const navItems = getDesignSectionNavItems({
-    intakeSnapshot,
-    documentInclusions,
-    maritalStatus: sheet.marital_status,
-    spouseName: sheet.spouse_name ?? matter.spouse_name,
-    isJointTrust: sheet.is_joint,
-  })
-
-  return navItems.map(item => ({
-    id: item.id,
-    label: item.label,
-    status: item.id === DESIGN_SECTION_IDS.intakeReview
-      ? 'complete'
-      : (summaries[item.id]?.status ?? 'none'),
-  }))
-}
-
-export function resolveDesignSectionId(
-  sections: DesignSectionDef[],
-  requestedId: string | null | undefined,
-): string | null {
-  const visible = visibleDesignSections(sections)
-  const normalized = normalizeDesignSectionId(requestedId)
-  if (normalized === 'overview' || !normalized) return null
-  return visible.some(section => section.id === normalized) ? normalized : visible[0]?.id ?? null
-}
-
-export function designSectionHref(matterId: string, sectionId: string, embedded: boolean): string {
-  const normalized = normalizeDesignSectionId(sectionId) ?? sectionId
-  if (embedded) {
-    return `/admin/drafting/${matterId}?step=design&section=${normalized}`
-  }
-  return `/admin/drafting/${matterId}/design?section=${normalized}`
-}
-
-export function designOverviewHref(matterId: string, embedded: boolean): string {
-  if (embedded) {
-    return `/admin/drafting/${matterId}?step=design`
-  }
-  return `/admin/drafting/${matterId}/design`
-}
-

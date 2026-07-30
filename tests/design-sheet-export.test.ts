@@ -17,7 +17,7 @@ describe('design sheet Word export', () => {
   })
 
   it('wires the design sheet screen button to save first and then download the Word export', () => {
-    const shell = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'), 'utf8')
+    const shell = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'), 'utf8')
     const state = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/useDesignSheetState.ts'), 'utf8')
 
     expect(shell).toContain('onExport={handleExportDesignSheet}')

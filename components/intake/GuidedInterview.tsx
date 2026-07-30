@@ -36,18 +36,20 @@ import { unpackInitialData } from './IntakeStepPage'
 import { GuidedSection } from './GuidedSection'
 import { IntakeQuestionnaireReview } from './IntakeQuestionnaireReview'
 import {
+  IntakeSectionProgressList,
+  type IntakeSectionProgressItem,
+} from './IntakeSectionProgressList'
+import {
   BrandBar,
   DocumentPicker,
   DEFAULT_DOC_GROUPS,
   FlagPill,
   PlanStructurePicker,
   ProgressRing,
-  SectionProgressList,
   guidedCardStyle,
   guidedIntroCardStyle,
   guidedPageStyle,
   guidedPrimaryButtonStyle,
-  type SectionProgressItem,
 } from '@/components/guided'
 import { getFirmConfig } from '@/lib/firmConfig'
 import type { ChildEntry, FiduciaryEntry, AdditionalContactEntry, StepProps } from './IntakeWizard'
@@ -317,7 +319,7 @@ export default function GuidedInterview({
   )
 
   // Rail progress map — same entries, and same order, as the main column.
-  const progressItems = useMemo<SectionProgressItem[]>(
+  const progressItems = useMemo<IntakeSectionProgressItem[]>(
     () => sections.map((entry) => entry.kind === 'step'
       ? { id: entry.id, title: entry.step.title, complete: entry.complete, timeEstimate: entry.step.timeEstimate }
       : { id: entry.id, title: entry.title, complete: entry.complete }),
@@ -609,7 +611,7 @@ export default function GuidedInterview({
             {!isAttorney && (
               <>
                 <div className="gi-progress-rail">
-                  <SectionProgressList
+                  <IntakeSectionProgressList
                     items={progressItems}
                     openId={openId}
                     onSelect={selectSection}

@@ -183,21 +183,14 @@ describe('functional fiduciary slot updates', () => {
     expect(withPrimary.filter(s => !s.is_co).map(s => s.order)).toEqual([0, 1])
   })
 
-  it('uses functional onChange in fiduciary block slot persistence', () => {
-    const blocks = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/fiduciary-blocks.tsx'),
-      'utf8',
-    )
-    const roleSection = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/FiduciaryRoleSection.tsx'),
+  it('uses functional onChange in unified-grid slot persistence', () => {
+    const grid = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/FiduciaryGrid.tsx'),
       'utf8',
     )
 
-    expect(blocks).toContain('onChange(field, prevSheet =>')
-    expect(blocks).toContain("onChange('fiduciary_slot_states', prevSheet =>")
-    expect(blocks).not.toMatch(/persistSlots\(rawSlots\)/)
-    expect(roleSection).toContain('onSlotsChange(prev =>')
-    expect(roleSection).toContain('addBackupAgent(prev)')
-    expect(roleSection).not.toMatch(/onSlotsChange\(setSlotContact\(slots/)
+    expect(grid).toContain('onChange(field, previousSheet =>')
+    expect(grid).toContain('normalizeFiduciarySlots(updater(resolved))')
+    expect(grid).toContain('setPrimaryContact')
   })
 })

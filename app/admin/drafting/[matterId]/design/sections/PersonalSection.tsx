@@ -6,9 +6,7 @@ import {
   DesignSectionContent,
   DobAgeHint,
   SectionBlock,
-  sectionFieldGrid2,
   sectionFieldGrid3,
-  sectionFieldGrid4,
   type SectionProps,
 } from './shared'
 import { DesignField } from '@/components/sharedFields/DesignField'
@@ -35,7 +33,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
       </AttorneyNoteBanner>
 
       <SectionBlock title="Client" subtitle="Primary grantor">
-        <div className={sectionFieldGrid2}>
+        <div className={sectionFieldGrid3}>
           <DesignField
             fieldId="client_name"
             sheet={sheet}
@@ -49,7 +47,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
             onChange={v => onChange('client_aka', v || null)}
           />
         </div>
-        <div className={`mt-4 ${sectionFieldGrid2}`}>
+        <div className={`mt-4 ${sectionFieldGrid3}`}>
           <DesignField
             fieldId="client_pronouns"
             sheet={sheet}
@@ -86,7 +84,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
         </div>
 
         {(isDivorced || isWidowed) && (
-          <div className={`mt-4 ${sectionFieldGrid2}`}>
+          <div className={`mt-4 ${sectionFieldGrid3}`}>
             {isDivorced && (
               <AttorneyInput
                 label="Former Spouse Name"
@@ -104,20 +102,20 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
           </div>
         )}
 
-        <div className={`mt-4 ${sectionFieldGrid4}`}>
+        <div className={`mt-4 ${sectionFieldGrid3}`}>
           <DesignField fieldId="street" sheet={sheet} onChange={onChange} originalValue={original('street')} />
           <DesignField fieldId="city" sheet={sheet} onChange={onChange} originalValue={original('city')} />
           <DesignField fieldId="state" sheet={sheet} onChange={onChange} originalValue={original('state')} />
           <DesignField fieldId="zip" sheet={sheet} onChange={onChange} originalValue={original('zip')} />
         </div>
-        <div className={`mt-4 ${sectionFieldGrid2}`}>
+        <div className={`mt-4 ${sectionFieldGrid3}`}>
           <DesignField fieldId="county" sheet={sheet} onChange={onChange} originalValue={original('county')} />
         </div>
       </SectionBlock>
 
       {isMarried && (
         <SectionBlock title="Spouse / Partner" subtitle="Co-grantor">
-          <div className={sectionFieldGrid2}>
+          <div className={sectionFieldGrid3}>
             <DesignField
               fieldId="spouse_name"
               sheet={sheet}
@@ -152,7 +150,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
               originalValue={original('spouse_email')}
             />
           </div>
-          <div className={`mt-4 ${sectionFieldGrid2}`}>
+          <div className={`mt-4 ${sectionFieldGrid3}`}>
             <DesignField
               fieldId="spouse_pronouns"
               sheet={sheet}
@@ -167,7 +165,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
               valueOverride={spouseCitizenshipDisplay}
             />
           </div>
-          <div className={`mt-4 ${sectionFieldGrid2}`}>
+          <div className={`mt-4 ${sectionFieldGrid3}`}>
             <DesignField
               fieldId="marriage_date"
               sheet={sheet}
@@ -179,7 +177,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
       )}
 
       <SectionBlock title="Citizenship & Residency">
-        <div className={sectionFieldGrid2}>
+        <div className={sectionFieldGrid3}>
           <DesignField
             fieldId="client_citizenship"
             sheet={sheet}

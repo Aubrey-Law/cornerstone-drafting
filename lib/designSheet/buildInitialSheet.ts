@@ -36,7 +36,7 @@ export function normalizeOverrideValue(value: unknown): string {
 /**
  * Build a fully-populated empty design sheet. Used as the initial value when a
  * matter has no persisted design sheet yet. Mirrors the canonical default used
- * by the original DesignSheetShell so both attorney sheets start identically.
+ * by the original design-sheet shell so every entry point starts identically.
  */
 export function buildInitialSheet(sheet: DesignSheet | null): DesignSheet {
   if (sheet) return sheet

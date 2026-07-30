@@ -78,4 +78,31 @@ describe('email settings and templates', () => {
     expect(signatureRoute).toContain('sanitizeEmailHtml')
     expect(draftRoute).toContain(".eq('user_id', userId)")
   })
+
+  it('defines the scheduled email queue, cancellation API, and cron worker', () => {
+    const migration = fs.readFileSync(
+      path.join(process.cwd(), 'supabase/migrations/20260729190000_scheduled_emails.sql'),
+      'utf8',
+    )
+    const scheduleRoute = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/email/scheduled/route.ts'),
+      'utf8',
+    )
+    const cancelRoute = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/email/scheduled/[id]/route.ts'),
+      'utf8',
+    )
+    const cronRoute = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/cron/scheduled-emails/route.ts'),
+      'utf8',
+    )
+    const vercel = fs.readFileSync(path.join(process.cwd(), 'vercel.json'), 'utf8')
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.scheduled_emails')
+    expect(migration).toContain("status IN ('pending', 'processing', 'sent', 'suppressed', 'failed', 'cancelled')")
+    expect(scheduleRoute).toContain('scheduledFor')
+    expect(scheduleRoute).toContain('Resolve or remove all template variables')
+    expect(cancelRoute).toContain(".eq('status', 'pending')")
+    expect(cronRoute).toContain('CRON_SECRET')
+    expect(vercel).toContain('/api/cron/scheduled-emails')
+  })
 })

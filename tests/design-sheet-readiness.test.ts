@@ -267,8 +267,8 @@ describe('computeDesignSheetReadiness', () => {
     })
 
     expect(readiness.complete).toBe(true)
-    expect(readiness.blockers).toHaveLength(0)
-    expect(readiness.completedCount).toBe(readiness.total)
+    expect(readiness.blocking).toHaveLength(0)
+    expect(readiness.optional.length).toBeGreaterThan(0)
   })
 
   it('does not gate LP drafting on design-sheet approval (now a separate client design review)', () => {
@@ -286,15 +286,52 @@ describe('computeDesignSheetReadiness', () => {
     })
 
     // Approval moved to the client-facing design review; lite never blocks on readiness.
-    expect(readiness.blockers).toEqual([])
+    expect(readiness.blocking).toEqual([])
     expect(readiness.complete).toBe(true)
+  })
+
+  it('classifies a missing backup trustee as optional', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        trustee_slots: [{ id: 'trustee-1', contact_id: 'contact-trustee', is_co: false, order: 0 }],
+      }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.optional.find(item => item.label === 'backup trustee')?.blocking).toBe(false)
+    expect(readiness.blocking.map(item => item.label)).not.toContain('backup trustee')
+  })
+
+  it('classifies a missing successor trustee as blocking', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({ trustee_slots: [] }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.blocking.find(item => item.label === 'successor trustee')?.blocking).toBe(true)
+  })
+
+  it('classifies a missing signing date as optional', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({ signing_date: null }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.optional.find(item => item.label === 'signing date')?.blocking).toBe(false)
+    expect(readiness.blocking.map(item => item.label)).not.toContain('signing date')
   })
 })
 
 describe('design sheet readiness UI wiring', () => {
   it('surfaces readiness blockers as advisory hints without gating generation', () => {
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
       'utf8',
     )
     const workspace = fs.readFileSync(
@@ -319,8 +356,9 @@ describe('design sheet readiness UI wiring', () => {
     )
 
     expect(workspace).toContain('computeDesignSheetReadiness')
-    expect(shell).toContain('readinessComplete')
-    expect(shell).toContain('blockerDetails')
+    expect(shell).toContain('blockingCount')
+    expect(shell).toContain('blockingDetails')
+    expect(shell).toContain('optionalDetails')
     // Blockers hint, never gate: generation must not be disabled by readiness.
     expect(shell).not.toContain('generateDisabled={!readinessComplete}')
     expect(sharedControls).toContain('designFieldTargetId')
@@ -334,21 +372,13 @@ describe('design sheet readiness UI wiring', () => {
 
   it('preserves blocker focus in standalone navigation and handles each changing focus token', () => {
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
-      'utf8',
-    )
-    const express = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/ExpressDesignSheet.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
       'utf8',
     )
 
-    expect(shell).toContain("params.set('focus', `${focus.sectionId}:${focus.targetField ?? ''}`)")
     expect(shell).toContain('if (!targetId) target.tabIndex = -1')
-    expect(express).toContain('if (!targetId) target.tabIndex = -1')
     expect(shell).not.toContain('handledFocusToken.current === focusToken')
-    expect(express).not.toContain('handledFocusToken.current === focusToken')
     expect(shell).not.toContain('const initialFocusHandled = useRef(false)')
-    expect(express).not.toContain('const initialFocusHandled = useRef(false)')
   })
 })
 

@@ -1,9 +1,8 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronDown, ChevronRight, WandSparkles } from 'lucide-react'
+import { ChevronDown, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -13,9 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
 import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
-import type { DesignReadinessBlocker } from '@/lib/designSheetReadiness'
 import type { DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { useUserPreferences } from '@/lib/userPreferencesClient'
 import type { AttorneyDesignPreset } from '@/lib/designSheet/fastEntryWorkflow'
@@ -32,37 +29,16 @@ export interface DesignAccelerationBarProps {
   sheet: DesignSheet
   updateField: DesignSheetOnChange
   documentInclusions: DesignDocumentInclusions
-  nextRequired: DesignReadinessBlocker | null
-  onNextRequired: (blocker: DesignReadinessBlocker) => void
-  showLayoutControls?: boolean
-  showCompleted?: boolean
-  expandAll?: boolean
-  onShowCompletedChange?: (value: boolean) => void
-  onExpandAllChange?: (value: boolean) => void
   attorneyPreset: AttorneyDesignPreset | null
   onAttorneyPresetChange: (preset: AttorneyDesignPreset) => void
-  /**
-   * `bar` is the full fast-entry toolbar. `slim` and `inline` collapse the shortcuts
-   * into a dropdown and show only the next-required control; `inline` drops the card
-   * chrome so the row can sit inside the guided overview intro card.
-   */
-  variant?: 'bar' | 'slim' | 'inline'
 }
 
 export function DesignAccelerationBar({
   sheet,
   updateField,
   documentInclusions,
-  nextRequired,
-  onNextRequired,
-  showLayoutControls = false,
-  showCompleted = false,
-  expandAll = false,
-  onShowCompletedChange,
-  onExpandAllChange,
   attorneyPreset,
   onAttorneyPresetChange,
-  variant = 'bar',
 }: DesignAccelerationBarProps) {
   const [presetDialogOpen, setPresetDialogOpen] = useState(false)
   const [overwritePresetConflicts, setOverwritePresetConflicts] = useState(false)
@@ -137,15 +113,6 @@ export function DesignAccelerationBar({
     },
   ]
 
-  const nextRequiredControl = nextRequired ? (
-    <Button size="sm" className="gap-1.5 text-xs" onClick={() => onNextRequired(nextRequired)}>
-      Next: {nextRequired.label}
-      <ChevronRight className="h-3.5 w-3.5" />
-    </Button>
-  ) : (
-    <Badge className="border-0 bg-success/10 text-success"><Check className="mr-1 h-3 w-3" />Ready to generate</Badge>
-  )
-
   const shortcutsMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -203,50 +170,9 @@ export function DesignAccelerationBar({
         </DialogContent>
       </Dialog>
 
-      {variant !== 'bar' ? (
-        <div
-          className={cn(
-            'flex flex-wrap items-center gap-2',
-            variant === 'slim' && 'mb-3 rounded-lg border border-border bg-card px-3 py-2',
-          )}
-        >
-          {nextRequiredControl}
-          {shortcutsMenu}
-        </div>
-      ) : (
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-        {nextRequired ? (
-          <Button size="sm" className="gap-1.5 text-xs" onClick={() => onNextRequired(nextRequired)}>
-            <ChevronRight className="h-3.5 w-3.5" />Next required: {nextRequired.label}
-          </Button>
-        ) : (
-          <Badge className="border-0 bg-success/10 text-success"><Check className="mr-1 h-3 w-3" />Ready to generate</Badge>
-        )}
-        {showLayoutControls && (
-          <>
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => onExpandAllChange?.(!expandAll)}>
-              {expandAll ? 'Collapse completed' : 'Expand all'}
-            </Button>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Checkbox checked={showCompleted} onCheckedChange={value => onShowCompletedChange?.(value === true)} />Show completed
-            </label>
-            <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
-          </>
-        )}
-        {attorneyPreset && (
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setPresetDialogOpen(true)}>
-            <WandSparkles className="h-3.5 w-3.5" />Apply my standards
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" className="text-xs" onClick={() => void handleSavePreset()}>Save current as my standards</Button>
-        {documentInclusions.spouse_docs && (
-          <Button variant="outline" size="sm" className="text-xs" onClick={() => applyPatch(buildCopyClientToSpousePatch(sheet))}>Client selections → spouse</Button>
-        )}
-        {documentInclusions.trust && (
-          <Button variant="outline" size="sm" className="text-xs" onClick={() => applyPatch(buildTrusteesToPrimaryRolesPatch(sheet, documentInclusions))}>Trustees → primary roles</Button>
-        )}
+      <div className="flex items-center">
+        {shortcutsMenu}
       </div>
-      )}
     </>
   )
 }

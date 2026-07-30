@@ -150,6 +150,10 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   const ownsRealProperty = Boolean(assets.real_property) || assetItems.some(item => item.category === 'real_property')
   const simultaneousDeath = typeof will.simultaneous_death === 'string' ? will.simultaneous_death : 'omit'
   const petCareOption = typeof petCare.option === 'string' ? petCare.option : 'omit'
+  const descendantsDistribution = recordValue(trust.descendants_distribution)
+  const descendantsMethod = typeof descendantsDistribution.method === 'string'
+    ? descendantsDistribution.method
+    : ''
 
   return {
     ...data,
@@ -193,6 +197,13 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     hipaa_list_fiduciaries_by_name: hipaa.list_fiduciaries_by_name === 'by_name',
     hipaa_list_fiduciaries_general: hipaa.list_fiduciaries_by_name === 'general_language',
     uses_revocable_trust: Boolean(planning.uses_revocable_trust),
+    includes_pour_over_will: Boolean(planning.include_pour_over_will),
+    includes_simple_will: Boolean(planning.include_simple_will),
+    includes_dpoa: Boolean(planning.include_dpoa),
+    includes_hcp: Boolean(planning.include_hcp),
+    includes_hipaa: Boolean(planning.include_hipaa),
+    distributes_to_descendants: descendantsMethod !== '' && descendantsMethod !== 'none',
+    dpoa_gifting_authorized: dpoa.allow_gifts === true || dpoa.allow_gifts === 'yes',
     requires_guardian_clause: hasMinorChildren,
     has_specific_gifts: gifts.length > 0,
     has_charitable_gifts: charitable.length > 0,

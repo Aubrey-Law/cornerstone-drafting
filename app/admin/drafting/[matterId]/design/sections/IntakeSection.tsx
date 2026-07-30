@@ -7,9 +7,40 @@ import { cn } from '@/lib/utils'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { formatDobWithAge } from '@/lib/dob'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { IntakeResyncDialog } from '@/components/design-sheet/IntakeResyncDialog'
 import { SectionBlock } from './shared'
 import type { IntakeSnapshot } from '@/lib/queries'
+
+export function IntakeSnapshotDialog({
+  open,
+  onOpenChange,
+  intake,
+  matterId,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  intake: IntakeSnapshot
+  matterId: string
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Read-only intake snapshot</DialogTitle>
+        </DialogHeader>
+        <div className="min-h-0 overflow-y-auto pr-2">
+          <IntakeSection intake={intake} matterId={matterId} />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // ── Read-only field primitives ───────────────────────────────────────────────
 

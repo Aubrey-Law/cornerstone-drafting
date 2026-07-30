@@ -1,4 +1,8 @@
 import type { DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import {
+  designPlanTypeIncludesRevocableTrust,
+  planTypeDisallowsRevocableTrustDocument,
+} from '@/lib/designPlanType'
 import type { IntakeSnapshot } from '@/lib/queries'
 import {
   DESIGN_SECTION_IDS,
@@ -8,6 +12,7 @@ import {
 export interface DesignSectionNavItem {
   id: string
   label: string
+  applicable: boolean
 }
 
 export function getDesignSectionNavItems(args: {
@@ -16,50 +21,48 @@ export function getDesignSectionNavItems(args: {
   maritalStatus?: string | null
   spouseName?: string | null
   isJointTrust?: boolean | null
+  planType?: string | null
 }): DesignSectionNavItem[] {
-  const { intakeSnapshot, documentInclusions } = args
-  const items: DesignSectionNavItem[] = []
+  return getAllDesignSectionNavItems(args).filter(item => item.applicable)
+}
 
-  if (intakeSnapshot) {
-    items.push({ id: DESIGN_SECTION_IDS.intakeReview, label: 'Intake Review' })
-  }
+export function getAllDesignSectionNavItems(args: {
+  intakeSnapshot: IntakeSnapshot | null
+  documentInclusions: DesignDocumentInclusions
+  maritalStatus?: string | null
+  spouseName?: string | null
+  isJointTrust?: boolean | null
+  planType?: string | null
+}): DesignSectionNavItem[] {
+  const { intakeSnapshot, documentInclusions, planType } = args
+  const revocableTrustPlan = designPlanTypeIncludesRevocableTrust(planType)
+  const disallowsRevocableTrust = planTypeDisallowsRevocableTrustDocument(planType)
+  const revocableTrustApplicable = planType == null || planType === ''
+    ? documentInclusions.trust
+    : documentInclusions.trust && revocableTrustPlan && !disallowsRevocableTrust
 
-  items.push(
-    { id: DESIGN_SECTION_IDS.clientInformation, label: 'Client Information' },
-    { id: DESIGN_SECTION_IDS.familyInformation, label: 'Family Information' },
-    { id: DESIGN_SECTION_IDS.contactsFiduciaries, label: 'Contacts & Fiduciaries' },
-    { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Fiduciary Role Assignment' },
-    { id: DESIGN_SECTION_IDS.estatePlanDesign, label: 'Estate Plan Design' },
-  )
-
-  if (documentInclusions.trust) {
-    items.push({ id: DESIGN_SECTION_IDS.trustDetails, label: 'Trust Details' })
-  }
-
-  if (documentInclusions.will) {
-    items.push({ id: DESIGN_SECTION_IDS.willDetails, label: 'Will Details' })
-  }
-
-  if (documentInclusions.dpoa) {
-    items.push({ id: DESIGN_SECTION_IDS.financialPoa, label: 'Financial Power of Attorney' })
-  }
-
-  if (documentInclusions.healthcare) {
-    items.push({ id: DESIGN_SECTION_IDS.healthcareDirectives, label: 'Health Care & Directives' })
-  }
-
-  if (documentInclusions.trust) {
-    items.push({ id: DESIGN_SECTION_IDS.assetSchedules, label: 'Asset Schedules' })
-  }
-
-  // Asset-transfer docs are opted in from Estate Plan Design (document_inclusions.deed).
-  if (documentInclusions.deed) {
-    items.push({ id: DESIGN_SECTION_IDS.transfersAssignments, label: 'Transfers & Assignments' })
-  }
-
-  items.push({ id: DESIGN_SECTION_IDS.attorneyNotes, label: 'Attorney Notes' })
-
-  return items
+  return [
+    { id: DESIGN_SECTION_IDS.intakeReview, label: 'Intake Review', applicable: Boolean(intakeSnapshot) },
+    { id: DESIGN_SECTION_IDS.clientInformation, label: 'Client Information', applicable: true },
+    { id: DESIGN_SECTION_IDS.familyInformation, label: 'Family Information', applicable: true },
+    { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Fiduciary Role Assignment', applicable: true },
+    { id: DESIGN_SECTION_IDS.estatePlanDesign, label: 'Estate Plan Design', applicable: true },
+    {
+      id: DESIGN_SECTION_IDS.trustDetails,
+      label: 'Trust Details',
+      applicable: revocableTrustApplicable,
+    },
+    { id: DESIGN_SECTION_IDS.willDetails, label: 'Will Details', applicable: documentInclusions.will },
+    { id: DESIGN_SECTION_IDS.financialPoa, label: 'Financial Power of Attorney', applicable: documentInclusions.dpoa },
+    { id: DESIGN_SECTION_IDS.healthcareDirectives, label: 'Health Care & Directives', applicable: documentInclusions.healthcare },
+    {
+      id: DESIGN_SECTION_IDS.assetSchedules,
+      label: 'Asset Schedules',
+      applicable: revocableTrustApplicable,
+    },
+    { id: DESIGN_SECTION_IDS.transfersAssignments, label: 'Transfers & Assignments', applicable: documentInclusions.deed },
+    { id: DESIGN_SECTION_IDS.attorneyNotes, label: 'Attorney Notes', applicable: true },
+  ]
 }
 
 export function isValidDesignSectionId(

@@ -90,6 +90,12 @@ export function defaultModelForProvider(provider: LlmProvider): string {
 
 export interface DraftingUserPreferences {
   designView?: DraftingDesignView
+  /** Opts into the in-progress single-page design-sheet route. */
+  singlePageDesignSheet?: boolean
+  /** Hide decisions and sections that do not apply to the selected plan. */
+  hideUnusedDesignDecisions?: boolean
+  /** Show the live clause preview beside the single-page design sheet. */
+  clausePreviewOpen?: boolean
   /** Hide the guided vs express tooltip after first dismissal. */
   designViewHintDismissed?: boolean
   /** Explicitly applied, versioned defaults limited to safe structural fields. */
@@ -162,6 +168,9 @@ export function parseUserPreferences(raw: unknown): UserPreferences {
         ? undefined
         : {
             designView: designView === 'guided' || designView === 'express' ? designView : undefined,
+            singlePageDesignSheet: drafting.singlePageDesignSheet === true,
+            hideUnusedDesignDecisions: drafting.hideUnusedDesignDecisions !== false,
+            clausePreviewOpen: drafting.clausePreviewOpen !== false,
             designViewHintDismissed: drafting.designViewHintDismissed === true,
             attorneyPreset: parseAttorneyPreset(drafting.attorneyPreset),
           },
@@ -184,6 +193,18 @@ export function mergeUserPreferences(
       ...patch.models,
     },
   }
+}
+
+export function resolveSinglePageDesignSheet(prefs?: UserPreferences | null): boolean {
+  return prefs?.drafting?.singlePageDesignSheet ?? false
+}
+
+export function resolveHideUnusedDesignDecisions(prefs?: UserPreferences | null): boolean {
+  return prefs?.drafting?.hideUnusedDesignDecisions ?? true
+}
+
+export function resolveClausePreviewOpen(prefs?: UserPreferences | null): boolean {
+  return prefs?.drafting?.clausePreviewOpen ?? true
 }
 
 export function resolveLlmProvider(prefs?: UserPreferences | null): LlmProvider {

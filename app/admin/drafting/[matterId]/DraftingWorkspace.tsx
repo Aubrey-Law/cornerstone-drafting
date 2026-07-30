@@ -4,25 +4,18 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, HelpCircle, ListChecks, X } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, ListChecks } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
 import { nextConsumedDesignFocus, shouldConsumeDesignFocus } from '@/lib/designFocusNavigation'
 import { useDesignSheetState } from '@/lib/designSheet/useDesignSheetState'
-import DesignSheetShell from '@/app/admin/drafting/[matterId]/design/DesignSheetShell'
-import ExpressDesignSheet from '@/app/admin/drafting/[matterId]/design/ExpressDesignSheet'
+import DesignSheetPage from '@/app/admin/drafting/[matterId]/design/DesignSheetPage'
 import type { DesignSheet, MatterContact, MatterDocument, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
 const GenerateStep = dynamic(() => import('./GenerateStep'), { ssr: false })
 const ReviewStep = dynamic(() => import('./ReviewStep'), { ssr: false })
-import {
-  DESIGN_VIEW_STORAGE_KEY,
-  resolveDesignView,
-  type DraftingDesignView,
-} from '@/lib/userPreferences'
-import { useUserPreferences } from '@/lib/userPreferencesClient'
 
 type Step = 'design' | 'generate' | 'review'
 
@@ -34,10 +27,6 @@ const STEPS: { id: Step; label: string; icon: React.ElementType; description: st
 
 function isStep(value: string | null): value is Step {
   return value === 'design' || value === 'generate' || value === 'review'
-}
-
-function isDesignView(value: string | null): value is DraftingDesignView {
-  return value === 'guided' || value === 'express'
 }
 
 interface DraftingWorkspaceProps {
@@ -67,7 +56,6 @@ export default function DraftingWorkspace({
 }: DraftingWorkspaceProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { savePreferences, loadPreferences } = useUserPreferences()
   const rawStep = searchParams.get('step')
   const isLP = normalizePracticeArea(matter.practice_area) === 'EP-LP'
 
@@ -132,67 +120,7 @@ export default function DraftingWorkspace({
     router.replace(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
   }
 
-  // Design entry mode: URL wins for shareable links; localStorage remembers the
-  // attorney's default for future drafting sessions.
-  const rawDesignView = searchParams.get('design')
   const rawDesignSection = searchParams.get('section')
-  const [preferredDesignView, setPreferredDesignView] = useState<DraftingDesignView>(() => {
-    if (typeof window === 'undefined') return 'guided'
-    const stored = window.localStorage.getItem(DESIGN_VIEW_STORAGE_KEY)
-    return stored === 'express' ? 'express' : 'guided'
-  })
-  const [showDesignViewHint, setShowDesignViewHint] = useState(false)
-  const [userDesignView, setUserDesignView] = useState<DraftingDesignView | undefined>(undefined)
-
-  useEffect(() => {
-    void loadPreferences().then(prefs => {
-      const view = prefs?.drafting?.designView
-      // Do not override an existing localStorage/URL choice — that remounted the
-      // design sheet mid-edit and wiped unsaved (or just-saved) field state.
-      const stored = typeof window !== 'undefined'
-        ? window.localStorage.getItem(DESIGN_VIEW_STORAGE_KEY)
-        : null
-      if (!isDesignView(stored) && (view === 'guided' || view === 'express')) {
-        setUserDesignView(view)
-      }
-      if (!prefs?.drafting?.designViewHintDismissed) setShowDesignViewHint(true)
-    })
-  }, [loadPreferences])
-
-  useEffect(() => {
-    if (isDesignView(rawDesignView)) {
-      setPreferredDesignView(rawDesignView)
-      window.localStorage.setItem(DESIGN_VIEW_STORAGE_KEY, rawDesignView)
-      void savePreferences({ drafting: { designView: rawDesignView } })
-      return
-    }
-
-    const stored = window.localStorage.getItem(DESIGN_VIEW_STORAGE_KEY)
-    if (isDesignView(stored)) setPreferredDesignView(stored)
-  }, [rawDesignView, savePreferences])
-
-  const designView: DraftingDesignView = resolveDesignView({
-    urlView: rawDesignView,
-    storedLocal: preferredDesignView,
-    userPreference: userDesignView,
-    designComplete,
-    hasIntake: Boolean(intakeSnapshot),
-  })
-
-  const setDesignView = (next: DraftingDesignView) => {
-    setPreferredDesignView(next)
-    window.localStorage.setItem(DESIGN_VIEW_STORAGE_KEY, next)
-    void savePreferences({ drafting: { designView: next } })
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('design', next)
-    router.replace(`/admin/drafting/${matterId}?${params.toString()}`, { scroll: false })
-  }
-
-  const dismissDesignViewHint = () => {
-    setShowDesignViewHint(false)
-    void savePreferences({ drafting: { designViewHintDismissed: true } })
-  }
-
   const clientDisplayName = matter.client_name || 'Unnamed client'
 
   return (
@@ -266,75 +194,20 @@ export default function DraftingWorkspace({
       )}>
         {step === 'design' && (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="flex shrink-0 flex-col gap-2 border-b border-border bg-card px-4 py-1.5 md:px-5">
-              {showDesignViewHint && (
-                <div className="flex items-start gap-2 rounded-md border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-foreground">
-                  <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">Choose your design entry mode</p>
-                    <p className="mt-0.5 text-muted-foreground">
-                      <strong>Section by section</strong> walks each design area with guidance — best for first-time setup.
-                      <strong> Fast entry</strong> shows all fields on one scrollable page for quick edits after the sheet is complete.
-                    </p>
-                  </div>
-                  <button type="button" onClick={dismissDesignViewHint} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              <div className="flex items-center justify-end">
-                <div className="flex items-center rounded-md bg-muted p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setDesignView('guided')}
-                    className={cn(
-                      'rounded px-2.5 py-1 font-medium transition-colors',
-                      designView === 'guided' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    Section by section
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDesignView('express')}
-                    className={cn(
-                      'rounded px-2.5 py-1 font-medium transition-colors',
-                      designView === 'express' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    Fast entry
-                  </button>
-                </div>
-              </div>
-            </div>
             <div className="min-h-0 flex-1 overflow-hidden">
-              {designView === 'express' ? (
-                <ExpressDesignSheet
-                  matterId={matterId}
-                  matter={matter}
-                  contacts={contacts}
-                  sheet={sheet}
-                  lpData={lpData}
-                  intakeSnapshot={intakeSnapshot}
-                  designState={designState}
-                  onOpenDrafting={() => setStep('generate')}
-                  initialFocus={initialFocus}
-                />
-              ) : (
-                <DesignSheetShell
-                  matterId={matterId}
-                  matter={matter}
-                  contacts={contacts}
-                  sheet={sheet}
-                  lpData={lpData}
-                  intakeSnapshot={intakeSnapshot}
-                  designState={designState}
-                  embedded
-                  onOpenDrafting={() => setStep('generate')}
-                  initialFocus={initialFocus}
-                  activeSectionId={rawDesignSection}
-                />
-              )}
+              <DesignSheetPage
+                matterId={matterId}
+                matter={matter}
+                contacts={contacts}
+                sheet={sheet}
+                lpData={lpData}
+                intakeSnapshot={intakeSnapshot}
+                designState={designState}
+                embedded
+                onOpenDrafting={() => setStep('generate')}
+                initialFocus={initialFocus}
+                requestedSectionId={rawDesignSection}
+              />
             </div>
           </div>
         )}

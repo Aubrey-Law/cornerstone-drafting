@@ -1,29 +1,27 @@
 'use client'
 
 import { Check } from 'lucide-react'
-import { guidedCardStyle } from './styles'
+import { guidedCardStyle } from '@/components/guided/styles'
 
-export interface SectionProgressItem {
+export interface IntakeSectionProgressItem {
   id: string
   title: string
   complete: boolean
-  /** Minutes; omitted for sections without an estimate (e.g. attorney sections). */
   timeEstimate?: number
 }
 
-interface SectionProgressListProps {
-  items: SectionProgressItem[]
-  /** Id of the currently expanded section, or '' when all are collapsed. */
+interface IntakeSectionProgressListProps {
+  items: IntakeSectionProgressItem[]
   openId: string
   onSelect: (id: string) => void
 }
 
-/**
- * Client-mode rail card: a progress map over the same sections shown in the
- * main column. Selecting a row toggles that section open in the interview.
- */
-export function SectionProgressList({ items, openId, onSelect }: SectionProgressListProps) {
-  const done = items.filter(i => i.complete).length
+export function IntakeSectionProgressList({
+  items,
+  openId,
+  onSelect,
+}: IntakeSectionProgressListProps) {
+  const done = items.filter(item => item.complete).length
 
   return (
     <div style={guidedCardStyle}>
@@ -69,11 +67,11 @@ export function SectionProgressList({ items, openId, onSelect }: SectionProgress
               >
                 {item.title}
               </span>
-              {!item.complete && item.timeEstimate != null && (
+              {!item.complete && item.timeEstimate != null ? (
                 <span style={{ font: '400 11.5px/1 var(--gi-sans)', color: 'var(--gi-faint)', flexShrink: 0 }}>
                   ~{item.timeEstimate} min
                 </span>
-              )}
+              ) : null}
             </button>
           )
         })}
@@ -82,7 +80,6 @@ export function SectionProgressList({ items, openId, onSelect }: SectionProgress
   )
 }
 
-/** Matches the section-header circle language: filled = done, ring = open, faint ring = todo. */
 function StatusDot({ complete, open }: { complete: boolean; open: boolean }) {
   const base = {
     width: 16,

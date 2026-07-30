@@ -12,8 +12,8 @@ describe('drafting app smoke', () => {
   })
 
   it('keeps the design sheet under the drafting workspace', () => {
-    expect(fs.existsSync(path.join(root, 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'))).toBe(true)
-    expect(fs.existsSync(path.join(root, 'app/admin/drafting/[matterId]/design/[sectionId]/page.tsx'))).toBe(true)
+    expect(fs.existsSync(path.join(root, 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'))).toBe(true)
+    expect(fs.existsSync(path.join(root, 'app/admin/drafting/[matterId]/design/[sectionId]/page.tsx'))).toBe(false)
     expect(fs.existsSync(path.join(root, 'app/admin/matters/[id]/design/page.tsx'))).toBe(true)
 
     const legacy = fs.readFileSync(path.join(root, 'app/admin/matters/[id]/design/page.tsx'), 'utf8')

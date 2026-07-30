@@ -1,14 +1,8 @@
 'use client'
 
-import { useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { formatPhoneDisplay } from '@/lib/phone'
-import { designFieldTargetId } from '@/lib/designSheetReadiness'
 import type { DesignSheet, FiduciaryRole, FiduciarySlot, MatterContact, PipelineMatter } from '@/types/database'
-import type { SlotState } from '@/types/planReview'
-import type { SectionProps } from './shared'
-import { FiduciaryRoleSection } from './FiduciaryRoleSection'
-import { defaultPrimarySlot, normalizeFiduciarySlots } from './fiduciary-helpers'
 
 export const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
 export const SPOUSE_PRIMARY_CONTACT_ID = '__design_sheet_spouse__'
@@ -34,28 +28,24 @@ export type FiduciarySlotField =
   | 'spouse_poa_slots'
   | 'spouse_hcp_slots'
 
-export interface FiduciaryBlockProps extends SectionProps {
-  contacts: MatterContact[]
-  matter: PipelineMatter
-  onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
-  onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
-  role: FiduciaryRole
-  sameAsTrustee?: boolean
-  onSameAsTrusteeToggle?: () => void
-  sameAsTrusteeLabel?: string
-  spouseOptionLabel?: string
-  slotField?: FiduciarySlotField
-  sectionTitle?: string
-  primaryShortcutContact?: MatterContact | null
-  primaryShortcutLabel?: string
-  clientShortcutContact?: MatterContact | null
-  clientShortcutLabel?: string
-  coShortcutContact?: MatterContact | null
-  coShortcutLabel?: string
-  primaryLabel?: string
-  altLabel?: string
-  coLabel?: string
-  slotScope?: 'all' | 'primary' | 'backup'
+export type FiduciaryGridRole = 'trustee' | 'executor' | 'poa' | 'hcp' | 'guardian'
+
+export const CLIENT_SLOT_FIELDS: Record<FiduciaryGridRole, FiduciarySlotField> = {
+  trustee: 'trustee_slots',
+  executor: 'executor_slots',
+  poa: 'poa_slots',
+  hcp: 'hcp_slots',
+  guardian: 'guardian_slots',
+}
+
+export const SPOUSE_SLOT_FIELDS: Record<FiduciaryGridRole, FiduciarySlotField> = {
+  trustee: 'spouse_trustee_slots',
+  executor: 'spouse_executor_slots',
+  poa: 'spouse_poa_slots',
+  hcp: 'spouse_hcp_slots',
+  // Guardians are appointed for the same children, so both party tabs share
+  // the existing guardian slot array instead of introducing a new store.
+  guardian: 'guardian_slots',
 }
 
 export function isMarriedSheet(sheet: DesignSheet) {
@@ -206,158 +196,6 @@ export function resolveSlotContactIds(
     }
     return slot
   })
-}
-
-function slotsNeedContactIdResolution(
-  slots: FiduciarySlot[],
-  clientContact: MatterContact | null,
-  spouseContact: MatterContact | null,
-): boolean {
-  return slots.some(slot => {
-    if (!slot.contact_id) return false
-    if (
-      slot.contact_id === CLIENT_PRIMARY_CONTACT_ID
-      && clientContact?.id
-      && clientContact.id !== CLIENT_PRIMARY_CONTACT_ID
-    ) return true
-    if (
-      slot.contact_id === SPOUSE_PRIMARY_CONTACT_ID
-      && spouseContact?.id
-      && spouseContact.id !== SPOUSE_PRIMARY_CONTACT_ID
-    ) return true
-    return false
-  })
-}
-
-function slotsMissingPrimary(slots: FiduciarySlot[]): boolean {
-  return !slots.some(slot => slot.order === 0 && !slot.is_co)
-}
-
-export function FiduciaryBlock({
-  role,
-  sheet,
-  contacts,
-  matter,
-  onChange,
-  onAddContact,
-  onUpdateContact,
-  sameAsTrustee,
-  onSameAsTrusteeToggle,
-  sameAsTrusteeLabel,
-  spouseOptionLabel,
-  slotField,
-  sectionTitle,
-  primaryShortcutContact,
-  primaryShortcutLabel,
-  clientShortcutContact,
-  clientShortcutLabel,
-  coShortcutContact,
-  coShortcutLabel,
-  primaryLabel,
-  altLabel,
-  coLabel,
-  slotScope,
-}: FiduciaryBlockProps) {
-  const field = slotField ?? SLOT_FIELDS[role]
-  const rawSlots = (sheet[field] as FiduciarySlot[] | null) ?? []
-  const spouseContact = isMarriedSheet(sheet) ? findSpouseContact(contacts, matter, sheet) : null
-  const clientContact = findClientContact(contacts, matter, sheet)
-
-  const persistSlots = useCallback((
-    updater: FiduciarySlot[] | ((prev: FiduciarySlot[]) => FiduciarySlot[]),
-  ) => {
-    onChange(field, prevSheet => {
-      const current = (prevSheet[field] as FiduciarySlot[] | null) ?? []
-      const resolvedCurrent = resolveSlotContactIds(current, clientContact, spouseContact)
-      const next = typeof updater === 'function' ? updater(resolvedCurrent) : updater
-      const resolved = resolveSlotContactIds(next, clientContact, spouseContact)
-      return normalizeFiduciarySlots(resolved) as DesignSheet[keyof DesignSheet]
-    })
-  }, [clientContact, field, onChange, spouseContact])
-
-  // Ensure a primary slot exists in persisted sheet state, not only in display memory.
-  useEffect(() => {
-    if (slotScope === 'backup') return
-    if (!slotsMissingPrimary(rawSlots)) return
-    onChange(field, prevSheet => {
-      const current = (prevSheet[field] as FiduciarySlot[] | null) ?? []
-      if (!slotsMissingPrimary(current)) return current as DesignSheet[typeof field]
-      const next = [...defaultPrimarySlot(), ...current]
-      const resolved = resolveSlotContactIds(next, clientContact, spouseContact)
-      return normalizeFiduciarySlots(resolved) as DesignSheet[typeof field]
-    })
-  }, [clientContact, field, onChange, rawSlots, slotScope, spouseContact])
-
-  // Upgrade legacy synthetic shortcut ids after contacts are loaded.
-  useEffect(() => {
-    if (!slotsNeedContactIdResolution(rawSlots, clientContact, spouseContact)) return
-    onChange(field, prevSheet => {
-      const current = (prevSheet[field] as FiduciarySlot[] | null) ?? []
-      if (!slotsNeedContactIdResolution(current, clientContact, spouseContact)) {
-        return current as DesignSheet[typeof field]
-      }
-      const resolved = resolveSlotContactIds(current, clientContact, spouseContact)
-      return normalizeFiduciarySlots(resolved) as DesignSheet[typeof field]
-    })
-  }, [clientContact, field, onChange, rawSlots, spouseContact])
-
-  const resolvedSlots = resolveSlotContactIds(rawSlots, clientContact, spouseContact)
-  const slotsForDisplay = (() => {
-    if (slotScope === 'backup') return resolvedSlots
-    if (!slotsMissingPrimary(resolvedSlots)) return resolvedSlots
-    return [...defaultPrimarySlot(), ...resolvedSlots]
-  })()
-
-  const handleSlotsChange = useCallback((
-    updater: FiduciarySlot[] | ((prev: FiduciarySlot[]) => FiduciarySlot[]),
-  ) => {
-    persistSlots(updater)
-  }, [persistSlots])
-
-  const handleSlotStateChange = useCallback((slotId: string, state: SlotState) => {
-    onChange('fiduciary_slot_states', prevSheet => ({
-      ...(prevSheet.fiduciary_slot_states ?? {}),
-      [slotId]: state,
-    }))
-  }, [onChange])
-
-  const contactsForDisplay = [clientContact, spouseContact]
-    .filter((c): c is MatterContact => Boolean(c))
-    .reduce<MatterContact[]>((acc, c) => (acc.some(x => x.id === c.id) ? acc : [...acc, c]), contacts)
-
-  return (
-    <div
-      id={designFieldTargetId(slotScope === 'backup' ? `${String(field)}:backup` : String(field))}
-      tabIndex={-1}
-    >
-      <FiduciaryRoleSection
-        role={role}
-        slots={slotsForDisplay}
-        contacts={contactsForDisplay}
-        onSlotsChange={handleSlotsChange}
-        onAddContact={data => onAddContact(data) as Promise<MatterContact>}
-        onUpdateContact={onUpdateContact ? ((id, data) => onUpdateContact(id, data) as Promise<MatterContact>) : undefined}
-        slotStates={sheet.fiduciary_slot_states}
-        onSlotStateChange={handleSlotStateChange}
-        sameAsTrustee={sameAsTrustee}
-        onSameAsTrusteeToggle={onSameAsTrusteeToggle}
-        sameAsTrusteeLabel={sameAsTrusteeLabel}
-        spouseContact={spouseOptionLabel ? spouseContact : null}
-        spouseOptionLabel={spouseOptionLabel}
-        primaryShortcutContact={primaryShortcutContact ?? undefined}
-        primaryShortcutLabel={primaryShortcutLabel}
-        clientContact={clientShortcutContact ?? undefined}
-        clientOptionLabel={clientShortcutLabel}
-        coShortcutContact={coShortcutContact ?? undefined}
-        coShortcutLabel={coShortcutLabel}
-        primaryLabel={primaryLabel}
-        altLabel={altLabel}
-        coLabel={coLabel}
-        slotScope={slotScope}
-        title={sectionTitle}
-      />
-    </div>
-  )
 }
 
 export function SegControl({ value, options, onChange }: {

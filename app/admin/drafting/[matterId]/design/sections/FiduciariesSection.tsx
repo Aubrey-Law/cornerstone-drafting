@@ -2,8 +2,9 @@
 
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { DesignSheetOnChange } from './shared'
-import { FiduciariesSectionEP } from './FiduciariesSectionEP'
-import { FiduciariesSectionLP } from './FiduciariesSectionLP'
+import { DesignSectionContent, SectionBlock } from './shared'
+import { ExcludedGuardians } from './ExcludedGuardiansSection'
+import { FiduciaryGrid } from './FiduciaryGrid'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,33 +27,42 @@ export interface FiduciariesSectionProps {
   matter: PipelineMatter
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  showInapplicable?: boolean
 }
 
 // ── FiduciariesSection ────────────────────────────────────────────────────────
 
-export default function FiduciariesSection({ isLP, ...props }: FiduciariesSectionProps) {
-  if (isLP) {
-    return (
-      <FiduciariesSectionLP
-        lpData={props.lpData}
-        sheet={props.sheet}
-        contacts={props.contacts}
-        onChange={props.onLpChange}
-        matter={props.matter}
-        onAddContact={props.onAddContact}
-        onUpdateContact={props.onUpdateContact}
-      />
-    )
-  }
-
+export default function FiduciariesSection({
+  sheet,
+  contacts,
+  matter,
+  onChange,
+  onAddContact,
+  onUpdateContact,
+  showInapplicable = false,
+}: FiduciariesSectionProps) {
   return (
-    <FiduciariesSectionEP
-      sheet={props.sheet}
-      contacts={props.contacts}
-      matter={props.matter}
-      onChange={props.onChange}
-      onAddContact={props.onAddContact}
-      onUpdateContact={props.onUpdateContact}
-    />
+    <DesignSectionContent>
+      <SectionBlock
+        title="Fiduciary assignments"
+        subtitle="Set the order in which each person serves across every document."
+      >
+        <FiduciaryGrid
+          sheet={sheet}
+          contacts={contacts}
+          matter={matter}
+          onChange={onChange}
+          onAddContact={onAddContact}
+          showInapplicable={showInapplicable}
+        />
+      </SectionBlock>
+      <ExcludedGuardians
+        sheet={sheet}
+        onChange={onChange}
+        contacts={contacts}
+        onAddContact={onAddContact}
+        onUpdateContact={onUpdateContact}
+      />
+    </DesignSectionContent>
   )
 }

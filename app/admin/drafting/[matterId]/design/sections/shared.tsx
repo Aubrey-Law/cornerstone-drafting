@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, forwardRef, useContext, useImperativeHandle, useRef } from 'react'
-import { CircleAlert as AlertCircle, CircleHelp as HelpCircle, TriangleAlert as AlertTriangle, Check, ChevronDown } from 'lucide-react'
+import { CircleAlert as AlertCircle, CircleHelp as HelpCircle, TriangleAlert as AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatAgeLabel, toDateInputValue } from '@/lib/dob'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -126,6 +126,83 @@ export function DesignSheetCheckboxOption({
         )}
       </span>
     </label>
+  )
+}
+
+export interface DecisionRowOption<T extends string> {
+  value: T
+  label: string
+  description?: string
+  disabled?: boolean
+}
+
+export function DecisionRow<T extends string>({
+  question,
+  help,
+  value,
+  options,
+  onChange,
+  blocking = false,
+  fieldName,
+}: {
+  question: string
+  help?: string
+  value: T | null | undefined
+  options: readonly DecisionRowOption<T>[]
+  onChange: (value: T) => void
+  blocking?: boolean
+  fieldName?: keyof DesignSheet | string
+}) {
+  const { showError, onBlur } = useFieldValidation(fieldName)
+  return (
+    <div
+      id={fieldId(fieldName)}
+      data-design-field={fieldName ? String(fieldName) : undefined}
+      className={cn(
+        'grid gap-3 border-b border-[#e5e7eb] py-4 last:border-b-0 md:grid-cols-[232px_minmax(0,1fr)]',
+        showError && 'rounded-md bg-destructive/5 px-3',
+      )}
+      onBlur={onBlur}
+    >
+      <div>
+        <p className="text-sm font-semibold text-[#1f2d5a]">{question}</p>
+        {help ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{help}</p> : null}
+        {blocking ? (
+          <span className="mt-2 inline-flex rounded-full border border-[#fcd34d] bg-[#fffbeb] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#92400e]">
+            Blocks drafting
+          </span>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap content-start gap-2" role="group" aria-label={question}>
+        {options.map(option => {
+          const selected = value === option.value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              disabled={option.disabled}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                'rounded-lg border px-3 py-2 text-left text-xs transition-colors',
+                selected
+                  ? 'border-[#1a6b72] bg-[rgba(26,107,114,.08)] font-semibold text-[#155a60]'
+                  : 'border-[#e5e7eb] bg-white text-foreground hover:border-[#1a6b72]',
+                option.disabled && 'cursor-not-allowed opacity-50',
+              )}
+            >
+              <span className="block">{option.label}</span>
+              {option.description ? (
+                <span className="mt-0.5 block max-w-64 text-[11px] font-normal leading-snug text-muted-foreground">
+                  {option.description}
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+      {showError ? <RequiredForDraftingNote /> : null}
+    </div>
   )
 }
 
@@ -471,19 +548,109 @@ export function DesignSectionContent({ children }: { children: React.ReactNode }
   return <div className="design-section-content [&>.rounded-lg:last-child]:mb-0">{children}</div>
 }
 
+const GroupCardContext = createContext(false)
+
+export function GroupCard({
+  id,
+  title,
+  summary,
+  headerAction,
+  blockingCount,
+  optionalCount,
+  collapsed,
+  onCollapsedChange,
+  children,
+  scrollMarginTop,
+}: {
+  id: string
+  title: string
+  summary: string
+  headerAction?: React.ReactNode
+  blockingCount: number
+  optionalCount: number
+  collapsed: boolean
+  onCollapsedChange: (collapsed: boolean) => void
+  children: React.ReactNode
+  scrollMarginTop?: number
+}) {
+  const openCount = blockingCount > 0 ? blockingCount : optionalCount
+  const openLabel = blockingCount > 0 ? 'blocking' : 'optional'
+  return (
+    <section
+      id={id}
+      className="mb-4 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm"
+      style={{ scrollMarginTop }}
+    >
+      <div className="flex items-center gap-3 px-5 py-4">
+        <button
+          type="button"
+          className="min-w-0 flex-1 text-left"
+          aria-expanded={!collapsed}
+          aria-controls={`${id}-content`}
+          onClick={() => onCollapsedChange(!collapsed)}
+        >
+          <span className="block text-sm font-semibold text-[#1f2d5a]">{title}</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{summary}</span>
+        </button>
+        {headerAction}
+        {openCount > 0 ? (
+          <span className={cn(
+            'rounded-full border px-2 py-1 text-[10px] font-semibold',
+            blockingCount > 0
+              ? 'border-[#fcd34d] bg-[#fffbeb] text-[#92400e]'
+              : 'border-[#e5e7eb] bg-muted text-muted-foreground',
+          )}>
+            {openCount} {openLabel}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Set
+          </span>
+        )}
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground hover:bg-muted"
+          aria-label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
+          aria-expanded={!collapsed}
+          aria-controls={`${id}-content`}
+          onClick={() => onCollapsedChange(!collapsed)}
+        >
+          {collapsed
+            ? <ChevronRight className="h-4 w-4" />
+            : <ChevronDown className="h-4 w-4" />}
+        </button>
+      </div>
+      <div
+        id={`${id}-content`}
+        className={cn('border-t border-[#e5e7eb] px-5 py-5', collapsed && 'hidden')}
+        aria-hidden={collapsed}
+      >
+        <GroupCardContext.Provider value>
+          {children}
+        </GroupCardContext.Provider>
+      </div>
+    </section>
+  )
+}
+
 export function SectionBlock({ title, subtitle, children }: {
   title: string
   subtitle?: string
   children: React.ReactNode
 }) {
+  const insideGroupCard = useContext(GroupCardContext)
   return (
-    <div className="mb-4 rounded-lg border border-border bg-card p-4 sm:p-5 last:mb-0">
+    <section className={cn(
+      'mb-6 last:mb-0',
+      !insideGroupCard && 'rounded-lg border border-border bg-card p-4 sm:p-5',
+    )}>
       <div className="mb-4">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">{title}</h3>
         {subtitle && <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{subtitle}</p>}
       </div>
       {children}
-    </div>
+    </section>
   )
 }
 

@@ -19,7 +19,7 @@ describe('trust details design section', () => {
     expect(trustDetailsSource).toContain('Spousal Trust Funding')
     expect(trustDetailsSource).toContain('Outright to Spouse')
     expect(trustDetailsSource).toContain('Clayton Election')
-    expect(trustDetailsSource).toContain("setTrustPlanningType(prevSheet, option.value)")
+    expect(trustDetailsSource).toContain("setTrustPlanningType(prevSheet, value)")
   })
 
   it('includes trust name quick-fill suggestions and format controls', () => {
@@ -30,7 +30,7 @@ describe('trust details design section', () => {
   })
 
   it('captures trustee provisions, residuary, administrative, and definition options', () => {
-    expect(trustDetailsSource).toContain('Initial Trustee Nomination Structure')
+    expect(trustDetailsSource).not.toContain('Initial Trustee Nomination Structure')
     expect(trustDetailsSource).toContain('Successor Trustee Vacancy')
     expect(trustDetailsSource).toContain('Residual Beneficiary Method')
     expect(trustDetailsSource).toContain('Special Distributions')

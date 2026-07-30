@@ -2,7 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react'
 import DOMPurify from 'isomorphic-dompurify'
-import { Bold, Italic, Link as LinkIcon, List, ListOrdered, Maximize2, Minimize2 } from 'lucide-react'
+import {
+  Bold,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Maximize2,
+  Minimize2,
+  Redo2,
+  RemoveFormatting,
+  Underline,
+  Undo2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -198,6 +210,9 @@ export function RichTextEmailEditor({
         <ToolbarButton onClick={() => exec('italic')} disabled={disabled} title="Italic (Cmd+I)">
           <Italic className="h-3.5 w-3.5" />
         </ToolbarButton>
+        <ToolbarButton onClick={() => exec('underline')} disabled={disabled} title="Underline (Cmd+U)">
+          <Underline className="h-3.5 w-3.5" />
+        </ToolbarButton>
         <ToolbarButton onClick={() => exec('insertUnorderedList')} disabled={disabled} title="Bulleted list">
           <List className="h-3.5 w-3.5" />
         </ToolbarButton>
@@ -206,6 +221,15 @@ export function RichTextEmailEditor({
         </ToolbarButton>
         <ToolbarButton onClick={() => openLinkEditor()} disabled={disabled} title="Insert or edit link">
           <LinkIcon className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => exec('removeFormat')} disabled={disabled} title="Clear formatting">
+          <RemoveFormatting className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => exec('undo')} disabled={disabled} title="Undo (Cmd+Z)">
+          <Undo2 className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => exec('redo')} disabled={disabled} title="Redo (Cmd+Shift+Z)">
+          <Redo2 className="h-3.5 w-3.5" />
         </ToolbarButton>
         {variableOptions.length > 0 && (
           <select

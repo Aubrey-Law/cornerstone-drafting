@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
-import { PlanStructurePicker } from '@/components/guided/PlanStructurePicker'
+import { useMemo, type ReactNode } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import type { MatterContact } from '@/types/database'
@@ -29,18 +28,13 @@ import {
   planTypeDisallowsRevocableTrustDocument,
   type DesignPlanType,
 } from '@/lib/designPlanType'
-import { Input } from '@/components/ui/input'
-import { toDateInputValue } from '@/lib/dob'
 import {
-  AttorneyDateInput,
   AttorneyNoteBanner,
-  AttorneySelect,
   ClientDecisionCallout,
+  DecisionRow,
   DesignSectionContent,
-  FieldLabel,
   SectionBlock,
   sectionFieldGrid2,
-  sectionFieldGrid3,
   type SectionProps,
 } from './shared'
 
@@ -48,24 +42,8 @@ interface PlanDesignSectionProps extends SectionProps {
   contacts?: MatterContact[]
   onAddContact?: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  showInapplicable?: boolean
 }
-
-const SIGNING_COUNTY_OPTIONS = [
-  'Barnstable',
-  'Berkshire',
-  'Bristol',
-  'Dukes',
-  'Essex',
-  'Franklin',
-  'Hampden',
-  'Hampshire',
-  'Middlesex',
-  'Nantucket',
-  'Norfolk',
-  'Plymouth',
-  'Suffolk',
-  'Worcester',
-]
 
 const FUNDING_DOCUMENT_LABELS: Record<
   'certificate_of_trust' | 'assignment_of_personal_property' | 'funding_instructions' | 'funding_recommendation' | 'homestead_trustee',
@@ -94,7 +72,27 @@ const ANCILLARY_DOCUMENT_LABELS: Record<
 type FundingDocumentKey = keyof typeof FUNDING_DOCUMENT_LABELS
 type StandaloneAncillaryDocumentKey = keyof typeof ANCILLARY_DOCUMENT_LABELS
 
-export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], onAddContact: _onAddContact, onUpdateContact: _onUpdateContact }: PlanDesignSectionProps) {
+function ApplicableDecision({
+  applicable,
+  showInapplicable,
+  children,
+}: {
+  applicable: boolean
+  showInapplicable: boolean
+  children: ReactNode
+}) {
+  if (!applicable && !showInapplicable) return null
+  return <div className={!applicable ? 'opacity-45 grayscale-[20%]' : undefined}>{children}</div>
+}
+
+export function PlanDesignSection({
+  sheet,
+  onChange,
+  contacts: _contacts = [],
+  onAddContact: _onAddContact,
+  onUpdateContact: _onUpdateContact,
+  showInapplicable = false,
+}: PlanDesignSectionProps) {
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
   const inclusions = getDocumentInclusions(sheet)
   const estatePlanSetup = getEstatePlanDesignSetup(sheet)
@@ -215,7 +213,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
 
   const selectedAssetTransferDocs = useMemo(
     () => new Set(getPersistedRealEstateTransfer(sheet).selectedDocs),
-    [sheet.decisions],
+    [sheet],
   )
 
   const updateAssetTransferDoc = (docType: RealEstateTransferDocType, checked: boolean) => {
@@ -227,21 +225,8 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
 
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
   const trustCheckboxDisabled = planTypeDisallowsRevocableTrustDocument(normalizedPlanType)
-
-  // Signing Date is the single source of truth; derive the month-name / year text
-  // the drafting templates still consume so document output is unchanged.
-  const handleSigningDateChange = (value: string) => {
-    if (!value) {
-      onChange('signing_date', null)
-      onChange('signing_month', null)
-      onChange('signing_year', null)
-      return
-    }
-    onChange('signing_date', value)
-    const d = new Date(`${value}T12:00:00`) // local noon avoids TZ off-by-one
-    onChange('signing_month', d.toLocaleString('en-US', { month: 'long' }))
-    onChange('signing_year', String(d.getFullYear()))
-  }
+  const revocableTrustDecisionApplies = normalizedPlanType == null
+    || designPlanTypeIncludesRevocableTrust(normalizedPlanType)
 
   return (
     <DesignSectionContent>
@@ -250,14 +235,17 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
       </AttorneyNoteBanner>
 
       <SectionBlock title="Plan Type">
-        <PlanStructurePicker
+        <DecisionRow
+          question="Plan type"
+          help="Choose the structure that controls the document package and downstream drafting choices."
+          fieldName="plan_type"
+          blocking
           options={DESIGN_PLAN_TYPE_OPTIONS.map((opt) => ({
             value: opt.value,
-            title: opt.label,
+            label: opt.label,
           }))}
-          selected={normalizedPlanType}
-          onSelect={handlePlanTypeSelect}
-          heading="Plan structure"
+          value={normalizedPlanType}
+          onChange={handlePlanTypeSelect}
         />
       </SectionBlock>
 
@@ -278,10 +266,11 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
                 { key: 'living_will', label: 'Living Will' },
               ].map(item => {
                 const isTrust = item.key === 'trust'
+                const applicable = !isTrust || revocableTrustDecisionApplies
                 const disabled = isTrust && trustCheckboxDisabled
                 return (
+                <ApplicableDecision key={item.key} applicable={applicable} showInapplicable={showInapplicable}>
                 <label
-                  key={item.key}
                   className={cn(
                     'flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5',
                     disabled && 'cursor-not-allowed opacity-60',
@@ -304,6 +293,7 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
                     )}
                   </span>
                 </label>
+                </ApplicableDecision>
                 )
               })}
             </div>
@@ -312,17 +302,16 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
           {estatePlanSetup.will && (
             <div className="rounded-md border border-border bg-muted/20 p-4">
               <ClientDecisionCallout>review the will title before drafting</ClientDecisionCallout>
-              <div className={sectionFieldGrid2}>
-                <AttorneySelect
-                  label="Will Title"
-                  value={estatePlanSetup.will_title}
-                  options={[
-                    { value: 'last_will', label: `Last Will and Testament of ${clientFirst || '[Name]'}` },
-                    { value: 'pour_over_will', label: `Pour-Over Will of ${clientFirst || '[Name]'}` },
-                  ]}
-                  onChange={value => updateEstatePlanSetup({ will_title: value as 'last_will' | 'pour_over_will' })}
-                />
-              </div>
+              <DecisionRow
+                question="Will title"
+                help="Select the title used for the generated will."
+                value={estatePlanSetup.will_title}
+                options={[
+                  { value: 'last_will', label: `Last Will and Testament of ${clientFirst || '[Name]'}` },
+                  { value: 'pour_over_will', label: `Pour-Over Will of ${clientFirst || '[Name]'}` },
+                ]}
+                onChange={value => updateEstatePlanSetup({ will_title: value })}
+              />
             </div>
           )}
 
@@ -341,6 +330,10 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
           <div>
             <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Ancillary Documents</p>
             <div className="space-y-3">
+              <ApplicableDecision
+                applicable={revocableTrustDecisionApplies}
+                showInapplicable={showInapplicable}
+              >
               <div className="rounded-md border border-border bg-muted/20 p-4">
                 <p className="mb-3 text-sm font-semibold text-foreground">Funding Documents</p>
                 <div className="space-y-2">
@@ -355,9 +348,17 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
                   ))}
                 </div>
               </div>
+              </ApplicableDecision>
 
               <div className={sectionFieldGrid2}>
-                {standaloneAncillaryKeys.map(key => (
+                {standaloneAncillaryKeys.map(key => {
+                  const trustOnly = key === 'trust_summary' || key === 'successor_trustee_checklist'
+                  return (
+                  <ApplicableDecision
+                    key={key}
+                    applicable={!trustOnly || revocableTrustDecisionApplies}
+                    showInapplicable={showInapplicable}
+                  >
                   <label key={key} className="flex items-start gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
                     <Checkbox
                       checked={estatePlanSetup.ancillary_documents[key]}
@@ -365,7 +366,9 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
                     />
                     <span className="text-sm text-foreground">{ANCILLARY_DOCUMENT_LABELS[key]}</span>
                   </label>
-                ))}
+                  </ApplicableDecision>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -392,49 +395,6 @@ export function PlanDesignSection({ sheet, onChange, contacts: _contacts = [], o
           </div>
         </div>
       </SectionBlock>
-
-      {/* Execution Mechanics — deferred, not required before drafting */}
-      <div className="rounded-lg border border-dashed border-border bg-surface-1 p-6 mb-6">
-        <div className="mb-4 flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-tertiary">Execution Mechanics</span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Complete at the signing meeting — not required before drafting</span>
-        </div>
-        <div className={sectionFieldGrid3}>
-          <AttorneySelect
-            label="Signing Type"
-            value={estatePlanSetup.signing_type}
-            options={[
-              { value: 'undecided', label: 'Undecided' },
-              { value: 'attorney_supervised', label: 'Attorney Supervised' },
-              { value: 'independent_client', label: 'Independent Client' },
-            ]}
-            onChange={value => updateEstatePlanSetup({ signing_type: value as 'undecided' | 'attorney_supervised' | 'independent_client' })}
-          />
-          <div id="design-field-signing_date" tabIndex={-1}>
-            <FieldLabel>Signing Date</FieldLabel>
-            <Input
-              type="date"
-              value={toDateInputValue(sheet.signing_date)}
-              onChange={e => handleSigningDateChange(e.target.value)}
-              className="h-10"
-            />
-          </div>
-          <AttorneySelect
-            fieldName="signing_county"
-            label="Signing County"
-            value={sheet.signing_county ?? ''}
-            placeholder="Select..."
-            options={SIGNING_COUNTY_OPTIONS.map(county => ({ value: county, label: county }))}
-            onChange={v => onChange('signing_county', v || null)}
-          />
-          <AttorneyDateInput
-            fieldName="notary_commission_expiration"
-            label="Notary Commission Expiration"
-            value={sheet.notary_commission_expiration ?? ''}
-            onChange={v => onChange('notary_commission_expiration', v || null)}
-          />
-        </div>
-      </div>
     </DesignSectionContent>
   )
 }

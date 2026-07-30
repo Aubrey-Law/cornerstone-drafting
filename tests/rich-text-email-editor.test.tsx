@@ -10,6 +10,20 @@ import { RichTextEmailEditor } from '@/components/admin/RichTextEmailEditor'
 afterEach(cleanup)
 
 describe('RichTextEmailEditor links', () => {
+  it('exposes underline, clear formatting, undo, and redo controls', async () => {
+    const user = userEvent.setup()
+    const execCommand = vi.fn()
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand })
+    render(<RichTextEmailEditor ariaLabel="Message" valueHtml="<p>Formatted</p>" onChange={vi.fn()} />)
+
+    await user.click(screen.getByTitle('Underline (Cmd+U)'))
+    await user.click(screen.getByTitle('Clear formatting'))
+    await user.click(screen.getByTitle('Undo (Cmd+Z)'))
+    await user.click(screen.getByTitle('Redo (Cmd+Shift+Z)'))
+
+    expect(execCommand.mock.calls.map(call => call[0])).toEqual(['underline', 'removeFormat', 'undo', 'redo'])
+  })
+
   it('populates and edits both fields when an existing link is clicked', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()

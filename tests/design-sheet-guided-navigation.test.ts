@@ -34,8 +34,8 @@ describe('guided design sheet navigation', () => {
 
   it('returns the next blocker after the active section and wraps', () => {
     const blockers = [
-      { id: 'client:name', sectionId: 'client' },
-      { id: 'trust:name', sectionId: 'trust' },
+      { id: 'client:name', sectionId: 'client', blocking: true },
+      { id: 'trust:name', sectionId: 'trust', blocking: true },
     ] as any
 
     expect(findNextUnresolvedBlocker(blockers, 'client')?.id).toBe('trust:name')
@@ -44,9 +44,9 @@ describe('guided design sheet navigation', () => {
 
   it('skips every blocker in the active section before wrapping to another section', () => {
     const blockers = [
-      { id: 'client:name', sectionId: 'client' },
-      { id: 'client:address', sectionId: 'client' },
-      { id: 'trust:name', sectionId: 'trust' },
+      { id: 'client:name', sectionId: 'client', blocking: true },
+      { id: 'client:address', sectionId: 'client', blocking: true },
+      { id: 'trust:name', sectionId: 'trust', blocking: true },
     ] as any
 
     expect(findNextUnresolvedBlocker(blockers, 'client')?.id).toBe('trust:name')
@@ -55,10 +55,10 @@ describe('guided design sheet navigation', () => {
 
   it('advances from a middle section past its full blocker run before wrapping', () => {
     const blockers = [
-      { id: 'client:name', sectionId: 'client' },
-      { id: 'family:child-name', sectionId: 'family' },
-      { id: 'family:child-birth-date', sectionId: 'family' },
-      { id: 'trust:name', sectionId: 'trust' },
+      { id: 'client:name', sectionId: 'client', blocking: true },
+      { id: 'family:child-name', sectionId: 'family', blocking: true },
+      { id: 'family:child-birth-date', sectionId: 'family', blocking: true },
+      { id: 'trust:name', sectionId: 'trust', blocking: true },
     ] as any
 
     expect(findNextUnresolvedBlocker(blockers, 'family')?.id).toBe('trust:name')
@@ -66,5 +66,14 @@ describe('guided design sheet navigation', () => {
 
   it('returns null when no unresolved blocker remains', () => {
     expect(findNextUnresolvedBlocker([], 'client')).toBeNull()
+  })
+
+  it('skips optional readiness items', () => {
+    const items = [
+      { id: 'trust:backup', sectionId: 'trust', blocking: false },
+      { id: 'trust:primary', sectionId: 'trust', blocking: true },
+    ] as any
+
+    expect(findNextUnresolvedBlocker(items)?.id).toBe('trust:primary')
   })
 })

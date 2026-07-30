@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarPlus, Eye, FileText, Loader2, Paperclip, Send, Trash2, Upload, X } from 'lucide-react'
+import { CalendarClock, CalendarPlus, Eye, FileText, Loader2, Paperclip, Send, Trash2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
@@ -18,6 +18,8 @@ import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
 import { railRecordForPath } from './RailActivityPane'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -69,6 +71,17 @@ interface SchedulingType {
   links: { email: string; sms: string; portal: string } | null
 }
 
+interface ScheduledEmailItem {
+  id: string
+  to: string
+  subject: string
+  scheduledFor: string
+  timezone: string
+  status: 'pending' | 'processing' | 'sent' | 'suppressed' | 'failed' | 'cancelled'
+  attempts: number
+  lastError: string | null
+}
+
 /** Mirrors MAX_TOTAL_ATTACHMENT_BYTES on the server. */
 const MAX_TOTAL_BYTES = 10 * 1024 * 1024
 const ONE_OFF = 'none'
@@ -82,6 +95,13 @@ const VARIABLE_OPTIONS = [
   { key: 'intake_link', label: 'Intake link' },
 ]
 const UNRESOLVED_RE = /\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/g
+
+function defaultScheduleInput(): string {
+  const value = new Date(Date.now() + 60 * 60_000)
+  value.setSeconds(0, 0)
+  const offset = value.getTimezoneOffset() * 60_000
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16)
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -296,6 +316,10 @@ export function ManualEmailComposer({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewing, setPreviewing] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState(defaultScheduleInput)
+  const [scheduling, setScheduling] = useState(false)
+  const [scheduledEmails, setScheduledEmails] = useState<ScheduledEmailItem[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftExistedRef = useRef(false)
   const defaultRecipientRef = useRef('')
@@ -379,6 +403,22 @@ export function ManualEmailComposer({
 
   const draftContextType = recordType ?? 'general'
   const draftQuery = `contextType=${draftContextType}${recordId ? `&contextId=${encodeURIComponent(recordId)}` : ''}`
+
+  useEffect(() => {
+    if (!scheduleOpen || !token) return
+    let cancelled = false
+    void fetch(`/api/admin/email/scheduled?${draftQuery}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => res.json())
+      .then(body => {
+        if (!cancelled) setScheduledEmails(Array.isArray(body.scheduled) ? body.scheduled : [])
+      })
+      .catch(() => {
+        if (!cancelled) setScheduledEmails([])
+      })
+    return () => { cancelled = true }
+  }, [draftQuery, scheduleOpen, token])
 
   useEffect(() => {
     if (!token) return
@@ -616,6 +656,71 @@ export function ManualEmailComposer({
       setError(caught instanceof Error ? caught.message : 'Could not build preview')
     } finally {
       setPreviewing(false)
+    }
+  }
+
+  async function scheduleEmail() {
+    if (!token || !ready || files.length > 0 || scheduling) return
+    const scheduledFor = new Date(scheduleAt)
+    if (!Number.isFinite(scheduledFor.getTime())) {
+      setError('Choose a valid send time')
+      return
+    }
+    setScheduling(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/email/scheduled', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contextType: draftContextType,
+          contextId: recordId,
+          to: to.trim(),
+          cc: ccList,
+          bcc: bccList,
+          subject: subject.trim(),
+          html: bodyHtml,
+          text: emailHtmlToText(bodyHtml),
+          documentIds: selectedDocumentIds,
+          includeSignature,
+          scheduledFor: scheduledFor.toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York',
+        }),
+      })
+      const response = await res.json().catch(() => ({})) as { error?: string; scheduled?: ScheduledEmailItem }
+      if (!res.ok) throw new Error(response.error ?? 'Could not schedule email')
+      if (response.scheduled) setScheduledEmails(items => [response.scheduled!, ...items])
+      setSentNotice(`Email scheduled for ${scheduledFor.toLocaleString()}.`)
+      setSubject('')
+      setBodyHtml('')
+      setTemplateId(ONE_OFF)
+      setCc('')
+      setBcc('')
+      setShowCc(false)
+      setShowBcc(false)
+      setSelectedDocumentIds([])
+      setDraftStatus('idle')
+      draftExistedRef.current = false
+      await fetch(`/api/admin/email/draft?${draftQuery}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setScheduleAt(defaultScheduleInput())
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not schedule email')
+    } finally {
+      setScheduling(false)
+    }
+  }
+
+  async function cancelScheduled(id: string) {
+    if (!token) return
+    const res = await fetch(`/api/admin/email/scheduled/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      setScheduledEmails(items => items.map(item => item.id === id ? { ...item, status: 'cancelled' } : item))
     }
   }
 
@@ -1057,11 +1162,23 @@ export function ManualEmailComposer({
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setScheduleOpen(true)}
+          disabled={!ready || sending || files.length > 0}
+          title={files.length > 0 ? 'Remove computer uploads before scheduling' : 'Schedule send'}
+          className="ml-auto h-8 text-xs"
+        >
+          <CalendarClock className="h-3.5 w-3.5" />
+          Schedule
+        </Button>
         <button
           type="button"
           onClick={() => void send()}
           disabled={!ready || sending}
-          className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
           {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           {sending ? 'Sending…' : embedded ? 'Send email' : 'Send'}
@@ -1079,6 +1196,56 @@ export function ManualEmailComposer({
             sandbox=""
             className="h-[60dvh] w-full rounded-md border border-border bg-white"
           />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Schedule email</DialogTitle>
+            <DialogDescription>
+              Times are shown in {Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'}.
+              Computer uploads cannot be scheduled; linked matter documents can.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="scheduled-email-time">Send date and time</Label>
+              <Input
+                id="scheduled-email-time"
+                type="datetime-local"
+                value={scheduleAt}
+                min={defaultScheduleInput().slice(0, 10) + 'T00:00'}
+                onChange={event => setScheduleAt(event.target.value)}
+              />
+            </div>
+            <Button type="button" className="w-full" disabled={scheduling} onClick={() => void scheduleEmail()}>
+              {scheduling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />}
+              {scheduling ? 'Scheduling…' : 'Schedule email'}
+            </Button>
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs font-semibold">Scheduled email status</p>
+              {scheduledEmails.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No scheduled emails for this record.</p>
+              ) : (
+                scheduledEmails.map(item => (
+                  <div key={item.id} className="flex items-start gap-2 rounded-md border border-border p-2 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{item.subject}</p>
+                      <p className="text-muted-foreground">
+                        {new Date(item.scheduledFor).toLocaleString()} · {item.status}
+                        {item.lastError ? ` · ${item.lastError}` : ''}
+                      </p>
+                    </div>
+                    {item.status === 'pending' && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => void cancelScheduled(item.id)}>
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

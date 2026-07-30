@@ -12,12 +12,12 @@ import {
   type AdvanceDirectiveChoice,
   type AnatomicalGiftPreference,
 } from '@/lib/designSheetHealthcareProvisions'
-import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
-import { FiduciaryBlock, findClientContact, findSpouseContact, isMarriedSheet } from './fiduciary-blocks'
+import type { MatterContact, PipelineMatter } from '@/types/database'
+import { isMarriedSheet } from './fiduciary-blocks'
 import type { SectionProps } from './shared'
 import {
+  DecisionRow,
   DesignSheetCheckboxOption,
-  FieldLabel,
   SectionBlock,
 } from './shared'
 
@@ -61,24 +61,17 @@ function AnatomicalGiftBlock({
 
   return (
     <SectionBlock title={title}>
-      <div className="space-y-2">
-        {[
+      <DecisionRow
+        question="Anatomical gift preference"
+        blocking
+        value={preference}
+        options={[
           { value: 'yes' as const, label: 'Yes, make anatomical gifts' },
           { value: 'defer' as const, label: 'Defer to healthcare agent or donor registry' },
           { value: 'no' as const, label: 'No, do not make anatomical gifts' },
-        ].map(option => (
-          <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-            <input
-              type="radio"
-              name={`${title}-anatomical-gift`}
-              checked={preference === option.value}
-              onChange={() => onPreferenceChange(option.value)}
-              className="mt-1"
-            />
-            <span className="text-sm font-medium text-foreground">{option.label}</span>
-          </label>
-        ))}
-      </div>
+        ]}
+        onChange={onPreferenceChange}
+      />
 
       <div className="mt-4">
         <DesignSheetCheckboxOption
@@ -123,8 +116,12 @@ function AdvanceDirectiveBlock({
 }) {
   return (
     <SectionBlock title={title}>
-      <div className="space-y-2">
-        {[
+      <DecisionRow
+        question="Life-support preference"
+        help="Choose the direction used in the advance health directive."
+        blocking
+        value={value}
+        options={[
           {
             value: 'prolong_life' as const,
             label: 'Prolong Life',
@@ -140,22 +137,9 @@ function AdvanceDirectiveBlock({
             label: 'Do Not Prolong Life',
             description: 'Do not prolong life, only provide medical care for pain, anxiety, and comfort.',
           },
-        ].map(option => (
-          <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-            <input
-              type="radio"
-              name={`${title}-advance-directive`}
-              checked={value === option.value}
-              onChange={() => onChange(option.value)}
-              className="mt-1"
-            />
-            <span>
-              <span className="block text-sm font-medium text-foreground">{option.label}</span>
-              <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
-            </span>
-          </label>
-        ))}
-      </div>
+        ]}
+        onChange={onChange}
+      />
     </SectionBlock>
   )
 }
@@ -168,8 +152,6 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
   const spouseFirst = (sheet.spouse_name ?? matter.spouse_name ?? '').trim().split(/\s+/)[0] || ''
   const married = isMarriedSheet(sheet)
   const spouseDocs = married && inclusions.spouse_docs
-  const clientContact = findClientContact(contacts, matter, sheet)
-  const spouseContact = married ? findSpouseContact(contacts, matter, sheet) : null
   const settlorLabel = clientFirst || 'Settlor'
 
   const updateProvisions = (patch: Parameters<typeof setDesignSheetHealthcareProvisions>[1]) => {
@@ -224,24 +206,6 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
 
   return (
     <div>
-      <FiduciaryBlock
-        {...props}
-        role="hcp"
-        slotScope="primary"
-        sectionTitle={`${clientFirst || 'Client'}'s Health Care Proxy`}
-        primaryLabel="First Agent"
-        altLabel="First Agent"
-        spouseOptionLabel={spouseContact ? `${spouseFirst} as initial health care agent` : undefined}
-      />
-      <FiduciaryBlock
-        {...props}
-        role="hcp"
-        slotScope="backup"
-        sectionTitle="Backup Agent(s)"
-        primaryLabel="Backup Agent"
-        altLabel="Backup Agent"
-      />
-
       <AnatomicalGiftBlock
         title={`${clientFirst || 'Client'}'s Anatomical gifts preference`}
         preference={provisions.client_anatomical_gift}
@@ -256,27 +220,6 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
 
       {spouseDocs && (
         <>
-          <FiduciaryBlock
-            {...props}
-            role="hcp"
-            slotField="spouse_hcp_slots"
-            slotScope="primary"
-            sectionTitle={`${spouseFirst || 'Spouse'}'s Health Care Proxy`}
-            primaryLabel="First Agent"
-            altLabel="First Agent"
-            clientShortcutContact={clientContact}
-            clientShortcutLabel={clientContact ? `${clientFirst} as initial health care agent` : undefined}
-          />
-          <FiduciaryBlock
-            {...props}
-            role="hcp"
-            slotField="spouse_hcp_slots"
-            slotScope="backup"
-            sectionTitle="Backup Agent(s)"
-            primaryLabel="Backup Agent"
-            altLabel="Backup Agent"
-          />
-
           <AnatomicalGiftBlock
             title={`${spouseFirst || 'Spouse'}'s Anatomical gifts preference`}
             preference={provisions.spouse_anatomical_gift}
@@ -307,31 +250,16 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
             onChange={checked => updateProvisions({ hipaa_include_trustees: checked })}
           />
 
-          <div>
-            <FieldLabel>List fiduciaries by name in the HIPAA authorization?</FieldLabel>
-            <p className="mb-2 text-xs text-muted-foreground">
-              Controls whether trustees, POA agents, and healthcare agents are listed by name, or whether only general language is used.
-            </p>
-            <div className="flex gap-0.5 rounded-lg bg-muted p-[2px]">
-              {[
-                { value: 'by_name' as const, label: 'List fiduciaries by name' },
-                { value: 'general_language' as const, label: 'Use general language only' },
-              ].map(option => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => updateProvisions({ hipaa_list_fiduciaries_by_name: option.value })}
-                  className={`flex-1 rounded-md px-3 py-2 text-[12px] transition-all ${
-                    provisions.hipaa_list_fiduciaries_by_name === option.value
-                      ? 'bg-card font-semibold text-primary shadow-sm'
-                      : 'text-foreground hover:text-foreground'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <DecisionRow
+            question="HIPAA fiduciary scope"
+            help="Controls whether trustees, POA agents, and healthcare agents are listed by name, or whether only general language is used."
+            value={provisions.hipaa_list_fiduciaries_by_name}
+            options={[
+              { value: 'by_name', label: 'List fiduciaries by name' },
+              { value: 'general_language', label: 'Use general language only' },
+            ]}
+            onChange={value => updateProvisions({ hipaa_list_fiduciaries_by_name: value })}
+          />
         </div>
       </SectionBlock>
 

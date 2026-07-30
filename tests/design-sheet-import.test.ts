@@ -84,7 +84,7 @@ describe('design sheet import route source', () => {
       'utf8',
     )
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
       'utf8',
     )
 
@@ -375,9 +375,9 @@ describe('design sheet import UI source', () => {
     expect(source).toContain('Only Word .docx documents are supported')
   })
 
-  it('DesignSheetShell renders the shared import dialog and updates local sheet state after accept', () => {
+  it('DesignSheetPage renders the shared import dialog and updates local sheet state after accept', () => {
     const source = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
       'utf8',
     )
 
@@ -392,7 +392,7 @@ describe('design sheet import UI source', () => {
       'utf8',
     )
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
       'utf8',
     )
 
@@ -408,7 +408,7 @@ describe('design sheet import UI source', () => {
       'utf8',
     )
     const shell = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetShell.tsx'),
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
       'utf8',
     )
 

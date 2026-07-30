@@ -362,6 +362,7 @@ export interface DesignSheet {
   // Attorney notes sections
   goals_notes: string | null
   concerns: string | null
+  drafting_notes?: string | null
   assets: AssetItem[] | null
 
   // Timestamps

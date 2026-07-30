@@ -1,44 +1,15 @@
 'use client'
 
-import { cn } from '@/lib/utils'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
-import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import {
   AttorneyDateInput,
   AttorneyInput,
   AttorneyNoteBanner,
-  AttorneySelect,
   ClientDecisionCallout,
-  FieldLabel,
+  DecisionRow,
   SectionBlock,
   type SectionProps,
 } from './shared'
-
-function SegControl({ value, options, onChange }: {
-  value: string
-  options: { value: string; label: string }[]
-  onChange: (v: string) => void
-}) {
-  return (
-    <div className="flex gap-0.5 rounded-lg bg-muted p-[2px]">
-      {options.map(o => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={cn(
-            'flex-1 rounded-md px-3 py-2 text-[12px] transition-all',
-            value === o.value
-              ? 'bg-card font-semibold text-primary shadow-sm'
-              : 'text-foreground hover:text-foreground'
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 const YES_NO = [
   { value: 'yes', label: 'Yes' },
@@ -50,7 +21,6 @@ type WillProvisionScope = 'all' | 'will' | 'dpoa' | 'healthcare'
 export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: SectionProps & { scope?: WillProvisionScope }) {
   const marital = (sheet.marital_status ?? '').toLowerCase()
   const isMarried = marital.includes('married') && !marital.includes('never')
-  const hasMinors = sheetHasMinorChildren(sheet.children)
   const planType = normalizeDesignPlanType(sheet.plan_type)
   const isPourOver = planType === 'pour_over' || sheet.plan_type === 'pour_over'
   const isOutright = sheet.plan_type === 'outright_will'
@@ -69,21 +39,16 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
       {/* ── DPOA ────────────────────────────────────────────────────────────── */}
       {(scope === 'all' || scope === 'dpoa') && (
       <SectionBlock title="Durable Power of Attorney — Additional Provisions">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          {isMarried && (
-            <div>
-              <FieldLabel>Include Section L (Spousal Proximity / Support)</FieldLabel>
-              <SegControl
-                value={sheet.dpoa_include_section_l ?? 'no'}
-                options={YES_NO}
-                onChange={v => onChange('dpoa_include_section_l', v as 'yes' | 'no')}
-              />
-            </div>
-          )}
-        </div>
-        <div className="mt-4 max-w-[320px]">
-          <FieldLabel>Self-Dealing Reviewer (Section K)</FieldLabel>
-          <SegControl
+        {isMarried && (
+          <DecisionRow
+            question="Include Section L (Spousal Proximity / Support)"
+            value={sheet.dpoa_include_section_l ?? 'no'}
+            options={YES_NO}
+            onChange={v => onChange('dpoa_include_section_l', v as 'yes' | 'no')}
+          />
+        )}
+        <DecisionRow
+            question="Self-Dealing Reviewer (Section K)"
             value={includeSelfDealing ? 'yes' : 'no'}
             options={YES_NO}
             onChange={v => {
@@ -95,7 +60,6 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
               }
             }}
           />
-        </div>
         {includeSelfDealing && (
           <>
             <div className="mt-4">
@@ -128,17 +92,17 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
         subtitle="Client must initial — no default"
       >
         <ClientDecisionCallout>Anatomical gift election. Client must initial — never default.</ClientDecisionCallout>
-        <AttorneySelect
+        <DecisionRow
           fieldName="hcp_anatomical_gift"
-          label="Anatomical Gift Election"
-          value={sheet.hcp_anatomical_gift ?? ''}
-          placeholder="Select…"
+          question="Anatomical gift election"
+          blocking
+          value={sheet.hcp_anatomical_gift}
           options={[
             { value: 'all', label: 'Give any needed organs/tissues for any lawful purpose' },
             { value: 'specified', label: 'Give only specified organs/tissues for specified purposes' },
             { value: 'none', label: 'Make no anatomical gift' },
           ]}
-          onChange={v => onChange('hcp_anatomical_gift', (v || null) as 'all' | 'specified' | 'none' | null)}
+          onChange={v => onChange('hcp_anatomical_gift', v)}
         />
         {sheet.hcp_anatomical_gift === 'specified' && (
           <div className="mt-4">
@@ -161,16 +125,15 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
         subtitle="Client must initial — no default"
       >
         <ClientDecisionCallout>Psychotherapy notes disclosure. Client must initial — never default.</ClientDecisionCallout>
-        <AttorneySelect
+        <DecisionRow
           fieldName="hipaa_psychotherapy_notes"
-          label="Psychotherapy Notes"
-          value={sheet.hipaa_psychotherapy_notes ?? ''}
-          placeholder="Select…"
+          question="Psychotherapy notes"
+          value={sheet.hipaa_psychotherapy_notes}
           options={[
             { value: 'authorize', label: 'Authorize disclosure' },
             { value: 'do_not_authorize', label: 'Do NOT authorize disclosure' },
           ]}
-          onChange={v => onChange('hipaa_psychotherapy_notes', (v || null) as 'authorize' | 'do_not_authorize' | null)}
+          onChange={v => onChange('hipaa_psychotherapy_notes', v)}
         />
       </SectionBlock>
       )}
@@ -178,91 +141,35 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
       {/* ── Will — Common Options ───────────────────────────────────────────── */}
       {(scope === 'all' || scope === 'will') && (
       <SectionBlock title="Will — Common Provisions">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <div>
-            <FieldLabel>Bond</FieldLabel>
-            <SegControl
-              value={sheet.bond ?? 'no_bond'}
-              options={[
-                { value: 'no_bond', label: 'No bond (default)' },
-                { value: 'required', label: 'Required' },
-              ]}
-              onChange={v => onChange('bond', v as 'no_bond' | 'required')}
-            />
-          </div>
-          <div>
-            <FieldLabel>Supervision</FieldLabel>
-            <SegControl
-              value={sheet.supervision ?? 'unsupervised'}
-              options={[
-                { value: 'unsupervised', label: 'Unsupervised (default)' },
-                { value: 'supervised', label: 'Supervised' },
-              ]}
-              onChange={v => onChange('supervision', v as 'unsupervised' | 'supervised')}
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-3 gap-x-6 gap-y-4">
-          <AttorneySelect
-            label="Simultaneous Death"
-            value={sheet.simultaneous_death ?? ''}
-            placeholder={isMarried ? 'Default: spouse survives' : 'Default: omit'}
-            options={[
-              { value: 'spouse_survives', label: 'Spouse deemed to survive' },
-              { value: 'testator_survives', label: 'Testator deemed to survive' },
-              { value: 'omit', label: 'Omit' },
-            ]}
-            onChange={v => onChange('simultaneous_death', (v || null) as 'spouse_survives' | 'testator_survives' | 'omit' | null)}
-          />
-          <div>
-            <FieldLabel>UTMA Age</FieldLabel>
-            <SegControl
-              value={String(sheet.utma_age ?? 21)}
-              options={[
-                { value: '18', label: '18' },
-                { value: '21', label: '21 (default)' },
-              ]}
-              onChange={v => onChange('utma_age', (parseInt(v) as 18 | 21))}
-            />
-          </div>
-          <div>
-            <FieldLabel>No-Contest Clause</FieldLabel>
-            <SegControl
-              value={sheet.no_contest_clause ?? 'omit'}
-              options={[
-                { value: 'omit', label: 'Omit (default)' },
-                { value: 'include', label: 'Include' },
-              ]}
-              onChange={v => onChange('no_contest_clause', v as 'omit' | 'include')}
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-          <div>
-            <FieldLabel>Disclaimer Article</FieldLabel>
-            <SegControl
-              value={sheet.include_disclaimer_article === false ? 'no' : 'yes'}
-              options={[
-                { value: 'yes', label: 'Include (default)' },
-                { value: 'no', label: 'Omit' },
-              ]}
-              onChange={v => onChange('include_disclaimer_article', v === 'yes')}
-            />
-          </div>
-          <div>
-            <FieldLabel>Self-Proving Affidavit</FieldLabel>
-            <SegControl
-              value={sheet.include_self_proving_affidavit === false ? 'no' : 'yes'}
-              options={[
-                { value: 'yes', label: 'Include (default)' },
-                { value: 'no', label: 'Omit' },
-              ]}
-              onChange={v => onChange('include_self_proving_affidavit', v === 'yes')}
-            />
-          </div>
-        </div>
+        <DecisionRow question="Bond" value={sheet.bond ?? 'no_bond'} options={[
+          { value: 'no_bond', label: 'No bond (default)' },
+          { value: 'required', label: 'Required' },
+        ]} onChange={v => onChange('bond', v)} />
+        <DecisionRow question="Supervision" value={sheet.supervision ?? 'unsupervised'} options={[
+          { value: 'unsupervised', label: 'Unsupervised (default)' },
+          { value: 'supervised', label: 'Supervised' },
+        ]} onChange={v => onChange('supervision', v)} />
+        <DecisionRow question="Simultaneous death" help={isMarried ? 'Default: spouse survives.' : 'Default: omit.'} value={sheet.simultaneous_death} options={[
+          { value: 'spouse_survives', label: 'Spouse deemed to survive' },
+          { value: 'testator_survives', label: 'Testator deemed to survive' },
+          { value: 'omit', label: 'Omit' },
+        ]} onChange={v => onChange('simultaneous_death', v)} />
+        <DecisionRow question="UTMA age" value={String(sheet.utma_age ?? 21)} options={[
+          { value: '18', label: '18' },
+          { value: '21', label: '21 (default)' },
+        ]} onChange={v => onChange('utma_age', parseInt(v) as 18 | 21)} />
+        <DecisionRow question="No-contest clause" value={sheet.no_contest_clause ?? 'omit'} options={[
+          { value: 'omit', label: 'Omit (default)' },
+          { value: 'include', label: 'Include' },
+        ]} onChange={v => onChange('no_contest_clause', v)} />
+        <DecisionRow question="Disclaimer article" value={sheet.include_disclaimer_article === false ? 'no' : 'yes'} options={[
+          { value: 'yes', label: 'Include (default)' },
+          { value: 'no', label: 'Omit' },
+        ]} onChange={v => onChange('include_disclaimer_article', v === 'yes')} />
+        <DecisionRow question="Self-proving affidavit" value={sheet.include_self_proving_affidavit === false ? 'no' : 'yes'} options={[
+          { value: 'yes', label: 'Include (default)' },
+          { value: 'no', label: 'Omit' },
+        ]} onChange={v => onChange('include_self_proving_affidavit', v === 'yes')} />
       </SectionBlock>
       )}
 
@@ -276,18 +183,12 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
               value={sheet.trust_date ?? ''}
               onChange={v => onChange('trust_date', v || null)}
             />
-            <AttorneySelect
-              label="Alternate Disposition (if pour-over fails)"
-              value={sheet.pour_over_alternate_disposition ?? ''}
-              placeholder="Select…"
-              options={[
-                { value: 'spouse_then_descendants', label: 'Spouse, then descendants' },
-                { value: 'descendants_only', label: 'Descendants only' },
-                { value: 'named', label: 'Named individual' },
-              ]}
-              onChange={v => onChange('pour_over_alternate_disposition', (v || null) as 'spouse_then_descendants' | 'descendants_only' | 'named' | null)}
-            />
           </div>
+          <DecisionRow question="Alternate disposition if pour-over fails" value={sheet.pour_over_alternate_disposition} options={[
+            { value: 'spouse_then_descendants', label: 'Spouse, then descendants' },
+            { value: 'descendants_only', label: 'Descendants only' },
+            { value: 'named', label: 'Named individual' },
+          ]} onChange={v => onChange('pour_over_alternate_disposition', v)} />
           {sheet.pour_over_alternate_disposition === 'named' && (
             <div className="mt-4">
               <AttorneyInput
@@ -303,16 +204,15 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
       {/* ── Outright Will Specific ──────────────────────────────────────────── */}
       {(scope === 'all' || scope === 'will') && isOutright && (
         <SectionBlock title="Outright Will — Residuary Estate">
-          <AttorneySelect
-            label="Residuary Distribution"
-            value={sheet.outright_residuary ?? ''}
-            placeholder="Select…"
+          <DecisionRow
+            question="Residuary distribution"
+            value={sheet.outright_residuary}
             options={[
               { value: 'spouse_then_descendants', label: 'Spouse, then descendants' },
               { value: 'descendants_then_heirs', label: 'Descendants, then heirs at law' },
               { value: 'named', label: 'Named individual, then alternate, then heirs at law' },
             ]}
-            onChange={v => onChange('outright_residuary', (v || null) as 'spouse_then_descendants' | 'descendants_then_heirs' | 'named' | null)}
+            onChange={v => onChange('outright_residuary', v)}
           />
           {sheet.outright_residuary === 'named' && (
             <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
@@ -334,33 +234,24 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
       {/* ── Testamentary Trust Specific ─────────────────────────────────────── */}
       {(scope === 'all' || scope === 'will') && isTestamentary && (
         <SectionBlock title="Testamentary Trust Specifics" subtitle="Trustee structure is set in the Fiduciaries section">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <AttorneySelect
-              label="Beneficiary Structure"
-              value={sheet.beneficiary_structure ?? ''}
-              placeholder="Select…"
-              options={[
-                { value: 'spouse_hems_then_descendants', label: 'Spouse for life (HEMS), remainder to descendants' },
-                { value: 'descendants_per_stirpes', label: 'Descendants in separate shares per stirpes' },
-                { value: 'single_beneficiary', label: 'Single beneficiary (HEMS)' },
-              ]}
-              onChange={v => onChange('beneficiary_structure', (v || null) as 'spouse_hems_then_descendants' | 'descendants_per_stirpes' | 'single_beneficiary' | null)}
-            />
+          <DecisionRow question="Beneficiary structure" value={sheet.beneficiary_structure} options={[
+            { value: 'spouse_hems_then_descendants', label: 'Spouse for life (HEMS), remainder to descendants' },
+            { value: 'descendants_per_stirpes', label: 'Descendants in separate shares per stirpes' },
+            { value: 'single_beneficiary', label: 'Single beneficiary (HEMS)' },
+          ]} onChange={v => onChange('beneficiary_structure', v)} />
             {sheet.beneficiary_structure !== 'single_beneficiary' && (
-              <AttorneySelect
-                label="Age-Based Distribution Schedule"
-                value={sheet.age_distribution_schedule ?? ''}
-                placeholder="Select…"
+              <DecisionRow
+                question="Age-based distribution schedule"
+                value={sheet.age_distribution_schedule}
                 options={[
                   { value: 'outright_25', label: 'Outright at 25' },
                   { value: 'outright_30', label: 'Outright at 30' },
                   { value: 'outright_35', label: 'Outright at 35' },
                   { value: 'staggered_25_30_35', label: 'Staggered: 1/3 at 25, 1/2 of remainder at 30, balance at 35' },
                 ]}
-                onChange={v => onChange('age_distribution_schedule', (v || null) as 'outright_25' | 'outright_30' | 'outright_35' | 'staggered_25_30_35' | null)}
+                onChange={v => onChange('age_distribution_schedule', v)}
               />
             )}
-          </div>
           {sheet.beneficiary_structure === 'single_beneficiary' && (
             <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
               <AttorneyInput

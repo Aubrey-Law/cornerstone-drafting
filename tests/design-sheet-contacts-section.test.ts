@@ -91,8 +91,9 @@ describe('design sheet contacts UI cleanup', () => {
       path.join(designRoot, 'designSectionCatalog.tsx'),
       'utf8',
     )
-    expect(catalog).toContain('DESIGN_SECTION_IDS.contactsFiduciaries')
-    expect(catalog).toContain('Fiduciaries & Additional Contacts')
+    expect(catalog).toContain('DESIGN_SECTION_IDS.fiduciaries')
+    expect(catalog).toContain('<FiduciariesSection')
+    expect(catalog).not.toContain('<ContactsFiduciariesSection')
   })
 
   it('registers contacts section in readiness labels', () => {

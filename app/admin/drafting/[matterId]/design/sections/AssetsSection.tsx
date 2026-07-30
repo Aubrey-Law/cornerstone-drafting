@@ -82,7 +82,7 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
             {assets.map(asset => {
               const meta = categoryMeta(asset.category)
               return (
-                <div key={asset.id} className="rounded-lg border border-border bg-card p-4">
+                <div key={asset.id} className="rounded-lg border border-border bg-card p-3">
                   {/* Category badge + delete */}
                   <div className="mb-3 flex items-center justify-between">
                     <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', meta.color)}>
@@ -97,7 +97,7 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                     {/* Category */}
                     <div>
                       <FieldLabel>Type</FieldLabel>
@@ -139,8 +139,7 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
                     </div>
                   </div>
 
-                  {/* Institution + notes */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
                     <div>
                       <FieldLabel>Institution / Holder</FieldLabel>
                       <Input
@@ -169,30 +168,19 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
             </Button>
           </div>
         )}
+        <footer className="mt-4 flex items-center justify-between border-t border-border pt-3">
+          <span className="text-xs font-medium text-muted-foreground">
+            Gross estate total · {assets.length} item{assets.length === 1 ? '' : 's'}
+          </span>
+          <span className="tabular-nums text-base font-semibold text-[#1f2d5a]">
+            {new Intl.NumberFormat('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              maximumFractionDigits: 0,
+            }).format(totalValue)}
+          </span>
+        </footer>
       </SectionBlock>
-
-      {assets.length > 0 && totalValue > 0 && (
-        <SectionBlock title="Summary">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-lg border border-border bg-muted px-4 py-3 text-center">
-              <p className="text-[11px] text-muted-foreground mb-1">Total Listed</p>
-              <p className="tabular-nums text-lg font-semibold text-foreground">
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalValue)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted px-4 py-3 text-center">
-              <p className="text-[11px] text-muted-foreground mb-1">Asset Items</p>
-              <p className="text-lg font-semibold text-foreground">{assets.length}</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted px-4 py-3 text-center">
-              <p className="text-[11px] text-muted-foreground mb-1">Categories</p>
-              <p className="text-lg font-semibold text-foreground">
-                {new Set(assets.map(a => a.category)).size}
-              </p>
-            </div>
-          </div>
-        </SectionBlock>
-      )}
     </div>
   )
 }

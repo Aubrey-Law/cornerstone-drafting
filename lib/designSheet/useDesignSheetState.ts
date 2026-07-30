@@ -57,7 +57,7 @@ export interface UseDesignSheetStateArgs {
 /**
  * Encapsulates all design-sheet editing state, autosave, contact management and
  * readiness computation. Extracted so multiple shells (the guided
- * DesignSheetShell and the streamlined ExpressDesignSheet) share identical save
+ * Embedded and standalone single-page sheets share identical save
  * and validation behaviour without duplicating logic.
  */
 export function useDesignSheetState({
@@ -209,20 +209,20 @@ export function useDesignSheetState({
   }, [])
   const blockedFields = useMemo(() => {
     const set = new Set<string>()
-    for (const item of readiness.blockers) {
+    for (const item of readiness.blocking) {
       if (item.targetField) set.add(item.targetField)
     }
     return set
-  }, [readiness.blockers])
+  }, [readiness.blocking])
   const validationValue = useMemo(
     () => ({ blockedFields, touched: touchedFields, markTouched }),
     [blockedFields, touchedFields, markTouched],
   )
 
   const sectionSummaries = readiness.sectionSummaries
-  const blockerDetails = useMemo(() => {
+  const groupReadinessItems = useCallback((items: DesignReadinessBlocker[]) => {
     const grouped = new Map<string, { id: string; label: string; blockers: DesignReadinessBlocker[] }>()
-    for (const item of readiness.blockers) {
+    for (const item of items) {
       const current = grouped.get(item.sectionId)
       if (current) {
         current.blockers.push(item)
@@ -231,8 +231,16 @@ export function useDesignSheetState({
       }
     }
     return Array.from(grouped.values())
-  }, [readiness.blockers])
-  const draftBlockers = useMemo(() => blockerDetails.map(b => b.label), [blockerDetails])
+  }, [])
+  const blockingDetails = useMemo(
+    () => groupReadinessItems(readiness.blocking),
+    [groupReadinessItems, readiness.blocking],
+  )
+  const optionalDetails = useMemo(
+    () => groupReadinessItems(readiness.optional),
+    [groupReadinessItems, readiness.optional],
+  )
+  const draftBlockers = useMemo(() => blockingDetails.map(b => b.label), [blockingDetails])
 
   const saveStatusText = useMemo(() => {
     if (saveStatus === 'saving') return saveRetryCount > 0 ? `Retrying save (${saveRetryCount})…` : 'Saving…'
@@ -595,7 +603,10 @@ export function useDesignSheetState({
     readiness,
     documentInclusions,
     sectionSummaries: sectionSummaries as Record<string, DesignSectionSummary>,
-    blockerDetails,
+    blockingCount: readiness.blocking.length,
+    optionalCount: readiness.optional.length,
+    blockingDetails,
+    optionalDetails,
     draftBlockers,
     readinessComplete: readiness.complete,
     readinessCompletedCount: readiness.completedCount,

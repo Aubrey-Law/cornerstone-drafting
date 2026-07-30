@@ -123,6 +123,13 @@ export type NodeEstateContext = NodeEstateData & {
   hipaa_list_fiduciaries_by_name: boolean
   hipaa_list_fiduciaries_general: boolean
   uses_revocable_trust: boolean
+  includes_pour_over_will: boolean
+  includes_simple_will: boolean
+  includes_dpoa: boolean
+  includes_hcp: boolean
+  includes_hipaa: boolean
+  distributes_to_descendants: boolean
+  dpoa_gifting_authorized: boolean
   requires_guardian_clause: boolean
   has_specific_gifts: boolean
   has_charitable_gifts: boolean

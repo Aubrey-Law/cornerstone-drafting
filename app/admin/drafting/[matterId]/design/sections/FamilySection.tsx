@@ -5,17 +5,15 @@ import { BookOpen, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { isMinorFromDob } from '@/lib/contacts/childMinor'
-import { ageInYearsFromDob } from '@/lib/dob'
+import { formatAgeLabel } from '@/lib/dob'
 import {
   AttorneyInput,
   AttorneyNoteBanner,
   AttorneySelect,
   DesignSectionContent,
   DesignSheetCheckboxOption,
-  DobAgeHint,
   FieldHelpLabel,
   FieldLabel,
   PrefilledInput,
@@ -25,7 +23,7 @@ import {
   yesNoField,
   type SectionProps,
 } from './shared'
-import type { DesignSheet, DesignSheetChild, MatterContact, AdditionalBeneficiary } from '@/types/database'
+import type { DesignSheetChild, MatterContact, AdditionalBeneficiary } from '@/types/database'
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'Male' },
@@ -55,7 +53,13 @@ interface FamilySectionProps extends SectionProps {
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
 }
 
-export function FamilySection({ sheet, onChange, contacts = [], onAddContact, onUpdateContact }: FamilySectionProps) {
+export function FamilySection({
+  sheet,
+  onChange,
+  contacts: _contacts = [],
+  onAddContact: _onAddContact,
+  onUpdateContact: _onUpdateContact,
+}: FamilySectionProps) {
   const children = sheet.children ?? []
   const disinheritances = sheet.disinheritances ?? []
   const disinheritedChildren = sheet.disinherited_children ?? []
@@ -175,34 +179,28 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
               </Button>
             </div>
           )}
+          <div className="space-y-2">
           {children.map((child, idx) => {
-            const age = ageInYearsFromDob(child.dob)
+            const ageLabel = formatAgeLabel(child.dob)
             const derivedMinor = isMinorFromDob(child.dob)
             const isDeceased = Boolean(child.deceased)
             return (
               <div key={idx}>
-                {idx > 0 && <Separator className="my-4" />}
                 <div
-                  className={`flex items-start justify-between ${
+                  className={`flex items-start justify-between rounded-lg border border-border p-3 ${
                     isDeceased
-                      ? 'rounded-md bg-muted/60 p-3 -m-1'
+                      ? 'bg-muted/60'
                       : child.is_minor
-                        ? 'rounded-md bg-blue-50/60 dark:bg-blue-950/20 p-3 -m-1'
-                        : ''
+                        ? 'bg-blue-50/60 dark:bg-blue-950/20'
+                        : 'bg-card'
                   }`}
                 >
                   <div className="flex-1">
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(160px,1.5fr)_150px_90px_130px]">
                       <PrefilledInput
                         label="Full Name"
                         value={child.name}
                         onChange={v => updateChild(idx, { name: v })}
-                      />
-                      <PrefilledSelect
-                        label="Gender"
-                        value={child.gender ?? ''}
-                        options={GENDER_OPTIONS}
-                        onChange={v => updateChild(idx, { gender: (v || null) as DesignSheetChild['gender'] })}
                       />
                       <div>
                         <PrefilledInput
@@ -211,7 +209,10 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
                           value={child.dob ?? ''}
                           onChange={v => updateChild(idx, { dob: v || null })}
                         />
-                        <DobAgeHint dob={child.dob} />
+                      </div>
+                      <div>
+                        <FieldLabel>Age</FieldLabel>
+                        <p className="flex h-9 items-center text-sm text-foreground">{ageLabel ?? '—'}</p>
                       </div>
                       <PrefilledSelect
                         label="Deceased"
@@ -222,6 +223,12 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
                     </div>
                     {!isDeceased && (
                       <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
+                        <PrefilledSelect
+                          label="Gender"
+                          value={child.gender ?? ''}
+                          options={GENDER_OPTIONS}
+                          onChange={v => updateChild(idx, { gender: (v || null) as DesignSheetChild['gender'] })}
+                        />
                         {isMarried ? (
                           <PrefilledSelect
                             label="Child of"
@@ -246,22 +253,15 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
                           />
                         )}
                         <div className="flex items-end gap-3">
-                          <Badge
-                            variant="outline"
-                            className={`text-[11px] ${
-                              child.is_minor
-                                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                                : ''
-                            }`}
-                          >
-                            {child.is_minor
-                              ? age !== null
-                                ? `Minor (age ${age})`
-                                : 'Minor'
-                              : age !== null
-                                ? `Adult (age ${age})`
-                                : 'Adult'}
-                          </Badge>
+                          {derivedMinor ? (
+                            <Badge variant="outline" className="border-[#fcd34d] bg-[#fffbeb] text-[11px] text-[#92400e]">
+                              Minor — guardian required
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[11px]">
+                              {ageLabel ? 'Adult' : 'Age unknown'}
+                            </Badge>
+                          )}
                           {child.dob && child.is_minor !== derivedMinor && (
                             <span className="text-[10px] text-muted-foreground">
                               Override (DOB → {derivedMinor ? 'minor' : 'adult'})
@@ -292,6 +292,7 @@ export function FamilySection({ sheet, onChange, contacts = [], onAddContact, on
               </div>
             )
           })}
+          </div>
         </SectionBlock>
       </div>
 

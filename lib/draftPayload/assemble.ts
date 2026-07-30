@@ -48,7 +48,19 @@ import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function buildDraftPayload(matterId: string): Promise<DraftPayload> {
+export interface BuildDraftPayloadOptions {
+  /**
+   * Preview-only overlay for the current in-browser design sheet. The persisted
+   * row remains authoritative for identity fields while drafting decisions can
+   * be previewed before autosave completes.
+   */
+  designSheetOverride?: Partial<DesignSheet>
+}
+
+export async function buildDraftPayload(
+  matterId: string,
+  options: BuildDraftPayloadOptions = {},
+): Promise<DraftPayload> {
   const admin = getAdminClient()
   const resolvedMatterId = await resolveMatterId(matterId, admin)
 
@@ -110,6 +122,14 @@ export async function buildDraftPayload(matterId: string): Promise<DraftPayload>
 
   if (!rawDesignSheet?.id) {
     throw new Error('No design sheet found for matter: ' + resolvedMatterId)
+  }
+
+  if (options.designSheetOverride) {
+    rawDesignSheet = {
+      ...rawDesignSheet,
+      ...options.designSheetOverride,
+      id: rawDesignSheet.id,
+    } as DesignSheetRow
   }
 
   // Overlay computed defaults (trust name, citizenship, domicile) onto the saved

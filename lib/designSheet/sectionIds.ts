@@ -17,6 +17,42 @@ export const DESIGN_SECTION_IDS = {
 
 export type DesignSectionId = typeof DESIGN_SECTION_IDS[keyof typeof DESIGN_SECTION_IDS]
 
+export const DESIGN_SHEET_GROUP_IDS = {
+  facts: 'facts',
+  family: 'family',
+  fiduciaries: 'fiduciaries',
+  plan: 'plan',
+  trust: 'trust',
+  powersOfAttorney: 'powers-of-attorney',
+  healthcare: 'healthcare',
+  realProperty: 'real-property',
+  notes: 'notes',
+} as const
+
+export type DesignSheetGroupId = typeof DESIGN_SHEET_GROUP_IDS[keyof typeof DESIGN_SHEET_GROUP_IDS]
+
+const DESIGN_SECTION_GROUPS: Record<DesignSectionId, DesignSheetGroupId> = {
+  [DESIGN_SECTION_IDS.intakeReview]: DESIGN_SHEET_GROUP_IDS.facts,
+  [DESIGN_SECTION_IDS.clientInformation]: DESIGN_SHEET_GROUP_IDS.facts,
+  [DESIGN_SECTION_IDS.familyInformation]: DESIGN_SHEET_GROUP_IDS.facts,
+  [DESIGN_SECTION_IDS.assetSchedules]: DESIGN_SHEET_GROUP_IDS.facts,
+  [DESIGN_SECTION_IDS.willDetails]: DESIGN_SHEET_GROUP_IDS.family,
+  [DESIGN_SECTION_IDS.contactsFiduciaries]: DESIGN_SHEET_GROUP_IDS.fiduciaries,
+  [DESIGN_SECTION_IDS.fiduciaries]: DESIGN_SHEET_GROUP_IDS.fiduciaries,
+  [DESIGN_SECTION_IDS.estatePlanDesign]: DESIGN_SHEET_GROUP_IDS.plan,
+  [DESIGN_SECTION_IDS.trustDetails]: DESIGN_SHEET_GROUP_IDS.trust,
+  [DESIGN_SECTION_IDS.financialPoa]: DESIGN_SHEET_GROUP_IDS.powersOfAttorney,
+  [DESIGN_SECTION_IDS.healthcareDirectives]: DESIGN_SHEET_GROUP_IDS.healthcare,
+  [DESIGN_SECTION_IDS.transfersAssignments]: DESIGN_SHEET_GROUP_IDS.realProperty,
+  [DESIGN_SECTION_IDS.attorneyNotes]: DESIGN_SHEET_GROUP_IDS.notes,
+}
+
+export function designSectionAnchorId(sectionId: string | null | undefined): DesignSheetGroupId | null {
+  const normalized = normalizeDesignSectionId(sectionId)
+  if (!normalized) return null
+  return DESIGN_SECTION_GROUPS[normalized as DesignSectionId] ?? null
+}
+
 /** Map legacy section ids from older URLs / preflight links to current ids. */
 export const LEGACY_DESIGN_SECTION_ALIASES: Record<string, DesignSectionId> = {
   'plan-design': DESIGN_SECTION_IDS.estatePlanDesign,

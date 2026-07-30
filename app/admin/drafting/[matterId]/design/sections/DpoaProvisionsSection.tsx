@@ -17,41 +17,12 @@ import {
 } from '@/lib/designSheetDpoaProvisions'
 import {
   AttorneyNoteBanner,
-  AttorneySelect,
+  DecisionRow,
   DesignSheetCheckboxOption,
   FieldLabel,
   SectionBlock,
   type SectionProps,
 } from './shared'
-
-function ChoiceOption({
-  label,
-  description,
-  checked,
-  onSelect,
-}: {
-  label: string
-  description?: string
-  checked: boolean
-  onSelect: () => void
-}) {
-  return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
-      <input
-        type="radio"
-        className="mt-1"
-        checked={checked}
-        onChange={onSelect}
-      />
-      <span>
-        <span className="block text-sm font-medium text-foreground">{label}</span>
-        {description && (
-          <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{description}</span>
-        )}
-      </span>
-    </label>
-  )
-}
 
 export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
   const provisions = getDesignSheetDpoaProvisions(sheet)
@@ -121,63 +92,51 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
       </SectionBlock>
 
       <SectionBlock title="Compensation for Agents">
-        <div className="space-y-3">
-          <ChoiceOption
-            label="Prevailing Rate for Professional Fiduciaries"
-            description="Compensation shall be in the range of then-prevailing rates charged by professional fiduciaries."
-            checked={provisions.agent_compensation === 'prevailing_professional'}
-            onSelect={() => updateCompensation('prevailing_professional')}
-          />
-          <ChoiceOption
-            label="Reasonable Compensation"
-            description="Compensation shall be a reasonable fee based on time and effort."
-            checked={provisions.agent_compensation === 'reasonable'}
-            onSelect={() => updateCompensation('reasonable')}
-          />
-          <ChoiceOption
-            label="No Compensation"
-            description="Agents may not receive compensation."
-            checked={provisions.agent_compensation === 'none'}
-            onSelect={() => updateCompensation('none')}
-          />
-        </div>
+        <DecisionRow
+          question="Agent compensation"
+          fieldName="dpoa_provisions.agent_compensation"
+          blocking
+          value={provisions.agent_compensation}
+          options={[
+            { value: 'prevailing_professional', label: 'Prevailing Rate for Professional Fiduciaries', description: 'Compensation shall be in the range of then-prevailing rates charged by professional fiduciaries.' },
+            { value: 'reasonable', label: 'Reasonable Compensation', description: 'Compensation shall be a reasonable fee based on time and effort.' },
+            { value: 'none', label: 'No Compensation', description: 'Agents may not receive compensation.' },
+          ]}
+          onChange={updateCompensation}
+        />
       </SectionBlock>
 
       <SectionBlock
         title="Should co-agents serve jointly, separately, or should the document be silent?"
         subtitle="If multiple people are serving, select how they should make decisions."
       >
-        <div className="space-y-3">
-          <ChoiceOption
-            label="Co-agents must act jointly"
-            description="All decisions require the unanimous agreement of all then-acting co-agents."
-            checked={provisions.coagent_serving === 'jointly'}
-            onSelect={() => updateCoagentServing('jointly')}
-          />
-          <ChoiceOption
-            label="Co-agents may act separately"
-            description="Each co-agent may act independently without the consent of any other co-agent."
-            checked={provisions.coagent_serving === 'separately'}
-            onSelect={() => updateCoagentServing('separately')}
-          />
-          <ChoiceOption
-            label="Do not include"
-            description="The document will be silent on co-agent decision-making."
-            checked={provisions.coagent_serving === 'silent'}
-            onSelect={() => updateCoagentServing('silent')}
-          />
-        </div>
+        <DecisionRow
+          question="Co-agent decision-making"
+          fieldName="dpoa_provisions.coagent_serving"
+          blocking
+          value={provisions.coagent_serving}
+          options={[
+            { value: 'jointly', label: 'Co-agents must act jointly', description: 'All decisions require the unanimous agreement of all then-acting co-agents.' },
+            { value: 'separately', label: 'Co-agents may act separately', description: 'Each co-agent may act independently without the consent of any other co-agent.' },
+            { value: 'silent', label: 'Do not include', description: 'The document will be silent on co-agent decision-making.' },
+          ]}
+          onChange={updateCoagentServing}
+        />
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           Note: This form allows you to designate co-agents. However, banks may not accept co-agents as a matter of policy.
         </p>
       </SectionBlock>
 
       <SectionBlock title="Gifting Powers">
-        <DesignSheetCheckboxOption
-          label="Allow gifts"
-          description="Select to give the agent(s) gifting powers."
-          checked={provisions.allow_gifts}
-          onChange={checked => updateProvisions({ allow_gifts: checked })}
+        <DecisionRow
+          question="Allow gifts?"
+          help="Choose whether the agent receives gifting powers."
+          value={provisions.allow_gifts ? 'yes' : 'no'}
+          options={[
+            { value: 'yes', label: 'Allow gifts' },
+            { value: 'no', label: 'Do not allow gifts' },
+          ]}
+          onChange={value => updateProvisions({ allow_gifts: value === 'yes' })}
         />
       </SectionBlock>
 

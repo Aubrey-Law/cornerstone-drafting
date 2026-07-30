@@ -103,6 +103,29 @@ function mockFetch(options: {
     if (url.includes('/api/admin/email/preview')) {
       return { ok: true, json: async () => ({ html: '<p>Rendered preview</p>', unresolved: [] }) } as Response
     }
+    if (url.includes('/api/admin/email/scheduled')) {
+      if (init?.method === 'POST') {
+        const payload = JSON.parse(String(init.body))
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({
+            scheduled: {
+              id: 'scheduled-1',
+              to: payload.to,
+              subject: payload.subject,
+              scheduledFor: payload.scheduledFor,
+              timezone: payload.timezone,
+              status: 'pending',
+              attempts: 0,
+              lastError: null,
+            },
+          }),
+        } as Response
+      }
+      if (init?.method === 'DELETE') return { ok: true, json: async () => ({ ok: true }) } as Response
+      return { ok: true, json: async () => ({ scheduled: [] }) } as Response
+    }
     if (url.includes('/api/admin/email/directory')) {
       return { ok: true, json: async () => ({ entries: DIRECTORY }) } as Response
     }
@@ -499,6 +522,49 @@ describe('rail email pane', () => {
       const payload = JSON.parse(String((send![1]!.body as FormData).get('payload')))
       expect(payload.includeSignature).toBe(true)
     })
+  })
+
+  it('schedules a validated email snapshot and clears the active draft', async () => {
+    const fetchMock = mockFetch({
+      signature: { html: '<p>Aubrey Law</p>', includeByDefault: true },
+    })
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() => expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'))
+
+    await user.type(screen.getByLabelText('Subject'), 'Send tomorrow')
+    await typeBody(user, 'A scheduled message.')
+    await user.click(screen.getByRole('button', { name: 'Schedule' }))
+    await user.click(screen.getByRole('button', { name: 'Schedule email' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([url, init]) =>
+        String(url).endsWith('/api/admin/email/scheduled') && init?.method === 'POST')
+      expect(call).toBeTruthy()
+      const payload = JSON.parse(String(call![1]!.body))
+      expect(payload).toMatchObject({
+        contextType: 'matter',
+        contextId: 'm1',
+        to: 'margaret@example.com',
+        subject: 'Send tomorrow',
+        includeSignature: true,
+      })
+      expect(new Date(payload.scheduledFor).getTime()).toBeGreaterThan(Date.now())
+    })
+    expect(await screen.findByText(/Email scheduled for/)).toBeTruthy()
+    expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('')
+  })
+
+  it('does not allow computer uploads to be scheduled', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() => expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'))
+    await user.type(screen.getByLabelText('Subject'), 'Local attachment')
+    await typeBody(user, 'See attached.')
+    attach(new File(['hello'], 'local.txt', { type: 'text/plain' }))
+
+    expect((screen.getByRole('button', { name: 'Schedule' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('re-derives the recipient when the rail moves to another record', async () => {

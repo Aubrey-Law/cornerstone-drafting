@@ -12,21 +12,23 @@ import type { DesignSheet } from '@/types/database'
 export interface DesignFinalReviewProps {
   sheet: DesignSheet
   selectedDocKeys: DesignDocumentKey[]
-  blockerDetails: Array<{ id: string; label: string; blockers: DesignReadinessBlocker[] }>
+  blockingDetails: Array<{ id: string; label: string; blockers: DesignReadinessBlocker[] }>
+  optionalDetails: Array<{ id: string; label: string; blockers: DesignReadinessBlocker[] }>
   pendingFiduciaries: string[]
   readinessComplete: boolean
   onGenerate?: () => void
   attorneyPreset: AttorneyDesignPreset | null
 }
 
-export function DesignFinalReview({ sheet, selectedDocKeys, blockerDetails, pendingFiduciaries, readinessComplete, onGenerate, attorneyPreset }: DesignFinalReviewProps) {
+export function DesignFinalReview({ sheet, selectedDocKeys, blockingDetails, optionalDetails, pendingFiduciaries, readinessComplete, onGenerate, attorneyPreset }: DesignFinalReviewProps) {
   const intakeOverrides = Object.keys(sheet.overrides ?? {})
   const appliedPresetFields = attorneyPreset
     ? Object.entries(attorneyPreset.fields)
         .filter(([field, value]) => JSON.stringify(sheet[field as keyof DesignSheet]) === JSON.stringify(value))
         .map(([field]) => field)
     : []
-  const blockers = blockerDetails.flatMap(group => group.blockers)
+  const blockingCount = blockingDetails.reduce((total, group) => total + group.blockers.length, 0)
+  const optionalCount = optionalDetails.reduce((total, group) => total + group.blockers.length, 0)
   const list = (values: string[]) => values.map(value => value.replace(/_/g, ' ')).join(' · ') || 'None'
 
   return (
@@ -37,7 +39,7 @@ export function DesignFinalReview({ sheet, selectedDocKeys, blockerDetails, pend
           <p className="mt-1 text-xs text-muted-foreground">Only exceptions, unresolved work, and package choices are shown.</p>
         </div>
         <Badge className={cn('border-0', readinessComplete ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>
-          {readinessComplete ? 'Ready' : `${blockers.length} unresolved`}
+          {readinessComplete ? `${optionalCount} optional` : `${blockingCount} blocking`}
         </Badge>
       </div>
       <div className="mt-4 grid gap-4 text-xs sm:grid-cols-2">
