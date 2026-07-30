@@ -31,6 +31,9 @@ const PUBLIC_ROUTE_SUFFIXES = [
   // Manage link: authorization is possession of an unguessable 256-bit token
   // stored hashed with an expiry (same pattern as intake invite tokens).
   'scheduling/manage/[token]/route.ts',
+  // Telnyx fetches this fixed-destination TeXML instruction document when an
+  // inbound call arrives; it accepts no caller-controlled input or user data.
+  'voice/telnyx/inbound/route.ts',
 ] as const
 
 function listRouteFiles(dir = API_ROOT, acc: string[] = []): string[] {
