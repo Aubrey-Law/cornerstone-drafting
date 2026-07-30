@@ -1149,7 +1149,11 @@ export default function Softphone() {
 
           <div className="mt-3 flex gap-2">
             <a
-              href={dialedEntry?.matterId ? `/admin/matters/${dialedEntry.matterId}` : undefined}
+              href={
+                dialedEntry?.matterId
+                  ? `/admin/matters/${dialedEntry.matterId}?tab=communications&channel=sms`
+                  : undefined
+              }
               aria-disabled={!dialedEntry?.matterId}
               className={cn(
                 'grid w-11 place-items-center rounded-[10px] border border-border text-[10px] font-medium tracking-[0.08em] text-muted-foreground',
