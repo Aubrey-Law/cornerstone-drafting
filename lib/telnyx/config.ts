@@ -1,4 +1,5 @@
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
+import { telnyxInboundRouteConfig } from '@/lib/telnyx/inbound'
 
 export function telnyxAppBaseUrl(): string {
   return (
@@ -44,10 +45,15 @@ export function isTelnyxVoiceConfigured(): boolean {
 
 export function telnyxConfigStatus() {
   const missing = (names: string[]) => names.filter(name => !process.env[name]?.trim())
+  const inboundMissing = missing([
+    'TELNYX_INBOUND_AGENT_SIP_URI',
+    'TELNYX_INBOUND_FALLBACK_DESTINATION',
+  ])
   return {
     provider: 'telnyx' as const,
     smsConfigured: isTelnyxSmsConfigured(),
     voiceConfigured: isTelnyxVoiceConfigured(),
+    inboundVoiceConfigured: inboundMissing.length === 0 && Boolean(telnyxInboundRouteConfig()),
     missing: {
       sms: missing(['TELNYX_API_KEY', 'TELNYX_PUBLIC_KEY', 'TELNYX_PHONE_NUMBER', 'TELNYX_MESSAGING_PROFILE_ID']),
       voice: [
@@ -57,10 +63,12 @@ export function telnyxConfigStatus() {
           ? ['TELNYX_TELEPHONY_CREDENTIAL_IDS or TELNYX_TELEPHONY_CREDENTIAL_ID']
           : []),
       ],
+      inboundVoice: inboundMissing,
     },
     webhooks: {
       messaging: `${telnyxAppBaseUrl()}/api/webhooks/telnyx/messaging`,
       voice: `${telnyxAppBaseUrl()}/api/webhooks/telnyx/voice`,
+      inboundTeXML: `${telnyxAppBaseUrl()}/api/voice/telnyx/inbound`,
     },
   }
 }

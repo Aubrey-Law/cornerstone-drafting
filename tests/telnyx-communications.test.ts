@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { generateKeyPairSync, sign } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { smsProvider, voiceProvider } from '@/lib/communications/providers'
-import { telnyxCredentialIdForUser } from '@/lib/telnyx/config'
+import { telnyxConfigStatus, telnyxCredentialIdForUser } from '@/lib/telnyx/config'
 import {
   buildTelnyxInboundTexml,
   telnyxInboundRouteConfig,
@@ -94,6 +94,29 @@ describe('Telnyx communications migration', () => {
     }))
     expect(telnyxCredentialIdForUser('user-1')).toBe('credential-1')
     expect(telnyxCredentialIdForUser('unknown')).toBeNull()
+  })
+
+  it('reports inbound voice configuration separately from outbound voice', () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+    vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '25')
+    expect(telnyxConfigStatus()).toMatchObject({
+      inboundVoiceConfigured: true,
+      missing: { inboundVoice: [] },
+      webhooks: {
+        inboundTeXML: expect.stringContaining('/api/voice/telnyx/inbound'),
+      },
+    })
+  })
+
+  it('does not report inbound voice ready for invalid routing values', () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'not-a-sip-uri')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+
+    expect(telnyxConfigStatus()).toMatchObject({
+      inboundVoiceConfigured: false,
+      missing: { inboundVoice: [] },
+    })
   })
 
   it('normalizes Telnyx voice events into existing call history', () => {

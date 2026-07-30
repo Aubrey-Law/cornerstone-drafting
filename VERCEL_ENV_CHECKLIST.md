@@ -160,18 +160,22 @@ Set `SMS_PROVIDER=telnyx` and/or `VOICE_PROVIDER=telnyx` to activate Telnyx.
 | `TELNYX_PUBLIC_KEY` | Ed25519 webhook verification key |
 | `TELNYX_PHONE_NUMBER` | New Telnyx number in E.164 format |
 | `TELNYX_MESSAGING_PROFILE_ID` | Messaging Profile assigned to the number |
-| `TELNYX_CONNECTION_ID` | Credential Connection assigned to the number |
+| `TELNYX_CONNECTION_ID` | Credential Connection used to mint Scott's softphone JWT (separate from inbound number routing) |
 | `TELNYX_TELEPHONY_CREDENTIAL_IDS` | JSON map of Supabase user UUID to Telnyx telephony credential ID |
 | `TELNYX_TELEPHONY_CREDENTIAL_ID` | Optional single-user credential fallback |
 | `TELNYX_WEBHOOK_BASE_URL` | Optional public callback base; defaults to `NEXT_PUBLIC_APP_URL` |
 | `TELNYX_RECORD_CALLS` | Optional `true` recording flag for portal routing configuration |
-| `TELNYX_INBOUND_RING_TIMEOUT` | Optional unanswered ring timeout |
-| `TELNYX_INBOUND_FALLBACK_DESTINATION` | Optional Retell phone number or SIP destination |
+| `TELNYX_INBOUND_AGENT_SIP_URI` | Scott's inbound SIP target: `sip:gencredScott@sip.telnyx.com` |
+| `TELNYX_INBOUND_RING_TIMEOUT` | `25` seconds before the fallback destination |
+| `TELNYX_INBOUND_FALLBACK_DESTINATION` | Environment-configurable fallback; production value: `+13392381012` |
 
 Configure the Messaging Profile webhook as `/api/webhooks/telnyx/messaging` and
 the Credential Connection voice webhook as `/api/webhooks/telnyx/voice`. Each
-staff softphone user needs a distinct telephony credential. The admin-safe audit
-endpoint is `GET /api/admin/communications/status`.
+staff softphone user needs a distinct telephony credential. For inbound calling,
+assign the Telnyx number to a TeXML application. Set that application's Voice URL
+to `/api/voice/telnyx/inbound` and its event callback URL to
+`/api/webhooks/telnyx/voice`. The admin-safe audit endpoint is
+`GET /api/admin/communications/status`.
 
 ## Optional — Microsoft Graph (Outlook send)
 
