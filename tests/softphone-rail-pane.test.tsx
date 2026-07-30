@@ -193,6 +193,18 @@ describe('softphone rail pane', () => {
     expect((screen.getByLabelText('Phone number') as HTMLInputElement).value).toBe('(781) 555-1212')
   })
 
+  it('opens the matched matter SMS composer from the dialer', async () => {
+    mockFetch()
+    renderPhone()
+    await screen.findByText('Ready')
+
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '7815551212' } })
+
+    expect(screen.getByRole('link', { name: 'SMS' }).getAttribute('href')).toBe(
+      '/admin/matters/m1?tab=communications&channel=sms',
+    )
+  })
+
   it('prefills the dialer from a click-to-call event', async () => {
     mockFetch()
     renderPhone()
