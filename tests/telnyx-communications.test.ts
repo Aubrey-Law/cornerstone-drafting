@@ -104,6 +104,25 @@ describe('Telnyx communications migration', () => {
     })
   })
 
+  it('rejects credential-bearing SIP URIs and serves a safe hangup document', async () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott:password@sip.telnyx.com')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+
+    expect(telnyxInboundRouteConfig()).toBeNull()
+    const response = getTelnyxInboundTexml()
+    expect(await response.text()).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
+    )
+  })
+
+  it('caps the inbound ring timeout at the TeXML maximum of 120 seconds', () => {
+    vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
+    vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
+    vi.stubEnv('TELNYX_INBOUND_RING_TIMEOUT', '121')
+
+    expect(telnyxInboundRouteConfig()).toMatchObject({ ringTimeoutSeconds: 120 })
+  })
+
   it('serves inbound TeXML without caching', () => {
     vi.stubEnv('TELNYX_INBOUND_AGENT_SIP_URI', 'sip:gencredScott@sip.telnyx.com')
     vi.stubEnv('TELNYX_INBOUND_FALLBACK_DESTINATION', '+13392381012')
