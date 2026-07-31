@@ -1,6 +1,7 @@
 import 'server-only'
 import { getAccessToken, getMicrosoftConnectionForUser } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { getRawBoolean } from '@/lib/appointments/rawMetadata'
 import type { Interval } from './types'
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
@@ -127,7 +128,7 @@ export async function fetchAppointmentBusy(
   }
 
   return ((data ?? []) as Array<{ start_time: string; end_time: string; raw?: unknown }>)
-    .filter(row => isShowAsBusy(row.raw))
+    .filter(row => getRawBoolean(row.raw, 'calendarShowAsBusy', true))
     .map(row => ({ start: Date.parse(row.start_time), end: Date.parse(row.end_time) }))
     .filter(iv => Number.isFinite(iv.start) && Number.isFinite(iv.end) && iv.end > iv.start)
 }
