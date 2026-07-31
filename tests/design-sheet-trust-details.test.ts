@@ -3,6 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildSpouseTrustNameSuggestions,
   buildStaggeredTiersFromPreset,
   buildTrustNameSuggestions,
   getTrustDetails,
@@ -41,12 +42,29 @@ describe('trust details design section', () => {
 
   it('builds joint and separate trust name suggestions', () => {
     expect(buildTrustNameSuggestions(
-      { client_name: 'John Smith', spouse_name: 'Jane Smith', is_joint: true },
-      { client_name: 'John Smith', spouse_name: 'Jane Smith' },
+      { client_name: 'John David Smith', spouse_name: 'Jane Smith', is_joint: true },
+      { client_name: 'John David Smith', spouse_name: 'Jane Smith' },
     )).toEqual([
-      'The John and Jane Trust',
-      'The John and Jane Revocable Trust',
       'The Smith Family Trust',
+      'The John David Smith and Jane Smith Trust',
+    ])
+
+    expect(buildTrustNameSuggestions(
+      { client_name: 'John David Smith', spouse_name: null, is_joint: false },
+      { client_name: 'John David Smith', spouse_name: null },
+    )).toEqual([
+      'The John David Smith Trust',
+      'The JDS Trust',
+    ])
+  })
+
+  it('builds spouse separate trust name suggestions from full name and initials', () => {
+    expect(buildSpouseTrustNameSuggestions(
+      { spouse_name: 'Jane Ann Smith' },
+      { spouse_name: 'Jane Ann Smith' },
+    )).toEqual([
+      'The Jane Ann Smith Trust',
+      'The JAS Trust',
     ])
   })
 

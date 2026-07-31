@@ -33,6 +33,8 @@ export interface RealEstateTransferFormState {
   realtyTrustDate: string
   /** Preferred: matter contact id (or design-sheet client/spouse shortcut ids). */
   trusteeContactId: string
+  /** Additional co-trustees serving alongside the primary trustee. */
+  coTrusteeContactIds: string[]
   /** @deprecated Prefer trusteeContactId; retained for read/write compat. */
   trusteeSource: 'client' | 'spouse' | 'fiduciary'
   /** @deprecated Prefer trusteeContactId; retained for read/write compat. */
@@ -59,6 +61,7 @@ export function emptyRealEstateTransferFormState(): RealEstateTransferFormState 
     realtyTrustName: '',
     realtyTrustDate: '',
     trusteeContactId: '',
+    coTrusteeContactIds: [],
     trusteeSource: 'client',
     trusteeFiduciaryId: '',
     fiduciaries: [],
@@ -106,13 +109,18 @@ function resolvePartyName(
   }
 }
 
+function resolveTrusteeContactName(contactId: string, form: RealEstateTransferFormState): string {
+  if (contactId === '__design_sheet_client__') return form.clientName.trim()
+  if (contactId === '__design_sheet_spouse__') return form.spouseName.trim()
+  const fiduciary = form.fiduciaries.find(item => item.id === contactId)
+  return fiduciary?.name.trim() ?? ''
+}
+
 function resolveTrusteeName(form: RealEstateTransferFormState): string {
   const contactId = form.trusteeContactId.trim()
   if (contactId) {
-    if (contactId === '__design_sheet_client__') return form.clientName.trim()
-    if (contactId === '__design_sheet_spouse__') return form.spouseName.trim()
-    const fiduciary = form.fiduciaries.find(item => item.id === contactId)
-    if (fiduciary?.name.trim()) return fiduciary.name.trim()
+    const name = resolveTrusteeContactName(contactId, form)
+    if (name) return name
   }
 
   // Legacy fallback when only trusteeSource / trusteeFiduciaryId are set.
@@ -120,6 +128,22 @@ function resolveTrusteeName(form: RealEstateTransferFormState): string {
   if (form.trusteeSource === 'spouse') return form.spouseName.trim()
   const fiduciary = form.fiduciaries.find(item => item.id === form.trusteeFiduciaryId)
   return fiduciary?.name.trim() ?? ''
+}
+
+/** Primary trustee plus any co-trustees, deduped, in serving order. */
+export function resolveTrusteeNames(form: RealEstateTransferFormState): string[] {
+  const names = [
+    resolveTrusteeName(form),
+    ...form.coTrusteeContactIds.map(id => resolveTrusteeContactName(id, form)),
+  ].filter(Boolean)
+  return [...new Set(names)]
+}
+
+/** "A", "A and B", "A, B and C" — the deed's `trustees` merge text. */
+export function formatTrusteeNames(form: RealEstateTransferFormState): string {
+  const names = resolveTrusteeNames(form)
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 }
 
 /** Keep legacy source fields aligned with the contact-id selection. */
@@ -139,8 +163,10 @@ function formatGranteeLine(name: string, form: RealEstateTransferFormState): str
   const trimmed = name.trim()
   if (!trimmed) return ''
   if (trimmed === form.realtyTrustName.trim()) {
-    const trustee = resolveTrusteeName(form)
-    if (trustee) return `${trustee}, Trustee of the ${trimmed}`
+    const trustees = resolveTrusteeNames(form)
+    if (trustees.length > 0) {
+      return `${formatTrusteeNames(form)}, Trustee${trustees.length > 1 ? 's' : ''} of the ${trimmed}`
+    }
   }
   return trimmed
 }
@@ -178,7 +204,7 @@ export function buildTemplateFields(form: RealEstateTransferFormState): RealEsta
     grantor: deed.grantor?.trim().toUpperCase() || '',
     grantor_2: deed.grantor_2?.trim().toUpperCase() || '',
     grantee: formatGrantees(form) || deed.grantee?.trim() || '',
-    trustees: resolveTrusteeName(form) || deed.trustees?.trim() || '',
+    trustees: formatTrusteeNames(form) || deed.trustees?.trim() || '',
     settlor: form.clientName.trim() || deed.settlor?.trim() || '',
     trust_name: form.realtyTrustName.trim() || deed.trust_name?.trim() || '',
     trust_date: form.realtyTrustDate.trim() || deed.trust_date?.trim() || '',

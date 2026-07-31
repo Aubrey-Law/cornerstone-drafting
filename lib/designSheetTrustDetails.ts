@@ -266,29 +266,47 @@ export function setTrustDetails(
   }
 }
 
+function trustNameInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map(part => part.replace(/[^a-zA-Z]/g, '')[0] ?? '')
+    .join('')
+    .toUpperCase()
+}
+
 export function buildTrustNameSuggestions(
   sheet: Pick<DesignSheet, 'client_name' | 'spouse_name' | 'is_joint'>,
   matter: Pick<{ client_name?: string | null; spouse_name?: string | null }, 'client_name' | 'spouse_name'>,
 ): string[] {
   const clientName = (sheet.client_name ?? matter.client_name ?? '').trim()
   const spouseName = (sheet.spouse_name ?? matter.spouse_name ?? '').trim()
-  const clientFirst = clientName.split(/\s+/)[0] || 'Client'
-  const spouseFirst = spouseName.split(/\s+/)[0] || 'Spouse'
   const familyLast = clientName.split(/\s+/).at(-1) || 'Family'
 
   if (sheet.is_joint) {
-    return [
-      `The ${clientFirst} and ${spouseFirst} Trust`,
-      `The ${clientFirst} and ${spouseFirst} Revocable Trust`,
+    return [...new Set([
       `The ${familyLast} Family Trust`,
-    ]
+      `The ${clientName || 'Client'} and ${spouseName || 'Spouse'} Trust`,
+    ])]
   }
 
-  return [
-    `The ${clientFirst} Trust`,
-    `The ${clientFirst} Revocable Trust`,
-    `The ${familyLast} Family Trust`,
-  ]
+  const initials = trustNameInitials(clientName)
+  return [...new Set([
+    `The ${clientName || 'Client'} Trust`,
+    `The ${initials || 'Client'} Trust`,
+  ])]
+}
+
+/** Quick-fill suggestions for the spouse's separate trust: full name and initials. */
+export function buildSpouseTrustNameSuggestions(
+  sheet: Pick<DesignSheet, 'spouse_name'>,
+  matter: Pick<{ spouse_name?: string | null }, 'spouse_name'>,
+): string[] {
+  const spouseName = (sheet.spouse_name ?? matter.spouse_name ?? '').trim()
+  const initials = trustNameInitials(spouseName)
+  return [...new Set([
+    `The ${spouseName || 'Spouse'} Trust`,
+    `The ${initials || 'Spouse'} Trust`,
+  ])]
 }
 
 export interface StaggeredDistributionPreset {

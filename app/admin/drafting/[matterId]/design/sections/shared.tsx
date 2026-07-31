@@ -557,7 +557,7 @@ export function GroupCard({
   headerAction,
   blockingCount,
   optionalCount,
-  collapsed,
+  collapsed = false,
   onCollapsedChange,
   children,
   scrollMarginTop,
@@ -568,13 +568,22 @@ export function GroupCard({
   headerAction?: React.ReactNode
   blockingCount: number
   optionalCount: number
-  collapsed: boolean
-  onCollapsedChange: (collapsed: boolean) => void
+  /** Collapsible only when `onCollapsedChange` is provided; sectioned mode forces the card open. */
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
   children: React.ReactNode
   scrollMarginTop?: number
 }) {
+  const collapsible = Boolean(onCollapsedChange)
+  const isCollapsed = collapsible && collapsed
   const openCount = blockingCount > 0 ? blockingCount : optionalCount
   const openLabel = blockingCount > 0 ? 'blocking' : 'optional'
+  const header = (
+    <>
+      <span className="block text-sm font-semibold text-foreground">{title}</span>
+      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{summary}</span>
+    </>
+  )
   return (
     <section
       id={id}
@@ -582,16 +591,19 @@ export function GroupCard({
       style={{ scrollMarginTop }}
     >
       <div className="flex items-center gap-3 px-5 py-4">
-        <button
-          type="button"
-          className="min-w-0 flex-1 text-left"
-          aria-expanded={!collapsed}
-          aria-controls={`${id}-content`}
-          onClick={() => onCollapsedChange(!collapsed)}
-        >
-          <span className="block text-sm font-semibold text-foreground">{title}</span>
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{summary}</span>
-        </button>
+        {collapsible ? (
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left"
+            aria-expanded={!isCollapsed}
+            aria-controls={`${id}-content`}
+            onClick={() => onCollapsedChange?.(!isCollapsed)}
+          >
+            {header}
+          </button>
+        ) : (
+          <div className="min-w-0 flex-1 text-left">{header}</div>
+        )}
         {headerAction}
         {openCount > 0 ? (
           <span className={cn(
@@ -608,23 +620,25 @@ export function GroupCard({
             Set
           </span>
         )}
-        <button
-          type="button"
-          className="rounded p-1 text-muted-foreground hover:bg-muted"
-          aria-label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
-          aria-expanded={!collapsed}
-          aria-controls={`${id}-content`}
-          onClick={() => onCollapsedChange(!collapsed)}
-        >
-          {collapsed
-            ? <ChevronRight className="h-4 w-4" />
-            : <ChevronDown className="h-4 w-4" />}
-        </button>
+        {collapsible ? (
+          <button
+            type="button"
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
+            aria-label={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
+            aria-expanded={!isCollapsed}
+            aria-controls={`${id}-content`}
+            onClick={() => onCollapsedChange?.(!isCollapsed)}
+          >
+            {isCollapsed
+              ? <ChevronRight className="h-4 w-4" />
+              : <ChevronDown className="h-4 w-4" />}
+          </button>
+        ) : null}
       </div>
       <div
         id={`${id}-content`}
-        className={cn('border-t border-border px-5 py-5', collapsed && 'hidden')}
-        aria-hidden={collapsed}
+        className={cn('border-t border-border px-5 py-5', isCollapsed && 'hidden')}
+        aria-hidden={isCollapsed}
       >
         <GroupCardContext.Provider value>
           {children}

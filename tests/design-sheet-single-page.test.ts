@@ -7,25 +7,34 @@ import {
   designSectionAnchorId,
 } from '@/lib/designSheet/sectionIds'
 
-describe('single-page design sheet anchors', () => {
-  it('maps legacy section navigation onto the nine stable group anchors', () => {
-    expect(Object.keys(DESIGN_SHEET_GROUP_IDS)).toHaveLength(9)
+const pageSource = fs.readFileSync(
+  path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
+  'utf8',
+)
+
+describe('sectioned design sheet anchors', () => {
+  it('maps legacy section navigation onto the ten stable group anchors', () => {
+    expect(Object.keys(DESIGN_SHEET_GROUP_IDS)).toHaveLength(10)
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.trustDetails)).toBe('trust')
     expect(designSectionAnchorId('trust')).toBe('trust')
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.clientInformation)).toBe('facts')
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.financialPoa)).toBe('powers-of-attorney')
   })
 
-  it('keeps focus scrolling inside the page container', () => {
-    const page = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'),
-      'utf8',
-    )
+  it('renders one section at a time instead of a single scroll page', () => {
+    // Only the active group mounts; the review section is the synthetic last stop.
+    expect(pageSource).toContain('{activeGroup.render()}')
+    expect(pageSource).not.toContain('{groups.map(group => {')
+    expect(pageSource).toContain('REVIEW_GROUP')
+    expect(pageSource).toContain('SigningMechanicsSection')
+    expect(pageSource).toContain('DesignFinalReview')
+  })
 
-    expect(page).toContain('container.scrollTop +=')
-    expect(page).toContain("target.focus({ preventScroll: true })")
-    expect(page).toContain('}, 1600)')
-    expect(page).not.toContain('scrollIntoView')
+  it('keeps focus and field targeting inside the page container', () => {
+    expect(pageSource).toContain('container.scrollTop +=')
+    expect(pageSource).toContain("target.focus({ preventScroll: true })")
+    expect(pageSource).toContain('}, 1600)')
+    expect(pageSource).not.toContain('scrollIntoView')
   })
 
   it('removes the legacy per-section route after the cleanup phase', () => {

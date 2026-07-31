@@ -25,6 +25,7 @@ export interface PersistedRealEstateTransferState {
   realtyTrustName: string
   realtyTrustDate: string
   trusteeContactId: string
+  coTrusteeContactIds: string[]
   trusteeSource: RealEstateTransferFormState['trusteeSource']
   trusteeFiduciaryId: string
   beneficialOwners: BeneficialOwnerEntry[]
@@ -41,6 +42,7 @@ function emptyPersistedState(): PersistedRealEstateTransferState {
     realtyTrustName: '',
     realtyTrustDate: '',
     trusteeContactId: CLIENT_PRIMARY_CONTACT_ID,
+    coTrusteeContactIds: [],
     trusteeSource: 'client',
     trusteeFiduciaryId: '',
     beneficialOwners: [],
@@ -114,6 +116,9 @@ export function getPersistedRealEstateTransfer(
     realtyTrustName: typeof raw.realtyTrustName === 'string' ? raw.realtyTrustName : defaults.realtyTrustName,
     realtyTrustDate: typeof raw.realtyTrustDate === 'string' ? raw.realtyTrustDate : defaults.realtyTrustDate,
     trusteeContactId,
+    coTrusteeContactIds: Array.isArray(raw.coTrusteeContactIds)
+      ? raw.coTrusteeContactIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : defaults.coTrusteeContactIds,
     trusteeSource: raw.trusteeSource === 'spouse' || raw.trusteeSource === 'fiduciary'
       ? raw.trusteeSource
       : legacy.trusteeSource,
@@ -224,6 +229,7 @@ export function buildFormStateFromDesignSheet(
     realtyTrustName: persisted.realtyTrustName,
     realtyTrustDate: persisted.realtyTrustDate,
     trusteeContactId: persisted.trusteeContactId,
+    coTrusteeContactIds: persisted.coTrusteeContactIds,
     trusteeSource: persisted.trusteeSource,
     trusteeFiduciaryId: persisted.trusteeFiduciaryId,
     beneficialOwners: persisted.beneficialOwners,
@@ -247,6 +253,7 @@ export function extractPersistedState(
     realtyTrustName: form.realtyTrustName,
     realtyTrustDate: form.realtyTrustDate,
     trusteeContactId,
+    coTrusteeContactIds: form.coTrusteeContactIds.filter(id => id.trim() && id !== trusteeContactId),
     trusteeSource: legacy.trusteeSource,
     trusteeFiduciaryId: legacy.trusteeFiduciaryId,
     beneficialOwners: form.beneficialOwners,

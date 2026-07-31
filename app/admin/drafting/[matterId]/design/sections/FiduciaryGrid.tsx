@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeftRight, Loader2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -111,6 +111,7 @@ export function FiduciaryGrid({
   onChange,
   onAddContact,
   showInapplicable = false,
+  flashRoleKey = null,
 }: {
   sheet: DesignSheet
   contacts: MatterContact[]
@@ -118,9 +119,20 @@ export function FiduciaryGrid({
   onChange: DesignSheetOnChange
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   showInapplicable?: boolean
+  /** Slot field to flash (readiness blocker target); tints that role's column briefly. */
+  flashRoleKey?: FiduciarySlotField | null
 }) {
   const married = isMarriedSheet(sheet)
   const [party, setParty] = useState<'client' | 'spouse'>('client')
+  const [flashField, setFlashField] = useState<FiduciarySlotField | null>(null)
+
+  useEffect(() => {
+    if (!flashRoleKey) return
+    setParty(flashRoleKey.startsWith('spouse_') ? 'spouse' : 'client')
+    setFlashField(flashRoleKey)
+    const timer = window.setTimeout(() => setFlashField(null), 1600)
+    return () => window.clearTimeout(timer)
+  }, [flashRoleKey])
   const [newName, setNewName] = useState('')
   const [newRelationship, setNewRelationship] = useState('')
   const [adding, setAdding] = useState(false)
@@ -230,13 +242,15 @@ export function FiduciaryGrid({
             const count = namedPrincipals(slots).length
             const required = requiredRoles.has(role.id)
             const status = count === 0 ? 'Not named' : count === 1 ? 'No alternate' : `${count} in line`
+            const flashing = flashField != null && flashField === slotFields[role.id]
             return (
               <div
                 key={role.id}
                 id={designFieldTargetId(String(slotFields[role.id]))}
                 tabIndex={-1}
                 className={cn(
-                  'border-b border-r border-border bg-muted/40 p-2 last:border-r-0',
+                  'border-b border-r border-border p-2 last:border-r-0',
+                  flashing ? 'bg-warning/10' : 'bg-muted/40',
                   !role.applicable && 'opacity-45 grayscale-[20%]',
                 )}
               >
@@ -267,6 +281,7 @@ export function FiduciaryGrid({
                 const slots = (sheet[field] as FiduciarySlot[] | null) ?? []
                 const order = namedPrincipals(slots).findIndex(slot => slot.contact_id === contact.id)
                 const selected = order >= 0
+                const flashing = flashField != null && flashField === field
                 return (
                   <button
                     key={role.id}
@@ -278,7 +293,9 @@ export function FiduciaryGrid({
                       'flex min-h-14 items-center justify-center border-b border-r border-border p-2 last:border-r-0',
                       selected
                         ? 'bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
-                        : 'bg-card text-muted-foreground hover:bg-muted/40',
+                        : flashing
+                          ? 'bg-warning/10 text-muted-foreground'
+                          : 'bg-card text-muted-foreground hover:bg-muted/40',
                       !role.applicable && 'opacity-45 grayscale-[20%]',
                     )}
                   >
