@@ -60,7 +60,7 @@ interface CreateTaskInput {
   calendarShowAsBusy: boolean
 }
 
-function tool(
+const tool = (
   name: string,
   description: string,
   properties: Record<string, unknown>,
