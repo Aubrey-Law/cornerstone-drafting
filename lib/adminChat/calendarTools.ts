@@ -22,7 +22,8 @@ import {
   TASK_TYPES,
 } from '@/lib/tasks/types'
 import { actorFrom, logTaskActivity } from '@/lib/tasks/server'
-import { parseRecurrence as parseRecurrenceText, type TaskRecurrence } from '@/lib/tasks/recurrence'
+import { parseRecurrence as parseRecurrenceText } from '@/lib/tasks/recurrence'
+import type { TaskRecurrence } from '@/lib/tasks/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 const DAY_MS = 86_400_000
