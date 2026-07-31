@@ -13,6 +13,7 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from '@/components/ui/popover'
+import { Input } from '@/components/ui/input'
 
 export interface ContactSuggestion {
   id: string
@@ -41,22 +42,6 @@ function suggestionLabel(s: ContactSuggestion): string {
 function suggestionSubLabel(s: ContactSuggestion): string {
   const label = typeof s.relationship_label === 'string' ? s.relationship_label.trim() : ''
   return label
-}
-
-// Default style matches AdminIntakeSheet's inputStyle so the visual diff is
-// just the popover, not the field itself.
-const defaultInputStyle: React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box',
-  height: 34,
-  padding: '0 10px',
-  fontSize: 13,
-  fontWeight: 400,
-  borderRadius: 6,
-  border: '1px solid var(--border)',
-  background: 'var(--card)',
-  color: 'var(--foreground)',
-  outline: 'none',
 }
 
 export default function ContactCombobox({
@@ -95,7 +80,7 @@ export default function ContactCombobox({
   return (
     <Popover open={open && filtered.length > 0} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <input
+        <Input
           ref={inputRef}
           type="text"
           value={value}
@@ -112,7 +97,8 @@ export default function ContactCombobox({
           }}
           placeholder={placeholder}
           disabled={disabled}
-          style={{ ...defaultInputStyle, ...style }}
+          className="h-[34px] px-2.5 text-[13px] md:text-[13px]"
+          style={style}
           autoComplete="off"
         />
       </PopoverAnchor>

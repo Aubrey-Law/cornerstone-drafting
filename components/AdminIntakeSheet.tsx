@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useId, useState, useEffect, useRef, useCallback } from 'react'
+import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import { getAdminIntakeData, saveAdminIntakeDraft, submitAdminIntake, resolveMatterIntake } from '@/app/actions/adminIntake'
 import { emptyAdminIntakeFormData } from '@/types/adminIntake'
@@ -8,6 +9,9 @@ import type { AdminIntakeFormData, AdminIntakeChild } from '@/types/adminIntake'
 import { AddressAutocomplete, type ParsedAddress } from '@/components/address-autocomplete'
 import ContactCombobox, { type ContactSuggestion } from '@/components/intake/ContactCombobox'
 import { AdminIntakeUploadsList } from '@/components/admin/AdminIntakeUploadsList'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import {
   Sheet,
   SheetContent,
@@ -15,6 +19,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import { formatPhoneInput } from '@/lib/phone'
 import { MA_COUNTY_OPTIONS, MARITAL_STATUS_OPTIONS, ESTATE_VALUE_OPTIONS } from '@/lib/sharedFields'
 import {
@@ -51,11 +57,7 @@ function uid() {
 
 function GroupLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      fontSize: 11, fontWeight: 500, textTransform: 'uppercase' as const,
-      letterSpacing: '0.05em', color: 'var(--muted-foreground)',
-      marginTop: 24, marginBottom: 10,
-    }}>
+    <div className="mt-6 mb-2.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
       {children}
     </div>
   )
@@ -63,61 +65,24 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted-foreground)', marginBottom: 4 }}>
-      {children}{required && <span style={{ color: 'var(--destructive)', marginLeft: 2 }}>*</span>}
+    <div className="mb-1 text-xs font-medium text-muted-foreground">
+      {children}{required && <span className="ml-0.5 text-destructive">*</span>}
     </div>
   )
 }
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null
-  return <div style={{ fontSize: 11, color: 'var(--destructive)', marginTop: 3 }}>{message}</div>
+  return <div className="mt-1 text-[11px] text-destructive">{message}</div>
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box' as const,
-  height: 34,
-  padding: '0 10px',
-  fontSize: 13,
-  fontWeight: 400,
-  borderRadius: 6,
-  border: '1px solid var(--border)',
-  background: 'var(--card)',
-  color: 'var(--foreground)',
-  outline: 'none',
-}
+// Compact variants of the shared Input/Textarea density for this dense sheet.
+const inputCls = 'h-[34px] px-2.5 text-[13px] md:text-[13px]'
+const textareaCls = 'min-h-20 px-2.5 py-2 text-[13px] md:text-[13px]'
 
-const inputErrorStyle: React.CSSProperties = {
-  ...inputStyle,
-  border: '1px solid var(--destructive)',
-}
-
-const textareaStyle: React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box' as const,
-  padding: '8px 10px',
-  fontSize: 13,
-  fontWeight: 400,
-  borderRadius: 6,
-  border: '1px solid var(--border)',
-  background: 'var(--card)',
-  color: 'var(--foreground)',
-  outline: 'none',
-  resize: 'vertical' as const,
-  minHeight: 80,
-  fontFamily: 'inherit',
-}
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: 'none' as const,
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 8px center',
-  paddingRight: 28,
-  cursor: 'pointer',
-}
+// Native <select> (platform picker) styled with the Input primitive's tokens.
+const selectCls =
+  'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 h-[34px] w-full cursor-pointer rounded-md border bg-transparent px-2.5 text-[13px] shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
 function SegmentedYesNo({
   value, onChange,
@@ -125,36 +90,30 @@ function SegmentedYesNo({
   value: boolean
   onChange: (v: boolean) => void
 }) {
-  const activeStyle: React.CSSProperties = {
-    padding: '4px 14px', fontSize: 12, fontWeight: 500, borderRadius: 5,
-    border: 'none', background: 'var(--accent)', color: 'var(--accent-foreground)',
-    cursor: 'pointer',
-  }
-  const inactiveStyle: React.CSSProperties = {
-    padding: '4px 14px', fontSize: 12, fontWeight: 500, borderRadius: 5,
-    border: 'none', background: 'transparent', color: 'var(--muted-foreground)',
-    cursor: 'pointer',
-  }
+  const buttonCls = (active: boolean) => cn(
+    'rounded-[5px] px-3.5 py-1 text-xs font-medium transition-colors',
+    active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground',
+  )
   return (
-    <div style={{ display: 'inline-flex', background: 'var(--muted)', borderRadius: 6, padding: 2, gap: 2 }}>
-      <button type="button" style={value ? activeStyle : inactiveStyle} onClick={() => onChange(true)}>Yes</button>
-      <button type="button" style={!value ? activeStyle : inactiveStyle} onClick={() => onChange(false)}>No</button>
+    <div className="inline-flex gap-0.5 rounded-md bg-muted p-0.5">
+      <button type="button" aria-pressed={value} className={buttonCls(value)} onClick={() => onChange(true)}>Yes</button>
+      <button type="button" aria-pressed={!value} className={buttonCls(!value)} onClick={() => onChange(false)}>No</button>
     </div>
   )
 }
 
 // ── Field-level wrapper with optional two-column grid ─────────────────────────
 
-function Row2({ children, mt }: { children: React.ReactNode; mt?: number }) {
+function Row2({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: mt }}>
+    <div className={cn('grid grid-cols-2 gap-3', className)}>
       {children}
     </div>
   )
 }
 
 function Field({ children, span2 }: { children: React.ReactNode; span2?: boolean }) {
-  return <div style={span2 ? { gridColumn: '1 / -1' } : {}}>{children}</div>
+  return <div className={span2 ? 'col-span-2' : undefined}>{children}</div>
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -190,6 +149,7 @@ export default function AdminIntakeSheet({
   const [addressSearch, setAddressSearch] = useState('')
   const bodyRef = useRef<HTMLDivElement>(null)
   const firstErrorRef = useRef<HTMLDivElement>(null)
+  const checkboxId = useId()
 
   const showEP = isEP(practiceArea)
   const showProbate = isProbate(practiceArea)
@@ -392,58 +352,23 @@ export default function AdminIntakeSheet({
     )
   }
 
-  // ── Styles ────────────────────────────────────────────────────────────────
-  const headerStyle: React.CSSProperties = {
-    flexShrink: 0,
-    padding: '20px 24px 16px',
-    borderBottom: '1px solid var(--border)',
-    gap: 3,
-  }
-  const bodyStyle: React.CSSProperties = {
-    flex: 1, overflowY: 'auto', padding: 24,
-  }
-  const footerStyle: React.CSSProperties = {
-    flexShrink: 0,
-    padding: '14px 24px',
-    borderTop: '1px solid var(--border)',
-    background: 'var(--card)',
-  }
-  const btnSecondary: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', height: 34, padding: '0 14px',
-    fontSize: 13, fontWeight: 500, borderRadius: 6,
-    border: '1px solid var(--border)', background: 'transparent',
-    color: 'var(--foreground)', cursor: 'pointer',
-  }
-  const btnSecondaryDisabled: React.CSSProperties = {
-    ...btnSecondary, opacity: 0.4, cursor: 'not-allowed',
-  }
-  const btnPrimary: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', height: 34, padding: '0 18px',
-    fontSize: 13, fontWeight: 500, borderRadius: 6,
-    border: 'none', background: 'var(--accent)', color: 'var(--accent-foreground)',
-    cursor: 'pointer',
-  }
-  const btnDanger: React.CSSProperties = {
-    ...btnSecondary, color: 'var(--destructive)', borderColor: 'var(--destructive)',
-  }
-
   return (
     <Sheet open={open} onOpenChange={nextOpen => { if (!nextOpen) requestClose() }}>
       <SheetContent side="right" className="w-[520px] max-w-[100vw] gap-0 border-l bg-card p-0 sm:max-w-[520px]">
         {/* ── Header ── */}
-        <SheetHeader style={headerStyle}>
-          <SheetTitle style={{ fontSize: 15, fontWeight: 500, color: 'var(--foreground)', lineHeight: 1.3 }}>
+        <SheetHeader className="shrink-0 gap-1 border-b border-border px-6 pt-5 pb-4">
+          <SheetTitle className="text-[15px] leading-tight font-medium text-foreground">
             Intake — {clientName || 'Client'}
           </SheetTitle>
-          <SheetDescription style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 3 }}>
+          <SheetDescription className="mt-1 text-xs text-muted-foreground">
             Filling out on behalf of client
           </SheetDescription>
         </SheetHeader>
 
         {/* ── Body ── */}
-        <div ref={bodyRef} style={bodyStyle}>
+        <div ref={bodyRef} className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--muted-foreground)', fontSize: 13 }}>
+            <div className="py-12 text-center text-[13px] text-muted-foreground">
               Loading intake data…
             </div>
           ) : (
@@ -457,8 +382,8 @@ export default function AdminIntakeSheet({
               <Row2>
                 <Field>
                   <FieldLabel required>First Name</FieldLabel>
-                  <input
-                    style={errors.first_name ? inputErrorStyle : inputStyle}
+                  <Input
+                    className={inputCls} aria-invalid={Boolean(errors.first_name)}
                     value={str('first_name')}
                     onChange={e => set('first_name', e.target.value)}
                   />
@@ -466,12 +391,12 @@ export default function AdminIntakeSheet({
                 </Field>
                 <Field>
                   <FieldLabel>Middle Name</FieldLabel>
-                  <input style={inputStyle} value={str('middle_name')} onChange={e => set('middle_name', e.target.value)} />
+                  <Input className={inputCls} value={str('middle_name')} onChange={e => set('middle_name', e.target.value)} />
                 </Field>
                 <Field>
                   <FieldLabel required>Last Name</FieldLabel>
-                  <input
-                    style={errors.last_name ? inputErrorStyle : inputStyle}
+                  <Input
+                    className={inputCls} aria-invalid={Boolean(errors.last_name)}
                     value={str('last_name')}
                     onChange={e => set('last_name', e.target.value)}
                   />
@@ -479,25 +404,25 @@ export default function AdminIntakeSheet({
                 </Field>
                 <Field>
                   <FieldLabel>Suffix</FieldLabel>
-                  <select style={selectStyle} value={str('suffix')} onChange={e => set('suffix', e.target.value)}>
+                  <select className={selectCls} value={str('suffix')} onChange={e => set('suffix', e.target.value)}>
                     <option value="">—</option>
                     {['Jr.', 'Sr.', 'II', 'III', 'IV', 'Esq.'].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Field>
                 <Field>
                   <FieldLabel>Date of Birth</FieldLabel>
-                  <input style={inputStyle} type="date" value={str('date_of_birth')} onChange={e => set('date_of_birth', e.target.value)} />
+                  <Input className={inputCls} type="date" value={str('date_of_birth')} onChange={e => set('date_of_birth', e.target.value)} />
                 </Field>
                 <Field>
                   <FieldLabel>US Citizen</FieldLabel>
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <SegmentedYesNo value={bool('is_us_citizen')} onChange={v => set('is_us_citizen', v)} />
                   </div>
                 </Field>
                 <Field>
                   <FieldLabel required>Email</FieldLabel>
-                  <input
-                    style={errors.email ? inputErrorStyle : inputStyle}
+                  <Input
+                    className={inputCls} aria-invalid={Boolean(errors.email)}
                     type="email"
                     value={str('email')}
                     onChange={e => set('email', e.target.value)}
@@ -506,8 +431,8 @@ export default function AdminIntakeSheet({
                 </Field>
                 <Field>
                   <FieldLabel>Phone</FieldLabel>
-                  <input
-                    style={inputStyle}
+                  <Input
+                    className={inputCls}
                     type="tel"
                     autoComplete="tel"
                     value={str('phone')}
@@ -518,13 +443,13 @@ export default function AdminIntakeSheet({
               </Row2>
 
               {/* Address */}
-              <div style={{ marginTop: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="mt-3">
+                <div className="flex items-center justify-between">
                   <FieldLabel>Search Address</FieldLabel>
                   <button
                     type="button"
                     onClick={() => setManualAddress(v => !v)}
-                    style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 11, cursor: 'pointer', padding: 0 }}
+                    className="text-[11px] text-accent hover:underline"
                   >
                     {manualAddress ? 'Use search' : 'Enter manually'}
                   </button>
@@ -544,16 +469,16 @@ export default function AdminIntakeSheet({
                   />
                 )}
                 <FieldLabel>Street Address</FieldLabel>
-                <input
-                  style={{ ...inputStyle, marginBottom: 8 }}
+                <Input
+                  className={cn(inputCls, 'mb-2')}
                   name="address-line1"
                   autoComplete="address-line1"
                   value={str('address_line1')}
                   onChange={e => set('address_line1', e.target.value)}
                   placeholder="Street address"
                 />
-                <input
-                  style={inputStyle}
+                <Input
+                  className={inputCls}
                   name="address-line2"
                   autoComplete="address-line2"
                   value={str('address_line2')}
@@ -561,22 +486,22 @@ export default function AdminIntakeSheet({
                   placeholder="Apt, unit, etc. (optional)"
                 />
               </div>
-              <Row2 mt={8}>
+              <Row2 className="mt-2">
                 <Field>
                   <FieldLabel>City</FieldLabel>
-                  <input style={inputStyle} name="address-level2" autoComplete="address-level2" value={str('city')} onChange={e => set('city', e.target.value)} />
+                  <Input className={inputCls} name="address-level2" autoComplete="address-level2" value={str('city')} onChange={e => set('city', e.target.value)} />
                 </Field>
                 <Field>
                   <FieldLabel>State</FieldLabel>
-                  <input style={inputStyle} name="address-level1" autoComplete="address-level1" value={str('state')} onChange={e => set('state', e.target.value)} />
+                  <Input className={inputCls} name="address-level1" autoComplete="address-level1" value={str('state')} onChange={e => set('state', e.target.value)} />
                 </Field>
                 <Field>
                   <FieldLabel>ZIP</FieldLabel>
-                  <input style={inputStyle} name="postal-code" autoComplete="postal-code" value={str('zip')} onChange={e => set('zip', e.target.value)} />
+                  <Input className={inputCls} name="postal-code" autoComplete="postal-code" value={str('zip')} onChange={e => set('zip', e.target.value)} />
                 </Field>
                 <Field>
                   <FieldLabel>County</FieldLabel>
-                  <select style={selectStyle} value={str('county')} onChange={e => set('county', e.target.value)}>
+                  <select className={selectCls} value={str('county')} onChange={e => set('county', e.target.value)}>
                     <option value="">Select county</option>
                     {MA_COUNTY_OPTIONS.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
@@ -586,11 +511,11 @@ export default function AdminIntakeSheet({
               </Row2>
 
               {/* Marital status */}
-              <div style={{ marginTop: 12 }}>
+              <div className="mt-3">
                 {errors.marital_status && <div ref={firstErrorRef} />}
                 <FieldLabel required>Marital Status</FieldLabel>
                 <select
-                  style={errors.marital_status ? { ...selectStyle, border: '1px solid var(--destructive)' } : selectStyle}
+                  className={selectCls} aria-invalid={Boolean(errors.marital_status)}
                   value={str('marital_status')}
                   onChange={e => set('marital_status', e.target.value)}
                 >
@@ -609,32 +534,32 @@ export default function AdminIntakeSheet({
                   <Row2>
                     <Field>
                       <FieldLabel>First Name</FieldLabel>
-                      <input style={inputStyle} value={str('spouse_first_name')} onChange={e => set('spouse_first_name', e.target.value)} />
+                      <Input className={inputCls} value={str('spouse_first_name')} onChange={e => set('spouse_first_name', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Middle Name</FieldLabel>
-                      <input style={inputStyle} value={str('spouse_middle_name')} onChange={e => set('spouse_middle_name', e.target.value)} />
+                      <Input className={inputCls} value={str('spouse_middle_name')} onChange={e => set('spouse_middle_name', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Last Name</FieldLabel>
-                      <input style={inputStyle} value={str('spouse_last_name')} onChange={e => set('spouse_last_name', e.target.value)} />
+                      <Input className={inputCls} value={str('spouse_last_name')} onChange={e => set('spouse_last_name', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Date of Birth</FieldLabel>
-                      <input style={inputStyle} type="date" value={str('spouse_date_of_birth')} onChange={e => set('spouse_date_of_birth', e.target.value)} />
+                      <Input className={inputCls} type="date" value={str('spouse_date_of_birth')} onChange={e => set('spouse_date_of_birth', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Date of Marriage</FieldLabel>
-                      <input style={inputStyle} type="date" value={str('date_of_marriage')} onChange={e => set('date_of_marriage', e.target.value)} />
+                      <Input className={inputCls} type="date" value={str('date_of_marriage')} onChange={e => set('date_of_marriage', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Email</FieldLabel>
-                      <input style={inputStyle} type="email" value={str('spouse_email')} onChange={e => set('spouse_email', e.target.value)} />
+                      <Input className={inputCls} type="email" value={str('spouse_email')} onChange={e => set('spouse_email', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Phone</FieldLabel>
-                      <input
-                        style={inputStyle}
+                      <Input
+                        className={inputCls}
                         type="tel"
                         value={str('spouse_phone')}
                         onChange={e => set('spouse_phone', formatPhoneInput(e.target.value))}
@@ -650,14 +575,14 @@ export default function AdminIntakeSheet({
               <Row2>
                 <Field>
                   <FieldLabel>Children?</FieldLabel>
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <SegmentedYesNo value={bool('has_children')} onChange={v => { set('has_children', v); if (!v) { set('has_minor_children', false); set('children', []) } }} />
                   </div>
                 </Field>
                 {form.has_children && (
                   <Field>
                     <FieldLabel>Minor children (under 18)?</FieldLabel>
-                    <div style={{ marginTop: 4 }}>
+                    <div className="mt-1">
                       <SegmentedYesNo value={bool('has_minor_children')} onChange={v => set('has_minor_children', v)} />
                     </div>
                   </Field>
@@ -665,60 +590,63 @@ export default function AdminIntakeSheet({
               </Row2>
 
               {form.has_children && (
-                <div style={{ marginTop: 12 }}>
+                <div className="mt-3">
                   <FieldLabel>Children</FieldLabel>
                   {form.children.map((child, idx) => (
-                    <div key={child.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <input
-                        style={{ ...inputStyle, flex: 1 }}
+                    <div key={child.id} className="mb-2 flex items-center gap-2">
+                      <Input
+                        className={cn(inputCls, 'flex-1')}
                         placeholder="First name"
                         value={child.first_name}
                         onChange={e => updateChild(child.id, 'first_name', e.target.value)}
                       />
-                      <input
-                        style={{ ...inputStyle, flex: 1 }}
+                      <Input
+                        className={cn(inputCls, 'flex-1')}
                         placeholder="Middle name"
                         value={child.middle_name}
                         onChange={e => updateChild(child.id, 'middle_name', e.target.value)}
                       />
-                      <input
-                        style={{ ...inputStyle, flex: 1 }}
+                      <Input
+                        className={cn(inputCls, 'flex-1')}
                         placeholder="Last name"
                         value={child.last_name}
                         onChange={e => updateChild(child.id, 'last_name', e.target.value)}
                       />
-                      <input
-                        style={{ ...inputStyle, width: 130, flex: 'none' }}
+                      <Input
+                        className={cn(inputCls, 'w-[130px] flex-none')}
                         type="date"
                         value={child.date_of_birth}
                         onChange={e => updateChild(child.id, 'date_of_birth', e.target.value)}
                         title={`Child ${idx + 1} date of birth`}
                       />
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0 text-muted-foreground"
+                        aria-label={`Remove child ${idx + 1}`}
                         onClick={() => removeChild(child.id)}
-                        style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted-foreground)' }}
                       >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
+                        <X className="size-3.5" />
+                      </Button>
                     </div>
                   ))}
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 px-0 text-xs text-accent hover:bg-transparent hover:text-accent"
                     onClick={addChild}
-                    style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginTop: 4 }}
                   >
                     + Add child
-                  </button>
+                  </Button>
                 </div>
               )}
 
-              <div style={{ marginTop: 12 }}>
+              <div className="mt-3">
                 <FieldLabel>Family notes</FieldLabel>
-                <textarea
-                  style={textareaStyle}
+                <Textarea
+                  className={textareaCls}
                   value={str('family_notes')}
                   onChange={e => set('family_notes', e.target.value)}
                   placeholder="Notes about dependents, blended family, or other family complexity…"
@@ -728,11 +656,11 @@ export default function AdminIntakeSheet({
 
               {/* ── Section: Assets ── */}
               <GroupLabel>Assets</GroupLabel>
-              <div style={{ marginBottom: 12 }}>
+              <div className="mb-3">
                 {errors.estate_value && <div ref={firstErrorRef} />}
                 <FieldLabel>Approximate estate value</FieldLabel>
                 <select
-                  style={errors.estate_value ? { ...selectStyle, border: '1px solid var(--destructive)' } : selectStyle}
+                  className={selectCls} aria-invalid={Boolean(errors.estate_value)}
                   value={str('estate_value')}
                   onChange={e => set('estate_value', e.target.value)}
                 >
@@ -747,64 +675,64 @@ export default function AdminIntakeSheet({
               <Row2>
                 <Field>
                   <FieldLabel>Real property?</FieldLabel>
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <SegmentedYesNo value={bool('has_real_property')} onChange={v => set('has_real_property', v)} />
                   </div>
                 </Field>
                 {form.has_real_property && (
                   <Field>
                     <FieldLabel>Approx. property value</FieldLabel>
-                    <input style={inputStyle} value={str('real_property_value')} onChange={e => set('real_property_value', e.target.value)} placeholder="e.g. $650K" />
+                    <Input className={inputCls} value={str('real_property_value')} onChange={e => set('real_property_value', e.target.value)} placeholder="e.g. $650K" />
                   </Field>
                 )}
               </Row2>
               {form.has_real_property && (
-                <div style={{ marginTop: 8 }}>
+                <div className="mt-2">
                   <FieldLabel>Property address</FieldLabel>
-                  <input style={inputStyle} value={str('real_property_address')} onChange={e => set('real_property_address', e.target.value)} />
+                  <Input className={inputCls} value={str('real_property_address')} onChange={e => set('real_property_address', e.target.value)} />
                 </div>
               )}
 
-              <Row2 mt={12}>
+              <Row2 className="mt-3">
                 <Field>
                   <FieldLabel>Retirement accounts?</FieldLabel>
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <SegmentedYesNo value={bool('has_retirement')} onChange={v => set('has_retirement', v)} />
                   </div>
                 </Field>
                 {form.has_retirement && (
                   <Field>
                     <FieldLabel>Approx. value</FieldLabel>
-                    <input style={inputStyle} value={str('retirement_value')} onChange={e => set('retirement_value', e.target.value)} placeholder="e.g. $400K" />
+                    <Input className={inputCls} value={str('retirement_value')} onChange={e => set('retirement_value', e.target.value)} placeholder="e.g. $400K" />
                   </Field>
                 )}
                 <Field>
                   <FieldLabel>Life insurance?</FieldLabel>
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <SegmentedYesNo value={bool('has_life_insurance')} onChange={v => set('has_life_insurance', v)} />
                   </div>
                 </Field>
                 {form.has_life_insurance && (
                   <Field>
                     <FieldLabel>Death benefit</FieldLabel>
-                    <input style={inputStyle} value={str('life_insurance_value')} onChange={e => set('life_insurance_value', e.target.value)} placeholder="e.g. $500K" />
+                    <Input className={inputCls} value={str('life_insurance_value')} onChange={e => set('life_insurance_value', e.target.value)} placeholder="e.g. $500K" />
                   </Field>
                 )}
                 <Field>
                   <FieldLabel>Business interests?</FieldLabel>
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <SegmentedYesNo value={bool('has_business')} onChange={v => set('has_business', v)} />
                   </div>
                 </Field>
                 {form.has_business && (
                   <Field>
                     <FieldLabel>Description</FieldLabel>
-                    <input style={inputStyle} value={str('business_description')} onChange={e => set('business_description', e.target.value)} placeholder="e.g. 50% LLC, plumbing company" />
+                    <Input className={inputCls} value={str('business_description')} onChange={e => set('business_description', e.target.value)} placeholder="e.g. 50% LLC, plumbing company" />
                   </Field>
                 )}
                 <Field>
                   <FieldLabel>Investment accounts?</FieldLabel>
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <SegmentedYesNo value={bool('has_investments')} onChange={v => set('has_investments', v)} />
                   </div>
                 </Field>
@@ -816,8 +744,8 @@ export default function AdminIntakeSheet({
                   <GroupLabel>Estate Planning Goals</GroupLabel>
                   <div>
                     <FieldLabel>Goals &amp; wishes</FieldLabel>
-                    <textarea
-                      style={textareaStyle}
+                    <Textarea
+                      className={textareaCls}
                       value={str('planning_objectives')}
                       onChange={e => set('planning_objectives', e.target.value)}
                       placeholder="What does the client want to accomplish with their estate plan?"
@@ -825,21 +753,20 @@ export default function AdminIntakeSheet({
                     />
                   </div>
 
-                  <div style={{ marginTop: 12 }}>
+                  <div className="mt-3">
                     <FieldLabel>Existing documents</FieldLabel>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
+                    <div className="mt-1.5 grid grid-cols-2 gap-2">
                       {[
                         { key: 'has_will' as const, label: 'Current Will' },
                         { key: 'has_trust' as const, label: 'Current Trust' },
                         { key: 'has_poa' as const, label: 'Power of Attorney' },
                         { key: 'has_hcp' as const, label: 'Healthcare Proxy' },
                       ].map(({ key, label }) => (
-                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--foreground)' }}>
-                          <input
-                            type="checkbox"
+                        <label key={key} htmlFor={`${checkboxId}-${key}`} className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
+                          <Checkbox
+                            id={`${checkboxId}-${key}`}
                             checked={bool(key)}
-                            onChange={e => set(key, e.target.checked)}
-                            style={{ width: 14, height: 14, cursor: 'pointer' }}
+                            onCheckedChange={checked => set(key, checked === true)}
                           />
                           {label}
                         </label>
@@ -847,9 +774,9 @@ export default function AdminIntakeSheet({
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 12 }}>
+                  <div className="mt-3">
                     <FieldLabel>Special circumstances</FieldLabel>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
+                    <div className="mt-1.5 grid grid-cols-2 gap-2">
                       {[
                         'Blended family',
                         'Disabled beneficiary',
@@ -858,12 +785,11 @@ export default function AdminIntakeSheet({
                         'Tax planning',
                         'Medicaid planning',
                       ].map(val => (
-                        <label key={val} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--foreground)' }}>
-                          <input
-                            type="checkbox"
+                        <label key={val} htmlFor={`${checkboxId}-${val}`} className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
+                          <Checkbox
+                            id={`${checkboxId}-${val}`}
                             checked={form.special_circumstances.includes(val)}
-                            onChange={() => toggleCircumstance(val)}
-                            style={{ width: 14, height: 14, cursor: 'pointer' }}
+                            onCheckedChange={() => toggleCircumstance(val)}
                           />
                           {val}
                         </label>
@@ -883,7 +809,7 @@ export default function AdminIntakeSheet({
                     { label: 'DPOA Agent', primary: 'poa_primary' as const, alt: 'poa_alternate' as const },
                     { label: 'Healthcare Proxy', primary: 'hcp_primary' as const, alt: 'hcp_alternate' as const },
                   ].map(({ label, primary, alt }) => (
-                    <div key={label} style={{ marginBottom: 12 }}>
+                    <div key={label} className="mb-3">
                       <FieldLabel>{label}</FieldLabel>
                       <Row2>
                         <Field>
@@ -907,7 +833,7 @@ export default function AdminIntakeSheet({
                   ))}
 
                   {showGuardian && (
-                    <div style={{ marginBottom: 12 }}>
+                    <div className="mb-3">
                       <FieldLabel>Guardian for minor children</FieldLabel>
                       <Row2>
                         <Field>
@@ -939,36 +865,36 @@ export default function AdminIntakeSheet({
                   <Row2>
                     <Field>
                       <FieldLabel>Decedent name</FieldLabel>
-                      <input style={inputStyle} value={str('pb_decedent_name')} onChange={e => set('pb_decedent_name', e.target.value)} />
+                      <Input className={inputCls} value={str('pb_decedent_name')} onChange={e => set('pb_decedent_name', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Date of death</FieldLabel>
-                      <input style={inputStyle} type="date" value={str('pb_date_of_death')} onChange={e => set('pb_date_of_death', e.target.value)} />
+                      <Input className={inputCls} type="date" value={str('pb_date_of_death')} onChange={e => set('pb_date_of_death', e.target.value)} />
                     </Field>
                     <Field>
                       <FieldLabel>Domicile at death</FieldLabel>
-                      <input style={inputStyle} value={str('pb_domicile')} onChange={e => set('pb_domicile', e.target.value)} placeholder="City, State" />
+                      <Input className={inputCls} value={str('pb_domicile')} onChange={e => set('pb_domicile', e.target.value)} placeholder="City, State" />
                     </Field>
                     <Field>
                       <FieldLabel>Approx. estate value</FieldLabel>
-                      <input style={inputStyle} value={str('pb_estate_value')} onChange={e => set('pb_estate_value', e.target.value)} placeholder="e.g. $450K" />
+                      <Input className={inputCls} value={str('pb_estate_value')} onChange={e => set('pb_estate_value', e.target.value)} placeholder="e.g. $450K" />
                     </Field>
                     <Field span2>
                       <FieldLabel>Known assets</FieldLabel>
-                      <textarea style={textareaStyle} value={str('pb_known_assets')} onChange={e => set('pb_known_assets', e.target.value)} rows={2} />
+                      <Textarea className={textareaCls} value={str('pb_known_assets')} onChange={e => set('pb_known_assets', e.target.value)} rows={2} />
                     </Field>
                     <Field span2>
                       <FieldLabel>Known debts / liabilities</FieldLabel>
-                      <textarea style={textareaStyle} value={str('pb_known_debts')} onChange={e => set('pb_known_debts', e.target.value)} rows={2} />
+                      <Textarea className={textareaCls} value={str('pb_known_debts')} onChange={e => set('pb_known_debts', e.target.value)} rows={2} />
                     </Field>
                     <Field>
                       <FieldLabel>Petitioner relationship to decedent</FieldLabel>
-                      <input style={inputStyle} value={str('pb_petitioner_relationship')} onChange={e => set('pb_petitioner_relationship', e.target.value)} placeholder="e.g. spouse, child" />
+                      <Input className={inputCls} value={str('pb_petitioner_relationship')} onChange={e => set('pb_petitioner_relationship', e.target.value)} placeholder="e.g. spouse, child" />
                     </Field>
                   </Row2>
-                  <div style={{ marginTop: 8 }}>
+                  <div className="mt-2">
                     <FieldLabel>Goals / timeline notes</FieldLabel>
-                    <textarea style={textareaStyle} value={str('pb_goals_timeline')} onChange={e => set('pb_goals_timeline', e.target.value)} rows={3} />
+                    <Textarea className={textareaCls} value={str('pb_goals_timeline')} onChange={e => set('pb_goals_timeline', e.target.value)} rows={3} />
                   </div>
                 </>
               )}
@@ -977,8 +903,8 @@ export default function AdminIntakeSheet({
               <AdminIntakeUploadsList intakeId={currentIntakeId} />
 
               <GroupLabel>Internal Notes</GroupLabel>
-              <textarea
-                style={textareaStyle}
+              <Textarea
+                className={textareaCls}
                 value={str('special_notes')}
                 onChange={e => set('special_notes', e.target.value)}
                 placeholder="Notes from the consultation — anything not captured above."
@@ -989,49 +915,48 @@ export default function AdminIntakeSheet({
         </div>
 
         {/* ── Footer ── */}
-        <div style={footerStyle}>
+        <div className="shrink-0 border-t border-border bg-card px-6 py-3.5">
           {/* Unsaved changes guard */}
           {showDiscard ? (
             <div>
-              <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginBottom: 10 }}>
+              <div className="mb-2.5 text-xs text-muted-foreground">
                 You have unsaved changes. Discard them?
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" style={btnDanger} onClick={doClose}>Discard</button>
-                <button type="button" style={btnSecondary} onClick={() => setShowDiscard(false)}>Keep editing</button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={doClose}>Discard</Button>
+                <Button type="button" variant="outline" onClick={() => setShowDiscard(false)}>Keep editing</Button>
               </div>
             </div>
           ) : (
             <>
               {footerError && (
-                <div style={{ fontSize: 12, color: 'var(--destructive)', marginBottom: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 6 }}>
+                <div className="mb-2.5 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {footerError}
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button type="button" style={btnSecondary} onClick={requestClose}>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={requestClose}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  style={isDirty && !saving ? btnSecondary : btnSecondaryDisabled}
+                  variant="outline"
                   disabled={!isDirty || saving}
                   onClick={handleSaveDraft}
                 >
                   {saving ? 'Saving…' : clientLocked ? 'Save attorney edits' : 'Save draft'}
-                </button>
+                </Button>
                 {/* A locked (submitted/approved) intake is edited in place via
                     "Save attorney edits" — never re-submitted, which would
                     re-stamp completion / re-advance the matter. */}
                 {!clientLocked && (
-                  <button
+                  <Button
                     type="button"
-                    style={submitting ? { ...btnPrimary, opacity: 0.6, cursor: 'not-allowed' } : btnPrimary}
                     disabled={submitting}
                     onClick={handleSubmit}
                   >
                     {submitting ? 'Submitting…' : 'Submit intake'}
-                  </button>
+                  </Button>
                 )}
               </div>
             </>
