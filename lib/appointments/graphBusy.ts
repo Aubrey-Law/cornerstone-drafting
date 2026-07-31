@@ -42,6 +42,12 @@ function parseGraphUtc(value: string | undefined): number | null {
   return Number.isFinite(ts) ? ts : null
 }
 
+function isShowAsBusy(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return true
+  const metadata = raw as Record<string, unknown>
+  return metadata.calendarShowAsBusy !== false
+}
+
 /**
  * Busy intervals from the connected Outlook mailbox via getSchedule.
  * Fails closed: throws AvailabilityUnavailableError when Outlook is not
