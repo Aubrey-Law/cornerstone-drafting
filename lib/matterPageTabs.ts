@@ -4,6 +4,7 @@ export const MATTER_TABS = [
   'people',
   'assets',
   'documents',
+  'billing',
   'communications',
   'notes',
   'activity',

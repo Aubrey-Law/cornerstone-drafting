@@ -13,6 +13,18 @@ import type {
 
 const DAY_MS = 86_400_000
 
+const MONEY = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+})
+
+/** Formats integer cents for billing surfaces. */
+export function billingMoney(cents: number): string {
+  return MONEY.format(cents / 100)
+}
+
 function dateParts(key: string): [number, number, number] {
   const [year, month, day] = key.split('-').map(Number)
   return [year, month, day]
@@ -85,7 +97,11 @@ function average(values: number[]): number | null {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
 }
 
-function buildRows(
+/**
+ * Joins payments onto items and derives collected / balance / age / overdue.
+ * Exported so matter-scoped views derive rows the same way the firm ledger does.
+ */
+export function buildRows(
   items: BillingItem[],
   payments: BillingPayment[],
   today: string,

@@ -23,7 +23,7 @@ import type {
 import { BillingRail } from './BillingRail'
 import { KpiRow } from './KpiRow'
 import { LedgerTable } from './LedgerTable'
-import { LogPaymentDialog } from './LogPaymentDialog'
+import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import { RevenueTiles } from './RevenueTiles'
 
 const filterLabels: { value: BillingFilter; label: string }[] = [
