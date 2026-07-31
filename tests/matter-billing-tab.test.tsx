@@ -407,4 +407,52 @@ describe('MatterBillingTab', () => {
       })
     })
   })
+
+  it('warns before adding a second legal fee, without blocking it', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] }) // the seeded flat fee
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('status').textContent).toContain(
+      'already has a legal fee',
+    )
+
+    // Advisory only — the charge still saves.
+    await user.type(within(dialog).getByLabelText('Description'), 'Additional trust work')
+    await user.type(within(dialog).getByLabelText('Amount'), '750')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(call => call[0] === '/api/admin/billing/items')
+      expect(JSON.parse(post![1].body)).toMatchObject({ kind: 'flat_fee' })
+    })
+  })
+
+  it('does not warn when the matter has no legal fee, or for other kinds', async () => {
+    const user = userEvent.setup()
+    respondWith({
+      rows: [row({ kind: 'cost', label: 'Deed recording fee', amountBilled: 15_500 })],
+    })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('status')).toBeNull()
+  })
+
+  it('drops the warning when the type changes away from a legal fee', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('status')).toBeTruthy()
+
+    await user.click(within(dialog).getByLabelText('Type'))
+    await user.click(await screen.findByRole('option', { name: 'Cost' }))
+    expect(within(dialog).queryByRole('status')).toBeNull()
+  })
 })

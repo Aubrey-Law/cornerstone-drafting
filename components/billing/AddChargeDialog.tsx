@@ -68,6 +68,7 @@ export function AddChargeDialog({
   onOpenChange,
   matterId,
   matters,
+  matterIdsWithLegalFee,
   saving,
   returnFocusRef,
   onSave,
@@ -78,6 +79,8 @@ export function AddChargeDialog({
   matterId?: string
   /** Selectable matters. Omit when `matterId` is fixed. */
   matters?: BillingMatterOption[]
+  /** Matters that already carry a legal fee, so a second one can be warned about. */
+  matterIdsWithLegalFee?: readonly string[]
   saving: boolean
   returnFocusRef: RefObject<HTMLElement | null>
   onSave: (input: AddChargeInput) => Promise<void>
@@ -89,6 +92,14 @@ export function AddChargeDialog({
   const [amount, setAmount] = useState('')
   const [plan, setPlan] = useState<BillingPlan>('metlife')
   const [error, setError] = useState<string | null>(null)
+
+  const targetMatter = matterId ?? selectedMatter
+  // Advisory only: a matter may legitimately carry a second fee for additional
+  // work, and the seeded engagement fee is a separate source='engagement' row.
+  const duplicateLegalFee =
+    kind === 'flat_fee'
+    && targetMatter !== ''
+    && (matterIdsWithLegalFee ?? []).includes(targetMatter)
 
   // Reseed on each open so a cancelled entry never leaks into the next one.
   useEffect(() => {
@@ -103,7 +114,6 @@ export function AddChargeDialog({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
-    const targetMatter = matterId ?? selectedMatter
     if (!targetMatter) {
       setError('Choose a matter.')
       return
@@ -196,6 +206,16 @@ export function AddChargeDialog({
                   </SelectContent>
                 </Select>
               </div>
+            )}
+
+            {duplicateLegalFee && (
+              <p
+                role="status"
+                className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber"
+              >
+                This matter already has a legal fee. Add another only if it is for
+                additional work — otherwise the matter will be billed twice.
+              </p>
             )}
 
             <div className="space-y-2">

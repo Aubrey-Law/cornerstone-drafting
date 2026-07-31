@@ -9,6 +9,11 @@ const matterOptions = [
   { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Chen, Marcus & Lily · 2026-EP-Chen-014' },
 ]
 
+const twoMatterOptions = [
+  ...matterOptions,
+  { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', label: 'Nguyen, Peter & An · 2026-EP-Nguyen-003' },
+]
+
 const navigation = vi.hoisted(() => ({
   params: new URLSearchParams(),
   replace: vi.fn(),
@@ -226,5 +231,20 @@ describe('billing workspace', () => {
         plan: null,
       })
     })
+  })
+
+  it('warns per matter, following the picker rather than the visible filter', async () => {
+    const user = userEvent.setup()
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={twoMatterOptions} />)
+
+    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Chen carries the flat fee in the fixture, so the default pick warns.
+    expect(within(dialog).getByRole('status').textContent).toContain('already has a legal fee')
+
+    await user.click(within(dialog).getByLabelText('Matter'))
+    await user.click(await screen.findByRole('option', { name: /Nguyen/ }))
+    expect(within(dialog).queryByRole('status')).toBeNull()
   })
 })
