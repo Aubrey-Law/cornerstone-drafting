@@ -25,50 +25,18 @@ import {
   type CalendarAppointment,
   type CalendarRailData,
   type CalendarView,
-  type EventCategory,
   type OutlookEvent,
   type PlanData,
   LOCATION_LABEL,
   allowedFormats,
 } from './types'
-
-/**
- * Appointments carry a `typeLabel`; Outlook events only ever have a subject,
- * so both are classified from their display text.
- */
-function categorize(label: string): EventCategory {
-  const s = label.toLowerCase()
-  if (/discovery/.test(s)) return 'discovery'
-  if (/signing|execution/.test(s)) return 'signing'
-  if (/draft|design|review/.test(s)) return 'draft'
-  if (/client|peace of mind|planning session|estate plan/.test(s)) return 'meeting'
-  return 'internal'
-}
-
-const CATEGORY_STYLE: Record<EventCategory, { bg: string; text: string; dot: string }> = {
-  discovery: { bg: 'var(--stage-early-bg)', text: 'var(--stage-early-text)', dot: 'var(--stage-early)' },
-  meeting: { bg: 'var(--stage-work-bg)', text: 'var(--stage-work-text)', dot: 'var(--stage-work)' },
-  draft: { bg: 'var(--stage-active-bg)', text: 'var(--stage-active-text)', dot: 'var(--stage-active)' },
-  signing: { bg: 'var(--stage-done-bg)', text: 'var(--stage-done-text)', dot: 'var(--stage-done)' },
-  internal: { bg: 'var(--stage-closed-bg)', text: 'var(--stage-closed-text)', dot: 'var(--stage-closed)' },
-}
-
-const CATEGORY_LEGEND: { category: EventCategory; label: string }[] = [
-  { category: 'discovery', label: 'Discovery' },
-  { category: 'meeting', label: 'Client meeting' },
-  { category: 'draft', label: 'Draft / design review' },
-  { category: 'signing', label: 'Signing' },
-  { category: 'internal', label: 'Internal / Outlook' },
-]
-
-/** Diagonal hatch used for Outlook "block" holds, which are background, not events. */
-const BLOCK_HATCH =
-  'repeating-linear-gradient(45deg, var(--page-bg) 0 3px, var(--page-bg-2) 3px 6px)'
-
-/** Outlook holds named "BLOCK" are time the attorney reserved, not a meeting. */
-function isBlock(e: OutlookEvent): boolean {
-  return /^\s*◦?\s*block/i.test(e.subject)
-}
+import {
+  BLOCK_HATCH,
+  CATEGORY_LEGEND,
+  CATEGORY_STYLE,
+  categorize,
+  isBlock,
+} from './eventCategories'
 
 /** Last two segments of a matter number, e.g. "2026-EP-Example-007" → "Example-007". */
 function shortMatterLabel(matterNumber: string): string {
@@ -679,7 +647,8 @@ export function CalendarClient() {
       <div
         className={cn(
           'flex-wrap items-center gap-3 text-[11px] text-foreground',
-          view === 'month' ? 'flex' : 'hidden',
+          // Month and day both colour events by category, so both need the key.
+          view === 'month' || view === 'day' ? 'flex' : 'hidden',
         )}
       >
         {CATEGORY_LEGEND.map(({ category, label }) => (
@@ -728,9 +697,6 @@ export function CalendarClient() {
               outlookEvents={selectedOutlook}
               attention={attention}
               rail={rail}
-              categoryStyle={CATEGORY_STYLE}
-              categorize={categorize}
-              blockHatch={BLOCK_HATCH}
               onDismissAttention={id => void dismissAttention(id)}
               onOpenAppointment={setSelectedAppointment}
               onReschedule={beginReschedule}

@@ -46,12 +46,15 @@ describe('design-sheet progressive disclosure', () => {
 
   it('persists the hide-unused toggle and dims revealed inapplicable decisions', () => {
     const page = read('app/admin/drafting/[matterId]/design/DesignSheetPage.tsx')
+    // The toggle itself moved into the section index, which is rendered once for
+    // both the docked desktop column and the mobile sheet.
+    const nav = read('app/admin/drafting/[matterId]/design/DesignSectionNav.tsx')
     const catalog = read('app/admin/drafting/[matterId]/design/designSectionCatalog.tsx')
     const plan = read('app/admin/drafting/[matterId]/design/sections/PlanDesignSection.tsx')
 
-    expect(page).toContain("Hide what this plan doesn&apos;t use")
+    expect(nav).toContain("Hide what this plan doesn&apos;t use")
     expect(page).toContain('hideUnusedDesignDecisions')
-    expect(page).toContain('decision{hiddenDecisionCount === 1')
+    expect(nav).toContain('decision{hiddenDecisionCount === 1')
     expect(catalog).toContain('appliesWhen?: (sheet: DesignSheet) => boolean')
     expect(catalog).toContain("opacity-45 grayscale-[20%]")
     expect(plan).toContain('<ApplicableDecision')

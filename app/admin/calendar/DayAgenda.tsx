@@ -19,12 +19,13 @@ import type {
   CalendarRailData,
   OutlookEvent,
 } from './types'
-
-interface CategoryStyle {
-  bg: string
-  text: string
-  dot: string
-}
+import {
+  BLOCK_HATCH,
+  CATEGORY_LABEL,
+  categorize,
+  categoryStyleFor,
+  isBlock,
+} from './eventCategories'
 
 function minutesLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60)
@@ -91,14 +92,52 @@ function AttentionBand({
   )
 }
 
+/**
+ * Colour key shared with the month grid: the category's `bg`/`text` tokens fill
+ * a strip across the top of the card and its `dot` carries the left edge, so a
+ * day reads by colour the same way a month cell does.
+ */
+function CategoryStrip({ label, style }: { label: string; style: { bg: string; text: string; dot: string } }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 rounded-t-[3px] px-2 py-1 text-[11px] font-medium leading-4"
+      style={{ background: style.bg, color: style.text }}
+    >
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: style.dot }} aria-hidden />
+      <span className="truncate">{label}</span>
+    </div>
+  )
+}
+
+/** Outlook events carry the same category colour as their month-grid block. */
+function OutlookRow({ event }: { event: OutlookEvent }) {
+  const category = categorize(event.subject)
+  const style = categoryStyleFor(event.subject)
+  return (
+    <div className="flex gap-3">
+      <div className="w-[62px] shrink-0 pt-2 text-right text-xs tabular-nums text-muted-foreground">
+        {event.isAllDay ? 'All day' : fmtTime(event.startIso)}
+      </div>
+      <div
+        className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card"
+        style={{ borderLeft: `3px solid ${style.dot}` }}
+      >
+        <CategoryStrip label={CATEGORY_LABEL[category]} style={style} />
+        <div className="px-3 py-2 text-muted-foreground">
+          <p className="text-sm font-medium text-foreground">{event.subject}</p>
+          <p className="text-[11px]">Outlook event</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AgendaRow({
   appointment,
-  categoryStyle,
   onOpen,
   onReschedule,
 }: {
   appointment: CalendarAppointment
-  categoryStyle: CategoryStyle
   onOpen: () => void
   onReschedule: () => void
 }) {
@@ -106,6 +145,8 @@ function AgendaRow({
   const followUpReady = Date.now() >= Date.parse(appointment.endTime) + 10 * 60_000
   const minutes = durationMinutes(appointment.startTime, appointment.endTime)
   const pending = appointment.status === 'scheduled' && !past
+  const category = categorize(appointment.typeLabel)
+  const categoryStyle = categoryStyleFor(appointment.typeLabel)
   return (
     <div className={cn('flex gap-3', past && 'opacity-55')}>
       <div className="w-[62px] shrink-0 pt-2 text-right">
@@ -113,76 +154,79 @@ function AgendaRow({
         <div className="text-[11px] text-muted-foreground">{minutesLabel(minutes)}</div>
       </div>
       <article
-        className="min-w-0 flex-1 rounded-md border border-border bg-card px-3 py-2"
+        className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card"
         style={{ borderLeft: `3px solid ${categoryStyle.dot}` }}
       >
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <button
-              type="button"
-              onClick={onOpen}
-              className={cn('truncate text-left text-[15px] font-semibold text-foreground hover:underline', past && 'line-through')}
-            >
-              {appointment.attendeeName}
-            </button>
-            <p className="text-xs text-muted-foreground">
-              {appointment.typeLabel}
-              {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
-              {!appointment.outlookSynced && appointment.status === 'scheduled' ? ' · ⚠ not on Outlook' : ''}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {appointment.linkedMatterNumber && (
-              <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
-                {appointment.linkedMatterNumber}
-              </span>
-            )}
-            {appointment.linkedMatterStage && (
-              <span
-                className="rounded-full px-1.5 py-0.5 text-[11px]"
-                style={{ background: 'var(--stage-active-bg)', color: 'var(--stage-active-text)' }}
+        <CategoryStrip label={CATEGORY_LABEL[category]} style={categoryStyle} />
+        <div className="px-3 py-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={onOpen}
+                className={cn('truncate text-left text-[15px] font-semibold text-foreground hover:underline', past && 'line-through')}
               >
-                {appointment.linkedMatterStage.replace(/_/g, ' ')}
-              </span>
-            )}
+                {appointment.attendeeName}
+              </button>
+              <p className="text-xs text-muted-foreground">
+                {appointment.typeLabel}
+                {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
+                {!appointment.outlookSynced && appointment.status === 'scheduled' ? ' · ⚠ not on Outlook' : ''}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {appointment.linkedMatterNumber && (
+                <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
+                  {appointment.linkedMatterNumber}
+                </span>
+              )}
+              {appointment.linkedMatterStage && (
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[11px]"
+                  style={{ background: 'var(--stage-active-bg)', color: 'var(--stage-active-text)' }}
+                >
+                  {appointment.linkedMatterStage.replace(/_/g, ' ')}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-[11px]">
-          <span className="inline-flex items-center gap-1 text-green-700">
-            <Check className="h-3 w-3" /> calendar synced
-          </span>
-          <span className={cn('inline-flex items-center gap-1', pending ? 'text-muted-foreground' : 'text-green-700')}>
-            {pending ? <Circle className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-            {pending ? 'prep pending' : 'meeting complete'}
-          </span>
-          {appointment.status === 'no_show' && <span className="text-red-700">● no-show</span>}
-          <span className="ml-auto flex flex-wrap gap-1">
-            {appointment.linkedMatterId && (
-              <Button asChild size="sm" variant="ghost">
-                <Link href={`/admin/matters/${appointment.linkedMatterId}`}>Open matter</Link>
+          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-[11px]">
+            <span className="inline-flex items-center gap-1 text-green-700">
+              <Check className="h-3 w-3" /> calendar synced
+            </span>
+            <span className={cn('inline-flex items-center gap-1', pending ? 'text-muted-foreground' : 'text-green-700')}>
+              {pending ? <Circle className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+              {pending ? 'prep pending' : 'meeting complete'}
+            </span>
+            {appointment.status === 'no_show' && <span className="text-red-700">● no-show</span>}
+            <span className="ml-auto flex flex-wrap gap-1">
+              {appointment.linkedMatterId && (
+                <Button asChild size="sm" variant="ghost">
+                  <Link href={`/admin/matters/${appointment.linkedMatterId}`}>Open matter</Link>
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={onOpen}>
+                <FileText className="mr-1 h-3 w-3" /> Prep pack
               </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={onOpen}>
-              <FileText className="mr-1 h-3 w-3" /> Prep pack
-            </Button>
-            {!past && (
-              <Button size="sm" variant="ghost" onClick={onReschedule}>
-                <RotateCcw className="mr-1 h-3 w-3" /> Reschedule
-              </Button>
-            )}
-            {appointment.onlineMeetingUrl && (
-              <Button asChild size="sm">
-                <a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer">
-                  <Video className="mr-1 h-3 w-3" /> Join
-                </a>
-              </Button>
-            )}
-            {followUpReady && (
-              <Button size="sm" variant="outline" onClick={onOpen}>
-                After-meeting actions
-              </Button>
-            )}
-          </span>
+              {!past && (
+                <Button size="sm" variant="ghost" onClick={onReschedule}>
+                  <RotateCcw className="mr-1 h-3 w-3" /> Reschedule
+                </Button>
+              )}
+              {appointment.onlineMeetingUrl && (
+                <Button asChild size="sm">
+                  <a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer">
+                    <Video className="mr-1 h-3 w-3" /> Join
+                  </a>
+                </Button>
+              )}
+              {followUpReady && (
+                <Button size="sm" variant="outline" onClick={onOpen}>
+                  After-meeting actions
+                </Button>
+              )}
+            </span>
+          </div>
         </div>
       </article>
     </div>
@@ -195,9 +239,6 @@ export function DayAgenda({
   outlookEvents,
   attention,
   rail,
-  categoryStyle,
-  categorize,
-  blockHatch,
   onDismissAttention,
   onOpenAppointment,
   onReschedule,
@@ -208,9 +249,6 @@ export function DayAgenda({
   outlookEvents: OutlookEvent[]
   attention: AttentionItem[]
   rail: CalendarRailData
-  categoryStyle: Record<string, CategoryStyle>
-  categorize: (label: string) => string
-  blockHatch: string
   onDismissAttention: (id: string) => void
   onOpenAppointment: (appointment: CalendarAppointment) => void
   onReschedule: (appointment: CalendarAppointment) => void
@@ -220,8 +258,8 @@ export function DayAgenda({
   const booked = active.reduce((sum, item) => sum + durationMinutes(item.startTime, item.endTime), 0)
   const workday = 8 * 60
   const heading = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-  const blocks = outlookEvents.filter(event => /^\s*◦?\s*block/i.test(event.subject))
-  const outlook = outlookEvents.filter(event => !/^\s*◦?\s*block/i.test(event.subject))
+  const blocks = outlookEvents.filter(isBlock)
+  const outlook = outlookEvents.filter(event => !isBlock(event))
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_268px]">
@@ -242,7 +280,7 @@ export function DayAgenda({
               </div>
               <div
                 className="min-h-6 flex-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground"
-                style={{ backgroundImage: blockHatch }}
+                style={{ backgroundImage: BLOCK_HATCH }}
               >
                 {event.subject}
               </div>
@@ -255,20 +293,11 @@ export function DayAgenda({
               <AgendaRow
                 key={row.item.id}
                 appointment={row.item}
-                categoryStyle={categoryStyle[categorize(row.item.typeLabel)]}
                 onOpen={() => onOpenAppointment(row.item)}
                 onReschedule={() => onReschedule(row.item)}
               />
             ) : (
-              <div key={row.item.id} className="flex gap-3">
-                <div className="w-[62px] shrink-0 pt-2 text-right text-xs tabular-nums text-muted-foreground">
-                  {row.item.isAllDay ? 'All day' : fmtTime(row.item.startIso)}
-                </div>
-                <div className="flex-1 rounded-md border border-border bg-muted/70 px-3 py-2 text-muted-foreground">
-                  <p className="text-sm font-medium">{row.item.subject}</p>
-                  <p className="text-[11px]">Outlook event</p>
-                </div>
-              </div>
+              <OutlookRow key={row.item.id} event={row.item} />
             ))}
           {active.length === 0 && outlook.length === 0 && blocks.length === 0 && (
             <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">

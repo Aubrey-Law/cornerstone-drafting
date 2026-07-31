@@ -379,7 +379,9 @@ export function TasksClient({
     groups.overdue.length + groups.today.length + groups.week.length + groups.later.length === 0
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-4">
+    // Full width, matching Matters and Drafting — the queue reads better with
+    // the room the admin shell already gives every other list page.
+    <div className="w-full space-y-4">
       <PageHeader
         eyebrow="Firm work"
         icon={ListTodo}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -14,6 +14,11 @@ export function isMobileDetailViewport(): boolean {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
     && window.matchMedia(MOBILE_QUERY).matches
+}
+
+/** Reactive twin of `isMobileDetailViewport` for callers that lay out around the rail. */
+export function useIsMobileDetailViewport(): boolean {
+  return useIsMobile()
 }
 
 function useIsMobile(): boolean {
@@ -37,6 +42,8 @@ type ResponsiveDetailRailProps = {
   label: string
   children: ReactNode
   desktopClassName?: string
+  /** Escape hatch for docked positioning that depends on a runtime offset. */
+  desktopStyle?: CSSProperties
   mobileClassName?: string
 }
 
@@ -46,6 +53,7 @@ export function ResponsiveDetailRail({
   label,
   children,
   desktopClassName,
+  desktopStyle,
   mobileClassName,
 }: ResponsiveDetailRailProps) {
   const mobile = useIsMobile()
@@ -69,6 +77,7 @@ export function ResponsiveDetailRail({
   return (
     <aside
       aria-label={label}
+      style={desktopStyle}
       className={cn('hidden min-h-0 shrink-0 md:flex', desktopClassName)}
     >
       {children}
