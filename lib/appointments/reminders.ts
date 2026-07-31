@@ -7,6 +7,7 @@ import { getSchedulingSettings, listAppointmentTypes } from './settings'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { normalizeSmsRecipient, sendSmsMessage } from '@/lib/twilio/sms'
 import { resolveLocationType, type AppointmentType } from './types'
+import { getRawBoolean } from '@/lib/appointments/rawMetadata'
 
 const HOUR_MS = 3_600_000
 
@@ -22,11 +23,6 @@ interface DueReminderRow {
   location_type: string | null
   created_at: string
   raw?: unknown
-}
-
-function suppressesDueReminder(raw: unknown): boolean {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
-  return (raw as Record<string, unknown>).suppressDueReminder === true
 }
 
 export interface SendDueRemindersResult {
@@ -82,7 +78,7 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
 
   for (const row of due) {
     const startMs = Date.parse(row.start_time)
-    if (suppressesDueReminder(row.raw)) {
+    if (getRawBoolean(row.raw, 'suppressDueReminder', false)) {
       skipped++
       continue
     }

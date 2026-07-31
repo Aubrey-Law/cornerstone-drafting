@@ -11,6 +11,7 @@ import {
 import { listAppointmentTypes } from '@/lib/appointments/settings'
 import { isAppointmentLocationType, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { getRawBoolean, getRawString } from '@/lib/appointments/rawMetadata'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -56,8 +57,7 @@ export async function GET(req: NextRequest) {
   const typeById = new Map(types.map(t => [t.id, t]))
 
   // Matter numbers for the chip shown on calendar events.
-  const rows = (data ?? []) as Partial<AppointmentRow>[]
-    .map((row) => ({ ...row, raw: (row as { raw?: unknown }).raw as unknown }))
+  const rows = (data ?? []) as (AppointmentRow & { raw?: unknown })[]
 
   const linkedMatterIds = Array.from(
     new Set(rows.map(row => row.linked_matter_id).filter((id): id is string => Boolean(id))),
@@ -114,15 +114,11 @@ export async function GET(req: NextRequest) {
         ? matterContextById.get(row.linked_matter_id)?.planType ?? null
         : null,
       source: row.source,
-      typeLabel: typeof row.raw === 'object' && row.raw !== null && !Array.isArray(row.raw)
-        ? ((row.raw as Record<string, unknown>).taskTypeLabel as string | undefined) ??
-          typeById.get(row.appointment_type_id ?? '')?.label
-        : typeById.get(row.appointment_type_id ?? '')?.label ?? 'Unknown',
-      calendarShowAsBusy: typeof row.raw === 'object' && row.raw !== null && !Array.isArray(row.raw)
-        ? (row.raw as Record<string, unknown>).calendarShowAsBusy === false
-          ? false
-          : true
-        : true,
+      typeLabel:
+        getRawString(row.raw, 'taskTypeLabel') ??
+        typeById.get(row.appointment_type_id ?? '')?.label ??
+        'Unknown',
+      calendarShowAsBusy: getRawBoolean(row.raw, 'calendarShowAsBusy', true),
       // Null after a successful booking means the Outlook event failed to
       // create — surfaced in the admin list as a warning.
       outlookSynced: Boolean(row.microsoft_event_id),
