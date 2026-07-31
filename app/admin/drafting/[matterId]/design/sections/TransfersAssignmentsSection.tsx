@@ -145,6 +145,9 @@ export function TransfersAssignmentsSection({
       trustNames: fresh.trustNames,
       fiduciaries: fresh.fiduciaries,
       trusteeContactId: current.trusteeContactId || fresh.trusteeContactId,
+      coTrusteeContactIds: current.coTrusteeContactIds.length > 0
+        ? current.coTrusteeContactIds
+        : fresh.coTrusteeContactIds,
       trusteeSource: current.trusteeContactId ? current.trusteeSource : fresh.trusteeSource,
       trusteeFiduciaryId: current.trusteeContactId ? current.trusteeFiduciaryId : fresh.trusteeFiduciaryId,
     }))

@@ -4,6 +4,7 @@ import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/databas
 import type { DesignSheetOnChange } from './shared'
 import { DesignSectionContent, SectionBlock } from './shared'
 import { ExcludedGuardians } from './ExcludedGuardiansSection'
+import type { FiduciarySlotField } from './fiduciary-blocks'
 import { FiduciaryGrid } from './FiduciaryGrid'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -28,6 +29,8 @@ export interface FiduciariesSectionProps {
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   showInapplicable?: boolean
+  /** Slot field a readiness blocker points at; flashes that grid column. */
+  flashRoleKey?: FiduciarySlotField | null
 }
 
 // ── FiduciariesSection ────────────────────────────────────────────────────────
@@ -40,6 +43,7 @@ export default function FiduciariesSection({
   onAddContact,
   onUpdateContact,
   showInapplicable = false,
+  flashRoleKey = null,
 }: FiduciariesSectionProps) {
   return (
     <DesignSectionContent>
@@ -54,6 +58,7 @@ export default function FiduciariesSection({
           onChange={onChange}
           onAddContact={onAddContact}
           showInapplicable={showInapplicable}
+          flashRoleKey={flashRoleKey}
         />
       </SectionBlock>
       <ExcludedGuardians

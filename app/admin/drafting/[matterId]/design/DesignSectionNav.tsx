@@ -12,10 +12,12 @@ export interface DesignSectionNavGroup {
 
 interface DesignSectionNavProps {
   groups: DesignSectionNavGroup[]
+  /** Currently displayed section; `null` before the first selection resolves. */
+  activeGroupId?: DesignSheetGroupId | null
   hideUnusedDecisions: boolean
   hiddenDecisionCount: number
   onHideUnusedChange: (checked: boolean) => void
-  /** Jumps the scroll container to the group and updates the hash. */
+  /** Switches the displayed section and updates the hash. */
   onSelectGroup: (groupId: DesignSheetGroupId) => void
 }
 
@@ -25,6 +27,7 @@ interface DesignSectionNavProps {
  */
 export function DesignSectionNav({
   groups,
+  activeGroupId = null,
   hideUnusedDecisions,
   hiddenDecisionCount,
   onHideUnusedChange,
@@ -51,14 +54,15 @@ export function DesignSectionNav({
       </label>
       <div className="space-y-1">
         {groups.map(group => (
-          <a
+          <button
             key={group.id}
-            href={`#${group.id}`}
-            onClick={event => {
-              event.preventDefault()
-              onSelectGroup(group.id)
-            }}
-            className="flex items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-foreground hover:bg-muted"
+            type="button"
+            aria-current={group.id === activeGroupId ? 'page' : undefined}
+            onClick={() => onSelectGroup(group.id)}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium hover:bg-muted',
+              group.id === activeGroupId ? 'bg-muted text-foreground' : 'text-foreground',
+            )}
           >
             <span
               className={cn(
@@ -81,7 +85,7 @@ export function DesignSectionNav({
                 {group.optionalCount}
               </span>
             ) : null}
-          </a>
+          </button>
         ))}
       </div>
     </nav>

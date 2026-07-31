@@ -64,7 +64,7 @@ describe('design sheet section index', () => {
     const rail = screen.getByRole('complementary', { name: 'Design sheet sections' })
     expect(rail.style.position).toBe('sticky')
     expect(screen.getByRole('navigation', { name: 'Design sheet groups' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Client facts/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Client facts/ })).toBeTruthy()
   })
 
   it('removes the column entirely when collapsed, leaving no empty rail', () => {
@@ -87,9 +87,9 @@ describe('design sheet section index', () => {
   it('reports blocking and optional counts per group', () => {
     renderNav(true)
 
-    const facts = screen.getByRole('link', { name: /Client facts/ })
+    const facts = screen.getByRole('button', { name: /Client facts/ })
     expect(facts.textContent).toContain('2')
-    const fiduciaries = screen.getByRole('link', { name: /Fiduciaries/ })
+    const fiduciaries = screen.getByRole('button', { name: /Fiduciaries/ })
     expect(fiduciaries.textContent).toContain('1')
   })
 

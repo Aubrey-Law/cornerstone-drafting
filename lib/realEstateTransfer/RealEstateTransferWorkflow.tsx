@@ -318,19 +318,49 @@ export function RealEstateTransferWorkflow({
     onFormChange({ ...form, ...patch })
   }
 
+  const mergeFiduciary = (contact: PickerContact | null) => {
+    const name = contact ? contactFullName(contact).trim() : ''
+    if (!contact || !name) return form.fiduciaries
+    return form.fiduciaries.some(item => item.id === contact.id)
+      ? form.fiduciaries.map(item => (item.id === contact.id ? { ...item, name } : item))
+      : [...form.fiduciaries, { id: contact.id, name }]
+  }
+
   const setTrusteeContact = (contact: PickerContact | null) => {
     const trusteeContactId = contact?.id ?? ''
     const legacy = deriveLegacyTrusteeFields(trusteeContactId)
-    const name = contact ? contactFullName(contact).trim() : ''
-    const fiduciaries = contact && name && !form.fiduciaries.some(item => item.id === contact.id)
-      ? [...form.fiduciaries, { id: contact.id, name }]
-      : contact && name
-        ? form.fiduciaries.map(item => (item.id === contact.id ? { ...item, name } : item))
-        : form.fiduciaries
     updateForm({
       trusteeContactId,
       ...legacy,
-      fiduciaries,
+      fiduciaries: mergeFiduciary(contact),
+      coTrusteeContactIds: form.coTrusteeContactIds.filter(id => id !== trusteeContactId),
+    })
+  }
+
+  const setCoTrusteeContact = (index: number, contact: PickerContact | null) => {
+    const next = [...form.coTrusteeContactIds]
+    if (!contact) {
+      next.splice(index, 1)
+      updateForm({ coTrusteeContactIds: next })
+      return
+    }
+    if (contact.id === form.trusteeContactId || next.some((id, i) => i !== index && id === contact.id)) {
+      toast.error('That person is already serving as a trustee.')
+      return
+    }
+    next[index] = contact.id
+    updateForm({ coTrusteeContactIds: next, fiduciaries: mergeFiduciary(contact) })
+  }
+
+  const addCoTrusteeContact = (contact: PickerContact | null) => {
+    if (!contact) return
+    if (contact.id === form.trusteeContactId || form.coTrusteeContactIds.includes(contact.id)) {
+      toast.error('That person is already serving as a trustee.')
+      return
+    }
+    updateForm({
+      coTrusteeContactIds: [...form.coTrusteeContactIds, contact.id],
+      fiduciaries: mergeFiduciary(contact),
     })
   }
 
@@ -706,15 +736,36 @@ export function RealEstateTransferWorkflow({
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Trustee</h3>
             {trusteePicker ? (
-              <ContactPicker
-                role="Trustee"
-                required
-                value={selectedTrusteeContact}
-                onChange={setTrusteeContact}
-                contacts={pickerContacts}
-                onAddContact={trusteePicker.onAddContact}
-                onUpdateContact={trusteePicker.onUpdateContact}
-              />
+              <div className="space-y-2">
+                <ContactPicker
+                  role="Trustee"
+                  required
+                  value={selectedTrusteeContact}
+                  onChange={setTrusteeContact}
+                  contacts={pickerContacts}
+                  onAddContact={trusteePicker.onAddContact}
+                  onUpdateContact={trusteePicker.onUpdateContact}
+                />
+                {form.coTrusteeContactIds.map((contactId, index) => (
+                  <ContactPicker
+                    key={`${contactId}-${index}`}
+                    role="Co-trustee"
+                    value={pickerContacts.find(contact => contact.id === contactId) ?? null}
+                    onChange={contact => setCoTrusteeContact(index, contact)}
+                    contacts={pickerContacts}
+                    onAddContact={trusteePicker.onAddContact}
+                    onUpdateContact={trusteePicker.onUpdateContact}
+                  />
+                ))}
+                <ContactPicker
+                  role="Add a co-trustee"
+                  value={null}
+                  onChange={addCoTrusteeContact}
+                  contacts={pickerContacts}
+                  onAddContact={trusteePicker.onAddContact}
+                  onUpdateContact={trusteePicker.onUpdateContact}
+                />
+              </div>
             ) : (
               <>
                 <Select

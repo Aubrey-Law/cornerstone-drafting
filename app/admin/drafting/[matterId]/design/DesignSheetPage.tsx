@@ -32,6 +32,7 @@ import {
   DESIGN_SHEET_GROUP_IDS,
   designSectionAnchorId,
   normalizeDesignSectionId,
+  resolveDesignSheetGroupId,
   type DesignSheetGroupId,
 } from '@/lib/designSheet/sectionIds'
 import {
@@ -96,6 +97,21 @@ export interface DesignSheetPageProps {
 
 function saveStatusForHeader(status: DesignSheetState['saveStatus']): GuidedSaveStatus {
   return status
+}
+
+/** Final section: signing mechanics + drafting review. Synthetic — not in the section catalog. */
+const REVIEW_GROUP = {
+  id: DESIGN_SHEET_GROUP_IDS.review,
+  title: 'Review & sign',
+  subtitle: 'Signing mechanics and final drafting review',
+} as const
+
+/** Transient highlight applied to a blocker's target so the eye lands on the right decision. */
+function flashDesignTarget(target: HTMLElement) {
+  target.classList.add('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
+  window.setTimeout(() => {
+    target.classList.remove('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
+  }, 1600)
 }
 
 function DesignSheetPageWithState(props: DesignSheetPageProps) {
@@ -164,7 +180,12 @@ function DesignSheetPageContent({
   // transient and always starts closed so the form is what you land on.
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<DesignSheetGroupId>>(new Set())
+  // `null` falls back to the first visible group. Seeded from the URL hash so
+  // deep links (matter overview "fix this", copied URLs) land on their section.
+  const [activeGroupId, setActiveGroupId] = useState<DesignSheetGroupId | null>(() =>
+    typeof window === 'undefined' ? null : resolveDesignSheetGroupId(window.location.hash.replace(/^#/, '')),
+  )
+  const [fiduciaryFlashField, setFiduciaryFlashField] = useState<string | null>(null)
   const { loadPreferences, savePreferences } = useUserPreferences()
   const isMobile = useIsMobileDetailViewport()
 
@@ -224,9 +245,11 @@ function DesignSheetPageContent({
     handleUpdateContact,
     handleRemoveContact,
     showInapplicable: !hideUnusedDecisions,
+    fiduciaryFlashField,
   }), [
     contactsState,
     documentInclusions,
+    fiduciaryFlashField,
     handleAddContact,
     handleRemoveContact,
     handleUpdateContact,
@@ -295,24 +318,33 @@ function DesignSheetPageContent({
     return [group.id, { blocking, optional }] as const
   })), [blockingDetails, groups, state.optionalDetails])
 
-  const navGroups = useMemo(() => groups.map(group => {
-    const counts = groupReadiness.get(group.id)
-    return {
-      id: group.id,
-      title: group.title,
-      blockingCount: counts?.blocking.length ?? 0,
-      optionalCount: counts?.optional.length ?? 0,
-    }
-  }), [groupReadiness, groups])
+  const navGroups = useMemo(() => [
+    ...groups.map(group => {
+      const counts = groupReadiness.get(group.id)
+      return {
+        id: group.id,
+        title: group.title,
+        blockingCount: counts?.blocking.length ?? 0,
+        optionalCount: counts?.optional.length ?? 0,
+      }
+    }),
+    { id: REVIEW_GROUP.id, title: REVIEW_GROUP.title, blockingCount: 0, optionalCount: 0 },
+  ], [groupReadiness, groups])
 
-  const setGroupOpen = useCallback((groupId: DesignSheetGroupId, open: boolean) => {
-    setCollapsedGroups(current => {
-      const next = new Set(current)
-      if (open) next.delete(groupId)
-      else next.add(groupId)
-      return next
-    })
-  }, [])
+  // One section at a time: the active group falls back to the first visible
+  // group when unset or hidden by "Hide what this plan doesn't use".
+  const resolvedActiveGroupId: DesignSheetGroupId = useMemo(() => {
+    if (activeGroupId && navGroups.some(group => group.id === activeGroupId)) return activeGroupId
+    return navGroups[0]?.id ?? REVIEW_GROUP.id
+  }, [activeGroupId, navGroups])
+  const activeGroup = useMemo(
+    () => groups.find(group => group.id === resolvedActiveGroupId) ?? null,
+    [groups, resolvedActiveGroupId],
+  )
+  const activeIndex = navGroups.findIndex(group => group.id === resolvedActiveGroupId)
+  const previousGroup = activeIndex > 0 ? navGroups[activeIndex - 1] : null
+  const nextGroup = activeIndex >= 0 && activeIndex < navGroups.length - 1 ? navGroups[activeIndex + 1] : null
+  const activeTitle = activeGroup?.title ?? REVIEW_GROUP.title
 
   const setContainerScrollTop = useCallback((target: HTMLElement, clearance = STICKY_CONTENT_OFFSET) => {
     const container = scrollContainerRef.current
@@ -322,28 +354,61 @@ function DesignSheetPageContent({
     container.scrollTop += targetTop - containerTop - clearance
   }, [])
 
-  const scrollToGroup = useCallback((
+  /**
+   * Switches the visible section. Keeps the same `#<groupId>` hash contract the
+   * scroll version used, so external "fix this" links keep working. With a
+   * `targetField`, scrolls to and flashes that field once the section mounts;
+   * otherwise focus moves to the section heading for keyboard/SR continuity.
+   */
+  const selectGroup = useCallback((
     groupId: DesignSheetGroupId,
-    options: { updateHash?: boolean; smooth?: boolean } = {},
+    options: { targetField?: string | null } = {},
   ) => {
-    setGroupOpen(groupId, true)
+    setActiveGroupId(groupId)
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${groupId}`)
+    const targetField = options.targetField ?? null
     window.requestAnimationFrame(() => {
-      const target = document.getElementById(groupId)
-      if (!target) return
-      setContainerScrollTop(target)
-      if (options.updateHash) {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${groupId}`)
-      }
+      window.requestAnimationFrame(() => {
+        const container = scrollContainerRef.current
+        if (container) container.scrollTop = 0
+        const target = targetField ? document.getElementById(designFieldTargetId(targetField)) : null
+        if (target instanceof HTMLElement) {
+          setContainerScrollTop(target)
+          target.focus({ preventScroll: true })
+          flashDesignTarget(target)
+          return
+        }
+        const heading = document.getElementById('design-active-group-heading')
+        if (heading instanceof HTMLElement) {
+          heading.tabIndex = -1
+          heading.focus({ preventScroll: true })
+        }
+      })
     })
-  }, [setContainerScrollTop, setGroupOpen])
+  }, [setContainerScrollTop])
+
+  const handleBlockerSelect = useCallback((item: { sectionId: string; targetField: string | null }) => {
+    const groupId = designSectionAnchorId(item.sectionId)
+    if (!groupId) return
+    selectGroup(groupId, { targetField: item.targetField })
+    // Fiduciary blockers target a grid role column, not a single input — tint
+    // the whole column so the missing assignment is obvious.
+    if (item.targetField?.endsWith('_slots')) setFiduciaryFlashField(item.targetField)
+  }, [selectGroup])
+
+  useEffect(() => {
+    if (!fiduciaryFlashField) return
+    const timer = window.setTimeout(() => setFiduciaryFlashField(null), 1600)
+    return () => window.clearTimeout(timer)
+  }, [fiduciaryFlashField])
 
   useEffect(() => {
     const normalized = normalizeDesignSectionId(requestedSectionId)
-    const groupId = designSectionAnchorId(normalized)
+    const groupId = resolveDesignSheetGroupId(requestedSectionId)
     if (!groupId || appliedSectionRef.current === normalized) return
     appliedSectionRef.current = normalized
-    scrollToGroup(groupId)
-  }, [requestedSectionId, scrollToGroup])
+    selectGroup(groupId)
+  }, [requestedSectionId, selectGroup])
 
   useEffect(() => {
     if (!initialFocus) return
@@ -352,7 +417,7 @@ function DesignSheetPageContent({
     const groupId = designSectionAnchorId(normalizedSectionId)
     if (!groupId) return
     appliedInitialFocusRef.current = initialFocus
-    setGroupOpen(groupId, true)
+    setActiveGroupId(groupId)
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
@@ -363,13 +428,10 @@ function DesignSheetPageContent({
         setContainerScrollTop(target)
         if (!targetId) target.tabIndex = -1
         target.focus({ preventScroll: true })
-        target.classList.add('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
-        window.setTimeout(() => {
-          target.classList.remove('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
-        }, 1600)
+        flashDesignTarget(target)
       })
     })
-  }, [initialFocus, setContainerScrollTop, setGroupOpen])
+  }, [initialFocus, setContainerScrollTop])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -494,11 +556,12 @@ function DesignSheetPageContent({
             >
               <DesignSectionNav
                 groups={navGroups}
+                activeGroupId={resolvedActiveGroupId}
                 hideUnusedDecisions={hideUnusedDecisions}
                 hiddenDecisionCount={hiddenDecisionCount}
                 onHideUnusedChange={handleHideUnusedChange}
                 onSelectGroup={groupId => {
-                  scrollToGroup(groupId, { updateHash: true, smooth: true })
+                  selectGroup(groupId)
                   setMobileNavOpen(false)
                 }}
               />
@@ -529,7 +592,7 @@ function DesignSheetPageContent({
                             <button
                               key={item.id}
                               type="button"
-                              onClick={() => scrollToGroup(groupId, { updateHash: true, smooth: true })}
+                              onClick={() => handleBlockerSelect(item)}
                               className="rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning hover:bg-warning/15"
                             >
                               {item.label}
@@ -575,49 +638,71 @@ function DesignSheetPageContent({
               </section>
 
               <div className="pt-4">
-                {groups.map(group => {
-                  const collapsed = collapsedGroups.has(group.id)
-                  const counts = groupReadiness.get(group.id)
-                  const groupBlockingCount = counts?.blocking.length ?? 0
-                  const groupOptionalCount = counts?.optional.length ?? 0
-                  return (
-                    <GroupCard
-                      key={group.id}
-                      id={group.id}
-                      title={group.title}
-                      summary={group.subtitle}
-                      headerAction={group.id === DESIGN_SHEET_GROUP_IDS.facts && intakeSnapshot ? (
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          className="h-auto shrink-0 px-1 text-xs text-accent"
-                          onClick={() => setIntakeSnapshotOpen(true)}
-                        >
-                          View intake snapshot
-                        </Button>
-                      ) : undefined}
-                      blockingCount={groupBlockingCount}
-                      optionalCount={groupOptionalCount}
-                      collapsed={collapsed}
-                      onCollapsedChange={nextCollapsed => setGroupOpen(group.id, !nextCollapsed)}
-                      scrollMarginTop={STICKY_CONTENT_OFFSET}
-                    >
-                      {group.render()}
-                    </GroupCard>
-                  )
-                })}
-                <SigningMechanicsSection sheet={sheet} onChange={updateField} />
-                <DesignFinalReview
-                  sheet={sheet}
-                  selectedDocKeys={selectedDocKeys}
-                  blockingDetails={blockingDetails}
-                  optionalDetails={state.optionalDetails}
-                  pendingFiduciaries={pendingFiduciaries}
-                  readinessComplete={state.readinessComplete}
-                  onGenerate={openDrafting}
-                  attorneyPreset={attorneyPreset}
-                />
+                <div className="mb-3">
+                  <p className="text-category text-muted-foreground">
+                    Section {activeIndex + 1} of {navGroups.length}
+                  </p>
+                  <h2
+                    id="design-active-group-heading"
+                    tabIndex={-1}
+                    className="admin-section-title outline-none"
+                  >
+                    {activeTitle}
+                  </h2>
+                </div>
+                {activeGroup ? (
+                  <GroupCard
+                    key={activeGroup.id}
+                    id={activeGroup.id}
+                    title={activeGroup.title}
+                    summary={activeGroup.subtitle}
+                    headerAction={activeGroup.id === DESIGN_SHEET_GROUP_IDS.facts && intakeSnapshot ? (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto shrink-0 px-1 text-xs text-accent"
+                        onClick={() => setIntakeSnapshotOpen(true)}
+                      >
+                        View intake snapshot
+                      </Button>
+                    ) : undefined}
+                    blockingCount={groupReadiness.get(activeGroup.id)?.blocking.length ?? 0}
+                    optionalCount={groupReadiness.get(activeGroup.id)?.optional.length ?? 0}
+                    scrollMarginTop={STICKY_CONTENT_OFFSET}
+                  >
+                    {activeGroup.render()}
+                  </GroupCard>
+                ) : (
+                  <>
+                    <SigningMechanicsSection sheet={sheet} onChange={updateField} />
+                    <DesignFinalReview
+                      sheet={sheet}
+                      selectedDocKeys={selectedDocKeys}
+                      blockingDetails={blockingDetails}
+                      optionalDetails={state.optionalDetails}
+                      pendingFiduciaries={pendingFiduciaries}
+                      readinessComplete={state.readinessComplete}
+                      onGenerate={openDrafting}
+                      attorneyPreset={attorneyPreset}
+                    />
+                  </>
+                )}
+                <nav
+                  aria-label="Section pagination"
+                  className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4"
+                >
+                  {previousGroup ? (
+                    <Button type="button" variant="outline" onClick={() => selectGroup(previousGroup.id)}>
+                      Back: {previousGroup.title}
+                    </Button>
+                  ) : <span />}
+                  {nextGroup ? (
+                    <Button type="button" onClick={() => selectGroup(nextGroup.id)}>
+                      Next: {nextGroup.title}
+                    </Button>
+                  ) : null}
+                </nav>
               </div>
             </main>
 

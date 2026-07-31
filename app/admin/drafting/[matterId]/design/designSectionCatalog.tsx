@@ -112,6 +112,8 @@ export interface BuildDesignSectionsArgs {
   handleUpdateContact: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   handleRemoveContact: (id: string) => void
   showInapplicable?: boolean
+  /** Slot field a readiness blocker points at; flashes that fiduciary-grid column. */
+  fiduciaryFlashField?: string | null
 }
 
 export function designSectionAppliesWhen(sectionId: string, sheet: DesignSheet): boolean {
@@ -153,6 +155,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     handleAddContact,
     handleUpdateContact,
     showInapplicable,
+    fiduciaryFlashField,
   } = args
 
   const navArgs = {
@@ -203,6 +206,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         onAddContact={handleAddContact}
         onUpdateContact={handleUpdateContact}
         showInapplicable={Boolean(showInapplicable)}
+        flashRoleKey={(fiduciaryFlashField ?? null) as Parameters<typeof FiduciariesSection>[0]['flashRoleKey']}
       />
     ),
     [DESIGN_SECTION_IDS.estatePlanDesign]: () => (

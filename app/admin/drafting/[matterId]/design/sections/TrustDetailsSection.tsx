@@ -12,6 +12,7 @@ import {
   type TrustPlanningType,
 } from '@/lib/designSheetDocumentInclusions'
 import {
+  buildSpouseTrustNameSuggestions,
   buildStaggeredTiersFromPreset,
   buildTrustNameSuggestions,
   getTrustDetails,
@@ -155,6 +156,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   const trustDetails = getTrustDetails(sheet)
   const spousalFunding = getTrustPlanningType(sheet)
   const trustNameSuggestions = buildTrustNameSuggestions(sheet, matter)
+  const spouseTrustNameSuggestions = buildSpouseTrustNameSuggestions(sheet, matter)
   const [specialTrusteeInstructions, setSpecialTrusteeInstructions] = useState(
     trustDetails.special_trustee_instructions ?? '',
   )
@@ -185,10 +187,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
                 onChange={v => onChange('spouse_trust_name', v || null)}
               />
               <TrustNameQuickFill
-                suggestions={[
-                  `The ${spouseFirst || 'Spouse'} Trust`,
-                  `The ${spouseFirst || 'Spouse'} Revocable Trust`,
-                ]}
+                suggestions={buildSpouseTrustNameSuggestions(sheet, matter)}
                 onSelect={v => onChange('spouse_trust_name', v)}
               />
             </div>
@@ -297,10 +296,7 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
                 onChange={v => onChange('spouse_trust_name', v || null)}
               />
               <TrustNameQuickFill
-                suggestions={[
-                  `The ${spouseFirst || 'Spouse'} Trust`,
-                  `The ${spouseFirst || 'Spouse'} Revocable Trust`,
-                ]}
+                suggestions={spouseTrustNameSuggestions}
                 onSelect={v => onChange('spouse_trust_name', v)}
               />
             </div>

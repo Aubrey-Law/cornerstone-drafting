@@ -27,9 +27,23 @@ export const DESIGN_SHEET_GROUP_IDS = {
   healthcare: 'healthcare',
   realProperty: 'real-property',
   notes: 'notes',
+  review: 'review',
 } as const
 
 export type DesignSheetGroupId = typeof DESIGN_SHEET_GROUP_IDS[keyof typeof DESIGN_SHEET_GROUP_IDS]
+
+const DESIGN_SHEET_GROUP_ID_SET = new Set<string>(Object.values(DESIGN_SHEET_GROUP_IDS))
+
+/**
+ * Resolves a deep-link token (`#hash`, `?section=`) to a design-sheet group.
+ * Accepts group ids directly, plus current and legacy section ids.
+ */
+export function resolveDesignSheetGroupId(token: string | null | undefined): DesignSheetGroupId | null {
+  if (!token) return null
+  const normalized = normalizeDesignSectionId(token)
+  if (normalized && DESIGN_SHEET_GROUP_ID_SET.has(normalized)) return normalized as DesignSheetGroupId
+  return designSectionAnchorId(token)
+}
 
 const DESIGN_SECTION_GROUPS: Record<DesignSectionId, DesignSheetGroupId> = {
   [DESIGN_SECTION_IDS.intakeReview]: DESIGN_SHEET_GROUP_IDS.facts,
