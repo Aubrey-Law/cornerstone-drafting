@@ -1,8 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { AlertTriangle, ReceiptText } from 'lucide-react'
+import { AlertTriangle, Plus, ReceiptText } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmptyState } from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
@@ -20,6 +19,7 @@ import {
 import { TabsContent } from '@/components/ui/tabs'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
+import { AddChargeDialog, type AddChargeInput } from '@/components/billing/AddChargeDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { billingMoney } from '@/lib/billing/metrics'
 import type {
@@ -52,25 +52,38 @@ function dayOf(iso: string | null): string {
 }
 
 /** Fees, plan claims and costs billed on this matter. */
-function FeesChargesCard({ rows }: { rows: BillingLedgerRow[] }) {
+function FeesChargesCard({
+  rows,
+  onAddCharge,
+}: {
+  rows: BillingLedgerRow[]
+  onAddCharge: () => void
+}) {
   const billed = rows.reduce((sum, row) => sum + row.amountBilled, 0)
   const collected = rows.reduce((sum, row) => sum + row.collected, 0)
   const balance = rows.reduce((sum, row) => sum + row.balance, 0)
 
   return (
     <Card>
-      <CardHeader className="border-b">
+      <CardHeader className="border-b [.border-b]:pb-4">
         <CardTitle className="text-sm">Fees &amp; charges</CardTitle>
+        <div className="col-start-2 row-span-2 row-start-1 self-start justify-self-end">
+          <Button variant="outline" size="sm" onClick={onAddCharge}>
+            <Plus className="size-4" aria-hidden />
+            Add charge
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
           <EmptyState
             icon={ReceiptText}
             title="Nothing billed yet"
-            description="The engagement fee appears here once the agreement is signed. Costs and plan claims are added from the billing workspace."
+            description="The engagement fee appears here once the agreement is signed. Costs and plan claims can be added now."
             action={
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin/billing">Open billing</Link>
+              <Button variant="outline" size="sm" onClick={onAddCharge}>
+                <Plus className="size-4" aria-hidden />
+                Add charge
               </Button>
             }
           />
@@ -270,9 +283,11 @@ function leastSettled(rows: BillingLedgerRow[]): BillingLedgerRow {
 function PlanClaimCard({
   rows,
   legalPlan,
+  onStartClaim,
 }: {
   rows: BillingLedgerRow[]
   legalPlan: BillingPlan | null
+  onStartClaim: () => void
 }) {
   const claims = rows.filter(row => row.kind === 'plan_claim')
   if (claims.length === 0 && !legalPlan) return null
@@ -290,8 +305,8 @@ function PlanClaimCard({
             <p className="text-xs text-muted-foreground">
               This matter is covered by {planLabel}, but no claim has been started.
             </p>
-            <Button asChild variant="outline" size="sm" className="w-full">
-              <Link href="/admin/billing">Start a claim in billing</Link>
+            <Button variant="outline" size="sm" className="w-full" onClick={onStartClaim}>
+              Start a claim
             </Button>
           </>
         ) : (
@@ -323,7 +338,10 @@ export function MatterBillingTab({ matterId, enabled }: MatterBillingTabProps) {
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentItemId, setPaymentItemId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [chargeOpen, setChargeOpen] = useState(false)
+  const [chargeSaving, setChargeSaving] = useState(false)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
+  const chargeOpenerRef = useRef<HTMLElement | null>(null)
 
   const authHeaders = useMemo(
     () => ({
@@ -379,6 +397,26 @@ export function MatterBillingTab({ matterId, enabled }: MatterBillingTabProps) {
     })
     const json = (await response.json().catch(() => ({}))) as { error?: string }
     if (!response.ok) throw new Error(json.error ?? 'Billing update failed')
+  }
+
+  function openCharge() {
+    chargeOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setChargeOpen(true)
+  }
+
+  async function saveCharge(input: AddChargeInput) {
+    setChargeSaving(true)
+    try {
+      await post('/api/admin/billing/items', input)
+      setChargeOpen(false)
+      toast.success(`${input.label} added`)
+      await load()
+    } catch (saveError) {
+      toast.error(saveError instanceof Error ? saveError.message : 'Could not add charge')
+    } finally {
+      setChargeSaving(false)
+    }
   }
 
   async function markInvoice(row: BillingLedgerRow) {
@@ -448,13 +486,17 @@ export function MatterBillingTab({ matterId, enabled }: MatterBillingTabProps) {
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-4">
-            <FeesChargesCard rows={rows} />
+            <FeesChargesCard rows={rows} onAddCharge={openCharge} />
             <PaymentsCard rows={rows} onLogPayment={() => openPayment()} />
           </div>
 
           <div className="space-y-4">
             {rows.length > 0 && <BalanceCard rows={rows} />}
-            <PlanClaimCard rows={rows} legalPlan={view?.legalPlan ?? null} />
+            <PlanClaimCard
+              rows={rows}
+              legalPlan={view?.legalPlan ?? null}
+              onStartClaim={openCharge}
+            />
             {(toInvoice.length > 0 || overdue.length > 0) && (
               <Card>
                 <CardHeader className="border-b">
@@ -493,6 +535,15 @@ export function MatterBillingTab({ matterId, enabled }: MatterBillingTabProps) {
           </div>
         </div>
       )}
+
+      <AddChargeDialog
+        open={chargeOpen}
+        onOpenChange={setChargeOpen}
+        matterId={matterId}
+        saving={chargeSaving}
+        returnFocusRef={chargeOpenerRef}
+        onSave={saveCharge}
+      />
 
       <LogPaymentDialog
         open={paymentOpen}

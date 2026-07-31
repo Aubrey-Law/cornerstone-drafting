@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { BillingSnapshot } from '@/lib/billing/types'
+
+const matterOptions = [
+  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Chen, Marcus & Lily · 2026-EP-Chen-014' },
+]
 
 const navigation = vi.hoisted(() => ({
   params: new URLSearchParams(),
@@ -107,7 +111,7 @@ describe('billing workspace', () => {
   })
 
   it('defaults to open receivables and gives overdue display precedence', () => {
-    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" />)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
 
     expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open.*1/ }).getAttribute('aria-pressed')).toBe('true')
@@ -118,7 +122,7 @@ describe('billing workspace', () => {
 
   it('syncs the selected ledger filter into the URL', async () => {
     const user = userEvent.setup()
-    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" />)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
 
     await user.click(screen.getByRole('button', { name: /Paid.*1/ }))
 
@@ -127,7 +131,7 @@ describe('billing workspace', () => {
 
   it('opens an accessible payment dialog and blocks an overpayment', async () => {
     const user = userEvent.setup()
-    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" />)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
 
     await user.click(screen.getByRole('button', { name: 'Log payment' }))
     expect(screen.getByRole('dialog', { name: 'Log payment' })).toBeTruthy()
@@ -144,7 +148,7 @@ describe('billing workspace', () => {
 
   it('closes the payment dialog with Escape and restores focus to its opener', async () => {
     const user = userEvent.setup()
-    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" />)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
 
     const opener = screen.getByRole('button', { name: 'Log payment' })
     await user.click(opener)
@@ -161,7 +165,7 @@ describe('billing workspace', () => {
       Response.json({ item: { id: snapshot.rows[0].id, status: 'partial' } }),
     )
     const user = userEvent.setup()
-    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" />)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
 
     await user.click(screen.getByRole('button', { name: 'Log payment' }))
     const amount = screen.getByLabelText('Amount')
@@ -183,5 +187,34 @@ describe('billing workspace', () => {
     )
     expect(toast.success).toHaveBeenCalledWith('$125.50 payment logged')
     expect(navigation.refresh).toHaveBeenCalled()
+  })
+
+  it('adds a charge to a chosen matter through the audited create route', async () => {
+    const user = userEvent.setup()
+    const post = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ item: {} }), { status: 201 }),
+    )
+    vi.stubGlobal('fetch', post)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
+
+    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    // Unlike the matter tab, this surface must pick a matter.
+    expect(within(dialog).getByLabelText('Matter')).toBeTruthy()
+
+    await user.type(within(dialog).getByLabelText('Description'), 'Deed recording fee')
+    await user.type(within(dialog).getByLabelText('Amount'), '155')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    await waitFor(() => {
+      const call = post.mock.calls.find(entry => entry[0] === '/api/admin/billing/items')
+      expect(JSON.parse(call![1].body)).toEqual({
+        matterId: matterOptions[0].id,
+        kind: 'cost',
+        label: 'Deed recording fee',
+        amountBilled: 15_500,
+        plan: null,
+      })
+    })
   })
 })
