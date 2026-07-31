@@ -74,6 +74,41 @@ function currentWeekStart(now = new Date()): string {
   return utc.toISOString().slice(0, 10)
 }
 
+export interface BillingMatterOption {
+  id: string
+  label: string
+}
+
+/**
+ * Matters a charge can be added to, for the firm workspace's matter picker.
+ * Covers every matter, not only those already carrying billing items.
+ */
+export async function fetchBillingMatterOptions(): Promise<BillingMatterOption[]> {
+  const admin = getAdminClient()
+  const [matterResult, pipelineResult] = await Promise.all([
+    admin.from('matters').select('id, matter_number'),
+    admin.from('v_matter_pipeline').select('matter_id, client_name, matter_name'),
+  ])
+  if (matterResult.error) throw new Error(matterResult.error.message)
+  if (pipelineResult.error) throw new Error(pipelineResult.error.message)
+
+  type NameRow = Pick<PipelineRow, 'matter_id' | 'client_name' | 'matter_name'>
+  const pipelineById = new Map(
+    ((pipelineResult.data ?? []) as NameRow[]).map(row => [row.matter_id, row]),
+  )
+
+  return ((matterResult.data ?? []) as MatterRow[])
+    .map(matter => {
+      const pipeline = pipelineById.get(matter.id)
+      const name = pipeline?.client_name ?? pipeline?.matter_name ?? 'Unknown client'
+      return {
+        id: matter.id,
+        label: matter.matter_number ? `${name} · ${matter.matter_number}` : name,
+      }
+    })
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
 /** Joins a raw billing_items row to its matter context. Shared by both views. */
 function mapBillingItem(
   row: BillingItemRow,

@@ -24,6 +24,11 @@ import { BillingRail } from './BillingRail'
 import { KpiRow } from './KpiRow'
 import { LedgerTable } from './LedgerTable'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
+import {
+  AddChargeDialog,
+  type AddChargeInput,
+  type BillingMatterOption,
+} from '@/components/billing/AddChargeDialog'
 import { RevenueTiles } from './RevenueTiles'
 
 const filterLabels: { value: BillingFilter; label: string }[] = [
@@ -51,10 +56,12 @@ export default function BillingClient({
   initialSnapshot,
   loadError,
   weekStart,
+  matterOptions,
 }: {
   initialSnapshot: BillingSnapshot
   loadError: string | null
   weekStart: string
+  matterOptions: BillingMatterOption[]
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -67,7 +74,10 @@ export default function BillingClient({
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentItemId, setPaymentItemId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [chargeOpen, setChargeOpen] = useState(false)
+  const [chargeSaving, setChargeSaving] = useState(false)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
+  const chargeOpenerRef = useRef<HTMLElement | null>(null)
 
   const rows = useMemo(
     () => filterBillingRows(initialSnapshot.rows, filter, search, month),
@@ -153,6 +163,27 @@ export default function BillingClient({
     }
   }
 
+  function openCharge() {
+    chargeOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setChargeOpen(true)
+  }
+
+  async function saveCharge(input: AddChargeInput) {
+    setChargeSaving(true)
+    try {
+      await request('/api/admin/billing/items', input)
+      setChargeOpen(false)
+      toast.success(`${input.label} added`)
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add charge')
+    } finally {
+      setChargeSaving(false)
+    }
+  }
+
   async function dismissNudge(nudge: BillingNudge) {
     try {
       await request('/api/admin/billing/nudges/dismiss', {
@@ -216,6 +247,15 @@ export default function BillingClient({
               <Download className="size-4" aria-hidden />
               Export CSV
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={openCharge}
+            >
+              <Plus className="size-4" aria-hidden />
+              Add charge
+            </Button>
             <Button type="button" className="min-h-11" onClick={() => openPayment()}>
               <Plus className="size-4" aria-hidden />
               Log payment
@@ -270,6 +310,15 @@ export default function BillingClient({
           onDismiss={nudge => void dismissNudge(nudge)}
         />
       </div>
+
+      <AddChargeDialog
+        open={chargeOpen}
+        onOpenChange={setChargeOpen}
+        matters={matterOptions}
+        saving={chargeSaving}
+        returnFocusRef={chargeOpenerRef}
+        onSave={saveCharge}
+      />
 
       <LogPaymentDialog
         open={paymentOpen}

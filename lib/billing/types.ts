@@ -105,6 +105,23 @@ export const logBillingPaymentSchema = z.object({
   receivedAt: z.string().datetime({ offset: true }).optional(),
 })
 
+/** Kinds staff may add by hand. The flat fee is seeded from the engagement. */
+export const addableBillingKinds = ['cost', 'plan_claim'] as const
+export type AddableBillingKind = (typeof addableBillingKinds)[number]
+
+export const createBillingItemSchema = z
+  .object({
+    matterId: z.string().uuid(),
+    kind: z.enum(addableBillingKinds),
+    label: z.string().trim().min(1).max(200),
+    amountBilled: z.number().int().positive(),
+    plan: z.enum(billingPlans).nullable().optional(),
+  })
+  .refine(value => (value.kind === 'plan_claim') === Boolean(value.plan), {
+    message: 'A plan claim requires a legal plan, and only a plan claim carries one',
+    path: ['plan'],
+  })
+
 export const dismissBillingNudgeSchema = z.object({
   nudgeKey: z.string().trim().min(1).max(250),
   weekStart: z.string().date(),

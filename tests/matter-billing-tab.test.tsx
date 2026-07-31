@@ -236,14 +236,12 @@ describe('MatterBillingTab', () => {
     })
   })
 
-  it('nudges when a covered matter has no claim, and links to billing', async () => {
+  it('nudges when a covered matter has no claim', async () => {
     respondWith({ rows: [row()], legalPlan: 'metlife' })
     renderTab()
 
     expect(await screen.findByText('MetLife plan')).toBeTruthy()
-    expect(
-      screen.getByRole('link', { name: 'Start a claim in billing' }).getAttribute('href'),
-    ).toBe('/admin/billing')
+    expect(screen.getByRole('button', { name: 'Start a claim' })).toBeTruthy()
   })
 
   it('shows claim progress instead of the nudge once a claim exists', async () => {
@@ -265,7 +263,7 @@ describe('MatterBillingTab', () => {
 
     // Appears twice: the fees-table row label and the rail card title.
     expect(await screen.findAllByText('MetLife claim')).toHaveLength(2)
-    expect(screen.queryByRole('link', { name: 'Start a claim in billing' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start a claim' })).toBeNull()
     expect(screen.getAllByText('Claim submitted').length).toBeGreaterThan(0)
   })
 
@@ -288,5 +286,83 @@ describe('MatterBillingTab', () => {
     respondWith({ rows: [row()] })
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Flat fee — Joint trust package')).toBeTruthy()
+  })
+
+  it('adds a cost against this matter, without a matter picker', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    // The matter is fixed on this surface.
+    expect(within(dialog).queryByLabelText('Matter')).toBeNull()
+
+    await user.type(within(dialog).getByLabelText('Description'), 'Deed recording fee')
+    await user.type(within(dialog).getByLabelText('Amount'), '155')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        call => call[1]?.method === 'POST' && call[0] === '/api/admin/billing/items',
+      )
+      expect(JSON.parse(post![1].body)).toEqual({
+        matterId: MATTER_ID,
+        kind: 'cost',
+        label: 'Deed recording fee',
+        amountBilled: 15_500,
+        plan: null,
+      })
+    })
+  })
+
+  it('will not submit a charge with no amount', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Description'), 'Deed recording fee')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    expect(await within(dialog).findByRole('alert')).toBeTruthy()
+    expect(
+      fetchMock.mock.calls.some(call => call[0] === '/api/admin/billing/items'),
+    ).toBe(false)
+  })
+
+  it('offers Add charge from the empty state when nothing is billed', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [] })
+    renderTab()
+
+    await screen.findByText('Nothing billed yet')
+    await user.click(screen.getAllByRole('button', { name: 'Add charge' })[0])
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+  })
+
+  it('starts a claim from the plan nudge with the plan preselected', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()], legalPlan: 'metlife' })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Start a claim' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText('Type'))
+    await user.click(await screen.findByRole('option', { name: 'Legal plan claim' }))
+
+    await user.type(within(dialog).getByLabelText('Description'), 'MetLife claim')
+    await user.type(within(dialog).getByLabelText('Amount'), '1275')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(call => call[0] === '/api/admin/billing/items')
+      expect(JSON.parse(post![1].body)).toMatchObject({
+        kind: 'plan_claim',
+        plan: 'metlife',
+        amountBilled: 127_500,
+      })
+    })
   })
 })
