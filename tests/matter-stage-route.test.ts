@@ -33,6 +33,11 @@ describe('drafting hub pipeline views', () => {
       path.join(process.cwd(), 'app/admin/drafting/MatterPipelineKanban.tsx'),
       'utf8',
     )
+    // Drag-and-drop and the stage save live in the board shared with /admin/matters.
+    const boardSource = fs.readFileSync(
+      path.join(process.cwd(), 'components/matter/MatterStageBoard.tsx'),
+      'utf8',
+    )
     const tableSource = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'),
       'utf8',
@@ -44,8 +49,9 @@ describe('drafting hub pipeline views', () => {
 
     expect(hubSource).toContain('MatterPipelineKanban')
     expect(hubSource).toContain('MatterPipelineTable')
-    expect(kanbanSource).toContain('draggable')
-    expect(kanbanSource).toContain("updateMatterStage")
+    expect(kanbanSource).toContain('MatterStageBoard')
+    expect(boardSource).toContain('draggable')
+    expect(boardSource).toContain("updateMatterStage")
     expect(tableSource).toContain("updateMatterStage")
     expect(updateSource).toContain('/api/admin/matters/')
     expect(updateSource).toContain('/stage')

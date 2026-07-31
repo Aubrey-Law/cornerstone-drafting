@@ -16,6 +16,29 @@ export const EMPTY_MATTER_TABLE_FILTERS: MatterTableFilters = {
   stageGroup: 'all',
 }
 
+export type MatterListView = 'board' | 'table'
+
+export const MATTER_LIST_VIEW_KEY = 'cornerstone.admin.mattersView'
+
+/** The table is the default so the list keeps the shape it has always had. */
+export function readMatterListView(): MatterListView {
+  if (typeof window === 'undefined') return 'table'
+  try {
+    return window.localStorage.getItem(MATTER_LIST_VIEW_KEY) === 'board' ? 'board' : 'table'
+  } catch {
+    return 'table'
+  }
+}
+
+export function writeMatterListView(view: MatterListView) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(MATTER_LIST_VIEW_KEY, view)
+  } catch {
+    /* ignore */
+  }
+}
+
 /** The pipeline view's newest timestamp is the best available activity signal. */
 export function matterLastActivityAt(matter: MatterListRow): number | null {
   const timestamps = [

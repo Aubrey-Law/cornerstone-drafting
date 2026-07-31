@@ -110,12 +110,13 @@ describe('drafting hub and workspace', () => {
 
   it('shows hub empty-state CTA and stage success toasts', () => {
     const hub = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/DraftingHubClient.tsx'), 'utf8')
-    const kanban = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineKanban.tsx'), 'utf8')
+    // The kanban's stage save lives in the board shared with /admin/matters.
+    const board = fs.readFileSync(path.join(process.cwd(), 'components/matter/MatterStageBoard.tsx'), 'utf8')
     const table = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'), 'utf8')
 
     expect(hub).toContain('/admin/matters?create=1')
     expect(hub).toContain('router.refresh()')
-    expect(kanban).toContain("toast.success(`Moved to ${stageLabel(targetStage)}`)")
+    expect(board).toContain("toast.success(`Moved to ${stageLabel(targetStage)}`)")
     expect(table).toContain("toast.success(`Moved to ${stageLabel(nextStage)}`)")
   })
 
@@ -183,9 +184,9 @@ describe('drafting hub and workspace', () => {
   })
 
   it('prefetches drafting workspace routes on hub hover', () => {
-    const kanban = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineKanban.tsx'), 'utf8')
+    const board = fs.readFileSync(path.join(process.cwd(), 'components/matter/MatterStageBoard.tsx'), 'utf8')
     const table = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'), 'utf8')
-    expect(kanban).toContain('useDebouncedPrefetch')
+    expect(board).toContain('useDebouncedPrefetch')
     expect(table).toContain('useDebouncedPrefetch')
   })
 

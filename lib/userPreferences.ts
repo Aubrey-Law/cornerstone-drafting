@@ -96,6 +96,8 @@ export interface DraftingUserPreferences {
   hideUnusedDesignDecisions?: boolean
   /** Show the live clause preview beside the single-page design sheet. */
   clausePreviewOpen?: boolean
+  /** Hide the design sheet's section index so the form gets the full width. */
+  designNavCollapsed?: boolean
   /** Hide the guided vs express tooltip after first dismissal. */
   designViewHintDismissed?: boolean
   /** Explicitly applied, versioned defaults limited to safe structural fields. */
@@ -171,6 +173,7 @@ export function parseUserPreferences(raw: unknown): UserPreferences {
             singlePageDesignSheet: drafting.singlePageDesignSheet === true,
             hideUnusedDesignDecisions: drafting.hideUnusedDesignDecisions !== false,
             clausePreviewOpen: drafting.clausePreviewOpen !== false,
+            designNavCollapsed: drafting.designNavCollapsed === true,
             designViewHintDismissed: drafting.designViewHintDismissed === true,
             attorneyPreset: parseAttorneyPreset(drafting.attorneyPreset),
           },
@@ -205,6 +208,11 @@ export function resolveHideUnusedDesignDecisions(prefs?: UserPreferences | null)
 
 export function resolveClausePreviewOpen(prefs?: UserPreferences | null): boolean {
   return prefs?.drafting?.clausePreviewOpen ?? true
+}
+
+/** The section index starts visible; collapsing it is an explicit opt-in. */
+export function resolveDesignNavCollapsed(prefs?: UserPreferences | null): boolean {
+  return prefs?.drafting?.designNavCollapsed ?? false
 }
 
 export function resolveLlmProvider(prefs?: UserPreferences | null): LlmProvider {

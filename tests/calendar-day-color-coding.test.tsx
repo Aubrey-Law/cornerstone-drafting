@@ -1,0 +1,112 @@
+// @vitest-environment jsdom
+
+import fs from 'node:fs'
+import path from 'node:path'
+import React from 'react'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DayAgenda } from '@/app/admin/calendar/DayAgenda'
+import { BLOCK_HATCH, CATEGORY_STYLE, categorize } from '@/app/admin/calendar/eventCategories'
+import type { CalendarAppointment, CalendarRailData, OutlookEvent } from '@/app/admin/calendar/types'
+
+afterEach(cleanup)
+
+const rail: CalendarRailData = { datesThisWeek: [], followUps: [], openSlots: [] }
+
+function appointment(overrides: Partial<CalendarAppointment> & Pick<CalendarAppointment, 'id'>): CalendarAppointment {
+  return {
+    startTime: '2026-07-30T14:00:00.000Z', endTime: '2026-07-30T15:00:00.000Z',
+    status: 'scheduled', locationType: 'teams', secondAttendeeName: null, secondAttendeeEmail: null,
+    attendeeName: 'Jane Alpha', attendeeEmail: 'jane@example.com', attendeePhone: null, notes: null,
+    typeLabel: 'Discovery call', source: 'internal', outlookSynced: true, onlineMeetingUrl: null,
+    linkedMatterId: null, linkedMatterNumber: null, linkedMatterStage: null, linkedMatterPlanType: null,
+    linkedLeadId: null,
+    ...overrides,
+  }
+}
+
+function outlookEvent(overrides: Partial<OutlookEvent> & Pick<OutlookEvent, 'id' | 'subject'>): OutlookEvent {
+  return {
+    startIso: '2026-07-30T18:00:00.000Z', endIso: '2026-07-30T19:00:00.000Z',
+    isAllDay: false, showAs: 'busy',
+    ...overrides,
+  }
+}
+
+function renderDay(props: {
+  appointments?: CalendarAppointment[]
+  outlookEvents?: OutlookEvent[]
+}) {
+  return render(
+    <DayAgenda
+      date={new Date('2026-07-30T12:00:00.000Z')}
+      appointments={props.appointments ?? []}
+      outlookEvents={props.outlookEvents ?? []}
+      attention={[]}
+      rail={rail}
+      onDismissAttention={vi.fn()}
+      onOpenAppointment={vi.fn()}
+      onReschedule={vi.fn()}
+      onBookSlot={vi.fn()}
+    />,
+  )
+}
+
+describe('day calendar colour coding', () => {
+  it('labels each appointment with its category using the month grid tokens', () => {
+    renderDay({
+      appointments: [
+        appointment({ id: 'a', typeLabel: 'Discovery call', attendeeName: 'Jane Alpha' }),
+        appointment({ id: 'b', typeLabel: 'Signing appointment', attendeeName: 'Zoe Beta' }),
+      ],
+    })
+
+    expect(screen.getByText('Discovery')).toBeTruthy()
+    expect(screen.getByText('Signing')).toBeTruthy()
+
+    const discovery = screen.getByText('Discovery').parentElement as HTMLElement
+    expect(discovery.style.background).toBe(CATEGORY_STYLE.discovery.bg)
+    expect(discovery.style.color).toBe(CATEGORY_STYLE.discovery.text)
+  })
+
+  it('carries the category accent on the card edge like a month cell', () => {
+    renderDay({ appointments: [appointment({ id: 'a', typeLabel: 'Design review' })] })
+
+    const card = screen.getByText('Jane Alpha').closest('article') as HTMLElement
+    expect(card.style.borderLeft).toContain(CATEGORY_STYLE.draft.dot)
+  })
+
+  it('colour codes Outlook events the same way', () => {
+    renderDay({ outlookEvents: [outlookEvent({ id: 'o1', subject: 'Estate plan sync' })] })
+
+    expect(categorize('Estate plan sync')).toBe('meeting')
+    const strip = screen.getByText('Client meeting').parentElement as HTMLElement
+    expect(strip.style.background).toBe(CATEGORY_STYLE.meeting.bg)
+  })
+
+  it('keeps Outlook blocks as hatched background, not coloured events', () => {
+    renderDay({ outlookEvents: [outlookEvent({ id: 'o2', subject: 'BLOCK admin time' })] })
+
+    const block = screen.getByText('BLOCK admin time') as HTMLElement
+    expect(block.style.backgroundImage).toBe(BLOCK_HATCH)
+    expect(screen.queryByText('Internal / Outlook')).toBeNull()
+  })
+
+  it('uses theme tokens rather than literal colours so both themes work', () => {
+    for (const style of Object.values(CATEGORY_STYLE)) {
+      expect(style.bg.startsWith('var(--')).toBe(true)
+      expect(style.text.startsWith('var(--')).toBe(true)
+      expect(style.dot.startsWith('var(--')).toBe(true)
+    }
+  })
+})
+
+describe('day calendar legend', () => {
+  it('shows the category key on the day view, not just the month view', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/calendar/CalendarClient.tsx'),
+      'utf8',
+    )
+    expect(source).toContain("view === 'month' || view === 'day' ? 'flex' : 'hidden'")
+  })
+})

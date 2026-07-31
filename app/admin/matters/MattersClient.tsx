@@ -4,22 +4,29 @@ import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Briefcase, ChevronRight, Database, Plus, Trash2 } from 'lucide-react'
+import { Briefcase, ChevronRight, Columns3, Database, Plus, Table2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import {
   EMPTY_MATTER_TABLE_FILTERS,
   filterAndSortMatters,
   matterLastActivityAt,
+  readMatterListView,
+  writeMatterListView,
+  type MatterListView,
   type MatterSortKey,
   type MatterTableFilters,
 } from '@/lib/adminTables/matterTable'
 import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
+import { STAGE_GROUP_LABELS, STAGE_GROUP_ORDER } from '@/lib/matter/stageGroups'
+import { MatterStageBoard, type StageBoardCard } from '@/components/matter/MatterStageBoard'
+import { isMobileDetailViewport } from '@/components/layout/ResponsiveDetailRail'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
 import { PRACTICE_AREA_OPTIONS, practiceAreaLabel, type PracticeAreaCode } from '@/lib/practiceArea'
 import { formatPhoneInput } from '@/lib/phone'
-import { GROUP_COLORS, stageInfo, stageLabel, type StageGroup } from '@/types/database'
+import { GROUP_COLORS, stageInfo, stageLabel, type MatterStage, type StageGroup } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -57,16 +64,6 @@ interface MattersClientProps {
   matters: MatterListRow[]
   loadError?: string | null
 }
-
-const GROUP_LABELS: Record<StageGroup, string> = {
-  early: 'Intake',
-  active: 'Drafting',
-  work: 'Client work',
-  done: 'Signing',
-  closed: 'Closed',
-}
-
-const GROUP_ORDER: StageGroup[] = ['early', 'active', 'work', 'done', 'closed']
 
 function intakeStatusLabel(status: string | null | undefined) {
   return status?.replace(/_/g, ' ') || '—'
@@ -110,12 +107,16 @@ function MattersClientShell({ matters: _matters, loadError = null }: MattersClie
   )
 }
 
-function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
+function MattersClientInner({ matters: initialMatters, loadError = null }: MattersClientProps) {
   const searchParams = useSearchParams()
   const token = useAccessToken()
   const router = useRouter()
+  // Held locally so a board drag can move a card before the server confirms;
+  // `router.refresh()` re-seeds it through the effect below.
+  const [matters, setMatters] = useState(initialMatters)
   const [filters, setFilters] = useState<MatterTableFilters>(EMPTY_MATTER_TABLE_FILTERS)
   const [sortKey, setSortKey] = useState<MatterSortKey>('last_activity')
+  const [view, setView] = useState<MatterListView>('table')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
@@ -130,6 +131,17 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
   const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
   const [createdMatterId, setCreatedMatterId] = useState<string | null>(null)
   const [createdIntakeUrl, setCreatedIntakeUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    setMatters(initialMatters)
+  }, [initialMatters])
+
+  useEffect(() => {
+    // Below md the five columns are too cramped, so start on the table without
+    // overwriting the stored choice — the board stays one tap away.
+    const stored = readMatterListView()
+    setView(isMobileDetailViewport() && stored === 'board' ? 'table' : stored)
+  }, [])
 
   useEffect(() => {
     if (searchParams.get('create') === '1') setCreateOpen(true)
@@ -161,6 +173,46 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
     () => filterAndSortMatters(matters, filters, sortKey),
     [filters, matters, sortKey],
   )
+
+  const boardCards = useMemo<StageBoardCard[]>(() => filtered.map(m => {
+    const unreviewed = mergeUnreviewedCounts(
+      m.unreviewed_intake_upload_count ?? 0,
+      m.unreviewed_portal_upload_count ?? 0,
+    )
+    const activity = matterLastActivityAt(m)
+    const intake = m.intake_status ?? ''
+
+    return {
+      id: m.matter_id,
+      stage: m.stage,
+      title: m.client_name || m.matter_name || 'Untitled',
+      subtitle: [m.matter_number, practiceAreaLabel(m.practice_area)].filter(Boolean).join(' · '),
+      badge: {
+        label: intakeStatusLabel(intake),
+        tone: intake === 'submitted' ? ('success' as const) : intake ? ('warning' as const) : ('muted' as const),
+      },
+      quietDays: activity === null ? null : daysSince(activity),
+      href: `/admin/matters/${m.matter_id}`,
+      meta: [
+        formatLastActivity(activity),
+        ...(unreviewed.total > 0 ? [formatUnreviewedUploadLabel(unreviewed)] : []),
+      ],
+    }
+  }), [filtered])
+
+  const handleStageChange = (matterId: string, stage: MatterStage) => {
+    setMatters(current =>
+      current.map(m => (m.matter_id === matterId ? { ...m, stage } : m)),
+    )
+  }
+
+  const switchView = (next: MatterListView) => {
+    setView(next)
+    writeMatterListView(next)
+    // Row selection is a table affordance; the board has no checkboxes, so a
+    // stale selection would leave an un-clearable bulk bar on screen.
+    if (next === 'board') setSelected({})
+  }
 
   const selectedIds = useMemo(
     () => filtered.filter(m => selected[m.matter_id]).map(m => m.matter_id),
@@ -347,7 +399,7 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
           >
             All
           </FilterChip>
-          {GROUP_ORDER.map(group => (
+          {STAGE_GROUP_ORDER.map(group => (
             <FilterChip
               key={group}
               onClick={() => updateFilter('stageGroup', filters.stageGroup === group ? 'all' : group)}
@@ -358,10 +410,40 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ background: GROUP_COLORS[group].dot }}
               />
-              {GROUP_LABELS[group]}
+              {STAGE_GROUP_LABELS[group]}
             </FilterChip>
           ))}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div
+              className="inline-flex rounded-md border border-border bg-background p-0.5"
+              role="group"
+              aria-label="View mode"
+            >
+              <button
+                type="button"
+                aria-pressed={view === 'board'}
+                onClick={() => switchView('board')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                  view === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Columns3 className="h-3.5 w-3.5" aria-hidden />
+                Board
+              </button>
+              <button
+                type="button"
+                aria-pressed={view === 'table'}
+                onClick={() => switchView('table')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                  view === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Table2 className="h-3.5 w-3.5" aria-hidden />
+                Table
+              </button>
+            </div>
             <Select
               value={filters.practice}
               onValueChange={value => updateFilter('practice', value)}
@@ -432,6 +514,13 @@ function MattersClientInner({ matters, loadError = null }: MattersClientProps) {
               </Button>
             )}
           </div>
+        ) : view === 'board' ? (
+          <MatterStageBoard
+            cards={boardCards}
+            onOpen={matterId => router.push(`/admin/matters/${matterId}`)}
+            onStageChange={handleStageChange}
+            label="Matters pipeline board"
+          />
         ) : (
           <div className="rounded-lg border border-border bg-card">
             <Table className="min-w-[56rem]">

@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
+import { PanelLeft, PanelLeftClose } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -19,6 +20,10 @@ import {
 import { DesignAccelerationBar } from '@/components/design-sheet/DesignAccelerationBar'
 import { ClausePreview } from '@/components/design-sheet/ClausePreview'
 import { DesignFinalReview } from '@/components/design-sheet/DesignFinalReview'
+import {
+  ResponsiveDetailRail,
+  useIsMobileDetailViewport,
+} from '@/components/layout/ResponsiveDetailRail'
 import { Button } from '@/components/ui/button'
 import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import { cn } from '@/lib/utils'
@@ -40,6 +45,7 @@ import {
 import { useUserPreferences } from '@/lib/userPreferencesClient'
 import {
   resolveClausePreviewOpen,
+  resolveDesignNavCollapsed,
   resolveHideUnusedDesignDecisions,
 } from '@/lib/userPreferences'
 import type { AttorneyDesignPreset } from '@/lib/designSheet/fastEntryWorkflow'
@@ -51,6 +57,7 @@ import {
   buildDesignSheetGroups,
   visibleDesignSections,
 } from './designSectionCatalog'
+import { DesignSectionNav } from './DesignSectionNav'
 import { DesignValidationProvider, GroupCard } from './sections/shared'
 import { IntakeSnapshotDialog } from './sections/IntakeSection'
 import { SigningMechanicsSection } from './sections/SigningMechanicsSection'
@@ -153,8 +160,13 @@ function DesignSheetPageContent({
   const [attorneyPreset, setAttorneyPreset] = useState<AttorneyDesignPreset | null>(null)
   const [hideUnusedDecisions, setHideUnusedDecisions] = useState(true)
   const [clausePreviewOpen, setClausePreviewOpen] = useState(true)
+  // Desktop keeps a persisted docked/hidden preference; the phone sheet is
+  // transient and always starts closed so the form is what you land on.
+  const [navCollapsed, setNavCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<DesignSheetGroupId>>(new Set())
   const { loadPreferences, savePreferences } = useUserPreferences()
+  const isMobile = useIsMobileDetailViewport()
 
   useEffect(() => {
     let active = true
@@ -163,6 +175,7 @@ function DesignSheetPageContent({
       if (!active) return
       setHideUnusedDecisions(resolveHideUnusedDesignDecisions(preferences))
       setClausePreviewOpen(resolveClausePreviewOpen(preferences))
+      setNavCollapsed(resolveDesignNavCollapsed(preferences))
       if (attorneyPresetVersionRef.current === loadVersion) {
         setAttorneyPreset(preferences?.drafting?.attorneyPreset ?? null)
       }
@@ -260,6 +273,17 @@ function DesignSheetPageContent({
     })
   }, [savePreferences])
 
+  const navOpen = isMobile ? mobileNavOpen : !navCollapsed
+
+  const handleNavOpenChange = useCallback((open: boolean) => {
+    if (isMobile) {
+      setMobileNavOpen(open)
+      return
+    }
+    setNavCollapsed(!open)
+    void savePreferences({ drafting: { designNavCollapsed: !open } })
+  }, [isMobile, savePreferences])
+
   const groupReadiness = useMemo(() => new Map(groups.map(group => {
     const sectionIds = new Set(group.sections.map(section => section.id))
     const blocking = blockingDetails
@@ -270,6 +294,16 @@ function DesignSheetPageContent({
       .flatMap(detail => detail.blockers)
     return [group.id, { blocking, optional }] as const
   })), [blockingDetails, groups, state.optionalDetails])
+
+  const navGroups = useMemo(() => groups.map(group => {
+    const counts = groupReadiness.get(group.id)
+    return {
+      id: group.id,
+      title: group.title,
+      blockingCount: counts?.blocking.length ?? 0,
+      optionalCount: counts?.optional.length ?? 0,
+    }
+  }), [groupReadiness, groups])
 
   const setGroupOpen = useCallback((groupId: DesignSheetGroupId, open: boolean) => {
     setCollapsedGroups(current => {
@@ -365,6 +399,19 @@ function DesignSheetPageContent({
     alignSelf: 'flex-start',
   }
 
+  /**
+   * One column on phones — the index moves into its own sheet there, and the
+   * clause preview is dropped rather than squeezed. Wider viewports add the
+   * docked index and, when open, the preview.
+   */
+  const gridTemplateColumns = isMobile
+    ? 'minmax(0, 1fr)'
+    : [
+        navOpen ? '244px' : null,
+        'minmax(0, 1fr)',
+        clausePreviewOpen ? '400px' : null,
+      ].filter(Boolean).join(' ')
+
   return (
     <SharedFieldsProvider>
       <DesignValidationProvider value={validationValue}>
@@ -435,69 +482,27 @@ function DesignSheetPageContent({
 
           <div
             className="mx-auto grid w-full max-w-[1680px] gap-5 px-4"
-            style={{
-              gridTemplateColumns: clausePreviewOpen
-                ? '244px minmax(560px, 1fr) 400px'
-                : '244px minmax(560px, 1fr)',
-            }}
+            style={{ gridTemplateColumns }}
           >
-            <nav aria-label="Design sheet groups" className="border-r border-border pr-3" style={indexStyle}>
-              <div className="py-4">
-                <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Design sheet</p>
-                <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-md border border-border bg-muted/30 px-2 py-2">
-                  <input
-                    type="checkbox"
-                    checked={hideUnusedDecisions}
-                    onChange={event => handleHideUnusedChange(event.target.checked)}
-                    className="mt-0.5 h-3.5 w-3.5 accent-[#1a6b72]"
-                  />
-                  <span className="text-[11px] leading-4 text-foreground">
-                    Hide what this plan doesn&apos;t use
-                    <span className="block text-[10px] text-muted-foreground">
-                      {hiddenDecisionCount} decision{hiddenDecisionCount === 1 ? '' : 's'} hidden
-                    </span>
-                  </span>
-                </label>
-                <div className="space-y-1">
-                  {groups.map(group => {
-                    const counts = groupReadiness.get(group.id)
-                    const groupBlockingCount = counts?.blocking.length ?? 0
-                    const groupOptionalCount = counts?.optional.length ?? 0
-                    return (
-                      <a
-                        key={group.id}
-                        href={`#${group.id}`}
-                        onClick={event => {
-                          event.preventDefault()
-                          scrollToGroup(group.id, { updateHash: true, smooth: true })
-                        }}
-                        className="flex items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        <span className={cn(
-                          'h-2 w-2 shrink-0 rounded-full',
-                          groupBlockingCount > 0
-                            ? 'bg-warning'
-                            : groupOptionalCount > 0
-                              ? 'bg-muted-foreground/40'
-                              : 'bg-success',
-                        )} />
-                        <span className="min-w-0 flex-1">{group.title}</span>
-                        {groupBlockingCount > 0 ? (
-                          <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
-                            {groupBlockingCount}
-                          </span>
-                        ) : null}
-                        {groupOptionalCount > 0 ? (
-                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                            {groupOptionalCount}
-                          </span>
-                        ) : null}
-                      </a>
-                    )
-                  })}
-                </div>
-              </div>
-            </nav>
+            <ResponsiveDetailRail
+              open={navOpen}
+              onOpenChange={handleNavOpenChange}
+              label="Design sheet sections"
+              desktopClassName="border-r border-border pr-3"
+              desktopStyle={indexStyle}
+              mobileClassName="overflow-y-auto px-3"
+            >
+              <DesignSectionNav
+                groups={navGroups}
+                hideUnusedDecisions={hideUnusedDecisions}
+                hiddenDecisionCount={hiddenDecisionCount}
+                onHideUnusedChange={handleHideUnusedChange}
+                onSelectGroup={groupId => {
+                  scrollToGroup(groupId, { updateHash: true, smooth: true })
+                  setMobileNavOpen(false)
+                }}
+              />
+            </ResponsiveDetailRail>
 
             <main className="min-w-0 pb-10">
               <section
@@ -534,13 +539,33 @@ function DesignSheetPageContent({
                       </div>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-pressed={navOpen}
+                      onClick={() => handleNavOpenChange(!navOpen)}
+                    >
+                      {navOpen ? (
+                        <PanelLeftClose className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <PanelLeft className="h-4 w-4" aria-hidden />
+                      )}
+                      <span className="hidden sm:inline">{navOpen ? 'Hide sections' : 'Sections'}</span>
+                      <span className="sr-only sm:hidden">
+                        {navOpen ? 'Hide sections' : 'Show sections'}
+                      </span>
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       aria-pressed={clausePreviewOpen}
                       onClick={handleClausePreviewToggle}
+                      // The preview column is not rendered on phones, so the
+                      // control that governs it is hidden there too.
+                      className="hidden md:inline-flex"
                     >
                       {clausePreviewOpen ? 'Hide clauses' : 'Preview clauses'}
                     </Button>
@@ -596,7 +621,7 @@ function DesignSheetPageContent({
               </div>
             </main>
 
-            {clausePreviewOpen ? (
+            {clausePreviewOpen && !isMobile ? (
               <aside
                 aria-label="Clause preview"
                 className="border-l border-border"
