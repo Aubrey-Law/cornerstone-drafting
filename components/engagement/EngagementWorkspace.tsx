@@ -1,10 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { cloneElement, useEffect, useId, useMemo, useState, type ReactElement } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, FilePenLine, FileText, ListChecks, Pencil, Save, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { canSendReviewedRevision, engagementStep, ENGAGEMENT_STEPS } from './workspaceState'
 import { EngagementClauseEditor } from './EngagementClauseEditor'
@@ -348,50 +352,13 @@ function DesignStep({
         <p className="text-xs text-muted-foreground">Define the signers, fee terms, scope, and agreement clauses.</p>
       </div>
       <div className="grid gap-5 p-4 lg:grid-cols-[1fr_280px]">
-        <div className="space-y-5">
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="text-xs font-medium">
-              Agreement date
-              <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="date" value={input.agreementDate} onChange={event => onEdit({ agreementDate: event.target.value })} />
-            </label>
-            <label className="text-xs font-medium">
-              Flat fee
-              <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="number" value={input.fee.amount} onChange={event => onEdit({ fee: { ...input.fee, amount: Number(event.target.value) } })} />
-            </label>
-            <label className="text-xs font-medium">
-              Expiration hours
-              <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="number" value={input.expirationHours} onChange={event => onEdit({ expirationHours: Number(event.target.value) })} />
-            </label>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-xs font-medium">
-              Primary name
-              <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.primary.name} onChange={event => onPrimary({ name: event.target.value })} />
-            </label>
-            <label className="text-xs font-medium">
-              Primary email
-              <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.primary.email} onChange={event => onPrimary({ email: event.target.value })} />
-            </label>
-            <label className="text-xs font-medium">
-              Spouse name
-              <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.spouse?.name ?? ''} onChange={event => onSpouse({ name: event.target.value })} />
-            </label>
-            <label className="text-xs font-medium">
-              Spouse email
-              <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.spouse?.email ?? ''} onChange={event => onSpouse({ email: event.target.value })} />
-            </label>
-          </div>
-          <label className="block text-xs font-medium">
-            Payment terms
-            <textarea disabled={locked} className="mt-1 min-h-24 w-full rounded-md border border-border bg-background p-2 text-sm" value={input.fee.paymentTerms} onChange={event => onEdit({ fee: { ...input.fee, paymentTerms: event.target.value } })} />
-          </label>
-          <label className="block text-xs font-medium">
-            Email message
-            <textarea disabled={locked} className="mt-1 min-h-24 w-full rounded-md border border-border bg-background p-2 text-sm" value={input.emailMessage} onChange={event => onEdit({ emailMessage: event.target.value })} />
-          </label>
-          <EngagementClauseEditor label="Additional Clauses" category="additional_clause" value={input.additionalClauses ?? []} disabled={locked} onChange={additionalClauses => onEdit({ additionalClauses })} />
-          <EngagementClauseEditor label="Schedule A - Additional Scope Terms" category="schedule_a" value={input.scheduleAClauses ?? []} disabled={locked} onChange={scheduleAClauses => onEdit({ scheduleAClauses })} />
-        </div>
+        <EngagementFieldsEditor
+          input={input}
+          locked={locked}
+          onEdit={onEdit}
+          onPrimary={onPrimary}
+          onSpouse={onSpouse}
+        />
         <aside className="space-y-3">
           <div className="rounded-md border border-border bg-background p-3">
             <p className="text-[11px] font-medium uppercase text-muted-foreground">Supported definition</p>
@@ -512,6 +479,7 @@ function ReviewStep({
   onSend: () => void
   onToggleEdit: () => void
 }) {
+  const confirmId = useId()
   return (
     <section className="rounded-lg border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
@@ -556,10 +524,10 @@ function ReviewStep({
           <p className="mt-2 text-xs text-muted-foreground">
             {agreement.recipients.map(recipient => `${recipient.name}: ${recipient.status}`).join(' · ') || `Overall: ${agreement.status}`}
           </p>
-          <label className="mt-3 flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={confirmExactRevision} onChange={event => onConfirm(event.target.checked)} />
-            I confirm this exact revision was reviewed.
-          </label>
+          <div className="mt-3 flex items-center gap-2">
+            <Checkbox id={confirmId} checked={confirmExactRevision} onCheckedChange={checked => onConfirm(checked === true)} />
+            <Label htmlFor={confirmId} className="text-sm font-normal">I confirm this exact revision was reviewed.</Label>
+          </div>
           <Button className="mt-3" disabled={!canSend || isSending} onClick={onSend}>
             {isSending ? 'Sending...' : 'Send for signature'}
           </Button>
@@ -607,46 +575,83 @@ function ReviewEditor({
           Resolve required fields before saving: {blockers.join(', ')}
         </div>
       )}
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <label className="text-xs font-medium">
-          Agreement date
-          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="date" value={input.agreementDate} onChange={event => onEdit({ agreementDate: event.target.value })} />
-        </label>
-        <label className="text-xs font-medium">
-          Flat fee
-          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="number" value={input.fee.amount} onChange={event => onEdit({ fee: { ...input.fee, amount: Number(event.target.value) } })} />
-        </label>
-        <label className="text-xs font-medium">
-          Expiration hours
-          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" type="number" value={input.expirationHours} onChange={event => onEdit({ expirationHours: Number(event.target.value) })} />
-        </label>
+      <div className="mt-4">
+        <EngagementFieldsEditor
+          input={input}
+          locked={locked}
+          onEdit={onEdit}
+          onPrimary={onPrimary}
+          onSpouse={onSpouse}
+        />
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <label className="text-xs font-medium">
-          Primary name
-          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.primary.name} onChange={event => onPrimary({ name: event.target.value })} />
-        </label>
-        <label className="text-xs font-medium">
-          Primary email
-          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.primary.email} onChange={event => onPrimary({ email: event.target.value })} />
-        </label>
-        <label className="text-xs font-medium">
-          Spouse name
-          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.spouse?.name ?? ''} onChange={event => onSpouse({ name: event.target.value })} />
-        </label>
-        <label className="text-xs font-medium">
-          Spouse email
-          <input disabled={locked} className="mt-1 block w-full rounded-md border border-border bg-background p-2 text-sm" value={input.spouse?.email ?? ''} onChange={event => onSpouse({ email: event.target.value })} />
-        </label>
+    </div>
+  )
+}
+
+function EngagementField({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactElement<{ id?: string }>
+}) {
+  const controlId = useId()
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={controlId} className="text-xs">{label}</Label>
+      {cloneElement(children, { id: children.props.id ?? controlId })}
+    </div>
+  )
+}
+
+// Single source for the engagement input fields — rendered by both the Design
+// step and the Review step's in-app editor so the two never drift apart.
+function EngagementFieldsEditor({
+  input,
+  locked,
+  onEdit,
+  onPrimary,
+  onSpouse,
+}: {
+  input: EngagementInput
+  locked: boolean
+  onEdit: (patch: Partial<EngagementInput>) => void
+  onPrimary: (patch: Partial<EngagementInput['primary']>) => void
+  onSpouse: (patch: Partial<NonNullable<EngagementInput['spouse']>>) => void
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <EngagementField label="Agreement date">
+          <Input disabled={locked} type="date" value={input.agreementDate} onChange={event => onEdit({ agreementDate: event.target.value })} />
+        </EngagementField>
+        <EngagementField label="Flat fee">
+          <Input disabled={locked} type="number" value={input.fee.amount} onChange={event => onEdit({ fee: { ...input.fee, amount: Number(event.target.value) } })} />
+        </EngagementField>
+        <EngagementField label="Expiration hours">
+          <Input disabled={locked} type="number" value={input.expirationHours} onChange={event => onEdit({ expirationHours: Number(event.target.value) })} />
+        </EngagementField>
       </div>
-      <label className="mt-3 block text-xs font-medium">
-        Payment terms
-        <textarea disabled={locked} className="mt-1 min-h-28 w-full rounded-md border border-border bg-background p-2 text-sm" value={input.fee.paymentTerms} onChange={event => onEdit({ fee: { ...input.fee, paymentTerms: event.target.value } })} />
-      </label>
-      <label className="mt-3 block text-xs font-medium">
-        Email message
-        <textarea disabled={locked} className="mt-1 min-h-24 w-full rounded-md border border-border bg-background p-2 text-sm" value={input.emailMessage} onChange={event => onEdit({ emailMessage: event.target.value })} />
-      </label>
+      <div className="grid gap-3 md:grid-cols-2">
+        <EngagementField label="Primary name">
+          <Input disabled={locked} value={input.primary.name} onChange={event => onPrimary({ name: event.target.value })} />
+        </EngagementField>
+        <EngagementField label="Primary email">
+          <Input disabled={locked} type="email" value={input.primary.email} onChange={event => onPrimary({ email: event.target.value })} />
+        </EngagementField>
+        <EngagementField label="Spouse name">
+          <Input disabled={locked} value={input.spouse?.name ?? ''} onChange={event => onSpouse({ name: event.target.value })} />
+        </EngagementField>
+        <EngagementField label="Spouse email">
+          <Input disabled={locked} type="email" value={input.spouse?.email ?? ''} onChange={event => onSpouse({ email: event.target.value })} />
+        </EngagementField>
+      </div>
+      <EngagementField label="Payment terms">
+        <Textarea disabled={locked} className="min-h-24" value={input.fee.paymentTerms} onChange={event => onEdit({ fee: { ...input.fee, paymentTerms: event.target.value } })} />
+      </EngagementField>
+      <EngagementField label="Email message">
+        <Textarea disabled={locked} className="min-h-24" value={input.emailMessage} onChange={event => onEdit({ emailMessage: event.target.value })} />
+      </EngagementField>
       <EngagementClauseEditor label="Additional Clauses" category="additional_clause" value={input.additionalClauses ?? []} disabled={locked} onChange={additionalClauses => onEdit({ additionalClauses })} />
       <EngagementClauseEditor label="Schedule A - Additional Scope Terms" category="schedule_a" value={input.scheduleAClauses ?? []} disabled={locked} onChange={scheduleAClauses => onEdit({ scheduleAClauses })} />
     </div>

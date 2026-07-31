@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Sans, EB_Garamond, Lora } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Toaster } from 'sonner'
 import { ThemeProvider } from '@/lib/theme/ThemeProvider'
 import { THEME_INIT_SCRIPT } from '@/lib/theme/theme-init-script'
 import './globals.css'
 
-const dmSans = DM_Sans({
-  subsets: ['latin'],
+// Vendored latin-subset variable fonts (assets/fonts/) so production builds
+// don't reach Google's network. Latin-ext glyphs fall back to system fonts.
+const dmSans = localFont({
+  src: '../assets/fonts/dm-sans-latin-var.woff2',
+  weight: '100 1000',
   display: 'swap',
   variable: '--font-sans',
 })
@@ -14,14 +17,16 @@ const dmSans = DM_Sans({
 // Exposed as `--font-lora`, not `--font-serif`: the Tailwind theme bridge
 // (styles/theme/tailwind-bridge.css) maps `--font-serif` to the sans stack, so
 // anything injected under that name is shadowed and never renders.
-const lora = Lora({
-  subsets: ['latin'],
+const lora = localFont({
+  src: '../assets/fonts/lora-latin-var.woff2',
+  weight: '400 700',
   display: 'swap',
   variable: '--font-lora',
 })
 
-const ebGaramond = EB_Garamond({
-  subsets: ['latin'],
+const ebGaramond = localFont({
+  src: '../assets/fonts/eb-garamond-latin-var.woff2',
+  weight: '400 800',
   display: 'swap',
   variable: '--font-eb-garamond',
 })

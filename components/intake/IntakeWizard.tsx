@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useId,
   useMemo,
   useState,
   type ReactNode,
@@ -18,6 +19,7 @@ import { ContactPickerField } from '@/components/intake/FiduciaryContactPicker'
 import { IntakeDocumentUpload, IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReview'
 import { formatPhoneInput } from '@/lib/phone'
 import { IntakeField } from '@/components/sharedFields/IntakeField'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import {
   ContactAddressFields,
   AddButton,
@@ -493,7 +496,7 @@ function RealEstateModalContent({ items, onChange }: {
     onChange(items.filter(r => r.id !== id))
   }
 
-  const inputCls = 'w-full rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
   return (
     <div className="space-y-4">
@@ -536,12 +539,12 @@ function RealEstateModalContent({ items, onChange }: {
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-gray-500">Notes</label>
-              <textarea
+              <Textarea
                 value={row.notes ?? ''}
                 onChange={e => updateRow(row.id, 'notes', e.target.value)}
                 rows={2}
                 placeholder="Anything we should know about this property (e.g. held in trust, co-owned, rented)…"
-                className={inputCls}
+                className="px-2 py-1.5 text-sm"
               />
             </div>
           </div>
@@ -565,7 +568,7 @@ function BusinessModalContent({ items, onChange }: {
 }) {
   const businessTypes = ['Sole Proprietorship', 'LLC', 'Partnership', 'Corporation', 'Other']
   const ownerOptions = ['Client', 'Spouse', 'Joint']
-  const inputCls = 'w-full rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
   function addRow() {
     onChange([...items, { id: crypto.randomUUID(), name: '', business_type: '', interest_pct: '', value: '', owner: 'Client' }])
@@ -636,7 +639,7 @@ function LiabilityModalContent({ items, onChange }: {
   onChange: (items: LiabilityItem[]) => void
 }) {
   const ownerOptions = ['Client', 'Spouse', 'Joint']
-  const inputCls = 'w-full rounded border border-gray-200 px-2 py-1.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+  const inputCls = 'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
   function addRow() {
     onChange([...items, { id: crypto.randomUUID(), description: '', value: '', owner: 'Client' }])
@@ -698,7 +701,6 @@ function AssetTotalsContent({ label, totals, onChange, clientName, spouseName }:
   clientName?: string
   spouseName?: string
 }) {
-  const inputCls = 'w-full rounded border border-gray-200 px-3 py-2 text-base focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm'
   const rows: { field: keyof AssetTotals; label: string }[] = [
     { field: 'client_total', label: clientName ? `${clientName}'s Total` : 'Client Total' },
     { field: 'spouse_total', label: spouseName ? `${spouseName}'s Total` : 'Spouse Total' },
@@ -706,18 +708,15 @@ function AssetTotalsContent({ label, totals, onChange, clientName, spouseName }:
   ]
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">Enter approximate totals for all {label.toLowerCase()} combined.</p>
+      <p className="text-sm text-muted-foreground">Enter approximate totals for all {label.toLowerCase()} combined.</p>
       {rows.map(({ field, label: rowLabel }) => (
-        <div key={field}>
-          <label className="mb-1 block text-sm font-medium text-gray-700">{rowLabel}</label>
-          <input
-            type="text"
+        <FormField key={field} label={rowLabel}>
+          <TextInput
             value={totals[field]}
-            onChange={e => onChange({ ...totals, [field]: e.target.value })}
+            onChange={v => onChange({ ...totals, [field]: v })}
             placeholder="$0 or leave blank"
-            className={inputCls}
           />
-        </div>
+        </FormField>
       ))}
     </div>
   )
@@ -732,12 +731,11 @@ function AssetTextContent({ label, value, onChange }: {
   return (
     <div className="space-y-2">
       <p className="text-sm text-gray-500">Describe your {label.toLowerCase()} — include approximate values if known.</p>
-      <textarea
+      <Textarea
         value={value}
         onChange={e => onChange(e.target.value)}
         rows={6}
         placeholder={`Describe your ${label.toLowerCase()}…`}
-        className="w-full rounded-md border border-gray-200 px-3 py-2 text-base focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
       />
     </div>
   )
@@ -790,6 +788,7 @@ function AssetSummary({ assetKey, data, clientName, spouseName }: {
 
 export function StepEstate({ data, update }: StepProps) {
   const [activeModal, setActiveModal] = useState<string | null>(null)
+  const assetCheckboxId = useId()
 
   // Use entered first names for personalized labels; fall back to generic
   const clientName = (data.first_name as string | undefined)?.trim() || undefined
@@ -897,22 +896,21 @@ export function StepEstate({ data, update }: StepProps) {
           {INTAKE_ASSET_TYPE_VALUES.map((asset) => {
             const isChecked = currentAssets.includes(asset)
             return (
-              <div key={asset} className={cn('rounded-md border p-3 transition-colors', isChecked ? 'border-accent bg-teal-bg' : 'border-gray-200 hover:bg-gray-50')}>
+              <div key={asset} className={cn('rounded-md border p-3 transition-colors', isChecked ? 'border-accent bg-teal-bg' : 'border-border hover:bg-muted/50')}>
                 <div className="flex items-center justify-between gap-2">
-                  <label className="flex cursor-pointer items-center gap-2 flex-1">
-                    <input
-                      type="checkbox"
+                  <label className="flex cursor-pointer items-center gap-2 flex-1" htmlFor={`${assetCheckboxId}-${asset}`}>
+                    <Checkbox
+                      id={`${assetCheckboxId}-${asset}`}
                       checked={isChecked}
-                      onChange={() => toggleAsset(asset)}
-                      className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                      onCheckedChange={() => toggleAsset(asset)}
                     />
-                    <span className="text-sm text-gray-700">{assetTypeLabel(asset)}</span>
+                    <span className="text-sm text-foreground">{assetTypeLabel(asset)}</span>
                   </label>
                   {isChecked && (
                     <button
                       type="button"
                       onClick={() => setActiveModal(asset)}
-                      className="shrink-0 rounded px-2 py-0.5 text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors border border-accent"
+                      className="shrink-0 rounded px-2 py-0.5 text-xs font-medium text-accent hover:bg-accent hover:text-accent-foreground transition-colors border border-accent"
                     >
                       Add details
                     </button>
@@ -937,12 +935,12 @@ export function StepEstate({ data, update }: StepProps) {
                 label={c.label}
               />
               {on && (
-                <textarea
+                <Textarea
                   value={circumstanceDetails[c.value] ?? ''}
                   onChange={(e) => updateCircumstanceDetail(c.value, e.target.value)}
                   rows={2}
                   placeholder="Please provide additional information…"
-                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
+                  className="mt-2"
                 />
               )}
             </div>
@@ -981,12 +979,11 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
   return (
     <div className="space-y-6">
       <FormField label="Why did you choose Aubrey Law?" optional>
-        <textarea
+        <Textarea
           value={obj.why_choose_firm ?? ''}
           onChange={(e) => updateObj('why_choose_firm', e.target.value)}
           rows={3}
           placeholder="A referral, online search, prior experience…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
         />
         <WhyWeAsk>
           This helps us understand what mattered to you when choosing counsel and tailor your first conversation.
@@ -994,12 +991,11 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
       </FormField>
 
       <FormField label="Why are you planning now?" optional>
-        <textarea
+        <Textarea
           value={obj.why_now ?? ''}
           onChange={(e) => updateObj('why_now', e.target.value)}
           rows={3}
           placeholder="A life event, peace of mind, a nudge from family…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
         />
         <WhyWeAsk>
           Your timing and motivation help your attorney focus the plan on what is driving you right now.
@@ -1007,12 +1003,11 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
       </FormField>
 
       <FormField label="Is making things easy for loved ones important to you?" optional>
-        <textarea
+        <Textarea
           value={obj.make_things_easy ?? ''}
           onChange={(e) => updateObj('make_things_easy', e.target.value)}
           rows={2}
           placeholder="Most clients say yes — share anything specific you have in mind."
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
         />
         <WhyWeAsk>
           Many clients want to spare family from confusion, conflict, or extra court steps. Your answer shapes how we structure the plan.
@@ -1113,11 +1108,10 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
       </FormField>
 
       <FormField label="Anything else you'd like us to know?">
-        <textarea
+        <Textarea
           value={(data.special_notes as string) ?? ''}
           onChange={(e) => update('special_notes', e.target.value)}
           rows={4}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-base shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent md:text-sm"
           placeholder="Any specific concerns, questions, or wishes you'd like to share..."
         />
       </FormField>

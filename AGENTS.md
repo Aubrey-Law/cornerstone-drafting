@@ -46,17 +46,14 @@ that a fresh VM needs and must be done manually (kept out of the update script o
    `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_AUTH_SITE_URL=http://localhost:3002`. R2
    vars can be placeholders locally. `.env.local` is git-ignored; the required shape is
    in `VERCEL_ENV_CHECKLIST.md` (note the code reads `R2_BUCKET_NAME`, not `R2_BUCKET`).
-3. Seed a staff user + a matter (Supabase auth has no UI signup for staff here):
+3. Seed a staff user, a client portal user, a lead, and a hired matter
+   (Supabase auth has no UI signup for staff here):
    ```bash
-   # create the auth user (email/password) via the GoTrue admin API using the service-role key
-   curl -s -X POST "http://127.0.0.1:54321/auth/v1/admin/users" \
-     -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
-     -H "Content-Type: application/json" \
-     -d '{"email":"attorney@example.com","password":"Password123!","email_confirm":true}'
-   # then insert a public.users row (role='attorney') for that auth id, plus a
-   # client_intake + matters (+ matter_details) row so it shows in the drafting hub.
+   npm run seed:browser-fixture   # scripts/seedBrowserFixture.ts — idempotent
    ```
-   Demo login used during setup: `attorney@example.com` / `Password123!`.
+   Logins: staff `attorney@example.com` / `Password123!`; portal client
+   `client@example.com` / `Password123!`. The script prints direct URLs for the
+   leads list, lead detail, matter detail, drafting hub, and portal dashboard.
 4. `npm run dev` and open http://localhost:3002 (redirects to `/admin/drafting`; unauthenticated
    requests go to `/auth/login`).
 

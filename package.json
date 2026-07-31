@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "theme:generate": "tsx scripts/generate-theme-css.ts",
     "clauses:import": "tsx scripts/import-estate-clauses.ts",
+    "seed:browser-fixture": "tsx scripts/seedBrowserFixture.ts",
     "prebuild:next": "npm run theme:generate",
     "validate-env": "node scripts/validateEnv.mjs",
     "check:db-rpcs": "node scripts/checkDbRpcs.mjs",
