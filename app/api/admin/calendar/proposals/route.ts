@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
+import { createCalendarHold } from '@/lib/appointments/graphEvents'
 
 export async function POST(req: Request) {
   const auth = await requireAdmin(req)
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
       startIso: new Date(start).toISOString(),
       endIso: new Date(end).toISOString(),
       matterId: typeof payload.matter_id === 'string' ? payload.matter_id : null,
+      showAsBusy: payload.calendarShowAsBusy !== false,
     })
     return NextResponse.json({ ok: true, eventId: result.eventId })
   }
