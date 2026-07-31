@@ -280,6 +280,11 @@ export function CalendarClient() {
   function shift(delta: number) {
     if (view === 'month') {
       setAnchor(a => new Date(a.getFullYear(), a.getMonth() + delta, 1))
+    } else if (view === 'day') {
+      // The day view renders from selectedDay, not anchor, so move both.
+      const next = addDays(selectedDate, delta)
+      setAnchor(next)
+      setSelectedDay(dayKey(next))
     } else {
       setAnchor(a => addDays(a, delta * (view === 'week' ? 7 : 1)))
     }
@@ -960,15 +965,23 @@ function TimeGrid(props: {
                     Blocked all day
                   </span>
                 )}
-                {allDay.map(e => (
-                  <span
-                    key={e.id}
-                    className="mt-0.5 block truncate rounded border border-border/60 bg-muted/60 px-1 text-[10px] leading-4 text-muted-foreground"
-                    title={`All day: ${e.subject} (Outlook)`}
-                  >
-                    {e.subject}
-                  </span>
-                ))}
+                {allDay.map(e => {
+                  const style = CATEGORY_STYLE[categorize(e.subject)]
+                  return (
+                    <span
+                      key={e.id}
+                      className="mt-0.5 block truncate rounded px-1 text-[10px] leading-4"
+                      style={{
+                        background: style.bg,
+                        color: style.text,
+                        borderLeft: `3px solid ${style.dot}`,
+                      }}
+                      title={`All day: ${e.subject} (Outlook)`}
+                    >
+                      {e.subject}
+                    </span>
+                  )
+                })}
               </div>
             )
           })}
@@ -1045,17 +1058,24 @@ function TimeGrid(props: {
                   if (startMin >= GRID_END_MIN) return null
                   const top = ((startMin - GRID_START_MIN) / SLOT_MIN) * SLOT_PX
                   const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 18)
+                  const style = CATEGORY_STYLE[categorize(e.subject)]
                   return (
                     <div
                       key={e.id}
                       className={cn(
-                        'pointer-events-none absolute inset-x-1 overflow-hidden rounded border border-border/60 bg-muted/70 px-1.5 py-0.5',
+                        'pointer-events-none absolute inset-x-1 overflow-hidden rounded px-1.5 py-0.5',
                         (e.showAs === 'free' || e.showAs === 'tentative') && 'opacity-60',
                       )}
-                      style={{ top, height }}
+                      style={{
+                        top,
+                        height,
+                        background: style.bg,
+                        color: style.text,
+                        borderLeft: `3px solid ${style.dot}`,
+                      }}
                       title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (Outlook)`}
                     >
-                      <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                      <span className="block truncate text-[11px] leading-4">
                         {fmtTime(e.startIso)} {e.subject}
                       </span>
                     </div>
