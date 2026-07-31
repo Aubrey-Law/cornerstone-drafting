@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
+import { isSmsConfigured } from '@/lib/communications/config'
 import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
 import { fetchTasksForLead } from '@/lib/queries/tasks'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
@@ -188,6 +189,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         id: user?.id ?? '',
         role: user ? await getCachedUserRole(user.id) ?? '' : '',
       }}
+      smsEnabled={isSmsConfigured()}
     />
   )
 }
