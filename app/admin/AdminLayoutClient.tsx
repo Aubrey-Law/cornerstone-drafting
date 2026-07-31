@@ -16,6 +16,7 @@ import {
   PanelLeft,
   PanelRight,
   Phone,
+  ReceiptText,
   Settings,
   Sparkles,
   Sun,
@@ -57,11 +58,12 @@ function isIconRailRoute(pathname: string): boolean {
   return ICON_RAIL_ROUTES.some(pattern => pattern.test(pathname))
 }
 
-const navItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[] = [
+export const adminNavItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
   { href: '/admin/leads', label: 'Leads', icon: UserPlus },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
+  { href: '/admin/billing', label: 'Billing', icon: ReceiptText },
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
   { href: '/admin/assistant', label: 'Assistant', icon: Sparkles },
@@ -168,7 +170,7 @@ export default function AdminLayoutClient({
 
   const nav = (compact: boolean) => (
     <nav className="flex flex-col gap-1 p-2">
-      {navItems.map(item => {
+      {adminNavItems.map(item => {
         const active = pathname === item.href || (!item.exact && pathname.startsWith(`${item.href}/`))
         const Icon = item.icon
         const badge = getNavBadge(item.href, badgeCounts)

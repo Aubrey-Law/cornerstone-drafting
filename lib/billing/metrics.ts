@@ -1,0 +1,368 @@
+import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import type {
+  BillingFilter,
+  BillingItem,
+  BillingLedgerRow,
+  BillingNudge,
+  BillingPayment,
+  BillingSnapshot,
+  RevenueCategory,
+  RevenueRollup,
+  UnpreparedClaim,
+} from './types'
+
+const DAY_MS = 86_400_000
+
+function dateParts(key: string): [number, number, number] {
+  const [year, month, day] = key.split('-').map(Number)
+  return [year, month, day]
+}
+
+function calendarDaysBetween(from: string, to: string): number {
+  const [fromYear, fromMonth, fromDay] = dateParts(from)
+  const [toYear, toMonth, toDay] = dateParts(to)
+  return Math.max(
+    0,
+    Math.floor(
+      (Date.UTC(toYear, toMonth - 1, toDay) - Date.UTC(fromYear, fromMonth - 1, fromDay))
+      / DAY_MS,
+    ),
+  )
+}
+
+function monthBounds(month: string): { start: string; end: string; priorStart: string; priorEnd: string } {
+  const match = /^(\d{4})-(\d{2})$/.exec(month)
+  if (!match) throw new Error('selectedMonth must use YYYY-MM')
+  const year = Number(match[1])
+  const monthIndex = Number(match[2]) - 1
+  const key = (date: Date) => date.toISOString().slice(0, 10)
+  const startDate = new Date(Date.UTC(year, monthIndex, 1))
+  const endDate = new Date(Date.UTC(year, monthIndex + 1, 1))
+  const priorStartDate = new Date(Date.UTC(year, monthIndex - 1, 1))
+  return {
+    start: key(startDate),
+    end: key(endDate),
+    priorStart: key(priorStartDate),
+    priorEnd: key(startDate),
+  }
+}
+
+function inDateRange(iso: string, start: string, end: string): boolean {
+  const key = firmDateKey(iso)
+  return key !== null && key >= start && key < end
+}
+
+function paymentCompletionDate(
+  item: BillingItem,
+  payments: BillingPayment[],
+): string | null {
+  let running = 0
+  for (const payment of [...payments].sort(
+    (a, b) => a.receivedAt.localeCompare(b.receivedAt) || a.id.localeCompare(b.id),
+  )) {
+    running += payment.amount
+    if (running >= item.amountBilled) return payment.receivedAt
+  }
+  return null
+}
+
+function revenueCategory(item: BillingItem): RevenueCategory | null {
+  if (item.legalPlan?.trim()) return 'legal'
+  const practice = item.practiceArea?.trim().toLowerCase() ?? ''
+  if (practice === 'pb' || practice.includes('probate')) return 'probate'
+  const plan = item.planType?.trim().toLowerCase() ?? ''
+  if (plan.includes('trust')) return 'trust'
+  if (plan.includes('will')) return 'will'
+  return null
+}
+
+function emptyRollup(): RevenueRollup {
+  return { current: 0, prior: 0, count: 0 }
+}
+
+function average(values: number[]): number | null {
+  if (values.length === 0) return null
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+}
+
+function buildRows(
+  items: BillingItem[],
+  payments: BillingPayment[],
+  today: string,
+): BillingLedgerRow[] {
+  const byItem = new Map<string, BillingPayment[]>()
+  for (const payment of payments) {
+    const list = byItem.get(payment.billingItemId) ?? []
+    list.push(payment)
+    byItem.set(payment.billingItemId, list)
+  }
+
+  return items
+    .map(item => {
+      const itemPayments = byItem.get(item.id) ?? []
+      const collected = itemPayments.reduce((sum, payment) => sum + payment.amount, 0)
+      const balance = Math.max(0, item.amountBilled - collected)
+      const ageStart = item.invoicedAt ?? item.createdAt
+      const ageKey = firmDateKey(ageStart) ?? today
+      const ageDays = item.status === 'paid' ? 0 : calendarDaysBetween(ageKey, today)
+      return {
+        ...item,
+        payments: itemPayments,
+        collected,
+        balance,
+        ageDays,
+        overdue: balance > 0 && item.invoicedAt !== null && ageDays > 30,
+        paidAt: paymentCompletionDate(item, itemPayments),
+      }
+    })
+    .sort((a, b) => {
+      const aOpen = a.balance > 0 ? 0 : 1
+      const bOpen = b.balance > 0 ? 0 : 1
+      if (aOpen !== bOpen) return aOpen - bOpen
+      const aDate = a.invoicedAt ?? a.createdAt
+      const bDate = b.invoicedAt ?? b.createdAt
+      return aDate.localeCompare(bDate) || a.clientName.localeCompare(b.clientName)
+    })
+}
+
+function buildRevenue(rows: BillingLedgerRow[], today: string): BillingSnapshot['revenue'] {
+  const [year, month, day] = dateParts(today)
+  const currentStart = `${year}-01-01`
+  const currentEnd = today
+  const priorStart = `${year - 1}-01-01`
+  const priorEnd = `${year - 1}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const result: BillingSnapshot['revenue'] = {
+    total: emptyRollup(),
+    trust: emptyRollup(),
+    will: emptyRollup(),
+    probate: emptyRollup(),
+    legal: emptyRollup(),
+  }
+
+  for (const row of rows) {
+    if (row.source !== 'engagement') continue
+    const category = revenueCategory(row)
+    if (!category) continue
+    const created = firmDateKey(row.createdAt)
+    if (!created) continue
+    if (created >= currentStart && created <= currentEnd) {
+      result[category].current += row.amountBilled
+      result[category].count += 1
+      result.total.current += row.amountBilled
+      result.total.count += 1
+    } else if (created >= priorStart && created <= priorEnd) {
+      result[category].prior += row.amountBilled
+      result.total.prior += row.amountBilled
+    }
+  }
+  return result
+}
+
+function buildNudges(
+  rows: BillingLedgerRow[],
+  unpreparedClaims: UnpreparedClaim[],
+  dismissed: Set<string>,
+  today: string,
+): BillingNudge[] {
+  const nudges: BillingNudge[] = []
+  for (const row of rows) {
+    if (row.status === 'to_invoice') {
+      const key = `invoice:${row.id}`
+      if (!dismissed.has(key)) {
+        nudges.push({
+          key,
+          kind: 'invoice',
+          clientName: row.clientName,
+          description: `Send ${row.label.toLowerCase()}`,
+          itemId: row.id,
+          matterId: row.matterId,
+          clientEmail: row.clientEmail,
+          legalPlan: row.plan,
+        })
+      }
+    } else if (row.overdue) {
+      const reminderKey = row.lastRemindedAt ? firmDateKey(row.lastRemindedAt) : null
+      const recentlyReminded =
+        reminderKey !== null && calendarDaysBetween(reminderKey, today) < 7
+      const key = `reminder:${row.id}`
+      if (!recentlyReminded && !dismissed.has(key)) {
+        nudges.push({
+          key,
+          kind: 'reminder',
+          clientName: row.clientName,
+          description: `Payment reminder, ${row.ageDays} days past due`,
+          itemId: row.id,
+          matterId: row.matterId,
+          clientEmail: row.clientEmail,
+          legalPlan: row.plan,
+        })
+      }
+    }
+  }
+  for (const claim of unpreparedClaims) {
+    const key = `claim:${claim.matterId}:${claim.legalPlan}`
+    if (!dismissed.has(key)) {
+      nudges.push({
+        key,
+        kind: 'claim',
+        clientName: claim.clientName,
+        description: `${claim.legalPlan === 'metlife' ? 'MetLife' : 'LegalEASE'} claim not prepared`,
+        itemId: null,
+        matterId: claim.matterId,
+        clientEmail: claim.clientEmail,
+        legalPlan: claim.legalPlan,
+      })
+    }
+  }
+  return nudges
+}
+
+export function buildBillingSnapshot(input: {
+  items: BillingItem[]
+  payments: BillingPayment[]
+  engagementRevenueItems?: BillingItem[]
+  selectedMonth: string
+  annualGoalCents: number
+  now?: Date
+  dismissedNudgeKeys: string[]
+  unpreparedClaims: UnpreparedClaim[]
+}): BillingSnapshot {
+  const now = input.now ?? new Date()
+  const today = firmTodayKey(now)
+  const rows = buildRows(input.items, input.payments, today)
+  const open = rows.filter(row => row.balance > 0)
+  const bounds = monthBounds(input.selectedMonth)
+  const monthAmount = input.payments
+    .filter(payment => inDateRange(payment.receivedAt, bounds.start, bounds.end))
+    .reduce((sum, payment) => sum + payment.amount, 0)
+  const priorAmount = input.payments
+    .filter(payment => inDateRange(payment.receivedAt, bounds.priorStart, bounds.priorEnd))
+    .reduce((sum, payment) => sum + payment.amount, 0)
+  const yearStart = `${dateParts(today)[0]}-01-01`
+  const yearEnd = `${dateParts(today)[0] + 1}-01-01`
+  const ytd = input.payments
+    .filter(payment => inDateRange(payment.receivedAt, yearStart, yearEnd))
+    .reduce((sum, payment) => sum + payment.amount, 0)
+  const paidDurations = rows
+    .filter(row => row.paidAt && row.invoicedAt)
+    .map(row => ({
+      kind: row.kind,
+      days: calendarDaysBetween(
+        firmDateKey(row.invoicedAt!)!,
+        firmDateKey(row.paidAt!)!,
+      ),
+    }))
+
+  return {
+    rows,
+    selectedMonth: input.selectedMonth,
+    annualGoalCents: input.annualGoalCents,
+    revenue: buildRevenue(
+      input.engagementRevenueItems
+        ? buildRows(input.engagementRevenueItems, [], today)
+        : rows,
+      today,
+    ),
+    outstanding: {
+      amount: open.reduce((sum, row) => sum + row.balance, 0),
+      openCount: open.length,
+      overdueAmount: open.filter(row => row.overdue).reduce((sum, row) => sum + row.balance, 0),
+    },
+    collectedMonth: {
+      amount: monthAmount,
+      priorAmount,
+      deltaPercent:
+        priorAmount === 0 ? null : Math.round(((monthAmount - priorAmount) / priorAmount) * 100),
+    },
+    collectedYtd: {
+      amount: ytd,
+      goal: input.annualGoalCents,
+      progressPercent: Math.min(100, Math.round((ytd / input.annualGoalCents) * 100)),
+    },
+    averageDaysToCollect: {
+      all: average(paidDurations.map(entry => entry.days)),
+      flatFee: average(
+        paidDurations.filter(entry => entry.kind === 'flat_fee').map(entry => entry.days),
+      ),
+      planClaim: average(
+        paidDurations.filter(entry => entry.kind === 'plan_claim').map(entry => entry.days),
+      ),
+    },
+    aging: {
+      current: open.filter(row => row.ageDays <= 30).reduce((sum, row) => sum + row.balance, 0),
+      days31To60: open
+        .filter(row => row.ageDays >= 31 && row.ageDays <= 60)
+        .reduce((sum, row) => sum + row.balance, 0),
+      days61Plus: open.filter(row => row.ageDays >= 61).reduce((sum, row) => sum + row.balance, 0),
+    },
+    openClaims: open.filter(row => row.kind === 'plan_claim'),
+    unpreparedClaims: input.unpreparedClaims,
+    nudges: buildNudges(
+      rows,
+      input.unpreparedClaims,
+      new Set(input.dismissedNudgeKeys),
+      today,
+    ),
+  }
+}
+
+export function billingStatusPresentation(
+  row: BillingLedgerRow,
+): {
+  label: string
+  tone: 'neutral' | 'invoiced' | 'claim' | 'partial' | 'paid' | 'overdue'
+} {
+  if (row.overdue) return { label: 'Overdue', tone: 'overdue' }
+  const presentations = {
+    to_invoice: { label: 'To invoice', tone: 'neutral' },
+    invoiced: { label: 'Invoiced', tone: 'invoiced' },
+    claim_submitted: { label: 'Claim submitted', tone: 'claim' },
+    partial: { label: 'Partially paid', tone: 'partial' },
+    paid: { label: 'Paid in full', tone: 'paid' },
+  } as const
+  return presentations[row.status]
+}
+
+export function filterBillingRows(
+  rows: BillingLedgerRow[],
+  filter: BillingFilter,
+  search: string,
+  selectedMonth: string,
+): BillingLedgerRow[] {
+  const normalized = search.trim().toLowerCase()
+  return rows.filter(row => {
+    if (filter === 'open' && row.balance === 0) return false
+    if (filter === 'overdue' && !row.overdue) return false
+    if (
+      filter === 'paid'
+      && (row.balance > 0 || !row.paidAt || !row.paidAt.startsWith(`${selectedMonth}-`))
+    ) return false
+    if (
+      normalized
+      && !`${row.clientName} ${row.matterNumber ?? ''} ${row.label}`.toLowerCase().includes(normalized)
+    ) return false
+    return true
+  })
+}
+
+function csvCell(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
+}
+
+export function billingCsv(rows: BillingLedgerRow[]): string {
+  const lines = [
+    ['Client', 'Matter', 'Item', 'Billed', 'Collected', 'Balance', 'Status', 'Invoice date', 'Age days'],
+    ...rows.map(row => [
+      row.clientName,
+      row.matterNumber ?? '',
+      row.label,
+      (row.amountBilled / 100).toFixed(2),
+      (row.collected / 100).toFixed(2),
+      (row.balance / 100).toFixed(2),
+      billingStatusPresentation(row).label,
+      row.invoicedAt ? firmDateKey(row.invoicedAt) ?? '' : '',
+      row.status === 'paid' ? '' : String(row.ageDays),
+    ]),
+  ]
+  return lines.map(line => line.map(csvCell).join(',')).join('\n')
+}

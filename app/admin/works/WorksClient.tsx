@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { BookOpen, FileText, MessageSquare, Plus, RefreshCw, Search, Table2 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -33,11 +34,12 @@ Review only approved matter facts. Identify missing information as [UNKNOWN]. Dr
 const SCOPES = ['all', 'mine', 'shared', 'system', 'inactive'] as const
 
 export default function WorksClient() {
+  const searchParams = useSearchParams()
   const [skills, setSkills] = useState<WorkSkill[]>([])
   const [scope, setScope] = useState<(typeof SCOPES)[number]>('all')
   const [type, setType] = useState('')
   const [practice, setPractice] = useState('')
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(() => searchParams.get('search') ?? '')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorSkill, setEditorSkill] = useState<WorkSkill | null>(null)
