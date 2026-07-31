@@ -101,12 +101,28 @@ describe('day calendar colour coding', () => {
   })
 })
 
-describe('day calendar legend', () => {
-  it('shows the category key on the day view, not just the month view', () => {
+describe('calendar category legend', () => {
+  // The legend visibility is a ternary inside a className, with no test hook on
+  // the element. Rather than pin the exact expression, lift the condition out of
+  // the source and evaluate it per view — any equivalent phrasing still passes.
+  function legendVisibility(): (view: string) => boolean {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/calendar/CalendarClient.tsx'),
       'utf8',
     )
-    expect(source).toContain("view === 'month' || view === 'day' ? 'flex' : 'hidden'")
+    const match = source.match(/([^\n]*?)\s*\?\s*'flex'\s*:\s*'hidden'/)
+    if (!match) throw new Error('legend visibility ternary not found in CalendarClient.tsx')
+    return new Function('view', `return Boolean(${match[1]})`) as (view: string) => boolean
+  }
+
+  it('shows the category key on every view that colours events by category', () => {
+    const visible = legendVisibility()
+
+    // Month, week and day all render events with CATEGORY_STYLE tokens.
+    for (const view of ['month', 'week', 'day']) {
+      expect(visible(view)).toBe(true)
+    }
+    // Plan is the only view with no colour-coded events, so it needs no key.
+    expect(visible('plan')).toBe(false)
   })
 })
