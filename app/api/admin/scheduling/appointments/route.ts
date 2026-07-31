@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   let query = getAdminClient()
     .from('appointments')
     .select(
-      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, online_meeting_url, source, created_at',
+      'id, appointment_type_id, start_time, end_time, status, location_type, attendee_name, attendee_email, attendee_phone, second_attendee_name, second_attendee_email, notes, linked_lead_id, linked_matter_id, microsoft_event_id, online_meeting_url, source, created_at, raw',
     )
 
   if (hasRange) {
@@ -57,6 +57,8 @@ export async function GET(req: NextRequest) {
 
   // Matter numbers for the chip shown on calendar events.
   const rows = (data ?? []) as Partial<AppointmentRow>[]
+    .map((row) => ({ ...row, raw: (row as { raw?: unknown }).raw as unknown }))
+
   const linkedMatterIds = Array.from(
     new Set(rows.map(row => row.linked_matter_id).filter((id): id is string => Boolean(id))),
   )
@@ -112,7 +114,15 @@ export async function GET(req: NextRequest) {
         ? matterContextById.get(row.linked_matter_id)?.planType ?? null
         : null,
       source: row.source,
-      typeLabel: typeById.get(row.appointment_type_id ?? '')?.label ?? 'Unknown',
+      typeLabel: typeof row.raw === 'object' && row.raw !== null && !Array.isArray(row.raw)
+        ? ((row.raw as Record<string, unknown>).taskTypeLabel as string | undefined) ??
+          typeById.get(row.appointment_type_id ?? '')?.label
+        : typeById.get(row.appointment_type_id ?? '')?.label ?? 'Unknown',
+      calendarShowAsBusy: typeof row.raw === 'object' && row.raw !== null && !Array.isArray(row.raw)
+        ? (row.raw as Record<string, unknown>).calendarShowAsBusy === false
+          ? false
+          : true
+        : true,
       // Null after a successful booking means the Outlook event failed to
       // create — surfaced in the admin list as a warning.
       outlookSynced: Boolean(row.microsoft_event_id),

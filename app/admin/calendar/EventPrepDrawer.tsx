@@ -63,6 +63,7 @@ export function EventPrepDrawer({
     : appointment?.typeLabel.toLowerCase().includes('draft')
       ? 'var(--stage-active-bg)'
       : 'var(--stage-work-bg)'
+  const calendarStatus = appointment?.calendarShowAsBusy === false ? 'Free' : 'Busy'
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -71,6 +72,11 @@ export function EventPrepDrawer({
           <>
             <SheetHeader className="border-b border-border p-5" style={{ background: categoryColor }}>
               <span className="w-fit rounded-full bg-card/80 px-2 py-0.5 text-[11px] font-medium text-foreground">{appointment.typeLabel}</span>
+              <span
+                className={`w-fit rounded-full ${appointment?.calendarShowAsBusy === false ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} px-2 py-0.5 text-[11px] font-medium`}
+              >
+                {calendarStatus}
+              </span>
               <SheetTitle className="text-left text-lg">{appointment.attendeeName}{appointment.secondAttendeeName ? ` + ${appointment.secondAttendeeName}` : ''}</SheetTitle>
               <p className="text-xs text-muted-foreground">
                 {new Date(appointment.startTime).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}

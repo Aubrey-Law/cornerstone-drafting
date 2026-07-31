@@ -23,6 +23,7 @@ export interface CalendarAppointment {
   linkedMatterStage: string | null
   linkedMatterPlanType: string | null
   linkedLeadId: string | null
+  calendarShowAsBusy?: boolean
 }
 
 export interface BookableType {

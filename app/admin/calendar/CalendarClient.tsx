@@ -58,6 +58,16 @@ function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
+function availabilityLabel(appointment: CalendarAppointment): string {
+  return appointment.calendarShowAsBusy === false ? 'Free' : 'Busy'
+}
+
+function availabilityClass(appointment: CalendarAppointment): string {
+  return appointment.calendarShowAsBusy === false
+    ? 'bg-emerald-100 text-emerald-700'
+    : 'bg-rose-100 text-rose-700'
+}
+
 function fmtDayHeading(d: Date): string {
   return d.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -449,6 +459,11 @@ export function CalendarClient() {
                           {a.attendeePhone ? ` · ${a.attendeePhone}` : ''}
                           {a.secondAttendeeEmail ? ` · +${a.secondAttendeeName || a.secondAttendeeEmail}` : ''}
                           {a.locationType ? ` · ${LOCATION_LABEL[a.locationType]}` : ''}
+                          <span
+                            className={cn('ml-1 inline-block rounded-full px-1.5 py-0.5', availabilityClass(a))}
+                          >
+                            {availabilityLabel(a)}
+                          </span>
                           {!a.outlookSynced && a.status === 'scheduled' && (
                             <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
                           )}
@@ -894,7 +909,15 @@ function MonthGrid(props: {
                     }
                     title={`${fmtTime(a.startTime)} ${a.typeLabel} — ${a.attendeeName}`}
                   >
-                    {fmtTime(a.startTime)} {a.attendeeName}
+                    {fmtTime(a.startTime)} {a.attendeeName}{' '}
+                    <span
+                      className={cn(
+                        'inline-block rounded-full px-1.5 py-0.5 text-[10px]',
+                        availabilityClass(a),
+                      )}
+                    >
+                      {availabilityLabel(a)}
+                    </span>
                   </button>
                 )
               })}
@@ -1114,6 +1137,11 @@ function TimeGrid(props: {
                     >
                       <span className="block truncate text-[11px] font-medium leading-4">
                         {fmtTime(a.startTime)} {a.attendeeName}
+                      </span>
+                      <span
+                        className={cn('mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px]', availabilityClass(a))}
+                      >
+                        {availabilityLabel(a)}
                       </span>
                       {showTypeLabel && (
                         <span className="block truncate text-[10px] leading-4 opacity-80">
