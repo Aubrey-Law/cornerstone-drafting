@@ -46,6 +46,7 @@ import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocum
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
 import { LeadCommunicationDialog } from '@/components/leads/LeadCommunicationDialog'
+import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import {
   isMobileDetailViewport,
@@ -92,6 +93,7 @@ type LeadDetailClientProps = {
   initialPeopleContacts?: MatterContact[]
   initialTaskCounts?: RecordTaskCounts
   initialIntakeUrl?: string | null
+  smsEnabled?: boolean
 }
 
 type LeadPatchResponse = {
@@ -162,6 +164,7 @@ export function LeadDetailClient({
   initialPeopleContacts = [],
   initialTaskCounts = { open: 0, overdue: 0 },
   initialIntakeUrl = null,
+  smsEnabled = true,
 }: LeadDetailClientProps) {
   const token = useAccessToken()
   const router = useRouter()
@@ -675,6 +678,7 @@ export function LeadDetailClient({
                 )}
               </TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
+              <TabsTrigger value="communications">Comms</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
               <TabsTrigger value="people">People</TabsTrigger>
               <TabsTrigger value="assets">Assets</TabsTrigger>
@@ -714,6 +718,16 @@ export function LeadDetailClient({
 
             <TabsContent value="timeline" className="mt-4">
               {timeline}
+            </TabsContent>
+
+            <TabsContent value="communications" className="mt-4">
+              <RecordCommunicationsCard
+                record={{ type: 'lead', id: lead.id }}
+                recipientName={clientName}
+                recipientEmail={lead.email ?? null}
+                recipientPhone={lead.phone ?? null}
+                smsEnabled={smsEnabled}
+              />
             </TabsContent>
 
             <TabsContent value="intake" className="mt-4">

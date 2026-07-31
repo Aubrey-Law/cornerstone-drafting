@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import {
   Briefcase,
   BookOpen,
+  BookUser,
   CalendarDays,
   FilePenLine,
   ListTodo,
@@ -63,6 +64,7 @@ export const adminNavItems: { href: string; label: string; icon: React.ElementTy
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
   { href: '/admin/leads', label: 'Leads', icon: UserPlus },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
+  { href: '/admin/contacts', label: 'Contacts', icon: BookUser },
   { href: '/admin/billing', label: 'Billing', icon: ReceiptText },
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
