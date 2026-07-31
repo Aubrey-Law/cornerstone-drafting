@@ -566,7 +566,7 @@ function DesignSheetPageContent({
                           type="button"
                           variant="link"
                           size="sm"
-                          className="h-auto shrink-0 px-1 text-xs text-[#1a6b72]"
+                          className="h-auto shrink-0 px-1 text-xs text-accent"
                           onClick={() => setIntakeSnapshotOpen(true)}
                         >
                           View intake snapshot

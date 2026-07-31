@@ -172,7 +172,7 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
           <span className="text-xs font-medium text-muted-foreground">
             Gross estate total · {assets.length} item{assets.length === 1 ? '' : 's'}
           </span>
-          <span className="tabular-nums text-base font-semibold text-[#1f2d5a]">
+          <span className="tabular-nums text-base font-semibold text-foreground">
             {new Intl.NumberFormat('en-US', {
               style: 'currency',
               currency: 'USD',

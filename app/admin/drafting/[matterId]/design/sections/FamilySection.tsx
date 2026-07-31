@@ -254,7 +254,7 @@ export function FamilySection({
                         )}
                         <div className="flex items-end gap-3">
                           {derivedMinor ? (
-                            <Badge variant="outline" className="border-[#fcd34d] bg-[#fffbeb] text-[11px] text-[#92400e]">
+                            <Badge variant="outline" className="border-amber-border bg-amber-bg text-[11px] text-amber">
                               Minor — guardian required
                             </Badge>
                           ) : (

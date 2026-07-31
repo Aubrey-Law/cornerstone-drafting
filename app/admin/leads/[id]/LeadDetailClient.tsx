@@ -36,7 +36,10 @@ import { Badge } from '@/components/ui/badge'
 import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
-import { LeadFieldsRail } from '@/components/leads/LeadFieldsRail'
+import {
+  LeadFieldsRail,
+  LEAD_DETAIL_RAIL_WIDTH,
+} from '@/components/leads/LeadFieldsRail'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
@@ -44,6 +47,10 @@ import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
 import { LeadCommunicationDialog } from '@/components/leads/LeadCommunicationDialog'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
+import {
+  isMobileDetailViewport,
+  ResponsiveDetailRail,
+} from '@/components/layout/ResponsiveDetailRail'
 import { LeadIntakeCard } from './LeadIntakeCard'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
@@ -167,7 +174,7 @@ export function LeadDetailClient({
   const [activity, setActivity] = useState(initialActivity)
   const [busy, setBusy] = useState(false)
   const [busyIntent, setBusyIntent] = useState<string | null>(null)
-  const [railOpen, setRailOpen] = useState(true)
+  const [railOpen, setRailOpen] = useState(false)
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [schedulingLinkOpen, setSchedulingLinkOpen] = useState(false)
@@ -178,6 +185,10 @@ export function LeadDetailClient({
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeLinkBusy, setIntakeLinkBusy] = useState(false)
   const [communicationInitialMessage, setCommunicationInitialMessage] = useState<string | undefined>()
+
+  useEffect(() => {
+    if (!isMobileDetailViewport()) setRailOpen(true)
+  }, [])
   const [spouseRemovalError, setSpouseRemovalError] = useState<string | null>(null)
   const [dataRefreshWarning, setDataRefreshWarning] = useState<string | null>(null)
   const [activityRefreshWarning, setActivityRefreshWarning] = useState<string | null>(null)
@@ -623,7 +634,13 @@ export function LeadDetailClient({
       )}
 
       <div className="flex min-h-0 flex-1">
-        {railOpen && (
+        <ResponsiveDetailRail
+          open={railOpen}
+          onOpenChange={setRailOpen}
+          label="Lead details"
+          desktopClassName={`${LEAD_DETAIL_RAIL_WIDTH} border-r border-border bg-card`}
+          mobileClassName="bg-card"
+        >
           <LeadFieldsRail
             lead={lead}
             spouse={spouse}
@@ -633,7 +650,7 @@ export function LeadDetailClient({
             onRemoveSpouse={removeSpouse}
             spouseRemovalError={spouseRemovalError}
           />
-        )}
+        </ResponsiveDetailRail>
 
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4">
           {visibleAction && (

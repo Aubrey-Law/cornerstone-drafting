@@ -12,6 +12,7 @@ import type { WorkSkill } from '@/components/works/types'
 import { WorkflowDetail } from './components/WorkflowDetail'
 import { SkillEditorDialog } from './components/SkillEditorDialog'
 import { ShareSkillDialog } from './components/ShareSkillDialog'
+import { AdminPageShell } from '@/components/layout/AdminPageShell'
 
 const starterSkill = `---
 name: My New Workflow
@@ -116,7 +117,7 @@ export default function WorksClient() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-4 md:p-8">
+    <AdminPageShell className="overflow-auto">
       <PageHeader
         eyebrow="Attorney tools"
         icon={BookOpen}
@@ -253,6 +254,6 @@ export default function WorksClient() {
         onSave={value => void saveSkill(value)}
       />
       <ShareSkillDialog skill={shareSkill} onOpenChange={open => { if (!open) setShareSkill(null) }} />
-    </div>
+    </AdminPageShell>
   )
 }

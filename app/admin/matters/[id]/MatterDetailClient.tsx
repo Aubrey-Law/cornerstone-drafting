@@ -84,6 +84,10 @@ import { MatterCommunicationsTab } from './tabs/messages'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
+import {
+  isMobileDetailViewport,
+  ResponsiveDetailRail,
+} from '@/components/layout/ResponsiveDetailRail'
 import { MatterStageStrip } from './MatterStageStrip'
 import { MatterBlockerBanner } from './MatterBlockerBanner'
 import {
@@ -189,7 +193,7 @@ function MatterFactsRail({
     .join(' · ')
 
   return (
-    <aside className="w-80 shrink-0 overflow-y-auto border-r border-border bg-card p-4">
+    <div className="h-full w-full overflow-y-auto bg-card p-4">
       <div className="flex items-start gap-3">
         <Avatar className="size-10">
           <AvatarFallback className="text-xs">{initials || '—'}</AvatarFallback>
@@ -223,7 +227,7 @@ function MatterFactsRail({
           <RailDate label="Target signing" value={details?.scheduled_signing_date} />
         </dl>
       </div>
-    </aside>
+    </div>
   )
 }
 
@@ -293,7 +297,11 @@ function MatterDetailClientInner({
   const [portalUploadsOpen, setPortalUploadsOpen] = useState(false)
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
-  const [factsRailOpen, setFactsRailOpen] = useState(true)
+  const [factsRailOpen, setFactsRailOpen] = useState(false)
+
+  useEffect(() => {
+    if (!isMobileDetailViewport()) setFactsRailOpen(true)
+  }, [])
 
   const {
     portalMessages,
@@ -802,7 +810,13 @@ function MatterDetailClientInner({
       )}
 
       <div className="flex min-h-0 flex-1">
-        {factsRailOpen && (
+        <ResponsiveDetailRail
+          open={factsRailOpen}
+          onOpenChange={setFactsRailOpen}
+          label="Matter facts"
+          desktopClassName="w-80 border-r border-border bg-card"
+          mobileClassName="bg-card"
+        >
           <MatterFactsRail
             matter={matter}
             matterId={matterId}
@@ -811,7 +825,7 @@ function MatterDetailClientInner({
             estate={initialEstateSnapshot}
             readinessItems={readinessItems}
           />
-        )}
+        </ResponsiveDetailRail>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           <div className="border-b border-border bg-card px-4 py-2">

@@ -11,11 +11,11 @@ import {
   LogOut,
   Menu,
   MessageSquare,
-  X,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { getFirmConfig } from '@/lib/firmConfig'
 
 const firm = getFirmConfig()
@@ -128,16 +128,14 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           </Button>
         </header>
 
-        {mobileOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <button
-              type="button"
-              className="absolute inset-0 bg-black/40"
-              aria-label="Close navigation"
-              onClick={() => setMobileOpen(false)}
-            />
-            <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-sidebar shadow-xl">
-              <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent
+            side="left"
+            className="w-72 gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground md:hidden sm:max-w-none"
+          >
+            <SheetTitle className="sr-only">Client portal navigation</SheetTitle>
+            <div className="flex h-full flex-col">
+              <div className="flex h-14 items-center border-b border-sidebar-border px-4 pr-12">
                 <Link
                   href="/dashboard"
                   className="text-sm font-semibold text-sidebar-foreground"
@@ -145,15 +143,6 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 >
                   {firm.firmName}
                 </Link>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-sidebar-foreground hover:bg-sidebar-accent/50"
-                  onClick={() => setMobileOpen(false)}
-                  aria-label="Close navigation"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
               <nav className="flex-1 space-y-1 p-2">
                 {navItems.map((item) => {
@@ -192,9 +181,9 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   Sign out
                 </Button>
               </div>
-            </aside>
-          </div>
-        )}
+            </div>
+          </SheetContent>
+        </Sheet>
 
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>

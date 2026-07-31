@@ -32,6 +32,8 @@ type FieldErrorState = {
   message: string
 }
 
+export const LEAD_DETAIL_RAIL_WIDTH = 'w-[340px]'
+
 export type LeadFieldsRailProps = {
   lead: LeadRecord
   spouse: LeadSpouse | null
@@ -423,10 +425,10 @@ export function LeadFieldsRail({
   }
 
   return (
-    <aside
-      aria-label="Lead details"
+    <div
+      data-detail-content="Lead details"
       className={cn(
-        '@container/rail flex w-[340px] shrink-0 flex-col overflow-y-auto border-r border-border bg-card p-4',
+        '@container/rail flex h-full w-full flex-col overflow-y-auto bg-card p-4',
         className,
       )}
       onPointerDownCapture={event => {
@@ -473,6 +475,6 @@ export function LeadFieldsRail({
           <MatterAssistantQuickPrompts className="mt-2 flex flex-wrap gap-2" prompts={ASSISTANT_PROMPTS} />
         )}
       </footer>
-    </aside>
+    </div>
   )
 }

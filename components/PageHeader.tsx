@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 interface PageHeaderProps {
   title: string
-  description?: string
+  description?: ReactNode
   /** Small uppercase label above the title (e.g. "Attorney tools"). */
   eyebrow?: string
   icon?: LucideIcon

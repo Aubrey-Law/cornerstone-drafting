@@ -6,6 +6,8 @@ import { TodayClearedCard } from '@/app/admin/components/TodayClearedCard'
 import { fetchTodayData } from '@/lib/queries/today'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import { stageLabel, type MatterStage, type PipelineMatter } from '@/types/database'
+import { PageHeader } from '@/components/PageHeader'
+import { AdminPageShell } from '@/components/layout/AdminPageShell'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,10 +43,11 @@ export default async function AdminTodayPage() {
   ].filter(Boolean) as string[]
 
   return (
-    <div className="mx-auto max-w-[1240px] p-4 md:p-6">
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold text-foreground">{dateLabel}</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
+    <AdminPageShell className="mx-auto w-full max-w-[1240px]">
+      <PageHeader
+        title={dateLabel}
+        description={
+          <>
           {today.overdueTasks.length} task{today.overdueTasks.length === 1 ? '' : 's'} overdue
           {' · '}
           {today.tasksDueToday.length} due today
@@ -52,8 +55,9 @@ export default async function AdminTodayPage() {
           {today.overdueCount} matter{today.overdueCount === 1 ? '' : 's'} over SLA
           {' · '}
           {today.appointmentsToday.length} appointment{today.appointmentsToday.length === 1 ? '' : 's'}
-        </p>
-      </header>
+          </>
+        }
+      />
 
       <div className="flex flex-wrap items-start gap-4">
         <div className="min-w-0 flex-1 basis-[560px]">
@@ -133,6 +137,6 @@ export default async function AdminTodayPage() {
           </p>
         </aside>
       </div>
-    </div>
+    </AdminPageShell>
   )
 }
