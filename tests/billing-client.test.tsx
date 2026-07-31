@@ -9,6 +9,11 @@ const matterOptions = [
   { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Chen, Marcus & Lily · 2026-EP-Chen-014' },
 ]
 
+const twoMatterOptions = [
+  ...matterOptions,
+  { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', label: 'Nguyen, Peter & An · 2026-EP-Nguyen-003' },
+]
+
 const navigation = vi.hoisted(() => ({
   params: new URLSearchParams(),
   replace: vi.fn(),
@@ -95,6 +100,14 @@ const snapshot: BillingSnapshot = {
   openClaims: [],
   unpreparedClaims: [],
   nudges: [],
+}
+
+// Radix Select needs these in jsdom before its listbox will open.
+if (!HTMLElement.prototype.hasPointerCapture) {
+  Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', { value: () => false })
+}
+if (!HTMLElement.prototype.scrollIntoView) {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: () => undefined })
 }
 
 describe('billing workspace', () => {
@@ -202,6 +215,8 @@ describe('billing workspace', () => {
     // Unlike the matter tab, this surface must pick a matter.
     expect(within(dialog).getByLabelText('Matter')).toBeTruthy()
 
+    await user.click(within(dialog).getByLabelText('Type'))
+    await user.click(await screen.findByRole('option', { name: 'Cost' }))
     await user.type(within(dialog).getByLabelText('Description'), 'Deed recording fee')
     await user.type(within(dialog).getByLabelText('Amount'), '155')
     await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
@@ -216,5 +231,20 @@ describe('billing workspace', () => {
         plan: null,
       })
     })
+  })
+
+  it('warns per matter, following the picker rather than the visible filter', async () => {
+    const user = userEvent.setup()
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={twoMatterOptions} />)
+
+    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Chen carries the flat fee in the fixture, so the default pick warns.
+    expect(within(dialog).getByRole('status').textContent).toContain('already has a legal fee')
+
+    await user.click(within(dialog).getByLabelText('Matter'))
+    await user.click(await screen.findByRole('option', { name: /Nguyen/ }))
+    expect(within(dialog).queryByRole('status')).toBeNull()
   })
 })

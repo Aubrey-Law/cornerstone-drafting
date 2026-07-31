@@ -171,9 +171,26 @@ describe('billing mutation routes', () => {
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
-  it('refuses to hand-add a flat fee — it is seeded from the engagement', async () => {
+  it('creates a hand-added legal fee as a manual item', async () => {
+    // source='manual' keeps billing_items_one_engagement_source free for the
+    // engagement-seeded fee, so both can coexist on one matter.
     const response = await createItem(
-      createRequest({ matterId: MATTER_ID, kind: 'flat_fee', label: 'Fee', amountBilled: 100 }),
+      createRequest({
+        matterId: MATTER_ID, kind: 'flat_fee', label: 'Trust package', amountBilled: 480_000,
+      }),
+    )
+
+    expect(response.status).toBe(201)
+    expect(mocks.rpc).toHaveBeenCalledWith('create_billing_item', expect.objectContaining({
+      p_kind: 'flat_fee',
+      p_plan: null,
+      p_amount_billed: 480_000,
+    }))
+  })
+
+  it('still rejects an unknown charge type', async () => {
+    const response = await createItem(
+      createRequest({ matterId: MATTER_ID, kind: 'retainer', label: 'Fee', amountBilled: 100 }),
     )
 
     expect(response.status).toBe(400)
@@ -199,9 +216,15 @@ describe('billing mutation routes', () => {
         matterId: MATTER_ID, kind: 'cost', label: 'Recording fee', amountBilled: 100, plan: 'metlife',
       }),
     )
+    const feeWithPlan = await createItem(
+      createRequest({
+        matterId: MATTER_ID, kind: 'flat_fee', label: 'Trust package', amountBilled: 100, plan: 'metlife',
+      }),
+    )
 
     expect(claimWithoutPlan.status).toBe(400)
     expect(costWithPlan.status).toBe(400)
+    expect(feeWithPlan.status).toBe(400)
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 

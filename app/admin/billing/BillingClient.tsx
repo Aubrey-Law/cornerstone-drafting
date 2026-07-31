@@ -83,6 +83,12 @@ export default function BillingClient({
     () => filterBillingRows(initialSnapshot.rows, filter, search, month),
     [filter, initialSnapshot.rows, month, search],
   )
+  const matterIdsWithLegalFee = useMemo(
+    () => initialSnapshot.rows
+      .filter(row => row.kind === 'flat_fee')
+      .map(row => row.matterId),
+    [initialSnapshot.rows],
+  )
   const counts = useMemo(() => ({
     all: initialSnapshot.rows.length,
     open: initialSnapshot.rows.filter(row => row.balance > 0).length,
@@ -315,6 +321,7 @@ export default function BillingClient({
         open={chargeOpen}
         onOpenChange={setChargeOpen}
         matters={matterOptions}
+        matterIdsWithLegalFee={matterIdsWithLegalFee}
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}

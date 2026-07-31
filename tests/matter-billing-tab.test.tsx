@@ -298,6 +298,8 @@ describe('MatterBillingTab', () => {
     // The matter is fixed on this surface.
     expect(within(dialog).queryByLabelText('Matter')).toBeNull()
 
+    await user.click(within(dialog).getByLabelText('Type'))
+    await user.click(await screen.findByRole('option', { name: 'Cost' }))
     await user.type(within(dialog).getByLabelText('Description'), 'Deed recording fee')
     await user.type(within(dialog).getByLabelText('Amount'), '155')
     await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
@@ -350,7 +352,7 @@ describe('MatterBillingTab', () => {
     await user.click(await screen.findByRole('button', { name: 'Start a claim' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByLabelText('Type'))
-    await user.click(await screen.findByRole('option', { name: 'Legal plan claim' }))
+    await user.click(await screen.findByRole('option', { name: 'Legal Plan Claim' }))
 
     await user.type(within(dialog).getByLabelText('Description'), 'MetLife claim')
     await user.type(within(dialog).getByLabelText('Amount'), '1275')
@@ -364,5 +366,93 @@ describe('MatterBillingTab', () => {
         amountBilled: 127_500,
       })
     })
+  })
+
+  it('offers all three charge types, defaulting to a legal fee', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText('Type'))
+
+    expect(
+      (await screen.findAllByRole('option')).map(option => option.textContent),
+    ).toEqual(['Legal Fee', 'Legal Plan Claim', 'Cost'])
+    expect(
+      screen.getByRole('option', { name: 'Legal Fee' }).getAttribute('aria-selected'),
+    ).toBe('true')
+  })
+
+  it('adds a legal fee alongside the engagement-seeded one', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Description'), 'Additional trust work')
+    await user.type(within(dialog).getByLabelText('Amount'), '750')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(call => call[0] === '/api/admin/billing/items')
+      expect(JSON.parse(post![1].body)).toEqual({
+        matterId: MATTER_ID,
+        kind: 'flat_fee',
+        label: 'Additional trust work',
+        amountBilled: 75_000,
+        plan: null,
+      })
+    })
+  })
+
+  it('warns before adding a second legal fee, without blocking it', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] }) // the seeded flat fee
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('status').textContent).toContain(
+      'already has a legal fee',
+    )
+
+    // Advisory only — the charge still saves.
+    await user.type(within(dialog).getByLabelText('Description'), 'Additional trust work')
+    await user.type(within(dialog).getByLabelText('Amount'), '750')
+    await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(call => call[0] === '/api/admin/billing/items')
+      expect(JSON.parse(post![1].body)).toMatchObject({ kind: 'flat_fee' })
+    })
+  })
+
+  it('does not warn when the matter has no legal fee, or for other kinds', async () => {
+    const user = userEvent.setup()
+    respondWith({
+      rows: [row({ kind: 'cost', label: 'Deed recording fee', amountBilled: 15_500 })],
+    })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('status')).toBeNull()
+  })
+
+  it('drops the warning when the type changes away from a legal fee', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('status')).toBeTruthy()
+
+    await user.click(within(dialog).getByLabelText('Type'))
+    await user.click(await screen.findByRole('option', { name: 'Cost' }))
+    expect(within(dialog).queryByRole('status')).toBeNull()
   })
 })

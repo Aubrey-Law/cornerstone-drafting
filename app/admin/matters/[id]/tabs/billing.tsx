@@ -540,6 +540,9 @@ export function MatterBillingTab({ matterId, enabled }: MatterBillingTabProps) {
         open={chargeOpen}
         onOpenChange={setChargeOpen}
         matterId={matterId}
+        matterIdsWithLegalFee={
+          rows.some(row => row.kind === 'flat_fee') ? [matterId] : []
+        }
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}

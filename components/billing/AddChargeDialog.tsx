@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  addableBillingKinds,
   billingPlans,
   type AddableBillingKind,
   type BillingPlan,
@@ -39,8 +40,15 @@ export interface AddChargeInput {
 }
 
 const kindLabels: Record<AddableBillingKind, string> = {
+  flat_fee: 'Legal Fee',
+  plan_claim: 'Legal Plan Claim',
   cost: 'Cost',
-  plan_claim: 'Legal plan claim',
+}
+
+const kindPlaceholders: Record<AddableBillingKind, string> = {
+  flat_fee: 'e.g. Trust package',
+  plan_claim: 'e.g. MetLife claim',
+  cost: 'e.g. Deed recording fee',
 }
 
 const planLabels: Record<BillingPlan, string> = {
@@ -52,13 +60,15 @@ const planLabels: Record<BillingPlan, string> = {
  * Adds a cost or legal plan claim to a matter. Shared by the matter Billing tab
  * (matter fixed, no picker) and the firm billing workspace (picks a matter).
  *
- * The flat fee is deliberately absent: it is seeded from the signed engagement.
+ * A legal fee may be added here even though a signed engagement seeds one too:
+ * the seeded row is source='engagement' and this one is source='manual'.
  */
 export function AddChargeDialog({
   open,
   onOpenChange,
   matterId,
   matters,
+  matterIdsWithLegalFee,
   saving,
   returnFocusRef,
   onSave,
@@ -69,23 +79,33 @@ export function AddChargeDialog({
   matterId?: string
   /** Selectable matters. Omit when `matterId` is fixed. */
   matters?: BillingMatterOption[]
+  /** Matters that already carry a legal fee, so a second one can be warned about. */
+  matterIdsWithLegalFee?: readonly string[]
   saving: boolean
   returnFocusRef: RefObject<HTMLElement | null>
   onSave: (input: AddChargeInput) => Promise<void>
 }) {
   const picking = matterId === undefined
   const [selectedMatter, setSelectedMatter] = useState('')
-  const [kind, setKind] = useState<AddableBillingKind>('cost')
+  const [kind, setKind] = useState<AddableBillingKind>('flat_fee')
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
   const [plan, setPlan] = useState<BillingPlan>('metlife')
   const [error, setError] = useState<string | null>(null)
 
+  const targetMatter = matterId ?? selectedMatter
+  // Advisory only: a matter may legitimately carry a second fee for additional
+  // work, and the seeded engagement fee is a separate source='engagement' row.
+  const duplicateLegalFee =
+    kind === 'flat_fee'
+    && targetMatter !== ''
+    && (matterIdsWithLegalFee ?? []).includes(targetMatter)
+
   // Reseed on each open so a cancelled entry never leaks into the next one.
   useEffect(() => {
     if (!open) return
     setSelectedMatter(matterId ?? matters?.[0]?.id ?? '')
-    setKind('cost')
+    setKind('flat_fee')
     setLabel('')
     setAmount('')
     setPlan('metlife')
@@ -94,7 +114,6 @@ export function AddChargeDialog({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
-    const targetMatter = matterId ?? selectedMatter
     if (!targetMatter) {
       setError('Choose a matter.')
       return
@@ -133,7 +152,8 @@ export function AddChargeDialog({
           <DialogHeader>
             <DialogTitle>Add charge</DialogTitle>
             <DialogDescription>
-              Add a pass-through cost or a legal plan claim. It starts awaiting invoice.
+              Add a legal fee, a legal plan claim, or a pass-through cost. It starts
+              awaiting invoice.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-5">
@@ -165,8 +185,8 @@ export function AddChargeDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(kindLabels).map(([value, text]) => (
-                    <SelectItem key={value} value={value}>{text}</SelectItem>
+                  {addableBillingKinds.map(value => (
+                    <SelectItem key={value} value={value}>{kindLabels[value]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -188,13 +208,23 @@ export function AddChargeDialog({
               </div>
             )}
 
+            {duplicateLegalFee && (
+              <p
+                role="status"
+                className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber"
+              >
+                This matter already has a legal fee. Add another only if it is for
+                additional work — otherwise the matter will be billed twice.
+              </p>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="charge-label">Description</Label>
               <Input
                 id="charge-label"
                 value={label}
                 onChange={event => setLabel(event.target.value)}
-                placeholder={kind === 'cost' ? 'e.g. Deed recording fee' : 'e.g. MetLife claim'}
+                placeholder={kindPlaceholders[kind]}
                 maxLength={200}
                 className="min-h-11"
                 autoFocus
