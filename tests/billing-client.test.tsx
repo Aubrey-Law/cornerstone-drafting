@@ -97,6 +97,14 @@ const snapshot: BillingSnapshot = {
   nudges: [],
 }
 
+// Radix Select needs these in jsdom before its listbox will open.
+if (!HTMLElement.prototype.hasPointerCapture) {
+  Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', { value: () => false })
+}
+if (!HTMLElement.prototype.scrollIntoView) {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: () => undefined })
+}
+
 describe('billing workspace', () => {
   afterEach(cleanup)
 
@@ -202,6 +210,8 @@ describe('billing workspace', () => {
     // Unlike the matter tab, this surface must pick a matter.
     expect(within(dialog).getByLabelText('Matter')).toBeTruthy()
 
+    await user.click(within(dialog).getByLabelText('Type'))
+    await user.click(await screen.findByRole('option', { name: 'Cost' }))
     await user.type(within(dialog).getByLabelText('Description'), 'Deed recording fee')
     await user.type(within(dialog).getByLabelText('Amount'), '155')
     await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))

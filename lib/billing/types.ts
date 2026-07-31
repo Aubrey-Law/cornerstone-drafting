@@ -105,8 +105,13 @@ export const logBillingPaymentSchema = z.object({
   receivedAt: z.string().datetime({ offset: true }).optional(),
 })
 
-/** Kinds staff may add by hand. The flat fee is seeded from the engagement. */
-export const addableBillingKinds = ['cost', 'plan_claim'] as const
+/**
+ * Kinds staff may add by hand, in the order the Add charge dropdown lists them.
+ * A legal fee may be added even though the engagement also seeds one — the
+ * seeded row is source='engagement' and a hand-added one is source='manual',
+ * so they never collide.
+ */
+export const addableBillingKinds = ['flat_fee', 'plan_claim', 'cost'] as const
 export type AddableBillingKind = (typeof addableBillingKinds)[number]
 
 export const createBillingItemSchema = z

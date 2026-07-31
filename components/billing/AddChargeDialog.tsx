@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  addableBillingKinds,
   billingPlans,
   type AddableBillingKind,
   type BillingPlan,
@@ -39,8 +40,15 @@ export interface AddChargeInput {
 }
 
 const kindLabels: Record<AddableBillingKind, string> = {
+  flat_fee: 'Legal Fee',
+  plan_claim: 'Legal Plan Claim',
   cost: 'Cost',
-  plan_claim: 'Legal plan claim',
+}
+
+const kindPlaceholders: Record<AddableBillingKind, string> = {
+  flat_fee: 'e.g. Trust package',
+  plan_claim: 'e.g. MetLife claim',
+  cost: 'e.g. Deed recording fee',
 }
 
 const planLabels: Record<BillingPlan, string> = {
@@ -52,7 +60,8 @@ const planLabels: Record<BillingPlan, string> = {
  * Adds a cost or legal plan claim to a matter. Shared by the matter Billing tab
  * (matter fixed, no picker) and the firm billing workspace (picks a matter).
  *
- * The flat fee is deliberately absent: it is seeded from the signed engagement.
+ * A legal fee may be added here even though a signed engagement seeds one too:
+ * the seeded row is source='engagement' and this one is source='manual'.
  */
 export function AddChargeDialog({
   open,
@@ -75,7 +84,7 @@ export function AddChargeDialog({
 }) {
   const picking = matterId === undefined
   const [selectedMatter, setSelectedMatter] = useState('')
-  const [kind, setKind] = useState<AddableBillingKind>('cost')
+  const [kind, setKind] = useState<AddableBillingKind>('flat_fee')
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
   const [plan, setPlan] = useState<BillingPlan>('metlife')
@@ -85,7 +94,7 @@ export function AddChargeDialog({
   useEffect(() => {
     if (!open) return
     setSelectedMatter(matterId ?? matters?.[0]?.id ?? '')
-    setKind('cost')
+    setKind('flat_fee')
     setLabel('')
     setAmount('')
     setPlan('metlife')
@@ -133,7 +142,8 @@ export function AddChargeDialog({
           <DialogHeader>
             <DialogTitle>Add charge</DialogTitle>
             <DialogDescription>
-              Add a pass-through cost or a legal plan claim. It starts awaiting invoice.
+              Add a legal fee, a legal plan claim, or a pass-through cost. It starts
+              awaiting invoice.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-5">
@@ -165,8 +175,8 @@ export function AddChargeDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(kindLabels).map(([value, text]) => (
-                    <SelectItem key={value} value={value}>{text}</SelectItem>
+                  {addableBillingKinds.map(value => (
+                    <SelectItem key={value} value={value}>{kindLabels[value]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -194,7 +204,7 @@ export function AddChargeDialog({
                 id="charge-label"
                 value={label}
                 onChange={event => setLabel(event.target.value)}
-                placeholder={kind === 'cost' ? 'e.g. Deed recording fee' : 'e.g. MetLife claim'}
+                placeholder={kindPlaceholders[kind]}
                 maxLength={200}
                 className="min-h-11"
                 autoFocus
