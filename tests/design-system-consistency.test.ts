@@ -48,4 +48,16 @@ describe('engagement + intake controls stay on shadcn primitives', () => {
     expect(source).not.toMatch(/<textarea[\s>]/)
     expect(source).not.toMatch(/border-gray-\d+ px-3 py-2/)
   })
+
+  // Migrated from an inline-style parallel styling system; keep it on
+  // Tailwind tokens + shadcn primitives. (GuidedInterview is a deliberate
+  // exception: its inline styles reference the scoped --gi-* token system in
+  // app/intake/guided.css from the guided-interview design handoff.)
+  it('AdminIntakeSheet stays free of inline styles and raw controls', () => {
+    const source = read('components/AdminIntakeSheet.tsx')
+    expect(source).not.toMatch(/style=\{/)
+    expect(source).not.toMatch(/<input[\s>]/)
+    expect(source).not.toMatch(/<textarea[\s>]/)
+    expect(source).not.toContain('React.CSSProperties')
+  })
 })
