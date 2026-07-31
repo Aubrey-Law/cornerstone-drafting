@@ -44,6 +44,7 @@ export async function createCalendarHold(input: {
   startIso: string
   endIso: string
   matterId?: string | null
+  showAsBusy?: boolean
 }): Promise<CreatedEvent> {
   const conn = await getMicrosoftConnectionForUser(null)
   if (!conn) throw new Error('Microsoft Outlook is not connected')
@@ -59,7 +60,7 @@ export async function createCalendarHold(input: {
       },
       start: { dateTime: input.startIso, timeZone: 'UTC' },
       end: { dateTime: input.endIso, timeZone: 'UTC' },
-      showAs: 'busy',
+      showAs: input.showAsBusy === false ? 'free' : 'busy',
       categories: ['Cornerstone'],
     }),
   })

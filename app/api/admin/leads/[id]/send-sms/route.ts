@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { smsProvider } from '@/lib/communications/providers'
-import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
+import { MAX_LEAD_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import { normalizeSmsRecipient, sendProviderSmsMessage } from '@/lib/sms/provider'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { telnyxPhoneNumber } from '@/lib/telnyx/config'
@@ -24,8 +24,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const payload = await req.json().catch(() => null) as { body?: unknown } | null
   const message = typeof payload?.body === 'string' ? payload.body.trim() : ''
   if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
-  if (message.length > MAX_SMS_BODY_LENGTH) {
-    return NextResponse.json({ error: `Message must be ${MAX_SMS_BODY_LENGTH} characters or fewer` }, { status: 400 })
+  if (message.length > MAX_LEAD_SMS_BODY_LENGTH) {
+    return NextResponse.json({ error: `Message must be ${MAX_LEAD_SMS_BODY_LENGTH} characters or fewer` }, { status: 400 })
   }
 
   const admin = getAdminClient()

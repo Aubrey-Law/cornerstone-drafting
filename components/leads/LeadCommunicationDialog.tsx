@@ -7,7 +7,9 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
+import { MAX_LEAD_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 
 type Props = {
   open: boolean
@@ -26,20 +28,39 @@ type Props = {
 
 export function LeadCommunicationDialog(props: Props) {
   const [message, setMessage] = useState('')
+  const [emailSubject, setEmailSubject] = useState<string | undefined>()
+  const [emailBody, setEmailBody] = useState<string | undefined>()
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  function applyEmailDraft(draft: string) {
+    const match = draft.match(/^Subject:\s*(.+)\n+([\s\S]*)$/)
+    if (match) {
+      setEmailSubject(match[1].trim() || 'Follow-up')
+      setEmailBody(match[2].trim())
+    } else {
+      setEmailSubject('Follow-up')
+      setEmailBody(draft.trim())
+    }
+  }
 
   useEffect(() => {
     if (!props.open) {
       setMessage('')
+      setEmailSubject(undefined)
+      setEmailBody(undefined)
       setError(null)
     } else if (props.channel === 'sms' && props.initialMessage) {
-      setMessage(props.initialMessage)
+      setMessage(props.initialMessage.slice(0, MAX_LEAD_SMS_BODY_LENGTH))
     }
   }, [props.channel, props.initialMessage, props.open])
 
   async function send() {
     if (!props.token) return
+    if (message.length > MAX_LEAD_SMS_BODY_LENGTH) {
+      setError(`Message must be ${MAX_LEAD_SMS_BODY_LENGTH} characters or fewer`)
+      return
+    }
     setSending(true)
     setError(null)
     try {
@@ -68,9 +89,18 @@ export function LeadCommunicationDialog(props: Props) {
             <DialogTitle>Email lead</DialogTitle>
             <DialogDescription>{props.email} · {props.clientName}</DialogDescription>
           </DialogHeader>
+          <div className="px-4 py-1">
+            <DraftWithAiButton
+              apiPath={`/api/admin/leads/${props.leadId}/draft-reply`}
+              channel="email"
+              onDraft={applyEmailDraft}
+            />
+          </div>
           <ManualEmailComposer
             embedded
             recordOverride={{ type: 'lead', id: props.leadId }}
+            subjectText={emailSubject}
+            bodyText={emailBody}
             initialContext={{
               recordType: 'lead',
               recordId: props.leadId,
@@ -99,7 +129,7 @@ export function LeadCommunicationDialog(props: Props) {
       </Dialog>
     )
   }
-  const ready = Boolean(message.trim())
+  const ready = Boolean(message.trim()) && message.length <= MAX_LEAD_SMS_BODY_LENGTH
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -110,16 +140,23 @@ export function LeadCommunicationDialog(props: Props) {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5">
+            <div className="space-y-1.5">
             <Label htmlFor="lead-communication-body">Text message</Label>
             <Textarea
               id="lead-communication-body"
               className="min-h-40"
-              maxLength={1600}
+              maxLength={MAX_LEAD_SMS_BODY_LENGTH}
               value={message}
-              onChange={event => setMessage(event.target.value)}
+              onChange={event => setMessage(event.target.value.slice(0, MAX_LEAD_SMS_BODY_LENGTH))}
             />
-            <p className="text-right text-xs text-muted-foreground">{message.length}/1600</p>
+            <p className="text-right text-xs text-muted-foreground">{message.length}/{MAX_LEAD_SMS_BODY_LENGTH}</p>
+            <DraftWithAiButton
+              apiPath={`/api/admin/leads/${props.leadId}/draft-reply`}
+              channel="sms"
+              notes={message}
+              maxChars={MAX_LEAD_SMS_BODY_LENGTH}
+              onDraft={next => setMessage(next.slice(0, MAX_LEAD_SMS_BODY_LENGTH))}
+            />
           </div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </div>

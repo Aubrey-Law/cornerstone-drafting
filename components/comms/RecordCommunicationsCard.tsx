@@ -9,10 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SetupBanner } from '@/components/SetupBanner'
 import { CallList } from '@/components/calls/CallList'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
+import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { apiRequest } from '@/lib/clientApi'
-import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
+import { MAX_LEAD_SMS_BODY_LENGTH, MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 
 export interface CommsRecord {
   type: 'lead' | 'matter'
@@ -64,6 +65,8 @@ export function RecordCommunicationsCard({
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const smsDraftLimit = record.type === 'lead' ? MAX_LEAD_SMS_BODY_LENGTH : MAX_SMS_BODY_LENGTH
+  const smsDraftRoute = record.type === 'lead' ? `/api/admin/leads/${record.id}/draft-reply` : undefined
 
   const recordBase = record.type === 'matter'
     ? `/api/admin/matters/${record.id}`
@@ -90,6 +93,10 @@ export function RecordCommunicationsCard({
 
   async function sendSms() {
     if (!token || !draft.trim()) return
+    if (record.type === 'lead' && draft.length > MAX_LEAD_SMS_BODY_LENGTH) {
+      toast.error(`Message must be ${MAX_LEAD_SMS_BODY_LENGTH} characters or fewer`)
+      return
+    }
     setSending(true)
     try {
       const body = record.type === 'matter'
@@ -162,23 +169,40 @@ export function RecordCommunicationsCard({
             </div>
             {smsSendable ? (
               <div className="flex items-end gap-2">
-                <Textarea
-                  value={draft}
-                  onChange={e => setDraft(e.target.value.slice(0, MAX_SMS_BODY_LENGTH))}
-                  placeholder={recipientPhone ? `Text ${recipientName}…` : 'No phone number on file'}
-                  rows={2}
-                  className="min-h-[60px] flex-1"
-                  disabled={!recipientPhone && record.type === 'lead'}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  className="shrink-0"
-                  disabled={sending || !draft.trim()}
-                  onClick={() => void sendSms()}
-                >
-                  Send SMS
-                </Button>
+            <Textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value.slice(0, smsDraftLimit))}
+              placeholder={recipientPhone ? `Text ${recipientName}…` : 'No phone number on file'}
+              rows={2}
+              className="min-h-[60px] flex-1"
+              disabled={!recipientPhone && record.type === 'lead'}
+            />
+            <p className="w-full text-right text-[11px] text-muted-foreground">{draft.length}/{smsDraftLimit}</p>
+            {record.type !== 'matter' ? (
+              <DraftWithAiButton
+                apiPath={smsDraftRoute}
+                channel="sms"
+                notes={draft}
+                maxChars={MAX_LEAD_SMS_BODY_LENGTH}
+                onDraft={next => setDraft(next.slice(0, smsDraftLimit))}
+              />
+            ) : (
+              <DraftWithAiButton
+                matterId={record.id}
+                channel="sms"
+                notes={draft}
+                onDraft={next => setDraft(next.slice(0, smsDraftLimit))}
+              />
+            )}
+            <Button
+              type="button"
+              size="sm"
+              className="shrink-0"
+              disabled={sending || !draft.trim() || (record.type === 'lead' && draft.length > MAX_LEAD_SMS_BODY_LENGTH)}
+              onClick={() => void sendSms()}
+            >
+              Send SMS
+            </Button>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">

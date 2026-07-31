@@ -13,6 +13,7 @@ import {
 import {
   renderEmailTemplateBodyHtml,
   renderEmailTemplateText,
+  textToEmailHtml,
 } from '@/lib/email/templateShared'
 import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
 import { railRecordForPath } from './RailActivityPane'
@@ -276,6 +277,8 @@ interface ManualEmailComposerProps {
   embedded?: boolean
   variableValues?: Record<string, string | null | undefined>
   initialContext?: ComposeContext
+  subjectText?: string
+  bodyText?: string
 }
 
 export function ManualEmailComposer({
@@ -285,6 +288,8 @@ export function ManualEmailComposer({
   embedded = false,
   variableValues = {},
   initialContext,
+  subjectText,
+  bodyText,
 }: ManualEmailComposerProps = {}) {
   const pathname = usePathname()
   const record = recordOverride === undefined ? railRecordForPath(pathname) : recordOverride
@@ -323,6 +328,8 @@ export function ManualEmailComposer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftExistedRef = useRef(false)
   const defaultRecipientRef = useRef('')
+  const seededSubjectRef = useRef<string | null>(null)
+  const seededBodyTextRef = useRef<string | null>(null)
 
   const recordType = record?.type ?? null
   const recordId = record?.id ?? null
@@ -343,6 +350,21 @@ export function ManualEmailComposer({
     ...option,
     value: resolvedVariables[option.key] ?? undefined,
   }))
+
+  useEffect(() => {
+    if (subjectText === undefined && bodyText === undefined) return
+    if (subjectText !== undefined && subjectText !== seededSubjectRef.current) {
+      setSubject(subjectText)
+      seededSubjectRef.current = subjectText
+    }
+    if (bodyText !== undefined && bodyText !== seededBodyTextRef.current) {
+      setBodyHtml(bodyText ? textToEmailHtml(bodyText) : '')
+      seededBodyTextRef.current = bodyText
+    }
+    if (subjectText !== undefined || bodyText !== undefined) {
+      setTemplateId(ONE_OFF)
+    }
+  }, [bodyText, subjectText])
 
   useEffect(() => {
     if (initialContext) {

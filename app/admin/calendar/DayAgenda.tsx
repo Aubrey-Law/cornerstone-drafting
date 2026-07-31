@@ -37,6 +37,16 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
+function availabilityLabel(calendarShowAsBusy?: boolean): string {
+  return calendarShowAsBusy === false ? 'Free' : 'Busy'
+}
+
+function availabilityClass(calendarShowAsBusy?: boolean): string {
+  return calendarShowAsBusy === false
+    ? 'bg-emerald-100 text-emerald-700'
+    : 'bg-rose-100 text-rose-700'
+}
+
 function durationMinutes(start: string, end: string) {
   return Math.max(0, Math.round((Date.parse(end) - Date.parse(start)) / 60_000))
 }
@@ -171,6 +181,10 @@ function AgendaRow({
               <p className="text-xs text-muted-foreground">
                 {appointment.typeLabel}
                 {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
+                <span className="inline-block">
+                  {' '}
+                  · <span className={`rounded-full px-1.5 py-0.5 ${availabilityClass(appointment.calendarShowAsBusy)} text-[10px]`}>{availabilityLabel(appointment.calendarShowAsBusy)}</span>
+                </span>
                 {!appointment.outlookSynced && appointment.status === 'scheduled' ? ' · ⚠ not on Outlook' : ''}
               </p>
             </div>

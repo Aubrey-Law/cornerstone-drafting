@@ -21,6 +21,12 @@ interface DueReminderRow {
   online_meeting_url: string | null
   location_type: string | null
   created_at: string
+  raw?: unknown
+}
+
+function suppressesDueReminder(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+  return (raw as Record<string, unknown>).suppressDueReminder === true
 }
 
 export interface SendDueRemindersResult {
@@ -52,7 +58,7 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
 
   const { data, error } = await admin
     .from('appointments')
-    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, attendee_phone, second_attendee_email, online_meeting_url, location_type, created_at')
+    .select('id, appointment_type_id, start_time, attendee_name, attendee_email, attendee_phone, second_attendee_email, online_meeting_url, location_type, created_at, raw')
     .eq('status', 'scheduled')
     .is('reminder_sent_at', null)
     .gt('start_time', nowIso)
@@ -76,6 +82,10 @@ export async function sendDueReminders(now = new Date()): Promise<SendDueReminde
 
   for (const row of due) {
     const startMs = Date.parse(row.start_time)
+    if (suppressesDueReminder(row.raw)) {
+      skipped++
+      continue
+    }
     const bookedInsideWindow = Date.parse(row.created_at) >= startMs - hours * HOUR_MS
     if (bookedInsideWindow || !row.attendee_email) {
       skipped++

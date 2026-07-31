@@ -128,6 +128,9 @@ export function TaskComposer({
   const [subtasks, setSubtasks] = useState<string[]>([])
   const [subtaskDraft, setSubtaskDraft] = useState('')
   const [subtasksOpen, setSubtasksOpen] = useState(false)
+  const [addToCalendar, setAddToCalendar] = useState(false)
+  const [calendarDurationMinutes, setCalendarDurationMinutes] = useState('30')
+  const [calendarShowAsBusy, setCalendarShowAsBusy] = useState(true)
   const [records, setRecords] = useState<RecordOption[]>([])
   const [templates, setTemplates] = useState<TemplateOption[]>([])
   const [assignees, setAssignees] = useState<AssigneeOption[]>([])
@@ -214,8 +217,23 @@ export function TaskComposer({
     setSubtasks([])
     setSubtaskDraft('')
     setSubtasksOpen(false)
+    setAddToCalendar(false)
+    setCalendarDurationMinutes('30')
+    setCalendarShowAsBusy(true)
     if (!lockRecord) setRecord(defaultRecord)
   }, [defaultRecord, lockRecord])
+
+  useEffect(() => {
+    if (!parsed.dueAt) {
+      setAddToCalendar(false)
+    }
+  }, [parsed.dueAt])
+
+  function isCalendarDurationValid(value: string): number | null {
+    const parsed = Number.parseInt(value, 10)
+    if (!Number.isFinite(parsed) || parsed <= 0) return null
+    return parsed
+  }
 
   const addSubtask = useCallback(() => {
     const text = subtaskDraft.trim()
@@ -226,26 +244,50 @@ export function TaskComposer({
 
   const submit = useCallback(async () => {
     const title = parsed.title.trim()
+    const dueAt = parsed.dueAt ? parsed.dueAt.toISOString() : null
+
+    let calendarDuration: number | undefined
+    if (addToCalendar) {
+      if (!dueAt) {
+        toast.error('Add a due date/time to the task title before creating a calendar hold.')
+        return
+      }
+      const parsedMinutes = isCalendarDurationValid(calendarDurationMinutes)
+      if (!parsedMinutes) {
+        toast.error('Calendar duration must be a positive number of minutes.')
+        return
+      }
+      calendarDuration = parsedMinutes
+    }
+
     if (!title || saving) return
     setSaving(true)
     try {
       const created = await onCreate({
         title,
         priority: effectivePriority ?? 'normal',
-        due_at: parsed.dueAt ? parsed.dueAt.toISOString() : null,
+        due_at: dueAt,
         matter_id: record?.kind === 'matter' ? record.id : null,
         lead_id: record?.kind === 'lead' ? record.id : null,
         assignee_id: assignee?.id ?? null,
         recurrence,
         checklist: subtasks.map(text => ({ text, done: false })),
+        ...(addToCalendar
+          ? {
+              calendarAddToCalendar: true,
+              calendarStartAt: dueAt,
+              calendarDurationMinutes: calendarDuration,
+              calendarShowAsBusy,
+            }
+          : {}),
       })
       if (created) reset()
     } finally {
       setSaving(false)
     }
-  }, [parsed, saving, onCreate, effectivePriority, record, assignee, recurrence, subtasks, reset])
+  }, [parsed, saving, onCreate, effectivePriority, record, assignee, recurrence, subtasks, addToCalendar, calendarDurationMinutes, calendarShowAsBusy, reset])
 
-  const canSubmit = parsed.title.trim().length > 0 && !saving
+  const canSubmit = parsed.title.trim().length > 0 && !saving && (!addToCalendar || !!parsed.dueAt)
 
   return (
     <div
@@ -467,6 +509,43 @@ export function TaskComposer({
               </div>
             </div>
           )}
+
+          <div className="rounded-md border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
+            <label className="flex flex-wrap items-center gap-2">
+              <input
+                type="checkbox"
+                checked={addToCalendar}
+                onChange={event => setAddToCalendar(event.target.checked)}
+                disabled={!parsed.dueAt}
+                className="size-3.5"
+              />
+              <span>Add calendar hold at parsed due time</span>
+              {!parsed.dueAt && <span className="text-destructive">· add a due date first</span>}
+            </label>
+            {addToCalendar && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1">
+                  <span className="text-[11px]">Minutes</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={calendarDurationMinutes}
+                    onChange={event => setCalendarDurationMinutes(event.target.value)}
+                    className="h-7 w-16 rounded border border-border bg-card px-2 text-xs text-foreground outline-none"
+                  />
+                </label>
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={calendarShowAsBusy}
+                    onChange={event => setCalendarShowAsBusy(event.target.checked)}
+                    className="size-3.5"
+                  />
+                  <span>Show as busy</span>
+                </label>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-muted-foreground">

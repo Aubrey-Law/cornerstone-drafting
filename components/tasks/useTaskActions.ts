@@ -19,6 +19,15 @@ export interface CreateTaskInput {
   checklist?: Array<{ text: string; done: boolean }>
   template_id?: string | null
   source?: TaskRow['source']
+
+  /** When true, create a calendar block tied to this task's due date. */
+  calendarAddToCalendar?: boolean
+  /** Start time for the optional calendar block in ISO format. */
+  calendarStartAt?: string | null
+  /** Calendar block duration in minutes. */
+  calendarDurationMinutes?: number | null
+  /** If false, block is created as free on calendar. */
+  calendarShowAsBusy?: boolean
 }
 
 /**

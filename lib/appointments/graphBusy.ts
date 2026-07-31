@@ -41,6 +41,12 @@ function parseGraphUtc(value: string | undefined): number | null {
   return Number.isFinite(ts) ? ts : null
 }
 
+function isShowAsBusy(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return true
+  const metadata = raw as Record<string, unknown>
+  return metadata.calendarShowAsBusy !== false
+}
+
 /**
  * Busy intervals from the connected Outlook mailbox via getSchedule.
  * Fails closed: throws AvailabilityUnavailableError when Outlook is not
@@ -110,7 +116,7 @@ export async function fetchAppointmentBusy(
 ): Promise<Interval[]> {
   const { data, error } = await getAdminClient()
     .from('appointments')
-    .select('start_time, end_time')
+    .select('start_time, end_time, raw')
     .eq('status', 'scheduled')
     .lt('start_time', rangeEnd.toISOString())
     .gt('end_time', rangeStart.toISOString())
@@ -120,7 +126,8 @@ export async function fetchAppointmentBusy(
     throw new AvailabilityUnavailableError('Could not read existing appointments')
   }
 
-  return ((data ?? []) as Array<{ start_time: string; end_time: string }>)
+  return ((data ?? []) as Array<{ start_time: string; end_time: string; raw?: unknown }>)
+    .filter(row => isShowAsBusy(row.raw))
     .map(row => ({ start: Date.parse(row.start_time), end: Date.parse(row.end_time) }))
     .filter(iv => Number.isFinite(iv.start) && Number.isFinite(iv.end) && iv.end > iv.start)
 }
