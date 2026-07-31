@@ -191,14 +191,14 @@ function AgendaRow({
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-[11px]">
-            <span className="inline-flex items-center gap-1 text-green-700">
+            <span className="inline-flex items-center gap-1 text-success">
               <Check className="h-3 w-3" /> calendar synced
             </span>
-            <span className={cn('inline-flex items-center gap-1', pending ? 'text-muted-foreground' : 'text-green-700')}>
+            <span className={cn('inline-flex items-center gap-1', pending ? 'text-muted-foreground' : 'text-success')}>
               {pending ? <Circle className="h-3 w-3" /> : <Check className="h-3 w-3" />}
               {pending ? 'prep pending' : 'meeting complete'}
             </span>
-            {appointment.status === 'no_show' && <span className="text-red-700">● no-show</span>}
+            {appointment.status === 'no_show' && <span className="text-destructive">● no-show</span>}
             <span className="ml-auto flex flex-wrap gap-1">
               {appointment.linkedMatterId && (
                 <Button asChild size="sm" variant="ghost">

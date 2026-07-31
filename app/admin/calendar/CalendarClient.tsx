@@ -647,8 +647,9 @@ export function CalendarClient() {
       <div
         className={cn(
           'flex-wrap items-center gap-3 text-[11px] text-foreground',
-          // Month and day both colour events by category, so both need the key.
-          view === 'month' || view === 'day' ? 'flex' : 'hidden',
+          // Month, week and day all colour events by category, so all three
+          // need the key. Only the plan view has no coloured events.
+          view !== 'plan' ? 'flex' : 'hidden',
         )}
       >
         {CATEGORY_LEGEND.map(({ category, label }) => (
