@@ -35,28 +35,41 @@ async function logInboundActivity(row: {
   body: string
   from_number: string
   matter_id: string | null
+  lead_id: string | null
   recipient_name: string | null
 }): Promise<void> {
-  if (!row.matter_id) return
-
   const admin = getAdminClient()
   const from = row.from_number
   const senderLabel = row.recipient_name?.trim() || from
 
-  await admin.from('matter_activity').insert({
-    matter_id: row.matter_id,
-    event_type: 'sms_received',
-    actor_id: null,
-    actor_email: null,
-    actor_name: senderLabel,
-    title: `Text received from ${senderLabel}`,
-    detail: from,
-    metadata: {
-      sms_message_id: row.id,
-      from,
-      body: row.body,
-    },
-  })
+  if (row.matter_id) {
+    await admin.from('matter_activity').insert({
+      matter_id: row.matter_id,
+      event_type: 'sms_received',
+      actor_id: null,
+      actor_email: null,
+      actor_name: senderLabel,
+      title: `Text received from ${senderLabel}`,
+      detail: from,
+      metadata: {
+        sms_message_id: row.id,
+        from,
+        body: row.body,
+      },
+    })
+  }
+
+  // Replies from leads also surface on the lead timeline.
+  if (row.lead_id) {
+    const { error } = await admin.from('lead_activity').insert({
+      lead_id: row.lead_id,
+      event_type: 'sms_received',
+      actor_id: null,
+      title: `Text received from ${senderLabel}`,
+      detail: `From ${from}`,
+    })
+    if (error) console.error('recordInboundSms: failed to log lead activity', error)
+  }
 }
 
 export async function recordInboundSms(
@@ -103,7 +116,7 @@ export async function recordInboundSms(
       raw_payload: input.rawPayload,
       sent_at: new Date().toISOString(),
     })
-    .select('id, body, from_number, matter_id, recipient_name')
+    .select('id, body, from_number, matter_id, lead_id, recipient_name')
     .single()
 
   if (insertError || !inserted) {
