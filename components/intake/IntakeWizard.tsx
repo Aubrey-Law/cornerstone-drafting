@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Loader2, Save, ChevronRight, Plus, Trash2, X } from 'lucide-react'
+import { Check, Loader2, Save, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAutoSave, type SaveStatus } from '@/hooks/useAutoSave'
 import { useContacts } from '@/hooks/useContacts'
@@ -18,6 +18,14 @@ import { ContactPickerField } from '@/components/intake/FiduciaryContactPicker'
 import { IntakeDocumentUpload, IntakeQuestionnaireReview } from '@/components/intake/IntakeQuestionnaireReview'
 import { formatPhoneInput } from '@/lib/phone'
 import { IntakeField } from '@/components/sharedFields/IntakeField'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   ContactAddressFields,
   AddButton,
@@ -432,34 +440,25 @@ function isAssetTotalsKey(key: string): key is IntakeAssetTotalsKey {
   return (ASSET_TOTALS_KEYS as readonly string[]).includes(key)
 }
 
-// Modal wrapper
-function AssetModal({ open, onClose, title, children }: {
+export function AssetModal({ open, onClose, title, children }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
 }) {
-  if (!open) return null
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-16"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="w-full max-w-2xl rounded-xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button type="button" onClick={onClose} aria-label="Close details" className="text-gray-400 hover:text-gray-600">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose() }}>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="border-b border-border px-6 py-4 pr-12">
+          <DialogTitle className="text-base">{title}</DialogTitle>
+        </DialogHeader>
         <div className="p-6">
-          <p className="mb-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          <DialogDescription className="mb-4 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs">
             These details are optional. Rough estimates are fine, and you can skip for now and add more at your appointment.
-          </p>
+          </DialogDescription>
           {children}
         </div>
-        <div className="flex justify-end border-t border-gray-200 px-6 py-4">
+        <DialogFooter className="border-t border-border px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -468,9 +467,9 @@ function AssetModal({ open, onClose, title, children }: {
           >
             Done
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

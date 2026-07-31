@@ -263,11 +263,11 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
         <div className="mt-4 rounded-md border border-border p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold">Run {runOutput.status}</span>
-            {runOutput.status === 'awaiting_confirmation' && <ShieldCheck className="h-4 w-4 text-amber-600" />}
+            {runOutput.status === 'awaiting_confirmation' && <ShieldCheck className="h-4 w-4 text-amber" />}
           </div>
           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs leading-5">{runOutput.output_text ?? 'No output'}</pre>
           {preflight.length > 0 && (
-            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+            <div className="mt-3 rounded-md border border-amber-border bg-amber-bg p-3 text-xs text-amber">
               <p className="font-semibold">Required before generation</p>
               <ul className="mt-1 list-disc space-y-1 pl-4">{preflight.map(issue => <li key={`${issue.field}-${issue.message}`}>{issue.message}</li>)}</ul>
             </div>

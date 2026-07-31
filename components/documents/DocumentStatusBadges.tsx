@@ -9,7 +9,7 @@ const TONE_CLASS: Record<DocumentBadgeModel['tone'], string> = {
   success: 'border-green/30 text-green',
   warning: 'border-amber-border bg-amber-bg text-amber',
   danger: 'border-destructive/30 text-destructive',
-  info: 'border-blue-200 text-blue-700',
+  info: 'border-primary/30 bg-primary/5 text-primary',
 }
 
 export function DocumentStatusBadges({ badges }: { badges: DocumentBadgeModel[] }) {

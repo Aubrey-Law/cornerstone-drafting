@@ -95,9 +95,9 @@ export function MatterDetailHeader({
           className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
-          Matters
+          <span className="hidden sm:inline">Matters</span>
         </Link>
-        <span aria-hidden className="shrink-0 text-xs text-muted-foreground">/</span>
+        <span aria-hidden className="hidden shrink-0 text-xs text-muted-foreground sm:inline">/</span>
         <span className="flex min-w-0 items-center gap-1.5">
           <span
             aria-hidden
@@ -107,11 +107,12 @@ export function MatterDetailHeader({
           </span>
           <span className="truncate text-sm font-semibold">{clientName}</span>
         </span>
-        <Badge variant="outline" className="shrink-0 text-[10px] font-medium tabular-nums">
+        <Badge variant="outline" className="hidden shrink-0 text-[10px] font-medium tabular-nums sm:inline-flex">
           {matterNumber ? `#${matterNumber}` : 'No matter number'}
         </Badge>
         <span
-          className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
+          aria-label="Matter stage"
+          className="hidden shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold lg:inline-flex"
           style={{ background: stageColors.bg, color: stageColors.text }}
         >
           {stageLabel(matter.stage)}
@@ -124,7 +125,7 @@ export function MatterDetailHeader({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="hidden shrink-0 items-center gap-2 md:flex">
         {matter.client_phone && (
           <CallPhoneLink
             phone={matter.client_phone}
@@ -189,6 +190,56 @@ export function MatterDetailHeader({
           <PanelRight className="size-3.5" />
         </Button>
       </div>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0 md:hidden"
+            aria-label="Matter actions"
+          >
+            <MoreHorizontal className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {matter.client_phone && (
+            <DropdownMenuItem asChild>
+              <CallPhoneLink phone={matter.client_phone} label="Call client" />
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={onOpenIntake}>
+            <ClipboardList className="mr-2 size-3.5" />
+            {intakeCompleted ? 'Edit intake' : intakeId ? 'Update intake' : 'Create intake'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onImportIntake}>
+            <Upload className="mr-2 size-3.5" />
+            Import intake
+          </DropdownMenuItem>
+          {intakeCompleted && intakeId && (
+            <DropdownMenuItem onClick={onUnlockIntake} disabled={unlocking}>
+              {unlocking ? (
+                <Loader2 className="mr-2 size-3.5 animate-spin text-muted-foreground" />
+              ) : (
+                <UnlockIcon className="mr-2 size-3.5 text-muted-foreground" />
+              )}
+              Unlock intake
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem asChild>
+            <Link href={`/admin/drafting/${matter.matter_id}`}>Open drafting</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onToggleFactsRail}>
+            <PanelRight className="mr-2 size-3.5" />
+            {factsRailOpen ? 'Hide facts' : 'Open facts'}
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+            <Trash2 className="mr-2 size-3.5" />
+            Delete matter
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
   )
 }

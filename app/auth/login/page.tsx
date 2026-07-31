@@ -2,9 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Image from 'next/image'
-import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { AuthShell } from '@/components/layout/AuthShell'
 import {
   DEFAULT_ADMIN_HOME,
   safeAdminRedirectPath,
@@ -135,15 +134,8 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 dark">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex justify-center">
-          <Link href="/auth/login" aria-label="Cornerstone home" className="rounded-sm transition-opacity hover:opacity-90">
-            <Image src="/logos/aubrey-law-stacked-dark.svg" alt="Aubrey Law" width={240} height={140} priority />
-          </Link>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border bg-card p-8 shadow-sm">
+    <AuthShell>
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border bg-card p-8 shadow-sm">
           <div>
             <h2 className="text-center text-lg font-medium text-foreground">Sign in</h2>
             <p className="mt-1 text-center text-xs text-muted-foreground/60">
@@ -226,9 +218,8 @@ function LoginForm() {
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
-        </form>
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   )
 }
 

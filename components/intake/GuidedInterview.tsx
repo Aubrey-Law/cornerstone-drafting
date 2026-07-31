@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { Check, Loader2, Lock, X } from 'lucide-react'
+import { Check, Loader2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabaseClient'
 import { useAutoSave, type SaveStatus } from '@/hooks/useAutoSave'
@@ -52,6 +52,11 @@ import {
   guidedPrimaryButtonStyle,
 } from '@/components/guided'
 import { getFirmConfig } from '@/lib/firmConfig'
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { ChildEntry, FiduciaryEntry, AdditionalContactEntry, StepProps } from './IntakeWizard'
 
 const stepLoading = () => (
@@ -661,7 +666,7 @@ function SectionIssues({ issues }: { issues: ReturnType<typeof getStepIssues> })
   )
 }
 
-function ReviewModal(props: {
+export function ReviewModal(props: {
   data: Record<string, unknown>
   intakeId: string
   publicIntakeToken?: string
@@ -690,15 +695,17 @@ function ReviewModal(props: {
   } = props
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(13,17,23,.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto', zIndex: 50 }}>
-      <div style={{ width: '100%', maxWidth: 920, background: 'var(--gi-surface)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.3)', animation: 'gi-fade .25s ease both', margin: 'auto' }}>
+    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) onClose() }}>
+      <DialogContent
+        showCloseButton={false}
+        className="gap-0 overflow-hidden border-0 p-0 sm:max-w-[920px]"
+        style={{ background: 'var(--gi-surface)' }}
+      >
         <div style={{ background: 'var(--gi-navy)', padding: '22px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <h2 style={{ fontWeight: 500, fontSize: 24, color: '#fff', margin: 0 }}>
-              Review your estate plan organizer{props.matterLabel ? ` · ${props.matterLabel}` : ''}
-            </h2>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', color: 'rgba(232,237,245,.7)', cursor: 'pointer', padding: '4px 8px' }}><X size={24} /></button>
+          <DialogTitle style={{ fontWeight: 500, fontSize: 24, color: '#fff', margin: 0 }}>
+            Review your estate plan organizer{props.matterLabel ? ` · ${props.matterLabel}` : ''}
+          </DialogTitle>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', color: 'rgba(232,237,245,.7)', cursor: 'pointer', padding: '4px 8px', fontSize: 24, lineHeight: 1 }}>×</button>
         </div>
 
         <div style={{ padding: '20px 28px', maxHeight: 'min(70vh, 720px)', overflowY: 'auto' }}>
@@ -742,7 +749,7 @@ function ReviewModal(props: {
             )}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

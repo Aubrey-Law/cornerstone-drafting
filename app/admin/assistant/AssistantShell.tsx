@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { ChatHistorySidebar, type AssistantChatSummary } from './components/ChatHistorySidebar'
 import { AssistantComposer } from './components/AssistantComposer'
 import { AssistantThread } from './components/AssistantThread'
+import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import {
   messagesFromPersisted,
   useAssistantStream,
@@ -210,7 +211,7 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
   const emptyState = !chatId && messages.length === 0
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 md:p-8">
+    <AdminPageShell className="gap-4 overflow-hidden">
       <PageHeader
         eyebrow="AI assistant"
         icon={Sparkles}
@@ -278,6 +279,6 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
           )}
         </div>
       </div>
-    </div>
+    </AdminPageShell>
   )
 }

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabaseClient'
+import { AuthShell } from '@/components/layout/AuthShell'
 
 function ResetPasswordForm() {
   const router = useRouter()
@@ -126,9 +127,9 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <Suspense>
-      <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <AuthShell>
         <ResetPasswordForm />
-      </main>
+      </AuthShell>
     </Suspense>
   )
 }

@@ -136,7 +136,11 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
   }
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="min-h-full bg-background">
+      <div
+        data-testid="message-column"
+        className="mx-auto flex min-h-full w-full max-w-3xl flex-col border-x border-border/60"
+      >
       <div className="border-b border-border bg-background px-6 py-4">
         <h1 className="text-base font-semibold text-foreground">Messages</h1>
         <p className="mt-0.5 text-xs text-muted-foreground">{firm.firmName}</p>
@@ -199,7 +203,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
       </div>
 
       <div className="sticky bottom-0 border-t border-border bg-background px-4 py-3">
-        <div className="flex max-w-2xl items-end gap-2">
+        <div className="flex items-end gap-2">
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -226,6 +230,7 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
             {sendError}
           </p>
         )}
+      </div>
       </div>
     </div>
   )
