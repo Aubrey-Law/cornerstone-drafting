@@ -561,4 +561,3 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
 export function calendarPlanningSystemPromptNote() {
   return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to add tasks for a matter or lead when needed. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).`
 }
-*** End Patch
