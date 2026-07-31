@@ -43,37 +43,36 @@ function CalendarProposalCard({ event }: { event: ToolEvent }) {
 
   async function accept(row: typeof rows[number]) {
     setActing(true)
-    try {
-      const response = await fetch('/api/admin/calendar/proposals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: row.kind, payload: row.payload }),
-      })
-      if (response.ok) {
-        const body = await response.json().catch(() => ({}))
-        setAccepted(current => new Set(current).add(row.id))
-        if (body.draftOnly) window.dispatchEvent(new Event('cornerstone:email-open'))
+      try {
+        const response = await fetch('/api/admin/calendar/proposals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: row.kind, payload: row.payload }),
+        })
+        if (response.ok) {
+          await response.json().catch(() => ({}))
+          setAccepted(current => new Set(current).add(row.id))
+        }
+      } finally {
+        setActing(false)
       }
-    } finally {
-      setActing(false)
-    }
   }
 
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-border bg-card text-xs text-foreground">
-      {rows.map(row => (
-        <div key={row.id} className="border-b border-border px-3 py-2 last:border-0">
-          <div className="font-semibold">{row.title}</div>
-          <div className="mt-0.5 text-muted-foreground">{row.rationale}</div>
-          <div className="mt-2 flex gap-1.5">
+              {rows.map(row => (
+                <div key={row.id} className="border-b border-border px-3 py-2 last:border-0">
+                  <div className="font-semibold">{row.title}</div>
+                  <div className="mt-0.5 text-muted-foreground">{row.rationale}</div>
+                  <div className="mt-2 flex gap-1.5">
             <button
               type="button"
               disabled={acting || accepted.has(row.id)}
-              onClick={() => void accept(row)}
-              className="rounded-md bg-primary px-2 py-1 font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              {accepted.has(row.id) ? 'Accepted' : row.kind === 'propose_reschedule' ? 'Prepare email' : 'Accept'}
-            </button>
+                    onClick={() => void accept(row)}
+                    className="rounded-md bg-primary px-2 py-1 font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+              {accepted.has(row.id) ? 'Accepted' : 'Accept'}
+                    </button>
             <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-muted">Alternative</button>
           </div>
         </div>
@@ -196,7 +195,7 @@ function ToolEventCard({
 
     return (
       <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-foreground">
-        <div className="font-semibold text-foreground">Task added to matter</div>
+        <div className="font-semibold text-foreground">Task created</div>
         {event.taskTitle && <div className="mt-0.5 text-muted-foreground">{event.taskTitle}</div>}
       </div>
     )

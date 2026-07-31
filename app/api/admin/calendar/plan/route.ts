@@ -73,7 +73,8 @@ export async function GET(req: NextRequest) {
       id: task.id,
       date,
       label: task.title,
-      matterId: task.matter_id ?? '',
+      matterId: task.matter_id,
+      leadId: task.lead_id,
       durationMinutes: task.estimate_minutes ?? 30,
     }))
   const unscheduledTasks = tasks

@@ -1,15 +1,66 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { AdminChatToolExecutor } from '@/lib/adminChat/engine'
+import { createCalendarHold } from '@/lib/appointments/graphEvents'
 import { computeSlots } from '@/lib/appointments/availability'
-import { fetchAllBusy } from '@/lib/appointments/graphBusy'
+import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/graphBusy'
 import { getSchedulingSettings, listAppointmentTypes } from '@/lib/appointments/settings'
 import { effectiveWeeklyHours } from '@/lib/appointments/types'
 import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
 import { fetchTasks } from '@/lib/queries/tasks'
+import {
+  isUuid,
+  TASK_COLUMNS,
+} from '@/lib/queries/tasks'
 import { effectiveDueAt, taskDueGroup } from '@/lib/tasks/types'
+import {
+  type ChecklistItem,
+  type TaskPriority,
+  type TaskSource,
+  type TaskType,
+  type TaskRow,
+  TASK_PRIORITIES,
+  TASK_TYPES,
+} from '@/lib/tasks/types'
+import { actorFrom, logTaskActivity } from '@/lib/tasks/server'
+import { parseRecurrence as parseRecurrenceText, type TaskRecurrence } from '@/lib/tasks/recurrence'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
-const tool = (
+const DAY_MS = 86_400_000
+const TASK_HOLD_TYPE_KEY = 'task_block'
+
+interface CalendarPlanningContext {
+  defaultMatterId?: string | null
+  defaultLeadId?: string | null
+  actor?: {
+    id: string
+    email?: string | null
+    user_metadata?: Record<string, unknown>
+  } | null
+}
+
+interface CreateTaskInput {
+  title: string
+  description: string | null
+  priority: TaskPriority
+  source: TaskSource
+  taskType: TaskType
+  checklist: ChecklistItem[]
+  matterId: string | null
+  leadId: string | null
+  dueAt: string | null
+  assigneeId: string | null
+  estimateMinutes: number | null
+  remindAt: string | null
+  recurrence: TaskRecurrence | null
+  templateId: string | null
+  documentId: string | null
+  calendarAddToCalendar: boolean
+  calendarStartAt: string | null
+  calendarDurationMinutes: number | null
+  calendarShowAsBusy: boolean
+}
+
+function tool(
   name: string,
   description: string,
   properties: Record<string, unknown>,
@@ -42,6 +93,37 @@ const definitions = {
     new_start: { type: 'string' },
     rationale: { type: 'string' },
   }, ['appointment_id', 'new_start', 'rationale']),
+  create_task: tool('create_task', 'Create a task for the current matter or lead. If calendarAddToCalendar is true, also create a calendar hold.', {
+    title: { type: 'string' },
+    description: { type: 'string' },
+    priority: { type: 'string', enum: ['high', 'normal', 'low'] },
+    source: { type: 'string', enum: ['manual', 'template', 'cadence', 'stage'] },
+    task_type: { type: 'string', enum: TASK_TYPES },
+    checklist: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          done: { type: 'boolean' },
+        },
+        required: ['text'],
+      },
+    },
+    matter_id: { type: 'string' },
+    lead_id: { type: 'string' },
+    due_at: { type: 'string' },
+    assignee_id: { type: 'string' },
+    estimate_minutes: { type: 'number' },
+    remind_at: { type: 'string' },
+    recurrence: { type: 'object' },
+    template_id: { type: 'string' },
+    document_id: { type: 'string' },
+    calendarAddToCalendar: { type: 'boolean' },
+    calendarStartAt: { type: 'string' },
+    calendarDurationMinutes: { type: 'number' },
+    calendarShowAsBusy: { type: 'boolean' },
+  }, ['title']),
   draft_reschedule_email: tool('draft_reschedule_email', 'Draft, but never send, a client reschedule email.', {
     attendee_name: { type: 'string' },
     old_time: { type: 'string' },
@@ -66,6 +148,266 @@ function validRange(input: Record<string, unknown>) {
   return { from, to }
 }
 
+function optionalTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
+
+function parsePositiveInt(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const parsed = Math.trunc(value)
+    return parsed > 0 ? parsed : null
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  }
+  return null
+}
+
+function optionalBoolean(value: unknown): boolean {
+  return value === false ? false : true
+}
+
+function optionalId(value: unknown): string | null {
+  return typeof value === 'string' && isUuid(value) ? value : null
+}
+
+function normalizeChecklist(value: unknown): ChecklistItem[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    if (typeof item === 'string') {
+      const text = item.trim()
+      return text ? [{ text, done: false }] : []
+    }
+    if (!item || typeof item !== 'object') return []
+    const raw = item as Record<string, unknown>
+    const text = typeof raw.text === 'string' ? raw.text.trim() : ''
+    return text ? [{ text, done: raw.done === true }] : []
+  })
+}
+
+async function getOrCreateTaskHoldType(admin: ReturnType<typeof getAdminClient>): Promise<string> {
+  const { data: existing, error: existingError } = await admin
+    .from('appointment_types')
+    .select('id, key')
+    .eq('key', TASK_HOLD_TYPE_KEY)
+    .maybeSingle()
+  if (existingError) throw existingError
+  if (existing?.id) return existing.id as string
+
+  const inserted = await admin.from('appointment_types').insert({
+    key: TASK_HOLD_TYPE_KEY,
+    slug: 'task-block',
+    label: 'Task hold',
+    description: 'Internal planning hold created from tasks.',
+    duration_minutes: 30,
+    location_type: 'phone',
+    location_types: ['phone'],
+    active: false,
+    public: false,
+    sort: 999,
+  } as const)
+
+  if (inserted.error) {
+    if (inserted.error.code !== '23505') throw inserted.error
+    const retried = await admin
+      .from('appointment_types')
+      .select('id, key')
+      .eq('key', TASK_HOLD_TYPE_KEY)
+      .maybeSingle()
+    if (retried.data?.id) return retried.data.id as string
+    throw inserted.error
+  }
+
+  const { data: refreshed, error: refreshedError } = await admin
+    .from('appointment_types')
+    .select('id, key')
+    .eq('key', TASK_HOLD_TYPE_KEY)
+    .maybeSingle()
+  if (refreshedError) throw refreshedError
+  if (refreshed?.id) return refreshed.id as string
+  throw new Error('Unable to initialize task hold appointment type')
+}
+
+function taskHoldTypeLabel(taskTitle: string): string {
+  return `Task hold: ${taskTitle}`
+}
+
+function buildCreateTaskPayload(fields: Record<string, unknown>, context: CalendarPlanningContext): CreateTaskInput {
+  const title = typeof fields.title === 'string' ? fields.title.trim() : ''
+  if (!title) throw new Error('title is required')
+
+  const matterId = optionalId(fields.matter_id) ?? context.defaultMatterId ?? null
+  const leadId = optionalId(fields.lead_id) ?? context.defaultLeadId ?? null
+  if (!matterId && !leadId) throw new Error('matter_id or lead_id is required')
+  if (matterId && leadId) throw new Error('A task belongs to a matter or a lead, not both')
+
+  const requestedSource = (typeof fields.source === 'string' && ['manual', 'template', 'cadence', 'stage'].includes(fields.source))
+    ? (fields.source as TaskSource)
+    : 'manual'
+
+  const requestedPriority = (typeof fields.priority === 'string' && TASK_PRIORITIES.includes(fields.priority as TaskPriority))
+    ? (fields.priority as TaskPriority)
+    : 'normal'
+
+  const requestedType = (typeof fields.task_type === 'string' && TASK_TYPES.includes(fields.task_type as TaskType))
+    ? (fields.task_type as TaskType)
+    : null
+
+  const checklist = normalizeChecklist(fields.checklist)
+  const taskType: TaskType = requestedType ?? (checklist.length > 0 ? 'checklist' : 'single')
+  const description = typeof fields.description === 'string' && fields.description.trim()
+    ? fields.description.trim()
+    : null
+
+  const calendarAddToCalendar = fields.calendarAddToCalendar === true
+  const proposedCalendarStart = optionalTimestamp(fields.calendarStartAt)
+  const calendarStartAt = proposedCalendarStart ?? optionalTimestamp(fields.due_at)
+  const calendarDurationMinutes = parsePositiveInt(fields.calendarDurationMinutes)
+  const calendarShowAsBusy = optionalBoolean(fields.calendarShowAsBusy)
+
+  if (calendarAddToCalendar) {
+    if (!calendarStartAt) throw new Error('calendarStartAt is required when calendar hold is enabled')
+    if (!calendarDurationMinutes) throw new Error('calendarDurationMinutes must be a positive integer')
+  }
+
+  return {
+    title,
+    description,
+    priority: requestedPriority,
+    source: requestedSource,
+    taskType,
+    checklist,
+    matterId,
+    leadId,
+    dueAt: optionalTimestamp(fields.due_at),
+    assigneeId: optionalId(fields.assignee_id),
+    estimateMinutes: parsePositiveInt(fields.estimate_minutes),
+    remindAt: optionalTimestamp(fields.remind_at),
+    recurrence: parseRecurrenceText(fields.recurrence),
+    templateId: optionalId(fields.template_id),
+    documentId: optionalId(fields.document_id),
+    calendarAddToCalendar,
+    calendarStartAt,
+    calendarDurationMinutes,
+    calendarShowAsBusy,
+  }
+}
+
+async function createTaskFromInput(input: CreateTaskInput, actor: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null) {
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('tasks')
+    .insert({
+      title: input.title,
+      description: input.description,
+      status: 'open',
+      priority: input.priority,
+      source: input.source,
+      task_type: input.taskType,
+      checklist: input.checklist,
+      matter_id: input.matterId,
+      lead_id: input.leadId,
+      due_at: input.dueAt,
+      assignee_id: input.assigneeId,
+      estimate_minutes: input.estimateMinutes,
+      remind_at: input.remindAt,
+      recurrence: input.recurrence,
+      template_id: input.templateId,
+      document_id: input.documentId,
+      created_by: actor?.id ?? null,
+    })
+    .select(TASK_COLUMNS)
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  const task = data as unknown as TaskRow
+  if (!task) throw new Error('Task creation failed')
+
+  if (input.calendarAddToCalendar && input.calendarStartAt && input.calendarDurationMinutes) {
+    const startMs = Date.parse(input.calendarStartAt)
+    const endMs = startMs + input.calendarDurationMinutes * 60_000
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+      await admin.from('tasks').delete().eq('id', task.id)
+      throw new Error('Invalid calendar window')
+    }
+
+    try {
+      const busy = await fetchAllBusy(new Date(startMs - DAY_MS), new Date(endMs + DAY_MS))
+      if (busy.some(interval => startMs < interval.end && endMs > interval.start)) {
+        await admin.from('tasks').delete().eq('id', task.id)
+        throw new Error('That time overlaps an existing appointment')
+      }
+    } catch (error) {
+      await admin.from('tasks').delete().eq('id', task.id)
+      if (error instanceof AvailabilityUnavailableError) {
+        throw new Error(error.message)
+      }
+      throw new Error('Could not verify calendar availability')
+    }
+
+    const appointmentTypeId = await getOrCreateTaskHoldType(admin)
+    const startIso = new Date(startMs).toISOString()
+    const endIso = new Date(endMs).toISOString()
+    const attendeeName = taskHoldTypeLabel(input.title)
+
+    const appointment = await admin
+      .from('appointments')
+      .insert({
+        appointment_type_id: appointmentTypeId,
+        start_time: startIso,
+        end_time: endIso,
+        status: 'scheduled',
+        attendee_name: attendeeName,
+        attendee_email: actor?.email?.toLowerCase() || 'noreply@aubreylegal.com',
+        attendee_phone: null,
+        notes: `Created from task ${input.title}`,
+        linked_lead_id: input.leadId,
+        linked_matter_id: input.matterId,
+        booked_by_user_id: actor?.id ?? null,
+        source: 'admin',
+        raw: {
+          source: 'task_calendar_hold',
+          calendarShowAsBusy: input.calendarShowAsBusy,
+          taskId: task.id,
+          taskTitle: input.title,
+          taskTypeLabel: attendeeName,
+          suppressDueReminder: true,
+        },
+      })
+      .select('id')
+      .single()
+
+    if (appointment.error || !appointment.data?.id) {
+      await admin.from('tasks').delete().eq('id', task.id)
+      throw new Error(appointment.error ? appointment.error.message : 'Could not create calendar hold')
+    }
+
+    try {
+      const hold = await createCalendarHold({
+        title: attendeeName,
+        startIso,
+        endIso,
+        matterId: input.matterId,
+        showAsBusy: input.calendarShowAsBusy,
+      })
+      await admin
+        .from('appointments')
+        .update({ microsoft_event_id: hold.eventId })
+        .eq('id', appointment.data.id)
+        .is('microsoft_event_id', null)
+    } catch {
+      console.error('[assistant-calendar-tools] failed to create task calendar hold in Outlook', task.id)
+    }
+  }
+
+  await logTaskActivity(admin, task, 'task_created', actorFrom(actor ?? null))
+  return task
+}
+
 function proposalExecutor(name: 'create_hold' | 'propose_reschedule'): AdminChatToolExecutor {
   return {
     tool: definitions[name],
@@ -86,7 +428,7 @@ function proposalExecutor(name: 'create_hold' | 'propose_reschedule'): AdminChat
   }
 }
 
-export function calendarPlanningToolExecutors(): AdminChatToolExecutor[] {
+export function calendarPlanningToolExecutors(context: CalendarPlanningContext = {}): AdminChatToolExecutor[] {
   return [
     {
       tool: definitions.list_calendar_range,
@@ -137,6 +479,41 @@ export function calendarPlanningToolExecutors(): AdminChatToolExecutor[] {
     proposalExecutor('create_hold'),
     proposalExecutor('propose_reschedule'),
     {
+      tool: definitions.create_task,
+      execute: async (input, { toolUseId, emit }) => {
+        try {
+          const fields = (input ?? {}) as Record<string, unknown>
+          const payload = buildCreateTaskPayload(fields, context)
+          const task = await createTaskFromInput(payload, context.actor ?? null)
+
+          emit({
+            tool: definitions.create_task.name,
+            tool_use_id: toolUseId,
+            status: 'done',
+            result: {
+              taskId: task.id,
+              title: task.title,
+              taskTitle: task.title,
+            },
+          })
+
+          return {
+            content: JSON.stringify({
+              ok: true,
+              task_id: task.id,
+              title: task.title,
+              task_title: task.title,
+            }),
+          }
+        } catch (error) {
+          return {
+            content: JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Could not create task' }),
+            isError: true,
+          }
+        }
+      },
+    },
+    {
       tool: definitions.draft_reschedule_email,
       execute: async input => {
         const fields = (input ?? {}) as Record<string, unknown>
@@ -182,5 +559,6 @@ export function calendarPlanningToolExecutors(): AdminChatToolExecutor[] {
 }
 
 export function calendarPlanningSystemPromptNote() {
-  return '\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule communications must be drafted for the Email tab and never sent automatically.'
+  return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to add tasks for a matter or lead when needed. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).`
 }
+*** End Patch

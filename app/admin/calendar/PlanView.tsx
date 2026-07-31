@@ -17,7 +17,7 @@ export function PlanView({
   onAskAssistant,
 }: {
   data: PlanData | null
-  onBook: (date?: string, durationMinutes?: number) => void
+  onBook: (deadline: PlanData['deadlines'][number]) => void
   onAskAssistant: (prompt: string) => void
 }) {
   if (!data) {
@@ -76,10 +76,20 @@ export function PlanView({
           {data.deadlines.length ? data.deadlines.map(item => (
             <div key={item.id} className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-0">
               <div>
-                <Link href={`/admin/matters/${item.matterId}`} className="text-xs font-semibold text-foreground hover:underline">{item.label}</Link>
+                {item.matterId ? (
+                  <Link href={`/admin/matters/${item.matterId}`} className="text-xs font-semibold text-foreground hover:underline">
+                    {item.label}
+                  </Link>
+                ) : item.leadId ? (
+                  <Link href={`/admin/leads/${item.leadId}`} className="text-xs font-semibold text-foreground hover:underline">
+                    {item.label}
+                  </Link>
+                ) : (
+                  <span className="text-xs font-semibold text-foreground">{item.label}</span>
+                )}
                 <p className="text-[11px] text-muted-foreground">{new Date(item.date).toLocaleDateString()}</p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => onBook(item.date, item.durationMinutes)}>
+              <Button size="sm" variant="outline" onClick={() => onBook(item)}>
                 <CalendarPlus className="mr-1 h-3 w-3" /> Block {item.durationMinutes}m
               </Button>
             </div>

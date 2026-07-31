@@ -64,6 +64,13 @@ export function messagesFromPersisted(rows: PersistedMessage[]): AssistantMessag
           tool: event.tool,
           toolUseId: event.tool_use_id,
           status: event.status as ToolEvent['status'],
+          taskId: typeof result?.task_id === 'string' ? result.task_id : undefined,
+          taskTitle:
+            typeof result?.title === 'string'
+              ? result.title
+              : typeof result?.task_title === 'string'
+                ? result.task_title
+                : undefined,
           matterId: typeof result?.matter_id === 'string' ? result.matter_id : undefined,
           preview: Array.isArray(result?.preview) ? result.preview as ToolEvent['preview'] : undefined,
           proposed: isRecord(result?.proposed) ? result.proposed as ToolEvent['proposed'] : undefined,

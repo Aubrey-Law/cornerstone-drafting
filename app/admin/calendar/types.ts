@@ -85,7 +85,8 @@ export interface PlanData {
     id: string
     date: string
     label: string
-    matterId: string
+    matterId?: string | null
+    leadId?: string | null
     durationMinutes: number
   }>
   unscheduledTasks: Array<{
