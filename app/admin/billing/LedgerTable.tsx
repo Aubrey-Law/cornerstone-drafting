@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { EmptyState } from '@/components/EmptyState'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import {
   Table,
   TableBody,
@@ -10,26 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { billingStatusPresentation } from '@/lib/billing/metrics'
+import { billingMoney } from '@/lib/billing/metrics'
 import type { BillingLedgerRow } from '@/lib/billing/types'
 import { cn } from '@/lib/utils'
 import { ReceiptText } from 'lucide-react'
 
-const MONEY = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-})
-
-const statusClasses = {
-  neutral: 'border-border bg-muted text-muted-foreground',
-  invoiced: 'border-blue-strong-border bg-blue-bg text-blue',
-  claim: 'border-stage-active/30 bg-stage-active-bg text-stage-active-text',
-  partial: 'border-stage-work/30 bg-stage-work-bg text-stage-work-text',
-  paid: 'border-green/30 bg-green-bg text-green',
-  overdue: 'border-destructive/30 bg-red-bg text-destructive',
-}
 export function LedgerTable({
   rows,
   onLogPayment,
@@ -66,7 +51,6 @@ export function LedgerTable({
         </TableHeader>
         <TableBody>
           {rows.map(row => {
-            const presentation = billingStatusPresentation(row)
             return (
               <TableRow key={row.id}>
                 <TableCell>
@@ -79,13 +63,11 @@ export function LedgerTable({
                   <p className="text-xs text-muted-foreground">{row.matterNumber ?? 'No matter number'}</p>
                 </TableCell>
                 <TableCell className="max-w-52 whitespace-normal">{row.label}</TableCell>
-                <TableCell className="text-right tabular-nums">{MONEY.format(row.amountBilled / 100)}</TableCell>
-                <TableCell className="text-right tabular-nums">{MONEY.format(row.collected / 100)}</TableCell>
-                <TableCell className="text-right font-medium tabular-nums">{MONEY.format(row.balance / 100)}</TableCell>
+                <TableCell className="text-right tabular-nums">{billingMoney(row.amountBilled)}</TableCell>
+                <TableCell className="text-right tabular-nums">{billingMoney(row.collected)}</TableCell>
+                <TableCell className="text-right font-medium tabular-nums">{billingMoney(row.balance)}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={statusClasses[presentation.tone]}>
-                    {presentation.label}
-                  </Badge>
+                  <BillingStatusBadge row={row} />
                 </TableCell>
                 <TableCell
                   className={cn(

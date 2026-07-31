@@ -1,8 +1,9 @@
 import 'server-only'
 
-import { buildBillingSnapshot } from '@/lib/billing/metrics'
+import { buildBillingSnapshot, buildRows } from '@/lib/billing/metrics'
 import type {
   BillingItem,
+  BillingLedgerRow,
   BillingPayment,
   BillingPlan,
   BillingSnapshot,
@@ -73,6 +74,109 @@ function currentWeekStart(now = new Date()): string {
   return utc.toISOString().slice(0, 10)
 }
 
+/** Joins a raw billing_items row to its matter context. Shared by both views. */
+function mapBillingItem(
+  row: BillingItemRow,
+  context: { matter: MatterRow | null; pipeline: PipelineRow | null; details: DetailRow | null },
+): BillingItem {
+  const { matter, pipeline, details } = context
+  return {
+    id: row.id,
+    matterId: row.matter_id,
+    kind: row.kind,
+    label: row.label,
+    plan: row.plan,
+    amountBilled: row.amount_billed,
+    status: row.status,
+    invoicedAt: row.invoiced_at,
+    source: row.source,
+    lastRemindedAt: row.last_reminded_at,
+    createdAt: row.created_at,
+    clientName: pipeline?.client_name ?? pipeline?.matter_name ?? 'Unknown client',
+    clientEmail: pipeline?.client_email ?? null,
+    matterNumber: matter?.matter_number ?? null,
+    practiceArea: details?.practice_area ?? pipeline?.practice_area ?? null,
+    planType: details?.plan_type ?? pipeline?.plan_type ?? null,
+    legalPlan: details?.legal_plan ?? null,
+  }
+}
+
+export interface MatterBillingView {
+  rows: BillingLedgerRow[]
+  /** `matter_details.legal_plan` normalized, so the tab can nudge for a claim. */
+  legalPlan: BillingPlan | null
+  /** True once a plan claim exists, so the nudge stays hidden. */
+  hasClaim: boolean
+}
+
+/**
+ * One matter's billing rows, derived exactly as the firm ledger derives them.
+ * Scoped at the database rather than by filtering the firm-wide snapshot.
+ */
+export async function fetchMatterBilling(
+  matterId: string,
+  now?: Date,
+): Promise<MatterBillingView> {
+  const admin = getAdminClient()
+  const [itemResult, matterResult, pipelineResult, detailResult] = await Promise.all([
+    admin
+      .from('billing_items')
+      .select('*')
+      .eq('matter_id', matterId)
+      .order('created_at', { ascending: true }),
+    admin.from('matters').select('id, matter_number').eq('id', matterId).maybeSingle(),
+    admin
+      .from('v_matter_pipeline')
+      .select('matter_id, client_name, client_email, matter_name, practice_area, plan_type')
+      .eq('matter_id', matterId)
+      .maybeSingle(),
+    admin
+      .from('matter_details')
+      .select(
+        'client_id, practice_area, plan_type, legal_plan, flat_fee_amount, engagement_signed, engagement_signed_at',
+      )
+      .eq('client_id', matterId)
+      .maybeSingle(),
+  ])
+
+  const error = itemResult.error ?? matterResult.error ?? pipelineResult.error ?? detailResult.error
+  if (error) throw new Error(error.message)
+
+  const itemRows = (itemResult.data ?? []) as BillingItemRow[]
+  const details = (detailResult.data ?? null) as DetailRow | null
+  const items = itemRows.map(row =>
+    mapBillingItem(row, {
+      matter: (matterResult.data ?? null) as MatterRow | null,
+      pipeline: (pipelineResult.data ?? null) as PipelineRow | null,
+      details,
+    }),
+  )
+
+  const paymentResult = items.length
+    ? await admin
+      .from('billing_payments')
+      .select('*')
+      .in('billing_item_id', items.map(item => item.id))
+      .order('received_at', { ascending: true })
+    : { data: [], error: null }
+  if (paymentResult.error) throw new Error(paymentResult.error.message)
+
+  const payments = ((paymentResult.data ?? []) as PaymentRow[]).map((row): BillingPayment => ({
+    id: row.id,
+    billingItemId: row.billing_item_id,
+    amount: row.amount,
+    method: row.method,
+    note: row.note,
+    receivedAt: row.received_at,
+  }))
+
+  return {
+    rows: buildRows(items, payments, firmTodayKey(now)),
+    legalPlan: billingPlan(details?.legal_plan ?? null),
+    hasClaim: items.some(item => item.kind === 'plan_claim'),
+  }
+}
+
 export async function fetchBillingData(input: {
   userId: string
   selectedMonth: string
@@ -132,30 +236,13 @@ export async function fetchBillingData(input: {
     ((detailResult.data ?? []) as DetailRow[]).map(detail => [detail.client_id, detail]),
   )
 
-  const items = ((itemResult.data ?? []) as BillingItemRow[]).map((row): BillingItem => {
-    const matter = matterById.get(row.matter_id)
-    const pipeline = pipelineById.get(row.matter_id)
-    const details = detailById.get(row.matter_id)
-    return {
-      id: row.id,
-      matterId: row.matter_id,
-      kind: row.kind,
-      label: row.label,
-      plan: row.plan,
-      amountBilled: row.amount_billed,
-      status: row.status,
-      invoicedAt: row.invoiced_at,
-      source: row.source,
-      lastRemindedAt: row.last_reminded_at,
-      createdAt: row.created_at,
-      clientName: pipeline?.client_name ?? pipeline?.matter_name ?? 'Unknown client',
-      clientEmail: pipeline?.client_email ?? null,
-      matterNumber: matter?.matter_number ?? null,
-      practiceArea: details?.practice_area ?? pipeline?.practice_area ?? null,
-      planType: details?.plan_type ?? pipeline?.plan_type ?? null,
-      legalPlan: details?.legal_plan ?? null,
-    }
-  })
+  const items = ((itemResult.data ?? []) as BillingItemRow[]).map(row =>
+    mapBillingItem(row, {
+      matter: matterById.get(row.matter_id) ?? null,
+      pipeline: pipelineById.get(row.matter_id) ?? null,
+      details: detailById.get(row.matter_id) ?? null,
+    }),
+  )
 
   const payments = ((paymentResult.data ?? []) as PaymentRow[]).map((row): BillingPayment => ({
     id: row.id,

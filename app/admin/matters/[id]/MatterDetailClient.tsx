@@ -81,6 +81,7 @@ import { useMatterNotes } from './useMatterNotes'
 import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
 import { MatterCommunicationsTab } from './tabs/messages'
+import { MatterBillingTab } from './tabs/billing'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
@@ -297,6 +298,7 @@ function MatterDetailClientInner({
   const [portalUploadsOpen, setPortalUploadsOpen] = useState(false)
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
+  const [billingTabVisited, setBillingTabVisited] = useState(false)
   const [factsRailOpen, setFactsRailOpen] = useState(false)
 
   useEffect(() => {
@@ -407,6 +409,7 @@ function MatterDetailClientInner({
 
   useEffect(() => {
     if (activeTab === 'assets') setAssetsTabVisited(true)
+    if (activeTab === 'billing') setBillingTabVisited(true)
   }, [activeTab])
 
   useEffect(() => {
@@ -865,6 +868,7 @@ function MatterDetailClientInner({
                 <TabsTrigger value="people">People</TabsTrigger>
                 <TabsTrigger value="assets">Assets</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="billing">Billing</TabsTrigger>
                 <TabsTrigger value="communications" className="gap-1.5">
                   Communications
                   {unreadPortalCount > 0 && (
@@ -1006,6 +1010,8 @@ function MatterDetailClientInner({
                   onReviewIntakeUploads={openIntakeSheet}
                 />
               </TabsContent>
+
+              <MatterBillingTab matterId={matterId} enabled={billingTabVisited} />
 
               <MatterCommunicationsTab
                 matterId={matter.matter_id}
