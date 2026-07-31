@@ -418,6 +418,7 @@ export function ChatPanel({
                 proposed?: unknown
                 task_id?: string
                 title?: string
+                task_title?: string
                 target?: 'matter' | 'lead'
                 proposal?: unknown
               }
@@ -440,7 +441,11 @@ export function ChatPanel({
                 totalClaim: parsed.result?.total_claim,
                 matterId: parsed.result?.matter_id,
                 taskId: parsed.result?.task_id,
-                taskTitle: parsed.result?.title,
+                taskTitle: typeof parsed.result?.title === 'string'
+                  ? parsed.result.title
+                  : typeof parsed.result?.task_title === 'string'
+                    ? parsed.result.task_title
+                    : undefined,
                 preview,
                 proposed,
                 proposal: Array.isArray(parsed.result?.proposal)

@@ -110,11 +110,16 @@ export async function POST(req: Request) {
   }
 
   const contextMatterId = contextType === 'matter' && body.context_id ? body.context_id : null
+  const contextLeadId = contextType === 'lead' && body.context_id ? body.context_id : null
   const tools: AdminChatToolExecutor[] = [
     createLeadToolExecutor,
     ...(contextMatterId ? [designSheetImportExecutor(contextMatterId, adminUserId ?? null)] : []),
     ...workflowToolExecutors({ userId: adminUserId ?? '', email: user?.email ?? null }),
-    ...calendarPlanningToolExecutors(),
+    ...calendarPlanningToolExecutors({
+      defaultMatterId: contextMatterId,
+      defaultLeadId: contextLeadId,
+      actor: user,
+    }),
   ]
 
   return createAdminChatStream({

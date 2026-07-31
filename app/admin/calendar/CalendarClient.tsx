@@ -120,6 +120,26 @@ interface RescheduleDraft {
   time: string
 }
 
+interface PlanBlockDraft {
+  id: string
+  date: string
+  time: string
+  title: string
+  durationMinutes: string
+  showAsBusy: boolean
+  matterId: string | null
+  leadId: string | null
+}
+
+function toTimeInputValue(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function parseIntOrNull(value: string): number | null {
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
 /**
  * Key Outlook events by day. Timed events use the local start day; all-day
  * events use the UTC date parts (Graph reports them as UTC midnights) and
@@ -172,6 +192,8 @@ export function CalendarClient() {
   const [planData, setPlanData] = useState<PlanData | null>(null)
   const [selectedAppointment, setSelectedAppointment] = useState<CalendarAppointment | null>(null)
   const [previewEvents, setPreviewEvents] = useState<OutlookEvent[]>([])
+  const [planBlock, setPlanBlock] = useState<PlanBlockDraft | null>(null)
+  const [planBlockSubmitting, setPlanBlockSubmitting] = useState(false)
 
   const authHeaders = useCallback((): HeadersInit | undefined => {
     if (!token) return undefined
@@ -416,6 +438,74 @@ export function CalendarClient() {
       date: dayKey(start),
       time: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
     })
+  }
+
+  function openPlanBlock(deadline: PlanData['deadlines'][number]) {
+    const parsedDate = Number.isFinite(Date.parse(deadline.date)) ? new Date(deadline.date) : null
+    const fallbackDate = new Date(`${dayKey(selectedDate)}T09:00:00`)
+    const date = toDateInputValue(parsedDate ?? fallbackDate)
+    const time = toTimeInputValue(parsedDate ?? fallbackDate)
+    const durationMinutes = parseIntOrNull(`${deadline.durationMinutes}`) ?? 30
+
+    setPlanBlock({
+      id: deadline.id,
+      date,
+      time,
+      title: deadline.label,
+      durationMinutes: String(durationMinutes),
+      showAsBusy: true,
+      matterId: deadline.matterId ?? null,
+      leadId: deadline.leadId ?? null,
+    })
+  }
+
+  async function createPlanBlock() {
+    if (!planBlock) return
+    const durationMinutes = parseIntOrNull(planBlock.durationMinutes)
+    const start = new Date(`${planBlock.date}T${planBlock.time}`)
+    if (!durationMinutes) {
+      toast.error('Block duration must be a positive number.')
+      return
+    }
+    if (!Number.isFinite(start.getTime())) {
+      toast.error('Add a valid date and time for the block.')
+      return
+    }
+    if (!planBlock.matterId && !planBlock.leadId) {
+      toast.error('This deadline is not tied to a matter or lead yet.')
+      return
+    }
+
+    setPlanBlockSubmitting(true)
+    try {
+      const payload: Record<string, unknown> = {
+        title: planBlock.title.trim() || 'Task block',
+        due_at: start.toISOString(),
+        calendarAddToCalendar: true,
+        calendarStartAt: start.toISOString(),
+        calendarDurationMinutes: durationMinutes,
+        calendarShowAsBusy: planBlock.showAsBusy,
+      }
+      if (planBlock.matterId) payload.matter_id = planBlock.matterId
+      else payload.lead_id = planBlock.leadId
+
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(payload),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast.error(json.error ?? 'Could not create that block')
+        return
+      }
+
+      toast.success('Planned block created and added to calendar')
+      setPlanBlock(null)
+      void load()
+    } finally {
+      setPlanBlockSubmitting(false)
+    }
   }
 
   const dayPanel = (
@@ -724,20 +814,95 @@ export function CalendarClient() {
               onBookSlot={iso => openQuickBook(iso ? { iso } : { date: selectedDate })}
             />
           ) : (
-            <PlanView
-              data={planData}
-              onBook={(date, duration) => openQuickBook({
-                date: date ? new Date(date) : selectedDate,
-                time: duration ? '09:00' : undefined,
-              })}
-              onAskAssistant={prompt => window.dispatchEvent(new CustomEvent('cornerstone:chat-open', { detail: { prompt } }))}
-            />
-          )}
+              <PlanView
+                data={planData}
+                onBook={openPlanBlock}
+                onAskAssistant={prompt => window.dispatchEvent(new CustomEvent('cornerstone:chat-open', { detail: { prompt } }))}
+              />
+            )}
         </div>
         {view === 'week' && <div className="w-[300px] shrink-0">{dayPanel}</div>}
       </div>
 
       {view === 'month' && dayPanel}
+
+      <Dialog open={planBlock !== null} onOpenChange={open => !open && setPlanBlock(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Block calendar time</DialogTitle>
+          </DialogHeader>
+          {planBlock && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Create a calendar hold from a task deadline.</p>
+              <div>
+                <Label htmlFor="plan-block-title">Title</Label>
+                <Input
+                  id="plan-block-title"
+                  className="mt-1"
+                  value={planBlock.title}
+                  onChange={event => setPlanBlock({ ...planBlock, title: event.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="plan-block-date">Date</Label>
+                  <Input
+                    id="plan-block-date"
+                    className="mt-1"
+                    type="date"
+                    value={planBlock.date}
+                    onChange={event => setPlanBlock({ ...planBlock, date: event.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="plan-block-time">Start</Label>
+                  <Input
+                    id="plan-block-time"
+                    className="mt-1"
+                    type="time"
+                    value={planBlock.time}
+                    onChange={event => setPlanBlock({ ...planBlock, time: event.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="plan-block-duration">Duration (minutes)</Label>
+                <Input
+                  id="plan-block-duration"
+                  className="mt-1"
+                  type="number"
+                  min="1"
+                  value={planBlock.durationMinutes}
+                  onChange={event => setPlanBlock({ ...planBlock, durationMinutes: event.target.value })}
+                />
+              </div>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={planBlock.showAsBusy}
+                  onChange={event => setPlanBlock({ ...planBlock, showAsBusy: event.target.checked })}
+                />
+                Show as busy
+              </label>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setPlanBlock(null)}
+                  disabled={planBlockSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={planBlockSubmitting}
+                  onClick={() => void createPlanBlock()}
+                >
+                  {planBlockSubmitting ? 'Creating…' : 'Create block'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <EventPrepDrawer
         appointment={selectedAppointment}
