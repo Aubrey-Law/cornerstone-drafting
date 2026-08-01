@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/clientApi'
+import { mergeCommunicationItems, type CommunicationItem } from '@/lib/comms/thread'
 import { useMessagesRealtime } from '@/lib/messages/useMessagesRealtime'
 
 export interface PortalMessage {
@@ -29,6 +30,16 @@ interface EmailSendResponse {
   provider?: string
 }
 
+interface CallItemRow {
+  id: string
+  direction: 'inbound' | 'outbound'
+  status: string
+  started_at: string
+  duration_seconds: number | null
+  summary: string | null
+  firm_user_email: string | null
+}
+
 export function useMatterCommunications({
   matterId,
   token,
@@ -51,8 +62,30 @@ export function useMatterCommunications({
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailSending, setEmailSending] = useState(false)
+  const [calls, setCalls] = useState<CallItemRow[]>([])
 
   useEffect(() => setEmailTo(initialEmailTo), [initialEmailTo])
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const rows = await apiRequest<unknown>(
+          `/api/admin/matters/${matterId}/calls?limit=100`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        if (cancelled) return
+        const list = Array.isArray(rows)
+          ? rows
+          : (rows as { calls?: unknown[] } | null)?.calls ?? []
+        setCalls(Array.isArray(list) ? list as CallItemRow[] : [])
+      } catch {
+        // Calls stay out of the timeline if history is unavailable.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [matterId, token])
 
   const loadPortalMessages = useCallback(async () => {
     if (!token) return
@@ -169,7 +202,70 @@ export function useMatterCommunications({
     }
   }
 
+  // One merged timeline over the arrays already fetched above — the tab's
+  // interleaved view reads this; the per-channel arrays stay for callers that
+  // still want a single channel.
+  const items: CommunicationItem[] = useMemo(() => mergeCommunicationItems(
+    portalMessages.map(m => ({
+      id: m.id,
+      channel: 'portal' as const,
+      direction: m.sender_role === 'client' ? 'inbound' as const : 'outbound' as const,
+      body: m.body,
+      sender: m.sender_role === 'client' ? null : 'Firm',
+      created_at: m.created_at,
+    })),
+    smsMessages.map(m => ({
+      id: m.id,
+      channel: 'sms' as const,
+      direction: m.direction === 'inbound' ? 'inbound' as const : 'outbound' as const,
+      body: m.body,
+      meta: m.status || null,
+      sender: m.direction === 'inbound' ? m.recipient_name : m.actor_name ?? 'Firm',
+      created_at: m.created_at,
+    })),
+    calls.map(c => ({
+      id: c.id,
+      channel: 'call' as const,
+      direction: c.direction,
+      body: c.summary?.trim() || `${c.direction === 'inbound' ? 'Inbound' : 'Outbound'} call`,
+      meta: [c.status, c.duration_seconds != null ? `${c.duration_seconds}s` : null]
+        .filter(Boolean).join(' · ') || null,
+      sender: c.direction === 'outbound' ? c.firm_user_email : null,
+      created_at: c.started_at,
+    })),
+  ), [portalMessages, smsMessages, calls])
+
+  /** Locked-composer send: same endpoints as the per-channel senders above. */
+  const sendOnChannel = useCallback(async (channel: 'portal' | 'sms', body: string): Promise<boolean> => {
+    if (!token || !body.trim()) return false
+    try {
+      if (channel === 'portal') {
+        await apiRequest('/api/messages', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ matter_id: matterId, body: body.trim() }),
+        }, 'Send failed')
+        toast.success('Message sent')
+        await loadPortalMessages()
+      } else {
+        await apiRequest(`/api/admin/matters/${matterId}/send-sms`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient: smsRecipient, body: body.trim() }),
+        }, 'SMS failed')
+        toast.success('Text sent')
+        await loadSmsMessages()
+      }
+      return true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not send')
+      return false
+    }
+  }, [token, matterId, smsRecipient, loadPortalMessages, loadSmsMessages])
+
   return {
+    items,
+    sendOnChannel,
     portalMessages,
     portalLoading,
     portalDraft,

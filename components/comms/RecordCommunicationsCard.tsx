@@ -1,19 +1,18 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { SetupBanner } from '@/components/SetupBanner'
-import { CallList } from '@/components/calls/CallList'
+import { FilterChip } from '@/components/FilterChip'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
 import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { apiRequest } from '@/lib/clientApi'
-import { MAX_LEAD_SMS_BODY_LENGTH, MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
+import { MAX_LEAD_SMS_BODY_LENGTH } from '@/lib/sms/constants'
+import { mergeCommunicationItems, type CommunicationItem } from '@/lib/comms/thread'
+import { CommunicationThread, type ThreadChannelFilter } from './CommunicationThread'
 
 export interface CommsRecord {
   type: 'lead' | 'matter'
@@ -27,6 +26,16 @@ interface SmsMessageRow {
   body: string
   status: string | null
   created_at: string
+}
+
+interface CallRowLite {
+  id: string
+  direction: 'inbound' | 'outbound'
+  status: string
+  started_at: string
+  duration_seconds: number | null
+  summary: string | null
+  firm_user_email: string | null
 }
 
 export interface RecordCommunicationsCardProps {
@@ -44,9 +53,10 @@ export interface RecordCommunicationsCardProps {
 }
 
 /**
- * SMS / email / call history for a lead or matter record, self-fetching so it
- * can drop into the lead Communications tab or the contact side panel. Matter
- * portal messages stay on the matter page — this covers the outward channels.
+ * Merged SMS / email / call timeline for a lead or matter record, self-fetching
+ * so it can drop into the lead Communications tab or the contact side panel.
+ * Renders the shared `CommunicationThread` — the inbox and matter tab use the
+ * same timeline and composer.
  */
 export function RecordCommunicationsCard({
   record,
@@ -57,30 +67,38 @@ export function RecordCommunicationsCard({
   smsRecipientRole = 'client',
   smsSendable = true,
   smsDisabledReason,
-  defaultChannel = 'sms',
+  defaultChannel,
 }: RecordCommunicationsCardProps) {
   const token = useAccessToken()
-  const [channel, setChannel] = useState<'sms' | 'email' | 'calls'>(defaultChannel)
+  const [channel, setChannel] = useState<ThreadChannelFilter>(
+    defaultChannel && defaultChannel !== 'sms' ? defaultChannel : 'all',
+  )
   const [messages, setMessages] = useState<SmsMessageRow[]>([])
+  const [calls, setCalls] = useState<CallRowLite[]>([])
   const [loading, setLoading] = useState(true)
-  const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const smsDraftLimit = record.type === 'lead' ? MAX_LEAD_SMS_BODY_LENGTH : MAX_SMS_BODY_LENGTH
-  const smsDraftRoute = record.type === 'lead' ? `/api/admin/leads/${record.id}/draft-reply` : undefined
 
   const recordBase = record.type === 'matter'
     ? `/api/admin/matters/${record.id}`
     : `/api/admin/leads/${record.id}`
+  const smsDraftRoute = record.type === 'lead' ? `/api/admin/leads/${record.id}/draft-reply` : undefined
 
   const loadMessages = useCallback(async () => {
     if (!token) return
     try {
-      const rows = await apiRequest<SmsMessageRow[]>(`${recordBase}/sms-messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      setMessages(Array.isArray(rows) ? rows : [])
-    } catch {
-      setMessages([])
+      const [smsRows, callRows] = await Promise.all([
+        apiRequest<SmsMessageRow[]>(`${recordBase}/sms-messages`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => []),
+        apiRequest<unknown>(`${recordBase}/calls?limit=50`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => []),
+      ])
+      setMessages(Array.isArray(smsRows) ? smsRows : [])
+      const callList = Array.isArray(callRows)
+        ? callRows
+        : (callRows as { calls?: unknown[] } | null)?.calls ?? []
+      setCalls(Array.isArray(callList) ? callList as CallRowLite[] : [])
     } finally {
       setLoading(false)
     }
@@ -91,40 +109,72 @@ export function RecordCommunicationsCard({
     void loadMessages()
   }, [loadMessages])
 
-  async function sendSms() {
-    if (!token || !draft.trim()) return
-    if (record.type === 'lead' && draft.length > MAX_LEAD_SMS_BODY_LENGTH) {
+  const items: CommunicationItem[] = useMemo(() => mergeCommunicationItems(
+    messages.map(m => ({
+      id: m.id,
+      channel: 'sms' as const,
+      direction: m.direction === 'inbound' ? 'inbound' as const : 'outbound' as const,
+      body: m.body,
+      meta: m.status ?? null,
+      sender: m.direction === 'inbound' ? recipientName : m.recipient_name ? `To ${m.recipient_name}` : 'Firm',
+      created_at: m.created_at,
+    })),
+    calls.map(c => ({
+      id: c.id,
+      channel: 'call' as const,
+      direction: c.direction,
+      body: c.summary?.trim() || `${c.direction === 'inbound' ? 'Inbound' : 'Outbound'} call`,
+      meta: [c.status, c.duration_seconds != null ? `${c.duration_seconds}s` : null]
+        .filter(Boolean).join(' · ') || null,
+      sender: c.direction === 'outbound' ? c.firm_user_email : null,
+      created_at: c.started_at,
+    })),
+  ), [messages, calls, recipientName])
+
+  const sendSms = useCallback(async (_channel: 'portal' | 'sms', body: string): Promise<boolean> => {
+    if (!token || !body.trim()) return false
+    if (record.type === 'lead' && body.length > MAX_LEAD_SMS_BODY_LENGTH) {
       toast.error(`Message must be ${MAX_LEAD_SMS_BODY_LENGTH} characters or fewer`)
-      return
+      return false
     }
     setSending(true)
     try {
-      const body = record.type === 'matter'
-        ? { recipient: smsRecipientRole, body: draft.trim() }
-        : { body: draft.trim() }
+      const payload = record.type === 'matter'
+        ? { recipient: smsRecipientRole, body: body.trim() }
+        : { body: body.trim() }
       await apiRequest(`${recordBase}/send-sms`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       }, 'Could not send text')
-      setDraft('')
       toast.success('Text sent')
       await loadMessages()
+      return true
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : 'Could not send text')
+      return false
     } finally {
       setSending(false)
     }
-  }
+  }, [token, record.type, smsRecipientRole, recordBase, loadMessages])
+
+  const chips: Array<{ key: ThreadChannelFilter; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'sms', label: 'SMS' },
+    { key: 'email', label: 'Email' },
+    { key: 'calls', label: 'Calls' },
+  ]
 
   return (
-    <Tabs value={channel} onValueChange={value => setChannel(value as typeof channel)} className="gap-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TabsList>
-          <TabsTrigger value="sms">SMS</TabsTrigger>
-          <TabsTrigger value="email">Email</TabsTrigger>
-          <TabsTrigger value="calls">Calls</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {chips.map(chip => (
+            <FilterChip key={chip.key} selected={channel === chip.key} onClick={() => setChannel(chip.key)}>
+              {chip.label}
+            </FilterChip>
+          ))}
+        </div>
         {recipientPhone && (
           <Button
             type="button"
@@ -138,83 +188,33 @@ export function RecordCommunicationsCard({
         )}
       </div>
 
-      <TabsContent value="sms" className="space-y-3">
-        {!smsEnabled ? (
-          <SetupBanner feature="SMS" detail="Configure the selected SMS provider in environment variables to text from here." />
-        ) : (
-          <>
-            <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3">
-              {loading ? (
-                <p className="text-xs text-muted-foreground">Loading…</p>
-              ) : messages.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No texts yet.</p>
-              ) : (
-                messages.map(m => (
-                  <div
-                    key={m.id}
-                    className={`rounded-md px-2.5 py-2 text-xs ${m.direction === 'inbound' ? 'bg-muted/50' : 'bg-primary/10'}`}
-                  >
-                    <div className="mb-0.5 flex justify-between gap-2 text-[10px] text-muted-foreground">
-                      <span>
-                        {m.direction === 'inbound' ? 'Inbound' : 'Outbound'}
-                        {m.recipient_name ? ` · ${m.recipient_name}` : ''}
-                        {m.status ? ` · ${m.status}` : ''}
-                      </span>
-                      <span>{new Date(m.created_at).toLocaleString()}</span>
-                    </div>
-                    <p className="whitespace-pre-wrap">{m.body}</p>
-                  </div>
-                ))
-              )}
-            </div>
-            {smsSendable ? (
-              <div className="flex items-end gap-2">
-            <Textarea
-              value={draft}
-              onChange={e => setDraft(e.target.value.slice(0, smsDraftLimit))}
-              placeholder={recipientPhone ? `Text ${recipientName}…` : 'No phone number on file'}
-              rows={2}
-              className="min-h-[60px] flex-1"
-              disabled={!recipientPhone && record.type === 'lead'}
+      <CommunicationThread
+        items={items}
+        loading={loading}
+        recordType={record.type}
+        recordLabel={recipientName}
+        recipientName={recipientName}
+        recipientPhone={recipientPhone}
+        smsConfigured={smsEnabled}
+        smsDisabledReason={smsSendable ? null : smsDisabledReason ?? 'Texting is not available for this contact.'}
+        portalAvailable={false}
+        channelFilter={channel}
+        sending={sending}
+        onSend={sendSms}
+        renderDraftAi={(replyChannel, notes, onDraft) => (
+          record.type === 'matter' ? (
+            <DraftWithAiButton matterId={record.id} channel={replyChannel} notes={notes} onDraft={onDraft} />
+          ) : (
+            <DraftWithAiButton
+              apiPath={smsDraftRoute}
+              channel={replyChannel}
+              notes={notes}
+              maxChars={MAX_LEAD_SMS_BODY_LENGTH}
+              onDraft={onDraft}
             />
-            <p className="w-full text-right text-[11px] text-muted-foreground">{draft.length}/{smsDraftLimit}</p>
-            {record.type !== 'matter' ? (
-              <DraftWithAiButton
-                apiPath={smsDraftRoute}
-                channel="sms"
-                notes={draft}
-                maxChars={MAX_LEAD_SMS_BODY_LENGTH}
-                onDraft={next => setDraft(next.slice(0, smsDraftLimit))}
-              />
-            ) : (
-              <DraftWithAiButton
-                matterId={record.id}
-                channel="sms"
-                notes={draft}
-                onDraft={next => setDraft(next.slice(0, smsDraftLimit))}
-              />
-            )}
-            <Button
-              type="button"
-              size="sm"
-              className="shrink-0"
-              disabled={sending || !draft.trim() || (record.type === 'lead' && draft.length > MAX_LEAD_SMS_BODY_LENGTH)}
-              onClick={() => void sendSms()}
-            >
-              Send SMS
-            </Button>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {smsDisabledReason ?? 'Texting is not available for this contact.'}
-              </p>
-            )}
-          </>
+          )
         )}
-      </TabsContent>
-
-      <TabsContent value="email">
-        {recipientEmail ? (
+        emailComposer={recipientEmail ? (
           <div className="rounded-md border border-border">
             <ManualEmailComposer
               embedded
@@ -235,13 +235,7 @@ export function RecordCommunicationsCard({
         ) : (
           <p className="py-4 text-center text-xs text-muted-foreground">No email address on file.</p>
         )}
-      </TabsContent>
-
-      <TabsContent value="calls">
-        {record.type === 'matter'
-          ? <CallList matterId={record.id} limit={25} />
-          : <CallList leadId={record.id} limit={25} />}
-      </TabsContent>
-    </Tabs>
+      />
+    </div>
   )
 }

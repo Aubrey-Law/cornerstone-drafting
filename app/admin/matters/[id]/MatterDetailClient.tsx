@@ -306,27 +306,22 @@ function MatterDetailClientInner({
   }, [])
 
   const {
+    items: communicationItems,
+    sendOnChannel,
     portalMessages,
     portalLoading,
-    portalDraft,
     portalSending,
-    smsMessages,
     smsLoading,
-    smsDraft,
     smsRecipient,
     smsSending,
     emailTo,
     emailSubject,
     emailBody,
     emailSending,
-    setPortalDraft,
-    setSmsDraft,
     setSmsRecipient,
     setEmailTo,
     setEmailSubject,
     setEmailBody,
-    sendPortalMessage,
-    sendSms,
     sendEmail,
   } = useMatterCommunications({
     matterId: matter.matter_id,
@@ -1017,13 +1012,14 @@ function MatterDetailClientInner({
                 matterId={matter.matter_id}
                 channel={communicationChannel}
                 onChannelChange={channel => setActiveTab('communications', undefined, channel)}
-                portalMessages={portalMessages}
+                items={communicationItems}
+                clientName={matter.client_name || matter.matter_name || 'Client'}
+                clientPhone={matter.client_phone || null}
+                recordLabel={matterNum ?? (matter.client_name || matter.matter_name || 'this matter')}
+                onSendOnChannel={sendOnChannel}
                 portalLoading={portalLoading}
-                portalDraft={portalDraft}
                 portalSending={portalSending}
-                smsMessages={smsMessages}
                 smsLoading={smsLoading}
-                smsDraft={smsDraft}
                 smsRecipient={smsRecipient}
                 smsSending={smsSending}
                 emailTo={emailTo}
@@ -1032,14 +1028,10 @@ function MatterDetailClientInner({
                 emailSending={emailSending}
                 smsEnabled={smsEnabled}
                 emailSendEnabled={emailSendEnabled}
-                setPortalDraft={setPortalDraft}
-                setSmsDraft={setSmsDraft}
                 setSmsRecipient={setSmsRecipient}
                 setEmailTo={setEmailTo}
                 setEmailSubject={setEmailSubject}
                 setEmailBody={setEmailBody}
-                onSendPortal={() => void sendPortalMessage()}
-                onSendSms={() => void sendSms()}
                 onSendEmail={() => void sendEmail()}
                 onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
                 onBookForClient={() => setBookForClientOpen(true)}
