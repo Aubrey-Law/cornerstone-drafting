@@ -1,4 +1,5 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { fetchInboxNeedsReplyCount } from '@/lib/queries/inbox'
 import { fetchMatterAgingTiles } from '@/lib/queries/pipelineAging'
 import { fetchTaskCounts } from '@/lib/queries/tasks'
 import { type SidebarCounts } from '@/lib/sidebarBadges'
@@ -75,7 +76,15 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     console.error('sidebar counts tasks error:', error)
   }
 
+  let inboxNeedsReplyCount = 0
+  try {
+    inboxNeedsReplyCount = await fetchInboxNeedsReplyCount()
+  } catch (error) {
+    console.error('sidebar counts inbox error:', error)
+  }
+
   return {
+    inboxNeedsReplyCount,
     intakeReviewCount,
     draftingNeedsDesignCount,
     agingRedCount,

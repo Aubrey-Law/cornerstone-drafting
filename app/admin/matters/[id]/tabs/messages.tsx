@@ -1,6 +1,5 @@
 'use client'
 
-import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,14 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { TabsContent } from '@/components/ui/tabs'
+import { FilterChip } from '@/components/FilterChip'
 import { SetupBanner } from '@/components/SetupBanner'
 import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
-import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
-import { linkifyText } from '@/lib/linkify'
+import { CommunicationThread } from '@/components/comms/CommunicationThread'
+import type { CommunicationItem } from '@/lib/comms/thread'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
-import { CallsSection } from './calls'
-import type { PortalMessage, SmsMessage } from '../useMatterCommunications'
 
 export interface SchedulingActionsProps {
   onSendSchedulingLink: () => void
@@ -27,14 +25,10 @@ export interface SchedulingActionsProps {
 }
 
 export interface MatterMessagesSectionsProps {
-  portalMessages: PortalMessage[]
   portalLoading: boolean
-  portalDraft: string
-  portalSending: boolean
-  smsMessages: SmsMessage[]
   smsLoading: boolean
-  smsDraft: string
   smsRecipient: 'client' | 'spouse'
+  portalSending: boolean
   smsSending: boolean
   emailTo: string
   emailSubject: string
@@ -42,175 +36,11 @@ export interface MatterMessagesSectionsProps {
   emailSending: boolean
   smsEnabled: boolean
   emailSendEnabled: boolean
-  setPortalDraft: (value: string) => void
-  setSmsDraft: (value: string) => void
   setSmsRecipient: (value: 'client' | 'spouse') => void
   setEmailTo: (value: string) => void
   setEmailSubject: (value: string) => void
   setEmailBody: (value: string) => void
-  onSendPortal: () => void
-  onSendSms: () => void
   onSendEmail: () => void
-}
-
-export function PortalMessagesSection({
-  matterId,
-  portalMessages,
-  portalLoading,
-  portalDraft,
-  portalSending,
-  setPortalDraft,
-  onSendPortal,
-}: Pick<
-  MatterMessagesSectionsProps,
-  'portalMessages' | 'portalLoading' | 'portalDraft' | 'portalSending' | 'setPortalDraft' | 'onSendPortal'
-> & { matterId?: string }) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Portal messages</h3>
-        <p className="text-xs text-muted-foreground">In-app thread with the client portal.</p>
-      </div>
-      <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3">
-        {portalLoading ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : portalMessages.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No portal messages yet.</p>
-        ) : (
-          portalMessages.map(m => (
-            <div
-              key={m.id}
-              className={`rounded-md px-2.5 py-2 text-xs ${m.sender_role === 'client' ? 'bg-muted/50' : 'bg-primary/10'}`}
-            >
-              <div className="mb-0.5 flex justify-between gap-2 text-[10px] text-muted-foreground">
-                <span className="capitalize">{m.sender_role}</span>
-                <span>{new Date(m.created_at).toLocaleString()}</span>
-              </div>
-              <p className="whitespace-pre-wrap">{linkifyText(m.body)}</p>
-            </div>
-          ))
-        )}
-      </div>
-      <div className="flex gap-2">
-        <Textarea
-          value={portalDraft}
-          onChange={e => setPortalDraft(e.target.value)}
-          placeholder="Write a portal message…"
-          rows={2}
-          className="min-h-[60px]"
-        />
-        <div className="flex shrink-0 flex-col justify-end gap-2">
-          {matterId && (
-            <DraftWithAiButton matterId={matterId} channel="portal" notes={portalDraft} onDraft={setPortalDraft} />
-          )}
-          <Button
-            type="button"
-            size="sm"
-            disabled={portalSending || !portalDraft.trim()}
-            onClick={onSendPortal}
-          >
-            <Send className="h-3.5 w-3.5" />
-            Send
-          </Button>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-export function SmsMessagesSection({
-  matterId,
-  smsMessages,
-  smsLoading,
-  smsDraft,
-  smsRecipient,
-  smsSending,
-  smsEnabled,
-  setSmsDraft,
-  setSmsRecipient,
-  onSendSms,
-}: Pick<
-  MatterMessagesSectionsProps,
-  | 'smsMessages'
-  | 'smsLoading'
-  | 'smsDraft'
-  | 'smsRecipient'
-  | 'smsSending'
-  | 'smsEnabled'
-  | 'setSmsDraft'
-  | 'setSmsRecipient'
-  | 'onSendSms'
-> & { matterId?: string }) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">SMS</h3>
-        <p className="text-xs text-muted-foreground">Text thread with the client or spouse.</p>
-      </div>
-      {!smsEnabled ? (
-        <SetupBanner feature="SMS" detail="Configure the selected SMS provider in environment variables to text clients from this tab." />
-      ) : (
-        <>
-          <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border p-3">
-            {smsLoading ? (
-              <p className="text-xs text-muted-foreground">Loading…</p>
-            ) : smsMessages.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No texts yet.</p>
-            ) : (
-              smsMessages.map(m => (
-                <div
-                  key={m.id}
-                  className={`rounded-md px-2.5 py-2 text-xs ${m.direction === 'inbound' ? 'bg-muted/50' : 'bg-primary/10'}`}
-                >
-                  <div className="mb-0.5 flex justify-between gap-2 text-[10px] text-muted-foreground">
-                    <span>
-                      {m.direction === 'inbound' ? 'Inbound' : 'Outbound'}
-                      {m.recipient_name ? ` · ${m.recipient_name}` : ''}
-                      {m.status ? ` · ${m.status}` : ''}
-                    </span>
-                    <span>{new Date(m.created_at).toLocaleString()}</span>
-                  </div>
-                  <p className="whitespace-pre-wrap">{m.body}</p>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="w-36">
-              <Label className="text-[11px]">To</Label>
-              <Select value={smsRecipient} onValueChange={v => setSmsRecipient(v as 'client' | 'spouse')}>
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="client">Client</SelectItem>
-                  <SelectItem value="spouse">Spouse</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Textarea
-              value={smsDraft}
-              onChange={e => setSmsDraft(e.target.value.slice(0, MAX_SMS_BODY_LENGTH))}
-              placeholder="Text message…"
-              rows={2}
-              className="min-h-[60px] flex-1"
-            />
-            {matterId && (
-              <DraftWithAiButton
-                matterId={matterId}
-                channel="sms"
-                notes={smsDraft}
-                onDraft={draft => setSmsDraft(draft.slice(0, MAX_SMS_BODY_LENGTH))}
-              />
-            )}
-            <Button type="button" size="sm" className="shrink-0" disabled={smsSending || !smsDraft.trim()} onClick={onSendSms}>
-              Send SMS
-            </Button>
-          </div>
-        </>
-      )}
-    </section>
-  )
 }
 
 export function EmailMessagesSection({
@@ -248,10 +78,6 @@ export function EmailMessagesSection({
   }
   return (
     <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Email</h3>
-        <p className="text-xs text-muted-foreground">Sends via Outlook when connected; otherwise Resend.</p>
-      </div>
       {!emailSendEnabled ? (
         <SetupBanner feature="Email" detail="Connect Outlook in Settings or configure Resend to send from this tab." />
       ) : (
@@ -286,10 +112,24 @@ export function EmailMessagesSection({
   )
 }
 
+const CHANNEL_CHIPS: Array<{ key: CommunicationChannel; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'portal', label: 'Portal' },
+  { key: 'sms', label: 'SMS' },
+  { key: 'email', label: 'Email' },
+  { key: 'calls', label: 'Calls' },
+]
+
 export interface MatterCommunicationsTabProps extends MatterMessagesSectionsProps, SchedulingActionsProps {
   matterId: string
   channel: CommunicationChannel
   onChannelChange: (channel: CommunicationChannel) => void
+  items: CommunicationItem[]
+  clientName: string
+  clientPhone: string | null
+  /** What sends log to — matter number when assigned, else the client name. */
+  recordLabel: string
+  onSendOnChannel: (channel: 'portal' | 'sms', body: string) => Promise<boolean>
 }
 
 export function MatterCommunicationsTab({
@@ -298,15 +138,30 @@ export function MatterCommunicationsTab({
   onChannelChange,
   onSendSchedulingLink,
   onBookForClient,
+  items,
+  clientName,
+  clientPhone,
+  recordLabel,
+  onSendOnChannel,
   ...messageProps
 }: MatterCommunicationsTabProps) {
+  const {
+    portalLoading,
+    smsLoading,
+    smsRecipient,
+    portalSending,
+    smsSending,
+    smsEnabled,
+    setSmsRecipient,
+  } = messageProps
+
   return (
     <TabsContent value="communications" className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">Communications</h3>
           <p className="text-xs text-muted-foreground">
-            Portal messages, SMS, email, and logged calls for this matter.
+            Portal messages, SMS, email, and logged calls for this matter — one timeline.
           </p>
         </div>
         <div className="flex justify-end gap-2">
@@ -318,26 +173,56 @@ export function MatterCommunicationsTab({
           </Button>
         </div>
       </div>
-      <Tabs value={channel} onValueChange={v => onChannelChange(v as CommunicationChannel)} className="gap-4">
-        <TabsList>
-          <TabsTrigger value="portal">Portal</TabsTrigger>
-          <TabsTrigger value="sms">SMS</TabsTrigger>
-          <TabsTrigger value="email">Email</TabsTrigger>
-          <TabsTrigger value="calls">Calls</TabsTrigger>
-        </TabsList>
-        <TabsContent value="portal">
-          <PortalMessagesSection matterId={matterId} {...messageProps} />
-        </TabsContent>
-        <TabsContent value="sms">
-          <SmsMessagesSection matterId={matterId} {...messageProps} />
-        </TabsContent>
-        <TabsContent value="email">
-          <EmailMessagesSection matterId={matterId} {...messageProps} />
-        </TabsContent>
-        <TabsContent value="calls">
-          <CallsSection matterId={matterId} />
-        </TabsContent>
-      </Tabs>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {CHANNEL_CHIPS.map(chip => (
+            <FilterChip
+              key={chip.key}
+              selected={channel === chip.key}
+              onClick={() => onChannelChange(chip.key)}
+            >
+              {chip.label}
+            </FilterChip>
+          ))}
+        </div>
+        {smsEnabled && (
+          <div className="flex items-center gap-1.5">
+            <Label className="text-[11px] text-muted-foreground">Text to</Label>
+            <Select value={smsRecipient} onValueChange={v => setSmsRecipient(v as 'client' | 'spouse')}>
+              <SelectTrigger className="h-8 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="client">Client</SelectItem>
+                <SelectItem value="spouse">Spouse</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      <CommunicationThread
+        items={items}
+        loading={portalLoading || smsLoading}
+        recordType="matter"
+        recordLabel={recordLabel}
+        recipientName={clientName}
+        recipientPhone={clientPhone}
+        smsConfigured={smsEnabled}
+        channelFilter={channel}
+        sending={portalSending || smsSending}
+        onSend={onSendOnChannel}
+        emailComposer={<EmailMessagesSection matterId={matterId} {...messageProps} />}
+        renderDraftAi={(replyChannel, notes, onDraft) => (
+          <DraftWithAiButton
+            matterId={matterId}
+            channel={replyChannel}
+            notes={notes}
+            onDraft={onDraft}
+          />
+        )}
+      />
     </TabsContent>
   )
 }
