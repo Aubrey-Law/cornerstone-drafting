@@ -70,6 +70,18 @@ export function AssistantShell({ chatId }: AssistantShellProps) {
 
   useEffect(() => { void loadChats() }, [loadChats])
 
+  // Deep link from the Library's Template Builder: pre-fill the first message
+  // with the upload tag so the assistant can pick up the file immediately.
+  useEffect(() => {
+    const uploadId = searchParams.get('templateUpload')
+    if (!uploadId || chatId) return
+    const uploadName = searchParams.get('templateUploadName')
+    setInput(
+      `[Template upload: ${uploadId}]\n\nI uploaded ${uploadName ? `"${uploadName}"` : 'a Word document'}. ` +
+      'Analyze it and help me turn it into a document template.',
+    )
+  }, [searchParams, chatId])
+
   // Deep link from the Library: /admin/assistant?workflow=<id> pre-attaches it.
   useEffect(() => {
     const workflowId = searchParams.get('workflow')

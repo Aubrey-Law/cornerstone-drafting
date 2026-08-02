@@ -285,6 +285,20 @@ selection).
 
 ---
 
+## Template Builder (assistant workflow)
+
+The fastest way to create or update a template is the Library's **Template Builder**
+(Library → Document masters → "Build a template with the assistant"): upload any Word
+document — a plain firm form, a filled example, or a draft template — and the assistant
+analyzes it, proposes which spots become merge fields, asks you to confirm the mappings
+and any conditional logic, rewrites the DOCX, verifies it through the real generator, and
+then (on your confirmation) registers it as a custom template or stages it as a new
+master version. Publishing a master remains a manual step in the Library. The skill lives
+at `tools/workflows/system/assistant/template-builder/SKILL.md`; its tools are in
+`lib/templateBuilder/`.
+
+---
+
 ## Custom templates (upload, no package wiring)
 
 A one-off DOCX that doesn't belong in any package can be uploaded from the Quick Draft
