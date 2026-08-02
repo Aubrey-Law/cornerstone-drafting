@@ -28,6 +28,7 @@ import { FamilySection } from './sections/FamilySection'
 import { PlanDesignSection } from './sections/PlanDesignSection'
 import { AssetsSection } from './sections/AssetsSection'
 import { GoalsSection } from './sections/GoalsSection'
+import { AdditionalVariablesSection } from './sections/AdditionalVariablesSection'
 import { ResiduarySection } from './sections/ResiduarySection'
 import FiduciariesSection from './sections/FiduciariesSection'
 import {
@@ -244,7 +245,12 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         onUpdateContact={handleUpdateContact}
       />
     ),
-    [DESIGN_SECTION_IDS.attorneyNotes]: () => <GoalsSection sheet={sheet} onChange={updateField} />,
+    [DESIGN_SECTION_IDS.attorneyNotes]: () => (
+      <>
+        <GoalsSection sheet={sheet} onChange={updateField} />
+        <AdditionalVariablesSection sheet={sheet} onChange={updateField} />
+      </>
+    ),
   }
 
   const subtitles: Partial<Record<string, string>> = {

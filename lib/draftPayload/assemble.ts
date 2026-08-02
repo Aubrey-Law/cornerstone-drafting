@@ -55,6 +55,13 @@ export interface BuildDraftPayloadOptions {
    * be previewed before autosave completes.
    */
   designSheetOverride?: Partial<DesignSheet>
+  /**
+   * Quick-draft mode: tolerate matters that are not yet hired and matters with
+   * no design-sheet row (a blank in-memory sheet is used instead, so every
+   * unresolved value renders as a `[[ MISSING ]]` hole rather than throwing).
+   * The full drafting workflow must never set this.
+   */
+  allowPartial?: boolean
 }
 
 export async function buildDraftPayload(
@@ -103,10 +110,29 @@ export async function buildDraftPayload(
   }
 
   const matter = matterRaw as MatterRow
-  if (matter.relationship_status !== 'hired') {
+  if (matter.relationship_status !== 'hired' && !options.allowPartial) {
     throw new Error('Drafting is available only for hired matters: ' + matterId)
   }
   let rawDesignSheet = designSheetRaw as DesignSheetRow | null
+
+  if (!rawDesignSheet && options.allowPartial && matter.client_intake_id) {
+    // Quick drafts may run before the sheet exists; seed one from intake so the
+    // render auto-fills whatever the intake already knows. Best-effort — the
+    // seeder refuses non-hired matters, and quick drafts must not.
+    try {
+      await ensureDesignSheetSeededFromIntake(resolvedMatterId)
+      const { data: seededSheet } = await admin
+        .from('design_sheets')
+        .select('*')
+        .eq('matter_id', resolvedMatterId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      rawDesignSheet = seededSheet as DesignSheetRow | null
+    } catch {
+      // Fall through to the blank in-memory sheet below.
+    }
+  }
 
   if (rawDesignSheet && isDesignSheetUnseeded(rawDesignSheet) && matter.client_intake_id) {
     await ensureDesignSheetSeededFromIntake(resolvedMatterId)
@@ -121,7 +147,12 @@ export async function buildDraftPayload(
   }
 
   if (!rawDesignSheet?.id) {
-    throw new Error('No design sheet found for matter: ' + resolvedMatterId)
+    if (!options.allowPartial) {
+      throw new Error('No design sheet found for matter: ' + resolvedMatterId)
+    }
+    // Blank in-memory sheet: every unresolved value becomes a `[[ MISSING ]]`
+    // hole in the render. The empty id surfaces as design_sheet_id: null.
+    rawDesignSheet = { id: '', status: null, decisions: {} } as DesignSheetRow
   }
 
   if (options.designSheetOverride) {
@@ -414,6 +445,19 @@ export async function buildDraftPayload(
     notary_commission_expiration: designSheet.notary_commission_expiration ?? null,
   }
 
+  // Attorney-defined template variables: `decisions.extras` flows straight
+  // through to the Nunjucks context as `extras.*`, so a template can reference
+  // `{{ extras.my_field }}` with no code changes.
+  const rawExtras = (designSheet.decisions as Record<string, unknown> | null)?.extras
+  const extras: Record<string, string> = {}
+  if (rawExtras && typeof rawExtras === 'object' && !Array.isArray(rawExtras)) {
+    for (const [key, value] of Object.entries(rawExtras as Record<string, unknown>)) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        extras[key] = String(value)
+      }
+    }
+  }
+
   // ── Assemble payload ───────────────────────────────────────────────────────
 
   return {
@@ -470,7 +514,8 @@ export async function buildDraftPayload(
     goals_notes: designSheet.goals_notes ?? null,
     concerns: designSheet.concerns ?? null,
     execution,
-    design_sheet_id: designSheet.id,
+    extras,
+    design_sheet_id: designSheet.id || null,
     special_provisions: details?.ep_special_provisions ?? null,
     ancillary_docs: ancillaryDocs,
     notes: details?.internal_notes ?? null,

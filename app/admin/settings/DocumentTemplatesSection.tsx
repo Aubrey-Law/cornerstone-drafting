@@ -35,6 +35,27 @@ interface TemplateRow {
   versions: TemplateVersion[]
 }
 
+interface TemplateFieldInfo {
+  path: string
+  label: string
+  type: string
+  description: string | null
+}
+
+interface TemplateVariablesReport {
+  source: 'bundled' | 'published'
+  versionLabel: string
+  variables: TemplateFieldInfo[]
+  clauses: string[]
+  perMatter: {
+    matterId: string
+    missingFields: TemplateFieldInfo[]
+    unresolvedMarkers: string[]
+    warnings: string[]
+    error?: string
+  } | null
+}
+
 const CATEGORY_LABELS = {
   estate: 'Estate planning',
   real_estate: 'Real-estate transfers',
@@ -55,6 +76,7 @@ export function DocumentTemplatesSection() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [matterIds, setMatterIds] = useState<Record<string, string>>({})
+  const [variablesByTemplate, setVariablesByTemplate] = useState<Record<string, TemplateVariablesReport | 'loading'>>({})
 
   const authHeaders = useMemo<Record<string, string>>(() => {
     if (!token) return {} as Record<string, string>
@@ -211,6 +233,28 @@ export function DocumentTemplatesSection() {
     }
   }
 
+  const loadVariables = useCallback(async (template: TemplateRow) => {
+    setVariablesByTemplate(current => ({ ...current, [template.id]: 'loading' }))
+    try {
+      const matterId = matterIds[template.id]
+      const query = matterId ? `?matterId=${encodeURIComponent(matterId)}` : ''
+      const response = await fetch(
+        `/api/admin/settings/document-templates/${template.id}/variables${query}`,
+        { headers: headers(), cache: 'no-store' },
+      )
+      const data = await response.json().catch(() => ({})) as TemplateVariablesReport & { error?: string }
+      if (!response.ok) throw new Error(data.error ?? 'Failed to analyze template variables')
+      setVariablesByTemplate(current => ({ ...current, [template.id]: data }))
+    } catch (error) {
+      setVariablesByTemplate(current => {
+        const next = { ...current }
+        delete next[template.id]
+        return next
+      })
+      toast.error(error instanceof Error ? error.message : 'Failed to analyze template variables')
+    }
+  }, [headers, matterIds])
+
   if (loading) return <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading templates…</div>
 
   return (
@@ -289,6 +333,60 @@ export function DocumentTemplatesSection() {
                     value={matterIds[template.id] ?? ''}
                     onChange={matterId => setMatterIds(current => ({ ...current, [template.id]: matterId }))}
                   />
+                  <div className="space-y-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={variablesByTemplate[template.id] === 'loading'}
+                      onClick={() => void loadVariables(template)}
+                    >
+                      {variablesByTemplate[template.id] === 'loading'
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <FileCheck2 className="h-4 w-4" />}
+                      {matterIds[template.id] ? 'Variables & matter check' : 'Variables'}
+                    </Button>
+                    {(() => {
+                      const report = variablesByTemplate[template.id]
+                      if (!report || report === 'loading') return null
+                      return (
+                        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+                          <p className="font-medium">
+                            {report.variables.length} variable{report.variables.length === 1 ? '' : 's'} ·{' '}
+                            {report.clauses.length} clause{report.clauses.length === 1 ? '' : 's'} ·{' '}
+                            {report.source === 'published' ? `published ${report.versionLabel}` : 'bundled master'}
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {report.variables.map(field => (
+                              <code key={field.path} title={field.description ?? field.label} className="rounded bg-background px-1.5 py-0.5">
+                                {field.path}
+                              </code>
+                            ))}
+                          </div>
+                          {report.clauses.length > 0 && (
+                            <p className="text-muted-foreground">Clauses: {report.clauses.join(', ')}</p>
+                          )}
+                          {report.perMatter && (
+                            report.perMatter.error ? (
+                              <p className="text-destructive">{report.perMatter.error}</p>
+                            ) : report.perMatter.missingFields.length === 0 ? (
+                              <p className="text-success">The selected matter resolves every field in this template.</p>
+                            ) : (
+                              <div>
+                                <p className="font-medium text-amber-600">
+                                  Missing for the selected matter ({report.perMatter.missingFields.length}):
+                                </p>
+                                <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                                  {report.perMatter.missingFields.map(field => (
+                                    <li key={field.path}>{field.label} <code>({field.path})</code></li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
                   {template.versions.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No uploaded versions. The bundled repository template is active.</p>
                   ) : template.versions.map(version => (

@@ -672,4 +672,123 @@ describe('buildDraftPayload', () => {
     )
     expect(payload.trust?.spouse_display_name).toBe('THE JOHN SMITH TRUST dated January 15, 2025')
   })
+
+  it('throws for a missing design sheet in default mode', async () => {
+    mocks.getAdminClient.mockReturnValue(adminStub({
+      matters: [
+        { data: { id: 'matter-nosheet' }, error: null },
+        {
+          data: {
+            id: 'matter-nosheet',
+            client_intake_id: null,
+            matter_number: 'EP-200',
+            relationship_status: 'hired',
+            status: 'active',
+            stage: 'drafting',
+          },
+          error: null,
+        },
+      ],
+      design_sheets: [{ data: null, error: null }],
+    }))
+
+    await expect(buildDraftPayload('matter-nosheet')).rejects.toThrow(/No design sheet found/)
+  })
+
+  it('allowPartial substitutes a blank sheet instead of throwing', async () => {
+    mocks.getAdminClient.mockReturnValue(adminStub({
+      matters: [
+        { data: { id: 'matter-nosheet' }, error: null },
+        {
+          data: {
+            id: 'matter-nosheet',
+            client_intake_id: null,
+            matter_number: 'EP-200',
+            relationship_status: 'hired',
+            status: 'active',
+            stage: 'drafting',
+          },
+          error: null,
+        },
+      ],
+      design_sheets: [{ data: null, error: null }],
+    }))
+
+    const payload = await buildDraftPayload('matter-nosheet', { allowPartial: true })
+
+    expect(payload.design_sheet_id).toBeNull()
+    expect(payload.matter.id).toBe('matter-nosheet')
+  })
+
+  it('allowPartial tolerates non-hired matters (default mode still throws)', async () => {
+    const responses = () => ({
+      matters: [
+        { data: { id: 'matter-lead' }, error: null },
+        {
+          data: {
+            id: 'matter-lead',
+            client_intake_id: null,
+            matter_number: 'EP-201',
+            relationship_status: 'lead',
+            status: 'active',
+            stage: 'intake',
+          },
+          error: null,
+        },
+      ],
+      design_sheets: [{
+        data: {
+          id: 'sheet-lead',
+          status: 'draft',
+          client_name: 'Lead Example',
+          marital_status: 'single',
+          decisions: {},
+        },
+        error: null,
+      }],
+    })
+
+    mocks.getAdminClient.mockReturnValue(adminStub(responses()))
+    await expect(buildDraftPayload('matter-lead')).rejects.toThrow(/hired matters/)
+
+    mocks.getAdminClient.mockReturnValue(adminStub(responses()))
+    const payload = await buildDraftPayload('matter-lead', { allowPartial: true })
+    expect(payload.client.full_name).toBe('Lead Example')
+    expect(payload.design_sheet_id).toBe('sheet-lead')
+  })
+
+  it('passes decisions.extras through as payload.extras', async () => {
+    mocks.getAdminClient.mockReturnValue(adminStub({
+      matters: [
+        { data: { id: 'matter-extras' }, error: null },
+        {
+          data: {
+            id: 'matter-extras',
+            client_intake_id: null,
+            matter_number: 'EP-202',
+            relationship_status: 'hired',
+            status: 'active',
+            stage: 'drafting',
+          },
+          error: null,
+        },
+      ],
+      design_sheets: [{
+        data: {
+          id: 'sheet-extras',
+          status: 'draft',
+          client_name: 'Extra Example',
+          marital_status: 'single',
+          decisions: {
+            extras: { firm_motto: 'Plan well.', ignored_object: { nested: true }, count: 3 },
+          },
+        },
+        error: null,
+      }],
+    }))
+
+    const payload = await buildDraftPayload('matter-extras')
+
+    expect(payload.extras).toEqual({ firm_motto: 'Plan well.', count: '3' })
+  })
 })

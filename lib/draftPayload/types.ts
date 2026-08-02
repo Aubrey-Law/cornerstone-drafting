@@ -228,6 +228,8 @@ export interface DraftPayload {
     signing_county: string | null
     notary_commission_expiration: string | null
   }
+  /** Attorney-defined template variables (decisions.extras) exposed to templates as `extras.*`. */
+  extras?: Record<string, string>
   design_sheet_id: string | null
   special_provisions: string | null
   ancillary_docs: string[]

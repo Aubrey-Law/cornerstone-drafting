@@ -4,7 +4,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, ListChecks } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, ListChecks, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
@@ -141,13 +141,22 @@ export default function DraftingWorkspace({
               </li>
             </ol>
           </nav>
-          <Link
-            href={`/admin/matters/${matterId}`}
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to matter
-          </Link>
+          <div className="flex shrink-0 items-center gap-4">
+            <Link
+              href={`/admin/drafting/${matterId}/quick`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Quick draft a document
+            </Link>
+            <Link
+              href={`/admin/matters/${matterId}`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to matter
+            </Link>
+          </div>
         </div>
 
         {/* Stepper */}

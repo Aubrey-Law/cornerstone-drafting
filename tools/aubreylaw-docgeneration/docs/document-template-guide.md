@@ -268,6 +268,46 @@ All canonical field paths live in `schemas/data-dictionary.json`. When a firm fo
 
 ---
 
+## `extras.*` — no-code custom variables
+
+For simple one-off values that don't warrant a design-sheet field, use the `extras`
+namespace instead of the full wiring above:
+
+1. Reference `{{ extras.my_field }}` in the template (any `[a-zA-Z][a-zA-Z0-9_]*` name).
+2. Set the value per matter in the design sheet's **Attorney notes → Additional Template
+   Variables** editor (stored under `design_sheets.decisions.extras`), or answer it in the
+   Quick Draft form when it surfaces as a missing field.
+
+`extras` values are plain strings passed through verbatim to every package. Unset extras
+render as `[[ MISSING: extras.my_field ]]` like any other field. Prefer real data-dictionary
+fields for anything structured, validated, or reused across logic (conditionals, clause
+selection).
+
+---
+
+## Custom templates (upload, no package wiring)
+
+A one-off DOCX that doesn't belong in any package can be uploaded from the Quick Draft
+page (matter → drafting → Quick Draft → "Custom templates"). It renders against the full
+generator data — `{{ client.full_name }}`, `{{ extras.* }}`, and `include_clause(...)`
+all work — but never enters the package pipeline. Rows live in
+`custom_document_templates`; files in the `document-template-versions` bucket under
+`custom/`. Use a package + manifest instead when the document should be part of a full
+design-sheet generation run.
+
+---
+
+## Variable catalog & CI check
+
+`npx tsx scripts/extract-template-variables.ts` regenerates
+`schemas/template-variables.generated.json` — the extracted merge-field paths, clause
+ids, and loop locals for every bundled template. `tests/template-variable-catalog.test.ts`
+fails CI when a template references a variable root nothing populates or a clause id
+missing from the library, and when the generated file is stale. After editing any
+template, rerun the script and commit the regenerated JSON.
+
+---
+
 ## Legal review note
 
 Templates and clauses in this repository are implementation artifacts. All legal text must be reviewed and approved by a qualified attorney before client use. Keep `review_status` accurate and do not mark clauses `approved` until review is complete.
