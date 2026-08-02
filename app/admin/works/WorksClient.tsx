@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DocumentTemplatesSection } from '@/app/admin/settings/DocumentTemplatesSection'
 import type { WorkSkill } from '@/components/works/types'
 import { WorkflowDetail } from './components/WorkflowDetail'
+import { TemplateBuilderLauncher } from './components/TemplateBuilderLauncher'
 import { SkillEditorDialog } from './components/SkillEditorDialog'
 import { ShareSkillDialog } from './components/ShareSkillDialog'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
@@ -242,6 +243,7 @@ export default function WorksClient() {
                 generation always uses the published (or bundled) master.
               </p>
             </div>
+            <TemplateBuilderLauncher skills={skills} />
             <DocumentTemplatesSection />
           </div>
         </TabsContent>
