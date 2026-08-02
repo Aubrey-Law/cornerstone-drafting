@@ -17,6 +17,7 @@ import {
   encodeDraftDownloadMeta,
 } from '@/lib/drafting/buildDraftDownloadZip'
 import { selectSupersededDraftIds } from '@/lib/drafting/supersede'
+import { registerDraftDocumentRow } from '@/lib/drafting/persistGeneratedDocument'
 import {
   pythonFallbackEngineLabel,
   resolveEstateGeneratorEngine,
@@ -605,22 +606,20 @@ export async function POST(req: NextRequest, { params }: Params) {
           )
         }
       } else {
-        const { data: insertedDoc, error: insertErr } = await admin.from('matter_documents').insert({
-          matter_id: canonicalMatterId,
-          r2_key: r2Key,
-          name: documentName,
-          size: file.buffer.length,
-          content_type: DOCX_CONTENT_TYPE,
-          folder: 'draft',
-          folder_id: null,
-          uploaded_by: user.id,
-          generation_id: generationId,
-          generation_engine: generationEngine,
-          marker_count: scan.markerCount,
-          missing_count: scan.missingFields.length,
-          template_id: file.templateId ?? null,
-          template_version_id: file.templateVersionId ?? null,
-        }).select('id').single()
+        const { data: insertedDoc, error: insertErr } = await registerDraftDocumentRow({
+          admin,
+          matterId: canonicalMatterId,
+          r2Key,
+          documentName,
+          buffer: file.buffer,
+          actorId: user.id,
+          generationId,
+          generationEngine,
+          markerCount: scan.markerCount,
+          missingCount: scan.missingFields.length,
+          templateId: file.templateId ?? null,
+          templateVersionId: file.templateVersionId ?? null,
+        })
 
         if (insertErr) {
           console.error('[draft route] matter_documents insert error', canonicalMatterId, insertErr)
@@ -631,25 +630,6 @@ export async function POST(req: NextRequest, { params }: Params) {
           throw new Error(`Failed to register document "${documentName}": no document ID returned`)
         }
         documentRefs.push({ id: insertedDoc.id, name: documentName })
-
-        if (insertedDoc.id) {
-          try {
-            const { ensureInitialVersion } = await import('@/lib/documentVersions')
-            await ensureInitialVersion({
-              admin,
-              documentId: insertedDoc.id,
-              r2Key,
-              filename: documentName,
-              contentType: DOCX_CONTENT_TYPE,
-              sizeBytes: file.buffer.length,
-              source: 'generated',
-              createdBy: user.id,
-            })
-          } catch (versionErr) {
-            // Versions table may not exist yet on firm DB — non-fatal.
-            console.warn('[draft route] ensureInitialVersion skipped', versionErr)
-          }
-        }
       }
 
       uploadedFilenames.push(documentName)

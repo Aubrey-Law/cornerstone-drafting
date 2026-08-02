@@ -18,6 +18,7 @@ const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
   'dpoa_provisions',
   'estate_plan_design',
   'excluded_guardian',
+  'extras',
   'excluded_guardians',
   'excluded_person',
   'fiduciary_contact_details',

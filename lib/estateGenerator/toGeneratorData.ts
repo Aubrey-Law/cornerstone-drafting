@@ -73,6 +73,8 @@ export interface EstateGeneratorData {
   funding_plan: Record<string, unknown>
   homestead: Record<string, unknown>
   tax: Record<string, unknown>
+  /** Attorney-defined template variables, referenced in templates as `extras.*`. */
+  extras: Record<string, string>
   drafting_notes?: string
 }
 
@@ -506,6 +508,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   }
 
   return {
+    extras: payload.extras ?? {},
     client: {
       ...compactObject({
         full_name: payload.client.full_name,
