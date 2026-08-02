@@ -94,7 +94,7 @@ const definitions = {
     new_start: { type: 'string' },
     rationale: { type: 'string' },
   }, ['appointment_id', 'new_start', 'rationale']),
-  find_matter_or_lead: tool('find_matter_or_lead', 'Search matters and leads by client name, email, phone, or matter name. Returns matching matter_id and lead_id values for use with other tools such as create_task.', {
+  find_matter_or_lead: tool('find_matter_or_lead', 'Search matters and leads by client name, email, phone, or matter name. Returns matching matter_id and lead_id values for use with any other tool that requires a matter or lead id.', {
     query: { type: 'string', description: 'Client name, email, phone, or matter name to search for.' },
   }, ['query']),
   create_task: tool('create_task', 'Create a task for the current matter or lead. If calendarAddToCalendar is true, also create a calendar hold.', {
@@ -609,5 +609,7 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
 }
 
 export function calendarPlanningSystemPromptNote() {
-  return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to add tasks for a matter or lead when needed. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available). When the attorney names a client or matter but you do not have its id, call find_matter_or_lead with the client name, email, phone, or matter name to look it up — never ask the attorney for a raw id. If the search returns exactly one match, use it; if it returns several, ask the attorney which one they mean (show name and email, not ids); if it returns none, say so and ask how to proceed.`
+  return `\n\nCALENDAR PLANNING: Use the calendar tools for day/week planning and risk review. Calendar writes are proposals only: never claim a hold or reschedule happened until the attorney explicitly accepts it. Reschedule proposals should not draft email content automatically.\n\nTASK MANAGEMENT: Use create_task to add tasks for a matter or lead when needed. For meeting blocks, set calendarAddToCalendar true and provide a positive calendarDurationMinutes.\n\nUse create_task only when requested explicitly by the attorney, and include either matter_id or lead_id (defaults are used from chat context when available).
+
+RECORD LOOKUP: Whenever any tool needs a matter_id or lead_id — creating tasks, calendar holds, listing matter dates, rendering templates, or anything else — and the attorney has named a client or matter without an id in context, call find_matter_or_lead with the client name, email, phone, or matter name to resolve it yourself. Never ask the attorney to supply a raw id. If the search returns exactly one match, use it; if it returns several, ask the attorney which one they mean (show name and email, not ids); if it returns none, say so and ask how to proceed.`
 }
