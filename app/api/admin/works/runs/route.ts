@@ -5,6 +5,7 @@ import { resolveFirmModel } from '@/lib/firmModels'
 import { worksDb } from '@/lib/works/data'
 import { canLaunchSkill } from '@/lib/works/run'
 import { buildDraftPayload } from '@/lib/buildDraftPayload'
+import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { assemblePmpsData } from '@/lib/pmps/assemble'
 import { generatePmpsArtifacts } from '@/lib/pmps/generate'
 import type { PmpsRunInput } from '@/lib/pmps/types'
@@ -18,7 +19,16 @@ async function loadMatterSnapshot(matterId: string | null) {
   const { data: intake } = matter.client_intake_id
     ? await db.from('client_intake').select('*').eq('id', matter.client_intake_id).maybeSingle()
     : { data: null }
-  return { matter, intake }
+  // The snapshot is handed to the model as the matter's context. Spouse,
+  // children, and fiduciaries live in contacts — the matching client_intake
+  // columns were dropped — so a raw row describes a client with no family.
+  const hydratedIntake = intake && matter.client_intake_id
+    ? await hydrateIntakeWithContacts(db, intake, matter.client_intake_id).catch(error => {
+        console.error('[works run] intake hydrate failed:', error)
+        return intake
+      })
+    : intake
+  return { matter, intake: hydratedIntake }
 }
 
 export async function POST(req: Request) {
