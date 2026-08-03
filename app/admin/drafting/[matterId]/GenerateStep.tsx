@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { designTargetForMissingField } from '@/lib/estateGenerator/missingFieldDesignMap'
+import { designTargetForMissingField, missingFieldDisplayLabel } from '@/lib/estateGenerator/missingFieldDesignMap'
 import { decodeDraftDownloadMeta } from '@/lib/drafting/draftDownloadMeta'
 import {
   blobToBase64,
@@ -74,6 +74,13 @@ type DraftPreflightDocument = {
   filename: string
 }
 
+type DraftPreflightMissingField = {
+  path: string
+  packageName: string
+  subjectKind: 'client' | 'spouse' | 'young-adult'
+  subjectName: string | null
+}
+
 type DraftPreflight = {
   matterId: string
   designSheetId: string | null
@@ -84,6 +91,7 @@ type DraftPreflight = {
   unsupportedDocumentLabels: string[]
   fallbackPackageNames: string[]
   missing: string[]
+  missingFields: DraftPreflightMissingField[]
   warnings: string[]
   error?: string
 }
@@ -123,6 +131,27 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
+function normalizeMissingFields(value: unknown, fallbackPaths: string[]): DraftPreflightMissingField[] {
+  const fields = Array.isArray(value)
+    ? value
+        .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+        .filter(item => typeof item.path === 'string' && item.path.length > 0)
+        .map((item): DraftPreflightMissingField => ({
+          path: item.path as string,
+          packageName: typeof item.packageName === 'string' ? item.packageName : '',
+          subjectKind: item.subjectKind === 'spouse' || item.subjectKind === 'young-adult'
+            ? item.subjectKind
+            : 'client',
+          subjectName: typeof item.subjectName === 'string' && item.subjectName.trim()
+            ? item.subjectName
+            : null,
+        }))
+    : []
+  if (fields.length > 0) return fields
+  // An older API response only carries `missing[]`; keep the checklist working.
+  return fallbackPaths.map(path => ({ path, packageName: '', subjectKind: 'client' as const, subjectName: null }))
+}
+
 function normalizePreflightResponse(value: unknown, matterId: string): DraftPreflight {
   const raw = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {}
   const documents = Array.isArray(raw.documentsToGenerate)
@@ -134,6 +163,7 @@ function normalizePreflightResponse(value: unknown, matterId: string): DraftPref
           filename: typeof item.filename === 'string' ? item.filename : 'document.docx',
         }))
     : []
+  const missing = stringArray(raw.missing)
   return {
     matterId: typeof raw.matterId === 'string' ? raw.matterId : matterId,
     designSheetId: typeof raw.designSheetId === 'string' ? raw.designSheetId : null,
@@ -143,7 +173,8 @@ function normalizePreflightResponse(value: unknown, matterId: string): DraftPref
     documentsToGenerate: documents,
     unsupportedDocumentLabels: stringArray(raw.unsupportedDocumentLabels),
     fallbackPackageNames: stringArray(raw.fallbackPackageNames),
-    missing: stringArray(raw.missing),
+    missing,
+    missingFields: normalizeMissingFields(raw.missingFields, missing),
     warnings: stringArray(raw.warnings),
     error: typeof raw.error === 'string' ? raw.error : undefined,
   }
@@ -257,6 +288,9 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
     startTransition(async () => {
       try {
         const response = await fetch(`/api/admin/matters/${matterId}/draft/preflight`, {
+          // Re-runs happen right after the attorney edits the design sheet, so a
+          // cached response would keep reporting fields they just filled in.
+          cache: 'no-store',
           headers: { Authorization: `Bearer ${accessToken}` },
         })
         const data = await response.json().catch(() => ({})) as { error?: string; detail?: string }
@@ -792,19 +826,24 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                 </div>
               </>
             )}
-            {preflight.missing.length > 0 && (
+            {preflight.missingFields.length > 0 && (
               <div className="mt-3 rounded border border-warning/30 bg-warning/5 p-3">
                 <p className="text-xs font-semibold text-warning">
-                  {preflight.missing.length} field{preflight.missing.length === 1 ? '' : 's'} blank — will render as <code>[[ MISSING ]]</code>
+                  {preflight.missingFields.length} field{preflight.missingFields.length === 1 ? '' : 's'} blank — will render as <code>[[ MISSING ]]</code>
                 </p>
                 <ul className="mt-2 space-y-1">
-                  {preflight.missing.map(fieldPath => {
-                    const target = designTargetForMissingField(fieldPath)
+                  {preflight.missingFields.map(field => {
+                    const target = designTargetForMissingField(field.path)
                     const focus = `${target.sectionId}:${target.targetField ?? ''}`
                     return (
-                      <li key={fieldPath} className="flex items-center justify-between gap-2 rounded bg-background px-2 py-1 text-xs">
+                      <li
+                        key={`${field.packageName}:${field.subjectName ?? ''}:${field.path}`}
+                        className="flex items-center justify-between gap-2 rounded bg-background px-2 py-1 text-xs"
+                      >
                         <span className="min-w-0 truncate">
-                          <span className="font-medium">{target.label}</span>
+                          <span className="font-medium">
+                            {missingFieldDisplayLabel(target.label, field.subjectKind, field.subjectName)}
+                          </span>
                           <span className="ml-1.5 text-[11px] text-muted-foreground">{target.sectionLabel ?? target.sectionId}</span>
                         </span>
                         <Link
@@ -890,27 +929,29 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {(preflight?.missing.length ?? 0) > 0
-                ? `Generate anyway — ${preflight?.missing.length ?? 0} field${(preflight?.missing.length ?? 0) === 1 ? '' : 's'} blank?`
+              {(preflight?.missingFields.length ?? 0) > 0
+                ? `Generate anyway — ${preflight?.missingFields.length ?? 0} field${(preflight?.missingFields.length ?? 0) === 1 ? '' : 's'} blank?`
                 : confirmGenerate?.mode === 'download'
                   ? `Download ${confirmGenerate?.documentsToSave.length ?? 0} draft${(confirmGenerate?.documentsToSave.length ?? 0) === 1 ? '' : 's'} as a ZIP?`
                   : `Generate ${confirmGenerate?.documentsToSave.length ?? 0} draft${(confirmGenerate?.documentsToSave.length ?? 0) === 1 ? '' : 's'}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {(preflight?.missing.length ?? 0) > 0
+              {(preflight?.missingFields.length ?? 0) > 0
                 ? <>These fields are empty and will render as <code>[[ MISSING ]]</code> in the draft. You can fix them first, or generate now and fill them in later.</>
                 : confirmGenerate?.mode === 'download'
                   ? 'Nothing will be saved to this matter — the drafts download to your computer as a ZIP file.'
                   : 'Drafts are saved to this matter as internal Word documents. Finished files can be shared with the client after attorney review.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {preflight && preflight.missing.length > 0 && (
+          {preflight && preflight.missingFields.length > 0 && (
             <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-border bg-muted/40 p-2 text-xs">
-              {preflight.missing.map(fieldPath => {
-                const target = designTargetForMissingField(fieldPath)
+              {preflight.missingFields.map(field => {
+                const target = designTargetForMissingField(field.path)
                 return (
-                  <li key={fieldPath}>
-                    <span className="font-medium">{target.label}</span>
+                  <li key={`${field.packageName}:${field.subjectName ?? ''}:${field.path}`}>
+                    <span className="font-medium">
+                      {missingFieldDisplayLabel(target.label, field.subjectKind, field.subjectName)}
+                    </span>
                     <span className="ml-1.5 text-muted-foreground">{target.sectionLabel}</span>
                   </li>
                 )
@@ -918,7 +959,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
             </ul>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel>{(preflight?.missing.length ?? 0) > 0 ? 'Go back & fix' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogCancel>{(preflight?.missingFields.length ?? 0) > 0 ? 'Go back & fix' : 'Cancel'}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 const ctx = confirmGenerate
@@ -926,7 +967,7 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, onAdv
                 if (ctx) runGeneration(ctx.documentsToSave, ctx.docsBeingGenerated, ctx.mode)
               }}
             >
-              {(preflight?.missing.length ?? 0) > 0
+              {(preflight?.missingFields.length ?? 0) > 0
                 ? confirmGenerate?.mode === 'download'
                   ? 'Download with [[ MISSING ]] markers'
                   : 'Generate with [[ MISSING ]] markers'

@@ -286,6 +286,12 @@ function testamentaryCoTrustee(payload: DraftPayload) {
   return person(payload.fiduciaries.trustee_co)
 }
 
+function spouseTestamentaryCoTrustee(payload: DraftPayload) {
+  const structure = payload.will_provisions.trustee_structure
+  if (structure && structure !== 'co_trustees') return person(null)
+  return person(payload.fiduciaries.spouse_trustee_co)
+}
+
 function testamentaryCoTrusteesAction(
   value: DraftPayload['will_provisions']['cotrustee_decision_standard'],
 ): string {
@@ -708,7 +714,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       },
       spouse_executor: {
         primary: fiduciaryPerson(fiduciaryDetails?.spouse_executor.primary, payload.fiduciaries.spouse_pr_primary),
-        co_primary: person(null),
+        co_primary: person(payload.fiduciaries.spouse_pr_co_primary),
         successor: fiduciaryPerson(fiduciaryDetails?.spouse_executor.successor, payload.fiduciaries.spouse_pr_successor),
         co_successor: person(null),
         second_successor: person(null),
@@ -735,7 +741,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       },
       spouse_testamentary_trustee: {
         primary: fiduciaryPerson(undefined, payload.fiduciaries.spouse_trustee_successor),
-        co_primary: person(null),
+        co_primary: spouseTestamentaryCoTrustee(payload),
         successor: person(null),
         co_trustees_action: testamentaryCoTrusteesAction(payload.will_provisions.cotrustee_decision_standard),
       },

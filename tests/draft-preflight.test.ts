@@ -8,12 +8,14 @@ import { buildEstateDraftPreflight } from '@/lib/estateGenerator/preflight'
 
 function payload(overrides: {
   matter?: Partial<DraftPayload['matter']>
+  client?: Partial<DraftPayload['client']>
   spouse?: Partial<NonNullable<DraftPayload['spouse']>> | null
   children?: DraftPayload['children']
   documents?: Partial<DraftPayload['documents']>
   fiduciaries?: Partial<DraftPayload['fiduciaries']>
   trust?: Partial<NonNullable<DraftPayload['trust']>> | null
   will_provisions?: Partial<DraftPayload['will_provisions']>
+  execution?: Partial<DraftPayload['execution']>
 } = {}): DraftPayload {
   const base: DraftPayload = {
     matter: {
@@ -84,6 +86,7 @@ function payload(overrides: {
       temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
+      spouse_pr_co_primary: null,
       spouse_pr_primary: null,
       spouse_pr_successor: null,
       spouse_dpoa_primary: null,
@@ -95,6 +98,7 @@ function payload(overrides: {
       spouse_hcp_successor_address: null,
       spouse_hcp_successor_relationship: null,
       spouse_trustee_successor: 'Morgan Trustee',
+      spouse_trustee_co: null,
     },
     documents: {
       include_trust: true,
@@ -167,6 +171,8 @@ function payload(overrides: {
   return {
     ...base,
     matter: { ...base.matter, ...overrides.matter },
+    client: { ...base.client, ...overrides.client },
+    execution: { ...base.execution, ...overrides.execution },
     children: overrides.children ?? base.children,
     spouse: overrides.spouse === undefined
       ? base.spouse
@@ -695,6 +701,140 @@ describe('estate draft preflight', () => {
       'testamentary_trust.single_beneficiary.full_name',
       'testamentary_trust.remainder_beneficiary.full_name',
     ])
+  })
+
+  it('clears the spouse co-personal-representative once one is assigned', () => {
+    const base = {
+      matter: { type: 'married_joint' as const },
+      spouse: { first_name: 'John', last_name: 'Example', full_name: 'John Example' },
+      documents: {
+        include_trust: false,
+        include_pour_over_will: true,
+        include_simple_will: false,
+        include_testamentary_trust_will: false,
+        include_dpoa: false,
+        include_hcp: false,
+        include_hipaa: false,
+        include_ahd: false,
+        include_ppm: false,
+        spouse_docs: true,
+      },
+      will_provisions: { pr_structure: 'co_pr' as const },
+    }
+
+    const withoutSpouseCoPr = buildEstateDraftPreflight(payload({
+      ...base,
+      fiduciaries: { pr_co_primary: 'Cody Executor', spouse_pr_primary: 'Spencer Spouse Executor' },
+    }))
+
+    // The client's co-PR is filled in, so only the spouse's will is short — and
+    // the checklist has to say so, or it reads as the client's field being blank.
+    expect(withoutSpouseCoPr.missing).toEqual(['fiduciaries.executor.co_primary.full_name'])
+    expect(withoutSpouseCoPr.missingFields).toEqual([
+      {
+        path: 'fiduciaries.executor.co_primary.full_name',
+        packageName: 'spouse-pourover-will',
+        subjectKind: 'spouse',
+        subjectName: 'John Example',
+      },
+    ])
+
+    const withSpouseCoPr = buildEstateDraftPreflight(payload({
+      ...base,
+      fiduciaries: {
+        pr_co_primary: 'Cody Executor',
+        spouse_pr_primary: 'Spencer Spouse Executor',
+        spouse_pr_co_primary: 'Sydney Spouse Executor',
+      },
+    }))
+
+    expect(withSpouseCoPr.missing).toEqual([])
+    expect(withSpouseCoPr.missingFields).toEqual([])
+  })
+
+  it('clears the spouse co-testamentary-trustee once one is assigned', () => {
+    const base = {
+      matter: { type: 'married_joint' as const },
+      spouse: { first_name: 'John', last_name: 'Example', full_name: 'John Example' },
+      trust: null,
+      documents: {
+        include_trust: false,
+        include_pour_over_will: false,
+        include_simple_will: false,
+        include_testamentary_trust_will: true,
+        include_dpoa: false,
+        include_hcp: false,
+        include_hipaa: false,
+        include_ahd: false,
+        include_ppm: false,
+        spouse_docs: true,
+      },
+      will_provisions: {
+        trustee_structure: 'co_trustees' as const,
+        beneficiary_structure: 'descendants_per_stirpes' as const,
+        age_distribution_schedule: 'staggered_25_30_35',
+        trust_protector: false,
+      },
+    }
+
+    const withoutSpouseCoTrustee = buildEstateDraftPreflight(payload({
+      ...base,
+      fiduciaries: {
+        trustee_initial: 'Taylor Trustee',
+        trustee_co: 'Casey Trustee',
+        spouse_pr_primary: 'Spencer Spouse Executor',
+        spouse_trustee_successor: 'Skyler Spouse Trustee',
+      },
+    }))
+
+    expect(withoutSpouseCoTrustee.missing).toEqual([
+      'fiduciaries.testamentary_trustee.co_primary.full_name',
+    ])
+    expect(withoutSpouseCoTrustee.missingFields.map(field => field.subjectKind)).toEqual(['spouse'])
+
+    const withSpouseCoTrustee = buildEstateDraftPreflight(payload({
+      ...base,
+      fiduciaries: {
+        trustee_initial: 'Taylor Trustee',
+        trustee_co: 'Casey Trustee',
+        spouse_pr_primary: 'Spencer Spouse Executor',
+        spouse_trustee_successor: 'Skyler Spouse Trustee',
+        spouse_trustee_co: 'Sasha Spouse Trustee',
+      },
+    }))
+
+    expect(withSpouseCoTrustee.missing).toEqual([])
+  })
+
+  it('attributes a blank young-adult field to the child it belongs to', () => {
+    const preflight = buildEstateDraftPreflight(payload({
+      client: { county: null },
+      trust: null,
+      children: [
+        { full_name: 'Alex Example', dob: '2005-01-01', relationship: 'biological', minor: false },
+      ],
+      documents: {
+        include_trust: false,
+        include_pour_over_will: false,
+        include_simple_will: false,
+        include_testamentary_trust_will: false,
+        include_dpoa: false,
+        include_hcp: false,
+        include_hipaa: false,
+        include_ahd: false,
+        include_ppm: false,
+        include_young_adult_estate_plan: true,
+      },
+      execution: { signing_county: null },
+    }))
+
+    const youngAdultFields = preflight.missingFields.filter(
+      field => field.packageName === 'young-adult-estate-plan',
+    )
+
+    expect(youngAdultFields.length).toBeGreaterThan(0)
+    expect(youngAdultFields.every(field => field.subjectKind === 'young-adult')).toBe(true)
+    expect(youngAdultFields.every(field => field.subjectName === 'Alex Example')).toBe(true)
   })
 
   it('flags an unnamed requested trust protector without blocking', () => {
