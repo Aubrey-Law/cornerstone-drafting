@@ -61,12 +61,15 @@ import {
 
 export type LeadRow = LeadListRow
 
-type LeadFilter = 'open' | 'lost' | 'all'
+type LeadFilter = 'open' | 'lost' | 'declined' | 'all'
 type LeadView = 'table' | 'board'
 
 const FILTER_TABS: { value: LeadFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
   { value: 'lost', label: 'Lost' },
+  // A fit that never engaged (lost) and one the firm turned away (declined) are
+  // separate outcomes, and only the first belongs in a conversion rate.
+  { value: 'declined', label: 'Declined' },
   { value: 'all', label: 'All' },
 ]
 
@@ -225,11 +228,12 @@ export function LeadsClient({
     setFilter('open')
   }
   const counts = useMemo(() => {
-    const c: Record<LeadFilter, number> = { open: 0, lost: 0, all: initialLeads.length }
+    const c: Record<LeadFilter, number> = { open: 0, lost: 0, declined: 0, all: initialLeads.length }
     for (const l of initialLeads) {
       const s = l.lead_status ?? 'lead'
       if (s === 'lead') c.open += 1
       else if (s === 'lost') c.lost += 1
+      else if (s === 'declined') c.declined += 1
     }
     return c
   }, [initialLeads])

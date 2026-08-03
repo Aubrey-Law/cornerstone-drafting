@@ -83,3 +83,39 @@ describe('lead board drops', () => {
     expect(resolveBoardDrop(lead(), 'new')).toEqual({ kind: 'none', reason: null })
   })
 })
+
+describe('declined leads on the board', () => {
+  const declined = lead({ lead_status: 'declined' })
+
+  it('places a declined lead in its own column, not by its timestamps', () => {
+    // The bug this covers: without an explicit branch, a lead declined at
+    // discovery — before any intake went out — lands in New looking active.
+    expect(leadBoardColumn(declined)).toBe('declined')
+    expect(leadBoardColumn(lead({ lead_status: 'declined', intake_sent_at: '2026-07-02T00:00:00.000Z' })))
+      .toBe('declined')
+  })
+
+  it('keeps declined distinct from lost', () => {
+    expect(leadBoardColumn(lead({ lead_status: 'lost' }))).toBe('lost')
+    expect(LEAD_BOARD_COLUMNS.map(c => c.key)).toContain('declined')
+  })
+
+  it('groups declined leads into the declined bucket', () => {
+    const grouped = groupLeadsByBoardColumn([declined, lead({ id: 'l2' })])
+    expect(grouped.get('declined')?.map(l => l.id)).toEqual(['lead-1'])
+    expect(grouped.get('new')?.map(l => l.id)).toEqual(['l2'])
+  })
+
+  it('reopens a declined lead only onto New', () => {
+    expect(resolveBoardDrop(declined, 'new')).toEqual({ kind: 'reopen' })
+    expect(resolveBoardDrop(declined, 'engagement').kind).toBe('none')
+    expect(resolveBoardDrop(declined, 'hired').kind).toBe('none')
+  })
+
+  it('never hires a lead dropped on a column with no action', () => {
+    // resolveBoardDrop used to end in a bare `return { kind: 'hire' }`, so any
+    // column added later silently hired the lead on drop.
+    expect(resolveBoardDrop(lead(), 'declined').kind).toBe('none')
+    expect(resolveBoardDrop(lead(), 'hired')).toEqual({ kind: 'hire' })
+  })
+})

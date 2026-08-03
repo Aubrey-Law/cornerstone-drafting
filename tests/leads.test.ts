@@ -143,6 +143,17 @@ describe('lead status pipeline source shape', () => {
     expect(source).toContain('matter_id')
   })
 
+  it('keeps declined leads on the list and gives them their own tab', () => {
+    // A declined opportunity used to be dropped by the list filter, so it could
+    // not be reviewed or reopened from anywhere in the app.
+    const page = read('app/admin/leads/page.tsx')
+    expect(page).toContain('LEAD_LIST_STATUSES')
+    expect(page).toMatch(/'lead',\s*'lost',\s*'declined'/)
+    const client = read('app/admin/leads/LeadsClient.tsx')
+    expect(client).toContain("{ value: 'declined', label: 'Declined' }")
+    expect(client).toContain('declined: 0')
+  })
+
   it('lead creation defaults to the lead status', () => {
     expect(read('lib/leads/createLead.ts')).toContain("lead_status: 'lead'")
   })
