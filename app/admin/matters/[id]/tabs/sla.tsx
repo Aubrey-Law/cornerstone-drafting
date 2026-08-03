@@ -23,6 +23,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TabsContent } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
@@ -279,6 +287,82 @@ function TaskRow({
  * The matter's SLA plan: the dated checklist generated from a task template,
  * grouped by phase, with the phase progress bar on top.
  */
+export interface SlaAnchors {
+  discoveryCallAt: string | null
+  pmpsAt: string | null
+  recommendationsSentAt: string | null
+  engagementSignedAt: string | null
+  fitDecision: string | null
+}
+
+const ANCHOR_FIELDS: { key: keyof SlaAnchors; label: string; hint: string }[] = [
+  { key: 'discoveryCallAt', label: 'Discovery call', hint: 'Starts the soft clock' },
+  { key: 'pmpsAt', label: 'Planning session', hint: 'Dates the organizer and prep tasks' },
+  { key: 'recommendationsSentAt', label: 'Recommendations sent', hint: 'Drives the follow-up nudges' },
+  { key: 'engagementSignedAt', label: 'Engagement signed', hint: 'Day 0 — starts the 28-day clock' },
+]
+
+/**
+ * The dates the plan hangs off. Until one is set the tasks waiting on it have no
+ * due date, so this is what turns the checklist into a schedule — which is why
+ * it sits above the plan rather than on a settings screen.
+ */
+function KeyDatesCard({
+  anchors,
+  saving,
+  onSave,
+}: {
+  anchors: SlaAnchors
+  saving: boolean
+  onSave: (patch: Partial<SlaAnchors>) => void
+}) {
+  return (
+    <Card>
+      <CardHeader className="border-b [.border-b]:pb-3">
+        <CardTitle className="text-sm">Key dates</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Setting a date schedules the tasks waiting on it.
+        </p>
+      </CardHeader>
+      <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
+        {ANCHOR_FIELDS.map(field => (
+          <label key={field.key} className="space-y-1">
+            <span className="text-xs font-medium text-foreground">{field.label}</span>
+            <Input
+              type="date"
+              className="h-9"
+              disabled={saving}
+              defaultValue={(anchors[field.key] as string | null) ?? ''}
+              onChange={event => onSave({ [field.key]: event.target.value || null })}
+            />
+            <span className="block text-[11px] text-muted-foreground">{field.hint}</span>
+          </label>
+        ))}
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-foreground">Fit decision</span>
+          <Select
+            value={anchors.fitDecision ?? 'undecided'}
+            disabled={saving}
+            onValueChange={value =>
+              onSave({ fitDecision: value === 'undecided' ? null : value })
+            }
+          >
+            <SelectTrigger className="h-9" aria-label="Fit decision"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="undecided">Not decided</SelectItem>
+              <SelectItem value="fit">Proceed — good fit</SelectItem>
+              <SelectItem value="not_a_fit">Not a fit</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="block text-[11px] text-muted-foreground">
+            Gates the organizer and planning-session tasks
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
   const token = useAccessToken()
   const [tasks, setTasks] = useState<MatterTaskRow[]>([])
@@ -286,6 +370,8 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [anchors, setAnchors] = useState<SlaAnchors | null>(null)
+  const [savingAnchors, setSavingAnchors] = useState(false)
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
@@ -301,6 +387,7 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
       if (!res.ok) throw new Error(body?.error ?? 'Could not load the SLA plan')
       setTasks(body.tasks ?? [])
       setProgress(body.progress ?? null)
+      setAnchors(body.anchors ?? null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not load the SLA plan')
     } finally {
@@ -311,6 +398,35 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
   useEffect(() => {
     if (enabled && authHeaders) void load()
   }, [enabled, authHeaders, load])
+
+  const saveAnchors = useCallback(
+    async (patch: Partial<SlaAnchors>) => {
+      if (!authHeaders) return
+      setSavingAnchors(true)
+      try {
+        const res = await fetch(`/api/admin/matters/${matterId}/sla-anchors`, {
+          method: 'PATCH',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        const body = await res.json()
+        if (!res.ok) throw new Error(body?.error ?? 'Could not save the key dates')
+        setAnchors(body.anchors ?? null)
+        toast.success(
+          body.rescheduled > 0
+            ? `Saved — ${body.rescheduled} task${body.rescheduled === 1 ? '' : 's'} scheduled`
+            : 'Saved',
+        )
+        // The dates on every task waiting on that anchor have just changed.
+        await load()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not save the key dates')
+      } finally {
+        setSavingAnchors(false)
+      }
+    },
+    [authHeaders, matterId, load],
+  )
 
   const patchTask = useCallback(
     async (taskId: string, payload: Record<string, unknown>) => {
@@ -380,72 +496,79 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
             <Skeleton className="h-4 w-full" />
           </CardContent>
         </Card>
-      ) : tasks.length === 0 ? (
-        <Card>
-          <CardContent className="px-0">
-            <EmptyState
-              icon={ListChecks}
-              title="No SLA plan on this matter"
-              description="Generate the standard estate planning checklist — every task dated from today, with client nudges and internal reminders already scheduled."
-              action={
-                <Button onClick={() => void generate()} disabled={generating}>
-                  <CalendarCheck className="size-4" aria-hidden />
-                  {generating ? 'Generating…' : 'Generate SLA plan'}
-                </Button>
-              }
-            />
-          </CardContent>
-        </Card>
       ) : (
         <>
-          {progress && (
-            <Card>
-              <CardHeader className="border-b [.border-b]:pb-4">
-                <CardTitle className="text-sm">
-                  {progress.currentPhase
-                    ? `${SLA_PHASE_LABEL[progress.currentPhase]} phase`
-                    : 'SLA plan'}
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {progress.complete} of {progress.total} tasks complete
-                  {' · '}
-                  <DaysRemaining progress={progress} />
-                  {progress.overdue > 0 && (
-                    <span className="text-red-strong"> · {progress.overdue} overdue</span>
-                  )}
-                </p>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <PhaseProgressBar progress={progress} />
-              </CardContent>
-            </Card>
+          {anchors && (
+            <KeyDatesCard anchors={anchors} saving={savingAnchors} onSave={saveAnchors} />
           )}
-
-          {[...byPhase.entries()].map(([phase, phaseTasks]) => (
-            <Card key={phase}>
-              <CardHeader className="border-b [.border-b]:pb-3">
-                <CardTitle className="text-sm">{SLA_PHASE_LABEL[phase]}</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {phaseTasks.filter(task => task.status === 'completed').length} of{' '}
-                  {phaseTasks.length} complete
-                </p>
-              </CardHeader>
+          {tasks.length === 0 ? (
+            <Card>
               <CardContent className="px-0">
-                <ul className="divide-y divide-border">
-                  {phaseTasks.map(task => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      busy={busyId === task.id}
-                      onStatus={status => void patchTask(task.id, { status })}
-                      onNotes={notes => void patchTask(task.id, { notes })}
-                      onPause={paused => void patchTask(task.id, { paused })}
-                    />
-                  ))}
-                </ul>
+                <EmptyState
+                  icon={ListChecks}
+                  title="No SLA plan on this matter"
+                  description="Generate the standard estate planning checklist — every task dated from today, with client nudges and internal reminders already scheduled."
+                  action={
+                    <Button onClick={() => void generate()} disabled={generating}>
+                      <CalendarCheck className="size-4" aria-hidden />
+                      {generating ? 'Generating…' : 'Generate SLA plan'}
+                    </Button>
+                  }
+                />
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            <>
+              {progress && (
+                <Card>
+                  <CardHeader className="border-b [.border-b]:pb-4">
+                    <CardTitle className="text-sm">
+                      {progress.currentPhase
+                        ? `${SLA_PHASE_LABEL[progress.currentPhase]} phase`
+                        : 'SLA plan'}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {progress.complete} of {progress.total} tasks complete
+                      {' · '}
+                      <DaysRemaining progress={progress} />
+                      {progress.overdue > 0 && (
+                        <span className="text-red-strong"> · {progress.overdue} overdue</span>
+                      )}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <PhaseProgressBar progress={progress} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {[...byPhase.entries()].map(([phase, phaseTasks]) => (
+                <Card key={phase}>
+                  <CardHeader className="border-b [.border-b]:pb-3">
+                    <CardTitle className="text-sm">{SLA_PHASE_LABEL[phase]}</CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {phaseTasks.filter(task => task.status === 'completed').length} of{' '}
+                      {phaseTasks.length} complete
+                    </p>
+                  </CardHeader>
+                  <CardContent className="px-0">
+                    <ul className="divide-y divide-border">
+                      {phaseTasks.map(task => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          busy={busyId === task.id}
+                          onStatus={status => void patchTask(task.id, { status })}
+                          onNotes={notes => void patchTask(task.id, { notes })}
+                          onPause={paused => void patchTask(task.id, { paused })}
+                        />
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
         </>
       )}
     </TabsContent>

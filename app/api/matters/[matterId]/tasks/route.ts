@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchMatterTasks } from '@/lib/slaTasks/queries'
 import { summarizeSlaProgress } from '@/lib/slaTasks/schedule'
+import { firmDateKey } from '@/lib/firmDate'
 import { isSlaTaskStatus, type SlaTaskStatus } from '@/lib/slaTasks/types'
 
 /**
@@ -45,9 +46,24 @@ export async function GET(
     const tasks =
       statuses.length > 0 ? allTasks.filter(task => statuses.includes(task.status)) : allTasks
 
+    // The dates the plan hangs off. Returned alongside the tasks because the
+    // tab needs both to explain why something is still unscheduled.
+    const { data: matter } = await admin
+      .from('matters')
+      .select('discovery_call_at, pmps_at, recommendations_sent_at, engagement_signed_at, fit_decision')
+      .eq('id', matterId)
+      .maybeSingle()
+
     return NextResponse.json({
       tasks,
       progress: summarizeSlaProgress(allTasks, { targetDays }),
+      anchors: {
+        discoveryCallAt: firmDateKey(matter?.discovery_call_at ?? null),
+        pmpsAt: firmDateKey(matter?.pmps_at ?? null),
+        recommendationsSentAt: firmDateKey(matter?.recommendations_sent_at ?? null),
+        engagementSignedAt: firmDateKey(matter?.engagement_signed_at ?? null),
+        fitDecision: (matter?.fit_decision as string | null) ?? null,
+      },
     })
   } catch (e) {
     return NextResponse.json(
