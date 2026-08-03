@@ -9,10 +9,12 @@ import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import {
+  matterStatusLabel,
   stageLabel,
   type MatterActivity,
   type MatterContact,
   type MatterStage,
+  type MatterStatus,
   type PipelineMatter,
 } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -289,6 +291,7 @@ function MatterDetailClientInner({
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [stageSaving, setStageSaving] = useState(false)
+  const [statusSaving, setStatusSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const { documents, loading: docsLoading, reload: loadDocuments } = useMatterDocuments(matter.matter_id)
@@ -580,6 +583,29 @@ function MatterDetailClientInner({
       })
     }
   }, [handleMarkPortalUploadsReviewed, openIntakeSheet, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
+
+  const handleStatusChange = async (status: MatterStatus) => {
+    if (!token || status === (matter.status ?? 'active')) return
+    setStatusSaving(true)
+    const previous = matter.status
+    setMatter(m => ({ ...m, status }))
+    try {
+      const res = await fetch(`/api/admin/matters/${matter.matter_id}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not update status')
+      toast.success(`Matter ${matterStatusLabel(status).toLowerCase()}`)
+      router.refresh()
+    } catch (e) {
+      setMatter(m => ({ ...m, status: previous }))
+      toast.error(e instanceof Error ? e.message : 'Could not update status')
+    } finally {
+      setStatusSaving(false)
+    }
+  }
 
   const handleStageChange = async (stage: MatterStage) => {
     if (!token || stage === matter.stage) return
@@ -927,6 +953,9 @@ function MatterDetailClientInner({
                   matterId={matterId}
                   matterNumber={matterNum}
                   matterNumberManual={matterNumberManual}
+                  matterStatus={matter.status ?? 'active'}
+                  onStatusChange={status => void handleStatusChange(status)}
+                  statusSaving={statusSaving}
                   details={matterDetails}
                   designSheetPlanType={designSheetPlanType}
                   onSaveField={handleSaveMatterDetailField}

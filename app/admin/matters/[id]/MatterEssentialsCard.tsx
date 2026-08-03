@@ -22,7 +22,7 @@ import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { MATTER_PLAN_TYPE_OPTIONS, normalizePlanType } from '@/lib/matterPlanType'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { normalizeTargetSigningDate, targetSigningDateInput } from '@/lib/matterDates'
-import type { PipelineMatter } from '@/types/database'
+import { MATTER_STATUSES, type MatterStatus, type PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import { ReadFirstPanel, ReadValue } from './ReadFirstPanel'
 
@@ -31,6 +31,9 @@ interface MatterEssentialsCardProps {
   matterId: string
   matterNumber: string | null
   matterNumberManual?: boolean
+  matterStatus: string
+  onStatusChange: (status: MatterStatus) => void
+  statusSaving?: boolean
   details: MatterDetailsRow | null
   designSheetPlanType?: string | null
   onSaveField: (
@@ -75,6 +78,9 @@ export function MatterEssentialsCard({
   matterId,
   matterNumber,
   matterNumberManual = false,
+  matterStatus,
+  onStatusChange,
+  statusSaving = false,
   details,
   designSheetPlanType,
   onSaveField,
@@ -236,6 +242,22 @@ export function MatterEssentialsCard({
               <SelectItem value="unpaid">Unpaid</SelectItem>
               <SelectItem value="deposit">Deposit</SelectItem>
               <SelectItem value="paid_in_full">Paid in full</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <FieldLabel>Matter status</FieldLabel>
+          <Select
+            value={matterStatus}
+            disabled={statusSaving}
+            onValueChange={value => onStatusChange(value as MatterStatus)}
+          >
+            <SelectTrigger className="h-9" aria-label="Matter status"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MATTER_STATUSES.map(option => (
+                <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
