@@ -37,6 +37,7 @@ export type LeadBoardDrop =
   | { kind: 'send_engagement' }
   | { kind: 'hire' }
   | { kind: 'mark_lost' }
+  | { kind: 'mark_declined' }
   | { kind: 'reopen' }
   | { kind: 'none'; reason: string | null }
 
@@ -91,11 +92,7 @@ export function resolveBoardDrop(lead: LeadListRow, target: LeadBoardColumnKey):
       ? { kind: 'reopen' }
       : { kind: 'none', reason: 'Drop a declined lead on New to reopen it first.' }
   }
-  if (target === 'declined') {
-    // Nothing in the app sets `declined` yet; the column exists so a lead
-    // declined elsewhere is visible rather than mis-filed as active.
-    return { kind: 'none', reason: 'Declining a lead is not available here yet.' }
-  }
+  if (target === 'declined') return { kind: 'mark_declined' }
   if (target === 'lost') return { kind: 'mark_lost' }
   if (target === 'new') {
     return { kind: 'none', reason: 'Leads only return to New when a lost lead is reopened.' }

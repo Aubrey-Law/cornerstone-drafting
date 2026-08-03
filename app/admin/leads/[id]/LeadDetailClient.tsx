@@ -59,6 +59,7 @@ import type {
   LeadActivityViewRow,
   LeadDetailRecord,
   LeadSpouseRecord,
+  MutableLeadStatus,
 } from '@/lib/leads/viewTypes'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTab } from '@/app/admin/matters/[id]/MatterPeopleTab'
@@ -350,7 +351,7 @@ export function LeadDetailClient({
     }
   }
 
-  async function persistStatus(status: 'lead' | 'lost') {
+  async function persistStatus(status: MutableLeadStatus) {
     setError(null)
     setBusy(true)
     try {
@@ -488,7 +489,7 @@ export function LeadDetailClient({
     void action(`/api/admin/leads/${lead.id}/convert`)().finally(endInteraction)
   }
 
-  async function handleTopStatusChange(status: 'lead' | 'lost') {
+  async function handleTopStatusChange(status: MutableLeadStatus) {
     if (!beginInteraction()) return
     try {
       await persistStatus(status)

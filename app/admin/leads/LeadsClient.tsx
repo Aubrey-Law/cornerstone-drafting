@@ -35,7 +35,7 @@ import { Button } from '@/components/ui/button'
 import { SearchField } from '@/components/SearchField'
 import { PageHeader } from '@/components/PageHeader'
 import { FilterChip } from '@/components/FilterChip'
-import type { LeadListRow, LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import type { LeadListRow, LeadSpouseRecord, MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { LeadSidePanel } from '@/components/leads/LeadSidePanel'
 import { apiRequest } from '@/lib/clientApi'
 import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
@@ -399,7 +399,7 @@ export function LeadsClient({
   }
 
   /** Board drops onto Lost / New flip the opportunity status in place. */
-  const handleStatusChange = async (lead: LeadRow, status: 'lead' | 'lost') => {
+  const handleStatusChange = async (lead: LeadRow, status: MutableLeadStatus) => {
     setBusyLeadId(lead.id)
     try {
       const res = await fetch(`/api/admin/leads/${lead.id}`, {
@@ -409,7 +409,11 @@ export function LeadsClient({
       })
       const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Could not update lead')
-      toast.success(status === 'lost' ? 'Lead marked lost' : 'Lead reopened')
+      toast.success(
+        status === 'lost' ? 'Lead marked lost'
+        : status === 'declined' ? 'Lead declined'
+        : 'Lead reopened',
+      )
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not update lead')
@@ -617,6 +621,7 @@ export function LeadsClient({
               onHire={setConvertTarget}
               onArchive={setDeleteTarget}
               onMarkLost={lead => void handleStatusChange(lead, 'lost')}
+              onMarkDeclined={lead => void handleStatusChange(lead, 'declined')}
               onReopen={lead => void handleStatusChange(lead, 'lead')}
             />
           ) : (

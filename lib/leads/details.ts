@@ -56,7 +56,7 @@ const leadDetailsSchema = z.object({
   maritalStatus: optionalText,
   practiceArea: optionalPracticeArea,
   source: optionalText,
-  status: z.enum(['lead', 'hired', 'lost'], { message: 'Invalid lead status' }),
+  status: z.enum(['lead', 'hired', 'lost', 'declined'], { message: 'Invalid lead status' }),
   fee: z.preprocess(blankToNull, z.number().finite('Invalid fee').nonnegative('Invalid fee').nullable()),
   urgency: z.preprocess(blankToNull, z.enum(['low', 'normal', 'high']).nullable()),
   estimatedEstateValue: optionalNumber,

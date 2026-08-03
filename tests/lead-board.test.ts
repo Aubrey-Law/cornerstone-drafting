@@ -112,10 +112,16 @@ describe('declined leads on the board', () => {
     expect(resolveBoardDrop(declined, 'hired').kind).toBe('none')
   })
 
+  it('declines an active lead dropped on the declined column', () => {
+    expect(resolveBoardDrop(lead(), 'declined')).toEqual({ kind: 'mark_declined' })
+    expect(resolveBoardDrop(lead({ intake_sent_at: '2026-07-02T00:00:00.000Z' }), 'declined'))
+      .toEqual({ kind: 'mark_declined' })
+  })
+
   it('never hires a lead dropped on a column with no action', () => {
     // resolveBoardDrop used to end in a bare `return { kind: 'hire' }`, so any
     // column added later silently hired the lead on drop.
-    expect(resolveBoardDrop(lead(), 'declined').kind).toBe('none')
     expect(resolveBoardDrop(lead(), 'hired')).toEqual({ kind: 'hire' })
+    expect(resolveBoardDrop(lead({ lead_status: 'lost' }), 'declined').kind).toBe('none')
   })
 })

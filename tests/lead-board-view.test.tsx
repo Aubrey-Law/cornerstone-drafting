@@ -82,7 +82,7 @@ describe('lead board drag and drop', () => {
   function renderBoard(handlers: Partial<Record<'onSendIntake' | 'onHire' | 'onMarkLost', () => void>> = {}) {
     const spies = {
       onSendIntake: vi.fn(), onSendEngagement: vi.fn(), onHire: vi.fn(),
-      onArchive: vi.fn(), onMarkLost: vi.fn(), onReopen: vi.fn(),
+      onArchive: vi.fn(), onMarkLost: vi.fn(), onMarkDeclined: vi.fn(), onReopen: vi.fn(),
       ...handlers,
     }
     render(

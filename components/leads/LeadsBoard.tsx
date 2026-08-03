@@ -39,6 +39,7 @@ interface LeadsBoardProps {
   onHire: (lead: LeadListRow) => void
   onArchive: (lead: LeadListRow) => void
   onMarkLost: (lead: LeadListRow) => void
+  onMarkDeclined: (lead: LeadListRow) => void
   onReopen: (lead: LeadListRow) => void
 }
 
@@ -65,6 +66,7 @@ function stateChip(lead: LeadListRow): { label: string; tone: 'done' | 'pending'
   if (column === 'intake_complete') return { label: 'Intake complete', tone: 'done' }
   if (column === 'hired') return { label: 'Hired', tone: 'done' }
   if (column === 'lost') return { label: 'Lost', tone: 'muted' }
+  if (column === 'declined') return { label: 'Declined', tone: 'muted' }
   return null
 }
 
@@ -89,6 +91,7 @@ export function LeadsBoard({
   onHire,
   onArchive,
   onMarkLost,
+  onMarkDeclined,
   onReopen,
 }: LeadsBoardProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -108,6 +111,7 @@ export function LeadsBoard({
     else if (drop.kind === 'send_engagement') onSendEngagement(lead)
     else if (drop.kind === 'hire') onHire(lead)
     else if (drop.kind === 'mark_lost') onMarkLost(lead)
+    else if (drop.kind === 'mark_declined') onMarkDeclined(lead)
     else onReopen(lead)
   }
 

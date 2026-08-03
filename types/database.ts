@@ -82,7 +82,7 @@ export interface LeadSnapshotRow {
   marital_status: string | null
   practice_area: string | null
   lead_source: string | null
-  lead_status: 'lead' | 'hired' | 'lost'
+  lead_status: 'lead' | 'hired' | 'lost' | 'declined'
   engagement_fee_quoted: number | null
   lead_urgency: string | null
   taxable_estate: number | null
