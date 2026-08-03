@@ -24,6 +24,42 @@ import { resolveMatterIntakeIdForMatter } from '@/lib/intake/resolveMatterIntake
 import { MATTER_INTAKE_LINK_COLUMNS } from '@/lib/matters/matterIntakeLink'
 import { markIntakeUploadsReviewed as persistIntakeUploadsReviewed, markPortalUploadsReviewed as persistPortalUploadsReviewed } from '@/lib/matter/unreviewedUploads'
 
+/**
+ * Recompute and persist the attorney review flags for an intake.
+ *
+ * The row must be hydrated first. Spouse, children, and fiduciaries live in
+ * `contacts` — `client_intake.spouse_*` and `client_intake.fiduciary_entries`
+ * were dropped — and the readiness rules read the hydrated `_spouse` / `_fid_*`
+ * keys. Passing a raw row makes every contacts-backed flag fire regardless of
+ * what the attorney actually entered.
+ */
+async function recomputeIntakeReviewFlags(
+  admin: ReturnType<typeof getAdminClient>,
+  intakeId: string,
+): Promise<IntakeReadinessFlag[]> {
+  const { data: intakeRow } = await admin
+    .from('client_intake')
+    .select('*')
+    .eq('id', intakeId)
+    .maybeSingle()
+  if (!intakeRow) return []
+
+  let hydrated: Record<string, unknown>
+  try {
+    hydrated = await hydrateIntakeWithContacts(admin, intakeRow, intakeId)
+  } catch (error) {
+    console.error('[adminIntake] hydrate for review flags failed:', error)
+    return []
+  }
+
+  const reviewFlags = getIntakeReadinessFlags(hydrated as IntakeRow)
+  await admin
+    .from('client_intake')
+    .update({ attorney_review_flags: reviewFlags })
+    .eq('id', intakeId)
+  return reviewFlags
+}
+
 async function syncIntakeToDesignSheet(
   admin: ReturnType<typeof getAdminClient>,
   intakeId: string,
@@ -366,18 +402,7 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
 
   let reviewFlags: IntakeReadinessFlag[] = []
   if (CLIENT_LOCKED_INTAKE_STATUSES.has(saveStatus)) {
-    const { data: intakeRow } = await admin
-      .from('client_intake')
-      .select('*')
-      .eq('id', intakeId)
-      .maybeSingle()
-    if (intakeRow) {
-      reviewFlags = getIntakeReadinessFlags(intakeRow as IntakeRow)
-      await admin
-        .from('client_intake')
-        .update({ attorney_review_flags: reviewFlags })
-        .eq('id', intakeId)
-    }
+    reviewFlags = await recomputeIntakeReviewFlags(admin, intakeId)
   }
 
   // Push attorney edits into the design sheet so the drafting workspace
@@ -459,19 +484,7 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
   // Compute readiness flags from the just-written intake row so the design
   // sheet seed and matter_alerts surface the same information the client-
   // portal submit path produces.
-  let reviewFlags: IntakeReadinessFlag[] = []
-  const { data: intakeRow } = await admin
-    .from('client_intake')
-    .select('*')
-    .eq('id', intakeId)
-    .maybeSingle()
-  if (intakeRow) {
-    reviewFlags = getIntakeReadinessFlags(intakeRow as IntakeRow)
-    await admin
-      .from('client_intake')
-      .update({ attorney_review_flags: reviewFlags })
-      .eq('id', intakeId)
-  }
+  const reviewFlags = await recomputeIntakeReviewFlags(admin, intakeId)
 
   const hiredMatterId = matter?.relationship_status === 'hired' ? (matter.id as string) : null
   await syncIntakeToDesignSheet(admin, intakeId, hiredMatterId, reviewFlags)
