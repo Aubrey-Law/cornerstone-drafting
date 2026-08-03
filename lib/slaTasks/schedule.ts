@@ -11,6 +11,7 @@ import {
   type MatterTaskRow,
   type SlaAnchor,
   type SlaAnchorDates,
+  type SlaClockAnchor,
   type SlaAssignee,
   type SlaGate,
   type SlaNudgeTier,
@@ -117,11 +118,15 @@ export function parseTemplateTasks(raw: unknown): SlaTemplateTask[] {
 export function resolveAnchorDate(
   relativeTo: SlaAnchor | null,
   anchors: SlaAnchorDates,
-  fallback: string,
+  fallback: string | null,
 ): string | null {
   if (relativeTo === null) {
     const dayZero = anchors.engagement
-    return dayZero && isDateKey(dayZero) ? dayZero : fallback
+    if (dayZero && isDateKey(dayZero)) return dayZero
+    // No fallback on a template that knows about the pre-engagement stretch:
+    // Day 0 is the engagement signature, and dating from anything else would
+    // promise a client a date the firm has not committed to yet.
+    return fallback
   }
   const anchor = anchors[relativeTo]
   return anchor && isDateKey(anchor) ? anchor : null
@@ -182,13 +187,17 @@ export function buildMatterTaskInserts(
   options: BuildMatterTaskOptions,
 ): MatterTaskInsert[] {
   const { matterId, templateId, startDate, anchors = {}, gatesMet = [], variants = [] } = options
+  // A template carrying pre-engagement work models Day 0 as a real event, so an
+  // unsigned matter leaves those tasks undated. A template without it (v1) is
+  // only ever generated at hire, where the start date *is* Day 0.
+  const dayZeroFallback = tasks.some(task => task.pre_engagement) ? null : startDate
   return tasks
     .filter(task => task.variant === null || variants.includes(task.variant))
     .map((task, index) => {
       // A task whose gate has not opened stays undated: it belongs on the
       // checklist, but the firm owes no date for work that may never start.
       const gateOpen = task.gate === null || gatesMet.includes(task.gate)
-      const anchor = gateOpen ? resolveAnchorDate(task.relative_to, anchors, startDate) : null
+      const anchor = gateOpen ? resolveAnchorDate(task.relative_to, anchors, dayZeroFallback) : null
       return {
         matter_id: matterId,
         template_id: templateId,
@@ -248,12 +257,14 @@ export function rescheduleForAnchor(
     | 'nudge_date'
     | 'escalation_date'
   >[],
-  anchor: SlaAnchor,
+  anchor: SlaClockAnchor,
   anchorDate: string,
 ): RescheduledTaskDates[] {
   if (!isDateKey(anchorDate)) return []
+  // Day-0 tasks are stored with a null `relative_to`; the other two name theirs.
+  const relativeTo = anchor === 'engagement' ? null : anchor
   return tasks.flatMap(task => {
-    if (task.relative_to !== anchor || !SLA_OPEN_STATUSES.includes(task.status)) return []
+    if (task.relative_to !== relativeTo || !SLA_OPEN_STATUSES.includes(task.status)) return []
     const next: RescheduledTaskDates = {
       id: task.id,
       due_date: offsetDate(anchorDate, task.due_offset_days),

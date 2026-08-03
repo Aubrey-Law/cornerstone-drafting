@@ -7,6 +7,8 @@ import {
 import {
   EMPTY_MATTER_TABLE_FILTERS,
   filterAndSortMatters,
+  matchesLifecycle,
+  type MatterTableFilters,
   matterLastActivityAt,
 } from '@/lib/adminTables/matterTable'
 import type { MatterListRow } from '@/lib/queries/matters'
@@ -126,6 +128,7 @@ const matterIds = (rows: MatterListRow[]) => rows.map(row => row.matter_id)
 
 const matterRow = (matter_id: string, fields: Partial<MatterListRow>): MatterListRow => ({
   matter_id,
+  relationship_status: 'hired',
   matter_name: 'Estate Plan',
   stage: 'intake',
   status: 'open',
@@ -230,6 +233,7 @@ describe('matter table controls', () => {
       search: 'smith',
       practice: 'EP',
       stageGroup: 'active',
+      lifecycle: 'all',
     }, 'last_activity'))).toEqual(['matching-matter'])
   })
 
@@ -257,5 +261,33 @@ describe('matter table controls', () => {
     const original = [...matterSortFixtures.client_asc]
     filterAndSortMatters(matterSortFixtures.client_asc, EMPTY_MATTER_TABLE_FILTERS, 'client_asc')
     expect(matterSortFixtures.client_asc).toEqual(original)
+  })
+})
+
+describe('matter list lifecycle filter', () => {
+  const row = (id: string, relationship_status: string) =>
+    matterRow(id, { relationship_status } as Partial<MatterListRow>)
+  const all = [row('lead', 'lead'), row('hired', 'hired'), row('lost', 'lost'), row('declined', 'declined')]
+  const ids = (lifecycle: MatterTableFilters['lifecycle']) =>
+    matterIds(filterAndSortMatters(all, { ...EMPTY_MATTER_TABLE_FILTERS, lifecycle }, 'newest')).sort()
+
+  it('defaults to everything still in play', () => {
+    // Leads joining the matters list must not bury the hired work, and a lost
+    // lead is not something the firm is working on.
+    expect(EMPTY_MATTER_TABLE_FILTERS.lifecycle).toBe('open')
+    expect(ids('open')).toEqual(['hired', 'lead'])
+  })
+
+  it('separates the two closed outcomes from the open pipeline', () => {
+    expect(ids('closed')).toEqual(['declined', 'lost'])
+    expect(ids('lead')).toEqual(['lead'])
+    expect(ids('hired')).toEqual(['hired'])
+    expect(ids('all')).toEqual(['declined', 'hired', 'lead', 'lost'])
+  })
+
+  it('treats a missing relationship_status as hired', () => {
+    // Rows predating the consolidated view carry no lifecycle value.
+    const legacy = matterRow('legacy', {} as Partial<MatterListRow>)
+    expect(matchesLifecycle({ ...legacy, relationship_status: '' }, 'open')).toBe(true)
   })
 })

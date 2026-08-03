@@ -1,11 +1,13 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { formatPhoneDisplay } from '@/lib/phone'
 import type { PipelineMatter } from '@/types/database'
-import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
+import { PIPELINE_MATTER_ALL_COLUMNS } from '@/lib/queries/matterCore'
 import { fetchUnreviewedUploadCountsForMatters } from '@/lib/matter/unreviewedUploads'
 
 export type MatterListRow = PipelineMatter & {
   matter_number: string | null
+  /** lead | hired | lost | declined — the list shows the whole pipeline. */
+  relationship_status: string
 }
 
 export async function fetchMattersList(): Promise<{
@@ -13,9 +15,11 @@ export async function fetchMattersList(): Promise<{
   error: string | null
 }> {
   const admin = getAdminClient()
+  // The consolidated view: leads and hired matters in one list, so a lead is a
+  // matter here rather than living on its own page.
   const { data, error } = await admin
-    .from('v_matter_pipeline')
-    .select(PIPELINE_MATTER_COLUMNS)
+    .from('v_matter_pipeline_all')
+    .select(PIPELINE_MATTER_ALL_COLUMNS)
     .neq('status', 'archived')
     .order('matter_created', { ascending: false })
 
@@ -24,24 +28,12 @@ export async function fetchMattersList(): Promise<{
     return { matters: [], error: error.message }
   }
 
-  const matters = (data ?? []) as PipelineMatter[]
+  // matter_number now comes from the view, so the second round trip is gone.
+  const matters = (data ?? []) as unknown as MatterListRow[]
   const matterIds = matters.map(m => m.matter_id)
 
-  const matterNumbersRes = matterIds.length
-    ? await admin.from('matters').select('id, matter_number').in('id', matterIds)
-    : { data: [] as { id: string; matter_number: string | null }[], error: null }
-
-  if (matterNumbersRes.error) {
-    console.error('fetchMattersList matter numbers error:', matterNumbersRes.error)
-  }
-
-  const matterNumberById = new Map(
-    (matterNumbersRes.data ?? []).map(row => [row.id, row.matter_number as string | null]),
-  )
-
-  const enrich = (m: PipelineMatter): MatterListRow => ({
+  const enrich = (m: MatterListRow): MatterListRow => ({
     ...m,
-    matter_number: matterNumberById.get(m.matter_id) ?? null,
     client_phone: formatPhoneDisplay(m.client_phone) || m.client_phone,
   })
 

@@ -426,3 +426,51 @@ describe('target date extensions', () => {
     )
   })
 })
+
+describe('a lead has no Day 0 yet', () => {
+  const preEngagement = templateTask({
+    name: 'Hold discovery call', due_offset_days: 0, relative_to: 'discovery_call', pre_engagement: true,
+  })
+  const dayZero = templateTask({ name: 'Client approves design', due_offset_days: 7 })
+
+  it('leaves Day-0 tasks undated while the engagement is unsigned', () => {
+    // The whole point of the soft clock: an unsigned matter must not show a
+    // 28-day plan counted from the day the lead happened to be created.
+    const rows = buildMatterTaskInserts([preEngagement, dayZero], {
+      matterId: 'm', templateId: null, startDate: '2026-03-01',
+      anchors: { discovery_call: '2026-03-05' },
+    })
+    expect(rows[0].due_date).toBe('2026-03-05')
+    expect(rows[1].due_date).toBeNull()
+  })
+
+  it('dates Day-0 tasks once the engagement date is known', () => {
+    const rows = buildMatterTaskInserts([preEngagement, dayZero], {
+      matterId: 'm', templateId: null, startDate: '2026-03-01',
+      anchors: { discovery_call: '2026-03-05', engagement: '2026-04-01' },
+    })
+    expect(rows[1].due_date).toBe('2026-04-08')
+  })
+
+  it('still dates a template with no pre-engagement work from its start date', () => {
+    // v1 is only ever generated at hire, where the start date *is* Day 0, so
+    // removing its fallback would have broken every existing matter.
+    const [row] = buildMatterTaskInserts([dayZero], {
+      matterId: 'm', templateId: null, startDate: '2026-03-01', anchors: {},
+    })
+    expect(row.due_date).toBe('2026-03-08')
+  })
+
+  it('starts the firm clock when the engagement anchor lands', () => {
+    const tasks = [
+      matterTask({ id: 'design', relative_to: null, due_offset_days: 7, due_date: null }),
+      matterTask({ id: 'sign', relative_to: null, due_offset_days: 28, due_date: null }),
+      matterTask({ id: 'pmps', relative_to: 'pmps', due_offset_days: -1, due_date: '2026-03-11' }),
+    ]
+    const updates = rescheduleForAnchor(tasks, 'engagement', '2026-04-01')
+    expect(updates).toEqual([
+      { id: 'design', due_date: '2026-04-08', nudge_date: null, escalation_date: null },
+      { id: 'sign', due_date: '2026-04-29', nudge_date: null, escalation_date: null },
+    ])
+  })
+})

@@ -4,6 +4,7 @@ import {
   standingIntakeUrl,
 } from '@/lib/intake/standingLinks'
 import { parsePracticeArea, type PracticeAreaCode } from '@/lib/practiceArea'
+import { ensureLeadSlaTasks } from '@/lib/slaTasks/generate'
 
 export interface CreateLeadInput {
   clientName: string
@@ -60,6 +61,17 @@ export async function createLead(input: CreateLeadInput): Promise<CreatedLead> {
     .single()
 
   if (error || !lead) throw new Error(error?.message ?? 'Failed to create lead')
+
+  // `ensure_lead_matter` creates the opportunity in an AFTER trigger, so the
+  // insert's RETURNING clause cannot carry it — read it back before seeding the
+  // checklist. Best-effort: a lead must never fail to be created because its
+  // SLA plan could not be written.
+  const { data: opportunity } = await admin
+    .from('matters')
+    .select('id')
+    .eq('client_intake_id', lead.id)
+    .maybeSingle()
+  if (opportunity?.id) await ensureLeadSlaTasks(opportunity.id)
 
   return {
     leadId: lead.id,
