@@ -17,7 +17,7 @@ const snoozeRequestSchema = z.object({
 }).strict()
 
 const statusRequestSchema = z.object({
-  status: z.enum(['lead', 'lost']),
+  status: z.enum(['lead', 'lost', 'declined']),
 }).strict()
 
 function validationError(error: unknown) {

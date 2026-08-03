@@ -16,7 +16,7 @@ import { LeadProgress, isLeadIntakeComplete } from '@/components/leads/LeadProgr
 import { formatCurrency } from '@/lib/format'
 import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
-import type { LeadListRow } from '@/lib/leads/viewTypes'
+import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 
 export type NextStep =
   | { key: 'send_intake'; label: string; primary: true }
@@ -80,6 +80,7 @@ interface LeadsTableProps {
   onToggleAll: (selected: boolean) => void
   onToggleSelected: (leadId: string, selected: boolean) => void
   onEdit: (lead: LeadListRow) => void
+  onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
@@ -100,6 +101,7 @@ export function LeadsTable({
   onToggleAll,
   onToggleSelected,
   onEdit,
+  onStatusChange,
   onSendIntake,
   onSendEngagement,
   onHire,
@@ -206,6 +208,7 @@ export function LeadsTable({
                         }
                       : {})}
                     onEdit={onEdit}
+                    onStatusChange={onStatusChange}
                     onSendIntake={onSendIntake}
                     onSendEngagement={onSendEngagement}
                     onHire={onHire}

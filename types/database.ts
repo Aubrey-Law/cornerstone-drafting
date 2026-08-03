@@ -82,7 +82,7 @@ export interface LeadSnapshotRow {
   marital_status: string | null
   practice_area: string | null
   lead_source: string | null
-  lead_status: 'lead' | 'hired' | 'lost'
+  lead_status: 'lead' | 'hired' | 'lost' | 'declined'
   engagement_fee_quoted: number | null
   lead_urgency: string | null
   taxable_estate: number | null
@@ -114,6 +114,25 @@ export type MatterStage =
   | 'post_execution'
   | 'funding'
   | 'closed'
+
+/**
+ * Where the work stands, independent of `relationship_status` (which answers
+ * whether the person became a client at all). `on_hold` is the SLA's
+ * 21-days-of-client-silence state and drops the matter off the aging boards;
+ * `closed` is work complete; `archived` is a visibility flag, not an outcome.
+ */
+export type MatterStatus = 'active' | 'on_hold' | 'closed' | 'archived'
+
+export const MATTER_STATUSES: { key: MatterStatus; label: string }[] = [
+  { key: 'active', label: 'Active' },
+  { key: 'on_hold', label: 'On hold' },
+  { key: 'closed', label: 'Closed' },
+  { key: 'archived', label: 'Archived' },
+]
+
+export function matterStatusLabel(status: string): string {
+  return MATTER_STATUSES.find(s => s.key === status)?.label ?? status
+}
 
 export type StageGroup = 'early' | 'active' | 'work' | 'done' | 'closed'
 

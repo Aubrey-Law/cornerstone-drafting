@@ -104,3 +104,16 @@ export interface LeadActivityViewRow {
   actor_id?: string | null
   created_at: string
 }
+
+/**
+ * Lead lifecycle states the app may set directly. `hired` is absent on purpose:
+ * hiring runs through the convert endpoint, which assigns the matter number and
+ * seeds the SLA checklist, so it is never a plain status write.
+ */
+export type MutableLeadStatus = 'lead' | 'lost' | 'declined'
+
+export const MUTABLE_LEAD_STATUS_LABEL: Record<MutableLeadStatus, string> = {
+  lead: 'Lead',
+  lost: 'Lost',
+  declined: 'Declined',
+}

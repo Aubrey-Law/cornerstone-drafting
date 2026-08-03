@@ -6,6 +6,14 @@ import { LeadsClient, type LeadRow } from './LeadsClient'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Lifecycle states that still belong on the leads list. A `hired` opportunity
+ * leaves for its matter; everything else stays visible, including one declined
+ * at discovery — a declined lead that cannot be seen also cannot be reviewed or
+ * reopened, and `lost` and `declined` are deliberately distinct.
+ */
+const LEAD_LIST_STATUSES = new Set(['lead', 'lost', 'declined'])
+
 export default async function LeadsPage() {
   const admin = getAdminClient()
 
@@ -41,7 +49,7 @@ export default async function LeadsPage() {
   const leads = candidateLeads
     .map(lead => ({ ...lead, lead_status: opportunityById.get(lead.matter_id ?? '')?.relationship_status ?? lead.lead_status }))
     .filter(lead => opportunityById.get(lead.matter_id ?? '')?.status !== 'archived')
-    .filter(lead => lead.lead_status === 'lead' || lead.lead_status === 'lost')
+    .filter(lead => LEAD_LIST_STATUSES.has(lead.lead_status ?? 'lead'))
   const leadIds = leads.map(lead => lead.id)
   const latestActivity = new Map<string, string>()
   if (leadIds.length > 0) {

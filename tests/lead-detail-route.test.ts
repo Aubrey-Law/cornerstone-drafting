@@ -338,3 +338,65 @@ describe('newestTimestamp', () => {
     expect(newestTimestamp([null, undefined, '', 'invalid'])).toBeNull()
   })
 })
+
+describe('lead editing surfaces', () => {
+  it('rejects the legacy dialog payload rather than silently half-saving it', async () => {
+    // The Edit dialog used to PATCH { clientName, ..., leadStatus }. That shape
+    // matches none of the route's branches, so it fell through to the full
+    // details validator and 400'd on a field the dialog never collected. The
+    // dialog is create-only now; this pins the behaviour so nobody reintroduces
+    // the shape expecting it to work.
+    harness()
+    const res = await PATCH(
+      request({
+        clientName: 'Jane Doe',
+        clientEmail: 'jane@example.com',
+        clientPhone: '',
+        practiceArea: 'EP',
+        feeQuoted: 4500,
+        leadStatus: 'lost',
+      }),
+      params,
+    )
+    expect(res.status).toBe(400)
+    expect((await res.json()).fieldErrors).toMatchObject({ firstName: expect.any(String) })
+  })
+
+  it('accepts a status-only body for every settable lead state', async () => {
+    for (const status of ['lead', 'lost', 'declined'] as const) {
+      const { calls } = harness({ rpcData: { lead: snapshotLead, spouse: null, activity: null } })
+      const res = await PATCH(request({ status }), params)
+      expect(res.status, status).toBe(200)
+      expect(calls.rpc[0]).toEqual([
+        'update_lead_opportunity_status',
+        { p_lead_id: 'l1', p_status: status, p_actor_id: 'u1' },
+      ])
+    }
+  })
+
+  it('still refuses a status the lifecycle does not allow to be set directly', async () => {
+    harness()
+    // Hiring runs through the convert endpoint, which assigns the matter number.
+    const res = await PATCH(request({ status: 'hired' }), params)
+    expect(res.status).toBe(400)
+  })
+
+  it('keeps the create dialog free of an edit path', () => {
+    const dialog = source('components/leads/LeadEditorDialog.tsx')
+    expect(dialog).not.toContain('editingLead')
+    // The status select lived here and could never save; status is set from the
+    // row menu, the detail header and the board instead.
+    expect(dialog).not.toContain('Matter status')
+
+    const client = source('app/admin/leads/LeadsClient.tsx')
+    expect(client).not.toContain('payload.leadStatus')
+    expect(client).toContain('const openEdit = (lead: LeadRow) => selectLead(lead.id)')
+  })
+
+  it('offers the status actions from the row menu', () => {
+    const menu = source('components/leads/LeadActionsMenu.tsx')
+    expect(menu).toContain("onStatusChange(lead, 'lost')")
+    expect(menu).toContain("onStatusChange(lead, 'declined')")
+    expect(menu).toContain("onStatusChange(lead, 'lead')")
+  })
+})

@@ -75,16 +75,3 @@ export async function deleteMatterNote(
   revalidatePath(`/admin/matters/${matterId}`)
   return data
 }
-
-export async function updateMatterStatus(matterId: string, status: string): Promise<void> {
-  await requireAdminServerAction()
-  const admin = getAdminClient()
-  const { error } = await admin.from('matters').update({ status }).eq('id', matterId)
-  if (error) throw new Error(error.message)
-
-  await admin
-    .from('matter_details')
-    .upsert({ client_id: matterId, client_status: status }, { onConflict: 'client_id' })
-
-  revalidatePath(`/admin/matters/${matterId}`)
-}

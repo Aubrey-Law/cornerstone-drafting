@@ -104,14 +104,17 @@ describe('lead edit and delete source shape', () => {
     expect(source).not.toContain("from('client_intake').delete()")
   })
 
-  it('leads client has selection, bulk delete, and an edit dialog', () => {
+  it('leads client has selection, bulk delete, and a create-only lead dialog', () => {
     const source = read('app/admin/leads/LeadsClient.tsx')
     const table = read('components/leads/LeadsTable.tsx')
     const editor = read('components/leads/LeadEditorDialog.tsx')
     expect(table).toContain('Checkbox')
     expect(source).toContain('bulk-delete')
     expect(source).toContain("method: 'PATCH'")
-    expect(editor).toContain('Edit lead')
+    // The dialog creates; editing an existing lead happens in the record panel,
+    // which patches one validated field at a time.
+    expect(editor).toContain('New lead')
+    expect(editor).not.toContain('Edit lead')
   })
 })
 
@@ -141,6 +144,17 @@ describe('lead status pipeline source shape', () => {
     const source = read('app/admin/leads/page.tsx')
     expect(source).toContain("not('lead_status', 'is', null)")
     expect(source).toContain('matter_id')
+  })
+
+  it('keeps declined leads on the list and gives them their own tab', () => {
+    // A declined opportunity used to be dropped by the list filter, so it could
+    // not be reviewed or reopened from anywhere in the app.
+    const page = read('app/admin/leads/page.tsx')
+    expect(page).toContain('LEAD_LIST_STATUSES')
+    expect(page).toMatch(/'lead',\s*'lost',\s*'declined'/)
+    const client = read('app/admin/leads/LeadsClient.tsx')
+    expect(client).toContain("{ value: 'declined', label: 'Declined' }")
+    expect(client).toContain('declined: 0')
   })
 
   it('lead creation defaults to the lead status', () => {

@@ -17,19 +17,23 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
-import type { LeadListRow } from '@/lib/leads/viewTypes'
 
+/**
+ * Creating a lead only. Editing one lives in the record side panel and the
+ * detail rail, which patch a field at a time through the validated lead-field
+ * endpoint. This dialog collects a single "Client name", while an edit has to
+ * write first and last name separately — the two shapes never reconciled, and
+ * the edit request had been failing validation outright.
+ */
 export interface LeadEditorForm {
   name: string
   email: string
   phone: string
   practiceArea: string
   fee: string
-  status: string
 }
 interface LeadEditorDialogProps {
   open: boolean
-  editingLead: LeadListRow | null
   form: LeadEditorForm
   saving: boolean
   onOpenChange: (open: boolean) => void
@@ -39,7 +43,6 @@ interface LeadEditorDialogProps {
 
 export function LeadEditorDialog({
   open,
-  editingLead,
   form,
   saving,
   onOpenChange,
@@ -52,7 +55,7 @@ export function LeadEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{editingLead ? 'Edit lead' : 'New lead'}</DialogTitle>
+          <DialogTitle>New lead</DialogTitle>
           <DialogDescription>
             A prospective matter becomes Hired when the engagement agreement is signed.
           </DialogDescription>
@@ -69,15 +72,6 @@ export function LeadEditorDialog({
               ))}
             </SelectContent>
           </Select>
-          {editingLead && (
-            <Select value={form.status} onValueChange={status => update({ status })}>
-              <SelectTrigger aria-label="Matter status"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="lead">Lead</SelectItem>
-                <SelectItem value="lost">Lost</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
           <Input
             type="number"
             min={0}
@@ -90,7 +84,7 @@ export function LeadEditorDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
           <Button onClick={onSave} disabled={saving}>
-            {saving ? 'Saving…' : editingLead ? 'Save changes' : 'Add lead'}
+            {saving ? 'Saving…' : 'Add lead'}
           </Button>
         </DialogFooter>
       </DialogContent>
