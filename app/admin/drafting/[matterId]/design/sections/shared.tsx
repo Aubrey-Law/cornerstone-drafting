@@ -557,6 +557,8 @@ export function GroupCard({
   headerAction,
   blockingCount,
   optionalCount,
+  blockingLabels = [],
+  optionalLabels = [],
   collapsed = false,
   onCollapsedChange,
   children,
@@ -568,6 +570,9 @@ export function GroupCard({
   headerAction?: React.ReactNode
   blockingCount: number
   optionalCount: number
+  /** Names of the open decisions; the count alone doesn't say which they are. */
+  blockingLabels?: string[]
+  optionalLabels?: string[]
   /** Collapsible only when `onCollapsedChange` is provided; sectioned mode forces the card open. */
   collapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
@@ -578,6 +583,7 @@ export function GroupCard({
   const isCollapsed = collapsible && collapsed
   const openCount = blockingCount > 0 ? blockingCount : optionalCount
   const openLabel = blockingCount > 0 ? 'blocking' : 'optional'
+  const openNames = blockingCount > 0 ? blockingLabels : optionalLabels
   const header = (
     <>
       <span className="block text-sm font-semibold text-foreground">{title}</span>
@@ -635,6 +641,16 @@ export function GroupCard({
           </button>
         ) : null}
       </div>
+      {openCount > 0 && openNames.length > 0 && !isCollapsed ? (
+        <div className="border-t border-border bg-muted/30 px-5 py-2">
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              Still {blockingCount > 0 ? 'required' : 'open'}:
+            </span>{' '}
+            {openNames.join(' · ')}
+          </p>
+        </div>
+      ) : null}
       <div
         id={`${id}-content`}
         className={cn('border-t border-border px-5 py-5', isCollapsed && 'hidden')}

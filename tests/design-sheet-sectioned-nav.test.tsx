@@ -66,6 +66,83 @@ describe('sectioned nav rail', () => {
     await user.click(screen.getByRole('button', { name: /Review & sign/ }))
     expect(onSelectGroup).toHaveBeenCalledWith(DESIGN_SHEET_GROUP_IDS.review)
   })
+
+  // A bare "Plan structure 4" says nothing about what the 4 are.
+  it('names the open decisions on the count badge and the group button', () => {
+    render(
+      <DesignSectionNav
+        groups={[
+          {
+            id: DESIGN_SHEET_GROUP_IDS.plan,
+            title: 'Plan structure',
+            blockingCount: 0,
+            optionalCount: 4,
+            blockingLabels: [],
+            optionalLabels: ['signing type', 'signing date', 'signing county', 'notary commission expiration'],
+          },
+        ]}
+        activeGroupId={DESIGN_SHEET_GROUP_IDS.plan}
+        hideUnusedDecisions
+        hiddenDecisionCount={0}
+        onHideUnusedChange={vi.fn()}
+        onSelectGroup={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTitle(
+      '4 optional: signing type · signing date · signing county · notary commission expiration',
+    ).textContent).toBe('4')
+    expect(screen.getByRole('button', { name: /Plan structure/ }).getAttribute('aria-label')).toBe(
+      'Plan structure — 4 optional: signing type, signing date, signing county, notary commission expiration',
+    )
+  })
+
+  it('distinguishes blocking from optional counts in the accessible name', () => {
+    render(
+      <DesignSectionNav
+        groups={[
+          {
+            id: DESIGN_SHEET_GROUP_IDS.plan,
+            title: 'Plan structure',
+            blockingCount: 1,
+            optionalCount: 2,
+            blockingLabels: ['plan type'],
+            optionalLabels: ['signing date', 'signing county'],
+          },
+          {
+            id: DESIGN_SHEET_GROUP_IDS.trust,
+            title: 'Trust terms',
+            blockingCount: 0,
+            optionalCount: 0,
+            blockingLabels: [],
+            optionalLabels: [],
+          },
+        ]}
+        activeGroupId={DESIGN_SHEET_GROUP_IDS.plan}
+        hideUnusedDecisions
+        hiddenDecisionCount={0}
+        onHideUnusedChange={vi.fn()}
+        onSelectGroup={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Plan structure/ }).getAttribute('aria-label')).toBe(
+      'Plan structure — 1 blocking: plan type — 2 optional: signing date, signing county',
+    )
+    expect(screen.getByRole('button', { name: /Trust terms/ }).getAttribute('aria-label'))
+      .toBe('Trust terms — complete')
+  })
+})
+
+describe('group card open decisions', () => {
+  const shared = read('sections/shared.tsx')
+
+  it('lists the open decision names under the count pill', () => {
+    expect(shared).toContain('const openNames = blockingCount > 0 ? blockingLabels : optionalLabels')
+    expect(shared).toContain('{openCount > 0 && openNames.length > 0 && !isCollapsed ? (')
+    expect(shared).toContain("Still {blockingCount > 0 ? 'required' : 'open'}:")
+    expect(shared).toContain("{openNames.join(' · ')}")
+  })
 })
 
 describe('sectioned design sheet page wiring', () => {
@@ -76,7 +153,15 @@ describe('sectioned design sheet page wiring', () => {
     expect(page).not.toContain('{groups.map(group => {')
     expect(page).toContain('<SigningMechanicsSection')
     expect(page).toContain('<DesignFinalReview')
-    expect(page).toContain("{ id: REVIEW_GROUP.id, title: REVIEW_GROUP.title, blockingCount: 0, optionalCount: 0 }")
+    expect(page).toContain('id: REVIEW_GROUP.id,')
+    expect(page).toContain('title: REVIEW_GROUP.title,')
+  })
+
+  it('passes the open decision names to the nav badges and the group card', () => {
+    expect(page).toContain('blockingLabels: counts?.blocking.map(item => item.label) ?? []')
+    expect(page).toContain('optionalLabels: counts?.optional.map(item => item.label) ?? []')
+    expect(page).toContain("blockingLabels={groupReadiness.get(activeGroup.id)?.blocking.map(item => item.label) ?? []}")
+    expect(page).toContain("optionalLabels={groupReadiness.get(activeGroup.id)?.optional.map(item => item.label) ?? []}")
   })
 
   it('keeps the hash contract and seeds the active group from the URL', () => {
