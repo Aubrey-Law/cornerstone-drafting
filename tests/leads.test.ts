@@ -104,14 +104,17 @@ describe('lead edit and delete source shape', () => {
     expect(source).not.toContain("from('client_intake').delete()")
   })
 
-  it('leads client has selection, bulk delete, and an edit dialog', () => {
+  it('leads client has selection, bulk delete, and a create-only lead dialog', () => {
     const source = read('app/admin/leads/LeadsClient.tsx')
     const table = read('components/leads/LeadsTable.tsx')
     const editor = read('components/leads/LeadEditorDialog.tsx')
     expect(table).toContain('Checkbox')
     expect(source).toContain('bulk-delete')
     expect(source).toContain("method: 'PATCH'")
-    expect(editor).toContain('Edit lead')
+    // The dialog creates; editing an existing lead happens in the record panel,
+    // which patches one validated field at a time.
+    expect(editor).toContain('New lead')
+    expect(editor).not.toContain('Edit lead')
   })
 })
 

@@ -19,7 +19,7 @@ import {
 import { formatCurrency } from '@/lib/format'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import { cn } from '@/lib/utils'
-import type { LeadListRow } from '@/lib/leads/viewTypes'
+import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 
 const DRAG_TYPE = 'text/lead-id'
 
@@ -34,6 +34,7 @@ interface LeadsBoardProps {
   openMenuLeadId?: string | null
   onMenuOpenChange?: (leadId: string, open: boolean) => void
   onEdit: (lead: LeadListRow) => void
+  onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
@@ -86,6 +87,7 @@ export function LeadsBoard({
   openMenuLeadId = null,
   onMenuOpenChange,
   onEdit,
+  onStatusChange,
   onSendIntake,
   onSendEngagement,
   onHire,
@@ -176,6 +178,7 @@ export function LeadsBoard({
                     onMenuOpenChange={onMenuOpenChange}
                     onActivate={onActivate}
                     onEdit={onEdit}
+                    onStatusChange={onStatusChange}
                     onSendIntake={onSendIntake}
                     onSendEngagement={onSendEngagement}
                     onHire={onHire}
@@ -203,6 +206,7 @@ function BoardCard({
   onMenuOpenChange,
   onActivate,
   onEdit,
+  onStatusChange,
   onSendIntake,
   onSendEngagement,
   onHire,
@@ -219,6 +223,7 @@ function BoardCard({
   onMenuOpenChange?: (leadId: string, open: boolean) => void
   onActivate: (lead: LeadListRow) => void
   onEdit: (lead: LeadListRow) => void
+  onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
@@ -277,6 +282,7 @@ function BoardCard({
               ? { open: menuOpen, onOpenChange: (open: boolean) => onMenuOpenChange(lead.id, open) }
               : {})}
             onEdit={onEdit}
+            onStatusChange={onStatusChange}
             onSendIntake={onSendIntake}
             onSendEngagement={onSendEngagement}
             onHire={onHire}

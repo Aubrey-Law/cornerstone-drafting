@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Columns3, Plus, Table2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { normalizePracticeArea, PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
+import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
 import {
   EMPTY_LEAD_TABLE_FILTERS,
   filterAndSortLeads,
@@ -111,10 +111,9 @@ export function LeadsClient({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingLead, setEditingLead] = useState<LeadRow | null>(null)
   const [saving, setSaving] = useState(false)
   const [busyLeadId, setBusyLeadId] = useState<string | null>(null)
-  const [form, setForm] = useState<LeadEditorForm>({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
+  const [form, setForm] = useState<LeadEditorForm>({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
   const [filter, setFilter] = useState<LeadFilter>('open')
   const [cardFilter, setCardFilter] = useState<LeadCardFilter | null>(null)
   const [tableFilters, setTableFilters] = useState<LeadTableFilters>(EMPTY_LEAD_TABLE_FILTERS)
@@ -276,22 +275,11 @@ export function LeadsClient({
   }
 
   const openCreate = () => {
-    setEditingLead(null)
-    setForm({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '', status: 'lead' })
+    setForm({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
     setDialogOpen(true)
   }
-  const openEdit = (lead: LeadRow) => {
-    setEditingLead(lead)
-    setForm({
-      name: leadName(lead) === lead.email ? '' : leadName(lead),
-      email: lead.email ?? '',
-      phone: lead.phone ?? '',
-      practiceArea: normalizePracticeArea(lead.practice_area),
-      fee: lead.engagement_fee_quoted != null ? String(lead.engagement_fee_quoted) : '',
-      status: lead.lead_status ?? 'lead',
-    })
-    setDialogOpen(true)
-  }
+  /** Editing happens in the record panel, which patches one validated field at a time. */
+  const openEdit = (lead: LeadRow) => selectLead(lead.id)
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.email.trim()) {
@@ -308,20 +296,8 @@ export function LeadsClient({
         practiceArea: form.practiceArea,
         feeQuoted: fee === '' ? null : Number(fee),
       }
-      if (editingLead) {
-        payload.leadStatus = form.status
-        const res = await fetch(`/api/admin/leads/${editingLead.id}`, {
-          method: 'PATCH',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
-        if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Could not save lead')
-        toast.success('Lead updated')
-      } else {
-        await authedPost('/api/admin/leads', payload)
-        toast.success('Lead added')
-      }
+      await authedPost('/api/admin/leads', payload)
+      toast.success('Lead added')
       setDialogOpen(false)
       router.refresh()
     } catch (e) {
@@ -616,6 +592,7 @@ export function LeadsClient({
               openMenuLeadId={openMenuLeadId}
               onMenuOpenChange={(leadId, open) => setOpenMenuLeadId(open ? leadId : null)}
               onEdit={openEdit}
+              onStatusChange={(lead, status) => void handleStatusChange(lead, status)}
               onSendIntake={lead => void handleSendIntake(lead)}
               onSendEngagement={setEngagementLead}
               onHire={setConvertTarget}
@@ -639,6 +616,7 @@ export function LeadsClient({
               onToggleAll={toggleAll}
               onToggleSelected={toggleSelected}
               onEdit={openEdit}
+              onStatusChange={(lead, status) => void handleStatusChange(lead, status)}
               onSendIntake={lead => void handleSendIntake(lead)}
               onSendEngagement={setEngagementLead}
               onHire={setConvertTarget}
@@ -661,7 +639,6 @@ export function LeadsClient({
 
       <LeadEditorDialog
         open={dialogOpen}
-        editingLead={editingLead}
         form={form}
         saving={saving}
         onOpenChange={setDialogOpen}
