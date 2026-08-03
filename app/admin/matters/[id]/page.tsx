@@ -222,7 +222,8 @@ export default async function MatterDetailPage({ params }: Params) {
   const admin = getAdminClient()
   const id = await resolveMatterId(rawId, admin)
   const [matter, contacts, agingSummary] = await Promise.all([
-    fetchMatter(id),
+    // A lead is a matter here; without this the page 404s on every one of them.
+    fetchMatter(id, { includeLeads: true }),
     fetchMatterContacts(id),
     fetchMatterAgingSummary(id),
   ])
