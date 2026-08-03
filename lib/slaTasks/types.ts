@@ -88,6 +88,12 @@ export const SLA_OPEN_STATUSES: SlaTaskStatus[] = ['pending', 'active', 'blocked
 export const SLA_ANCHORS = ['discovery_call', 'pmps'] as const
 export type SlaAnchor = (typeof SLA_ANCHORS)[number]
 
+/**
+ * Every clock a task can hang off, including Day 0. Stored as `relative_to`,
+ * where null means the engagement signature.
+ */
+export type SlaClockAnchor = SlaAnchor | 'engagement'
+
 /** Resolved anchor dates for one matter. Absent or null = not yet known. */
 export interface SlaAnchorDates {
   /** Day 0. Falls back to the generation start date when unsigned. */

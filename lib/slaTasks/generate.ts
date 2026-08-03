@@ -4,11 +4,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { normalizePracticeArea } from '@/lib/practiceArea'
-import { buildMatterTaskInserts, isDateKey, parseTemplateTasks } from './schedule'
+import { buildMatterTaskInserts, isDateKey, parseTemplateTasks, rescheduleForAnchor } from './schedule'
 import {
   MATTER_TASK_COLUMNS,
   type MatterTaskRow,
   type SlaAnchorDates,
+  type SlaClockAnchor,
   type SlaGate,
   type SlaTemplateRow,
   type SlaVariant,
@@ -84,7 +85,7 @@ export async function generateMatterTasks(
   options: GenerateOptions,
 ): Promise<GenerateResult> {
   const { matterId, replace = false } = options
-  const templateName = options.templateName?.trim() || ESTATE_PLANNING_SLA
+  const templateName = options.templateName?.trim() || ESTATE_PLANNING_SLA_V3
   const startDate = options.startDate?.trim() || firmTodayKey()
 
   if (!isDateKey(startDate)) {
@@ -163,7 +164,7 @@ export async function ensureEstatePlanningSlaTasks(
     if (normalizePracticeArea(options.practiceArea) === 'Probate') return
     const result = await generateMatterTasks(getAdminClient(), {
       matterId,
-      templateName: ESTATE_PLANNING_SLA,
+      templateName: ESTATE_PLANNING_SLA_V3,
       startDate: options.startDate ?? firmTodayKey(),
     })
     if (!result.ok) {
@@ -172,4 +173,73 @@ export async function ensureEstatePlanningSlaTasks(
   } catch (e) {
     console.warn('[sla-tasks] generation failed for matter', matterId, e)
   }
+}
+
+/**
+ * Kick off the SLA for a lead's opportunity.
+ *
+ * A lead already owns a `matters` row, so its checklist lives in the same place
+ * a hired matter's does — there is no separate lead task engine. Almost every
+ * task starts undated: the pre-engagement ones wait on the discovery call and
+ * the PMPS date, and the Day-0 ones wait on the engagement signature. They still
+ * belong on the plan, because the firm's next action is visible from the
+ * checklist long before any of those dates exist.
+ */
+export async function ensureLeadSlaTasks(matterId: string): Promise<void> {
+  try {
+    const result = await generateMatterTasks(getAdminClient(), {
+      matterId,
+      templateName: ESTATE_PLANNING_SLA_V3,
+      startDate: firmTodayKey(),
+    })
+    if (!result.ok) {
+      console.warn('[sla-tasks] lead generation skipped for matter', matterId, result.error)
+    }
+  } catch (e) {
+    console.warn('[sla-tasks] lead generation failed for matter', matterId, e)
+  }
+}
+
+export interface ApplyAnchorResult {
+  ok: boolean
+  updated: number
+  error?: string
+}
+
+/**
+ * Date the tasks waiting on `anchor` now that it has happened — the client books
+ * the PMPS, or signs and starts the firm clock.
+ *
+ * Recomputed from each task's stored offsets rather than shifted, so re-running
+ * after the date moves again is idempotent rather than cumulative.
+ */
+export async function applySlaAnchor(
+  admin: SupabaseClient,
+  matterId: string,
+  anchor: SlaClockAnchor,
+  anchorDate: string,
+): Promise<ApplyAnchorResult> {
+  if (!isDateKey(anchorDate)) {
+    return { ok: false, updated: 0, error: 'anchor date must be a calendar date (YYYY-MM-DD)' }
+  }
+
+  const { data, error } = await admin
+    .from('matter_tasks')
+    .select(MATTER_TASK_COLUMNS)
+    .eq('matter_id', matterId)
+  if (error) return { ok: false, updated: 0, error: error.message }
+
+  const updates = rescheduleForAnchor((data ?? []) as unknown as MatterTaskRow[], anchor, anchorDate)
+  for (const update of updates) {
+    const { error: updateError } = await admin
+      .from('matter_tasks')
+      .update({
+        due_date: update.due_date,
+        nudge_date: update.nudge_date,
+        escalation_date: update.escalation_date,
+      })
+      .eq('id', update.id)
+    if (updateError) return { ok: false, updated: 0, error: updateError.message }
+  }
+  return { ok: true, updated: updates.length }
 }
