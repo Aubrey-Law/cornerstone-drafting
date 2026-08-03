@@ -1,0 +1,58 @@
+import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/apiAuth'
+import { getAdminClient } from '@/lib/supabaseAdmin'
+import { fetchMatterTasks } from '@/lib/slaTasks/queries'
+import { summarizeSlaProgress } from '@/lib/slaTasks/schedule'
+import { isSlaTaskStatus, type SlaTaskStatus } from '@/lib/slaTasks/types'
+
+/**
+ * GET /api/matters/[matterId]/tasks — the matter's SLA checklist, earliest due
+ * first, with the phase/progress summary the tasks tab renders above it.
+ *
+ * `?status=pending,active` narrows the list. The summary is always computed
+ * from the unfiltered set, so "8 of 21 complete" stays true while you filter.
+ */
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ matterId: string }> },
+) {
+  const auth = await requireAdmin(req)
+  if (auth.err) return auth.err
+
+  const { matterId } = await params
+  const statusParam = new URL(req.url).searchParams.get('status')
+  const statuses = (statusParam?.split(',') ?? [])
+    .map(value => value.trim())
+    .filter(isSlaTaskStatus) as SlaTaskStatus[]
+
+  const admin = getAdminClient()
+  try {
+    const allTasks = await fetchMatterTasks(admin, matterId)
+    const templateId = allTasks.find(task => task.template_id)?.template_id ?? null
+
+    // The target is a property of the template the matter was generated from,
+    // not of the tasks, so it takes a second read to compute "days remaining".
+    let targetDays: number | null = null
+    if (templateId) {
+      const { data } = await admin
+        .from('sla_task_templates')
+        .select('target_days')
+        .eq('id', templateId)
+        .maybeSingle()
+      targetDays = (data?.target_days as number | undefined) ?? null
+    }
+
+    const tasks =
+      statuses.length > 0 ? allTasks.filter(task => statuses.includes(task.status)) : allTasks
+
+    return NextResponse.json({
+      tasks,
+      progress: summarizeSlaProgress(allTasks, { targetDays }),
+    })
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Could not load matter tasks' },
+      { status: 500 },
+    )
+  }
+}
