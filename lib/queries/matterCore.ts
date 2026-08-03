@@ -25,6 +25,14 @@ function normalizeFlags(m: PipelineMatter): PipelineMatter {
 export const PIPELINE_MATTER_COLUMNS =
   'matter_id, matter_name, stage, status, flags, matter_created, client_name, client_email, client_phone, client_dob, client_address, spouse_name, spouse_email, spouse_phone, spouse_dob, spouse_address, plan_type, marital_status, has_minor_children, taxable_estate, intake_status, intake_sent_at, design_status, intake_submitted_at, drafts_sent_at, signing_date, documents_executed_at, next_appointment, next_appointment_type, practice_area, referral_source, fee_amount, opened_at, client_status' as const
 
+/**
+ * The consolidated view's columns. Kept separate from PIPELINE_MATTER_COLUMNS
+ * because `v_matter_pipeline` does not have these two — selecting them from it
+ * would error for every one of its other callers.
+ */
+export const PIPELINE_MATTER_ALL_COLUMNS =
+  `${PIPELINE_MATTER_COLUMNS}, relationship_status, matter_number` as const
+
 function addressFromIntake(row: Record<string, unknown> | null | undefined): string | null {
   if (!row) return null
   const street = [row.address_line1, row.address_line2].filter(Boolean).join(' ').trim()

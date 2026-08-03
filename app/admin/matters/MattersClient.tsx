@@ -166,7 +166,12 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   }, [matters])
 
   const hasActiveFilters = useMemo(() => {
-    return Boolean(filters.search.trim() || filters.practice !== 'all' || filters.stageGroup !== 'all')
+    return Boolean(
+      filters.search.trim()
+      || filters.practice !== 'all'
+      || filters.stageGroup !== 'all'
+      || filters.lifecycle !== EMPTY_MATTER_TABLE_FILTERS.lifecycle,
+    )
   }, [filters])
 
   const filtered = useMemo(
@@ -445,6 +450,21 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
               </button>
             </div>
             <Select
+              value={filters.lifecycle}
+              onValueChange={value => updateFilter('lifecycle', value as MatterTableFilters['lifecycle'])}
+            >
+              <SelectTrigger size="sm" className="w-40" aria-label="Filter by lifecycle">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">Open · Leads + hired</SelectItem>
+                <SelectItem value="lead">Leads</SelectItem>
+                <SelectItem value="hired">Hired</SelectItem>
+                <SelectItem value="closed">Lost + declined</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
               value={filters.practice}
               onValueChange={value => updateFilter('practice', value)}
             >
@@ -572,6 +592,13 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
                           <span className="ml-1.5 text-[11px] text-muted-foreground">
                             {m.matter_number}
                           </span>
+                        )}
+                        {/* A lead has no matter number yet, so name the lifecycle
+                            instead of leaving the row looking like an unnumbered matter. */}
+                        {m.relationship_status && m.relationship_status !== 'hired' && (
+                          <Badge variant="outline" className="ml-1.5 text-[10px] capitalize">
+                            {m.relationship_status}
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
