@@ -24,7 +24,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { data: matter } = await admin
-    .from('v_matter_pipeline')
+    // Consolidated view: an engagement is sent to a lead, so the hired-only
+    // view would find nothing for exactly the matters that need this.
+    .from('v_matter_pipeline_all')
     .select('matter_id, client_name, client_email, spouse_name, spouse_email, practice_area, fee_amount')
     .eq('matter_id', matterId)
     .maybeSingle()
