@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
+import { ensureEstatePlanningSlaTasks } from '@/lib/slaTasks/generate'
 
 /**
  * Hire the opportunity matter linked to an intake, carrying over the quoted
@@ -89,6 +90,11 @@ export async function createMatterFromIntake(
   } catch (e) {
     console.warn('design sheet seed on lead conversion skipped:', e)
   }
+
+  // The engagement being signed is what starts the SLA clock, and this is the
+  // path the e-sign webhook takes. Idempotent, so a re-fired webhook or a
+  // manual hire after the fact does not duplicate the checklist.
+  await ensureEstatePlanningSlaTasks(matterId, { practiceArea })
 
   try {
     if (conversion.created) await admin.from('matter_activity').insert({

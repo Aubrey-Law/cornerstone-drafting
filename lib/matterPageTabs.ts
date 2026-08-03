@@ -1,6 +1,9 @@
 export const MATTER_TABS = [
   'overview',
   'tasks',
+  // The dated SLA checklist generated from a task template. Distinct from
+  // `tasks`, which is the ad-hoc unified task queue.
+  'sla',
   'people',
   'assets',
   'documents',

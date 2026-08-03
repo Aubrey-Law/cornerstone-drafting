@@ -11,6 +11,8 @@ export const EMAIL_CATEGORIES = [
   'appointment_reminder',
   'appointment_missed_followup',
   'scheduling_link',
+  'sla_task_nudge',
+  'sla_task_internal_reminder',
   'manual',
 ] as const
 
@@ -103,6 +105,19 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     label: 'Scheduling link',
     description: 'Sent to a client or lead with a Calendly link to book an appointment.',
     recipient: 'client',
+  },
+  sla_task_nudge: {
+    category: 'sla_task_nudge',
+    label: 'SLA task nudge',
+    description:
+      'Sent to a client when an SLA task they own reaches its nudge or escalation date without a response.',
+    recipient: 'client',
+  },
+  sla_task_internal_reminder: {
+    category: 'sla_task_internal_reminder',
+    label: 'SLA task internal reminder',
+    description: 'Sent to the firm when an attorney-owned SLA task reaches its nudge date.',
+    recipient: 'internal',
   },
   manual: {
     category: 'manual',

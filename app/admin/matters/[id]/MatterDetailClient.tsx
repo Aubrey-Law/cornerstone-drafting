@@ -82,6 +82,7 @@ import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
 import { MatterCommunicationsTab } from './tabs/messages'
 import { MatterBillingTab } from './tabs/billing'
+import { MatterSlaTab } from './tabs/sla'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
@@ -299,6 +300,7 @@ function MatterDetailClientInner({
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
+  const [slaTabVisited, setSlaTabVisited] = useState(false)
   const [factsRailOpen, setFactsRailOpen] = useState(false)
 
   useEffect(() => {
@@ -405,6 +407,7 @@ function MatterDetailClientInner({
   useEffect(() => {
     if (activeTab === 'assets') setAssetsTabVisited(true)
     if (activeTab === 'billing') setBillingTabVisited(true)
+    if (activeTab === 'sla') setSlaTabVisited(true)
   }, [activeTab])
 
   useEffect(() => {
@@ -860,6 +863,7 @@ function MatterDetailClientInner({
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="sla">SLA plan</TabsTrigger>
                 <TabsTrigger value="people">People</TabsTrigger>
                 <TabsTrigger value="assets">Assets</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -978,6 +982,8 @@ function MatterDetailClientInner({
                   onTasksChanged={() => void taskCounts.refresh()}
                 />
               </TabsContent>
+
+              <MatterSlaTab matterId={matterId} enabled={slaTabVisited} />
 
               <MatterPeopleTab
                 matterId={matterId}
