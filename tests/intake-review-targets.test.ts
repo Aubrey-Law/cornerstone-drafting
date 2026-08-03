@@ -91,6 +91,31 @@ describe('contacts-backed readiness flags', () => {
   })
 })
 
+// Every reader of a raw client_intake row must hydrate before it evaluates or
+// forwards spouse / children / fiduciary data, since those columns were dropped.
+describe('raw client_intake readers hydrate contacts', () => {
+  const CALLERS: Array<[file: string, hydrator: string]> = [
+    ['app/actions/adminIntake.ts', 'hydrateIntakeWithContacts'],
+    ['lib/calendarAttention.ts', 'applyContactIntakeData'],
+    ['app/api/admin/works/runs/route.ts', 'hydrateIntakeWithContacts'],
+    ['app/api/intake/route.ts', 'hydrateIntakeWithContacts'],
+    ['lib/adminChat/engine.ts', 'loadSpouseContact'],
+  ]
+
+  it.each(CALLERS)('%s hydrates via %s', (file, hydrator) => {
+    const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8')
+    expect(source).toContain("select('*')")
+    expect(source).toContain(hydrator)
+  })
+
+  it('reads intake contacts in one batch on the calendar attention path', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'lib/calendarAttention.ts'), 'utf8')
+    // Per-appointment hydration would issue a query per row in the loop.
+    expect(source).toContain(".in('client_intake_id', intakeIds)")
+    expect(source).toContain('contactsByIntake.get(row.id) ?? []')
+  })
+})
+
 describe('admin intake review flag computation', () => {
   const source = fs.readFileSync(path.join(process.cwd(), 'app/actions/adminIntake.ts'), 'utf8')
 
