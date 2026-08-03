@@ -201,8 +201,9 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     temp_guardian_successor:        null,
     temp_guardian_second_successor: null,
     // Spouse — executor / PR
-    spouse_pr_primary:   get('executor', 'spouse', 1),
-    spouse_pr_successor: get('executor', 'spouse', 2),
+    spouse_pr_primary:    get('executor', 'spouse', 1),
+    spouse_pr_co_primary: get('executor', 'spouse', 1, true),
+    spouse_pr_successor:  get('executor', 'spouse', 2),
     // Spouse — DPOA / POA
     spouse_dpoa_primary:   get('poa', 'spouse', 1),
     spouse_dpoa_successor: get('poa', 'spouse', 2),
@@ -215,6 +216,7 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     spouse_hcp_successor_relationship: getRel('hcp', 'spouse', 2),
     // Spouse — trustee
     spouse_trustee_successor: get('trustee', 'spouse', 2),
+    spouse_trustee_co:        get('trustee', 'spouse', 2, true),
   }
 }
 
@@ -320,6 +322,7 @@ export function overlayDesignSheetFiduciarySlots(
 
   const spouseExecutor = getDesignSlots(designSheet, 'spouse_executor_slots')
   applyName('spouse_pr_primary', spouseExecutor, 0)
+  applyName('spouse_pr_co_primary', spouseExecutor, 0, true)
   applyName('spouse_pr_successor', spouseExecutor, 1)
 
   const spousePoa = getDesignSlots(designSheet, 'spouse_poa_slots')
@@ -336,6 +339,7 @@ export function overlayDesignSheetFiduciarySlots(
 
   const spouseTrustee = getDesignSlots(designSheet, 'spouse_trustee_slots')
   applyName('spouse_trustee_successor', spouseTrustee, 0)
+  applyName('spouse_trustee_co', spouseTrustee, 0, true)
 
   return next
 }
@@ -370,6 +374,7 @@ export function emptyFiduciarySlots(): DraftPayload['fiduciaries'] {
     temp_guardian_successor: null,
     temp_guardian_second_successor: null,
     spouse_pr_primary: null,
+    spouse_pr_co_primary: null,
     spouse_pr_successor: null,
     spouse_dpoa_primary: null,
     spouse_dpoa_successor: null,
@@ -380,6 +385,7 @@ export function emptyFiduciarySlots(): DraftPayload['fiduciaries'] {
     spouse_hcp_successor_address: null,
     spouse_hcp_successor_relationship: null,
     spouse_trustee_successor: null,
+    spouse_trustee_co: null,
   }
 }
 

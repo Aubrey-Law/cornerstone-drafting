@@ -107,6 +107,7 @@ export interface DraftPayload {
     temp_guardian_successor: string | null
     temp_guardian_second_successor: string | null
     spouse_pr_primary: string | null
+    spouse_pr_co_primary: string | null
     spouse_pr_successor: string | null
     spouse_dpoa_primary: string | null
     spouse_dpoa_successor: string | null
@@ -117,6 +118,7 @@ export interface DraftPayload {
     spouse_hcp_successor_address: string | null
     spouse_hcp_successor_relationship: string | null
     spouse_trustee_successor: string | null
+    spouse_trustee_co: string | null
   }
   documents: {
     include_trust: boolean

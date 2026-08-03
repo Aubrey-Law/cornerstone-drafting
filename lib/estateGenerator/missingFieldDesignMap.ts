@@ -7,6 +7,11 @@ import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 // column whose input renders `id="design-field-<col>"`; null means scroll to the
 // section (used for fiduciary slot pickers and array/structural fields that have
 // no single focusable input).
+//
+// Every person's *name* is assigned in Fiduciary Role Assignment — Trust Details
+// and Will Details only hold that role's provisions. Pointing a name at the
+// provisions section sends the attorney somewhere the field does not exist, so
+// they "fix" it and the preflight still reports it blank.
 
 export interface MissingFieldTarget {
   path: string
@@ -44,53 +49,87 @@ const EXACT: Record<string, Entry> = {
   'young_adult.parent1.full_name': { label: 'Young-adult plan parent', sectionId: S.familyInformation, targetField: null },
 
   'trust.name': { label: 'Trust name', sectionId: S.trustDetails, targetField: 'trust_name' },
+  'trust.display_name': { label: 'Trust name', sectionId: S.trustDetails, targetField: 'trust_name' },
   'trust.date': { label: 'Trust date', sectionId: S.trustDetails, targetField: 'trust_date' },
   'trust.descendants_distribution.method': { label: 'Distribution method', sectionId: S.trustDetails, targetField: 'distribution_method' },
   'trust.tangible_personal_property.distribution_method': { label: 'Tangible property distribution', sectionId: S.estatePlanDesign, targetField: 'tangible_property_distribution' },
-  'trust.contingent_beneficiary.full_name': { label: 'Contingent beneficiary', sectionId: S.familyInformation, targetField: null },
+  'trust.contingent_beneficiary.full_name': { label: 'Contingent beneficiary', sectionId: S.willDetails, targetField: 'single_beneficiary_remainder' },
   'trust.remote_beneficiaries.individuals': { label: 'Remote beneficiaries', sectionId: S.familyInformation, targetField: 'remote_beneficiary' },
 
-  'fiduciaries.trustee.primary.full_name': { label: 'Trustee', sectionId: S.trustDetails, targetField: null },
-  'fiduciaries.trustee.co_primary.full_name': { label: 'Co-trustee', sectionId: S.trustDetails, targetField: null },
-  'fiduciaries.trustee.successor.full_name': { label: 'Successor trustee', sectionId: S.trustDetails, targetField: null },
-  'fiduciaries.trustee.second_successor.full_name': { label: 'Second successor trustee', sectionId: S.trustDetails, targetField: null },
+  'fiduciaries.trustee.primary.full_name': { label: 'Trustee', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.trustee.co_primary.full_name': { label: 'Co-trustee', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.trustee.successor.full_name': { label: 'Successor trustee', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.trustee.co_successor.full_name': { label: 'Co-successor trustee', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.trustee.second_successor.full_name': { label: 'Second successor trustee', sectionId: S.fiduciaries, targetField: null },
   'fiduciaries.trustee.co_trustees_action': { label: 'Co-trustee decision standard', sectionId: S.trustDetails, targetField: 'cotrustee_decision_standard' },
 
-  'fiduciaries.executor.primary.full_name': { label: 'Executor / Personal Representative', sectionId: S.willDetails, targetField: null },
-  'fiduciaries.testamentary_trustee.primary.full_name': { label: 'Testamentary trustee', sectionId: S.willDetails, targetField: null },
+  'fiduciaries.executor.primary.full_name': { label: 'Executor / Personal Representative', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.executor.co_primary.full_name': { label: 'Co-Executor / Co-Personal Representative', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.executor.successor.full_name': { label: 'Successor Personal Representative', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.testamentary_trustee.primary.full_name': { label: 'Testamentary trustee', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.testamentary_trustee.co_primary.full_name': { label: 'Co-testamentary trustee', sectionId: S.fiduciaries, targetField: null },
   'testamentary_trust.beneficiary_structure': { label: 'Testamentary trust beneficiary structure', sectionId: S.willDetails, targetField: 'beneficiary_structure' },
-  'guardians.primary.full_name': { label: 'Guardian for minor children', sectionId: S.willDetails, targetField: null },
+  'testamentary_trust.age_distribution_schedule': { label: 'Age distribution schedule', sectionId: S.willDetails, targetField: 'age_distribution_schedule' },
+  'testamentary_trust.single_beneficiary.full_name': { label: 'Single beneficiary', sectionId: S.willDetails, targetField: 'single_beneficiary_name' },
+  'testamentary_trust.remainder_beneficiary.full_name': { label: 'Remainder beneficiary', sectionId: S.willDetails, targetField: 'single_beneficiary_remainder' },
+  'testamentary_trust.trust_protector.full_name': { label: 'Trust protector', sectionId: S.willDetails, targetField: 'trust_protector_name' },
+  'pour_over.alternate_named.full_name': { label: 'Named alternate beneficiary (pour-over will)', sectionId: S.willDetails, targetField: 'pour_over_alternate_named' },
+  'outright_will.residuary.named.full_name': { label: 'Named residuary beneficiary', sectionId: S.willDetails, targetField: 'outright_residuary_named' },
+  'outright_will.residuary.alternate.full_name': { label: 'Alternate residuary beneficiary', sectionId: S.willDetails, targetField: 'outright_residuary_alternate' },
 
-  'fiduciaries.agent.primary.full_name': { label: 'Financial agent (POA)', sectionId: S.financialPoa, targetField: null },
+  'guardians.primary.full_name': { label: 'Guardian for minor children', sectionId: S.fiduciaries, targetField: null },
+  'guardians.successor.full_name': { label: 'Successor guardian', sectionId: S.fiduciaries, targetField: null },
+  'guardians.temporary.full_name': { label: 'Temporary guardian', sectionId: S.fiduciaries, targetField: null },
 
-  'healthcare.agent.primary.full_name': { label: 'Health care agent', sectionId: S.healthcareDirectives, targetField: null },
-  'healthcare.agent.primary.address': { label: 'Health care agent address', sectionId: S.healthcareDirectives, targetField: null },
-  'healthcare.agent.primary.phone': { label: 'Health care agent phone', sectionId: S.healthcareDirectives, targetField: null },
-  'healthcare.agent.primary.relationship': { label: 'Health care agent relationship', sectionId: S.healthcareDirectives, targetField: null },
-  'healthcare.agent.alternate.full_name': { label: 'Alternate health care agent', sectionId: S.healthcareDirectives, targetField: null },
+  'fiduciaries.agent.primary.full_name': { label: 'Financial agent (POA)', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.agent.co_primary.full_name': { label: 'Co-agent (POA)', sectionId: S.fiduciaries, targetField: null },
+  'fiduciaries.agent.successor.full_name': { label: 'Successor financial agent (POA)', sectionId: S.fiduciaries, targetField: null },
+
+  'healthcare.agent.primary.full_name': { label: 'Health care agent', sectionId: S.fiduciaries, targetField: null },
+  'healthcare.agent.primary.address': { label: 'Health care agent address', sectionId: S.contactsFiduciaries, targetField: null },
+  'healthcare.agent.primary.phone': { label: 'Health care agent phone', sectionId: S.contactsFiduciaries, targetField: null },
+  'healthcare.agent.primary.relationship': { label: 'Health care agent relationship', sectionId: S.contactsFiduciaries, targetField: null },
+  'healthcare.agent.alternate.full_name': { label: 'Alternate health care agent', sectionId: S.fiduciaries, targetField: null },
+
+  'assets.items': { label: 'Asset schedule', sectionId: S.assetSchedules, targetField: null },
+  'homestead.beneficiary_names': { label: 'Homestead beneficiaries', sectionId: S.transfersAssignments, targetField: null },
+  'homestead.property_address_line': { label: 'Homestead property address', sectionId: S.transfersAssignments, targetField: null },
 }
 
 // Prefix → section for paths not in EXACT (new/renamed generator fields degrade
-// to a section-level link rather than breaking the checklist).
+// to a section-level link rather than breaking the checklist). Fiduciary and
+// guardian names all live in Fiduciary Role Assignment, not in the sections that
+// hold each role's provisions.
 const PREFIXES: Array<[string, string]> = [
-  ['fiduciaries.trustee.', S.trustDetails],
-  ['fiduciaries.testamentary_trustee.', S.willDetails],
-  ['fiduciaries.executor.', S.willDetails],
-  ['fiduciaries.agent.', S.financialPoa],
-  ['guardians.', S.willDetails],
+  ['fiduciaries.', S.fiduciaries],
+  ['guardians.', S.fiduciaries],
+  ['healthcare.agent.', S.fiduciaries],
   ['healthcare.', S.healthcareDirectives],
+  ['pour_over.', S.willDetails],
+  ['outright_will.', S.willDetails],
   ['testamentary_trust.', S.willDetails],
+  ['will.', S.willDetails],
   ['trust.', S.trustDetails],
   ['client.', S.clientInformation],
   ['execution.', S.estatePlanDesign],
   ['spouse.', S.clientInformation],
   ['children', S.familyInformation],
   ['young_adult.', S.familyInformation],
+  ['assets.', S.assetSchedules],
+  ['homestead.', S.transfersAssignments],
 ]
 
 function humanize(path: string): string {
-  const last = path.replace(/\[\]/g, '').split('.').pop() ?? path
-  return last.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  const parts = path.replace(/\[\]/g, '').split('.')
+  // Every person path ends in `full_name`, so using only the last segment turns
+  // them all into an indistinguishable "Full Name". Keep the role instead.
+  const meaningful = parts.at(-1) === 'full_name' && parts.length > 1
+    ? parts.slice(Math.max(0, parts.length - 3), -1)
+    : parts.slice(-1)
+  return meaningful
+    .join(' ')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
 }
 
 function sectionLabel(sectionId: string): string {
@@ -114,6 +153,22 @@ export function designTargetForMissingField(path: string): MissingFieldTarget {
     sectionLabel: sectionLabel(S.estatePlanDesign),
     targetField: null,
   }
+}
+
+/**
+ * Adds the person a blank field belongs to, so a field that is filled in for the
+ * client but blank on a companion package reads as the companion's gap instead
+ * of looking like the client's own field is still empty.
+ */
+export function missingFieldDisplayLabel(
+  label: string,
+  subjectKind: 'client' | 'spouse' | 'young-adult',
+  subjectName: string | null,
+): string {
+  if (subjectKind === 'client') return label
+  const who = subjectName?.trim()
+  if (subjectKind === 'spouse') return `${label} — ${who ? `${who}'s` : 'spouse'} documents`
+  return `${label} — ${who ? `${who}'s` : 'young adult'} documents`
 }
 
 /** True when a section id is one the design sheet actually renders. */

@@ -89,6 +89,7 @@ function payload(overrides: {
       temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
+      spouse_pr_co_primary: null,
       spouse_pr_primary: 'Spouse PR',
       spouse_pr_successor: 'Spouse PR Alt',
       spouse_dpoa_primary: 'Spouse POA',
@@ -100,6 +101,7 @@ function payload(overrides: {
       spouse_hcp_successor_address: '4 Care Way',
       spouse_hcp_successor_relationship: 'Child',
       spouse_trustee_successor: null,
+      spouse_trustee_co: null,
     },
     documents: {
       include_trust: true,
