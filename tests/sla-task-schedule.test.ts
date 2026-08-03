@@ -8,6 +8,7 @@ import {
   isDateKey,
   parseTemplateTask,
   parseTemplateTasks,
+  rescheduleForAnchor,
   shiftDownstreamTasks,
   summarizeSlaProgress,
 } from '@/lib/slaTasks/schedule'
@@ -33,6 +34,13 @@ function templateTask(overrides: Partial<SlaTemplateTask> = {}): SlaTemplateTask
     auto: false,
     conditional: false,
     pauses_clock: false,
+    relative_to: null,
+    pre_engagement: false,
+    gate: null,
+    extends_target_days: null,
+    recurring_interval_days: null,
+    variant: null,
+    triggers_day_zero: false,
     ...overrides,
   }
 }
@@ -55,6 +63,17 @@ function matterTask(overrides: Partial<MatterTaskRow> = {}): MatterTaskRow {
     nudge_tier: null,
     escalation_date: null,
     escalation_tier: null,
+    due_offset_days: 7,
+    nudge_offset_days: null,
+    escalation_offset_days: null,
+    relative_to: null,
+    pre_engagement: false,
+    auto: false,
+    gate: null,
+    extends_target_days: null,
+    recurring_interval_days: null,
+    variant: null,
+    triggers_day_zero: false,
     status: 'pending',
     completed_at: null,
     skipped_at: null,
@@ -97,10 +116,18 @@ describe('date keys', () => {
 })
 
 describe('parseTemplateTask', () => {
-  it('drops entries with no name or no due offset', () => {
-    expect(parseTemplateTask({ name: 'x' })).toBeNull()
+  it('drops entries with no name', () => {
     expect(parseTemplateTask({ due_offset_days: 3 })).toBeNull()
     expect(parseTemplateTask(null)).toBeNull()
+  })
+
+  it('keeps a named entry with no due offset', () => {
+    // On the soft clock the firm sets no deadline for "lead schedules a
+    // discovery call" — the task is real, the date is the client's to make.
+    expect(parseTemplateTask({ name: 'Lead schedules call' })).toMatchObject({
+      name: 'Lead schedules call',
+      due_offset_days: null,
+    })
   })
 
   it('keeps a nudge tier only when there is a nudge date to act on', () => {
@@ -259,5 +286,143 @@ describe('summarizeSlaProgress', () => {
   it('holds on the last phase once everything is resolved', () => {
     const done = tasks.map(task => ({ ...task, status: 'completed' as const }))
     expect(summarizeSlaProgress(done, { today: '2026-03-10' }).currentPhase).toBe('signing')
+  })
+})
+
+describe('dual clock', () => {
+  const anchors = { engagement: '2026-04-01', discovery_call: '2026-03-01', pmps: '2026-03-12' }
+
+  it('dates each task off its own anchor', () => {
+    const rows = buildMatterTaskInserts(
+      [
+        templateTask({ name: 'Hold discovery call', due_offset_days: 0, relative_to: 'discovery_call' }),
+        // Negative offsets run backwards from the anchor: the organizer is due
+        // the day before the session.
+        templateTask({ name: 'Organizer', due_offset_days: -1, relative_to: 'pmps' }),
+        templateTask({ name: 'Client approves design', due_offset_days: 7 }),
+      ],
+      { matterId: 'matter-1', templateId: 'template-1', startDate: '2026-02-20', anchors },
+    )
+
+    expect(rows.map(row => row.due_date)).toEqual(['2026-03-01', '2026-03-11', '2026-04-08'])
+  })
+
+  it('falls back to the start date for Day 0 before the engagement is signed', () => {
+    const [row] = buildMatterTaskInserts([templateTask({ due_offset_days: 7 })], {
+      matterId: 'matter-1',
+      templateId: null,
+      startDate: '2026-02-20',
+      anchors: { discovery_call: '2026-03-01' },
+    })
+    expect(row.due_date).toBe('2026-02-27')
+  })
+
+  it('leaves a task undated while its anchor is unknown', () => {
+    const [row] = buildMatterTaskInserts(
+      [
+        templateTask({
+          due_offset_days: -1,
+          nudge_offset_days: -3,
+          nudge_tier: 'gentle',
+          relative_to: 'pmps',
+        }),
+      ],
+      { matterId: 'matter-1', templateId: null, startDate: '2026-02-20', anchors: {} },
+    )
+    expect(row.due_date).toBeNull()
+    expect(row.nudge_date).toBeNull()
+    // The offsets survive so the task can be dated once the PMPS is booked.
+    expect(row.due_offset_days).toBe(-1)
+    expect(dueTone({ due_date: row.due_date, status: 'pending' }, '2026-03-01')).toBe('unscheduled')
+  })
+
+  it('withholds dates from a task whose gate has not opened', () => {
+    const task = templateTask({ due_offset_days: 7, relative_to: 'discovery_call', gate: 'fit_confirmed' })
+    const build = (gatesMet: 'fit_confirmed'[]) =>
+      buildMatterTaskInserts([task], {
+        matterId: 'matter-1',
+        templateId: null,
+        startDate: '2026-02-20',
+        anchors,
+        gatesMet,
+      })[0]
+
+    // Still on the checklist either way — a not-a-fit lead should show the task
+    // it never reached, rather than a plan with a silent hole in it.
+    expect(build([]).due_date).toBeNull()
+    expect(build(['fit_confirmed']).due_date).toBe('2026-03-08')
+  })
+
+  it('includes variant tasks only for the branch the matter is on', () => {
+    const tasks = [
+      templateTask({ name: 'Signing meeting held', due_offset_days: 28 }),
+      templateTask({ name: 'Mail signing package', due_offset_days: 25, variant: 'remote_signing' }),
+    ]
+    const options = { matterId: 'matter-1', templateId: null, startDate: '2026-04-01', anchors }
+
+    expect(buildMatterTaskInserts(tasks, options).map(row => row.name)).toEqual([
+      'Signing meeting held',
+    ])
+    expect(
+      buildMatterTaskInserts(tasks, { ...options, variants: ['remote_signing'] }).map(row => row.name),
+    ).toEqual(['Signing meeting held', 'Mail signing package'])
+  })
+})
+
+describe('rescheduleForAnchor', () => {
+  const pending = (overrides: Partial<MatterTaskRow>) =>
+    matterTask({ relative_to: 'pmps', due_date: null, due_offset_days: -1, ...overrides })
+
+  it('dates the waiting tasks once the anchor lands', () => {
+    const updates = rescheduleForAnchor(
+      [
+        pending({ id: 'organizer', nudge_offset_days: -3 }),
+        pending({ id: 'prep', due_offset_days: -1 }),
+        matterTask({ id: 'day-zero', relative_to: null, due_offset_days: 7 }),
+      ],
+      'pmps',
+      '2026-03-12',
+    )
+
+    expect(updates).toEqual([
+      { id: 'organizer', due_date: '2026-03-11', nudge_date: '2026-03-09', escalation_date: null },
+      { id: 'prep', due_date: '2026-03-11', nudge_date: null, escalation_date: null },
+    ])
+  })
+
+  it('leaves resolved tasks on their historical dates', () => {
+    const updates = rescheduleForAnchor(
+      [pending({ id: 'done', status: 'completed', due_date: '2026-03-05' })],
+      'pmps',
+      '2026-03-12',
+    )
+    expect(updates).toEqual([])
+  })
+
+  it('returns nothing when the anchor has not moved', () => {
+    const settled = pending({ id: 'organizer', due_date: '2026-03-11' })
+    expect(rescheduleForAnchor([settled], 'pmps', '2026-03-12')).toEqual([])
+    // Rebooked a day later, so the date genuinely changes.
+    expect(rescheduleForAnchor([settled], 'pmps', '2026-03-13')).toEqual([
+      { id: 'organizer', due_date: '2026-03-12', nudge_date: null, escalation_date: null },
+    ])
+  })
+})
+
+describe('target date extensions', () => {
+  it('pushes the target out when a Round 2 revision is on the plan', () => {
+    const tasks = [
+      matterTask({ id: 'a', phase: 'client_review' }),
+      matterTask({ id: 'b', phase: 'client_review', extends_target_days: 5 }),
+    ]
+    expect(summarizeSlaProgress(tasks, { targetDays: 28, today: '2026-03-01' }).targetDate).toBe(
+      '2026-04-03',
+    )
+
+    // Skipping it puts the original commitment back.
+    const skipped = tasks.map(task => (task.id === 'b' ? { ...task, status: 'skipped' as const } : task))
+    expect(summarizeSlaProgress(skipped, { targetDays: 28, today: '2026-03-01' }).targetDate).toBe(
+      '2026-03-29',
+    )
   })
 })

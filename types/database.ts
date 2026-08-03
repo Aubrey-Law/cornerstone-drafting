@@ -112,6 +112,7 @@ export type MatterStage =
   | 'signing_scheduled'
   | 'signing_complete'
   | 'post_execution'
+  | 'funding'
   | 'closed'
 
 export type StageGroup = 'early' | 'active' | 'work' | 'done' | 'closed'
@@ -133,6 +134,7 @@ export const STAGES: StageInfo[] = [
   { key: 'signing_scheduled', label: 'Signing Scheduled', group: 'done' },
   { key: 'signing_complete', label: 'Signing Complete', group: 'done' },
   { key: 'post_execution', label: 'Post-Execution', group: 'closed' },
+  { key: 'funding', label: 'Funding', group: 'closed' },
   { key: 'closed', label: 'Closed', group: 'closed' },
 ]
 

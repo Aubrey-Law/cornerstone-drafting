@@ -8,6 +8,7 @@ export const ENGINE_STAGE_LABELS: Record<string, string> = {
   approved: 'Approved',
   signing_scheduled: 'Signing Scheduled',
   closeout: 'Closeout',
+  funding: 'Funding',
   matter_closed: 'Closed',
 }
 
@@ -35,6 +36,8 @@ export function mapMatterStageToEngine(stage: string): string | null {
       return 'signing_scheduled'
     case 'post_execution':
       return 'closeout'
+    case 'funding':
+      return 'funding'
     case 'closed':
       return 'matter_closed'
     default:
