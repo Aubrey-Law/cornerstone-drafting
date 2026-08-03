@@ -49,6 +49,7 @@ const TONE_CLASS: Record<SlaDueTone, string> = {
   overdue: 'text-red-strong font-medium',
   soon: 'text-amber-strong font-medium',
   on_track: 'text-green',
+  unscheduled: 'text-muted-foreground italic',
 }
 
 const STATUS_ACTIONS: { status: SlaTaskStatus; label: string }[] = [
@@ -182,7 +183,9 @@ function TaskRow({
           </div>
 
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            <span className={TONE_CLASS[tone]}>Due {dayLabel(task.due_date)}</span>
+            <span className={TONE_CLASS[tone]}>
+              {task.due_date ? `Due ${dayLabel(task.due_date)}` : 'Not scheduled yet'}
+            </span>
             {task.nudge_date && !task.nudge_sent_at && task.status !== 'completed' && (
               <span className="text-muted-foreground">· nudge {dayLabel(task.nudge_date)}</span>
             )}

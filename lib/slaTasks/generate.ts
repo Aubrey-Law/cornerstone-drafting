@@ -2,12 +2,44 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { firmTodayKey } from '@/lib/firmDate'
+import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { buildMatterTaskInserts, isDateKey, parseTemplateTasks } from './schedule'
-import { MATTER_TASK_COLUMNS, type MatterTaskRow, type SlaTemplateRow } from './types'
+import {
+  MATTER_TASK_COLUMNS,
+  type MatterTaskRow,
+  type SlaAnchorDates,
+  type SlaGate,
+  type SlaTemplateRow,
+  type SlaVariant,
+} from './types'
 
 export const ESTATE_PLANNING_SLA = 'estate_planning_sla'
+export const ESTATE_PLANNING_SLA_V3 = 'estate_planning_sla_v3'
+
+/** Columns on `matters` that anchor an SLA clock. */
+const MATTER_ANCHOR_COLUMNS = 'id, discovery_call_at, pmps_at, engagement_signed_at, fit_decision'
+
+interface MatterAnchorRow {
+  id: string
+  discovery_call_at: string | null
+  pmps_at: string | null
+  engagement_signed_at: string | null
+  fit_decision: string | null
+}
+
+/** Timestamps become calendar day keys in the firm's timezone. */
+function anchorsFromMatter(matter: MatterAnchorRow): SlaAnchorDates {
+  return {
+    engagement: matter.engagement_signed_at ? firmDateKey(matter.engagement_signed_at) : null,
+    discovery_call: matter.discovery_call_at ? firmDateKey(matter.discovery_call_at) : null,
+    pmps: matter.pmps_at ? firmDateKey(matter.pmps_at) : null,
+  }
+}
+
+function gatesFromMatter(matter: MatterAnchorRow): SlaGate[] {
+  return matter.fit_decision === 'fit' ? ['fit_confirmed'] : []
+}
 
 export type GenerateResult =
   | { ok: true; created: true; tasks: MatterTaskRow[]; templateId: string }
@@ -20,6 +52,8 @@ interface GenerateOptions {
   startDate?: string
   /** Discard any tasks already generated for this matter and start over. */
   replace?: boolean
+  /** Alternative branches to include, e.g. the remote-signing path. */
+  variants?: SlaVariant[]
 }
 
 /** Load a template and coerce its JSONB task array into typed definitions. */
@@ -29,7 +63,7 @@ export async function loadSlaTemplate(
 ): Promise<SlaTemplateRow | null> {
   const { data, error } = await admin
     .from('sla_task_templates')
-    .select('id, template_name, description, target_days, tasks, created_at, updated_at')
+    .select('id, template_name, description, target_days, target_days_pre_engagement, target_days_engagement, tasks, created_at, updated_at')
     .eq('template_name', templateName)
     .maybeSingle()
   if (error) throw error
@@ -59,9 +93,9 @@ export async function generateMatterTasks(
 
   const { data: matter, error: matterError } = await admin
     .from('matters')
-    .select('id')
+    .select(MATTER_ANCHOR_COLUMNS)
     .eq('id', matterId)
-    .maybeSingle()
+    .maybeSingle<MatterAnchorRow>()
   if (matterError) return { ok: false, error: matterError.message, status: 500 }
   if (!matter) return { ok: false, error: 'Matter not found', status: 404 }
 
@@ -99,6 +133,9 @@ export async function generateMatterTasks(
     matterId,
     templateId: template.id,
     startDate,
+    anchors: anchorsFromMatter(matter),
+    gatesMet: gatesFromMatter(matter),
+    variants: options.variants ?? [],
   })
 
   const { data: inserted, error: insertError } = await admin

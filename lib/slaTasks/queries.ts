@@ -8,6 +8,7 @@ import {
   SLA_OPEN_STATUSES,
   type MatterTaskRow,
   type MatterTaskWithMatter,
+  type ScheduledMatterTask,
   type SlaTaskStatus,
 } from './types'
 
@@ -65,7 +66,7 @@ async function withMatterNames(
 export async function fetchUpcomingTasks(
   admin: SupabaseClient,
   options: { days?: number; limit?: number; today?: string } = {},
-): Promise<MatterTaskWithMatter[]> {
+): Promise<ScheduledMatterTask[]> {
   const today = options.today ?? firmTodayKey()
   const days = options.days ?? 14
   const { data, error } = await admin
@@ -78,7 +79,10 @@ export async function fetchUpcomingTasks(
     .order('sort_order', { ascending: true })
   if (error) throw error
 
-  const withNames = await withMatterNames(admin, (data ?? []) as unknown as MatterTaskRow[])
+  const withNames = (await withMatterNames(
+    admin,
+    (data ?? []) as unknown as MatterTaskRow[],
+  )) as ScheduledMatterTask[]
   return options.limit ? withNames.slice(0, options.limit) : withNames
 }
 
@@ -86,7 +90,7 @@ export async function fetchUpcomingTasks(
 export async function fetchOverdueTasks(
   admin: SupabaseClient,
   options: { limit?: number; today?: string } = {},
-): Promise<MatterTaskWithMatter[]> {
+): Promise<ScheduledMatterTask[]> {
   const today = options.today ?? firmTodayKey()
   const { data, error } = await admin
     .from('matter_tasks')
@@ -97,6 +101,9 @@ export async function fetchOverdueTasks(
     .order('sort_order', { ascending: true })
   if (error) throw error
 
-  const withNames = await withMatterNames(admin, (data ?? []) as unknown as MatterTaskRow[])
+  const withNames = (await withMatterNames(
+    admin,
+    (data ?? []) as unknown as MatterTaskRow[],
+  )) as ScheduledMatterTask[]
   return options.limit ? withNames.slice(0, options.limit) : withNames
 }
