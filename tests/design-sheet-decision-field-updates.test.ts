@@ -6,6 +6,11 @@ import {
 } from '@/lib/designSheetPersistence'
 import { prepareDesignSheetForSave } from '@/lib/designSheet/designSheetDraft'
 import { buildIntakeResyncPatch } from '@/lib/designSheet/seedFromIntake'
+import {
+  normalizeResidualBeneficiaryMethod,
+  resolveResidualBeneficiaryMethod,
+  setTrustDetails,
+} from '@/lib/designSheetTrustDetails'
 import type { DesignSheet } from '@/types/database'
 
 /**
@@ -186,5 +191,45 @@ describe('intake re-sync preserves stored decisions', () => {
     expect(decisions.document_inclusions).toEqual({ trust: true })
     expect(decisions.bond).toBe('required')
     expect(payload.client_name).toBe('Jane Doe')
+  })
+})
+
+// The design-sheet import map is flat, so it can only propose `distribution_method`.
+// Left on the column, an existing trust_details value would shadow it and accepting
+// the import would silently do nothing — so the apply path routes it to the
+// canonical home. Mirrors handleImportedDesignSheetFields in useDesignSheetState.
+describe('imported distribution method lands in trust_details', () => {
+  function applyImport(prev: Record<string, unknown>, patch: Record<string, unknown>) {
+    const { distribution_method: importedMethod, ...rest } = patch
+    const next = { ...prev, ...rest } as unknown as DesignSheet
+    const method = normalizeResidualBeneficiaryMethod(importedMethod)
+    if (!method) return next
+    return { ...next, decisions: setTrustDetails(next, { residual_beneficiary_method: method }) }
+  }
+
+  it('overrides a trust_details value that would otherwise shadow the import', () => {
+    const next = applyImport(
+      { decisions: { trust_details: { residual_beneficiary_method: 'outright' } } },
+      { distribution_method: 'staggered' },
+    )
+
+    expect(resolveResidualBeneficiaryMethod(next as never)).toBe('staggered')
+  })
+
+  it('leaves the column unwritten', () => {
+    const next = applyImport({ decisions: {} }, { distribution_method: 'custom' }) as Record<string, unknown>
+
+    expect(next.distribution_method).toBeUndefined()
+    expect(resolveResidualBeneficiaryMethod(next as never)).toBe('custom')
+  })
+
+  it('keeps other imported fields and ignores an unusable method', () => {
+    const next = applyImport({ decisions: {} }, {
+      distribution_method: 'per stirpes',
+      trust_name: 'The Doe Trust',
+    }) as Record<string, unknown>
+
+    expect(next.trust_name).toBe('The Doe Trust')
+    expect(resolveResidualBeneficiaryMethod(next as never)).toBeNull()
   })
 })

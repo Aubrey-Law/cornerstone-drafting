@@ -49,9 +49,30 @@ describe('extractPlanStructure', () => {
     const patch = extractPlanStructure(sourceSheet())
     expect(patch.plan_type).toBe('pour_over')
     expect(patch.is_joint).toBe(true)
-    expect(patch.distribution_method).toBe('staggered')
     expect(patch.stagger_age_1).toBe(25)
     expect(patch.pr_structure).toBe('spouse_first')
+  })
+
+  // The source here is legacy-shaped: the method sits on the `distribution_method`
+  // column with no trust_details entry. The clone lands it in the canonical home
+  // rather than copying the column, which would reintroduce the second writer.
+  it('folds a legacy column method into trust_details', () => {
+    const patch = extractPlanStructure(sourceSheet()) as Record<string, unknown>
+    const trustDetails = (patch.decisions as Record<string, unknown>).trust_details as Record<string, unknown>
+
+    expect(trustDetails.residual_beneficiary_method).toBe('staggered')
+    expect(patch.distribution_method).toBeUndefined()
+  })
+
+  it('keeps a trust_details method ahead of a drifted column value', () => {
+    const source = sourceSheet() as unknown as Record<string, unknown>
+    source.distribution_method = 'outright'
+    ;(source.decisions as Record<string, Record<string, unknown>>).trust_details.residual_beneficiary_method = 'custom'
+
+    const patch = extractPlanStructure(source as never) as Record<string, unknown>
+    const trustDetails = (patch.decisions as Record<string, unknown>).trust_details as Record<string, unknown>
+
+    expect(trustDetails.residual_beneficiary_method).toBe('custom')
   })
 
   it('never copies identity data, people, assets, or notes', () => {

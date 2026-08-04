@@ -61,7 +61,15 @@ export function normalizeResidualBeneficiaryMethod(value: unknown): ResidualBene
     : null
 }
 
-/** The method the UI, readiness and the generator all resolve to, from either home. */
+/**
+ * The method the UI, readiness and the generator all resolve to.
+ *
+ * `decisions.trust_details.residual_beneficiary_method` is the canonical and only
+ * written home. The `distribution_method` column is read-only legacy: the design
+ * sheet used to write both for the same decision and they drifted, leaving some
+ * rows with a column value and no trust_details entry. Once those are backfilled
+ * the column can be dropped and this becomes a single read.
+ */
 export function resolveResidualBeneficiaryMethod(
   sheet: Pick<DesignSheet, 'decisions' | 'distribution_method'>,
 ): ResidualBeneficiaryMethod | null {
