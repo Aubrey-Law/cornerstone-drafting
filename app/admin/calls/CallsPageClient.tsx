@@ -139,16 +139,20 @@ export function CallsPageClient({ initialCalls, filter }: Props) {
             {selected.size > 0 ? `${selected.size} selected` : 'Select calls to delete in bulk'}
           </span>
           {selected.size > 0 && (
-            <Button
-              size="sm"
-              variant="destructive"
-              className="ml-auto"
-              disabled={bulkDeleting}
-              onClick={() => setBulkOpen(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete selected
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={bulkDeleting}
+                onClick={() => setBulkOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete selected
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                Clear
+              </Button>
+            </div>
           )}
         </div>
       )}
