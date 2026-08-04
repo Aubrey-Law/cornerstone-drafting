@@ -200,7 +200,7 @@ Vitest + Testing Library, matching the existing suites.
 |---|---|
 | Task grouping | `groupTasksByRecord` unit test — ordering, unlinked bucket last, same-name records kept separate |
 | Task detail | Sheet renders the record name and links to the matter; renders "No related record" for a free-floating task |
-| Tasks page | Switching Group to Matter renders one section per record |
+| Tasks page | Grouping is thin wiring over the tested helper — verified in the browser, not unit tested |
 | Calls | Route test: auth guard, bad body, non-UUID rejection, over-cap rejection, happy path. Client test: select-all, count, confirm, single request |
 | Rail email | AI button absent with no record; present for a matter; a drafted reply fills subject and body |
 | Matter header | Email and Text render, are disabled without contact details, and call their handlers |
