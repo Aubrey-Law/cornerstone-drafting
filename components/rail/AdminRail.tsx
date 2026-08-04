@@ -7,6 +7,7 @@ import {
   ChevronUp,
   ListTodo,
   Mail,
+  MessageSquare,
   Mic,
   MicOff,
   Minus,
@@ -26,6 +27,7 @@ import { OPEN_STAFF_SOFTPHONE_EVENT } from '@/app/admin/components/softphoneEven
 import { useSoftphoneCall } from '@/components/softphone/SoftphoneProvider'
 import { RailActivityPane } from './RailActivityPane'
 import { RailEmailPane } from './RailEmailPane'
+import { RailSmsPane } from './RailSmsPane'
 import { RailTasksPane } from './RailTasksPane'
 
 const ChatPanel = dynamic(
@@ -48,7 +50,7 @@ function formatCallDuration(totalSeconds: number): string {
   return `${minutes}:${seconds}`
 }
 
-export type RailTab = 'assistant' | 'phone' | 'email' | 'tasks' | 'activity'
+export type RailTab = 'assistant' | 'phone' | 'email' | 'sms' | 'tasks' | 'activity'
 
 const RAIL_STORAGE_KEY = 'cornerstone.admin.rail'
 
@@ -58,7 +60,7 @@ interface StoredRailState {
   tab?: RailTab
 }
 
-const RAIL_TABS: readonly RailTab[] = ['assistant', 'phone', 'email', 'tasks', 'activity']
+const RAIL_TABS: readonly RailTab[] = ['assistant', 'phone', 'email', 'sms', 'tasks', 'activity']
 
 function isRailTab(value: unknown): value is RailTab {
   return typeof value === 'string' && (RAIL_TABS as readonly string[]).includes(value)
@@ -76,6 +78,8 @@ export interface AdminRailController {
   assistantMounted: boolean
   /** Same for the email pane, so an unsent draft survives a tab switch. */
   emailMounted: boolean
+  /** And the text pane, so a half-written message survives one too. */
+  smsMounted: boolean
   /** And the tasks pane, so a half-typed capture survives a tab switch. */
   tasksMounted: boolean
   /** Bumped by ⌘⇧T so the tasks pane knows to focus its capture input. */
@@ -98,6 +102,7 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
   const [tab, setTabState] = useState<RailTab>('assistant')
   const [assistantMounted, setAssistantMounted] = useState(false)
   const [emailMounted, setEmailMounted] = useState(false)
+  const [smsMounted, setSmsMounted] = useState(false)
   const [tasksMounted, setTasksMounted] = useState(false)
   const [taskCaptureRequestId, setTaskCaptureRequestId] = useState(0)
   const [pendingChatAction, setPendingChatAction] = useState<CornerstoneChatOpenDetail | null>(null)
@@ -141,6 +146,7 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     if (!open || minimized) return
     if (tab === 'assistant') setAssistantMounted(true)
     if (tab === 'email') setEmailMounted(true)
+    if (tab === 'sms') setSmsMounted(true)
     if (tab === 'tasks') setTasksMounted(true)
   }, [open, minimized, tab])
 
@@ -217,6 +223,11 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
         openTab('email')
         return
       }
+      if (key === 's') {
+        event.preventDefault()
+        openTab('sms')
+        return
+      }
       if (key === 'k') {
         event.preventDefault()
         openTab('tasks')
@@ -247,6 +258,7 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     clearPendingChatAction,
     assistantMounted,
     emailMounted,
+    smsMounted,
     tasksMounted,
     taskCaptureRequestId,
     openTab,
@@ -255,7 +267,7 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
     minimize,
     close,
   }), [
-    open, minimized, tab, pendingChatAction, clearPendingChatAction, assistantMounted, emailMounted,
+    open, minimized, tab, pendingChatAction, clearPendingChatAction, assistantMounted, emailMounted, smsMounted,
     tasksMounted, taskCaptureRequestId, openTab, setTab, toggle, minimize, close,
   ])
 }
@@ -263,6 +275,8 @@ export function useAdminRail({ voiceEnabled }: { voiceEnabled: boolean }): Admin
 interface AdminRailProps {
   rail: AdminRailController
   voiceEnabled: boolean
+  /** False when no SMS provider is configured; the Text pane explains instead. */
+  smsEnabled?: boolean
   matterDisplayName?: string | null
   assistantModelLabel?: string | null
   /** Overdue task count for the Tasks tab badge, from the sidebar counts. */
@@ -272,6 +286,7 @@ interface AdminRailProps {
 export function AdminRail({
   rail,
   voiceEnabled,
+  smsEnabled = false,
   matterDisplayName = null,
   assistantModelLabel = null,
   tasksOverdue = 0,
@@ -297,6 +312,7 @@ export function AdminRail({
       ? [{ key: 'phone' as const, label: 'Phone', icon: Phone, dot: call.active || call.incoming }]
       : []),
     { key: 'email', label: 'Email', icon: Mail },
+    { key: 'sms', label: 'Text', icon: MessageSquare },
     { key: 'tasks', label: 'Tasks', icon: ListTodo, count: tasksOverdue },
     { key: 'activity', label: 'Activity', icon: Activity },
   ]
@@ -407,6 +423,13 @@ export function AdminRail({
       {rail.emailMounted && (
         <div className={cn('min-h-0 flex-1', visible && tab === 'email' ? 'flex flex-col' : 'hidden')}>
           <RailEmailPane />
+        </div>
+      )}
+
+      {/* Kept mounted like the email pane so a half-written text survives. */}
+      {rail.smsMounted && (
+        <div className={cn('min-h-0 flex-1', visible && tab === 'sms' ? 'flex flex-col' : 'hidden')}>
+          <RailSmsPane smsConfigured={smsEnabled} />
         </div>
       )}
 

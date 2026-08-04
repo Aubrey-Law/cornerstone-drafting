@@ -95,6 +95,7 @@ import { MatterLeadActions } from './MatterLeadActions'
 import type { MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { MatterBlockerBanner } from './MatterBlockerBanner'
 import { buildMatterReadinessItems } from './MatterReadinessDial'
+import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { useMatterCommunications } from './useMatterCommunications'
 import { useMatterDocuments } from './useMatterDocuments'
 
@@ -251,6 +252,9 @@ function MatterDetailClientInner({
 
   const [activity, setActivity] = useState<MatterActivity[]>(initialActivity)
   const activityLoading = false
+  // Header Email/Text open the same composer the lead page uses, AI drafting
+  // included, rather than only switching to the communications tab.
+  const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
 
   useEffect(() => {
     setUnreviewedUploadCounts(initialUnreviewedUploadCounts)
@@ -771,8 +775,8 @@ function MatterDetailClientInner({
         showHealthBadge={blockerCount === 0}
         factsRailOpen={factsRailOpen}
         onToggleFactsRail={() => setFactsRailOpen(open => !open)}
-        onEmail={() => setActiveTab('communications', undefined, 'email')}
-        onText={() => setActiveTab('communications', undefined, 'sms')}
+        onEmail={() => setComposerChannel('email')}
+        onText={() => setComposerChannel('sms')}
         onOpenIntake={() => void openIntakeSheet()}
         onImportIntake={() => setImportIntakeOpen(true)}
         onUnlockIntake={() => void handleUnlockIntake()}
@@ -1193,6 +1197,21 @@ function MatterDetailClientInner({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CommunicationDialog
+        open={composerChannel !== null}
+        channel={composerChannel ?? 'email'}
+        target={{ type: 'matter', id: matter.matter_id, recipient: 'client' }}
+        recipientName={matter.client_name ?? 'Client'}
+        recipientEmail={matter.client_email ?? null}
+        recipientPhone={matter.client_phone ?? null}
+        token={token}
+        onOpenChange={open => { if (!open) setComposerChannel(null) }}
+        onSent={() => {
+          toast.success(composerChannel === 'sms' ? 'Text sent' : 'Email sent')
+          router.refresh()
+        }}
+      />
     </div>
   )
 }
