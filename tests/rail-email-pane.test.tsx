@@ -11,6 +11,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
+vi.mock('@/lib/supabaseClient', () => ({
+  supabase: { auth: { getSession: async () => ({ data: { session: { access_token: 'token' } } }) } },
+}))
 
 import { RailEmailPane } from '@/components/rail/RailEmailPane'
 
@@ -93,6 +96,12 @@ function mockFetch(options: {
       return {
         ok: true,
         json: async () => ({ signature: options.signature ?? { html: '', includeByDefault: true } }),
+      } as Response
+    }
+    if (url.includes('/draft-reply')) {
+      return {
+        ok: true,
+        json: async () => ({ draft: 'Subject: Trust draft ready\n\nThe draft is attached.' }),
       } as Response
     }
     if (url.includes('/api/admin/email/draft')) {
@@ -720,5 +729,45 @@ describe('rail email pane', () => {
       expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('harold.pike@example.com'),
     )
     expect(screen.queryByRole('button', { name: /scheduling link/i })).toBeNull()
+  })
+})
+
+describe('AI drafting in the composer', () => {
+  it('offers Draft with AI when the pane is scoped to a matter', async () => {
+    mockFetch()
+    render(<RailEmailPane />)
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /draft with ai/i })).toBeTruthy(),
+    )
+  })
+
+  it('hides Draft with AI with no matter or lead in scope', async () => {
+    pathname.current = '/admin/calls'
+    mockFetch()
+    render(<RailEmailPane />)
+
+    await waitFor(() => expect(screen.getByLabelText('Message')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: /draft with ai/i })).toBeNull()
+  })
+
+  it('fills the subject and body from the drafted reply', async () => {
+    const user = userEvent.setup()
+    const fetchMock = mockFetch()
+    render(<RailEmailPane />)
+
+    const button = await screen.findByRole('button', { name: /draft with ai/i })
+    await user.click(button)
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('Trust draft ready'),
+    )
+    expect(screen.getByLabelText('Message').textContent).toContain('The draft is attached.')
+
+    const draftCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).includes('/draft-reply'),
+    )
+    expect(String(draftCall?.[0])).toBe('/api/admin/matters/m1/draft-reply')
+    expect(JSON.parse(String((draftCall?.[1] as RequestInit).body)).channel).toBe('email')
   })
 })

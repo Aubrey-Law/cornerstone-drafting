@@ -28,27 +28,12 @@ type Props = {
 
 export function LeadCommunicationDialog(props: Props) {
   const [message, setMessage] = useState('')
-  const [emailSubject, setEmailSubject] = useState<string | undefined>()
-  const [emailBody, setEmailBody] = useState<string | undefined>()
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  function applyEmailDraft(draft: string) {
-    const match = draft.match(/^Subject:\s*(.+)\n+([\s\S]*)$/)
-    if (match) {
-      setEmailSubject(match[1].trim() || 'Follow-up')
-      setEmailBody(match[2].trim())
-    } else {
-      setEmailSubject('Follow-up')
-      setEmailBody(draft.trim())
-    }
-  }
 
   useEffect(() => {
     if (!props.open) {
       setMessage('')
-      setEmailSubject(undefined)
-      setEmailBody(undefined)
       setError(null)
     } else if (props.channel === 'sms' && props.initialMessage) {
       setMessage(props.initialMessage.slice(0, MAX_LEAD_SMS_BODY_LENGTH))
@@ -89,18 +74,9 @@ export function LeadCommunicationDialog(props: Props) {
             <DialogTitle>Email lead</DialogTitle>
             <DialogDescription>{props.email} · {props.clientName}</DialogDescription>
           </DialogHeader>
-          <div className="px-4 py-1">
-            <DraftWithAiButton
-              apiPath={`/api/admin/leads/${props.leadId}/draft-reply`}
-              channel="email"
-              onDraft={applyEmailDraft}
-            />
-          </div>
           <ManualEmailComposer
             embedded
             recordOverride={{ type: 'lead', id: props.leadId }}
-            subjectText={emailSubject}
-            bodyText={emailBody}
             initialContext={{
               recordType: 'lead',
               recordId: props.leadId,
