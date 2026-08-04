@@ -273,3 +273,72 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function prettyAssetName(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
+
+/**
+ * Whether a fiduciary slot array has anybody named in it.
+ * Co-fiduciaries alone do not count: a co-agent qualifies the principal choice
+ * rather than being one, so a slot array holding only co-entries is still unnamed.
+ */
+function slotIsNamed(slots: unknown): boolean {
+  return Array.isArray(slots)
+    && slots.some(slot =>
+      typeof slot === 'object' && slot !== null
+      && !(slot as { is_co?: boolean }).is_co
+      && Boolean((slot as { contact_id?: string | null }).contact_id))
+}
+
+function sheetText(sheet: Record<string, unknown>, key: string): boolean {
+  const value = sheet[key]
+  return typeof value === 'string' ? value.trim().length > 0 : Boolean(value)
+}
+
+/**
+ * Does the design sheet now answer what intake left blank?
+ *
+ * Keyed by flag. Anything absent here has no design-sheet equivalent and so can
+ * only be resolved on the intake side.
+ */
+const REVIEW_FLAG_SATISFIED_BY: Record<string, (sheet: Record<string, unknown>) => boolean> = {
+  client_dob_missing: sheet => sheetText(sheet, 'client_dob'),
+  spouse_dob_missing: sheet => sheetText(sheet, 'spouse_dob'),
+  county_missing: sheet => sheetText(sheet, 'county'),
+
+  client_trustee_missing: sheet => slotIsNamed(sheet.trustee_slots),
+  // "Same as trustee" is an answer, so the trustee choice satisfies these too.
+  client_personal_rep_missing: sheet =>
+    slotIsNamed(sheet.executor_slots)
+    || (sheet.executor_same_as_trustee === true && slotIsNamed(sheet.trustee_slots)),
+  client_poa_missing: sheet =>
+    slotIsNamed(sheet.poa_slots)
+    || (sheet.poa_same_as_trustee === true && slotIsNamed(sheet.trustee_slots)),
+  client_hcp_missing: sheet => slotIsNamed(sheet.hcp_slots),
+
+  spouse_personal_rep_missing: sheet =>
+    slotIsNamed(sheet.spouse_executor_slots)
+    || (sheet.spouse_executor_same_as_trustee === true && slotIsNamed(sheet.spouse_trustee_slots)),
+  spouse_poa_missing: sheet => slotIsNamed(sheet.spouse_poa_slots),
+  spouse_hcp_missing: sheet => slotIsNamed(sheet.spouse_hcp_slots),
+
+  guardian_missing: sheet => slotIsNamed(sheet.guardian_slots),
+}
+
+/**
+ * Drop review flags the design sheet has since answered.
+ *
+ * `getIntakeReadinessFlags` describes the *intake submission*, and its result is
+ * frozen onto `design_sheets.intake_review_flags` when the sheet is seeded. Nothing
+ * recomputed it, so naming a fiduciary in the design sheet — which writes
+ * `<role>_slots`, not the intake row — left the flag showing forever. Resolving at
+ * read time makes the flags derived, so they clear themselves; the stored snapshot
+ * stays as the record of what intake originally provided.
+ */
+export function resolveIntakeReviewFlags(
+  flags: IntakeReadinessFlag[],
+  sheet: Record<string, unknown> | null | undefined,
+): IntakeReadinessFlag[] {
+  if (!sheet) return flags
+  return flags.filter(flag => {
+    const satisfied = REVIEW_FLAG_SATISFIED_BY[flag.key]
+    return !satisfied || !satisfied(sheet)
+  })
+}

@@ -194,6 +194,7 @@ export function computeDesignSheetReadiness({
   const poaPrimary = sheet.poa_same_as_trustee ? trusteePrimary : primaryContactId(sheet.poa_slots)
   const hcpPrimary = primaryContactId(sheet.hcp_slots)
   const guardianPrimary = primaryContactId(sheet.guardian_slots)
+  const temporaryGuardianPrimary = primaryContactId(sheet.temporary_guardian_slots)
   const hasMinorChildren = sheetHasMinorChildren(sheet.children)
   const spouseTrusteePrimary = primaryContactId(sheet.spouse_trustee_slots)
   const spouseExecutorPrimary = primaryContactId(sheet.spouse_executor_slots)
@@ -281,6 +282,10 @@ export function computeDesignSheetReadiness({
     documentInclusions.will && hasMinorChildren && !guardianPrimary && blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'guardian', 'guardian_slots'),
     documentInclusions.will && hasMinorChildren && guardianPrimary && !guardianAlternate &&
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'backup guardian', 'guardian_slots', 'required', false),
+    // Optional by design: a temporary guardian delegates short-term care and is a
+    // refinement on top of the permanent appointment, never a reason to hold drafting.
+    documentInclusions.will && hasMinorChildren && !temporaryGuardianPrimary &&
+      blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'temporary guardian', 'temporary_guardian_slots', 'required', false),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const dpoaBlockers = [

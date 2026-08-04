@@ -28,24 +28,58 @@ export type FiduciarySlotField =
   | 'spouse_poa_slots'
   | 'spouse_hcp_slots'
 
-export type FiduciaryGridRole = 'trustee' | 'executor' | 'poa' | 'hcp' | 'guardian'
+export type FiduciaryGridRole =
+  | 'trustee' | 'executor' | 'poa' | 'hcp' | 'guardian' | 'temporary_guardian'
 
-export const CLIENT_SLOT_FIELDS: Record<FiduciaryGridRole, FiduciarySlotField> = {
+/**
+ * Roles appointed per person: each spouse has their own will, POA and health care
+ * documents, and their own trust when the trusts are separate.
+ */
+export type FiduciaryPartyRole = 'trustee' | 'executor' | 'poa' | 'hcp'
+
+/**
+ * Roles appointed for the children rather than for a parent. Both spouses name the
+ * same guardians in their own wills, so there is one set, shown once — putting it
+ * under each party tab implied a choice per parent that does not exist.
+ */
+export type FiduciarySharedRole = 'guardian' | 'temporary_guardian'
+
+export const SHARED_SLOT_FIELDS: Record<FiduciarySharedRole, FiduciarySlotField> = {
+  guardian: 'guardian_slots',
+  temporary_guardian: 'temporary_guardian_slots',
+}
+
+export const CLIENT_SLOT_FIELDS: Record<FiduciaryPartyRole, FiduciarySlotField> = {
   trustee: 'trustee_slots',
   executor: 'executor_slots',
   poa: 'poa_slots',
   hcp: 'hcp_slots',
-  guardian: 'guardian_slots',
 }
 
-export const SPOUSE_SLOT_FIELDS: Record<FiduciaryGridRole, FiduciarySlotField> = {
+export const SPOUSE_SLOT_FIELDS: Record<FiduciaryPartyRole, FiduciarySlotField> = {
   trustee: 'spouse_trustee_slots',
   executor: 'spouse_executor_slots',
   poa: 'spouse_poa_slots',
   hcp: 'spouse_hcp_slots',
-  // Guardians are appointed for the same children, so both party tabs share
-  // the existing guardian slot array instead of introducing a new store.
-  guardian: 'guardian_slots',
+}
+
+/**
+ * Which slot arrays the spouse tab writes to.
+ *
+ * A joint trust is one instrument with one line of successor trustees, so both
+ * parties share `trustee_slots`; only separate trusts get a second set. The
+ * spouse's will, POA and health care documents are always their own, joint trust
+ * or not. Readiness already required a spouse trustee only when the trusts are
+ * separate — this stops the UI offering a second set that nothing would read.
+ */
+export function spouseSlotFields(
+  sheet: Pick<DesignSheet, 'is_joint'>,
+): Record<FiduciaryPartyRole, FiduciarySlotField> {
+  const separateTrusts = sheet.is_joint === false
+  return {
+    ...SPOUSE_SLOT_FIELDS,
+    trustee: separateTrusts ? 'spouse_trustee_slots' : 'trustee_slots',
+  }
 }
 
 export function isMarriedSheet(sheet: DesignSheet) {

@@ -24,7 +24,7 @@ describe('design sheet spouse fiduciary selections', () => {
     const trustDetails = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx'), 'utf8')
     const blocks = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/fiduciary-blocks.tsx'), 'utf8')
 
-    expect(grid).toContain('SPOUSE_SLOT_FIELDS')
+    expect(grid).toContain('spouseSlotFields')
     expect(grid).toContain('PartyTabs')
     expect(grid).toContain('Mirror reversed')
     expect(grid).toContain('mirrorReversedFiduciarySlots')

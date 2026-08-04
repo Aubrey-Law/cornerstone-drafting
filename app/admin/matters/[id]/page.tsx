@@ -9,7 +9,7 @@ import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
-import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
+import { resolveIntakeReviewFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterActivity } from '@/types/database'
@@ -267,7 +267,14 @@ export default async function MatterDetailPage({ params }: Params) {
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
   const matterNumberManual = Boolean(matterRow?.matter_number_manual)
   const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
-  const reviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
+  // The stored flags are a snapshot of the intake submission. Resolve them against
+  // the design sheet so anything the attorney has since answered — a named
+  // fiduciary, a filled-in DOB — stops being reported as outstanding.
+  const storedReviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
+  const reviewFlags = resolveIntakeReviewFlags(
+    storedReviewFlags,
+    designSheet as unknown as Record<string, unknown> | null,
+  )
   const resyncPreviewCount = intakeSnapshot && designSheet
     ? buildIntakeResyncPreview({
         currentSheet: designSheet as unknown as Record<string, unknown>,
