@@ -17,6 +17,7 @@ import {
   buildTrustNameSuggestions,
   getTrustDetails,
   getTrustNameFormat,
+  resolveResidualBeneficiaryMethod,
   setTrustDetails,
   setTrustNameFormat,
   STAGGERED_DISTRIBUTION_PRESETS,
@@ -44,6 +45,23 @@ import {
 } from './shared'
 import { isMarriedSheet as isMarried } from './fiduciary-blocks'
 import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
+
+/**
+ * Typed against ResidualBeneficiaryMethod so an option value that drifts from the
+ * union is a compile error. It drifted once — `trust-for-life` here against
+ * `trust_for_life` in the union — and an `as` cast at the change handler hid it,
+ * which meant a lifetime trust could resolve as a staged distribution.
+ */
+const RESIDUAL_BENEFICIARY_METHOD_OPTIONS: readonly {
+  value: ResidualBeneficiaryMethod
+  label: string
+  description?: string
+}[] = [
+  { value: 'outright', label: 'Outright' },
+  { value: 'staggered', label: 'Staggered', description: 'For example, distributions at ages 25, 30, and 35.' },
+  { value: 'trust_for_life', label: 'Held in trust for lifetime' },
+  { value: 'custom', label: 'Custom distribution schedule' },
+]
 
 interface DocumentSectionProps extends SectionProps {
   contacts: MatterContact[]
@@ -237,8 +255,10 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
   const updatePet = (patch: Partial<PetCareDetails>) =>
     onChange('pet_care_details', { ...pet, ...patch })
 
-  const residualMethod = trustDetails.residual_beneficiary_method
-    ?? (sheet.distribution_method as ResidualBeneficiaryMethod | null)
+  // Shared resolver rather than a local fallback: the UI, readiness and the
+  // generator must agree on which stored value wins, and it normalises legacy
+  // spellings so an older sheet still shows its choice as selected.
+  const residualMethod = resolveResidualBeneficiaryMethod(sheet)
   const deathLabel = married
     ? `Following the death of ${clientFirst || 'Client'} and ${spouseFirst || 'Spouse'}, the remaining trust property shall be:`
     : `Following the death of ${clientFirst || 'Client'}, the remaining trust property shall be:`
@@ -594,14 +614,8 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           fieldName="distribution_method"
           blocking
           value={residualMethod}
-          options={[
-            { value: 'outright', label: 'Outright' },
-            { value: 'staggered', label: 'Staggered', description: 'For example, distributions at ages 25, 30, and 35.' },
-            { value: 'trust-for-life', label: 'Held in trust for lifetime' },
-            { value: 'custom', label: 'Custom distribution schedule' },
-          ]}
-          onChange={v => {
-            const method = v as ResidualBeneficiaryMethod
+          options={RESIDUAL_BENEFICIARY_METHOD_OPTIONS}
+          onChange={method => {
             updateTrustDetails({ residual_beneficiary_method: method })
             onChange('distribution_method', method)
           }}
