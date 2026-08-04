@@ -269,6 +269,7 @@ export function stripDecisionOnlyTopLevelMirrors<T extends Record<string, unknow
 export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
   const input = formatPhoneFieldsDeep(data) as Record<string, unknown>
   const payload: Record<string, unknown> = {}
+  const callerSuppliedDecisions = input.decisions !== undefined
   // Start from the canonical decisions object. inflateDesignSheetRow mirrors decision
   // keys onto the sheet top-level for convenience; those mirrors go stale when the UI
   // updates only `decisions` (e.g. document_inclusions.trust) and must NOT win here.
@@ -280,8 +281,11 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
 
     if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
       payload[key] = normalizeColumnValue(key, value)
-    } else if (!(key in decisions) && !DECISION_ONLY_TOP_LEVEL_KEYS.has(key)) {
+    } else if (!DECISION_ONLY_TOP_LEVEL_KEYS.has(key)) {
       // Lite-only template fields without a dedicated column land in decisions jsonb.
+      // The stale-mirror hazard is confined to the decision namespaces skipped above,
+      // so ordinary fields must overwrite their decisions copy — guarding on
+      // `!(key in decisions)` froze every one of them at its first saved value.
       decisions[key] = value
     }
   }
@@ -294,7 +298,58 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
     }
   }
 
-  payload.decisions = decisions
+  // Only write the decisions column when the caller actually had something to say
+  // about it. Partial patches list columns only (asset intake sync, intake re-sync),
+  // and emitting `{}` for those replaced the attorney's entire decision blob —
+  // document inclusions, trust details, DPOA/health care provisions — with nothing.
+  if (callerSuppliedDecisions || Object.keys(decisions).length > 0) {
+    payload.decisions = decisions
+  }
+  return payload
+}
+
+/**
+ * Merge a client PATCH onto the stored sheet and build the row payload to write.
+ *
+ * `incomingDecisions` is the client's authoritative decisions blob and wins over
+ * anything the payload builder derived from the stored row — the stored row's
+ * top-level values are by definition the pre-edit ones.
+ */
+export function buildDesignSheetSavePayload(args: {
+  existingSheet: DesignSheet | null
+  incomingSheet: Record<string, unknown>
+  incomingDecisions: Record<string, unknown>
+}) {
+  const { existingSheet, incomingSheet, incomingDecisions } = args
+  const hasIncomingDecisions = Object.keys(incomingDecisions).length > 0
+  const existingDecisions = existingSheet && isRecord(existingSheet.decisions)
+    ? existingSheet.decisions
+    : {}
+
+  const sheetForPersistence = existingSheet
+    ? ({
+        ...existingSheet,
+        ...incomingSheet,
+        decisions: hasIncomingDecisions ? incomingDecisions : existingDecisions,
+      } as DesignSheetUpdate)
+    : ({
+        ...incomingSheet,
+        decisions: hasIncomingDecisions
+          ? incomingDecisions
+          : (incomingSheet as DesignSheetUpdate).decisions,
+      } as DesignSheetUpdate)
+
+  const payload = buildDesignSheetPersistencePayload(formatPhoneFieldsDeep(sheetForPersistence))
+
+  if (hasIncomingDecisions) {
+    const cleanedDecisions = { ...incomingDecisions }
+    for (const key of SYSTEM_COLUMNS) delete cleanedDecisions[key]
+    payload.decisions = {
+      ...(isRecord(payload.decisions) ? payload.decisions : {}),
+      ...cleanedDecisions,
+    }
+  }
+
   return payload
 }
 

@@ -36,6 +36,39 @@ export type SuccessorTrusteeVacancy =
 
 export type ResidualBeneficiaryMethod = 'outright' | 'staggered' | 'trust_for_life' | 'custom'
 
+export const RESIDUAL_BENEFICIARY_METHODS: readonly ResidualBeneficiaryMethod[] = [
+  'outright',
+  'staggered',
+  'trust_for_life',
+  'custom',
+]
+
+/**
+ * Coerce a stored residual beneficiary method to the canonical union, or null when
+ * nothing usable is set. Null must never be treated as a default — callers surface
+ * it as a decision the attorney still owes.
+ *
+ * `trust-for-life` is accepted because the design sheet's option value is hyphenated
+ * while the union is underscored, and the `as ResidualBeneficiaryMethod` cast at the
+ * call site hides the mismatch from the compiler. Normalising here keeps that from
+ * reading as an invalid value; the option value itself still needs correcting.
+ */
+export function normalizeResidualBeneficiaryMethod(value: unknown): ResidualBeneficiaryMethod | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().replace(/-/g, '_')
+  return (RESIDUAL_BENEFICIARY_METHODS as readonly string[]).includes(normalized)
+    ? normalized as ResidualBeneficiaryMethod
+    : null
+}
+
+/** The method the UI, readiness and the generator all resolve to, from either home. */
+export function resolveResidualBeneficiaryMethod(
+  sheet: Pick<DesignSheet, 'decisions' | 'distribution_method'>,
+): ResidualBeneficiaryMethod | null {
+  return normalizeResidualBeneficiaryMethod(getTrustDetails(sheet).residual_beneficiary_method)
+    ?? normalizeResidualBeneficiaryMethod(sheet.distribution_method)
+}
+
 export type ResiduaryAfterDeath =
   | 'descendants_outright_per_stirpes'
   | 'descendants_shares_outright_children_trusts_others'

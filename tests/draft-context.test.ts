@@ -52,3 +52,42 @@ describe('buildDraftContext', () => {
     expect(ctx.has_co_guardian).toBe(false)
   })
 })
+
+describe('buildDraftContext descendant_representation', () => {
+  it('follows the representation type the attorney selected', () => {
+    const ctx = buildDraftContext({
+      decisions: { trust_details: { representation_type: 'per_capita_each_generation' } },
+    })
+
+    expect(ctx.descendant_representation).toBe('per_capita')
+  })
+
+  it('maps per stirpes and by-representation to the per stirpes clause', () => {
+    for (const representation_type of ['per_stirpes', 'by_representation']) {
+      const ctx = buildDraftContext({ decisions: { trust_details: { representation_type } } })
+      expect(ctx.descendant_representation).toBe('per_stirpes')
+    }
+  })
+
+  // The `distribution_method` column holds the residual beneficiary method
+  // (outright / staggered / …), not per stirpes vs per capita — reading it here would
+  // match neither clause and drop the distribution language entirely.
+  it('ignores the same-named column, which means something else', () => {
+    const ctx = buildDraftContext({
+      distribution_method: 'staggered',
+      decisions: { trust_details: { representation_type: 'per_capita_each_generation' } },
+    })
+
+    expect(ctx.descendant_representation).toBe('per_capita')
+  })
+
+  it('honours a legacy decisions value when no representation type is set', () => {
+    const ctx = buildDraftContext({ decisions: { distribution_method: 'per_capita' } })
+
+    expect(ctx.descendant_representation).toBe('per_capita')
+  })
+
+  it('defaults to per stirpes when nothing is set', () => {
+    expect(buildDraftContext({}).descendant_representation).toBe('per_stirpes')
+  })
+})

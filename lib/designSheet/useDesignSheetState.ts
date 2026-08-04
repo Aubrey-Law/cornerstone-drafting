@@ -337,7 +337,15 @@ export function useDesignSheetState({
               expectedUpdatedAt: expectedUpdatedAtRef.current,
               sheet: sheetForSave,
               // Authoritative decisions blob — API must not lose this to stale merges.
-              decisions: sheetRef.current.decisions ?? {},
+              // The live blob alone is not enough: fields without a dedicated column
+              // (bond, supervision, HCP/DPOA choices…) are edited on the sheet
+              // top-level, and only the prepared payload folds them back in. Layer it
+              // over the live blob so those edits ship without dropping keys the
+              // payload builder moves to columns.
+              decisions: {
+                ...(sheetRef.current.decisions ?? {}),
+                ...((sheetForSave.decisions as Record<string, unknown> | undefined) ?? {}),
+              },
             }),
           })
           const result = await response.json().catch(() => ({})) as SaveDesignSheetResponse

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { buildDesignSheetPersistencePayload, inflateDesignSheetRow } from '@/lib/designSheetPersistence'
+import { buildDesignSheetSavePayload, inflateDesignSheetRow } from '@/lib/designSheetPersistence'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
-import { formatPhoneFieldsDeep } from '@/lib/phone'
 import { saveHouseholdChildren } from '@/lib/contacts/saveHouseholdChildren'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { updatedAtMatches } from '@/lib/designSheet/updatedAt'
@@ -166,9 +165,8 @@ export async function PATCH(req: Request, { params }: Params) {
     const existingSheet = inflateDesignSheetRow(existingRow)
     const resolvedExistingId = typeof existingRow?.id === 'string' ? existingRow.id : null
     const incoming = incomingSheet
-    const existingDecisions = existingSheet && typeof existingSheet.decisions === 'object' && existingSheet.decisions
-      ? existingSheet.decisions as Record<string, unknown>
-      : {}
+    // Client decisions are authoritative when provided. Never let inflated top-level
+    // mirrors from either side shadow nested document_inclusions / estate_plan_design.
     const incomingDecisions = (
       body.decisions
       && typeof body.decisions === 'object'
@@ -178,40 +176,11 @@ export async function PATCH(req: Request, { params }: Params) {
           ? incoming.decisions as Record<string, unknown>
           : {}
     )
-    // Client decisions are authoritative when provided. Never let inflated top-level
-    // mirrors from either side shadow nested document_inclusions / estate_plan_design.
-    const sheetForPersistence = existingSheet
-      ? ({
-          ...existingSheet,
-          ...incoming,
-          decisions: Object.keys(incomingDecisions).length > 0
-            ? incomingDecisions
-            : existingDecisions,
-        } as DesignSheetUpdate)
-      : ({
-          ...body.sheet,
-          decisions: Object.keys(incomingDecisions).length > 0
-            ? incomingDecisions
-            : (body.sheet as DesignSheetUpdate).decisions,
-        } as DesignSheetUpdate)
-    const payload = buildDesignSheetPersistencePayload(formatPhoneFieldsDeep(sheetForPersistence))
-    // Force client decisions when provided. Strip any accidental column keys that may
-    // have leaked into the decisions blob.
-    if (Object.keys(incomingDecisions).length > 0) {
-      const cleanedDecisions = { ...incomingDecisions }
-      for (const key of Object.keys(cleanedDecisions)) {
-        if (key === 'id' || key === 'matter_id' || key === 'updated_at' || key === 'created_at') {
-          delete cleanedDecisions[key]
-        }
-      }
-      // Prefer nested inclusions from the live client decisions over anything build* produced.
-      payload.decisions = {
-        ...(typeof payload.decisions === 'object' && payload.decisions
-          ? payload.decisions as Record<string, unknown>
-          : {}),
-        ...cleanedDecisions,
-      }
-    }
+    const payload = buildDesignSheetSavePayload({
+      existingSheet,
+      incomingSheet: incoming,
+      incomingDecisions,
+    })
     const syncChildren = shouldSyncChildren(childrenInput, existingSheet?.children)
 
     if (resolvedExistingId) {

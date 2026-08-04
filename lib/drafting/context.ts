@@ -2,6 +2,8 @@ import { DraftContext } from './clauses'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { designSheetString, isDesignSheetMarried } from '@/lib/draftPayload/designSheetFields'
 import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
+import { getTrustDetails } from '@/lib/designSheetTrustDetails'
+import type { DesignSheet } from '@/types/database'
 import type { FiduciarySlotRow } from '@/lib/draftPayload/types'
 
 type DesignSheetChildRow = {
@@ -54,6 +56,33 @@ function hasFilledCoSlot(slots: FiduciarySlotRow[], order = 0): boolean {
 
 function hasCoAgent(designSheet: DesignSheetCoFields, slots: FiduciarySlotRow[], legacyKey: keyof DesignSheetCoFields): boolean {
   return hasNamedLegacyCo(designSheet[legacyKey]) || hasFilledCoSlot(slots)
+}
+
+/**
+ * How residuary shares pass to descendants, for the per stirpes / per capita clause
+ * gates in ./clauses.
+ *
+ * The live control is `decisions.trust_details.representation_type`. Deliberately NOT
+ * the `distribution_method` column: despite the name that holds the residual
+ * beneficiary method (outright / staggered / trust-for-life / custom), an unrelated
+ * decision. `decisions.distribution_method` is a legacy key no current UI writes —
+ * reading it alone pinned every matter to the `per_stirpes` default and made the
+ * per capita clause unreachable — so it now only serves older matters that carry one.
+ */
+function descendantRepresentation(
+  designSheet: Record<string, unknown>,
+  decisions: Record<string, unknown>,
+): 'per_stirpes' | 'per_capita' {
+  const representation = getTrustDetails(
+    designSheet as unknown as Pick<DesignSheet, 'decisions'>,
+  ).representation_type
+
+  if (representation === 'per_capita_each_generation') return 'per_capita'
+  // 'by_representation' has no clause of its own; per stirpes is the closest of the
+  // two and keeps the long-standing output for matters already using it.
+  if (representation === 'per_stirpes' || representation === 'by_representation') return 'per_stirpes'
+
+  return decisions.distribution_method === 'per_capita' ? 'per_capita' : 'per_stirpes'
 }
 
 /**
@@ -120,7 +149,7 @@ export function buildDraftContext(designSheet: Record<string, unknown>): DraftCo
     excluded_guardian_2: undefined,
 
     provisions: (decisions.provisions as string[]) ?? [],
-    distribution_method: ((decisions.distribution_method as string) ?? 'per_stirpes') as 'per_stirpes' | 'per_capita',
+    descendant_representation: descendantRepresentation(designSheet, decisions),
     staggered_ages: decisions.staggered_ages ? String(decisions.staggered_ages) : undefined,
 
     plan_type: normalizedPlanType ?? String(designSheet.plan_type ?? decisions.plan_type ?? 'pour_over'),

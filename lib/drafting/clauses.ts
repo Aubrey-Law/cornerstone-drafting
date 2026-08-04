@@ -37,7 +37,13 @@ export interface DraftContext {
   excluded_guardian?: string
   excluded_guardian_2?: string
   provisions: string[]
-  distribution_method: 'per_stirpes' | 'per_capita'
+  /**
+   * How residuary shares pass to descendants. Named apart from the design sheet's
+   * `distribution_method` column on purpose — that column holds the residual
+   * beneficiary method (outright / staggered / …), an unrelated decision, and the
+   * shared name is what let a stale key drive these gates unnoticed.
+   */
+  descendant_representation: 'per_stirpes' | 'per_capita'
   staggered_ages?: string
   plan_type: string
   has_alt1_hcp: boolean
@@ -279,7 +285,7 @@ Upon the death of the Surviving Spouse, after payment of any applicable death ta
     section: 'Distribution on Death of Surviving Spouse',
     order: 72,
     always: false,
-    include: (ctx) => ctx.distribution_method === 'per_stirpes',
+    include: (ctx) => ctx.descendant_representation === 'per_stirpes',
     text: `The Trustee shall divide the trust property into as many equal shares as there shall be children of the Grantors then living and deceased children of the Grantors leaving descendants then living. The Trustee shall allot one share to each child then living and one share to each deceased child leaving descendants then living, such shares to be held and distributed per stirpes.`,
   },
 
@@ -289,7 +295,7 @@ Upon the death of the Surviving Spouse, after payment of any applicable death ta
     section: 'Distribution on Death of Surviving Spouse',
     order: 72,
     always: false,
-    include: (ctx) => ctx.distribution_method === 'per_capita',
+    include: (ctx) => ctx.descendant_representation === 'per_capita',
     text: `The Trustee shall divide the trust property equally among all then living descendants of the Grantors, per capita at each generation.`,
   },
 

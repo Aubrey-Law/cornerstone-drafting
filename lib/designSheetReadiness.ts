@@ -2,6 +2,7 @@ import { getDocumentInclusions, type DesignDocumentInclusions } from '@/lib/desi
 import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
+import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { DESIGN_SECTION_IDS, normalizeDesignSectionId } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
@@ -220,7 +221,11 @@ export function computeDesignSheetReadiness({
     !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
     documentInclusions.trust && married && sheet.is_joint == null &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'joint or separate trusts', 'is_joint'),
-    documentInclusions.trust && !hasText(sheet.distribution_method) &&
+    // Checks the resolved value, not just presence: a legacy sheet carrying an
+    // unrecognised string (e.g. 'per stirpes', left over from when this column
+    // meant something else) satisfied `hasText` and so was never flagged, while
+    // the generator quietly fell back to a staged distribution.
+    documentInclusions.trust && resolveResidualBeneficiaryMethod(sheet) == null &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'distribution method', 'distribution_method'),
     Object.entries(documentInclusions).filter(([key, value]) => key !== 'spouse_docs' && value).length === 0 &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'at least one document', null),
