@@ -144,6 +144,7 @@ function renderPanel(props: Partial<PanelProps> = {}) {
       details={DETAILS}
       designSheetPlanType={null}
       estate={ESTATE}
+      readinessItems={[]}
       activity={ACTIVITY}
       noteText=""
       onNoteTextChange={vi.fn()}

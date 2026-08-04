@@ -18,6 +18,7 @@ import type { MatterTab } from '@/lib/matterPageTabs'
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterActivity, PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import { MatterReadinessDial, type MatterReadinessItem } from '../MatterReadinessDial'
 import { InlineDate, InlineSelect, InlineText, ReadOnlyRow } from './InlineField'
 import { PanelActivity } from './PanelActivity'
 import { PanelSection } from './PanelSection'
@@ -55,6 +56,8 @@ export interface MatterFactsPanelProps {
   details: MatterDetailsRow | null
   designSheetPlanType: string | null
   estate: MatterEstateSnapshot
+  /** Kept from the previous rail — the panel must not drop the readiness dial. */
+  readinessItems: MatterReadinessItem[]
   activity: MatterActivity[]
   noteText: string
   onNoteTextChange: (value: string) => void
@@ -142,6 +145,7 @@ export function MatterFactsPanel({
   details,
   designSheetPlanType,
   estate,
+  readinessItems,
   activity,
   noteText,
   onNoteTextChange,
@@ -356,6 +360,8 @@ export function MatterFactsPanel({
           </button>
         </div>
       </div>
+
+      <MatterReadinessDial items={readinessItems} className="rounded-xl border border-border bg-card p-3 shadow-sm" />
 
       {/* Contact */}
       <PanelSection
