@@ -6,7 +6,13 @@ export const MAX_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 60_000
 export const MAX_DESIGN_SHEET_DOCX_BYTES = 10 * 1024 * 1024
 export const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-export type DesignSheetImportField = keyof DesignSheetUpdate | 'drafting_notes'
+// `residual_beneficiary_method` lives in decisions.trust_details rather than a
+// column, so it is named here alongside drafting_notes rather than derived from
+// DesignSheetUpdate. The apply path routes it to its decisions home.
+export type DesignSheetImportField =
+  | keyof DesignSheetUpdate
+  | 'drafting_notes'
+  | 'residual_beneficiary_method'
 export type DesignSheetImportProposal = Partial<Record<DesignSheetImportField, unknown>>
 
 export interface DesignSheetImportPreviewRow {
@@ -108,7 +114,7 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   spouse_trust_name: { section: 'Trust', label: 'Spouse trust name', kind: 'string' },
   restatement: { section: 'Trust', label: 'Restatement', kind: 'boolean' },
   trust_protector: { section: 'Trust', label: 'Trust protector', kind: 'boolean' },
-  distribution_method: { section: 'Trust', label: 'Distribution method', kind: 'string', options: RESIDUAL_BENEFICIARY_METHODS },
+  residual_beneficiary_method: { section: 'Trust', label: 'Residual beneficiary method', kind: 'string', options: RESIDUAL_BENEFICIARY_METHODS },
   distribution_age: { section: 'Trust', label: 'Distribution age', kind: 'number' },
   stagger_age_1: { section: 'Trust', label: 'First stagger age', kind: 'number' },
   stagger_pct_1: { section: 'Trust', label: 'First stagger percentage', kind: 'number' },

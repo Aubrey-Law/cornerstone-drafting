@@ -145,21 +145,16 @@ describe('residual beneficiary method normalisation', () => {
     expect(getTrustDetails(sheet as never).residual_beneficiary_method).toBe('trust_for_life')
   })
 
-  it('resolves trust_details ahead of the column, normalising either', () => {
+  it('resolves from trust_details only, normalising legacy spellings', () => {
     expect(resolveResidualBeneficiaryMethod({
-      decisions: { trust_details: { residual_beneficiary_method: 'outright' } },
-      distribution_method: 'staggered',
-    } as never)).toBe('outright')
-
-    expect(resolveResidualBeneficiaryMethod({
-      decisions: {},
-      distribution_method: 'trust-for-life',
+      decisions: { trust_details: { residual_beneficiary_method: 'trust-for-life' } },
     } as never)).toBe('trust_for_life')
 
     expect(resolveResidualBeneficiaryMethod({
-      decisions: {},
-      distribution_method: 'per stirpes',
+      decisions: { trust_details: { residual_beneficiary_method: 'per stirpes' } },
     } as never)).toBeNull()
+
+    expect(resolveResidualBeneficiaryMethod({ decisions: {} } as never)).toBeNull()
   })
 })
 
@@ -178,16 +173,9 @@ describe('residual beneficiary method has a single writer', () => {
     expect(source).not.toContain("onChange('distribution_method'")
   })
 
-  it('still anchors the readiness blocker to the rendered field', () => {
-    // designSheetReadiness targets `distribution_method`, which resolves to
-    // id="design-field-distribution_method" — the column name outlives the write.
-    expect(source).toContain('fieldName="distribution_method"')
-  })
-
-  it('resolves a legacy column-only sheet', () => {
-    expect(resolveResidualBeneficiaryMethod({
-      decisions: { trust_details: {} },
-      distribution_method: 'staggered',
-    } as never)).toBe('staggered')
+  it('anchors the readiness blocker to the rendered field', () => {
+    // designSheetReadiness targets `residual_beneficiary_method`, which resolves to
+    // id="design-field-residual_beneficiary_method".
+    expect(source).toContain('fieldName="residual_beneficiary_method"')
   })
 })

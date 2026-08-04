@@ -442,10 +442,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   const hasMinorChildren = payload.matter.minor_children
   const trustProvisions = payload.trust_provisions ?? defaultDraftPayloadTrustProvisions()
   const distributionAges = payload.trust?.distribution_ages ?? []
-  const descendantsMethod = descendantsDistributionMethod(
-    trustProvisions.residual_beneficiary_method,
-    trustProvisions.distribution_method,
-  )
+  const descendantsMethod = descendantsDistributionMethod(trustProvisions.residual_beneficiary_method)
   const distributionAge = trustProvisions.distribution_age ?? distributionAges[0] ?? null
   const staggerAges = trustProvisions.staggered_distributions
     .map(tier => tier.age)
