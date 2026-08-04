@@ -12,6 +12,7 @@ import {
   mergeDecisionUpdates,
   setDocumentInclusion,
 } from '@/lib/designSheetDocumentInclusions'
+import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import {
   getPersistedRealEstateTransfer,
   setSelectedAssetTransferDocs,
@@ -96,7 +97,7 @@ export function PlanDesignSection({
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
   const inclusions = getDocumentInclusions(sheet)
   const estatePlanSetup = getEstatePlanDesignSetup(sheet)
-  const needsDistributionMethod = !sheet.distribution_method
+  const needsDistributionMethod = resolveResidualBeneficiaryMethod(sheet) == null
   const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
   const fundingDocKeys: FundingDocumentKey[] = [
     'certificate_of_trust',

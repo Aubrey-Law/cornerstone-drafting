@@ -162,3 +162,32 @@ describe('residual beneficiary method normalisation', () => {
     } as never)).toBeNull()
   })
 })
+
+// Regression: the section wrote the residual beneficiary method to both
+// decisions.trust_details and the `distribution_method` column, and the two drifted
+// — some live sheets carry a column value with no trust_details entry. trust_details
+// is now the only written home; the column is read-only legacy.
+describe('residual beneficiary method has a single writer', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx'),
+    'utf8',
+  )
+
+  it('writes only trust_details when the method changes', () => {
+    expect(source).toContain("updateTrustDetails({ residual_beneficiary_method: method })")
+    expect(source).not.toContain("onChange('distribution_method'")
+  })
+
+  it('still anchors the readiness blocker to the rendered field', () => {
+    // designSheetReadiness targets `distribution_method`, which resolves to
+    // id="design-field-distribution_method" — the column name outlives the write.
+    expect(source).toContain('fieldName="distribution_method"')
+  })
+
+  it('resolves a legacy column-only sheet', () => {
+    expect(resolveResidualBeneficiaryMethod({
+      decisions: { trust_details: {} },
+      distribution_method: 'staggered',
+    } as never)).toBe('staggered')
+  })
+})

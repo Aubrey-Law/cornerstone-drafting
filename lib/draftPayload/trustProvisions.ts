@@ -158,6 +158,8 @@ export function draftPayloadTrustProvisions(sheet: TrustProvisionsInput): DraftP
     client_name_format: getTrustNameFormat(sheet, 'client'),
     spouse_name_format: getTrustNameFormat(sheet, 'spouse'),
     residual_beneficiary: sheet.residual_beneficiary ?? null,
+    // Carried only so descendantsDistributionMethod can fall back to it for sheets
+    // written before trust_details became the single home. Nothing writes it now.
     distribution_method: sheet.distribution_method ?? null,
     distribution_age: sheet.distribution_age ?? null,
     staggered_distributions: Array.isArray(sheet.staggered_distributions) ? sheet.staggered_distributions : [],

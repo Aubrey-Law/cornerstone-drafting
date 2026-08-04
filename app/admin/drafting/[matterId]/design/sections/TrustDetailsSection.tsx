@@ -615,10 +615,11 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           blocking
           value={residualMethod}
           options={RESIDUAL_BENEFICIARY_METHOD_OPTIONS}
-          onChange={method => {
-            updateTrustDetails({ residual_beneficiary_method: method })
-            onChange('distribution_method', method)
-          }}
+          // trust_details is the only home for this decision. It used to be written
+          // to the `distribution_method` column as well, and the two drifted — some
+          // sheets carry a column value with no trust_details entry. That column is
+          // now read-only legacy, resolved by resolveResidualBeneficiaryMethod.
+          onChange={method => updateTrustDetails({ residual_beneficiary_method: method })}
         />
 
         <div className="mt-4">
