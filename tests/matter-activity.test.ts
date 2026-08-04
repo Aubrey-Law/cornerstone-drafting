@@ -6,10 +6,11 @@ describe('matter activity timeline', () => {
   it('adds activity tab to matter detail', () => {
     const detail = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterDetailClient.tsx'), 'utf8')
     const page = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/page.tsx'), 'utf8')
-    const tab = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/MatterActivityTab.tsx'), 'utf8')
+    // Event icons/labels live in the shared module both activity surfaces read.
+    const meta = fs.readFileSync(path.join(process.cwd(), 'app/admin/matters/[id]/activityEventMeta.tsx'), 'utf8')
     expect(detail).toContain('MatterActivityTab')
     expect(page).toContain("from('matter_activity')")
     expect(detail).not.toContain("from('matter_activity')")
-    expect(tab).toContain('intake_sent')
+    expect(meta).toContain('intake_sent')
   })
 })

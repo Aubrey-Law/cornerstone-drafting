@@ -39,8 +39,6 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { formatDate } from '@/lib/utils'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import {
   type CommunicationChannel,
@@ -75,7 +73,6 @@ import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
-import { MatterOverviewFactsRail } from './MatterOverviewFactsRail'
 import { MatterProgressTimeline } from './MatterProgressTimeline'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
@@ -88,6 +85,7 @@ import { MatterSlaTab } from './tabs/sla'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
+import { MatterFactsPanel } from './facts-panel/MatterFactsPanel'
 import {
   isMobileDetailViewport,
   ResponsiveDetailRail,
@@ -96,11 +94,7 @@ import { MatterStageStrip } from './MatterStageStrip'
 import { MatterLeadActions } from './MatterLeadActions'
 import type { MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { MatterBlockerBanner } from './MatterBlockerBanner'
-import {
-  buildMatterReadinessItems,
-  MatterReadinessDial,
-  type MatterReadinessItem,
-} from './MatterReadinessDial'
+import { buildMatterReadinessItems } from './MatterReadinessDial'
 import { useMatterCommunications } from './useMatterCommunications'
 import { useMatterDocuments } from './useMatterDocuments'
 
@@ -151,91 +145,6 @@ export default function MatterDetailClient(props: MatterDetailClientProps) {
     <Suspense fallback={<MatterDetailShell {...props} />}>
       <MatterDetailClientInner {...props} />
     </Suspense>
-  )
-}
-
-function RailDate({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-right text-xs tabular-nums">{value ? formatDate(value) : '—'}</dd>
-    </div>
-  )
-}
-
-/**
- * Persistent record context: who the matter is for, how close it is to
- * draftable, the standing matter facts, and the dates that drive the calendar.
- * Scrolls independently of the tab panel beside it.
- */
-function MatterFactsRail({
-  matter,
-  matterId,
-  details,
-  designSheetPlanType,
-  estate,
-  readinessItems,
-}: {
-  matter: PipelineMatter
-  matterId: string
-  details: MatterDetailsRow | null
-  designSheetPlanType: string | null
-  estate: MatterEstateSnapshot
-  readinessItems: MatterReadinessItem[]
-}) {
-  const clientName = matter.client_name || matter.matter_name || 'Matter'
-  const initials = clientName
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('')
-  // No city column exists on matter_details — county and state are the finest
-  // location grain the record actually carries.
-  const locationLine = [
-    practiceAreaLabel(details?.practice_area ?? matter.practice_area),
-    details?.jurisdiction_county,
-    details?.jurisdiction_state,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-
-  return (
-    <div className="h-full w-full overflow-y-auto bg-card p-4">
-      <div className="flex items-start gap-3">
-        <Avatar className="size-10">
-          <AvatarFallback className="text-xs">{initials || '—'}</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{clientName}</p>
-          {matter.spouse_name && (
-            <p className="truncate text-xs text-muted-foreground">&amp; {matter.spouse_name}</p>
-          )}
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={locationLine}>
-            {locationLine || '—'}
-          </p>
-        </div>
-      </div>
-
-      <MatterReadinessDial items={readinessItems} className="mt-4" />
-
-      <MatterOverviewFactsRail
-        matterId={matterId}
-        details={details}
-        designSheetPlanType={designSheetPlanType}
-        estate={estate}
-        className="mt-4 border-t border-border pt-4"
-      />
-
-      <div className="mt-4 border-t border-border pt-4">
-        <h3 className="text-sm font-semibold">Dates</h3>
-        <dl className="mt-1">
-          <RailDate label="Open date" value={details?.open_date ?? matter.matter_created} />
-          <RailDate label="Design meeting" value={details?.design_meeting_date} />
-          <RailDate label="Target signing" value={details?.scheduled_signing_date} />
-        </dl>
-      </div>
-    </div>
   )
 }
 
@@ -862,6 +771,8 @@ function MatterDetailClientInner({
         showHealthBadge={blockerCount === 0}
         factsRailOpen={factsRailOpen}
         onToggleFactsRail={() => setFactsRailOpen(open => !open)}
+        onEmail={() => setActiveTab('communications', undefined, 'email')}
+        onText={() => setActiveTab('communications', undefined, 'sms')}
         onOpenIntake={() => void openIntakeSheet()}
         onImportIntake={() => setImportIntakeOpen(true)}
         onUnlockIntake={() => void handleUnlockIntake()}
@@ -890,16 +801,28 @@ function MatterDetailClientInner({
           open={factsRailOpen}
           onOpenChange={setFactsRailOpen}
           label="Matter facts"
-          desktopClassName="w-80 border-r border-border bg-card"
+          desktopClassName="w-[352px] border-r border-border bg-card"
           mobileClassName="bg-card"
         >
-          <MatterFactsRail
+          <MatterFactsPanel
             matter={matter}
             matterId={matterId}
             details={matterDetails}
             designSheetPlanType={designSheetPlanType}
             estate={initialEstateSnapshot}
             readinessItems={readinessItems}
+            activity={activity}
+            noteText={noteText}
+            onNoteTextChange={setNoteText}
+            onAddNote={() => void handleAddNote()}
+            noteSaving={noteSaving}
+            noteCount={linkedNotes.length}
+            latestNoteAt={linkedNotes[0]?.created_at ?? null}
+            onSaveField={handleSaveMatterDetailField}
+            savingField={savingField}
+            lastSavedAt={lastSavedAt}
+            error={matterDetailsError}
+            onOpenTab={tab => setActiveTab(tab)}
           />
         </ResponsiveDetailRail>
 

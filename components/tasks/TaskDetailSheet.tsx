@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
   describeRecurrence,
+  taskRecordHref,
   type ChecklistItem,
   type TaskPriority,
   type TaskRecurrence,
@@ -145,6 +147,7 @@ export function TaskDetailSheet({
 
   if (!task) return null
   const currentTask = task
+  const recordHref = taskRecordHref(currentTask)
 
   function addSubtask() {
     const text = subtaskDraft.trim()
@@ -198,6 +201,20 @@ export function TaskDetailSheet({
           </SheetHeader>
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+            <div className="space-y-1.5 text-sm">
+              <span className="font-medium">Related matter</span>
+              {recordHref && currentTask.record_name ? (
+                <Link
+                  href={recordHref}
+                  className="block truncate text-sm text-primary hover:underline"
+                >
+                  {currentTask.record_name}
+                </Link>
+              ) : (
+                <p className="text-sm text-muted-foreground">No related record</p>
+              )}
+            </div>
+
             <label className="block space-y-1.5 text-sm">
               <span className="font-medium">Title</span>
               <Input value={title} onChange={event => setTitle(event.target.value)} />
