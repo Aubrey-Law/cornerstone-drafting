@@ -694,6 +694,8 @@ export default function Softphone() {
       .filter(entry =>
         entry.name.toLowerCase().includes(query) ||
         (entry.matterNumber?.toLowerCase().includes(query) ?? false) ||
+        // Lets "trustee" or "spouse" find people who have no matter number.
+        (entry.detail?.toLowerCase().includes(query) ?? false) ||
         (queryDigits.length >= 3 && entry.digits.includes(queryDigits)),
       )
       .slice(0, 6)
@@ -763,9 +765,11 @@ export default function Softphone() {
           <p className="mt-0.5 text-[10px] text-muted-foreground">
             {wrapUp.entry?.matterNumber
               ? `Logging to ${wrapUp.entry.matterNumber}`
-              : wrapUp.entry
+              : wrapUp.entry?.leadId
                 ? 'Logging to lead record'
-                : 'No matching client — saved to the call log'}
+                : wrapUp.entry
+                  ? 'Saved to the call log'
+                  : 'No matching client — saved to the call log'}
           </p>
 
           <div className="mt-4 flex gap-1.5" role="group" aria-label="Outcome">
@@ -860,10 +864,10 @@ export default function Softphone() {
             {incomingEntry?.name ?? formatPhone(incomingFrom) ?? incomingFrom}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">{formatPhone(incomingFrom) || incomingFrom}</p>
-          {incomingEntry?.matterNumber && (
+          {(incomingEntry?.matterNumber ?? incomingEntry?.detail) && (
             <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-[10px]">
               <span className="h-[5px] w-[5px] rounded-full bg-primary" aria-hidden />
-              {incomingEntry.matterNumber}
+              {incomingEntry.matterNumber ?? incomingEntry.detail}
               {incomingEntry.practiceArea ? ` · ${incomingEntry.practiceArea}` : ''}
             </p>
           )}
@@ -1105,7 +1109,7 @@ export default function Softphone() {
                   <span className="min-w-0">
                     <span className="block truncate text-xs font-medium">{entry.name}</span>
                     <span className="block truncate text-[10px] text-muted-foreground">
-                      {entry.matterNumber ?? 'Lead'}
+                      {entry.detail ?? entry.matterNumber ?? 'Contact'}
                     </span>
                   </span>
                 </button>
@@ -1147,7 +1151,7 @@ export default function Softphone() {
               <span className="min-w-0">
                 <span className="block truncate text-xs font-medium">{dialedEntry.name}</span>
                 <span className="block truncate text-[10px] text-muted-foreground">
-                  {dialedEntry.matterNumber ?? 'Lead'}
+                  {dialedEntry.detail ?? dialedEntry.matterNumber ?? 'Contact'}
                 </span>
               </span>
             </button>

@@ -7,7 +7,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UNRESOLVED_RE = /\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/
 const MAX_FUTURE_MS = 366 * 24 * 60 * 60_000
 
-type ContextType = 'matter' | 'lead' | 'general'
+type ContextType = 'matter' | 'lead' | 'contact' | 'general'
+
+const CONTEXT_TYPES: string[] = ['matter', 'lead', 'contact', 'general']
 
 function stringList(value: unknown): string[] {
   return Array.isArray(value)
@@ -45,7 +47,7 @@ export async function GET(req: Request) {
     .eq('user_id', userId)
     .order('scheduled_for', { ascending: false })
     .limit(50)
-  if (contextType === 'matter' || contextType === 'lead' || contextType === 'general') {
+  if (contextType && CONTEXT_TYPES.includes(contextType)) {
     query = query.eq('context_type', contextType)
     query = contextId ? query.eq('context_id', contextId) : query.is('context_id', null)
   }
@@ -68,7 +70,7 @@ export async function POST(req: Request) {
 
   const contextType = body.contextType as ContextType
   const contextId = typeof body.contextId === 'string' && body.contextId.trim() ? body.contextId.trim() : null
-  if (!['matter', 'lead', 'general'].includes(contextType)) {
+  if (!CONTEXT_TYPES.includes(contextType)) {
     return NextResponse.json({ error: 'Invalid context type' }, { status: 400 })
   }
   if ((contextType === 'general' && contextId) || (contextType !== 'general' && !contextId)) {

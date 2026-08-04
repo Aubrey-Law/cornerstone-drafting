@@ -31,7 +31,14 @@ export async function fetchInboxThreads({
   return (data ?? []) as InboxThread[]
 }
 
-/** Threads with an unanswered client message, not snoozed or archived. */
+/**
+ * Threads with an unanswered client message, not snoozed or archived.
+ *
+ * Contact threads are excluded on purpose: this count drives the rail badge
+ * and the pre-engagement SLA, both of which measure responsiveness to clients
+ * and leads. An unanswered text from a referral partner or vendor shouldn't
+ * make the firm look behind on client work.
+ */
 export async function fetchInboxNeedsReplyCount(): Promise<number> {
   const admin = getAdminClient()
   const { count, error } = await admin
@@ -39,22 +46,23 @@ export async function fetchInboxNeedsReplyCount(): Promise<number> {
     .select('thread_key', { count: 'exact', head: true })
     .not('waiting_since', 'is', null)
     .is('archived_at', null)
+    .neq('record_type', 'contact')
     .or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
   if (error) throw new Error(error.message)
   return count ?? 0
 }
 
 export interface ParsedThreadKey {
-  recordType: 'matter' | 'lead'
+  recordType: 'matter' | 'lead' | 'contact'
   recordId: string
 }
 
-const THREAD_KEY_PATTERN = /^(matter|lead):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/
+const THREAD_KEY_PATTERN = /^(matter|lead|contact):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/
 
 export function parseThreadKey(key: string): ParsedThreadKey | null {
   const match = THREAD_KEY_PATTERN.exec(key)
   if (!match) return null
-  return { recordType: match[1] as 'matter' | 'lead', recordId: match[2] }
+  return { recordType: match[1] as ParsedThreadKey['recordType'], recordId: match[2] }
 }
 
 /** Full merged timeline for one record, across all four sources. */
@@ -105,24 +113,27 @@ export async function fetchThreadItems(key: ParsedThreadKey): Promise<Communicat
       })),
       smsRows(sms.data ?? []),
       callRows(calls.data ?? []),
-      (emails.data ?? []).map(row => ({
-        id: row.id as string,
-        channel: 'email' as const,
-        direction: 'outbound' as const,
-        body: (row.subject as string) || 'Email sent',
-        meta: (row.actual_to as string | null) ?? null,
-        created_at: row.created_at as string,
-      })),
+      emailRows(emails.data ?? []),
     )
   } else {
-    const [sms, calls] = await Promise.all([
-      smsQuery.eq('lead_id', key.recordId),
-      callsQuery.eq('lead_id', key.recordId),
+    // Leads and contacts have no portal thread; everything else scopes off the
+    // same column.
+    const column = key.recordType === 'contact' ? 'contact_id' : 'lead_id'
+    const [sms, calls, emails] = await Promise.all([
+      smsQuery.eq(column, key.recordId),
+      callsQuery.eq(column, key.recordId),
+      admin
+        .from('email_log')
+        .select('id, subject, actual_to, status, created_at')
+        .eq(column, key.recordId)
+        .neq('status', 'error')
+        .order('created_at', { ascending: true })
+        .limit(200),
     ])
-    for (const res of [sms, calls]) {
+    for (const res of [sms, calls, emails]) {
       if (res.error) throw new Error(res.error.message)
     }
-    items.push(smsRows(sms.data ?? []), callRows(calls.data ?? []))
+    items.push(smsRows(sms.data ?? []), callRows(calls.data ?? []), emailRows(emails.data ?? []))
   }
 
   return mergeCommunicationItems(...items)
@@ -146,6 +157,25 @@ function smsRows(rows: unknown[]): CommunicationItem[] {
     body: row.body ?? '',
     meta: row.status ?? null,
     sender: row.direction === 'inbound' ? row.recipient_name : row.actor_name ?? 'Firm',
+    created_at: row.created_at,
+  }))
+}
+
+interface EmailRow {
+  id: string
+  subject: string | null
+  actual_to: string | null
+  created_at: string
+}
+
+/** email_log is outbound-only today; inbound email arrives with a sync. */
+function emailRows(rows: unknown[]): CommunicationItem[] {
+  return (rows as EmailRow[]).map(row => ({
+    id: row.id,
+    channel: 'email' as const,
+    direction: 'outbound' as const,
+    body: row.subject || 'Email sent',
+    meta: row.actual_to ?? null,
     created_at: row.created_at,
   }))
 }

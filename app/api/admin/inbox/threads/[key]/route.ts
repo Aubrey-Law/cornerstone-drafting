@@ -85,10 +85,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const failure = portal.error ?? sms.error
       if (failure) return NextResponse.json({ error: failure.message }, { status: 500 })
     } else {
+      // Leads and contacts have no portal thread — SMS is the only readable
+      // inbound channel on either.
+      const column = key.recordType === 'contact' ? 'contact_id' : 'lead_id'
       const { error } = await admin
         .from('sms_messages')
         .update({ read_by_staff_at: nowIso })
-        .eq('lead_id', key.recordId)
+        .eq(column, key.recordId)
         .eq('direction', 'inbound')
         .is('read_by_staff_at', null)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })

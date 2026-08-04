@@ -30,6 +30,7 @@ interface Payload {
   text?: unknown
   matterId?: unknown
   leadId?: unknown
+  contactId?: unknown
   documentIds?: unknown
   includeSignature?: unknown
 }
@@ -123,6 +124,7 @@ export async function POST(req: Request) {
 
   const matterId = cleanString(payload.matterId) || null
   const leadId = cleanString(payload.leadId) || null
+  const contactId = cleanString(payload.contactId) || null
   const documentIds = Array.isArray(payload.documentIds)
     ? payload.documentIds.filter((value): value is string => typeof value === 'string')
     : []
@@ -169,6 +171,11 @@ export async function POST(req: Request) {
     userId,
     attachments: attachments.length > 0 ? attachments : undefined,
     includeSignature: payload.includeSignature === true,
+    // Without these the send is logged but threads to nothing, so a sent email
+    // shows up in no timeline at all.
+    matterId,
+    leadId,
+    contactId,
   })
 
   if (!result.ok) {
