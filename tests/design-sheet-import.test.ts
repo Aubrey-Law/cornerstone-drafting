@@ -277,10 +277,10 @@ describe('design sheet persistence import safety', () => {
       client_pronouns: 'she/her',
     } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
 
+    // No `decisions` key: a column-only patch must not overwrite the stored blob.
     expect(payload).toEqual({
       client_name: 'Jane Doe',
       client_pronouns: 'she/her',
-      decisions: {},
     })
   })
 
@@ -295,8 +295,8 @@ describe('design sheet persistence import safety', () => {
       client_name: 'Jane Doe',
       excluded_guardian_flag: true,
       excluded_guardian_name: 'John Smith',
-      decisions: {},
     })
+    expect('decisions' in payload).toBe(false)
   })
 
   it('does not persist legacy inheritance-structure values', () => {
@@ -305,10 +305,7 @@ describe('design sheet persistence import safety', () => {
       inheritance_structure: 'trust-protection',
     } as unknown as Parameters<typeof buildDesignSheetPersistencePayload>[0])
 
-    expect(payload).toEqual({
-      client_name: 'Jane Doe',
-      decisions: {},
-    })
+    expect(payload).toEqual({ client_name: 'Jane Doe' })
   })
 
   it('inflates flexible decisions over stale non-writable row values', () => {

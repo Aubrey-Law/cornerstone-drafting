@@ -126,7 +126,7 @@ Client context:
 - Married: ${ctx.is_married}
 - Has children: ${ctx.has_children}${ctx.has_minor_children ? ' (including minors)' : ''}
 - Provisions: ${ctx.provisions.join(', ') || 'standard'}
-- Distribution: ${ctx.distribution_method}${ctx.staggered_ages ? `, ages ${ctx.staggered_ages}` : ''}
+- Descendant representation: ${ctx.descendant_representation}${ctx.staggered_ages ? `, ages ${ctx.staggered_ages}` : ''}
 
 CRITICAL: Keep ALL [PLACEHOLDER] values exactly as written with square brackets — a separate system fills these in after you finish. Output ONLY the document text. No preamble, no explanation, no markdown formatting.`,
       messages: [{

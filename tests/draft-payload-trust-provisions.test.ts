@@ -251,3 +251,33 @@ describe('draft payload trust provisions wiring', () => {
     expect(descendantsDistributionMethod(null, 'staggered')).toBe('staged')
   })
 })
+
+// Regression: this used to end in a bare `return 'staged'`, so a matter where nobody
+// picked a method — or one carrying an unrecognised legacy value — still generated a
+// complete staged-distribution trust. Null leaves the generator field absent so the
+// draft preflight reports it instead.
+describe('descendantsDistributionMethod', () => {
+  it('maps each recognised method', () => {
+    expect(descendantsDistributionMethod('outright', null)).toBe('outright')
+    expect(descendantsDistributionMethod('staggered', null)).toBe('staged')
+    expect(descendantsDistributionMethod('trust_for_life', null)).toBe('trust_for_life')
+    expect(descendantsDistributionMethod('custom', null)).toBe('custom')
+  })
+
+  it('accepts the hyphenated option value from either home', () => {
+    expect(descendantsDistributionMethod('trust-for-life' as never, null)).toBe('trust_for_life')
+    expect(descendantsDistributionMethod(null, 'trust-for-life')).toBe('trust_for_life')
+  })
+
+  it('returns null when nothing is set rather than defaulting to staged', () => {
+    expect(descendantsDistributionMethod(null, null)).toBeNull()
+  })
+
+  it('returns null for a value that is not a residual beneficiary method', () => {
+    expect(descendantsDistributionMethod(null, 'per stirpes')).toBeNull()
+  })
+
+  it('prefers trust_details over the column', () => {
+    expect(descendantsDistributionMethod('outright', 'staggered')).toBe('outright')
+  })
+})

@@ -2,6 +2,7 @@ import { getTrustPlanningType } from '@/lib/designSheetDocumentInclusions'
 import {
   getTrustDetails,
   getTrustNameFormat,
+  normalizeResidualBeneficiaryMethod,
   type ResidualBeneficiaryMethod,
   type TrustCoTrusteeDecision,
   type TrustDetailsProvisions,
@@ -93,16 +94,27 @@ export function trustCoTrusteesAction(decision: TrustCoTrusteeDecision | null): 
   }
 }
 
+/**
+ * Map the residual beneficiary method onto the generator's descendant-distribution
+ * vocabulary, or null when nothing usable is set.
+ *
+ * Null is deliberate: this used to fall through to `'staged'`, so a matter where
+ * nobody picked a method — or where the stored value was unrecognised — still
+ * generated a complete staged-distribution trust. Callers must leave the field
+ * absent so the draft preflight reports it instead of emitting a distribution
+ * provision the attorney never chose.
+ */
 export function descendantsDistributionMethod(
   residualMethod: ResidualBeneficiaryMethod | null,
   distributionMethod: string | null | undefined,
-): string {
-  const method = residualMethod ?? (distributionMethod as ResidualBeneficiaryMethod | null)
+): string | null {
+  const method = normalizeResidualBeneficiaryMethod(residualMethod)
+    ?? normalizeResidualBeneficiaryMethod(distributionMethod)
   if (method === 'outright') return 'outright'
   if (method === 'staggered') return 'staged'
-  if (method === 'trust_for_life' || distributionMethod === 'trust-for-life') return 'trust_for_life'
+  if (method === 'trust_for_life') return 'trust_for_life'
   if (method === 'custom') return 'custom'
-  return 'staged'
+  return null
 }
 
 export function defaultDraftPayloadTrustProvisions(

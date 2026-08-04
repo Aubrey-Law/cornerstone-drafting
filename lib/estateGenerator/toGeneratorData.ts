@@ -647,7 +647,9 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         distribution_method: payload.will_provisions.tangible_property_distribution ?? 'memorandum',
       },
       descendants_distribution: {
-        method: descendantsMethod,
+        // Absent, not defaulted, when no method is set — the preflight's
+        // required-field check is what surfaces it to the attorney.
+        method: descendantsMethod ?? undefined,
         distribution_age: distributionAge?.toString(),
         stage_1_age: (staggerAges[0] ?? distributionAges[0])?.toString(),
         stage_2_age: (staggerAges[1] ?? distributionAges[1])?.toString(),

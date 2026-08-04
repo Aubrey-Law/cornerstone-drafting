@@ -36,6 +36,39 @@ export type SuccessorTrusteeVacancy =
 
 export type ResidualBeneficiaryMethod = 'outright' | 'staggered' | 'trust_for_life' | 'custom'
 
+export const RESIDUAL_BENEFICIARY_METHODS: readonly ResidualBeneficiaryMethod[] = [
+  'outright',
+  'staggered',
+  'trust_for_life',
+  'custom',
+]
+
+/**
+ * Coerce a stored residual beneficiary method to the canonical union, or null when
+ * nothing usable is set. Null must never be treated as a default — callers surface
+ * it as a decision the attorney still owes.
+ *
+ * Hyphens are folded to underscores for back-compat: the design sheet's option value
+ * used to be `trust-for-life` while the union is `trust_for_life`, and an
+ * `as ResidualBeneficiaryMethod` cast kept the compiler from noticing. The option
+ * value is corrected now, so this only serves sheets written before that.
+ */
+export function normalizeResidualBeneficiaryMethod(value: unknown): ResidualBeneficiaryMethod | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().replace(/-/g, '_')
+  return (RESIDUAL_BENEFICIARY_METHODS as readonly string[]).includes(normalized)
+    ? normalized as ResidualBeneficiaryMethod
+    : null
+}
+
+/** The method the UI, readiness and the generator all resolve to, from either home. */
+export function resolveResidualBeneficiaryMethod(
+  sheet: Pick<DesignSheet, 'decisions' | 'distribution_method'>,
+): ResidualBeneficiaryMethod | null {
+  return normalizeResidualBeneficiaryMethod(getTrustDetails(sheet).residual_beneficiary_method)
+    ?? normalizeResidualBeneficiaryMethod(sheet.distribution_method)
+}
+
 export type ResiduaryAfterDeath =
   | 'descendants_outright_per_stirpes'
   | 'descendants_shares_outright_children_trusts_others'
@@ -212,7 +245,10 @@ export function getTrustDetails(sheet: Pick<DesignSheet, 'decisions'>): TrustDet
     subchapter_s_provisions: readBoolean(raw, 'subchapter_s_provisions', DEFAULT_TRUST_DETAILS.subchapter_s_provisions),
     allow_trustee_change_situs: readBoolean(raw, 'allow_trustee_change_situs', DEFAULT_TRUST_DETAILS.allow_trustee_change_situs),
     successor_trustee_vacancy: readString(raw, 'successor_trustee_vacancy', DEFAULT_TRUST_DETAILS.successor_trustee_vacancy),
-    residual_beneficiary_method: readString(raw, 'residual_beneficiary_method', DEFAULT_TRUST_DETAILS.residual_beneficiary_method),
+    // Normalised on read so sheets written before the option value was corrected
+    // (they stored `trust-for-life`) come back as the canonical union member.
+    residual_beneficiary_method: normalizeResidualBeneficiaryMethod(raw.residual_beneficiary_method)
+      ?? DEFAULT_TRUST_DETAILS.residual_beneficiary_method,
     residuary_after_death: readString(raw, 'residuary_after_death', DEFAULT_TRUST_DETAILS.residuary_after_death),
     include_common_trust_for_children: readBoolean(raw, 'include_common_trust_for_children', DEFAULT_TRUST_DETAILS.include_common_trust_for_children),
     special_distributions_age: readNumber(raw, 'special_distributions_age', DEFAULT_TRUST_DETAILS.special_distributions_age),

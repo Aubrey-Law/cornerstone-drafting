@@ -7,6 +7,9 @@ import {
   buildStaggeredTiersFromPreset,
   buildTrustNameSuggestions,
   getTrustDetails,
+  normalizeResidualBeneficiaryMethod,
+  resolveResidualBeneficiaryMethod,
+  RESIDUAL_BENEFICIARY_METHODS,
   STAGGERED_DISTRIBUTION_PRESETS,
 } from '@/lib/designSheetTrustDetails'
 
@@ -112,5 +115,50 @@ describe('staggered distribution quick fill', () => {
     expect(trustDetailsSource).toContain('Quick fill:')
     expect(trustDetailsSource).toContain('STAGGERED_DISTRIBUTION_PRESETS.map')
     expect(trustDetailsSource).toContain('buildStaggeredTiersFromPreset(preset')
+  })
+})
+
+// Regression: the design sheet's option value was `trust-for-life` while the union is
+// `trust_for_life`, and an `as ResidualBeneficiaryMethod` cast at the change handler
+// hid it. Sheets written then still carry the hyphen, and without normalisation a
+// lifetime trust resolved as a staged distribution.
+describe('residual beneficiary method normalisation', () => {
+  it('accepts the canonical values', () => {
+    for (const method of RESIDUAL_BENEFICIARY_METHODS) {
+      expect(normalizeResidualBeneficiaryMethod(method)).toBe(method)
+    }
+  })
+
+  it('folds the legacy hyphenated spelling', () => {
+    expect(normalizeResidualBeneficiaryMethod('trust-for-life')).toBe('trust_for_life')
+  })
+
+  it('rejects anything that is not a method', () => {
+    expect(normalizeResidualBeneficiaryMethod('per stirpes')).toBeNull()
+    expect(normalizeResidualBeneficiaryMethod('')).toBeNull()
+    expect(normalizeResidualBeneficiaryMethod(null)).toBeNull()
+    expect(normalizeResidualBeneficiaryMethod(42)).toBeNull()
+  })
+
+  it('normalises a legacy value stored in trust_details', () => {
+    const sheet = { decisions: { trust_details: { residual_beneficiary_method: 'trust-for-life' } } }
+    expect(getTrustDetails(sheet as never).residual_beneficiary_method).toBe('trust_for_life')
+  })
+
+  it('resolves trust_details ahead of the column, normalising either', () => {
+    expect(resolveResidualBeneficiaryMethod({
+      decisions: { trust_details: { residual_beneficiary_method: 'outright' } },
+      distribution_method: 'staggered',
+    } as never)).toBe('outright')
+
+    expect(resolveResidualBeneficiaryMethod({
+      decisions: {},
+      distribution_method: 'trust-for-life',
+    } as never)).toBe('trust_for_life')
+
+    expect(resolveResidualBeneficiaryMethod({
+      decisions: {},
+      distribution_method: 'per stirpes',
+    } as never)).toBeNull()
   })
 })

@@ -14,6 +14,7 @@ function payload(overrides: {
   documents?: Partial<DraftPayload['documents']>
   fiduciaries?: Partial<DraftPayload['fiduciaries']>
   trust?: Partial<NonNullable<DraftPayload['trust']>> | null
+  trust_provisions?: DraftPayload['trust_provisions']
   will_provisions?: Partial<DraftPayload['will_provisions']>
   execution?: Partial<DraftPayload['execution']>
 } = {}): DraftPayload {
@@ -57,7 +58,9 @@ function payload(overrides: {
       has_ilit: false,
       ilit_trustee: null,
     },
-    trust_provisions: defaultDraftPayloadTrustProvisions(),
+    // A matter that is genuinely ready to generate has a distribution method; the
+    // preflight now reports it rather than letting the generator assume 'staged'.
+    trust_provisions: defaultDraftPayloadTrustProvisions({ residual_beneficiary_method: 'staggered' }),
     fiduciaries: {
       pr_primary: 'Pat Executor',
       pr_co_primary: null,
@@ -191,6 +194,7 @@ function payload(overrides: {
     fiduciaries: { ...base.fiduciaries, ...overrides.fiduciaries },
     will_provisions: { ...base.will_provisions, ...overrides.will_provisions },
     trust: overrides.trust === null ? null : { ...base.trust!, ...overrides.trust },
+    trust_provisions: overrides.trust_provisions ?? base.trust_provisions,
   }
 }
 
@@ -865,5 +869,26 @@ describe('estate draft preflight', () => {
     expect(preflight.canGenerate).toBe(true)
     expect(preflight.error).toBeUndefined()
     expect(preflight.missing).toEqual(['testamentary_trust.trust_protector.full_name'])
+  })
+})
+
+// Regression: with no distribution method chosen the generator used to fall back to
+// a staged distribution and the preflight reported nothing, so a single-trust matter
+// generated a distribution provision the attorney never selected.
+describe('estate draft preflight — distribution method', () => {
+  it('reports a missing distribution method instead of assuming staged', () => {
+    const preflight = buildEstateDraftPreflight(payload({
+      trust_provisions: defaultDraftPayloadTrustProvisions(),
+    }))
+
+    expect(preflight.missing).toContain('trust.descendants_distribution.method')
+  })
+
+  it('reports nothing once a method is chosen', () => {
+    const preflight = buildEstateDraftPreflight(payload({
+      trust_provisions: defaultDraftPayloadTrustProvisions({ residual_beneficiary_method: 'outright' }),
+    }))
+
+    expect(preflight.missing).not.toContain('trust.descendants_distribution.method')
   })
 })

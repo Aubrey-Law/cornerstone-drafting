@@ -81,7 +81,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       fields,
     })
     const now = new Date().toISOString()
-    const payload = buildDesignSheetPersistencePayload(patch)
+    // Seed from the stored decisions: the patch carries fields without a dedicated
+    // column (spouse_aka), and building from the patch alone would write a decisions
+    // blob holding only those — dropping every design decision on the sheet.
+    const payload = buildDesignSheetPersistencePayload({
+      decisions: sheet.decisions ?? {},
+      ...patch,
+    })
 
     const { error } = await admin
       .from('design_sheets')

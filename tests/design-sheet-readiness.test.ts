@@ -403,3 +403,42 @@ describe('parseDesignFocusParam', () => {
     expect(parseDesignFocusParam('   ')).toBeNull()
   })
 })
+
+// The gate used to be `!hasText(sheet.distribution_method)`, so any non-empty string
+// satisfied it — including 'per stirpes', left over from when this column carried the
+// representation type. The attorney was never prompted and the generator quietly fell
+// back to a staged distribution.
+describe('distribution method readiness', () => {
+  const readinessFor = (overrides: Partial<DesignSheet>) => computeDesignSheetReadiness({
+    sheet: makeSheet(overrides),
+    matter: makeMatter(),
+    isLP: false,
+    lpData: null,
+  })
+
+  const blocksOnMethod = (overrides: Partial<DesignSheet>) =>
+    readinessFor(overrides).blocking.some(item => item.label === 'distribution method')
+
+  it('blocks when no method is set', () => {
+    expect(blocksOnMethod({ distribution_method: null })).toBe(true)
+  })
+
+  it('blocks on a value that is not a residual beneficiary method', () => {
+    expect(blocksOnMethod({ distribution_method: 'per stirpes' })).toBe(true)
+  })
+
+  it('accepts a valid method on the column', () => {
+    expect(blocksOnMethod({ distribution_method: 'staggered' })).toBe(false)
+  })
+
+  it('accepts a method stored only in trust_details', () => {
+    expect(blocksOnMethod({
+      distribution_method: null,
+      decisions: { trust_details: { residual_beneficiary_method: 'outright' } },
+    })).toBe(false)
+  })
+
+  it('accepts the hyphenated option value the design sheet writes', () => {
+    expect(blocksOnMethod({ distribution_method: 'trust-for-life' })).toBe(false)
+  })
+})
