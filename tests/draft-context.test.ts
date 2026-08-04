@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildDraftContext } from '@/lib/drafting/context'
+import { documentsNeedingDescendantRepresentation, getClausesForDocument } from '@/lib/drafting/clauses'
 
 describe('buildDraftContext', () => {
   it('detects co-agents from legacy string columns', () => {
@@ -62,11 +63,10 @@ describe('buildDraftContext descendant_representation', () => {
     expect(ctx.descendant_representation).toBe('per_capita')
   })
 
-  it('maps per stirpes and by-representation to the per stirpes clause', () => {
-    for (const representation_type of ['per_stirpes', 'by_representation']) {
-      const ctx = buildDraftContext({ decisions: { trust_details: { representation_type } } })
-      expect(ctx.descendant_representation).toBe('per_stirpes')
-    }
+  it('maps per stirpes to the per stirpes clause', () => {
+    const ctx = buildDraftContext({ decisions: { trust_details: { representation_type: 'per_stirpes' } } })
+
+    expect(ctx.descendant_representation).toBe('per_stirpes')
   })
 
   // The `distribution_method` column holds the residual beneficiary method
@@ -89,5 +89,42 @@ describe('buildDraftContext descendant_representation', () => {
 
   it('defaults to per stirpes when nothing is set', () => {
     expect(buildDraftContext({}).descendant_representation).toBe('per_stirpes')
+  })
+})
+
+// Regression: "by right of representation" is a third, distinct option in Trust
+// Details with no clause of its own, and which of the other two it equates to is
+// jurisdiction-dependent (MA UPC G.L. c. 190B § 2-106 makes it per capita at each
+// generation; elsewhere it tracks per stirpes). It used to collapse into per
+// stirpes, silently changing who inherits.
+describe('by right of representation', () => {
+  const byRepresentation = { decisions: { trust_details: { representation_type: 'by_representation' } } }
+
+  it('resolves to null rather than picking a side', () => {
+    expect(buildDraftContext(byRepresentation).descendant_representation).toBeNull()
+  })
+
+  it('selects neither distribution clause', () => {
+    const ctx = buildDraftContext(byRepresentation)
+    const ids = getClausesForDocument('joint_revocable_trust', ctx).map(clause => clause.id)
+
+    expect(ids).not.toContain('jt_distribution_per_stirpes')
+    expect(ids).not.toContain('jt_distribution_per_capita')
+  })
+
+  // Which is why the drafting route has to refuse: without the guard the document
+  // would simply be assembled with no descendant-distribution provision.
+  it('names the documents that must not be drafted without it', () => {
+    expect([...documentsNeedingDescendantRepresentation()]).toEqual(['joint_revocable_trust'])
+  })
+
+  it('still resolves the two representations the library covers', () => {
+    for (const [representation_type, expected] of [
+      ['per_stirpes', 'per_stirpes'],
+      ['per_capita_each_generation', 'per_capita'],
+    ] as const) {
+      const ctx = buildDraftContext({ decisions: { trust_details: { representation_type } } })
+      expect(ctx.descendant_representation).toBe(expected)
+    }
   })
 })

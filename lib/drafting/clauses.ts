@@ -42,8 +42,12 @@ export interface DraftContext {
    * `distribution_method` column on purpose — that column holds the residual
    * beneficiary method (outright / staggered / …), an unrelated decision, and the
    * shared name is what let a stale key drive these gates unnoticed.
+   *
+   * Null when the design sheet asks for a representation this library has no clause
+   * for — currently "by right of representation". Callers must refuse to draft the
+   * affected documents rather than fall through to whichever gate happens to match.
    */
-  descendant_representation: 'per_stirpes' | 'per_capita'
+  descendant_representation: 'per_stirpes' | 'per_capita' | null
   staggered_ages?: string
   plan_type: string
   has_alt1_hcp: boolean
@@ -1275,4 +1279,28 @@ export function getClausesForDocument(docType: string, ctx: DraftContext): Claus
     .filter(c => c.document.includes(docType))
     .filter(c => c.always || (c.include && c.include(ctx)))
     .sort((a, b) => a.order - b.order)
+}
+
+/** Clauses selected by `descendant_representation`. */
+const REPRESENTATION_GATED_CLAUSE_IDS = new Set([
+  'jt_distribution_per_stirpes',
+  'jt_distribution_per_capita',
+])
+
+/**
+ * Documents that lose their descendant-distribution provision when
+ * `descendant_representation` is null. Derived from the clause library so adding a
+ * representation-gated clause to another document extends this automatically.
+ *
+ * Without this the gates simply both evaluate false and the document drafts with no
+ * distribution language at all — a silent omission in the provision that decides who
+ * inherits.
+ */
+export function documentsNeedingDescendantRepresentation(): Set<string> {
+  const documents = new Set<string>()
+  for (const clause of ALL_CLAUSES) {
+    if (!REPRESENTATION_GATED_CLAUSE_IDS.has(clause.id)) continue
+    for (const document of clause.document) documents.add(document)
+  }
+  return documents
 }
