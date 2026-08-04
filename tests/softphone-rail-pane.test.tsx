@@ -339,6 +339,45 @@ describe('softphone rail pane', () => {
     )
   })
 
+  it('opens the lead record when the number belongs to a lead', async () => {
+    // Regression: the button keyed off matterId alone, so it was dead for
+    // every lead and contact the firm directory now carries.
+    mockFetch()
+    renderPhone()
+    await screen.findByText('Ready')
+
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '6175559090' } })
+
+    const link = screen.getByRole('link', { name: 'SMS' })
+    expect(link.getAttribute('href')).toBe('/admin/leads/l1?tab=communications')
+    expect(link.getAttribute('aria-disabled')).toBe('false')
+  })
+
+  it('opens the contact panel when the number belongs to a contact', async () => {
+    mockFetch()
+    renderPhone()
+    await screen.findByText('Ready')
+
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '6175557070' } })
+
+    expect(screen.getByRole('link', { name: 'SMS' }).getAttribute('href')).toBe(
+      '/admin/contacts?selected=contact:c1',
+    )
+  })
+
+  it('leaves SMS disabled for a number nobody in the directory owns', async () => {
+    mockFetch()
+    renderPhone()
+    await screen.findByText('Ready')
+
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '9995551234' } })
+
+    // No href, so it is not a link at all — queried by text, not by role.
+    const link = screen.getByText('SMS')
+    expect(link.getAttribute('href')).toBeNull()
+    expect(link.getAttribute('aria-disabled')).toBe('true')
+  })
+
   it('prefills the dialer from a click-to-call event', async () => {
     mockFetch()
     renderPhone()

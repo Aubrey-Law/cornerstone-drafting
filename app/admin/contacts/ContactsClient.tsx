@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { BookUser, Mail, Phone, Plus, Users } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SearchField } from '@/components/SearchField'
@@ -76,10 +76,22 @@ interface ContactsClientProps {
 
 export function ContactsClient({ contacts, smsEnabled }: ContactsClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [filters, setFilters] = useState(EMPTY_CONTACT_TABLE_FILTERS)
   const [sortKey, setSortKey] = useState<ContactSortKey>('name_asc')
   const [addOpen, setAddOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // Deep link from the softphone: /admin/contacts?selected=contact:<uuid>.
+  // A bare uuid works too, so the caller doesn't have to know the namespace.
+  const requestedId = searchParams?.get('selected') ?? null
+  useEffect(() => {
+    if (!requestedId) return
+    const match = contacts.find(contact =>
+      contact.id === requestedId || contact.id === `contact:${requestedId}`,
+    )
+    if (match) setSelectedId(match.id)
+  }, [requestedId, contacts])
 
   const counts = useMemo(() => countContactsByKind(contacts), [contacts])
   const visible = useMemo(

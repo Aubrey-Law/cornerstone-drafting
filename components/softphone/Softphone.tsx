@@ -194,6 +194,23 @@ export default function Softphone() {
     return digits.length >= 3 ? lookup(digits) : null
   }, [number, lookup])
 
+  // Where "SMS" goes for whoever is on this number. The directory carries
+  // leads and contacts too now, so keying this off matterId alone left the
+  // button dead for every fiduciary, referrer and lead in it.
+  const smsHref = useMemo(() => {
+    if (!dialedEntry) return null
+    if (dialedEntry.matterId) {
+      return `/admin/matters/${dialedEntry.matterId}?tab=communications&channel=sms`
+    }
+    if (dialedEntry.leadId) {
+      return `/admin/leads/${dialedEntry.leadId}?tab=communications`
+    }
+    if (dialedEntry.contactId) {
+      return `/admin/contacts?selected=contact:${dialedEntry.contactId}`
+    }
+    return null
+  }, [dialedEntry])
+
   const incomingEntry = useMemo(
     () => (incomingFrom ? lookup(last10(incomingFrom)) : null),
     [incomingFrom, lookup],
@@ -1175,15 +1192,12 @@ export default function Softphone() {
 
           <div className="mt-3 flex gap-2">
             <a
-              href={
-                dialedEntry?.matterId
-                  ? `/admin/matters/${dialedEntry.matterId}?tab=communications&channel=sms`
-                  : undefined
-              }
-              aria-disabled={!dialedEntry?.matterId}
+              href={smsHref ?? undefined}
+              aria-disabled={!smsHref}
+              title={smsHref ? undefined : 'This number isn’t in the firm directory yet'}
               className={cn(
                 'grid w-11 place-items-center rounded-[10px] border border-border text-[10px] font-medium tracking-[0.08em] text-muted-foreground',
-                dialedEntry?.matterId ? 'hover:text-foreground' : 'pointer-events-none opacity-40',
+                smsHref ? 'hover:text-foreground' : 'pointer-events-none opacity-40',
               )}
             >
               SMS
