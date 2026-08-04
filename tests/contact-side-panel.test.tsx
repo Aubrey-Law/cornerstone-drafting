@@ -7,7 +7,10 @@ import userEvent from '@testing-library/user-event'
 import { ContactSidePanel } from '@/app/admin/contacts/ContactSidePanel'
 import type { ContactDirectoryRow } from '@/lib/adminTables/contactTable'
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/admin/contacts' }))
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/admin/contacts',
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+}))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'test-token' }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 

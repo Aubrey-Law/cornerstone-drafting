@@ -82,6 +82,7 @@ interface AdminLayoutClientProps {
   userName: string
   userInitials: string
   voiceEnabled?: boolean
+  smsEnabled?: boolean
   assistantModelLabel?: string | null
   /**
    * Forces the compact icon rail and hides the collapse toggle without writing
@@ -97,6 +98,7 @@ export default function AdminLayoutClient({
   userName,
   userInitials,
   voiceEnabled = false,
+  smsEnabled = false,
   assistantModelLabel = null,
   forceCollapsed,
 }: AdminLayoutClientProps) {
@@ -307,6 +309,7 @@ export default function AdminLayoutClient({
           <AdminRail
             rail={rail}
             voiceEnabled={voiceEnabled}
+            smsEnabled={smsEnabled}
             matterDisplayName={matterDisplayName}
             assistantModelLabel={assistantModelLabel}
             tasksOverdue={badgeCounts.tasksOverdueCount}

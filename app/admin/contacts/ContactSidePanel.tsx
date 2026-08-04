@@ -1,10 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect } from 'react'
-import { ExternalLink, Phone, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ExternalLink, Mail, MessageSquare, Phone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
+import { CommunicationDialog, type CommunicationTarget } from '@/components/comms/CommunicationDialog'
+import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
@@ -30,6 +33,10 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePanelProps) {
+  const router = useRouter()
+  const token = useAccessToken()
+  const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -53,6 +60,16 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
       ? { type: 'contact' as const, id: contactId }
       : contact.thread
   const smsRole = contact.relationship_type === 'spouse' ? 'spouse' as const : 'client' as const
+
+  // The composer targets the same record the thread does, so a reply lands in
+  // the timeline shown right below it.
+  const composerTarget: CommunicationTarget | null = contactId
+    ? { type: 'contact', id: contactId }
+    : contact.thread
+      ? contact.thread.type === 'matter'
+        ? { type: 'matter', id: contact.thread.id, recipient: smsRole }
+        : { type: 'lead', id: contact.thread.id }
+      : null
 
   return (
     <aside
@@ -90,6 +107,37 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
       </header>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
+        {composerTarget && (contact.email || contact.phone) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {contact.phone && (
+              <Button
+                type="button" size="sm" variant="outline"
+                onClick={() => openStaffSoftphone({ number: contact.phone ?? undefined })}
+              >
+                <Phone className="h-3.5 w-3.5" />
+                Call
+              </Button>
+            )}
+            <Button
+              type="button" size="sm" variant="outline"
+              disabled={!contact.email}
+              onClick={() => setComposerChannel('email')}
+            >
+              <Mail className="h-3.5 w-3.5" />
+              Email
+            </Button>
+            <Button
+              type="button" size="sm" variant="outline"
+              disabled={!contact.phone || !smsEnabled}
+              title={smsEnabled ? undefined : 'Texting is not configured yet'}
+              onClick={() => setComposerChannel('sms')}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Text
+            </Button>
+          </div>
+        )}
+
         <section className="rounded-md border border-border px-3 py-1.5">
           <InfoRow label="Email">
             {contact.email
@@ -133,6 +181,20 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
           </p>
         )}
       </div>
+
+      {composerTarget && (
+        <CommunicationDialog
+          open={composerChannel !== null}
+          channel={composerChannel ?? 'email'}
+          target={composerTarget}
+          recipientName={contact.name}
+          recipientEmail={contact.email}
+          recipientPhone={contact.phone}
+          token={token}
+          onOpenChange={open => { if (!open) setComposerChannel(null) }}
+          onSent={() => router.refresh()}
+        />
+      )}
     </aside>
   )
 }
