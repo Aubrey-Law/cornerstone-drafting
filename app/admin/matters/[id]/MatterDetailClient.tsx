@@ -789,6 +789,8 @@ function MatterDetailClientInner({
         showHealthBadge={blockerCount === 0}
         factsRailOpen={factsRailOpen}
         onToggleFactsRail={() => setFactsRailOpen(open => !open)}
+        onEmail={() => setActiveTab('communications', undefined, 'email')}
+        onText={() => setActiveTab('communications', undefined, 'sms')}
         onOpenIntake={() => void openIntakeSheet()}
         onImportIntake={() => setImportIntakeOpen(true)}
         onUnlockIntake={() => void handleUnlockIntake()}
