@@ -66,13 +66,20 @@ describe('resolveReplyChannel', () => {
     expect(resolveReplyChannel(items, 'lead')).toBe('email')
   })
 
-  it('never offers portal on a lead thread', () => {
+  it('never offers portal on a lead or contact thread', () => {
     // Portal messages are matter-only in the schema, but defend anyway.
     const items = [
       item({ id: '1', channel: 'sms', direction: 'inbound', created_at: '2026-08-01T09:00:00Z' }),
       item({ id: '2', channel: 'portal', direction: 'inbound', created_at: '2026-08-01T10:00:00Z' }),
     ]
     expect(resolveReplyChannel(items, 'lead')).toBe('sms')
+    expect(resolveReplyChannel(items, 'contact')).toBe('sms')
+  })
+
+  it('opens a fresh contact thread on email', () => {
+    // Nothing has been exchanged yet, so the composer should start where a
+    // cold outreach to a referral partner usually does.
+    expect(resolveReplyChannel([], 'contact')).toBe('email')
   })
 
   it('respects portalAvailable=false on matter surfaces without a portal composer', () => {
@@ -163,13 +170,18 @@ describe('threadIsUnread', () => {
 })
 
 describe('parseThreadKey', () => {
-  it('accepts matter and lead keys with UUIDs only', () => {
+  it('accepts matter, lead and contact keys with UUIDs only', () => {
     expect(parseThreadKey('matter:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')).toEqual({
       recordType: 'matter',
       recordId: '0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d',
     })
     expect(parseThreadKey('lead:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')?.recordType).toBe('lead')
+    expect(parseThreadKey('contact:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')?.recordType).toBe('contact')
+  })
+
+  it('still rejects anything that is not a UUID', () => {
     expect(parseThreadKey('matter:1 OR 1=1')).toBeNull()
-    expect(parseThreadKey('contact:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')).toBeNull()
+    expect(parseThreadKey('contact:1 OR 1=1')).toBeNull()
+    expect(parseThreadKey('user:0d4c7b9a-1f2e-4a5b-8c6d-9e0f1a2b3c4d')).toBeNull()
   })
 })

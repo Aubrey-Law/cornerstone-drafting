@@ -31,6 +31,15 @@ export interface ContactDirectoryRow {
   relationship_type: string | null
 }
 
+/**
+ * The `contacts` row behind a directory id, or null for an intake-backed one.
+ * Comms scoped to a person (rather than to their household's matter) key off
+ * this.
+ */
+export function contactRowId(id: string): string | null {
+  return id.startsWith('contact:') ? id.slice('contact:'.length) : null
+}
+
 export type ContactKindFilter = 'all' | ContactKind
 
 export type ContactTableFilters = {

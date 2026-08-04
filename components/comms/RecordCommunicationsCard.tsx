@@ -15,7 +15,12 @@ import { mergeCommunicationItems, type CommunicationItem } from '@/lib/comms/thr
 import { CommunicationThread, type ThreadChannelFilter } from './CommunicationThread'
 
 export interface CommsRecord {
-  type: 'lead' | 'matter'
+  /**
+   * 'contact' scopes the thread to one person in the contact book rather than
+   * to a household's lead or matter — so a trustee sees their own messages,
+   * not the client's.
+   */
+  type: 'lead' | 'matter' | 'contact'
   id: string
 }
 
@@ -78,9 +83,8 @@ export function RecordCommunicationsCard({
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
 
-  const recordBase = record.type === 'matter'
-    ? `/api/admin/matters/${record.id}`
-    : `/api/admin/leads/${record.id}`
+  const recordBase = `/api/admin/${record.type === 'matter' ? 'matters' : record.type === 'lead' ? 'leads' : 'contacts'}/${record.id}`
+  // AI drafting reads a lead or matter for context; a bare contact has none.
   const smsDraftRoute = record.type === 'lead' ? `/api/admin/leads/${record.id}/draft-reply` : undefined
 
   const loadMessages = useCallback(async () => {
@@ -133,7 +137,7 @@ export function RecordCommunicationsCard({
 
   const sendSms = useCallback(async (_channel: 'portal' | 'sms', body: string): Promise<boolean> => {
     if (!token || !body.trim()) return false
-    if (record.type === 'lead' && body.length > MAX_LEAD_SMS_BODY_LENGTH) {
+    if (record.type !== 'matter' && body.length > MAX_LEAD_SMS_BODY_LENGTH) {
       toast.error(`Message must be ${MAX_LEAD_SMS_BODY_LENGTH} characters or fewer`)
       return false
     }
@@ -204,7 +208,7 @@ export function RecordCommunicationsCard({
         renderDraftAi={(replyChannel, notes, onDraft) => (
           record.type === 'matter' ? (
             <DraftWithAiButton matterId={record.id} channel={replyChannel} notes={notes} onDraft={onDraft} />
-          ) : (
+          ) : record.type === 'lead' ? (
             <DraftWithAiButton
               apiPath={smsDraftRoute}
               channel={replyChannel}
@@ -212,7 +216,7 @@ export function RecordCommunicationsCard({
               maxChars={MAX_LEAD_SMS_BODY_LENGTH}
               onDraft={onDraft}
             />
-          )
+          ) : null
         )}
         emailComposer={recipientEmail ? (
           <div className="rounded-md border border-border">

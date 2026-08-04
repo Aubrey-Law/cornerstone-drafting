@@ -34,6 +34,13 @@ export interface SendEmailArgs {
   attachments?: EmailAttachment[]
   /** Append the current firm signature. Honored only for manual sends. */
   includeSignature?: boolean
+  /**
+   * The record this email belongs to, so it lands in that timeline. At most
+   * one should be set; a contact wins the thread key when combined.
+   */
+  matterId?: string | null
+  leadId?: string | null
+  contactId?: string | null
 }
 
 export type SendEmailResult =
@@ -76,11 +83,14 @@ async function logSend(row: Record<string, unknown>): Promise<string | null> {
   try {
     const { data, error } = await insertRow(row)
     if (!error) return (data?.id as string | undefined) ?? null
-    // email_log.bcc arrives in 20260729014420. On a database that hasn't run
-    // that migration, log the send without bcc rather than losing the row.
-    if ('bcc' in row) {
-      const { bcc: _bcc, ...withoutBcc } = row
-      const retry = await insertRow(withoutBcc)
+    // bcc arrives in 20260729014420 and lead_id/contact_id in 20260830000000.
+    // On a database that hasn't run them, log the send without those columns
+    // rather than losing the row.
+    const optional = ['bcc', 'lead_id', 'contact_id'].filter(key => key in row)
+    if (optional.length > 0) {
+      const retry = await insertRow(
+        Object.fromEntries(Object.entries(row).filter(([key]) => !optional.includes(key))),
+      )
       return (retry.data?.id as string | undefined) ?? null
     }
     return null
@@ -175,6 +185,13 @@ async function attemptGraph(
 
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   const { category, to, cc, bcc, replyTo, userId } = args
+  // Spread into every email_log row so a send is findable in its timeline
+  // whichever branch below records it (suppressed, logged, sent or error).
+  const recordLink = {
+    matter_id: args.matterId ?? null,
+    lead_id: args.leadId ?? null,
+    contact_id: args.contactId ?? null,
+  }
   let subject = args.subject
   let html = args.html
   let text = args.text
@@ -221,6 +238,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
   if (envEmailsHardKilled()) {
     const logId = await logSend({
+      ...recordLink,
       category,
       to_email: to,
       intended_to: to,
@@ -240,6 +258,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   const { mode, provider } = settings[category]
   if (mode === 'off') {
     const logId = await logSend({
+      ...recordLink,
       category,
       to_email: to,
       intended_to: to,
@@ -257,6 +276,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
   if (!isAllowed(to)) {
     const logId = await logSend({
+      ...recordLink,
       category,
       to_email: to,
       intended_to: to,
@@ -305,6 +325,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       result = graphResult
     } else {
       await logSend({
+        ...recordLink,
         category,
         to_email: actualTo,
         intended_to: to,
@@ -333,6 +354,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       replyTo,
     })
     const logId = await logSend({
+      ...recordLink,
       category,
       to_email: actualTo,
       intended_to: to,
@@ -349,6 +371,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   }
 
   const logId = await logSend({
+    ...recordLink,
     category,
     to_email: actualTo,
     intended_to: to,

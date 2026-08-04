@@ -22,7 +22,7 @@ export type ThreadChannelFilter = 'all' | 'portal' | 'sms' | 'email' | 'calls'
 export interface CommunicationThreadProps {
   items: CommunicationItem[]
   loading?: boolean
-  recordType: 'matter' | 'lead'
+  recordType: 'matter' | 'lead' | 'contact'
   /** What a send logs to, e.g. "EP-2026-0148" or the client's name. */
   recordLabel: string
   recipientName: string
@@ -96,7 +96,9 @@ export function CommunicationThread({
 
   // The reply channel comes from the full history, never the active filter.
   const replyChannel = resolveReplyChannel(merged, recordType, { portalAvailable })
-  const smsLimit = recordType === 'lead' ? MAX_LEAD_SMS_BODY_LENGTH : MAX_SMS_BODY_LENGTH
+  // Matters text over the full length; leads and one-off contacts are held to
+  // the shorter single-segment limit.
+  const smsLimit = recordType === 'matter' ? MAX_SMS_BODY_LENGTH : MAX_LEAD_SMS_BODY_LENGTH
 
   useEffect(() => {
     const log = logRef.current

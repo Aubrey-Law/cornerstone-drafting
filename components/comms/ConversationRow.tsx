@@ -63,8 +63,10 @@ export function ConversationRow({ thread, selected, onSelect }: ConversationRowP
             {thread.matter_number && (
               <span className="truncate text-[11px] text-muted-foreground">{thread.matter_number}</span>
             )}
-            {thread.record_type === 'lead' && (
-              <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Lead</Badge>
+            {thread.record_type !== 'matter' && (
+              <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                {thread.record_type === 'contact' ? 'Contact' : 'Lead'}
+              </Badge>
             )}
             {unread && (
               <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">

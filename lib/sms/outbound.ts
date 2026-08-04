@@ -21,6 +21,13 @@ export interface ResolvedSmsTarget {
   /** Exactly one of matterId / leadId is set. */
   matterId: string | null
   leadId?: string | null
+  /**
+   * The `contacts` row this is addressed to, when the recipient is a related
+   * person rather than the client of record. Owns the thread; any matterId /
+   * leadId alongside it is inherited from their household so the matter tab
+   * can still surface the message.
+   */
+  contactId?: string | null
 }
 
 export interface OutboundSmsResult {
@@ -53,8 +60,12 @@ export async function resolveMatterSmsTarget(
   recipient: 'client' | 'spouse',
 ): Promise<{ target: ResolvedSmsTarget | null; error: string | null }> {
   const admin = getAdminClient()
+  // `v_matter_pipeline_all`, not `v_matter_pipeline`: the latter is hired-only,
+  // but every lead now carries an opportunity matter and the SMS trigger
+  // threads lead conversations under it — so replying to a lead from the inbox
+  // failed with "Matter not found".
   const { data: matter, error } = await admin
-    .from('v_matter_pipeline')
+    .from('v_matter_pipeline_all')
     .select('matter_id, client_name, client_phone, spouse_name, spouse_phone')
     .eq('matter_id', matterId)
     .maybeSingle()
@@ -115,6 +126,72 @@ export async function resolveLeadSmsTarget(
   }
 }
 
+/**
+ * Text a related person — a trustee, an adult child, a referring professional —
+ * rather than the client of record. Inherits the household's matter or lead so
+ * the message still shows on that record, while `contactId` keeps it a thread
+ * of its own.
+ */
+export async function resolveContactSmsTarget(
+  contactId: string,
+): Promise<{ target: ResolvedSmsTarget | null; error: string | null }> {
+  const admin = getAdminClient()
+  const { data: contact, error } = await admin
+    .from('contacts')
+    .select('id, first_name, last_name, preferred_name, phone, relationship_type, client_intake_id, deceased')
+    .eq('id', contactId)
+    .maybeSingle()
+
+  if (error) return { target: null, error: error.message }
+  if (!contact) return { target: null, error: 'Contact not found' }
+  if (contact.deceased) return { target: null, error: 'This contact is marked deceased.' }
+
+  const name =
+    [contact.preferred_name?.trim() || contact.first_name?.trim(), contact.last_name?.trim()]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || 'Contact'
+
+  let matterId: string | null = null
+  let leadId: string | null = null
+
+  if (contact.client_intake_id) {
+    const { data: intake } = await admin
+      .from('client_intake')
+      .select('id, matter_id')
+      .eq('id', contact.client_intake_id)
+      .maybeSingle()
+
+    if (intake) {
+      const { data: matter } = intake.matter_id
+        ? await admin
+            .from('matters')
+            .select('id, relationship_status')
+            .eq('id', intake.matter_id)
+            .maybeSingle()
+        : { data: null }
+
+      // Same hired/lead split the rest of the app makes: a null status means a
+      // matter-origin intake predating the lead pipeline, i.e. a client.
+      if (matter && (matter.relationship_status ?? 'hired') === 'hired') matterId = matter.id
+      else leadId = intake.id
+    }
+  }
+
+  return {
+    target: {
+      recipientName: name,
+      // 'spouse' has dedicated handling elsewhere; everyone else is 'other'.
+      recipientRole: contact.relationship_type === 'spouse' ? 'spouse' : 'other',
+      phone: contact.phone,
+      matterId,
+      leadId,
+      contactId: contact.id,
+    },
+    error: null,
+  }
+}
+
 export async function sendOutboundSms(
   target: ResolvedSmsTarget,
   body: string,
@@ -145,6 +222,7 @@ export async function sendOutboundSms(
   const baseRow = {
     matter_id: target.matterId,
     lead_id: target.leadId ?? null,
+    contact_id: target.contactId ?? null,
     direction: 'outbound',
     provider: smsProvider(),
     recipient_role: target.recipientRole,
@@ -159,6 +237,7 @@ export async function sendOutboundSms(
     raw_payload: {
       requested_recipient: target.recipientRole,
       requested_phone: target.phone,
+      requested_contact_id: target.contactId ?? undefined,
     },
   }
 
@@ -213,6 +292,9 @@ export async function sendOutboundSms(
     : `Text failed to ${target.recipientName}`
   const detail = `To ${to}${result.ok ? '' : ` (${result.error})`}`
 
+  // Three-way, not an either/or: a standalone contact has no matter_activity
+  // and no lead_activity to write to (there is no contact_activity table).
+  // That's fine — the sms_messages row is the record.
   if (target.matterId) {
     const { data: matterActivity, error: activityError } = await admin
       .from('matter_activity')

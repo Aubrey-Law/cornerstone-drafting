@@ -138,20 +138,36 @@ const DIRECTORY = [
   {
     digits: '7815551212',
     name: 'Margaret Whitfield',
+    detail: '2026-EP-0142',
     matterId: 'm1',
     matterNumber: '2026-EP-0142',
     leadId: null,
+    contactId: null,
     practiceArea: 'Estate Planning',
     stage: 'drafting',
   },
   {
     digits: '6175559090',
     name: 'Harold Pike',
+    detail: 'Lead',
     matterId: null,
     matterNumber: null,
     leadId: 'l1',
+    contactId: null,
     practiceArea: null,
     stage: 'Lead',
+  },
+  // A standalone contact — the population the directory used to omit entirely.
+  {
+    digits: '6175557070',
+    name: 'Rita Referrer',
+    detail: 'Referring CPA',
+    matterId: null,
+    matterNumber: null,
+    leadId: null,
+    contactId: 'c1',
+    practiceArea: null,
+    stage: null,
   },
 ]
 
@@ -290,6 +306,13 @@ describe('softphone rail pane', () => {
     await user.type(search, '6175559090')
     expect(screen.getByText('Harold Pike')).toBeTruthy()
     expect(screen.getByText('Lead')).toBeTruthy()
+
+    // A contact with no matter is findable by name and by role, and labelled
+    // as one rather than falling back to "Lead".
+    await user.clear(search)
+    await user.type(search, 'referring')
+    expect(screen.getByText('Rita Referrer')).toBeTruthy()
+    expect(screen.getByText('Referring CPA')).toBeTruthy()
   })
 
   it('fills the dialer from a directory result', async () => {

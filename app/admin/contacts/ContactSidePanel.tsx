@@ -8,7 +8,11 @@ import { RecordCommunicationsCard } from '@/components/comms/RecordCommunication
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
-import { CONTACT_KIND_LABELS, type ContactDirectoryRow } from '@/lib/adminTables/contactTable'
+import {
+  CONTACT_KIND_LABELS,
+  contactRowId,
+  type ContactDirectoryRow,
+} from '@/lib/adminTables/contactTable'
 
 interface ContactSidePanelProps {
   contact: ContactDirectoryRow
@@ -36,11 +40,18 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
 
   const location = [contact.city, contact.state].filter(Boolean).join(', ')
   const tel = phoneTelHref(contact.phone)
+  const firstName = contact.name.trim().split(/\s+/)[0] || 'contact'
+  const contactId = contactRowId(contact.id)
 
-  // Intake-backed rows text the person themself; relationship contacts only
-  // have a wired SMS path when they're the spouse on a hired matter.
-  const smsSendable = contact.relationship_type === null
-    || (contact.thread?.type === 'matter' && contact.relationship_type === 'spouse')
+  // A contacts-table row threads through itself, not through the household it
+  // hangs off — otherwise a trustee's panel shows the client's whole message
+  // history under the trustee's name. Intake rows keep their lead/matter thread.
+  const reachable = Boolean(contact.phone || contact.email)
+  const record = !reachable
+    ? null
+    : contactId
+      ? { type: 'contact' as const, id: contactId }
+      : contact.thread
   const smsRole = contact.relationship_type === 'spouse' ? 'spouse' as const : 'client' as const
 
   return (
@@ -98,40 +109,28 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
           {contact.relationship && <InfoRow label="Relationship">{contact.relationship}</InfoRow>}
         </section>
 
-        {contact.thread ? (
+        {record ? (
           <section>
+            {/* The card carries its own Call button alongside the channel chips. */}
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Activity & communications
             </h3>
             <RecordCommunicationsCard
               key={contact.id}
-              record={contact.thread}
+              record={record}
               recipientName={contact.name}
               recipientEmail={contact.email}
               recipientPhone={contact.phone}
               smsEnabled={smsEnabled}
               smsRecipientRole={smsRole}
-              smsSendable={smsSendable}
-              smsDisabledReason="Texting from here is wired for leads, clients, and spouses. Use the call button to reach this contact."
+              smsSendable={Boolean(contact.phone)}
+              smsDisabledReason="No phone number on file, so there's nothing to text."
             />
           </section>
         ) : (
-          <section className="space-y-2 rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-            <p>
-              This contact isn&apos;t linked to a lead or matter, so there&apos;s no message history to show.
-            </p>
-            {contact.phone && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => openStaffSoftphone({ number: contact.phone ?? undefined })}
-              >
-                <Phone className="h-3.5 w-3.5" />
-                Call {contact.name.split(' ')[0]}
-              </Button>
-            )}
-          </section>
+          <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+            No phone or email on file, so there&apos;s no way to reach this contact yet.
+          </p>
         )}
       </div>
     </aside>

@@ -49,11 +49,11 @@ export function mergeCommunicationItems(...lists: CommunicationItem[][]): Commun
  */
 export function resolveReplyChannel(
   items: CommunicationItem[],
-  recordType: 'matter' | 'lead',
+  recordType: 'matter' | 'lead' | 'contact',
   opts?: { portalAvailable?: boolean },
 ): SendableChannel {
-  // Leads never have a portal; a matter surface may also opt out (e.g. the
-  // outward-channels card on the contact panel).
+  // Only matters have a portal — leads and contacts never do; a matter surface
+  // may also opt out (e.g. the outward-channels card on the contact panel).
   const portalAvailable = (opts?.portalAvailable ?? true) && recordType === 'matter'
   const sorted = mergeCommunicationItems(items)
   for (let i = sorted.length - 1; i >= 0; i--) {
@@ -144,9 +144,11 @@ export const CHANNEL_LABEL: Record<CommChannel, string> = {
 /** One row of the firm-wide thread list (`v_communication_threads` + state). */
 export interface InboxThread {
   thread_key: string
-  record_type: 'matter' | 'lead'
+  record_type: 'matter' | 'lead' | 'contact'
   matter_id: string | null
   lead_id: string | null
+  /** Set on contact threads; the matter/lead ids are null on those rows. */
+  contact_id: string | null
   display_name: string
   contact_phone: string | null
   contact_email: string | null

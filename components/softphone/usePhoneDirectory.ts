@@ -6,9 +6,12 @@ export interface DirectoryEntry {
   /** last 10 digits — the match key */
   digits: string
   name: string
+  /** Sub-label: matter number, "Lead", or "Trustee · Jane Smith". */
+  detail: string | null
   matterId: string | null
   matterNumber: string | null
   leadId: string | null
+  contactId: string | null
   practiceArea: string | null
   stage: string | null
 }

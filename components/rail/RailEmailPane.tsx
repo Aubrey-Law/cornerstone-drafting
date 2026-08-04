@@ -50,7 +50,9 @@ interface ComposeDocument {
 }
 
 interface ComposeContext {
-  recordType: 'matter' | 'lead'
+  // 'contact' is used by the contacts page for people with no lead or matter
+  // behind them. Such a send carries neither matterId nor leadId.
+  recordType: 'matter' | 'lead' | 'contact'
   recordId: string
   recipientName: string | null
   recipientEmail: string | null
@@ -272,7 +274,7 @@ function AddressField({
 }
 
 interface ManualEmailComposerProps {
-  recordOverride?: { type: 'matter' | 'lead'; id: string } | null
+  recordOverride?: { type: 'matter' | 'lead' | 'contact'; id: string } | null
   templateCategories?: string[]
   onSent?: () => void | Promise<void>
   embedded?: boolean
@@ -347,12 +349,12 @@ export function ManualEmailComposer({
   }))
 
   // Drafting needs a record to read context from, so the button only exists
-  // when the pane is scoped to one.
-  const draftRoute = record
-    ? record.type === 'matter'
-      ? `/api/admin/matters/${record.id}/draft-reply`
-      : `/api/admin/leads/${record.id}/draft-reply`
-    : null
+  // when the pane is scoped to one. A bare contact has no such context.
+  const draftRoute = record?.type === 'matter'
+    ? `/api/admin/matters/${record.id}/draft-reply`
+    : record?.type === 'lead'
+      ? `/api/admin/leads/${record.id}/draft-reply`
+      : null
 
   /** Both draft routes answer with "Subject: …" on line one, then the body. */
   function applyAiDraft(draft: string) {
@@ -372,7 +374,13 @@ export function ManualEmailComposer({
       setTo(value => value || initialContext.recipientEmail || '')
       return
     }
-    if (!recordType || !recordId) {
+    // Only leads and matters have a compose context to fetch; a contact-scoped
+    // pane is always given one via `initialContext`.
+    if (recordType !== 'matter' && recordType !== 'lead') {
+      setContext(null)
+      return
+    }
+    if (!recordId) {
       setContext(null)
       return
     }
@@ -535,7 +543,7 @@ export function ManualEmailComposer({
   // dropped into the body without leaving the pane.
   useEffect(() => {
     setSchedulingTypes([])
-    if (!recordType || !recordId || !token) return
+    if ((recordType !== 'matter' && recordType !== 'lead') || !recordId || !token) return
     let cancelled = false
     const query = recordType === 'matter' ? `matterId=${recordId}` : `leadId=${recordId}`
     void (async () => {
@@ -763,6 +771,7 @@ export function ManualEmailComposer({
           text: emailHtmlToText(bodyHtml),
           matterId: context?.recordType === 'matter' ? context.recordId : undefined,
           leadId: context?.recordType === 'lead' ? context.recordId : undefined,
+          contactId: context?.recordType === 'contact' ? context.recordId : undefined,
           documentIds: selectedDocumentIds,
           includeSignature,
         }),

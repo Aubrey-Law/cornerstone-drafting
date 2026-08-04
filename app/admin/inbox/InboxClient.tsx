@@ -271,7 +271,10 @@ export function InboxClient({ initialThreads, smsConfigured, voiceConfigured }: 
           body: JSON.stringify({ recipient: 'client', body }),
         }, 'Send failed')
       } else {
-        await apiRequest(`/api/admin/leads/${selected.lead_id}/send-sms`, {
+        const base = selected.record_type === 'contact'
+          ? `/api/admin/contacts/${selected.contact_id}`
+          : `/api/admin/leads/${selected.lead_id}`
+        await apiRequest(`${base}/send-sms`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ body }),
@@ -370,7 +373,9 @@ export function InboxClient({ initialThreads, smsConfigured, voiceConfigured }: 
           <p className="text-xs text-muted-foreground">
             {selected.record_type === 'matter'
               ? (selected.matter_number ?? 'Matter')
-              : 'Lead'}
+              : selected.record_type === 'contact'
+                ? 'Contact'
+                : 'Lead'}
             {selected.stage ? ` · ${selected.stage.replaceAll('_', ' ')}` : ''}
           </p>
         </div>
@@ -420,8 +425,24 @@ export function InboxClient({ initialThreads, smsConfigured, voiceConfigured }: 
               embedded
               recordOverride={{
                 type: selected.record_type,
-                id: selected.record_type === 'matter' ? selected.matter_id! : selected.lead_id!,
+                id: (selected.record_type === 'matter'
+                  ? selected.matter_id
+                  : selected.record_type === 'contact'
+                    ? selected.contact_id
+                    : selected.lead_id) ?? selected.thread_key,
               }}
+              // A contact has no compose-context endpoint; hand it the
+              // recipient the thread already knows about.
+              initialContext={selected.record_type === 'contact' ? {
+                recordType: 'contact',
+                recordId: selected.contact_id ?? selected.thread_key,
+                recipientName: selected.display_name,
+                recipientEmail: selected.contact_email,
+                spouseName: null,
+                spouseEmail: null,
+                alternateEmails: [],
+                documents: [],
+              } : undefined}
               onSent={() => {
                 toast.success('Email sent')
                 void loadItems(selected.thread_key)
