@@ -14,10 +14,8 @@ export const PLAN_STRUCTURE_FIELDS = [
   'plan_type',
   'is_joint',
   'trust_protector',
-  // `distribution_method` is deliberately absent: the residual beneficiary method
-  // lives in decisions.trust_details, and copying the legacy column too would
-  // reintroduce the second writer this decision used to have. extractPlanStructure
-  // folds a legacy source value into the canonical home instead.
+  // The residual beneficiary method is absent here on purpose: it lives in
+  // decisions.trust_details, which extractPlanStructure copies below.
   'distribution_age',
   'staggered_distributions',
   'stagger_age_1',
@@ -104,9 +102,8 @@ export function extractPlanStructure(source: DesignSheet): Partial<DesignSheet> 
     if (Object.keys(decisions).length > 0) patch.decisions = decisions
   }
 
-  // Resolve once from either home so a clone of an older matter — which may carry
-  // the method only on the legacy column — still brings the choice across, landing
-  // it in the canonical trust_details home.
+  // Copied explicitly rather than relying on the trust_details spread: a source
+  // sheet with no trust_details block at all still carries the choice across.
   const residualMethod = resolveResidualBeneficiaryMethod(source)
   if (residualMethod) {
     const decisions = (patch.decisions ?? {}) as Record<string, unknown>

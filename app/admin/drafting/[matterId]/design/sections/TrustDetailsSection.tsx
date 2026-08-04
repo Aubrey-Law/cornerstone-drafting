@@ -611,14 +611,13 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
         <DecisionRow
           question="Residual Beneficiary Method"
           help="Choose how the residuary share is distributed or held."
-          fieldName="distribution_method"
+          fieldName="residual_beneficiary_method"
           blocking
           value={residualMethod}
           options={RESIDUAL_BENEFICIARY_METHOD_OPTIONS}
-          // trust_details is the only home for this decision. It used to be written
-          // to the `distribution_method` column as well, and the two drifted — some
-          // sheets carry a column value with no trust_details entry. That column is
-          // now read-only legacy, resolved by resolveResidualBeneficiaryMethod.
+          // trust_details is the only home for this decision. It was once written to a
+          // parallel `distribution_method` column too, and the two drifted; that column
+          // has since been backfilled into trust_details and dropped.
           onChange={method => updateTrustDetails({ residual_beneficiary_method: method })}
         />
 

@@ -200,7 +200,6 @@ describe('draft payload trust provisions wiring', () => {
       trust_protector: true,
       trust_protector_name: 'Protector Person',
       residual_beneficiary: 'descendants',
-      distribution_method: 'outright',
       distribution_age: 30,
       staggered_distributions: [],
       remote_beneficiary: 'named',
@@ -247,8 +246,7 @@ describe('draft payload trust provisions wiring', () => {
   it('maps co-trustee decision standards for generator templates', () => {
     expect(trustCoTrusteesAction('joint_majority')).toBe('joint')
     expect(trustCoTrusteesAction('independent')).toBe('independent')
-    expect(descendantsDistributionMethod('outright', 'staggered')).toBe('outright')
-    expect(descendantsDistributionMethod(null, 'staggered')).toBe('staged')
+    expect(descendantsDistributionMethod('outright')).toBe('outright')
   })
 })
 
@@ -258,26 +256,21 @@ describe('draft payload trust provisions wiring', () => {
 // draft preflight reports it instead.
 describe('descendantsDistributionMethod', () => {
   it('maps each recognised method', () => {
-    expect(descendantsDistributionMethod('outright', null)).toBe('outright')
-    expect(descendantsDistributionMethod('staggered', null)).toBe('staged')
-    expect(descendantsDistributionMethod('trust_for_life', null)).toBe('trust_for_life')
-    expect(descendantsDistributionMethod('custom', null)).toBe('custom')
+    expect(descendantsDistributionMethod('outright')).toBe('outright')
+    expect(descendantsDistributionMethod('staggered')).toBe('staged')
+    expect(descendantsDistributionMethod('trust_for_life')).toBe('trust_for_life')
+    expect(descendantsDistributionMethod('custom')).toBe('custom')
   })
 
-  it('accepts the hyphenated option value from either home', () => {
-    expect(descendantsDistributionMethod('trust-for-life' as never, null)).toBe('trust_for_life')
-    expect(descendantsDistributionMethod(null, 'trust-for-life')).toBe('trust_for_life')
+  it('accepts the legacy hyphenated spelling', () => {
+    expect(descendantsDistributionMethod('trust-for-life' as never)).toBe('trust_for_life')
   })
 
   it('returns null when nothing is set rather than defaulting to staged', () => {
-    expect(descendantsDistributionMethod(null, null)).toBeNull()
+    expect(descendantsDistributionMethod(null)).toBeNull()
   })
 
   it('returns null for a value that is not a residual beneficiary method', () => {
-    expect(descendantsDistributionMethod(null, 'per stirpes')).toBeNull()
-  })
-
-  it('prefers trust_details over the column', () => {
-    expect(descendantsDistributionMethod('outright', 'staggered')).toBe('outright')
+    expect(descendantsDistributionMethod('per stirpes' as never)).toBeNull()
   })
 })

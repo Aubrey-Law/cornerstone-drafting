@@ -13,6 +13,8 @@ const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
 const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
   'contact_profiles',
   'deed',
+  // Dropped column. Listed here so a value still present on an old inflated row is
+  // stripped from the sheet rather than folded into the decisions blob.
   'distribution_method',
   'document_inclusions',
   'dpoa_provisions',
@@ -190,7 +192,6 @@ const WRITABLE_DESIGN_SHEET_COLUMNS = new Set([
   'remote_beneficiary_charities',
   'residual_beneficiary_individuals',
   'staggered_distributions',
-  'distribution_method',
   'distribution_age',
   // Universal additions present on lite
   'client_aka',

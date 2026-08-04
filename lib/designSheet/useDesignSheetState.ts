@@ -542,11 +542,9 @@ export function useDesignSheetState({
 
   const handleImportedDesignSheetFields = useCallback((patch: DesignSheetImportProposal) => {
     commitSheet(prev => {
-      // The import map is flat, so it can only propose `distribution_method`. Route
-      // it to the canonical trust_details home — left on the column it would be
-      // shadowed by an existing trust_details value and the import would silently
-      // do nothing.
-      const { distribution_method: importedMethod, ...rest } = patch as Record<string, unknown>
+      // The import map is flat, so the method arrives as a top-level key. Route it
+      // into decisions.trust_details, which is where the design sheet keeps it.
+      const { residual_beneficiary_method: importedMethod, ...rest } = patch as Record<string, unknown>
       const next = { ...prev, ...rest } as DesignSheet
       const method = normalizeResidualBeneficiaryMethod(importedMethod)
       if (!method) return next

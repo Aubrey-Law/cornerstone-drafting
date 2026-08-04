@@ -51,7 +51,7 @@ const EXACT: Record<string, Entry> = {
   'trust.name': { label: 'Trust name', sectionId: S.trustDetails, targetField: 'trust_name' },
   'trust.display_name': { label: 'Trust name', sectionId: S.trustDetails, targetField: 'trust_name' },
   'trust.date': { label: 'Trust date', sectionId: S.trustDetails, targetField: 'trust_date' },
-  'trust.descendants_distribution.method': { label: 'Distribution method', sectionId: S.trustDetails, targetField: 'distribution_method' },
+  'trust.descendants_distribution.method': { label: 'Distribution method', sectionId: S.trustDetails, targetField: 'residual_beneficiary_method' },
   'trust.tangible_personal_property.distribution_method': { label: 'Tangible property distribution', sectionId: S.estatePlanDesign, targetField: 'tangible_property_distribution' },
   'trust.contingent_beneficiary.full_name': { label: 'Contingent beneficiary', sectionId: S.willDetails, targetField: 'single_beneficiary_remainder' },
   'trust.remote_beneficiaries.individuals': { label: 'Remote beneficiaries', sectionId: S.familyInformation, targetField: 'remote_beneficiary' },

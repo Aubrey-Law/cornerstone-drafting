@@ -94,7 +94,6 @@ export function buildInitialSheet(sheet: DesignSheet | null): DesignSheet {
     spouse_trust_name: null,
     restatement: false,
     trust_protector: false,
-    distribution_method: null,
     distribution_age: null,
     include_child_gender_markers: 'no',
     include_afterborn_children: 'yes',

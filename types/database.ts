@@ -248,7 +248,6 @@ export interface DesignSheet {
   spouse_trust_name: string | null
   restatement: boolean | null
   trust_protector: boolean | null
-  distribution_method: string | null
   distribution_age: number | null
   // Trust residuary takers: 'children' | 'descendants' | 'named'
   residual_beneficiary?: string | null

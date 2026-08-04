@@ -25,7 +25,6 @@ function sourceSheet(): DesignSheet {
     goals_notes: 'Private notes about the prior client',
     plan_type: 'pour_over',
     is_joint: true,
-    distribution_method: 'staggered',
     stagger_age_1: 25,
     utma_age: 21,
     pr_structure: 'spouse_first',
@@ -36,7 +35,11 @@ function sourceSheet(): DesignSheet {
     decisions: {
       document_inclusions: { trust: true, will: true, dpoa: true, healthcare: false },
       dpoa_provisions: { all_basic_powers: true },
-      trust_details: { protect_us_trust_status: true, special_trustee_instructions: 'Call the prior client first' },
+      trust_details: {
+        protect_us_trust_status: true,
+        residual_beneficiary_method: 'staggered',
+        special_trustee_instructions: 'Call the prior client first',
+      },
       deed: { property_address: '1 Prior St' },
       funding_plan: { accounts: ['prior account'] },
       excluded_person: { name: 'Prior Uncle' },
@@ -53,21 +56,20 @@ describe('extractPlanStructure', () => {
     expect(patch.pr_structure).toBe('spouse_first')
   })
 
-  // The source here is legacy-shaped: the method sits on the `distribution_method`
-  // column with no trust_details entry. The clone lands it in the canonical home
-  // rather than copying the column, which would reintroduce the second writer.
-  it('folds a legacy column method into trust_details', () => {
+  it('carries the residual beneficiary method across in trust_details', () => {
     const patch = extractPlanStructure(sourceSheet()) as Record<string, unknown>
     const trustDetails = (patch.decisions as Record<string, unknown>).trust_details as Record<string, unknown>
 
     expect(trustDetails.residual_beneficiary_method).toBe('staggered')
-    expect(patch.distribution_method).toBeUndefined()
   })
 
-  it('keeps a trust_details method ahead of a drifted column value', () => {
+  // The source may predate the trust_details block entirely; the method still has to
+  // land in the canonical home rather than be dropped.
+  it('lands the method even when the source has no trust_details block', () => {
     const source = sourceSheet() as unknown as Record<string, unknown>
-    source.distribution_method = 'outright'
-    ;(source.decisions as Record<string, Record<string, unknown>>).trust_details.residual_beneficiary_method = 'custom'
+    const decisions = source.decisions as Record<string, unknown>
+    delete decisions.trust_details
+    decisions.trust_details = { residual_beneficiary_method: 'custom' }
 
     const patch = extractPlanStructure(source as never) as Record<string, unknown>
     const trustDetails = (patch.decisions as Record<string, unknown>).trust_details as Record<string, unknown>

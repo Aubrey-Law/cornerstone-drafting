@@ -97,7 +97,6 @@ function makeSheet(overrides: Partial<DesignSheet> = {}): DesignSheet {
     spouse_trust_name: null,
     restatement: false,
     trust_protector: false,
-    distribution_method: 'staggered',
     distribution_age: null,
     include_child_gender_markers: 'no',
     include_afterborn_children: 'yes',
@@ -172,6 +171,7 @@ function makeSheet(overrides: Partial<DesignSheet> = {}): DesignSheet {
     disinheritances: null,
     fiduciary_slot_states: null,
     decisions: {
+      trust_details: { residual_beneficiary_method: 'staggered' },
       document_inclusions: {
         trust: true,
         will: true,
@@ -420,25 +420,24 @@ describe('distribution method readiness', () => {
     readinessFor(overrides).blocking.some(item => item.label === 'distribution method')
 
   it('blocks when no method is set', () => {
-    expect(blocksOnMethod({ distribution_method: null })).toBe(true)
+    expect(blocksOnMethod({ decisions: {} })).toBe(true)
   })
 
   it('blocks on a value that is not a residual beneficiary method', () => {
-    expect(blocksOnMethod({ distribution_method: 'per stirpes' })).toBe(true)
-  })
-
-  it('accepts a valid method on the column', () => {
-    expect(blocksOnMethod({ distribution_method: 'staggered' })).toBe(false)
-  })
-
-  it('accepts a method stored only in trust_details', () => {
     expect(blocksOnMethod({
-      distribution_method: null,
-      decisions: { trust_details: { residual_beneficiary_method: 'outright' } },
+      decisions: { trust_details: { residual_beneficiary_method: 'per stirpes' } },
+    })).toBe(true)
+  })
+
+  it('accepts a valid method', () => {
+    expect(blocksOnMethod({
+      decisions: { trust_details: { residual_beneficiary_method: 'staggered' } },
     })).toBe(false)
   })
 
-  it('accepts the hyphenated option value the design sheet writes', () => {
-    expect(blocksOnMethod({ distribution_method: 'trust-for-life' })).toBe(false)
+  it('accepts the legacy hyphenated spelling', () => {
+    expect(blocksOnMethod({
+      decisions: { trust_details: { residual_beneficiary_method: 'trust-for-life' } },
+    })).toBe(false)
   })
 })
