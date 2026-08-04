@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import DOMPurify from 'isomorphic-dompurify'
+import DOMPurify from 'dompurify'
 import {
   Bold,
   Italic,
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { sanitizeEmailHtml } from '@/lib/email/templateShared'
 import { cn } from '@/lib/utils'
 
 // Tags/attributes we keep in the composed email HTML. execCommand can emit a
@@ -36,7 +37,20 @@ const SANITIZE_CONFIG = {
   ALLOWED_ATTR: ['href', 'target', 'rel'],
 }
 
+/**
+ * Plain `dompurify`, not `isomorphic-dompurify`: the isomorphic build does a
+ * top-level `require('jsdom')`, and jsdom's `html-encoding-sniffer` requires an
+ * ESM file, so Next pulls it into the server bundle and the lambda dies at load
+ * with ERR_REQUIRE_ESM — taking out every page whose module graph reaches this
+ * editor. See the same note in lib/email/templateShared.ts.
+ *
+ * Both callers below run in the browser, but fall back to the email pipeline's
+ * allowlist (identical tags) if this is ever reached without a DOM.
+ */
 function sanitize(html: string): string {
+  if (typeof window === 'undefined' || !DOMPurify.isSupported) {
+    return sanitizeEmailHtml(html ?? '')
+  }
   return DOMPurify.sanitize(html ?? '', SANITIZE_CONFIG)
 }
 
