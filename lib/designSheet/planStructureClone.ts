@@ -1,3 +1,4 @@
+import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import type { DesignSheet } from '@/types/database'
 
 /**
@@ -13,7 +14,8 @@ export const PLAN_STRUCTURE_FIELDS = [
   'plan_type',
   'is_joint',
   'trust_protector',
-  'distribution_method',
+  // The residual beneficiary method is absent here on purpose: it lives in
+  // decisions.trust_details, which extractPlanStructure copies below.
   'distribution_age',
   'staggered_distributions',
   'stagger_age_1',
@@ -98,6 +100,18 @@ export function extractPlanStructure(source: DesignSheet): Partial<DesignSheet> 
       }
     }
     if (Object.keys(decisions).length > 0) patch.decisions = decisions
+  }
+
+  // Copied explicitly rather than relying on the trust_details spread: a source
+  // sheet with no trust_details block at all still carries the choice across.
+  const residualMethod = resolveResidualBeneficiaryMethod(source)
+  if (residualMethod) {
+    const decisions = (patch.decisions ?? {}) as Record<string, unknown>
+    const trustDetails = (decisions.trust_details ?? {}) as Record<string, unknown>
+    patch.decisions = {
+      ...decisions,
+      trust_details: { ...trustDetails, residual_beneficiary_method: residualMethod },
+    }
   }
 
   return patch as Partial<DesignSheet>

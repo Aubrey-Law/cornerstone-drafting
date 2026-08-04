@@ -28,6 +28,7 @@ import {
   writeDesignSheetDraft,
 } from '@/lib/designSheet/designSheetDraft'
 import { stripDecisionOnlyTopLevelMirrors } from '@/lib/designSheetPersistence'
+import { normalizeResidualBeneficiaryMethod, setTrustDetails } from '@/lib/designSheetTrustDetails'
 import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
 
 export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
@@ -540,7 +541,15 @@ export function useDesignSheetState({
   }, [updateField])
 
   const handleImportedDesignSheetFields = useCallback((patch: DesignSheetImportProposal) => {
-    commitSheet(prev => ({ ...prev, ...patch } as DesignSheet))
+    commitSheet(prev => {
+      // The import map is flat, so the method arrives as a top-level key. Route it
+      // into decisions.trust_details, which is where the design sheet keeps it.
+      const { residual_beneficiary_method: importedMethod, ...rest } = patch as Record<string, unknown>
+      const next = { ...prev, ...rest } as DesignSheet
+      const method = normalizeResidualBeneficiaryMethod(importedMethod)
+      if (!method) return next
+      return { ...next, decisions: setTrustDetails(next, { residual_beneficiary_method: method }) }
+    })
     setSaveStatus('saved')
     setDirtyFields(new Set())
     setLastSavedAt(new Date().toISOString())

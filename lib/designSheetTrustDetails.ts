@@ -61,12 +61,17 @@ export function normalizeResidualBeneficiaryMethod(value: unknown): ResidualBene
     : null
 }
 
-/** The method the UI, readiness and the generator all resolve to, from either home. */
+/**
+ * The method the UI, readiness and the generator all resolve to.
+ *
+ * `decisions.trust_details.residual_beneficiary_method` is the single home. This
+ * used to fall back to a `distribution_method` column that the design sheet wrote
+ * in parallel; that column has been backfilled into trust_details and dropped.
+ */
 export function resolveResidualBeneficiaryMethod(
-  sheet: Pick<DesignSheet, 'decisions' | 'distribution_method'>,
+  sheet: Pick<DesignSheet, 'decisions'>,
 ): ResidualBeneficiaryMethod | null {
   return normalizeResidualBeneficiaryMethod(getTrustDetails(sheet).residual_beneficiary_method)
-    ?? normalizeResidualBeneficiaryMethod(sheet.distribution_method)
 }
 
 export type ResiduaryAfterDeath =

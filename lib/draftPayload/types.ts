@@ -339,7 +339,6 @@ export interface DesignSheetRow {
   trust_date?: string | null
   restatement?: boolean | null
   residual_beneficiary?: string | null
-  distribution_method?: string | null
   distribution_age?: number | null
   staggered_distributions?: StaggeredTier[] | null
   remote_beneficiary?: string | null

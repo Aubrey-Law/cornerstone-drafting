@@ -72,15 +72,20 @@ function hasCoAgent(designSheet: DesignSheetCoFields, slots: FiduciarySlotRow[],
 function descendantRepresentation(
   designSheet: Record<string, unknown>,
   decisions: Record<string, unknown>,
-): 'per_stirpes' | 'per_capita' {
+): 'per_stirpes' | 'per_capita' | null {
   const representation = getTrustDetails(
     designSheet as unknown as Pick<DesignSheet, 'decisions'>,
   ).representation_type
 
   if (representation === 'per_capita_each_generation') return 'per_capita'
-  // 'by_representation' has no clause of its own; per stirpes is the closest of the
-  // two and keeps the long-standing output for matters already using it.
-  if (representation === 'per_stirpes' || representation === 'by_representation') return 'per_stirpes'
+  if (representation === 'per_stirpes') return 'per_stirpes'
+
+  // "By right of representation" is a third, distinct choice with no clause of its
+  // own, and which of the other two it equates to is jurisdiction-dependent — under
+  // the Massachusetts UPC (G.L. c. 190B, § 2-106) it is per capita at each
+  // generation, elsewhere it tracks per stirpes. It used to collapse into per
+  // stirpes here, silently changing who inherits. Callers refuse to draft instead.
+  if (representation === 'by_representation') return null
 
   return decisions.distribution_method === 'per_capita' ? 'per_capita' : 'per_stirpes'
 }

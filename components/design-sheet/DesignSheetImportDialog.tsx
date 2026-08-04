@@ -27,6 +27,7 @@ import {
   MAX_DESIGN_SHEET_DOCX_BYTES,
   type DesignSheetImportPreviewRow,
   type DesignSheetImportProposal,
+  type DesignSheetImportRejection,
 } from '@/lib/designSheetImport/shared'
 import type { DesignSheet } from '@/types/database'
 
@@ -45,6 +46,7 @@ type ImportDocxResponse = {
   error?: string
   proposed?: DesignSheetImportProposal
   preview?: DesignSheetImportPreviewRow[]
+  rejected?: DesignSheetImportRejection[]
 }
 
 type SaveDesignSheetResponse = {
@@ -61,6 +63,35 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
+/**
+ * Values the document offered that the field cannot hold. Shown rather than dropped:
+ * the document said something about this field, and silently ignoring it reads as
+ * "the import found nothing" — which is how a stray value went unnoticed before.
+ */
+function RejectedValues({ rejected }: { rejected: DesignSheetImportRejection[] }) {
+  if (rejected.length === 0) return null
+
+  return (
+    <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5">
+      <p className="text-xs font-medium text-warning">
+        {rejected.length === 1 ? 'One value was not applied' : `${rejected.length} values were not applied`}
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {rejected.map(row => (
+          <li key={row.field} className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{row.label}</span>
+            {': '}
+            <span className="italic">&ldquo;{row.value}&rdquo;</span>
+            {' is not one of '}
+            {row.options.join(', ')}
+            {'. Set it in the design sheet if it applies.'}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export function DesignSheetImportDialog({
   open,
   onOpenChange,
@@ -74,6 +105,7 @@ export function DesignSheetImportDialog({
   const [file, setFile] = useState<File | null>(null)
   const [previewRows, setPreviewRows] = useState<DesignSheetImportPreviewRow[]>([])
   const [proposed, setProposed] = useState<DesignSheetImportProposal>({})
+  const [rejected, setRejected] = useState<DesignSheetImportRejection[]>([])
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
   const [submitting, setSubmitting] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -169,6 +201,7 @@ export function DesignSheetImportDialog({
       const rows = Array.isArray(result.preview) ? result.preview : []
       setPreviewRows(rows)
       setProposed(result.proposed ?? {})
+      setRejected(Array.isArray(result.rejected) ? result.rejected : [])
       setSelectedRows(buildSelectedRows(rows))
     } catch (error) {
       console.error(error)
@@ -281,11 +314,15 @@ export function DesignSheetImportDialog({
               )}
             </div>
           ) : !hasPreview ? (
-            <div className="rounded-md border bg-muted/40 px-4 py-5 text-sm text-muted-foreground">
-              No proposed design sheet updates are ready to review.
+            <div className="space-y-3">
+              <RejectedValues rejected={rejected} />
+              <div className="rounded-md border bg-muted/40 px-4 py-5 text-sm text-muted-foreground">
+                No proposed design sheet updates are ready to review.
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
+              <RejectedValues rejected={rejected} />
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Proposed updates</p>

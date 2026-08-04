@@ -226,7 +226,7 @@ export function computeDesignSheetReadiness({
     // meant something else) satisfied `hasText` and so was never flagged, while
     // the generator quietly fell back to a staged distribution.
     documentInclusions.trust && resolveResidualBeneficiaryMethod(sheet) == null &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'distribution method', 'distribution_method'),
+      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'distribution method', 'residual_beneficiary_method'),
     Object.entries(documentInclusions).filter(([key, value]) => key !== 'spouse_docs' && value).length === 0 &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'at least one document', null),
     (!hasText(signingType) || signingType === 'undecided') &&
