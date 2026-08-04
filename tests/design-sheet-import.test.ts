@@ -100,7 +100,7 @@ describe('design sheet import route source', () => {
 
 describe('coerceDesignSheetImport', () => {
   it('keeps recognized fields and discards unknown or empty values', () => {
-    const proposed = coerceDesignSheetImport({
+    const { proposed } = coerceDesignSheetImport({
       client_name: 'Jane Doe',
       client_pronouns: 'she/her',
       inheritance_structure: 'trust-protection',
@@ -136,14 +136,14 @@ describe('coerceDesignSheetImport', () => {
     expect(coerceDesignSheetImport({
       distribution_age: '',
       stagger_age_1: '   ',
-    })).toEqual({})
+    }).proposed).toEqual({})
   })
 
   it('discards empty JSON values', () => {
     expect(coerceDesignSheetImport({
       pet_care_details: {},
       specific_bequests: [],
-    })).toEqual({})
+    }).proposed).toEqual({})
   })
 })
 
@@ -412,5 +412,73 @@ describe('design sheet import UI source', () => {
     expect(workspace).toContain("step === 'design' ? 'overflow-hidden' : 'overflow-y-auto'")
     expect(workspace).toContain('min-h-0 flex-1 overflow-hidden')
     expect(shell).toContain('embedded')
+  })
+})
+
+// Regression: the import field map declared every choice field as free text, so a
+// document saying "per stirpes" wrote that string straight into `distribution_method`
+// — a column offering outright / staggered / trust_for_life / custom. One live sheet
+// carried that value for three weeks before anything noticed.
+describe('imported choice fields are validated against their options', () => {
+  it('rejects a value the field cannot hold, and does not propose it', () => {
+    const { proposed, rejected } = coerceDesignSheetImport({ distribution_method: 'per stirpes' })
+
+    expect(proposed).toEqual({})
+    expect(rejected).toEqual([{
+      field: 'distribution_method',
+      label: 'Distribution method',
+      section: 'Trust',
+      value: 'per stirpes',
+      options: ['outright', 'staggered', 'trust_for_life', 'custom'],
+    }])
+  })
+
+  it('accepts the phrasings documents actually use', () => {
+    for (const [input, expected] of [
+      ['staggered', 'staggered'],
+      ['Staggered', 'staggered'],
+      ['  Trust For Life  ', 'trust_for_life'],
+      ['trust-for-life', 'trust_for_life'],
+    ] as const) {
+      const { proposed, rejected } = coerceDesignSheetImport({ distribution_method: input })
+      expect(proposed.distribution_method, input).toBe(expected)
+      expect(rejected, input).toEqual([])
+    }
+  })
+
+  it('does not coerce to a near neighbour', () => {
+    const { proposed, rejected } = coerceDesignSheetImport({ bond: 'no bond required' })
+
+    expect(proposed).toEqual({})
+    expect(rejected.map(row => row.field)).toEqual(['bond'])
+  })
+
+  it('validates the other choice fields too', () => {
+    const { proposed, rejected } = coerceDesignSheetImport({
+      supervision: 'Unsupervised',
+      no_contest_clause: 'include',
+      beneficiary_structure: 'descendants per stirpes',
+      age_distribution_schedule: 'whenever they are ready',
+    })
+
+    expect(proposed).toEqual({
+      supervision: 'unsupervised',
+      no_contest_clause: 'include',
+      beneficiary_structure: 'descendants_per_stirpes',
+    })
+    expect(rejected.map(row => row.field)).toEqual(['age_distribution_schedule'])
+  })
+
+  it('leaves free-text fields alone', () => {
+    const { proposed, rejected } = coerceDesignSheetImport({
+      trust_name: 'The Jane Doe Revocable Trust',
+      goals_notes: 'Anything the attorney wrote',
+    })
+
+    expect(proposed).toEqual({
+      trust_name: 'The Jane Doe Revocable Trust',
+      goals_notes: 'Anything the attorney wrote',
+    })
+    expect(rejected).toEqual([])
   })
 })

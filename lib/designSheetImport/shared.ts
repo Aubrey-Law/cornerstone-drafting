@@ -1,4 +1,5 @@
-import type { AssetItem, DesignSheetChild, DesignSheetUpdate } from '@/types/database'
+import { RESIDUAL_BENEFICIARY_METHODS } from '@/lib/designSheetTrustDetails'
+import type { AssetItem, DesignSheet, DesignSheetChild, DesignSheetUpdate } from '@/types/database'
 
 export const MIN_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 20
 export const MAX_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 60_000
@@ -23,10 +24,30 @@ export interface DesignSheetImportPreviewRow {
 export interface DesignSheetImportResult {
   proposed: DesignSheetImportProposal
   preview: DesignSheetImportPreviewRow[]
+  /** Values the document offered that the field cannot hold. Surfaced, not applied. */
+  rejected: DesignSheetImportRejection[]
+}
+
+export interface DesignSheetImportRejection {
+  field: DesignSheetImportField
+  label: string
+  section: string
+  value: string
+  options: readonly string[]
 }
 
 type FieldKind = 'string' | 'boolean' | 'number' | 'children' | 'assets' | 'json'
-type FieldMeta = { section: string; label: string; kind: FieldKind }
+/**
+ * `options` marks a field the design sheet renders as a fixed choice. Imported text
+ * is matched against it and dropped when it does not fit, so a document that says
+ * something the field cannot express never reaches the sheet — that is how
+ * 'per stirpes' ended up stored in `distribution_method`, which offers
+ * outright / staggered / trust_for_life / custom.
+ *
+ * Each list is pinned to the column's own union with `satisfies`, so an option that
+ * drifts from the type is a compile error rather than a silently dead entry.
+ */
+type FieldMeta = { section: string; label: string; kind: FieldKind; options?: readonly string[] }
 
 export const DESIGN_SHEET_IMPORT_FIELDS = {
   client_name: { section: 'Personal', label: 'Client name', kind: 'string' },
@@ -87,7 +108,7 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   spouse_trust_name: { section: 'Trust', label: 'Spouse trust name', kind: 'string' },
   restatement: { section: 'Trust', label: 'Restatement', kind: 'boolean' },
   trust_protector: { section: 'Trust', label: 'Trust protector', kind: 'boolean' },
-  distribution_method: { section: 'Trust', label: 'Distribution method', kind: 'string' },
+  distribution_method: { section: 'Trust', label: 'Distribution method', kind: 'string', options: RESIDUAL_BENEFICIARY_METHODS },
   distribution_age: { section: 'Trust', label: 'Distribution age', kind: 'number' },
   stagger_age_1: { section: 'Trust', label: 'First stagger age', kind: 'number' },
   stagger_pct_1: { section: 'Trust', label: 'First stagger percentage', kind: 'number' },
@@ -116,30 +137,30 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   provision_substance_abuse: { section: 'Trust', label: 'Substance abuse provision', kind: 'string' },
   provision_married_beneficiary: { section: 'Trust', label: 'Married beneficiary provision', kind: 'string' },
   specific_bequests: { section: 'Will', label: 'Specific bequests', kind: 'json' },
-  pet_care_option: { section: 'Will', label: 'Pet care option', kind: 'string' },
+  pet_care_option: { section: 'Will', label: 'Pet care option', kind: 'string', options: ['omit', 'direct_bequest', 'pet_trust'] satisfies readonly NonNullable<DesignSheet['pet_care_option']>[] },
   pet_care_details: { section: 'Will', label: 'Pet care details', kind: 'json' },
-  pr_structure: { section: 'Will', label: 'PR structure', kind: 'string' },
-  bond: { section: 'Will', label: 'Bond', kind: 'string' },
-  supervision: { section: 'Will', label: 'Supervision', kind: 'string' },
-  simultaneous_death: { section: 'Will', label: 'Simultaneous death', kind: 'string' },
+  pr_structure: { section: 'Will', label: 'PR structure', kind: 'string', options: ['single', 'spouse_first', 'co_pr'] satisfies readonly NonNullable<DesignSheet['pr_structure']>[] },
+  bond: { section: 'Will', label: 'Bond', kind: 'string', options: ['no_bond', 'required'] satisfies readonly NonNullable<DesignSheet['bond']>[] },
+  supervision: { section: 'Will', label: 'Supervision', kind: 'string', options: ['unsupervised', 'supervised'] satisfies readonly NonNullable<DesignSheet['supervision']>[] },
+  simultaneous_death: { section: 'Will', label: 'Simultaneous death', kind: 'string', options: ['spouse_survives', 'testator_survives', 'omit'] satisfies readonly NonNullable<DesignSheet['simultaneous_death']>[] },
   utma_age: { section: 'Will', label: 'UTMA age', kind: 'number' },
-  no_contest_clause: { section: 'Will', label: 'No-contest clause', kind: 'string' },
+  no_contest_clause: { section: 'Will', label: 'No-contest clause', kind: 'string', options: ['omit', 'include'] satisfies readonly NonNullable<DesignSheet['no_contest_clause']>[] },
   include_disclaimer_article: { section: 'Will', label: 'Disclaimer article', kind: 'boolean' },
   include_self_proving_affidavit: { section: 'Will', label: 'Self-proving affidavit', kind: 'boolean' },
   excluded_guardian_flag: { section: 'Will', label: 'Excluded guardian', kind: 'boolean' },
   excluded_guardian_name: { section: 'Will', label: 'Excluded guardian name', kind: 'string' },
   trust_date: { section: 'Will', label: 'Trust date', kind: 'string' },
-  pour_over_alternate_disposition: { section: 'Will', label: 'Pour-over alternate disposition', kind: 'string' },
+  pour_over_alternate_disposition: { section: 'Will', label: 'Pour-over alternate disposition', kind: 'string', options: ['spouse_then_descendants', 'descendants_only', 'named'] satisfies readonly NonNullable<DesignSheet['pour_over_alternate_disposition']>[] },
   pour_over_alternate_named: { section: 'Will', label: 'Pour-over alternate named beneficiary', kind: 'string' },
-  outright_residuary: { section: 'Will', label: 'Outright residuary', kind: 'string' },
+  outright_residuary: { section: 'Will', label: 'Outright residuary', kind: 'string', options: ['spouse_then_descendants', 'descendants_then_heirs', 'named'] satisfies readonly NonNullable<DesignSheet['outright_residuary']>[] },
   outright_residuary_named: { section: 'Will', label: 'Outright residuary named beneficiary', kind: 'string' },
   outright_residuary_alternate: { section: 'Will', label: 'Outright residuary alternate', kind: 'string' },
-  trustee_structure: { section: 'Will', label: 'Testamentary trustee structure', kind: 'string' },
-  cotrustee_decision_standard: { section: 'Will', label: 'Co-trustee decision standard', kind: 'string' },
-  beneficiary_structure: { section: 'Will', label: 'Beneficiary structure', kind: 'string' },
+  trustee_structure: { section: 'Will', label: 'Testamentary trustee structure', kind: 'string', options: ['single', 'spouse_first', 'co_trustees'] satisfies readonly NonNullable<DesignSheet['trustee_structure']>[] },
+  cotrustee_decision_standard: { section: 'Will', label: 'Co-trustee decision standard', kind: 'string', options: ['majority', 'unanimous'] satisfies readonly NonNullable<DesignSheet['cotrustee_decision_standard']>[] },
+  beneficiary_structure: { section: 'Will', label: 'Beneficiary structure', kind: 'string', options: ['spouse_hems_then_descendants', 'descendants_per_stirpes', 'single_beneficiary'] satisfies readonly NonNullable<DesignSheet['beneficiary_structure']>[] },
   single_beneficiary_name: { section: 'Will', label: 'Single beneficiary name', kind: 'string' },
   single_beneficiary_remainder: { section: 'Will', label: 'Single beneficiary remainder', kind: 'string' },
-  age_distribution_schedule: { section: 'Will', label: 'Age distribution schedule', kind: 'string' },
+  age_distribution_schedule: { section: 'Will', label: 'Age distribution schedule', kind: 'string', options: ['outright_25', 'outright_30', 'outright_35', 'staggered_25_30_35'] satisfies readonly NonNullable<DesignSheet['age_distribution_schedule']>[] },
   trust_protector_name: { section: 'Trust', label: 'Trust protector name', kind: 'string' },
   disinheritances: { section: 'Family', label: 'Disinherited heirs', kind: 'json' },
 
@@ -290,10 +311,30 @@ export function getDesignSheetDocxValidationError(file: File | null): string | n
   return null
 }
 
-export function coerceDesignSheetImport(parsed: unknown): DesignSheetImportProposal {
-  if (!isRecord(parsed)) return {}
+/**
+ * Match imported text against a field's options.
+ *
+ * Documents phrase choices loosely — "Per Stirpes", "trust-for-life", "No Bond" —
+ * so casing and word separators are normalised before comparison. Anything that
+ * still does not match is rejected rather than coerced to a near neighbour.
+ */
+export function matchDesignSheetImportOption(
+  value: string,
+  options: readonly string[],
+): string | null {
+  const normalize = (input: string) => input.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  const normalized = normalize(value)
+  return options.find(option => normalize(option) === normalized) ?? null
+}
+
+export function coerceDesignSheetImport(parsed: unknown): {
+  proposed: DesignSheetImportProposal
+  rejected: DesignSheetImportRejection[]
+} {
+  if (!isRecord(parsed)) return { proposed: {}, rejected: [] }
 
   const proposed: DesignSheetImportProposal = {}
+  const rejected: DesignSheetImportRejection[] = []
 
   for (const [field, meta] of Object.entries(DESIGN_SHEET_IMPORT_FIELDS) as Array<[KnownDesignSheetImportField, FieldMeta]>) {
     if (!(field in parsed)) continue
@@ -308,12 +349,27 @@ export function coerceDesignSheetImport(parsed: unknown): DesignSheetImportPropo
     if (meta.kind === 'assets') value = coerceAssets(rawValue)
     if (meta.kind === 'json') value = coerceJson(rawValue)
 
-    if (!isEmptyValue(value)) {
-      proposed[field] = value
+    if (isEmptyValue(value)) continue
+
+    if (meta.options && typeof value === 'string') {
+      const matched = matchDesignSheetImportOption(value, meta.options)
+      if (!matched) {
+        rejected.push({
+          field,
+          label: meta.label,
+          section: meta.section,
+          value,
+          options: meta.options,
+        })
+        continue
+      }
+      value = matched
     }
+
+    proposed[field] = value
   }
 
-  return proposed
+  return { proposed, rejected }
 }
 
 export function formatDesignSheetImportValue(value: unknown): string {
