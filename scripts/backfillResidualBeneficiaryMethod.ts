@@ -9,9 +9,14 @@
  * resolveResidualBeneficiaryMethod can both go.
  *
  * Only rows whose column value maps onto a real ResidualBeneficiaryMethod are
- * touched. A row holding something else (e.g. 'per stirpes', left over from when
- * this column meant the representation type) is reported, not guessed at — which
- * method the attorney intended is not derivable.
+ * touched. A row holding something else is reported, not guessed at — which method
+ * the attorney intended is not derivable from free text.
+ *
+ * --clear-unmappable nulls the column on those rows instead. That is a separate,
+ * explicit decision: it discards a value rather than moving it, so it is opt-in and
+ * only for values that match no option this field has ever offered. Nothing reads
+ * them — resolveResidualBeneficiaryMethod already rejects them — so the column is
+ * simply claiming a choice that was never made.
  *
  * The write is a compare-and-swap on updated_at, so a concurrent edit from the app
  * makes the backfill skip that row rather than clobber it. It is idempotent: a row
@@ -19,7 +24,7 @@
  *
  * Usage (reads the hosted credentials from the env files):
  *   set -a; source .env; source .env.local; set +a
- *   npx tsx scripts/backfillResidualBeneficiaryMethod.ts [--apply]
+ *   npx tsx scripts/backfillResidualBeneficiaryMethod.ts [--apply] [--clear-unmappable]
  *
  * Without --apply it reports what it would do and writes nothing.
  */
@@ -27,6 +32,7 @@ import { createClient } from '@supabase/supabase-js'
 import { normalizeResidualBeneficiaryMethod } from '../lib/designSheetTrustDetails'
 
 const APPLY = process.argv.includes('--apply')
+const CLEAR_UNMAPPABLE = process.argv.includes('--clear-unmappable')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -40,6 +46,8 @@ type Candidate = {
   decisions: Record<string, unknown>
 }
 
+type Unmappable = { id: string; updatedAt: string | null; column: string }
+
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -52,7 +60,7 @@ async function main() {
   if (error) throw new Error(error.message)
 
   const candidates: Candidate[] = []
-  const unmappable: Array<{ id: string; column: string }> = []
+  const unmappable: Unmappable[] = []
   let alreadyCanonical = 0
   let noMethod = 0
 
@@ -71,7 +79,11 @@ async function main() {
     }
     const method = normalizeResidualBeneficiaryMethod(column)
     if (!method) {
-      unmappable.push({ id: row.id as string, column })
+      unmappable.push({
+        id: row.id as string,
+        updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
+        column,
+      })
       continue
     }
     candidates.push({
@@ -90,12 +102,16 @@ async function main() {
   console.log(`  unmappable:        ${unmappable.length}`)
 
   if (unmappable.length > 0) {
-    console.log('\nNot backfilled — the column value is not a residual beneficiary method.')
-    console.log('Someone has to decide what was intended; this script will not guess:')
+    console.log('\nColumn values that are not a residual beneficiary method:')
     for (const row of unmappable) console.log(`  ${row.id}  ${JSON.stringify(row.column)}`)
+    console.log(CLEAR_UNMAPPABLE
+      ? '  --clear-unmappable: these will be nulled. Nothing reads them; the column is'
+        + '\n  claiming a choice that was never made.'
+      : '  Not touched. Re-run with --clear-unmappable to null them, or set a real'
+        + '\n  method in Trust Details if one was intended.')
   }
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && !(CLEAR_UNMAPPABLE && unmappable.length > 0)) {
     console.log('\nNothing to do.')
     return
   }
@@ -103,6 +119,11 @@ async function main() {
   console.log('\nPlanned writes:')
   for (const row of candidates) {
     console.log(`  ${row.id}  column ${JSON.stringify(row.column)} -> trust_details.residual_beneficiary_method ${JSON.stringify(row.method)}`)
+  }
+  if (CLEAR_UNMAPPABLE) {
+    for (const row of unmappable) {
+      console.log(`  ${row.id}  column ${JSON.stringify(row.column)} -> null`)
+    }
   }
 
   if (!APPLY) {
@@ -134,6 +155,23 @@ async function main() {
     }
     console.log(`  wrote ${row.id}`)
     written += 1
+  }
+
+  if (CLEAR_UNMAPPABLE) {
+    for (const row of unmappable) {
+      let query = admin.from('design_sheets').update({ distribution_method: null }).eq('id', row.id)
+      if (row.updatedAt) query = query.eq('updated_at', row.updatedAt)
+
+      const { data: updated, error: clearError } = await query.select('id')
+      if (clearError) throw new Error(`${row.id}: ${clearError.message}`)
+      if (!updated || updated.length === 0) {
+        console.log(`  skipped ${row.id} — changed since it was read`)
+        skipped += 1
+        continue
+      }
+      console.log(`  cleared ${row.id} (was ${JSON.stringify(row.column)})`)
+      written += 1
+    }
   }
 
   console.log(`\nwritten: ${written}  skipped: ${skipped}`)
