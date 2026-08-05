@@ -3,6 +3,7 @@ import {
   getFiduciaryDocumentInclusions,
   type FiduciaryDocumentInclusions,
 } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import { principalOrderByPriority } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { getRelationshipLabel, structuredFromContactProfile } from '@/lib/kinship/relationshipLabels'
 import type { ContactRow, DesignSheetRow, FiduciarySlotRow } from '@/lib/draftPayload/types'
@@ -46,20 +47,28 @@ export interface DraftPayloadFiduciaryRoleDetails {
   }
   spouse_agent: {
     primary: DraftPayloadContactDetail | null
+    co_primary: DraftPayloadContactDetail | null
     successor: DraftPayloadContactDetail | null
   }
   healthcare_agent: {
     primary: DraftPayloadContactDetail | null
+    co_primary: DraftPayloadContactDetail | null
     alternate: DraftPayloadContactDetail | null
+    co_alternate: DraftPayloadContactDetail | null
   }
   spouse_healthcare_agent: {
     primary: DraftPayloadContactDetail | null
+    co_primary: DraftPayloadContactDetail | null
     alternate: DraftPayloadContactDetail | null
+    co_alternate: DraftPayloadContactDetail | null
   }
   guardians: {
     primary: DraftPayloadContactDetail | null
+    co_primary: DraftPayloadContactDetail | null
     successor: DraftPayloadContactDetail | null
+    co_successor: DraftPayloadContactDetail | null
     second_successor: DraftPayloadContactDetail | null
+    co_second_successor: DraftPayloadContactDetail | null
     temporary: DraftPayloadContactDetail | null
     temporary_co: DraftPayloadContactDetail | null
     temporary_successor: DraftPayloadContactDetail | null
@@ -184,22 +193,30 @@ function emptyRoleDetails(): DraftPayloadFiduciaryRoleDetails {
       co_primary: emptyPerson,
       successor: emptyPerson,
     },
-    spouse_agent: {
-      primary: emptyPerson,
-      successor: emptyPerson,
-    },
+  spouse_agent: {
+    primary: emptyPerson,
+    co_primary: emptyPerson,
+    successor: emptyPerson,
+  },
     healthcare_agent: {
       primary: emptyPerson,
+      co_primary: emptyPerson,
       alternate: emptyPerson,
+      co_alternate: emptyPerson,
     },
     spouse_healthcare_agent: {
       primary: emptyPerson,
+      co_primary: emptyPerson,
       alternate: emptyPerson,
+      co_alternate: emptyPerson,
     },
     guardians: {
       primary: emptyPerson,
+      co_primary: emptyPerson,
       successor: emptyPerson,
+      co_successor: emptyPerson,
       second_successor: emptyPerson,
+      co_second_successor: emptyPerson,
       temporary: emptyPerson,
       temporary_co: emptyPerson,
       temporary_successor: emptyPerson,
@@ -218,7 +235,9 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
   const details = emptyRoleDetails()
 
   function slotContact(slots: FiduciarySlotRow[], order: number, co = false): ContactRow | null {
-    const slot = slots.find(item => item.order === order && item.is_co === co)
+    const priorityOrder = principalOrderByPriority(slots, order)
+    if (priorityOrder == null) return null
+    const slot = slots.find(item => item.order === priorityOrder && item.is_co === co)
     return slot?.contact_id ? contactsById.get(slot.contact_id) ?? null : null
   }
 
@@ -228,7 +247,9 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
     co = false,
     perspective: 'client' | 'spouse' = 'client',
   ): DraftPayloadContactDetail | null {
-    const slot = slots.find(item => item.order === order && item.is_co === co)
+    const priorityOrder = principalOrderByPriority(slots, order)
+    if (priorityOrder == null) return null
+    const slot = slots.find(item => item.order === priorityOrder && item.is_co === co)
     if (!slot) return null
 
     if (slot.contact_id === CLIENT_PRIMARY_CONTACT_ID) {
@@ -264,12 +285,17 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
 
   const hcp = getDesignSlots(designSheet, 'hcp_slots')
   details.healthcare_agent.primary = slotDetail(hcp, 0)
+  details.healthcare_agent.co_primary = slotDetail(hcp, 0, true)
   details.healthcare_agent.alternate = slotDetail(hcp, 1)
+  details.healthcare_agent.co_alternate = slotDetail(hcp, 1, true)
 
   const guardian = getDesignSlots(designSheet, 'guardian_slots')
   details.guardians.primary = slotDetail(guardian, 0)
+  details.guardians.co_primary = slotDetail(guardian, 0, true)
   details.guardians.successor = slotDetail(guardian, 1)
+  details.guardians.co_successor = slotDetail(guardian, 1, true)
   details.guardians.second_successor = slotDetail(guardian, 2)
+  details.guardians.co_second_successor = slotDetail(guardian, 2, true)
 
   const tempGuardian = getDesignSlots(designSheet, 'temporary_guardian_slots')
   details.guardians.temporary = slotDetail(tempGuardian, 0)
@@ -283,11 +309,14 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
 
   const spousePoa = getDesignSlots(designSheet, 'spouse_poa_slots')
   details.spouse_agent.primary = slotDetail(spousePoa, 0, false, 'spouse')
+  details.spouse_agent.co_primary = slotDetail(spousePoa, 0, true, 'spouse')
   details.spouse_agent.successor = slotDetail(spousePoa, 1, false, 'spouse')
 
   const spouseHcp = getDesignSlots(designSheet, 'spouse_hcp_slots')
   details.spouse_healthcare_agent.primary = slotDetail(spouseHcp, 0, false, 'spouse')
+  details.spouse_healthcare_agent.co_primary = slotDetail(spouseHcp, 0, true, 'spouse')
   details.spouse_healthcare_agent.alternate = slotDetail(spouseHcp, 1, false, 'spouse')
+  details.spouse_healthcare_agent.co_alternate = slotDetail(spouseHcp, 1, true, 'spouse')
 
   return details
 }

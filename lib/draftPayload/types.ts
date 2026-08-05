@@ -90,9 +90,15 @@ export interface DraftPayload {
     hcp_primary: string | null
     hcp_primary_address: string | null
     hcp_primary_relationship: string | null
+    hcp_co?: string | null
+    hcp_co_relationship?: string | null
+    hcp_co_address?: string | null
     hcp_successor: string | null
     hcp_successor_address: string | null
     hcp_successor_relationship: string | null
+    hcp_successor_co?: string | null
+    hcp_successor_co_relationship?: string | null
+    hcp_successor_co_address?: string | null
     trustee_initial: string | null
     trustee_co: string | null
     trustee_successor: string | null
@@ -102,6 +108,9 @@ export interface DraftPayload {
     guardian_primary: string | null
     guardian_successor: string | null
     guardian_second_successor: string | null
+    guardian_co?: string | null
+    guardian_co_successor?: string | null
+    guardian_co_second_successor?: string | null
     temp_guardian_primary: string | null
     temp_guardian_co: string | null
     temp_guardian_successor: string | null
@@ -110,13 +119,20 @@ export interface DraftPayload {
     spouse_pr_co_primary: string | null
     spouse_pr_successor: string | null
     spouse_dpoa_primary: string | null
+    spouse_dpoa_co?: string | null
     spouse_dpoa_successor: string | null
     spouse_hcp_primary: string | null
     spouse_hcp_primary_address: string | null
     spouse_hcp_primary_relationship: string | null
+    spouse_hcp_co?: string | null
+    spouse_hcp_co_address?: string | null
+    spouse_hcp_co_relationship?: string | null
     spouse_hcp_successor: string | null
     spouse_hcp_successor_address: string | null
     spouse_hcp_successor_relationship: string | null
+    spouse_hcp_successor_co?: string | null
+    spouse_hcp_successor_co_address?: string | null
+    spouse_hcp_successor_co_relationship?: string | null
     spouse_trustee_successor: string | null
     spouse_trustee_co: string | null
   }

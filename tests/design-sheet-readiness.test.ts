@@ -315,6 +315,31 @@ describe('computeDesignSheetReadiness', () => {
     expect(readiness.blocking.find(item => item.label === 'successor trustee')?.blocking).toBe(true)
   })
 
+  it('treats non-zero order as the primary slot for PR, POA, and HCP readiness checks', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        executor_slots: [
+          { id: 'executor-1', contact_id: 'contact-executor', is_co: false, order: 4 },
+        ],
+        poa_slots: [
+          { id: 'poa-1', contact_id: 'contact-poa', is_co: false, order: 5 },
+        ],
+        hcp_slots: [
+          { id: 'hcp-1', contact_id: 'contact-hcp', is_co: false, order: 6 },
+        ],
+      }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    expect(readiness.complete).toBe(true)
+    const blockingLabels = readiness.blocking.map(item => item.label)
+    expect(blockingLabels).not.toContain('personal representative')
+    expect(blockingLabels).not.toContain('first attorney-in-fact')
+    expect(blockingLabels).not.toContain('first health care agent')
+  })
+
   it('classifies a missing signing date as optional', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet({ signing_date: null }),

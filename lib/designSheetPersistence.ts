@@ -1,6 +1,8 @@
 import type { DesignSheet, DesignSheetUpdate } from '@/types/database'
 import { toDateInputValue } from '@/lib/dob'
+import type { FiduciarySlot } from '@/types/database'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
+import { repairFiduciarySlotOrdering } from '@/lib/designSheet/fiduciarySlotOrdering'
 
 const SYSTEM_COLUMNS = new Set(['id', 'matter_id', 'client_intake_id', 'created_at', 'updated_at'])
 const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
@@ -102,6 +104,21 @@ function mergeFiduciarySlotColumn(columnValue: unknown, decisionsValue: unknown)
   if (isFiduciarySlotArray(columnValue) && columnValue.length > 0) return columnValue
   if (isFiduciarySlotArray(decisionsValue) && decisionsValue.length > 0) return decisionsValue
   return columnValue ?? decisionsValue ?? []
+}
+
+function repairFiduciarySlotCollection(value: unknown): unknown {
+  if (!isFiduciarySlotArray(value)) return value
+  return repairFiduciarySlotOrdering(value as FiduciarySlot[])
+}
+
+function repairFiduciarySlotColumns(target: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...target }
+  for (const key of FIDUCIARY_SLOT_COLUMN_KEYS) {
+    const raw = next[key]
+    if (raw === undefined) continue
+    next[key] = repairFiduciarySlotCollection(raw)
+  }
+  return next
 }
 
 // Columns added by 20260715000000_lite_design_sheets_intake_columns.sql — intake seed
@@ -268,7 +285,7 @@ export function stripDecisionOnlyTopLevelMirrors<T extends Record<string, unknow
 }
 
 export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
-  const input = formatPhoneFieldsDeep(data) as Record<string, unknown>
+  const input = repairFiduciarySlotColumns(formatPhoneFieldsDeep(data) as Record<string, unknown>)
   const payload: Record<string, unknown> = {}
   const callerSuppliedDecisions = input.decisions !== undefined
   // Start from the canonical decisions object. inflateDesignSheetRow mirrors decision
@@ -397,5 +414,7 @@ export function inflateDesignSheetRow(row: Record<string, unknown> | null): Desi
     }
   }
 
-  return stripDecisionOnlyTopLevelMirrors(sheet) as unknown as DesignSheet
+  const repaired = repairFiduciarySlotColumns(sheet)
+
+  return stripDecisionOnlyTopLevelMirrors(repaired) as unknown as DesignSheet
 }

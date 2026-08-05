@@ -1,8 +1,13 @@
 import type { DesignSheet, FiduciarySlot, MatterContact } from '@/types/database'
 import type { InitialTrusteeNomination } from '@/lib/designSheetTrustDetails'
+import {
+  firstAvailablePrincipalOrder,
+  namedPrincipalSlots,
+  principalSlotsByPriority,
+} from '@/lib/designSheet/fiduciarySlotOrdering'
 
 function primaryContactId(slots: FiduciarySlot[] | null | undefined): string | null {
-  return slots?.find(slot => slot.order === 0 && !slot.is_co)?.contact_id ?? null
+  return namedPrincipalSlots(slots ?? [])[0]?.contact_id ?? null
 }
 
 function createSlot(order: number, is_co = false): FiduciarySlot {
@@ -11,9 +16,9 @@ function createSlot(order: number, is_co = false): FiduciarySlot {
 
 function setPrimaryContact(slots: FiduciarySlot[] | null | undefined, contactId: string | null): FiduciarySlot[] {
   const existing = slots ?? []
-  const primary = existing.find(slot => slot.order === 0 && !slot.is_co)
+  const primary = principalSlotsByPriority(existing)[0]
   if (!primary) {
-    return [{ id: crypto.randomUUID(), contact_id: contactId, is_co: false, order: 0 }, ...existing]
+    return [{ id: crypto.randomUUID(), contact_id: contactId, is_co: false, order: firstAvailablePrincipalOrder(existing) }, ...existing]
   }
   return existing.map(slot => slot.id === primary.id ? { ...slot, contact_id: contactId } : slot)
 }
@@ -106,31 +111,39 @@ export function applyInitialTrusteeNomination(
   }
 
   const primaryId = primaryContactId(next)
-  const primarySlot = next.find(slot => slot.order === 0 && !slot.is_co)
+  const primarySlot = principalSlotsByPriority(next)[0]
+  const previousPrimaryOrder = primarySlot?.order
 
   if (normalized === 'client' && clientContact) {
+    const oldPrimaryId = primarySlot?.contact_id
     next = setPrimaryContact(next, clientContact.id)
-    if (primaryId && primaryId !== clientContact.id) {
-      next = removeCoForOrder(next, 0)
+    if (previousPrimaryOrder != null && oldPrimaryId && oldPrimaryId !== clientContact.id) {
+      next = removeCoForOrder(next, previousPrimaryOrder)
     }
     return next
   }
 
   if (normalized === 'spouse' && spouseContact) {
+    const oldPrimaryId = primarySlot?.contact_id
     next = setPrimaryContact(next, spouseContact.id)
-    if (primaryId && primaryId !== spouseContact.id) {
-      next = removeCoForOrder(next, 0)
+    if (previousPrimaryOrder != null && oldPrimaryId && oldPrimaryId !== spouseContact.id) {
+      next = removeCoForOrder(next, previousPrimaryOrder)
     }
     return next
   }
 
   if (normalized === 'client_and_spouse' && clientContact && spouseContact) {
+    const oldPrimaryId = primarySlot?.contact_id
     next = setPrimaryContact(next, clientContact.id)
-    const coSlot = next.find(slot => slot.order === 0 && slot.is_co)
-    if (!coSlot) {
-      next = addCo(next, 0)
+    if (previousPrimaryOrder != null && oldPrimaryId && oldPrimaryId !== clientContact.id) {
+      next = removeCoForOrder(next, previousPrimaryOrder)
     }
-    const refreshedCo = next.find(slot => slot.order === 0 && slot.is_co)
+    const primaryOrder = principalSlotsByPriority(next)[0]?.order ?? firstAvailablePrincipalOrder(next)
+    const coSlot = next.find(slot => slot.order === primaryOrder && slot.is_co)
+    if (!coSlot) {
+      next = addCo(next, primaryOrder)
+    }
+    const refreshedCo = next.find(slot => slot.order === primaryOrder && slot.is_co)
     if (refreshedCo) {
       next = setSlotContact(next, refreshedCo.id, spouseContact.id)
     }

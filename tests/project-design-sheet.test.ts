@@ -76,6 +76,12 @@ function payload(overrides: {
       hcp_successor: 'Riley Proxy',
       hcp_successor_address: '2 Care Way',
       hcp_successor_relationship: 'Sibling',
+      hcp_co: 'Casey Co-Proxy',
+      hcp_co_relationship: 'Child',
+      hcp_co_address: '3 Co-Care Way',
+      hcp_successor_co: 'Alex Co-Alternate',
+      hcp_successor_co_relationship: 'Colleague',
+      hcp_successor_co_address: '4 Co-Care Way',
       trustee_initial: 'John Client',
       trustee_co: 'Jane Client',
       trustee_successor: 'Taylor Trustee',
@@ -94,12 +100,20 @@ function payload(overrides: {
       spouse_pr_successor: 'Spouse PR Alt',
       spouse_dpoa_primary: 'Spouse POA',
       spouse_dpoa_successor: 'Spouse POA Alt',
+      guardian_co: 'Co Guard One',
+      guardian_co_successor: 'Co Guard Two',
       spouse_hcp_primary: 'Spouse HCP',
       spouse_hcp_primary_address: '3 Care Way',
       spouse_hcp_primary_relationship: 'Spouse',
       spouse_hcp_successor: 'Spouse HCP Alt',
       spouse_hcp_successor_address: '4 Care Way',
       spouse_hcp_successor_relationship: 'Child',
+      spouse_hcp_co: 'Spouse Co HCP',
+      spouse_hcp_co_address: '5 Spouse Co Way',
+      spouse_hcp_co_relationship: 'Parent',
+      spouse_hcp_successor_co: 'Spouse Co Alternate',
+      spouse_hcp_successor_co_address: '6 Spouse Co Way',
+      spouse_hcp_successor_co_relationship: 'Sibling',
       spouse_trustee_successor: null,
       spouse_trustee_co: null,
     },
@@ -189,6 +203,8 @@ describe('projectDraftPayloadToFlatSheet', () => {
 
     expect(flat.hcp_client_agent).toBe('HARPER PROXY')
     expect(flat.hcp_client_alt1).toBe('RILEY PROXY')
+    expect(flat.hcp_client_co).toBe('CASEY CO-PROXY')
+    expect(flat.hcp_client_co_alt1).toBe('ALEX CO-ALTERNATE')
     expect(flat.personal_representative).toBe('PAT EXECUTOR')
     expect(flat.personal_representative_co).toBe('CO EXECUTOR')
     expect(flat.personal_representative_alt1).toBe('SAM SUCCESSOR')
@@ -196,9 +212,12 @@ describe('projectDraftPayloadToFlatSheet', () => {
     expect(flat.poa_client_co).toBe('CO AGENT')
     expect(flat.poa_client_alt).toBe('CASEY AGENT')
     expect(flat.guardian).toBe('GUARD ONE')
+    expect(flat.co_guardian).toBe('CO GUARD ONE')
     expect(flat.alt_guardian).toBe('GUARD TWO')
-    expect(flat.co_alt_guardian).toBe('GUARD THREE')
+    expect(flat.co_alt_guardian).toBe('CO GUARD TWO')
     expect(flat.hcp_spouse_agent).toBe('SPOUSE HCP')
+    expect(flat.hcp_spouse_co).toBe('SPOUSE CO HCP')
+    expect(flat.hcp_spouse_co_alt1).toBe('SPOUSE CO ALTERNATE')
     expect(flat.personal_representative_spouse).toBe('SPOUSE PR')
   })
 
@@ -207,6 +226,8 @@ describe('projectDraftPayloadToFlatSheet', () => {
     const vars = buildClientVariables(flat)
 
     expect(vars['[PRIMARY HCP]']).toBe('HARPER PROXY')
+    expect(vars['[CO PRIMARY HCP]']).toBe('CASEY CO-PROXY')
+    expect(vars['[CO ALTERNATE 1 HCP]']).toBe('ALEX CO-ALTERNATE')
     expect(vars['[PERSONAL REPRESENTATIVE]']).toBe('PAT EXECUTOR')
     expect(vars['[CLIENT FULL NAME]']).toBe('JOHN CLIENT')
     expect(vars['[CHILD FULL NAME]']).toBe('KID CLIENT')

@@ -753,7 +753,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       },
       spouse_agent: {
         primary: fiduciaryPerson(fiduciaryDetails?.spouse_agent.primary, payload.fiduciaries.spouse_dpoa_primary),
-        co_primary: person(null),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.spouse_agent.co_primary, payload.fiduciaries.spouse_dpoa_co),
         successor: fiduciaryPerson(fiduciaryDetails?.spouse_agent.successor, payload.fiduciaries.spouse_dpoa_successor),
         co_agents_action: poaCoAgentsAction(payload.dpoa_provisions.coagent_manner),
         primary_has_spouse: Boolean(payload.client.full_name),
@@ -766,9 +766,17 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
           relationship: payload.fiduciaries.hcp_primary_relationship ?? null,
           address: payload.fiduciaries.hcp_primary_address ?? payload.client.address ?? '',
         }),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.co_primary, payload.fiduciaries.hcp_co, {
+          relationship: payload.fiduciaries.hcp_co_relationship ?? null,
+          address: payload.fiduciaries.hcp_co_address ?? '',
+        }),
         alternate: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.alternate, payload.fiduciaries.hcp_successor, {
           relationship: payload.fiduciaries.hcp_successor_relationship ?? null,
           address: payload.fiduciaries.hcp_successor_address ?? '',
+        }),
+        co_alternate: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.co_alternate, payload.fiduciaries.hcp_successor_co, {
+          relationship: payload.fiduciaries.hcp_successor_co_relationship ?? null,
+          address: payload.fiduciaries.hcp_successor_co_address ?? '',
         }),
         second_alternate: person(null),
       },
@@ -777,10 +785,22 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
           relationship: payload.fiduciaries.spouse_hcp_primary_relationship ?? null,
           address: payload.fiduciaries.spouse_hcp_primary_address ?? payload.client.address ?? '',
         }),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.spouse_healthcare_agent.co_primary, payload.fiduciaries.spouse_hcp_co, {
+          relationship: payload.fiduciaries.spouse_hcp_co_relationship ?? null,
+          address: payload.fiduciaries.spouse_hcp_co_address ?? '',
+        }),
         alternate: fiduciaryPerson(fiduciaryDetails?.spouse_healthcare_agent.alternate, payload.fiduciaries.spouse_hcp_successor, {
           relationship: payload.fiduciaries.spouse_hcp_successor_relationship ?? null,
           address: payload.fiduciaries.spouse_hcp_successor_address ?? '',
         }),
+        co_alternate: fiduciaryPerson(
+          fiduciaryDetails?.spouse_healthcare_agent.co_alternate,
+          payload.fiduciaries.spouse_hcp_successor_co,
+          {
+            relationship: payload.fiduciaries.spouse_hcp_successor_co_relationship ?? null,
+            address: payload.fiduciaries.spouse_hcp_successor_co_address ?? '',
+          },
+        ),
       },
       anatomical_gift: hcpProvisions.anatomical_gift,
       anatomical_specified: hcpProvisions.anatomical_specified ?? '',
@@ -822,8 +842,20 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     charitable_gifts: charitableGifts,
     guardians: {
       primary: fiduciaryPerson(fiduciaryDetails?.guardians.primary, payload.fiduciaries.guardian_primary),
+      co_primary: fiduciaryPerson(
+        fiduciaryDetails?.guardians.co_primary,
+        payload.fiduciaries.guardian_co,
+      ),
       successor: fiduciaryPerson(fiduciaryDetails?.guardians.successor, payload.fiduciaries.guardian_successor),
+      co_successor: fiduciaryPerson(
+        fiduciaryDetails?.guardians.co_successor,
+        payload.fiduciaries.guardian_co_successor,
+      ),
       second_successor: fiduciaryPerson(fiduciaryDetails?.guardians.second_successor, payload.fiduciaries.guardian_second_successor),
+      co_second_successor: fiduciaryPerson(
+        fiduciaryDetails?.guardians.co_second_successor,
+        payload.fiduciaries.guardian_co_second_successor,
+      ),
       temporary: fiduciaryPerson(fiduciaryDetails?.guardians.temporary, payload.fiduciaries.temp_guardian_primary),
       temporary_co: fiduciaryPerson(fiduciaryDetails?.guardians.temporary_co, payload.fiduciaries.temp_guardian_co),
       temporary_successor: fiduciaryPerson(fiduciaryDetails?.guardians.temporary_successor, payload.fiduciaries.temp_guardian_successor),

@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils'
 import { formatPhoneDisplay } from '@/lib/phone'
 import type { DesignSheet, FiduciaryRole, FiduciarySlot, MatterContact, PipelineMatter } from '@/types/database'
+import { firstAvailablePrincipalOrder, namedPrincipalSlots, principalSlotsByPriority } from './fiduciary-helpers'
 
 export const CLIENT_PRIMARY_CONTACT_ID = '__design_sheet_client__'
 export const SPOUSE_PRIMARY_CONTACT_ID = '__design_sheet_spouse__'
@@ -179,24 +180,30 @@ export function findClientContact(contacts: MatterContact[], matter: PipelineMat
 }
 
 export function primaryContactId(slots: FiduciarySlot[] | null | undefined): string | null {
-  return slots?.find(slot => slot.order === 0 && !slot.is_co)?.contact_id ?? null
+  return namedPrincipalSlots(slots ?? [])[0]?.contact_id ?? null
 }
 
 export function setPrimaryContact(slots: FiduciarySlot[] | null | undefined, contactId: string | null): FiduciarySlot[] {
   const existing = slots ?? []
-  const primary = existing.find(slot => slot.order === 0 && !slot.is_co)
+  const primary = principalSlotsByPriority(existing)[0]
+
   if (!primary) {
+    const nextOrder = firstAvailablePrincipalOrder(existing)
     return [
-      { id: crypto.randomUUID(), contact_id: contactId, is_co: false, order: 0 },
+      { id: crypto.randomUUID(), contact_id: contactId, is_co: false, order: nextOrder },
       ...existing,
     ]
   }
+
   return existing.map(slot => slot.id === primary.id ? { ...slot, contact_id: contactId } : slot)
 }
 
 export function clearPrimaryContactIf(slots: FiduciarySlot[] | null | undefined, contactId: string): FiduciarySlot[] {
-  return (slots ?? []).map(slot => (
-    slot.order === 0 && !slot.is_co && slot.contact_id === contactId
+  const existing = slots ?? []
+  const primary = principalSlotsByPriority(existing)[0]
+  if (!primary || primary.contact_id !== contactId) return existing
+  return existing.map(slot => (
+    slot.id === primary.id
       ? { ...slot, contact_id: null }
       : slot
   ))

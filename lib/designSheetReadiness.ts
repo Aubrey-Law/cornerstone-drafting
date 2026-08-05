@@ -1,6 +1,7 @@
 import { getDocumentInclusions, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
+import { namedPrincipalSlots } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
@@ -109,12 +110,23 @@ function countOverrides(sheet: DesignSheet, fields: string[]) {
   return fields.filter(field => Boolean(overrides[field])).length
 }
 
-function primaryContactId(slots: DesignSheet['trustee_slots'] | DesignSheet['executor_slots'] | DesignSheet['poa_slots'] | DesignSheet['hcp_slots'] | DesignSheet['guardian_slots']) {
-  return (slots ?? []).find(slot => slot.order === 0 && !slot.is_co)?.contact_id ?? null
+type FiduciarySlotSeries = NonNullable<DesignSheet['trustee_slots']>
+  | NonNullable<DesignSheet['executor_slots']>
+  | NonNullable<DesignSheet['poa_slots']>
+  | NonNullable<DesignSheet['hcp_slots']>
+  | NonNullable<DesignSheet['guardian_slots']>
+  | NonNullable<DesignSheet['temporary_guardian_slots']>
+  | NonNullable<DesignSheet['spouse_trustee_slots']>
+  | NonNullable<DesignSheet['spouse_executor_slots']>
+  | NonNullable<DesignSheet['spouse_poa_slots']>
+  | NonNullable<DesignSheet['spouse_hcp_slots']>
+
+function primaryContactId(slots: FiduciarySlotSeries | null | undefined) {
+  return namedPrincipalSlots(slots ?? [])[0]?.contact_id ?? null
 }
 
-function alternateContactId(slots: DesignSheet['trustee_slots'] | DesignSheet['executor_slots'] | DesignSheet['poa_slots'] | DesignSheet['hcp_slots'] | DesignSheet['guardian_slots']) {
-  return (slots ?? []).find(slot => slot.order > 0 && !slot.is_co)?.contact_id ?? null
+function alternateContactId(slots: FiduciarySlotSeries | null | undefined) {
+  return namedPrincipalSlots(slots ?? [])[1]?.contact_id ?? null
 }
 
 function isMarried(sheet: DesignSheet) {
@@ -290,11 +302,11 @@ export function computeDesignSheetReadiness({
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const dpoaBlockers = [
-    documentInclusions.dpoa && !poaPrimary && blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'first attorney-in-fact', 'poa_slots'),
+    documentInclusions.dpoa && !poaPrimary && blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'attorney-in-fact', 'poa_slots'),
     documentInclusions.dpoa && poaPrimary && !poaAlternate &&
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'backup attorney-in-fact', 'poa_slots', 'required', false),
     documentInclusions.dpoa && spouseFiduciariesNeeded && !spousePoaPrimary &&
-      blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse first attorney-in-fact', 'spouse_poa_slots'),
+      blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse attorney-in-fact', 'spouse_poa_slots'),
     documentInclusions.dpoa && spouseFiduciariesNeeded && spousePoaPrimary && !spousePoaAlternate &&
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse backup attorney-in-fact', 'spouse_poa_slots', 'required', false),
     documentInclusions.dpoa && !dpoaProvisions.agent_compensation &&
@@ -306,11 +318,11 @@ export function computeDesignSheetReadiness({
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const healthcareBlockers = [
-    documentInclusions.healthcare && !hcpPrimary && blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'first health care agent', 'hcp_slots'),
+    documentInclusions.healthcare && !hcpPrimary && blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'health care agent', 'hcp_slots'),
     documentInclusions.healthcare && hcpPrimary && !hcpAlternate &&
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'backup health care agent', 'hcp_slots', 'required', false),
     documentInclusions.healthcare && spouseFiduciariesNeeded && !spouseHcpPrimary &&
-      blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse first health care agent', 'spouse_hcp_slots'),
+      blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse health care agent', 'spouse_hcp_slots'),
     documentInclusions.healthcare && spouseFiduciariesNeeded && spouseHcpPrimary && !spouseHcpAlternate &&
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse backup health care agent', 'spouse_hcp_slots', 'required', false),
     documentInclusions.healthcare && !healthcareProvisions.client_anatomical_gift &&

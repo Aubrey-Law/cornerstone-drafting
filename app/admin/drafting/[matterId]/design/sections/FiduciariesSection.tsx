@@ -18,11 +18,20 @@ interface LpData {
   li_design_sheet_approved: boolean
 }
 
-function splitInlineName(name: string): Pick<MatterContact, 'first_name' | 'last_name'> {
+function splitInlineName(name: string): Pick<MatterContact, 'first_name' | 'middle_name' | 'last_name'> {
   const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length <= 1) {
+    return {
+      first_name: parts[0] ?? '',
+      middle_name: null,
+      last_name: '',
+    }
+  }
+
   return {
     first_name: parts[0] ?? '',
-    last_name: parts.length > 1 ? parts.slice(1).join(' ') : parts[0] ?? '',
+    middle_name: parts.length > 2 ? parts.slice(1, -1).join(' ') : null,
+    last_name: parts[parts.length - 1] ?? '',
   }
 }
 
