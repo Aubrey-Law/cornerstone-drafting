@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, Plus } from 'lucide-react'
+import { ArrowLeftRight, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { designPlanTypeIncludesTrust } from '@/lib/designPlanType'
@@ -76,6 +76,7 @@ export function toggleFiduciaryGridContact(
   slots: FiduciarySlot[] | null | undefined,
   contactId: string,
   roleConfig: RoleConfig,
+  targetOrder?: number,
 ): FiduciarySlot[] {
   const normalized = normalizeFiduciarySlots(slots ?? [])
   const existing = normalized.filter(slot => slot.contact_id === contactId)
@@ -89,6 +90,25 @@ export function toggleFiduciaryGridContact(
   const existingCoSlot = existing.find(slot => slot.is_co)
   if (existingCoSlot) {
     return normalizeFiduciarySlots(normalized.filter(slot => slot.id !== existingCoSlot.id))
+  }
+
+  if (targetOrder != null) {
+    if (!roleConfig.allowCo) {
+      const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
+      return normalizeFiduciarySlots([
+        ...normalized,
+        { ...createSlot(nextOrder), contact_id: contactId },
+      ])
+    }
+
+    const hasPrincipal = normalized.some(slot => !slot.is_co && slot.order === targetOrder && slot.contact_id)
+    const openOnTarget = coSlotsForOrder(normalized, targetOrder).filter(slot => slot.contact_id).length < roleConfig.maxCo
+    if (hasPrincipal && openOnTarget) {
+      return normalizeFiduciarySlots([
+        ...normalized,
+        { ...createSlot(targetOrder, true), contact_id: contactId },
+      ])
+    }
   }
 
   if (!roleConfig.allowCo) {
@@ -259,6 +279,7 @@ export function FiduciaryGrid({
         sheet={sheet}
         roster={roster}
         requiredRoles={requiredRoles}
+        scopeResetKey={party}
         flashField={flashField}
         writeSlots={writeSlots}
       />
@@ -279,6 +300,7 @@ export function FiduciaryGrid({
             sheet={sheet}
             roster={roster}
             requiredRoles={requiredRoles}
+            scopeResetKey={party}
             flashField={flashField}
             writeSlots={writeSlots}
           />
@@ -299,6 +321,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
   sheet,
   roster,
   requiredRoles,
+  scopeResetKey,
   flashField,
   writeSlots,
 }: {
@@ -307,10 +330,17 @@ function RoleMatrix<T extends FiduciaryGridRole>({
   sheet: DesignSheet
   roster: MatterContact[]
   requiredRoles: Set<FiduciaryGridRole>
+  scopeResetKey?: string
   flashField: string | null
   writeSlots: (field: FiduciarySlotField, updater: (slots: FiduciarySlot[]) => FiduciarySlot[]) => void
 }) {
   if (roles.length === 0) return null
+  type CoTarget = { role: T; order: number }
+  const [targetedCo, setTargetedCo] = useState<CoTarget | null>(null)
+
+  useEffect(() => {
+    setTargetedCo(null)
+  }, [scopeResetKey])
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
@@ -323,10 +353,20 @@ function RoleMatrix<T extends FiduciaryGridRole>({
         </div>
         {roles.map(role => {
           const slots = (sheet[slotFields[role.id]] as FiduciarySlot[] | null) ?? []
-          const count = namedPrincipals(slots).length
+          const roleConfig = roleConfigFor(role.id)
+          const principalSlots = namedPrincipals(slots)
+          const coTargets = principalSlots.map(slot => {
+            const openCo = coSlotsForOrder(slots, slot.order).filter(entry => entry.contact_id).length
+            return {
+              order: slot.order,
+              hasOpenCoSlot: openCo < roleConfig.maxCo,
+            }
+          })
+          const count = principalSlots.length
           const required = requiredRoles.has(role.id)
           const status = count === 0 ? 'Not named' : count === 1 ? 'No alternate' : `${count} in line`
           const flashing = flashField != null && flashField === slotFields[role.id]
+          const targetedOrder = targetedCo?.role === role.id ? targetedCo.order : null
           return (
             <div
               key={role.id}
@@ -343,13 +383,68 @@ function RoleMatrix<T extends FiduciaryGridRole>({
               <span className={cn(
                 'mt-2 inline-flex rounded-full border px-1.5 py-0.5 text-[9px] font-semibold',
                 count === 0 && required
-                  ? 'border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] text-[var(--gi-amber)]'
-                  : count === 1
-                    ? 'border-border bg-card text-muted-foreground'
-                    : 'border-[var(--gi-teal)] bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]',
+                ? 'border-[var(--gi-amber-border)] bg-[var(--gi-amber-bg)] text-[var(--gi-amber)]'
+                : count === 1
+                  ? 'border-border bg-card text-muted-foreground'
+                  : 'border-[var(--gi-teal)] bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]',
               )}>
                 {status}
               </span>
+              {roleConfig.allowCo ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {coTargets.length === 0 ? (
+                    <span className="rounded-full border border-dashed border-border px-1.5 py-0.5 text-[8px] text-muted-foreground">
+                      Name a principal first
+                    </span>
+                  ) : (
+                    coTargets.map(({ order, hasOpenCoSlot }) => (
+	                      <button
+                        type="button"
+                        key={order}
+                        disabled={!hasOpenCoSlot && targetedOrder !== order}
+                        onClick={() => {
+                          setTargetedCo(current => (
+                            current?.role === role.id && current?.order === order
+                              ? null
+                              : { role: role.id, order }
+                          ))
+                        }}
+                        className={cn(
+                          'rounded-full border px-1.5 py-0.5 text-[8px] transition-colors',
+                          targetedOrder === order
+                            ? 'border-[var(--gi-teal)] bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
+                            : hasOpenCoSlot
+                              ? 'border-border bg-card text-muted-foreground hover:border-[var(--gi-teal)] hover:text-[var(--gi-teal)]'
+                              : 'border-border bg-muted text-muted-foreground/70',
+                          !hasOpenCoSlot && targetedOrder !== order && 'cursor-not-allowed',
+                        )}
+                        title={hasOpenCoSlot ? `Pair with ${orderLabel(order)}` : `No open co-agent slot on ${orderLabel(order)}`}
+                      >
+                        Pair with {orderLabel(order)}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+              {roleConfig.allowCo ? (
+                <p className="mt-1.5 text-[8px] text-muted-foreground">
+                  {`Co max per line: ${roleConfig.maxCo}`}
+                </p>
+              ) : null}
+              {targetedOrder != null && (
+                <div className="mt-1.5 rounded border border-dashed border-[var(--gi-teal)] px-1.5 py-0.5 text-[9px] text-[var(--gi-teal)]">
+                  <span>Target line: {orderLabel(targetedOrder)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setTargetedCo(null)}
+                    className="ml-2 inline-flex items-center rounded-sm border border-[var(--gi-teal)]/35 px-1 py-0 text-[8px] text-[var(--gi-teal)] hover:bg-[color-mix(in_srgb,var(--gi-teal)_10%,transparent)]"
+                    aria-label="Clear target line"
+                    title="Clear target line"
+                  >
+                    <X className="mr-0.5 h-2 w-2" /> Clear
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}
@@ -361,48 +456,81 @@ function RoleMatrix<T extends FiduciaryGridRole>({
               <p className="truncate text-[10px] text-muted-foreground">{contact.relationship || 'Contact'}</p>
             </div>
             {roles.map(role => {
-                const field = slotFields[role.id]
-                const slots = (sheet[field] as FiduciarySlot[] | null) ?? []
-                const principalSlots = namedPrincipals(slots)
-                const principalOrder = principalSlots.findIndex(slot => slot.contact_id === contact.id)
-                const isPrincipal = principalOrder >= 0
-                const coSlot = slots.find(slot => slot.is_co && slot.contact_id === contact.id)
-                const isCo = coSlot != null
-                const roleConfig = roleConfigFor(role.id)
-                const selected = isPrincipal || isCo
-                const label = isPrincipal
-                  ? orderLabel(principalOrder)
-                  : isCo
-                    ? roleConfig.coLabel
-                    : ''
-                const flashing = flashField != null && flashField === field
-                return (
-                  <button
-                    key={role.id}
-                    type="button"
-                    aria-label={`${selected ? 'Remove' : 'Add'} ${contactName(contact)} ${
-                      isCo ? roleConfig.coLabel.toLowerCase() : role.label
-                    }`}
-                    aria-pressed={selected}
-                    onClick={() => writeSlots(field, current => toggleFiduciaryGridContact(current, contact.id, roleConfig))}
-                    className={cn(
-                      'flex min-h-14 items-center justify-center border-b border-r border-border p-2 last:border-r-0',
-                      isPrincipal
-                        ? 'bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
-                        : isCo
-                          ? 'border-[var(--gi-teal)]/35 bg-[color-mix(in_srgb,var(--gi-teal)_8%,transparent)] text-[var(--gi-teal)]'
-                          : flashing
-                            ? 'bg-warning/10 text-muted-foreground'
-                            : 'bg-card text-muted-foreground hover:bg-muted/40',
-                      !role.applicable && 'opacity-45 grayscale-[20%]',
-                    )}
-                  >
-                  {selected ? (
-                    <span className="rounded-full border border-[var(--gi-teal)] px-2 py-1 text-[11px] font-semibold">
+              const field = slotFields[role.id]
+              const slots = (sheet[field] as FiduciarySlot[] | null) ?? []
+              const principalSlots = namedPrincipals(slots)
+              const matchingPrincipalSlot = principalSlots.find(slot => slot.contact_id === contact.id)
+              const principalOrder = matchingPrincipalSlot?.order ?? null
+              const isPrincipal = principalOrder != null
+              const coSlot = slots.find(slot => slot.is_co && slot.contact_id === contact.id)
+              const isCo = coSlot != null
+              const roleConfig = roleConfigFor(role.id)
+              const selected = isPrincipal || isCo
+              const coForThisRole = targetedCo?.role === role.id ? targetedCo.order : null
+              const targetingThisCell = coForThisRole != null && principalOrder != null && coForThisRole === principalOrder
+              const selectedTargetOrder = coForThisRole == null || selected ? null : coForThisRole
+              const flashing = flashField != null && flashField === field
+              const label = isPrincipal
+                ? orderLabel(principalOrder)
+                : isCo
+                  ? roleConfig.coLabel
+                  : ''
+              const targetOrderLabel = selectedTargetOrder != null ? orderLabel(selectedTargetOrder) : null
+              return (
+                <button
+                  key={role.id}
+                  type="button"
+                  aria-label={
+                    `${selected ? 'Remove' : 'Add'} ${contactName(contact)} ${
+                      selected
+                        ? role.label
+                        : targetOrderLabel
+                          ? `${roleConfig.coLabel.toLowerCase()} for ${targetOrderLabel}`
+                          : role.label
+                    }`
+                  }
+                  aria-pressed={selected}
+                  onClick={() => {
+                    const targetOrder = selectedTargetOrder
+                    writeSlots(field, current => toggleFiduciaryGridContact(
+                      current,
+                      contact.id,
+                      roleConfig,
+                      targetOrder ?? undefined,
+                    ))
+                    if (selectedTargetOrder != null) setTargetedCo(null)
+                    if (selected && targetingThisCell) setTargetedCo(null)
+                  }}
+                  className={cn(
+                    'flex min-h-14 flex-col items-center justify-center border-b border-r border-border p-2 text-center last:border-r-0',
+                    isPrincipal
+                      ? 'bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
+                      : isCo
+                        ? 'border-[var(--gi-teal)]/35 bg-[color-mix(in_srgb,var(--gi-teal)_8%,transparent)] text-[var(--gi-teal)]'
+                        : flashing
+                          ? 'bg-warning/10 text-muted-foreground'
+                          : 'bg-card text-muted-foreground hover:bg-muted/40',
+                    targetingThisCell && 'ring-2 ring-[var(--gi-teal)]',
+                    !role.applicable && 'opacity-45 grayscale-[20%]',
+                  )}
+                >
+                  {isPrincipal ? (
+                    <span className="rounded-full border border-[var(--gi-teal)] px-1.5 py-1 text-[10px] font-semibold">
+                      {targetingThisCell ? `${label} • co` : label}
+                    </span>
+                  ) : isCo ? (
+                    <span className="rounded-full border border-[var(--gi-teal)] px-1.5 py-1 text-[10px] font-semibold">
                       {label}
                     </span>
-                  ) : (
+                  ) : selectedTargetOrder == null ? (
                     <Plus className="h-4 w-4" />
+                  ) : (
+                    <span className="text-[10px] font-semibold">+{roleConfig.coLabel}</span>
+                  )}
+                  {isPrincipal && roleConfig.allowCo && (
+                    <span className="mt-0.5 text-[8px] text-muted-foreground">
+                      {targetingThisCell ? 'Line targeted' : 'Use “Pair with” to choose a line'}
+                    </span>
                   )}
                 </button>
               )
