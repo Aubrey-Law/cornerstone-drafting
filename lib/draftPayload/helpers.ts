@@ -254,11 +254,11 @@ export function overlayDesignSheetFiduciarySlots(
   const contactsById = new Map(contacts.map(contact => [contact.id, contact]))
   const next = { ...base }
 
-  function slotContact(slots: FiduciarySlotRow[], order: number, co = false): ContactRow | null {
+  function slotContact(slots: FiduciarySlotRow[], order: number, co = false): FiduciarySlotRow | null {
     const mappedOrder = principalOrderByPriority(slots, order)
     if (mappedOrder === null) return null
     const slot = slots.find(item => item.order === mappedOrder && item.is_co === co)
-    return slot?.contact_id ? contactsById.get(slot.contact_id) ?? null : null
+    return slot?.contact_id ? slot : null
   }
 
   function slotNames(slots: FiduciarySlotRow[], order: number, co = false): string | null | undefined {
