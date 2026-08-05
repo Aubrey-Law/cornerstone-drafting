@@ -190,9 +190,6 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
       <FamilySection
         sheet={sheet}
         onChange={updateField}
-        contacts={contacts}
-        onAddContact={handleAddContact}
-        onUpdateContact={handleUpdateContact}
       />
     ),
     [DESIGN_SECTION_IDS.fiduciaries]: () => (
