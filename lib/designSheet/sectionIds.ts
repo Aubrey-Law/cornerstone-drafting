@@ -48,7 +48,7 @@ export function resolveDesignSheetGroupId(token: string | null | undefined): Des
 const DESIGN_SECTION_GROUPS: Record<DesignSectionId, DesignSheetGroupId> = {
   [DESIGN_SECTION_IDS.intakeReview]: DESIGN_SHEET_GROUP_IDS.facts,
   [DESIGN_SECTION_IDS.clientInformation]: DESIGN_SHEET_GROUP_IDS.facts,
-  [DESIGN_SECTION_IDS.familyInformation]: DESIGN_SHEET_GROUP_IDS.facts,
+  [DESIGN_SECTION_IDS.familyInformation]: DESIGN_SHEET_GROUP_IDS.family,
   [DESIGN_SECTION_IDS.assetSchedules]: DESIGN_SHEET_GROUP_IDS.plan,
   [DESIGN_SECTION_IDS.willDetails]: DESIGN_SHEET_GROUP_IDS.family,
   [DESIGN_SECTION_IDS.contactsFiduciaries]: DESIGN_SHEET_GROUP_IDS.fiduciaries,
