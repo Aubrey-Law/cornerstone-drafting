@@ -157,9 +157,16 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     return slots[`${role}_${party}_${priority}_${co ? 'co' : 'seq'}`]?.name ?? null
   }
 
-  function getAddr(role: string, party: string, priority: number): string | null {
-    return slots[`${role}_${party}_${priority}_seq`]?.address ??
-           slots[`${role}_${party}_${priority}_co`]?.address ?? null
+  function getAddr(role: string, party: string, priority: number, co = false): string | null {
+    if (co) {
+      return slots[`${role}_${party}_${priority}_co`]?.address
+        ?? slots[`${role}_${party}_${priority}_seq`]?.address
+        ?? null
+    }
+
+    return slots[`${role}_${party}_${priority}_seq`]?.address
+      ?? slots[`${role}_${party}_${priority}_co`]?.address
+      ?? null
   }
 
   function getRel(role: string, party: string, priority: number): string | null {
