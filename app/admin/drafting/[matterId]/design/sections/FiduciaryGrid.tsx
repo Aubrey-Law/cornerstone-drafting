@@ -26,7 +26,13 @@ import {
   type FiduciarySharedRole,
   type FiduciarySlotField,
 } from './fiduciary-blocks'
-import { createSlot, normalizeFiduciarySlots } from './fiduciary-helpers'
+import {
+  createSlot,
+  coSlotsForOrder,
+  normalizeFiduciarySlots,
+  ROLE_CONFIG,
+  type RoleConfig,
+} from './fiduciary-helpers'
 import type { DesignSheetOnChange } from './shared'
 
 type RoleDef<T extends string> = { id: T; label: string; document: string }
@@ -54,17 +60,59 @@ function namedPrincipals(slots: FiduciarySlot[]): FiduciarySlot[] {
     .sort((a, b) => a.order - b.order)
 }
 
+function orderLabel(order: number): string {
+  const next = order + 1
+  if (next === 1) return '1st'
+  if (next === 2) return '2nd'
+  if (next === 3) return '3rd'
+  return `${next}th`
+}
+
+function roleConfigFor(role: FiduciaryGridRole): RoleConfig {
+  return ROLE_CONFIG[role]
+}
+
 export function toggleFiduciaryGridContact(
   slots: FiduciarySlot[] | null | undefined,
   contactId: string,
+  roleConfig: RoleConfig,
 ): FiduciarySlot[] {
   const normalized = normalizeFiduciarySlots(slots ?? [])
   const existing = normalized.filter(slot => slot.contact_id === contactId)
 
-  if (existing.length > 0) {
+  if (existing.some(slot => !slot.is_co)) {
     const withoutExisting = normalized.filter(slot => slot.contact_id !== contactId)
     const nextPrimaryId = namedPrincipals(withoutExisting)[0]?.contact_id ?? null
     return normalizeFiduciarySlots(setPrimaryContact(withoutExisting, nextPrimaryId))
+  }
+
+  const existingCoSlot = existing.find(slot => slot.is_co)
+  if (existingCoSlot) {
+    return normalizeFiduciarySlots(normalized.filter(slot => slot.id !== existingCoSlot.id))
+  }
+
+  if (!roleConfig.allowCo) {
+    const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
+    return normalizeFiduciarySlots([
+      ...normalized,
+      { ...createSlot(nextOrder), contact_id: contactId },
+    ])
+  }
+
+  const principalOrders = Array.from(new Set(normalized
+    .filter(slot => !slot.is_co && slot.contact_id)
+    .map(slot => slot.order),
+  )).sort((a, b) => a - b)
+
+  const openOrder = principalOrders.find(order => (
+    coSlotsForOrder(normalized, order).filter(slot => slot.contact_id).length < roleConfig.maxCo
+  ))
+
+  if (openOrder !== undefined) {
+    return normalizeFiduciarySlots([
+      ...normalized,
+      { ...createSlot(openOrder, true), contact_id: contactId },
+    ])
   }
 
   const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
@@ -313,31 +361,45 @@ function RoleMatrix<T extends FiduciaryGridRole>({
               <p className="truncate text-[10px] text-muted-foreground">{contact.relationship || 'Contact'}</p>
             </div>
             {roles.map(role => {
-              const field = slotFields[role.id]
-              const slots = (sheet[field] as FiduciarySlot[] | null) ?? []
-              const order = namedPrincipals(slots).findIndex(slot => slot.contact_id === contact.id)
-              const selected = order >= 0
-              const flashing = flashField != null && flashField === field
-              return (
-                <button
-                  key={role.id}
-                  type="button"
-                  aria-label={`${selected ? 'Remove' : 'Add'} ${contactName(contact)} ${role.label}`}
-                  aria-pressed={selected}
-                  onClick={() => writeSlots(field, current => toggleFiduciaryGridContact(current, contact.id))}
-                  className={cn(
-                    'flex min-h-14 items-center justify-center border-b border-r border-border p-2 last:border-r-0',
-                    selected
-                      ? 'bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
-                      : flashing
-                        ? 'bg-warning/10 text-muted-foreground'
-                        : 'bg-card text-muted-foreground hover:bg-muted/40',
-                    !role.applicable && 'opacity-45 grayscale-[20%]',
-                  )}
-                >
+                const field = slotFields[role.id]
+                const slots = (sheet[field] as FiduciarySlot[] | null) ?? []
+                const principalSlots = namedPrincipals(slots)
+                const principalOrder = principalSlots.findIndex(slot => slot.contact_id === contact.id)
+                const isPrincipal = principalOrder >= 0
+                const coSlot = slots.find(slot => slot.is_co && slot.contact_id === contact.id)
+                const isCo = coSlot != null
+                const roleConfig = roleConfigFor(role.id)
+                const selected = isPrincipal || isCo
+                const label = isPrincipal
+                  ? orderLabel(principalOrder)
+                  : isCo
+                    ? roleConfig.coLabel
+                    : ''
+                const flashing = flashField != null && flashField === field
+                return (
+                  <button
+                    key={role.id}
+                    type="button"
+                    aria-label={`${selected ? 'Remove' : 'Add'} ${contactName(contact)} ${
+                      isCo ? roleConfig.coLabel.toLowerCase() : role.label
+                    }`}
+                    aria-pressed={selected}
+                    onClick={() => writeSlots(field, current => toggleFiduciaryGridContact(current, contact.id, roleConfig))}
+                    className={cn(
+                      'flex min-h-14 items-center justify-center border-b border-r border-border p-2 last:border-r-0',
+                      isPrincipal
+                        ? 'bg-[color-mix(in_srgb,var(--gi-teal)_12%,transparent)] text-[var(--gi-teal)]'
+                        : isCo
+                          ? 'border-[var(--gi-teal)]/35 bg-[color-mix(in_srgb,var(--gi-teal)_8%,transparent)] text-[var(--gi-teal)]'
+                          : flashing
+                            ? 'bg-warning/10 text-muted-foreground'
+                            : 'bg-card text-muted-foreground hover:bg-muted/40',
+                      !role.applicable && 'opacity-45 grayscale-[20%]',
+                    )}
+                  >
                   {selected ? (
                     <span className="rounded-full border border-[var(--gi-teal)] px-2 py-1 text-[11px] font-semibold">
-                      {order + 1}{order === 0 ? 'st' : order === 1 ? 'nd' : order === 2 ? 'rd' : 'th'}
+                      {label}
                     </span>
                   ) : (
                     <Plus className="h-4 w-4" />
