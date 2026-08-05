@@ -19,7 +19,6 @@ import {
 } from './shared'
 import type { AdditionalBeneficiary } from '@/types/database'
 import { AssetsSection } from './AssetsSection'
-
 function newAssetTitle() {
   return 'Additional Disinheritance Language'
 }
@@ -32,9 +31,7 @@ export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFact
   const disinheritedChildren = sheet.disinherited_children ?? []
   const additionalBeneficiaries = sheet.additional_beneficiaries ?? []
   const [additionalLanguage, setAdditionalLanguage] = useState(sheet.additional_disinheritance_language ?? '')
-
   const namedChildren = children.filter(c => c.name.trim().length > 0)
-
   function toggleDisinheritedChild(name: string, selected: boolean) {
     const trimmed = name.trim()
     if (!trimmed) return
