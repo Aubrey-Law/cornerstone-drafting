@@ -1,11 +1,19 @@
 import type { FiduciarySlot, FiduciaryRole } from '@/types/database'
-export {
+import {
   firstAvailablePrincipalOrder,
   namedPrincipalSlots,
   normalizeFiduciarySlots,
   principalSlotsByPriority,
   repairFiduciarySlotOrdering,
 } from '@/lib/designSheet/fiduciarySlotOrdering'
+
+export {
+  firstAvailablePrincipalOrder,
+  namedPrincipalSlots,
+  normalizeFiduciarySlots,
+  principalSlotsByPriority,
+  repairFiduciarySlotOrdering,
+}
 
 // ── Slot factories ───────────────────────────────────────────────────────────
 
