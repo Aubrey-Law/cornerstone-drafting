@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import {
   AttorneyInput,
   AttorneyNoteBanner,
+  AttorneySelect,
   DesignSheetCheckboxOption,
   FieldHelpLabel,
   FieldLabel,
