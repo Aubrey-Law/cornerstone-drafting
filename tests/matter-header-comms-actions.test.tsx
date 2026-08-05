@@ -65,7 +65,7 @@ describe('MatterDetailHeader communication actions', () => {
 
   it('disables Email without an address and Text without a number', () => {
     renderHeader(
-      { client_email: null, client_phone: null },
+      { client_email: '', client_phone: '' },
       { onEmail: vi.fn(), onText: vi.fn() },
     )
 
