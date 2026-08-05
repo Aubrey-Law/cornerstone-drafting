@@ -39,6 +39,10 @@ describe('designTargetForMissingField', () => {
       .toBe(DESIGN_SECTION_IDS.fiduciaries)
     expect(designTargetForMissingField('healthcare.agent.primary.full_name').sectionId)
       .toBe(DESIGN_SECTION_IDS.fiduciaries)
+    expect(designTargetForMissingField('healthcare.agent.co_primary.full_name').sectionId)
+      .toBe(DESIGN_SECTION_IDS.fiduciaries)
+    expect(designTargetForMissingField('healthcare.agent.co_alternate.full_name').sectionId)
+      .toBe(DESIGN_SECTION_IDS.fiduciaries)
   })
 
   it('keeps role provisions pointed at the section that holds them', () => {
@@ -57,6 +61,10 @@ describe('designTargetForMissingField', () => {
   it('keeps the role in the label instead of collapsing every person to "Full Name"', () => {
     expect(designTargetForMissingField('fiduciaries.executor.co_primary.full_name').label)
       .toBe('Co-Executor / Co-Personal Representative')
+    expect(designTargetForMissingField('healthcare.agent.co_primary.full_name').label)
+      .toBe('Co-health care agent')
+    expect(designTargetForMissingField('healthcare.agent.co_alternate.full_name').label)
+      .toBe('Co alternate health care agent')
     expect(designTargetForMissingField('fiduciaries.brand_new_role.successor.full_name').label)
       .toBe('Brand New Role Successor')
   })

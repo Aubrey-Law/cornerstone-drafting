@@ -107,12 +107,16 @@ function fiduciaryFlatFields(
     co_successor_trustee: upper(fiduciaries.trustee_co_successor),
 
     hcp_client_agent: upper(fiduciaries.hcp_primary),
+    hcp_client_co: upper(fiduciaries.hcp_co),
     hcp_client_alt1: upper(fiduciaries.hcp_successor),
+    hcp_client_co_alt1: upper(fiduciaries.hcp_successor_co),
     hcp_client_alt2: '',
     hcp_client_alt3: '',
 
     hcp_spouse_agent: upper(fiduciaries.spouse_hcp_primary),
+    hcp_spouse_co: upper(fiduciaries.spouse_hcp_co),
     hcp_spouse_alt1: upper(fiduciaries.spouse_hcp_successor),
+    hcp_spouse_co_alt1: upper(fiduciaries.spouse_hcp_successor_co),
     hcp_spouse_alt2: '',
     hcp_spouse_alt3: '',
 
@@ -122,7 +126,7 @@ function fiduciaryFlatFields(
     poa_client_co_alt: '',
 
     poa_spouse_primary: upper(fiduciaries.spouse_dpoa_primary),
-    poa_spouse_co: '',
+    poa_spouse_co: upper(fiduciaries.spouse_dpoa_co),
     poa_spouse_alt: upper(fiduciaries.spouse_dpoa_successor),
     poa_spouse_co_alt: '',
 
@@ -137,9 +141,9 @@ function fiduciaryFlatFields(
     personal_representative_spouse_co_alt: '',
 
     guardian: upper(fiduciaries.guardian_primary),
-    co_guardian: '',
+    co_guardian: upper(fiduciaries.guardian_co),
     alt_guardian: upper(fiduciaries.guardian_successor),
-    co_alt_guardian: upper(fiduciaries.guardian_second_successor),
+    co_alt_guardian: upper(fiduciaries.guardian_co_successor),
 
     hcp_client_relationship: str(fiduciaries.hcp_primary_relationship),
     hcp_client_address: str(fiduciaries.hcp_primary_address),
@@ -182,12 +186,16 @@ function legacyFiduciaryFlatFields(sheet: DesignSheetRow): FlatSheet {
     co_successor_trustee: upper(sheet.trustee_alt1_co || sheet.executor_alt1_co || ''),
 
     hcp_client_agent: upper(sheet.hcp_primary || ''),
+    hcp_client_co: upper(sheet.hcp_co || ''),
     hcp_client_alt1: upper(sheet.hcp_alt1 || ''),
+    hcp_client_co_alt1: upper(sheet.hcp_alt1_co || ''),
     hcp_client_alt2: '',
     hcp_client_alt3: '',
 
     hcp_spouse_agent: upper(sheet.hcp_co || ''),
-    hcp_spouse_alt1: upper(sheet.hcp_alt1_co || ''),
+    hcp_spouse_alt1: upper(designSheetString(sheet, 'spouse_hcp_successor') || sheet.hcp_alt1_co || ''),
+    hcp_spouse_co: upper(designSheetString(sheet, 'spouse_hcp_co')),
+    hcp_spouse_co_alt1: upper(designSheetString(sheet, 'spouse_hcp_successor_co')),
     hcp_spouse_alt2: '',
     hcp_spouse_alt3: '',
 
@@ -196,20 +204,20 @@ function legacyFiduciaryFlatFields(sheet: DesignSheetRow): FlatSheet {
     poa_client_alt: upper(sheet.poa_alt1 || ''),
     poa_client_co_alt: '',
 
-    poa_spouse_primary: '',
-    poa_spouse_co: '',
-    poa_spouse_alt: '',
-    poa_spouse_co_alt: '',
+    poa_spouse_primary: upper(designSheetString(sheet, 'spouse_dpoa_primary')),
+    poa_spouse_co: upper(designSheetString(sheet, 'spouse_dpoa_co')),
+    poa_spouse_alt: upper(designSheetString(sheet, 'spouse_dpoa_successor')),
+    poa_spouse_co_alt: upper(designSheetString(sheet, 'spouse_dpoa_successor_co')),
 
     personal_representative: upper(sheet.executor_primary || ''),
     personal_representative_co: upper(sheet.executor_co || ''),
     personal_representative_alt1: upper(sheet.executor_alt1 || ''),
     personal_representative_co_alt: upper(sheet.executor_alt1_co || ''),
 
-    personal_representative_spouse: '',
-    personal_representative_spouse_co: '',
-    personal_representative_spouse_alt1: '',
-    personal_representative_spouse_co_alt: '',
+    personal_representative_spouse: upper(designSheetString(sheet, 'spouse_pr_primary')),
+    personal_representative_spouse_co: upper(designSheetString(sheet, 'spouse_pr_co_primary')),
+    personal_representative_spouse_alt1: upper(designSheetString(sheet, 'spouse_pr_successor')),
+    personal_representative_spouse_co_alt: upper(designSheetString(sheet, 'spouse_pr_successor_co')),
 
     guardian: upper(sheet.guardian_primary || ''),
     co_guardian: upper(sheet.guardian_co || ''),

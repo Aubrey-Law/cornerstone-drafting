@@ -82,7 +82,9 @@ export function buildClientVariables(sheet: Record<string, unknown>): Record<str
     '[CO SUCCESSOR TRUSTEE]':upper(sheet.co_successor_trustee),
 
     '[PRIMARY HCP]':    upper(sheet.hcp_client_agent),
+    '[CO PRIMARY HCP]': upper(sheet.hcp_client_co),
     '[ALTERNATE 1 HCP]':upper(sheet.hcp_client_alt1),
+    '[CO ALTERNATE 1 HCP]': upper(sheet.hcp_client_co_alt1),
     '[ALTERNATE 2 HCP]':upper(sheet.hcp_client_alt2),
     '[ALTERNATE 3 HCP]':upper(sheet.hcp_client_alt3),
 
@@ -186,7 +188,9 @@ export function buildSpouseVariables(sheet: Record<string, unknown>): Record<str
     '[CO SUCCESSOR TRUSTEE]':upper(sheet.co_successor_trustee),
 
     '[PRIMARY HCP]':    upper(sheet.hcp_spouse_agent),
+    '[CO PRIMARY HCP]': upper(sheet.hcp_spouse_co),
     '[ALTERNATE 1 HCP]':upper(sheet.hcp_spouse_alt1),
+    '[CO ALTERNATE 1 HCP]': upper(sheet.hcp_spouse_co_alt1),
     '[ALTERNATE 2 HCP]':upper(sheet.hcp_spouse_alt2),
     '[ALTERNATE 3 HCP]':upper(sheet.hcp_spouse_alt3),
 

@@ -50,8 +50,11 @@ function hasNamedLegacyCo(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-function hasFilledCoSlot(slots: FiduciarySlotRow[], order = 0): boolean {
-  return slots.some(slot => slot.order === order && slot.is_co && slot.contact_id != null)
+function hasFilledCoSlot(slots: FiduciarySlotRow[], order?: number): boolean {
+  if (typeof order === 'number') {
+    return slots.some(slot => slot.order === order && slot.is_co && slot.contact_id != null)
+  }
+  return slots.some(slot => slot.is_co && slot.contact_id != null)
 }
 
 function hasCoAgent(designSheet: DesignSheetCoFields, slots: FiduciarySlotRow[], legacyKey: keyof DesignSheetCoFields): boolean {

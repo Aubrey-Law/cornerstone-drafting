@@ -52,6 +52,29 @@ describe('buildDraftContext', () => {
     expect(ctx.has_co_pr).toBe(false)
     expect(ctx.has_co_guardian).toBe(false)
   })
+
+  it('detects co-agents when the principal line is not first', () => {
+    const ctx = buildDraftContext({
+      marital_status: 'married',
+      spouse_name: 'Jane Client',
+      poa_slots: [
+        { id: 'poa-1', contact_id: 'contact-1', is_co: false, order: 3 },
+        { id: 'poa-2', contact_id: 'contact-2', is_co: true, order: 3 },
+      ],
+      executor_slots: [
+        { id: 'executor-1', contact_id: 'contact-3', is_co: false, order: 2 },
+        { id: 'executor-2', contact_id: 'contact-4', is_co: true, order: 2 },
+      ],
+      guardian_slots: [
+        { id: 'guardian-1', contact_id: 'contact-5', is_co: false, order: 1 },
+        { id: 'guardian-2', contact_id: 'contact-6', is_co: true, order: 1 },
+      ],
+    })
+
+    expect(ctx.has_co_poa).toBe(true)
+    expect(ctx.has_co_pr).toBe(true)
+    expect(ctx.has_co_guardian).toBe(true)
+  })
 })
 
 describe('buildDraftContext descendant_representation', () => {

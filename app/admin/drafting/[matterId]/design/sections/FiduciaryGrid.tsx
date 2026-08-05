@@ -15,6 +15,7 @@ import {
   cloneSlots,
   findClientContact,
   findSpouseContact,
+  SPOUSE_SLOT_FIELDS,
   isMarriedSheet,
   partyFullName,
   PartyTabs,
@@ -28,7 +29,9 @@ import {
 } from './fiduciary-blocks'
 import {
   createSlot,
+  firstAvailablePrincipalOrder,
   coSlotsForOrder,
+  repairFiduciarySlotOrdering,
   normalizeFiduciarySlots,
   ROLE_CONFIG,
   type RoleConfig,
@@ -80,22 +83,23 @@ export function toggleFiduciaryGridContact(
 ): FiduciarySlot[] {
   const normalized = normalizeFiduciarySlots(slots ?? [])
   const existing = normalized.filter(slot => slot.contact_id === contactId)
+  const finalize = (next: FiduciarySlot[]) => repairFiduciarySlotOrdering(normalizeFiduciarySlots(next))
 
   if (existing.some(slot => !slot.is_co)) {
     const withoutExisting = normalized.filter(slot => slot.contact_id !== contactId)
     const nextPrimaryId = namedPrincipals(withoutExisting)[0]?.contact_id ?? null
-    return normalizeFiduciarySlots(setPrimaryContact(withoutExisting, nextPrimaryId))
+    return finalize(setPrimaryContact(withoutExisting, nextPrimaryId))
   }
 
   const existingCoSlot = existing.find(slot => slot.is_co)
   if (existingCoSlot) {
-    return normalizeFiduciarySlots(normalized.filter(slot => slot.id !== existingCoSlot.id))
+    return finalize(normalized.filter(slot => slot.id !== existingCoSlot.id))
   }
 
   if (targetOrder != null) {
     if (!roleConfig.allowCo) {
-      const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
-      return normalizeFiduciarySlots([
+      const nextOrder = firstAvailablePrincipalOrder(normalized)
+      return finalize([
         ...normalized,
         { ...createSlot(nextOrder), contact_id: contactId },
       ])
@@ -103,17 +107,19 @@ export function toggleFiduciaryGridContact(
 
     const hasPrincipal = normalized.some(slot => !slot.is_co && slot.order === targetOrder && slot.contact_id)
     const openOnTarget = coSlotsForOrder(normalized, targetOrder).filter(slot => slot.contact_id).length < roleConfig.maxCo
-    if (hasPrincipal && openOnTarget) {
-      return normalizeFiduciarySlots([
-        ...normalized,
-        { ...createSlot(targetOrder, true), contact_id: contactId },
-      ])
+    if (!hasPrincipal || !openOnTarget) {
+      return normalized
     }
+
+    return finalize([
+      ...normalized,
+      { ...createSlot(targetOrder, true), contact_id: contactId },
+    ])
   }
 
   if (!roleConfig.allowCo) {
-    const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
-    return normalizeFiduciarySlots([
+    const nextOrder = firstAvailablePrincipalOrder(normalized)
+    return finalize([
       ...normalized,
       { ...createSlot(nextOrder), contact_id: contactId },
     ])
@@ -129,14 +135,14 @@ export function toggleFiduciaryGridContact(
   ))
 
   if (openOrder !== undefined) {
-    return normalizeFiduciarySlots([
+    return finalize([
       ...normalized,
       { ...createSlot(openOrder, true), contact_id: contactId },
     ])
   }
 
-  const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
-  return normalizeFiduciarySlots([
+  const nextOrder = firstAvailablePrincipalOrder(normalized)
+  return finalize([
     ...normalized,
     { ...createSlot(nextOrder), contact_id: contactId },
   ])
@@ -234,7 +240,9 @@ export function FiduciaryGrid({
     onChange(field, previousSheet => {
       const current = (previousSheet[field] as FiduciarySlot[] | null) ?? []
       const resolved = resolveSlotContactIds(current, clientContact, spouseContact)
-      return normalizeFiduciarySlots(updater(resolved)) as DesignSheet[typeof field]
+      return repairFiduciarySlotOrdering(
+        normalizeFiduciarySlots(updater(resolved)),
+      ) as DesignSheet[typeof field]
     })
   }
 
@@ -245,14 +253,31 @@ export function FiduciaryGrid({
       const targetField = targetFields[role.id]
       if (sourceField === targetField) continue
       const source = (sheet[sourceField] as FiduciarySlot[] | null) ?? []
-      onChange(targetField, mirrorReversedFiduciarySlots(
-        resolveSlotContactIds(source, clientContact, spouseContact),
-        clientContact?.id ?? null,
-        spouseContact?.id ?? null,
+      onChange(targetField, repairFiduciarySlotOrdering(
+        mirrorReversedFiduciarySlots(
+          resolveSlotContactIds(source, clientContact, spouseContact),
+          clientContact?.id ?? null,
+          spouseContact?.id ?? null,
+        ),
       ) as DesignSheet[typeof targetField])
     }
     setParty(current => current === 'client' ? 'spouse' : 'client')
   }
+
+  useEffect(() => {
+    const allFields = new Set<FiduciarySlotField>([
+      ...Object.values(CLIENT_SLOT_FIELDS),
+      ...Object.values(SHARED_SLOT_FIELDS),
+      ...(sheet.is_joint === false ? Object.values(SPOUSE_SLOT_FIELDS) : []),
+    ])
+
+    for (const field of allFields) {
+      const current = (sheet[field] as FiduciarySlot[] | null) ?? []
+      const repaired = repairFiduciarySlotOrdering(current)
+      if (JSON.stringify(current) === JSON.stringify(repaired)) continue
+      onChange(field, repaired as DesignSheet[typeof field])
+    }
+  }, [sheet, onChange])
 
   return (
     <div className="space-y-4">
@@ -356,10 +381,11 @@ function RoleMatrix<T extends FiduciaryGridRole>({
           const roleConfig = roleConfigFor(role.id)
           const principalSlots = namedPrincipals(slots)
           const coTargets = principalSlots.map(slot => {
-            const openCo = coSlotsForOrder(slots, slot.order).filter(entry => entry.contact_id).length
+            const activeCo = coSlotsForOrder(slots, slot.order).filter(entry => entry.contact_id).length
             return {
               order: slot.order,
-              hasOpenCoSlot: openCo < roleConfig.maxCo,
+              openCo: activeCo,
+              hasOpenCoSlot: activeCo < roleConfig.maxCo,
             }
           })
           const count = principalSlots.length
@@ -394,10 +420,10 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                 <div className="mt-2 flex flex-wrap gap-1">
                   {coTargets.length === 0 ? (
                     <span className="rounded-full border border-dashed border-border px-1.5 py-0.5 text-[8px] text-muted-foreground">
-                      Name a principal first
+                      Pick a line to pair first
                     </span>
                   ) : (
-                    coTargets.map(({ order, hasOpenCoSlot }) => (
+                    coTargets.map(({ order, openCo, hasOpenCoSlot }) => (
 	                      <button
                         type="button"
                         key={order}
@@ -418,9 +444,11 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                               : 'border-border bg-muted text-muted-foreground/70',
                           !hasOpenCoSlot && targetedOrder !== order && 'cursor-not-allowed',
                         )}
-                        title={hasOpenCoSlot ? `Pair with ${orderLabel(order)}` : `No open co-agent slot on ${orderLabel(order)}`}
+                        title={hasOpenCoSlot
+                          ? `Pair with ${orderLabel(order)} (${openCo}/${roleConfig.maxCo})`
+                          : `No open co-agent slot on ${orderLabel(order)} (${openCo}/${roleConfig.maxCo})`}
                       >
-                        Pair with {orderLabel(order)}
+                        Pair with {orderLabel(order)} ({openCo}/{roleConfig.maxCo})
                       </button>
                     ))
                   )}
@@ -467,8 +495,13 @@ function RoleMatrix<T extends FiduciaryGridRole>({
               const roleConfig = roleConfigFor(role.id)
               const selected = isPrincipal || isCo
               const coForThisRole = targetedCo?.role === role.id ? targetedCo.order : null
-              const targetingThisCell = coForThisRole != null && principalOrder != null && coForThisRole === principalOrder
-              const selectedTargetOrder = coForThisRole == null || selected ? null : coForThisRole
+              const targetLineHasPrincipal = coForThisRole != null
+                && principalSlots.some(slot => slot.order === coForThisRole && Boolean(slot.contact_id))
+              const targetLineOpenCo = coForThisRole != null
+                && coSlotsForOrder(slots, coForThisRole).filter(entry => entry.contact_id).length < roleConfig.maxCo
+              const targetLineReadyForCo = coForThisRole != null && roleConfig.allowCo && targetLineHasPrincipal && targetLineOpenCo
+              const targetingThisCell = targetLineReadyForCo && principalOrder != null && coForThisRole === principalOrder
+              const selectedTargetOrder = targetLineReadyForCo && !selected ? coForThisRole : null
               const flashing = flashField != null && flashField === field
               const label = isPrincipal
                 ? orderLabel(principalOrder)
@@ -498,8 +531,8 @@ function RoleMatrix<T extends FiduciaryGridRole>({
                       roleConfig,
                       targetOrder ?? undefined,
                     ))
-                    if (selectedTargetOrder != null) setTargetedCo(null)
                     if (selected && targetingThisCell) setTargetedCo(null)
+                    if (!selected && selectedTargetOrder != null) setTargetedCo(null)
                   }}
                   className={cn(
                     'flex min-h-14 flex-col items-center justify-center border-b border-r border-border p-2 text-center last:border-r-0',
