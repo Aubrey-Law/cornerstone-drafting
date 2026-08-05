@@ -63,10 +63,10 @@ const DESIGN_SHEET_GROUP_CATALOG: Array<{
   subtitle: string
 }> = [
   { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Facts from intake', subtitle: 'Client, family, and asset facts' },
-  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Family', subtitle: 'Will terms and family distributions' },
   { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Contacts, trustees, personal representatives, agents, and guardians' },
   { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Plan structure', subtitle: 'Plan type, documents, and execution mechanics' },
   { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust terms', subtitle: 'Trust structure, beneficiaries, and provisions' },
+  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Last Will and Testament', subtitle: 'Will title and legacy will details' },
   { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers' },
   { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives' },
   { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning' },

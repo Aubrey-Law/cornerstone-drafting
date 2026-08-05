@@ -44,7 +44,6 @@ export function getAllDesignSectionNavItems(args: {
   return [
     { id: DESIGN_SECTION_IDS.intakeReview, label: 'Intake Review', applicable: Boolean(intakeSnapshot) },
     { id: DESIGN_SECTION_IDS.clientInformation, label: 'Client Information', applicable: true },
-    { id: DESIGN_SECTION_IDS.familyInformation, label: 'Family Information', applicable: true },
     { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Fiduciary Role Assignment', applicable: true },
     { id: DESIGN_SECTION_IDS.estatePlanDesign, label: 'Estate Plan Design', applicable: true },
     {
@@ -52,6 +51,7 @@ export function getAllDesignSectionNavItems(args: {
       label: 'Trust Details',
       applicable: revocableTrustApplicable,
     },
+    { id: DESIGN_SECTION_IDS.familyInformation, label: 'Last Will and Testament', applicable: true },
     { id: DESIGN_SECTION_IDS.willDetails, label: 'Will Details', applicable: documentInclusions.will },
     { id: DESIGN_SECTION_IDS.financialPoa, label: 'Financial Power of Attorney', applicable: documentInclusions.dpoa },
     { id: DESIGN_SECTION_IDS.healthcareDirectives, label: 'Health Care & Directives', applicable: documentInclusions.healthcare },

@@ -1,10 +1,8 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowLeftRight, Loader2, Plus } from 'lucide-react'
-import { toast } from 'sonner'
+import { useEffect, useState } from 'react'
+import { ArrowLeftRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { designPlanTypeIncludesTrust } from '@/lib/designPlanType'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
@@ -61,26 +59,19 @@ export function toggleFiduciaryGridContact(
   contactId: string,
 ): FiduciarySlot[] {
   const normalized = normalizeFiduciarySlots(slots ?? [])
-  const existing = normalized.find(slot => !slot.is_co && slot.contact_id === contactId)
+  const existing = normalized.filter(slot => slot.contact_id === contactId)
 
-  if (!existing) {
-    const named = namedPrincipals(normalized)
-    if (named.length === 0) {
-      return normalizeFiduciarySlots(setPrimaryContact(normalized, contactId))
-    }
-    const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
-    return normalizeFiduciarySlots([
-      ...normalized,
-      { ...createSlot(nextOrder), contact_id: contactId },
-    ])
+  if (existing.length > 0) {
+    const withoutExisting = normalized.filter(slot => slot.contact_id !== contactId)
+    const nextPrimaryId = namedPrincipals(withoutExisting)[0]?.contact_id ?? null
+    return normalizeFiduciarySlots(setPrimaryContact(withoutExisting, nextPrimaryId))
   }
 
-  const removedOrder = existing.order
-  const compacted = normalized
-    .filter(slot => slot.order !== removedOrder)
-    .map(slot => slot.order > removedOrder ? { ...slot, order: slot.order - 1 } : slot)
-  const nextPrimaryId = namedPrincipals(compacted)[0]?.contact_id ?? null
-  return normalizeFiduciarySlots(setPrimaryContact(compacted, nextPrimaryId))
+  const nextOrder = Math.max(...normalized.map(slot => slot.order), -1) + 1
+  return normalizeFiduciarySlots([
+    ...normalized,
+    { ...createSlot(nextOrder), contact_id: contactId },
+  ])
 }
 
 export function mirrorReversedFiduciarySlots(
@@ -100,14 +91,6 @@ export function mirrorReversedFiduciarySlots(
   return normalizeFiduciarySlots(mirrored)
 }
 
-function splitInlineName(name: string): Pick<MatterContact, 'first_name' | 'last_name'> {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  return {
-    first_name: parts[0] ?? '',
-    last_name: parts.length > 1 ? parts.slice(1).join(' ') : parts[0] ?? '',
-  }
-}
-
 function contactName(contact: MatterContact): string {
   return [contact.first_name, contact.middle_name, contact.last_name, contact.suffix]
     .filter(Boolean)
@@ -119,7 +102,6 @@ export function FiduciaryGrid({
   contacts,
   matter,
   onChange,
-  onAddContact,
   showInapplicable = false,
   flashRoleKey = null,
 }: {
@@ -127,7 +109,6 @@ export function FiduciaryGrid({
   contacts: MatterContact[]
   matter: PipelineMatter
   onChange: DesignSheetOnChange
-  onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   showInapplicable?: boolean
   /** Slot field to flash (readiness blocker target); tints that role's column briefly. */
   flashRoleKey?: FiduciarySlotField | null
@@ -143,9 +124,6 @@ export function FiduciaryGrid({
     const timer = window.setTimeout(() => setFlashField(null), 1600)
     return () => window.clearTimeout(timer)
   }, [flashRoleKey])
-  const [newName, setNewName] = useState('')
-  const [newRelationship, setNewRelationship] = useState('')
-  const [adding, setAdding] = useState(false)
   const clientContact = findClientContact(contacts, matter, sheet)
   const spouseContact = married ? findSpouseContact(contacts, matter, sheet) : null
   const spouseFields = spouseSlotFields(sheet)
@@ -208,24 +186,6 @@ export function FiduciaryGrid({
     setParty(current => current === 'client' ? 'spouse' : 'client')
   }
 
-  const addPerson = async () => {
-    if (!newName.trim()) return
-    setAdding(true)
-    try {
-      await onAddContact({
-        ...splitInlineName(newName),
-        relationship: newRelationship.trim() || null,
-      })
-      setNewName('')
-      setNewRelationship('')
-      toast.success('Person added')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to add person')
-    } finally {
-      setAdding(false)
-    }
-  }
-
   return (
     <div className="space-y-4">
       {married ? (
@@ -253,26 +213,6 @@ export function FiduciaryGrid({
         requiredRoles={requiredRoles}
         flashField={flashField}
         writeSlots={writeSlots}
-        footer={(
-          <div className="grid grid-cols-1 gap-2 bg-muted/20 p-3 sm:grid-cols-[1fr_1fr_auto]">
-            <Input
-              value={newName}
-              onChange={event => setNewName(event.target.value)}
-              placeholder="Full name"
-              aria-label="New person full name"
-            />
-            <Input
-              value={newRelationship}
-              onChange={event => setNewRelationship(event.target.value)}
-              placeholder="Relationship"
-              aria-label="New person relationship"
-            />
-            <Button type="button" variant="outline" onClick={() => void addPerson()} disabled={adding || !newName.trim()}>
-              {adding ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
-              Add person
-            </Button>
-          </div>
-        )}
       />
 
       {displayedSharedRoles.length > 0 ? (
@@ -313,7 +253,6 @@ function RoleMatrix<T extends FiduciaryGridRole>({
   requiredRoles,
   flashField,
   writeSlots,
-  footer,
 }: {
   roles: Array<{ id: T; label: string; document: string; applicable: boolean }>
   slotFields: Record<T, FiduciarySlotField>
@@ -322,7 +261,6 @@ function RoleMatrix<T extends FiduciaryGridRole>({
   requiredRoles: Set<FiduciaryGridRole>
   flashField: string | null
   writeSlots: (field: FiduciarySlotField, updater: (slots: FiduciarySlot[]) => FiduciarySlot[]) => void
-  footer?: ReactNode
 }) {
   if (roles.length === 0) return null
 
@@ -410,11 +348,6 @@ function RoleMatrix<T extends FiduciaryGridRole>({
           </div>
         ))}
 
-        {footer ? (
-          <div style={{ gridColumn: `span ${roles.length + 1} / span ${roles.length + 1}` }}>
-            {footer}
-          </div>
-        ) : null}
       </div>
     </div>
   )

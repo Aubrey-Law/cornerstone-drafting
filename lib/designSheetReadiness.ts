@@ -55,7 +55,7 @@ export interface DesignSheetReadiness {
 export const DESIGN_SECTION_LABELS: Record<string, string> = {
   [DESIGN_SECTION_IDS.intakeReview]: 'Intake Review',
   [DESIGN_SECTION_IDS.clientInformation]: 'Client Information',
-  [DESIGN_SECTION_IDS.familyInformation]: 'Family Information',
+  [DESIGN_SECTION_IDS.familyInformation]: 'Last Will and Testament',
   [DESIGN_SECTION_IDS.contactsFiduciaries]: 'Contacts & Fiduciaries',
   [DESIGN_SECTION_IDS.fiduciaries]: 'Fiduciary Role Assignment',
   [DESIGN_SECTION_IDS.estatePlanDesign]: 'Estate Plan Design',
@@ -75,7 +75,7 @@ export const DESIGN_SECTION_LABELS: Record<string, string> = {
   healthcare: 'Health Care & Directives',
   deed: 'Transfers & Assignments',
   personal: 'Client Information',
-  family: 'Family Information',
+  family: 'Last Will and Testament',
   assets: 'Asset Schedules',
   'office-use': 'Office Use',
   'residuary-estate': 'Residuary Estate',
@@ -218,6 +218,11 @@ export function computeDesignSheetReadiness({
   const hasDpoaBasicPowers = dpoaProvisions.all_basic_powers
     || Object.values(dpoaProvisions.basic_powers).some(Boolean)
 
+  const familyBlockers = [
+    (hasMinorChildren || matter.has_minor_children) && (sheet.children?.length ?? 0) === 0 &&
+      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'children', 'children'),
+  ].filter(Boolean) as DesignReadinessBlocker[]
+
   const planBlockers = [
     !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
     documentInclusions.trust && married && sheet.is_joint == null &&
@@ -238,6 +243,7 @@ export function computeDesignSheetReadiness({
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing county', 'signing_county', 'client-decision', false),
     !hasText(sheet.notary_commission_expiration) &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'notary commission expiration', 'notary_commission_expiration', 'client-decision', false),
+    ...familyBlockers,
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const clientBlockers = [
@@ -247,11 +253,6 @@ export function computeDesignSheetReadiness({
     !hasText(sheet.marital_status) && blocker(DESIGN_SECTION_IDS.clientInformation, 'marital status', 'marital_status'),
     !hasText(sheet.state) && blocker(DESIGN_SECTION_IDS.clientInformation, 'state', 'state'),
     married && !hasText(sheet.spouse_name) && blocker(DESIGN_SECTION_IDS.clientInformation, 'spouse name', 'spouse_name'),
-  ].filter(Boolean) as DesignReadinessBlocker[]
-
-  const familyBlockers = [
-    (hasMinorChildren || matter.has_minor_children) && (sheet.children?.length ?? 0) === 0 &&
-      blocker(DESIGN_SECTION_IDS.familyInformation, 'children', 'children'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const clientTrustBlockers = [
@@ -364,7 +365,7 @@ export function computeDesignSheetReadiness({
       'spouse_citizenship',
       'marriage_date',
     ])),
-    [DESIGN_SECTION_IDS.familyInformation]: summaryFromBlockers(familyBlockers, 'complete', countOverrides(sheet, ['children'])),
+    [DESIGN_SECTION_IDS.familyInformation]: summaryFromBlockers([], 'complete'),
     [DESIGN_SECTION_IDS.fiduciaries]: summaryFromBlockers(fiduciaryBlockers, 'ready'),
     [DESIGN_SECTION_IDS.contactsFiduciaries]: summaryFromBlockers([], 'ready'),
     [DESIGN_SECTION_IDS.trustDetails]: !documentInclusions.trust

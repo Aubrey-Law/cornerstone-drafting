@@ -38,6 +38,7 @@ import {
   sectionFieldGrid2,
   type SectionProps,
 } from './shared'
+import { PlanStructureFactsSection } from './PlanStructureFactsSection'
 
 interface PlanDesignSectionProps extends SectionProps {
   contacts?: MatterContact[]
@@ -224,7 +225,6 @@ export function PlanDesignSection({
     onChange('decisions', prevSheet => setSelectedAssetTransferDocs(prevSheet, Array.from(next)))
   }
 
-  const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
   const trustCheckboxDisabled = planTypeDisallowsRevocableTrustDocument(normalizedPlanType)
   const revocableTrustDecisionApplies = normalizedPlanType == null
     || designPlanTypeIncludesRevocableTrust(normalizedPlanType)
@@ -299,22 +299,6 @@ export function PlanDesignSection({
               })}
             </div>
           </div>
-
-          {estatePlanSetup.will && (
-            <div className="rounded-md border border-border bg-muted/20 p-4">
-              <ClientDecisionCallout>review the will title before drafting</ClientDecisionCallout>
-              <DecisionRow
-                question="Will title"
-                help="Select the title used for the generated will."
-                value={estatePlanSetup.will_title}
-                options={[
-                  { value: 'last_will', label: `Last Will and Testament of ${clientFirst || '[Name]'}` },
-                  { value: 'pour_over_will', label: `Pour-Over Will of ${clientFirst || '[Name]'}` },
-                ]}
-                onChange={value => updateEstatePlanSetup({ will_title: value })}
-              />
-            </div>
-          )}
 
           {isMarried && (
             <div className="rounded-lg border border-border bg-muted/50 p-4">
@@ -394,6 +378,8 @@ export function PlanDesignSection({
               ))}
             </div>
           </div>
+
+          <PlanStructureFactsSection sheet={sheet} onChange={onChange} />
         </div>
       </SectionBlock>
     </DesignSectionContent>
