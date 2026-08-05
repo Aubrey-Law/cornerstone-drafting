@@ -1,8 +1,7 @@
 'use client'
 
 import { setEstatePlanDesignSetup, getEstatePlanDesignSetup } from '@/lib/designSheetDocumentInclusions'
-import type { SectionProps } from './shared'
-import { DecisionRow, DesignSectionContent, SectionBlock } from './shared'
+import { DecisionRow, DesignSectionContent, SectionBlock, type SectionProps } from './shared'
 
 export function FamilySection({ sheet, onChange }: SectionProps) {
   const estatePlanSetup = getEstatePlanDesignSetup(sheet)

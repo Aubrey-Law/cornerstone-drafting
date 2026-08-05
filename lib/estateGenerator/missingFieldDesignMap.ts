@@ -45,7 +45,7 @@ const EXACT: Record<string, Entry> = {
   'execution.id_type': { label: 'Client ID type', sectionId: S.clientInformation, targetField: null },
 
   'spouse.full_name': { label: 'Spouse legal name', sectionId: S.clientInformation, targetField: 'spouse_name' },
-  'children[].full_name': { label: 'Children', sectionId: S.estatePlanDesign, targetField: null },
+  'children[].full_name': { label: 'Children', sectionId: S.clientInformation, targetField: null },
   'young_adult.parent1.full_name': { label: 'Young-adult plan parent', sectionId: S.estatePlanDesign, targetField: null },
 
   'trust.name': { label: 'Trust name', sectionId: S.trustDetails, targetField: 'trust_name' },
@@ -113,7 +113,7 @@ const PREFIXES: Array<[string, string]> = [
   ['client.', S.clientInformation],
   ['execution.', S.estatePlanDesign],
   ['spouse.', S.clientInformation],
-  ['children', S.estatePlanDesign],
+  ['children', S.clientInformation],
   ['young_adult.', S.estatePlanDesign],
   ['assets.', S.assetSchedules],
   ['homestead.', S.transfersAssignments],

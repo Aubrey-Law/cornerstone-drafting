@@ -220,7 +220,7 @@ export function computeDesignSheetReadiness({
 
   const familyBlockers = [
     (hasMinorChildren || matter.has_minor_children) && (sheet.children?.length ?? 0) === 0 &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'children', 'children'),
+      blocker(DESIGN_SECTION_IDS.clientInformation, 'children', 'children'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const planBlockers = [
