@@ -1,12 +1,21 @@
-import { fetchCrmPeople } from '@/lib/queries/cornerstoneCrm'
-import { CrmPeopleClient } from '../CrmPeopleClient'
+import { fetchContactsDirectory } from '@/lib/queries/contactsDirectory'
+import { isSmsConfigured } from '@/lib/communications/config'
+import { ContactsClient } from '@/app/admin/contacts/ContactsClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CrmPeoplePage() {
-  const result = await fetchCrmPeople(250)
-  if (result.error) {
-    return <div className="space-y-4"><h1 className="text-xl font-semibold">People</h1><p className="text-sm text-destructive">Could not load people ({result.error}).</p></div>
+  const { rows, error } = await fetchContactsDirectory()
+  if (error) {
+    return <div className="space-y-4"><h1 className="text-xl font-semibold">People</h1><p className="text-sm text-destructive">Could not load people ({error}).</p></div>
   }
-  return <CrmPeopleClient initialPeople={result.people} />
+  return (
+    <ContactsClient
+      contacts={rows}
+      smsEnabled={isSmsConfigured()}
+      title="People"
+      eyebrow="CRM directory"
+      description="Leads, clients, related people, and standalone contacts in one firm directory."
+    />
+  )
 }

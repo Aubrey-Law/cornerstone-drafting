@@ -44,7 +44,7 @@ describe('lead and matter field parity', () => {
 
   it('routes each aging row to its lead or matter details page', () => {
     const source = read('app/admin/pipeline/aging/MatterAgingClient.tsx')
-    expect(source).toContain("row.entity === 'lead' ? `/admin/leads/${row.id}` : `/admin/matters/${row.id}`")
+    expect(source).toContain("row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`")
     expect(source).toContain('entity: target.entity')
   })
 })

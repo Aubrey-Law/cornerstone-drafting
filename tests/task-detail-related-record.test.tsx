@@ -72,7 +72,7 @@ describe('TaskDetailSheet related record', () => {
     renderSheet(task({ lead_id: 'l-9', record_name: 'Harold Pike' }))
 
     expect(screen.getByRole('link', { name: 'Harold Pike' }).getAttribute('href')).toBe(
-      '/admin/leads/l-9',
+      '/admin/crm/opportunities/l-9',
     )
   })
 

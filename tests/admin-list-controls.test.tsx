@@ -53,7 +53,7 @@ async function selectOption(user: ReturnType<typeof userEvent.setup>, label: str
 
 function visibleLeadNames(): string[] {
   return screen.getAllByRole('link')
-    .filter(link => link.getAttribute('href')?.startsWith('/admin/leads/'))
+    .filter(link => link.getAttribute('href')?.startsWith('/admin/crm/opportunities/'))
     .map(link => link.textContent ?? '')
 }
 

@@ -11,6 +11,7 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
+import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import {
   CONTACT_KIND_LABELS,
   contactRowId,
@@ -47,8 +48,8 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
 
   const location = [contact.city, contact.state].filter(Boolean).join(', ')
   const tel = phoneTelHref(contact.phone)
-  const firstName = contact.name.trim().split(/\s+/)[0] || 'contact'
   const contactId = contactRowId(contact.id)
+  const intakeId = contact.id.startsWith('intake:') ? contact.id.slice('intake:'.length) : null
 
   // A contacts-table row threads through itself, not through the household it
   // hangs off — otherwise a trustee's panel shows the client's whole message
@@ -156,6 +157,8 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
           {contact.matter_number && <InfoRow label="Matter">{contact.matter_number}</InfoRow>}
           {contact.relationship && <InfoRow label="Relationship">{contact.relationship}</InfoRow>}
         </section>
+
+        {intakeId && <MarketingProfileCard intakeId={intakeId} />}
 
         {record ? (
           <section>

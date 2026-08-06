@@ -183,7 +183,7 @@ export function LeadsClient({
   }, [writeParam])
 
   const openFullRecord = useCallback(() => {
-    if (selectedLeadId) router.push(`/admin/leads/${selectedLeadId}`)
+    if (selectedLeadId) router.push(`/admin/crm/opportunities/${selectedLeadId}`)
   }, [router, selectedLeadId])
 
   /** Arrow keys walk the reading order, which the board groups by column. */
@@ -429,8 +429,8 @@ export function LeadsClient({
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Leads"
-        description="Prospective matters before hiring — send the intake and engagement agreement from here. Signing promotes the existing opportunity to a hired matter."
+        title="Opportunities"
+        description="Prospective and historical client opportunities — manage intake, engagement, follow-up, and conversion from one pipeline."
         actions={
           <>
             <Button size="sm" variant="outline" onClick={() => setLawmaticsOpen(true)}>

@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react'
 import {
   Briefcase,
   BookOpen,
-  BookUser,
   CalendarDays,
   FilePenLine,
   ListTodo,
@@ -23,7 +22,6 @@ import {
   Settings,
   Sparkles,
   Sun,
-  UserPlus,
 } from 'lucide-react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
@@ -64,13 +62,9 @@ function isIconRailRoute(pathname: string): boolean {
 export const adminNavItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
-  { href: '/admin/leads', label: 'Leads', icon: UserPlus },
   { href: '/admin/crm', label: 'CRM', icon: Send },
-  { href: '/admin/crm/people', label: 'People', icon: BookUser },
-  { href: '/admin/crm/campaigns', label: 'Campaigns', icon: Mail },
   { href: '/admin/inbox', label: 'Inbox', icon: Mail },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
-  { href: '/admin/contacts', label: 'Contacts', icon: BookUser },
   { href: '/admin/billing', label: 'Billing', icon: ReceiptText },
   { href: '/admin/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },

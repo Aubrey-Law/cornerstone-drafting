@@ -676,7 +676,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
           </DialogHeader>
           <div className="grid gap-3 py-2 sm:grid-cols-2">
             <Button type="button" variant="outline" asChild>
-              <Link href="/admin/leads?create=1">New lead</Link>
+              <Link href="/admin/crm/opportunities?create=1">New opportunity</Link>
             </Button>
             <Button type="button" onClick={() => { setCreateChoiceOpen(false); setCreateOpen(true) }}>
               New matter

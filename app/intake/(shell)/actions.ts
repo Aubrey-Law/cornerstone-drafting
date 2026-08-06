@@ -49,7 +49,7 @@ export async function requestIntakeUnlock(note?: string): Promise<RequestUnlockR
     .maybeSingle()
   const adminLink = matter?.id && matter.relationship_status === 'hired'
     ? appUrl(`/admin/matters/${matter.id}?tab=communications&channel=portal`)
-    : appUrl(`/admin/leads/${intake.id}`)
+    : appUrl(`/admin/crm/opportunities/${intake.id}`)
 
   const clientName =
     [intake.first_name, intake.last_name].filter(Boolean).join(' ') || 'A client'

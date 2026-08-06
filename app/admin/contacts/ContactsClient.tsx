@@ -72,9 +72,18 @@ function KindBadge({ kind }: { kind: ContactKind }) {
 interface ContactsClientProps {
   contacts: ContactDirectoryRow[]
   smsEnabled: boolean
+  title?: string
+  eyebrow?: string
+  description?: string
 }
 
-export function ContactsClient({ contacts, smsEnabled }: ContactsClientProps) {
+export function ContactsClient({
+  contacts,
+  smsEnabled,
+  title = 'Contacts',
+  eyebrow = 'Directory',
+  description = 'Everyone the firm knows — leads, clients, and the people connected to them.',
+}: ContactsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [filters, setFilters] = useState(EMPTY_CONTACT_TABLE_FILTERS)
@@ -82,7 +91,7 @@ export function ContactsClient({ contacts, smsEnabled }: ContactsClientProps) {
   const [addOpen, setAddOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Deep link from the softphone: /admin/contacts?selected=contact:<uuid>.
+  // Deep link from the softphone: /admin/crm/people?selected=contact:<uuid>.
   // A bare uuid works too, so the caller doesn't have to know the namespace.
   const requestedId = searchParams?.get('selected') ?? null
   useEffect(() => {
@@ -113,10 +122,10 @@ export function ContactsClient({ contacts, smsEnabled }: ContactsClientProps) {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Contacts"
-        eyebrow="Directory"
+        title={title}
+        eyebrow={eyebrow}
         icon={BookUser}
-        description="Everyone the firm knows — leads, clients, and the people connected to them."
+        description={description}
         actions={
           <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="h-3.5 w-3.5" />

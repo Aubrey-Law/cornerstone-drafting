@@ -565,7 +565,7 @@ export function CalendarClient() {
                           View matter
                         </Link>
                       ) : a.linkedLeadId ? (
-                        <Link href={`/admin/leads/${a.linkedLeadId}`} className="text-xs text-primary underline">
+                        <Link href={`/admin/crm/opportunities/${a.linkedLeadId}`} className="text-xs text-primary underline">
                           View lead
                         </Link>
                       ) : null}

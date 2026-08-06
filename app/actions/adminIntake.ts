@@ -424,7 +424,7 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
 
   await syncIntakeToDesignSheet(admin, intakeId, matterIdForSync, reviewFlags)
 
-  if (args.leadId) revalidatePath(`/admin/leads/${args.leadId}`)
+  if (args.leadId) revalidatePath(`/admin/crm/opportunities/${args.leadId}`)
   if (args.matterId) revalidatePath(`/admin/matters/${args.matterId}`)
   return { id: intakeId }
 }
@@ -523,7 +523,7 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
     revalidatePath('/admin/dashboard')
   }
 
-  if (args.leadId) revalidatePath(`/admin/leads/${args.leadId}`)
+  if (args.leadId) revalidatePath(`/admin/crm/opportunities/${args.leadId}`)
   if (args.matterId) {
     await linkIntakeToMatter(admin, args.matterId, intakeId)
     revalidatePath(`/admin/matters/${args.matterId}`)

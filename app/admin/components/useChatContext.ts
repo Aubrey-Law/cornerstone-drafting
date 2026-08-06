@@ -18,9 +18,9 @@ export function chatContextForPath(pathname: string): ChatContextType {
     return { type: 'matter', id: draftingMatch[1], label: 'This matter' }
   }
 
-  const leadMatch = pathname.match(/\/admin\/leads\/([a-zA-Z0-9-]+)/)
+  const leadMatch = pathname.match(/\/admin\/(?:leads|crm\/opportunities)\/([a-zA-Z0-9-]+)/)
   if (leadMatch) {
-    return { type: 'lead', id: leadMatch[1], label: 'This lead' }
+    return { type: 'lead', id: leadMatch[1], label: 'This opportunity' }
   }
 
   return { type: 'general' }

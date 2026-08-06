@@ -74,7 +74,7 @@ function rowKey(row: TodayQueueRow) {
 }
 
 function rowHref(row: TodayQueueRow) {
-  return row.entity === 'lead' ? `/admin/leads/${row.id}` : `/admin/matters/${row.id}`
+  return row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`
 }
 
 function daysCell(row: TodayQueueRow) {
@@ -602,7 +602,7 @@ export function TodayQueue({
           const href = task.matter_id
             ? `/admin/matters/${task.matter_id}?tab=tasks`
             : task.lead_id
-              ? `/admin/leads/${task.lead_id}?tab=tasks`
+              ? `/admin/crm/opportunities/${task.lead_id}?tab=tasks`
               : '/admin/tasks'
           router.push(href)
         },
