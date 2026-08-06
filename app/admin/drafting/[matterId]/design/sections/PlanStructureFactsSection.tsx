@@ -24,7 +24,7 @@ function newAssetTitle() {
   return 'Additional Disinheritance Language'
 }
 
-interface PlanStructureFactsSectionProps extends SectionProps {}
+type PlanStructureFactsSectionProps = SectionProps
 
 export function PlanStructureFactsSection({ sheet, onChange }: PlanStructureFactsSectionProps) {
   const children = sheet.children ?? []
