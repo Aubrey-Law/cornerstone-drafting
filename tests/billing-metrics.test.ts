@@ -263,6 +263,75 @@ describe('billing metrics', () => {
     })
   })
 
+  it('charts six months of collections anchored on the selected month', () => {
+    const snapshot = buildBillingSnapshot({
+      items,
+      payments,
+      selectedMonth: '2026-07',
+      annualGoalCents: 1_200_000,
+      now: NOW,
+      dismissedNudgeKeys: [],
+      unpreparedClaims: [],
+    })
+
+    expect(snapshot.collectionsTrend.points.map(point => point.month)).toEqual([
+      '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07',
+    ])
+    expect(snapshot.collectionsTrend.points.map(point => point.label).at(-1)).toBe('Jul')
+    // May carries the claim payment, June the prior-month figure, July the two EFTs.
+    expect(snapshot.collectionsTrend.points.map(point => point.amount)).toEqual([
+      0, 0, 0, 90_000, 50_000, 200_000,
+    ])
+    // 200,000 against a 50,000 June.
+    expect(snapshot.collectionsTrend.deltaPercent).toBe(300)
+  })
+
+  it('separates costs billed and work still waiting to be invoiced', () => {
+    const snapshot = buildBillingSnapshot({
+      items,
+      payments,
+      selectedMonth: '2026-07',
+      annualGoalCents: 1_200_000,
+      now: NOW,
+      dismissedNudgeKeys: [],
+      unpreparedClaims: [],
+    })
+
+    const costs = items.filter(item => item.kind === 'cost' && item.createdAt.startsWith('2026-07'))
+    expect(snapshot.costsMonth.amount).toBe(
+      costs.reduce((sum, item) => sum + item.amountBilled, 0),
+    )
+    expect(snapshot.pendingInvoices.count).toBe(
+      snapshot.rows.filter(row => row.status === 'to_invoice').length,
+    )
+    expect(snapshot.pendingInvoices.overdueCount).toBe(
+      snapshot.rows.filter(row => row.overdue).length,
+    )
+    expect(snapshot.pendingInvoices.overdueAmount).toBe(snapshot.outstanding.overdueAmount)
+  })
+
+  it('lists recent payments newest first with their client context', () => {
+    const snapshot = buildBillingSnapshot({
+      items,
+      payments,
+      selectedMonth: '2026-07',
+      annualGoalCents: 1_200_000,
+      now: NOW,
+      dismissedNudgeKeys: [],
+      unpreparedClaims: [],
+    })
+
+    const dates = snapshot.recentPayments.map(payment => payment.receivedAt)
+    expect([...dates].sort((a, b) => b.localeCompare(a))).toEqual(dates)
+    expect(snapshot.recentPayments[0]).toMatchObject({
+      id: 'pay-legal-b',
+      matterId: 'matter-legal',
+      clientName: 'Rodriguez, Daniel',
+      method: 'plan_eft',
+      amount: 60_000,
+    })
+  })
+
   it('groups engaged fees by the existing matter plan facts and compares prior year', () => {
     const snapshot = buildBillingSnapshot({
       items,

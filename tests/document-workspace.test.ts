@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DOCUMENT_FOLDERS,
   buildDocumentStatusBadges,
   documentFileType,
+  documentFolderKey,
+  documentFolderLabel,
+  formatDocumentSize,
   isDocumentPdf,
   isDocumentWord,
   isDocumentShared,
@@ -41,6 +45,35 @@ describe('document workspace helpers', () => {
       .toContainEqual({ label: 'Shared', tone: 'success' })
     expect(buildDocumentStatusBadges(doc({ source: 'client' })))
       .toContainEqual({ label: 'Client upload', tone: 'info' })
+  })
+
+  it('files every document into exactly one derived folder', () => {
+    expect(documentFolderKey(doc({ source: 'client' }))).toBe('client-uploads')
+    expect(documentFolderKey(doc({ name: 'Chen Trust — SIGNED.pdf' }))).toBe('executed')
+    expect(documentFolderKey(doc({ name: 'Notarized deed.pdf' }))).toBe('executed')
+    expect(documentFolderKey(doc({ generation_id: 'gen-1' }))).toBe('drafts')
+    expect(documentFolderKey(doc({}))).toBe('firm-files')
+
+    // First match wins, so a signed client upload stays with the client.
+    expect(documentFolderKey(doc({ source: 'client', name: 'signed.pdf' })))
+      .toBe('client-uploads')
+    // A generated draft that has since been signed reads as executed.
+    expect(documentFolderKey(doc({ generation_id: 'gen-1', name: 'Will executed.docx' })))
+      .toBe('executed')
+  })
+
+  it('labels every folder key the taxonomy declares', () => {
+    for (const folder of DOCUMENT_FOLDERS) {
+      expect(documentFolderLabel(folder.key)).toBe(folder.label)
+    }
+  })
+
+  it('formats byte counts up through gigabytes', () => {
+    expect(formatDocumentSize(0)).toBe('—')
+    expect(formatDocumentSize(512)).toBe('512 B')
+    expect(formatDocumentSize(2048)).toBe('2.0 KB')
+    expect(formatDocumentSize(5 * 1024 * 1024)).toBe('5.0 MB')
+    expect(formatDocumentSize(3 * 1024 * 1024 * 1024)).toBe('3.0 GB')
   })
 
   it('badges marker and missing counts', () => {

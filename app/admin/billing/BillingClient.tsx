@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Download, Plus } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
@@ -21,15 +21,19 @@ import type {
   BillingSnapshot,
 } from '@/lib/billing/types'
 import { BillingRail } from './BillingRail'
-import { KpiRow } from './KpiRow'
+import { CollectionGoalCard } from './CollectionGoalCard'
+import { CollectionsTrendCard } from './CollectionsTrendCard'
+import { FinanceHeroCards } from './FinanceHeroCards'
 import { LedgerTable } from './LedgerTable'
+import { ReceivablesSummaryCard } from './ReceivablesSummaryCard'
+import { RecentPaymentsCard } from './RecentPaymentsCard'
+import { RevenueSourcesCard } from './RevenueSourcesCard'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import {
   AddChargeDialog,
   type AddChargeInput,
   type BillingMatterOption,
 } from '@/components/billing/AddChargeDialog'
-import { RevenueTiles } from './RevenueTiles'
 
 const filterLabels: { value: BillingFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -253,19 +257,6 @@ export default function BillingClient({
               <Download className="size-4" aria-hidden />
               Export CSV
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              onClick={openCharge}
-            >
-              <Plus className="size-4" aria-hidden />
-              Add charge
-            </Button>
-            <Button type="button" className="min-h-11" onClick={() => openPayment()}>
-              <Plus className="size-4" aria-hidden />
-              Log payment
-            </Button>
           </>
         }
       />
@@ -276,8 +267,17 @@ export default function BillingClient({
         </div>
       )}
 
-      <RevenueTiles revenue={initialSnapshot.revenue} />
-      <KpiRow snapshot={initialSnapshot} />
+      <FinanceHeroCards
+        snapshot={initialSnapshot}
+        onLogPayment={() => openPayment()}
+        onAddCharge={openCharge}
+      />
+
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+        <RevenueSourcesCard revenue={initialSnapshot.revenue} />
+        <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
+        <ReceivablesSummaryCard snapshot={initialSnapshot} />
+      </div>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <Card className="min-w-0 gap-0 py-0">
@@ -310,11 +310,15 @@ export default function BillingClient({
             <LedgerTable rows={rows} onLogPayment={openPayment} onInvoice={row => void markInvoice(row)} />
           </CardContent>
         </Card>
-        <BillingRail
-          snapshot={initialSnapshot}
-          onNudgeAction={nudge => void actOnNudge(nudge)}
-          onDismiss={nudge => void dismissNudge(nudge)}
-        />
+        <div className="space-y-3">
+          <CollectionGoalCard snapshot={initialSnapshot} />
+          <BillingRail
+            snapshot={initialSnapshot}
+            onNudgeAction={nudge => void actOnNudge(nudge)}
+            onDismiss={nudge => void dismissNudge(nudge)}
+          />
+          <RecentPaymentsCard payments={initialSnapshot.recentPayments} />
+        </div>
       </div>
 
       <AddChargeDialog

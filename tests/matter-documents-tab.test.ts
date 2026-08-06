@@ -54,14 +54,29 @@ describe('matter documents tab', () => {
     expect(source).toContain('onReviewPortalUploads')
   })
 
-  it('has no folder machinery left', () => {
+  it('groups into folders without writing a folder anywhere', () => {
     const source = readFileSync(tabPath, 'utf8')
+
+    // Folders are derived from provenance and lifecycle. The stored folder
+    // column is gone (20260806135231_drop_document_folders), so nothing here
+    // may move, promote, or persist one.
+    expect(source).toContain('documentFolderKey')
+    expect(source).toContain('DOCUMENT_FOLDERS')
+    expect(source).toContain('setOpenFolder')
     expect(source).not.toContain('PromoteDocumentDialog')
-    expect(source).not.toContain('activeFolder')
-    expect(source).not.toContain('folderSummaries')
     expect(source).not.toContain('Bulk move')
     expect(source).not.toContain('updateDocumentFolder')
+    expect(source).not.toContain('doc.folder')
     expect(source).not.toContain('getDocumentShareEligibility')
     expect(source).not.toContain('visibilityFilter')
+  })
+
+  it('carries the file-manager toolbar: search, filter, and sort', () => {
+    const source = readFileSync(tabPath, 'utf8')
+    expect(source).toContain('Search for files and folders')
+    expect(source).toContain('Sort:')
+    expect(source).toContain('setSortKey')
+    expect(source).toContain('Select all listed documents')
+    expect(source).toContain('Folder breadcrumb')
   })
 })

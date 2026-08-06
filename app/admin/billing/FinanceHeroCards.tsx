@@ -1,0 +1,137 @@
+'use client'
+
+import { Banknote, FileClock, Plus, ReceiptText, TrendingUp, Wallet } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import type { BillingSnapshot } from '@/lib/billing/types'
+import { money, trend, type Trend } from './financeFormat'
+
+function TrendLine({ value, caption }: { value: Trend; caption: string }) {
+  if (value.percent === null) {
+    return <p className="text-xs text-muted-foreground">{caption}</p>
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      <span className={value.positive ? 'font-medium text-green' : 'font-medium text-destructive'}>
+        {value.label}
+      </span>
+      {' '}
+      {caption}
+    </p>
+  )
+}
+
+function HeroCard({
+  icon: Icon,
+  label,
+  children,
+  action,
+}: {
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
+  label: string
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
+  return (
+    <Card className="min-w-0 gap-0 py-0">
+      <CardContent className="flex h-full min-w-0 flex-col px-4 py-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-md border border-border bg-muted/50">
+              <Icon className="size-3.5 text-muted-foreground" aria-hidden />
+            </span>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          </div>
+          {action}
+        </div>
+        <div className="mt-3 min-w-0 flex-1">{children}</div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function FinanceHeroCards({
+  snapshot,
+  onLogPayment,
+  onAddCharge,
+}: {
+  snapshot: BillingSnapshot
+  onLogPayment: () => void
+  onAddCharge: () => void
+}) {
+  const collected = trend(snapshot.collectedMonth.deltaPercent)
+  const costs = trend(snapshot.costsMonth.deltaPercent, { goodWhenUp: false })
+
+  return (
+    <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <HeroCard icon={Wallet} label="Outstanding">
+        <p className="text-3xl font-semibold tabular-nums">{money(snapshot.outstanding.amount)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {snapshot.outstanding.openCount} open item{snapshot.outstanding.openCount === 1 ? '' : 's'}
+          {snapshot.outstanding.overdueAmount > 0
+            ? ` · ${money(snapshot.outstanding.overdueAmount)} past due`
+            : ''}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button type="button" size="sm" className="min-h-9" onClick={onLogPayment}>
+            <Banknote className="size-4" aria-hidden />
+            Log payment
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="min-h-9" onClick={onAddCharge}>
+            <Plus className="size-4" aria-hidden />
+            Add charge
+          </Button>
+        </div>
+      </HeroCard>
+
+      <HeroCard icon={TrendingUp} label="Collected this month">
+        <p className="text-3xl font-semibold tabular-nums">{money(snapshot.collectedMonth.amount)}</p>
+        <div className="mt-2">
+          <TrendLine
+            value={collected}
+            caption={
+              collected.percent === null
+                ? `No collections in the prior month`
+                : 'compared to last month'
+            }
+          />
+        </div>
+      </HeroCard>
+
+      <HeroCard icon={ReceiptText} label="Costs billed">
+        <p className="text-3xl font-semibold tabular-nums">{money(snapshot.costsMonth.amount)}</p>
+        <div className="mt-2">
+          <TrendLine
+            value={costs}
+            caption={
+              costs.percent === null
+                ? 'No costs billed in the prior month'
+                : 'compared to last month'
+            }
+          />
+        </div>
+      </HeroCard>
+
+      <HeroCard
+        icon={FileClock}
+        label="Pending invoices"
+        action={
+          snapshot.pendingInvoices.overdueCount > 0 ? (
+            <Badge variant="outline" className="border-destructive/30 bg-red-bg text-[10px] text-destructive">
+              {snapshot.pendingInvoices.overdueCount} overdue
+            </Badge>
+          ) : undefined
+        }
+      >
+        <p className="text-3xl font-semibold tabular-nums">{money(snapshot.pendingInvoices.amount)}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {snapshot.pendingInvoices.count} item{snapshot.pendingInvoices.count === 1 ? '' : 's'} waiting to be invoiced
+          {snapshot.pendingInvoices.overdueAmount > 0
+            ? ` · ${money(snapshot.pendingInvoices.overdueAmount)} already past due`
+            : ''}
+        </p>
+      </HeroCard>
+    </div>
+  )
+}
