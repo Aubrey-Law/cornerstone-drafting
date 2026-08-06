@@ -7,7 +7,6 @@ import {
   BookOpen,
   Clock,
   FilePenLine,
-  Phone,
   Search,
   Settings,
   Sparkles,
@@ -40,7 +39,6 @@ const NAV_ITEMS = [
   { label: 'Assistant', href: '/admin/assistant', icon: Sparkles },
   { label: 'Library', href: '/admin/works', icon: BookOpen },
   { label: 'Aging', href: '/admin/pipeline/aging', icon: Clock },
-  { label: 'Calls', href: '/admin/calls', icon: Phone },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ]
 

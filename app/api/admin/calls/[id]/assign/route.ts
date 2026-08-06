@@ -7,8 +7,9 @@ import { revalidateSidebarCounts } from '@/lib/sidebarCountsInvalidation'
 const Body = z.object({
   matterId: z.string().min(1).optional(),
   leadId: z.string().min(1).optional(),
-}).refine((body) => Boolean(body.matterId) !== Boolean(body.leadId), {
-  message: 'Provide exactly one of matterId or leadId',
+  contactId: z.string().min(1).optional(),
+}).refine((body) => [body.matterId, body.leadId, body.contactId].filter(Boolean).length === 1, {
+  message: 'Provide exactly one record id',
 })
 
 export async function POST(
@@ -22,10 +23,14 @@ export async function POST(
   const { id } = await params
   const parsed = Body.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Provide exactly one of matterId or leadId' }, { status: 400 })
+    return NextResponse.json({ error: 'Provide exactly one record id' }, { status: 400 })
   }
 
   const admin = getAdminClient()
+
+  let matterId: string | null = null
+  let leadId: string | null = null
+  let contactId: string | null = null
 
   if (parsed.data.matterId) {
     const { data: matter } = await admin
@@ -38,7 +43,8 @@ export async function POST(
     if (!matter) {
       return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
     }
-  } else {
+    matterId = parsed.data.matterId
+  } else if (parsed.data.leadId) {
     const { data: lead } = await admin
       .from('client_intake')
       .select('id, matter_id')
@@ -56,19 +62,55 @@ export async function POST(
     if (!lead || !opportunity || opportunity.relationship_status === 'hired') {
       return NextResponse.json({ error: 'Lead not found or already hired' }, { status: 404 })
     }
+    leadId = parsed.data.leadId
+  } else {
+    const { data: contact } = await admin
+      .from('contacts')
+      .select('id, client_intake_id, deceased')
+      .eq('id', parsed.data.contactId!)
+      .maybeSingle()
+
+    if (!contact || contact.deceased) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    }
+    contactId = contact.id
+
+    if (contact.client_intake_id) {
+      const { data: intake } = await admin
+        .from('client_intake')
+        .select('id, matter_id')
+        .eq('id', contact.client_intake_id)
+        .maybeSingle()
+      const { data: opportunity } = intake?.matter_id
+        ? await admin
+            .from('matters')
+            .select('id, relationship_status')
+            .eq('id', intake.matter_id)
+            .maybeSingle()
+        : { data: null }
+
+      if (opportunity?.relationship_status === 'hired') matterId = opportunity.id
+      else if (intake) leadId = intake.id
+    }
   }
 
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from('calls')
     .update({
-      matter_id: parsed.data.matterId ?? null,
-      lead_id: parsed.data.leadId ?? null,
+      matter_id: matterId,
+      lead_id: leadId,
+      contact_id: contactId,
+      triage_dismissed_at: null,
+      triage_dismissed_by: null,
       assigned_by: userId,
       assigned_at: new Date().toISOString(),
     })
     .eq('id', id)
+    .select('id')
+    .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!updated) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
   revalidateSidebarCounts()
   return NextResponse.json({ ok: true })
 }

@@ -15,8 +15,6 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeft,
-  PanelRight,
-  Phone,
   Send,
   ReceiptText,
   Settings,
@@ -70,7 +68,6 @@ export const adminNavItems: { href: string; label: string; icon: React.ElementTy
   { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
   { href: '/admin/assistant', label: 'Assistant', icon: Sparkles },
   { href: '/admin/works', label: 'Library', icon: BookOpen },
-  { href: '/admin/calls', label: 'Calls', icon: Phone },
   { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]

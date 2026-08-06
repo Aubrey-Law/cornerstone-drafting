@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { SetupBanner } from '@/components/SetupBanner'
 import { linkifyText } from '@/lib/linkify'
+import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { MAX_LEAD_SMS_BODY_LENGTH, MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import {
   CHANNEL_LABEL,
@@ -197,6 +198,31 @@ export function CommunicationThread({
                 <time dateTime={item.created_at}>{TIME_FORMAT.format(new Date(item.created_at))}</time>
               </div>
               <p className="whitespace-pre-wrap">{linkifyText(item.body)}</p>
+              {item.channel === 'call' && item.call ? (
+                <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
+                  <CallPhoneLink phone={item.call.participant_number} className="text-primary" />
+                  {item.call.voicemail_url ? (
+                    <a
+                      href={item.call.voicemail_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline"
+                    >
+                      Voicemail
+                    </a>
+                  ) : null}
+                  {item.call.recording_url && item.call.recording_url !== item.call.voicemail_url ? (
+                    <a
+                      href={item.call.recording_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline"
+                    >
+                      Recording
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
             </li>
           ))
         )}

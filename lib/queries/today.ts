@@ -120,7 +120,9 @@ export async function fetchTodayData(): Promise<TodayData> {
       .from('calls')
       .select('id', { count: 'exact', head: true })
       .is('matter_id', null)
-      .is('lead_id', null),
+      .is('lead_id', null)
+      .is('contact_id', null)
+      .is('triage_dismissed_at', null),
     fetchTasks({ status: 'open', limit: 500 }),
     admin
       .from('appointments')

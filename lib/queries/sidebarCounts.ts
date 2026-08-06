@@ -29,7 +29,9 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
       .from('calls')
       .select('id', { count: 'exact', head: true })
       .is('matter_id', null)
-      .is('lead_id', null),
+      .is('lead_id', null)
+      .is('contact_id', null)
+      .is('triage_dismissed_at', null),
     admin
       .from('v_matter_pipeline')
       .select('matter_id')

@@ -1,78 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
+import { fetchFirmPeople } from '@/lib/queries/firmDirectory'
 
 export const dynamic = 'force-dynamic'
 
-/** Search matters and prospective leads for call assignment. */
+/** Search the shared firm directory for call assignment. */
 export async function GET(req: NextRequest) {
   const { err } = await requireAdmin(req)
   if (err) return err
 
   const q = (req.nextUrl.searchParams.get('q') ?? '').trim()
-  if (!q) return NextResponse.json({ matters: [], leads: [] })
+  if (!q) return NextResponse.json({ matters: [], leads: [], contacts: [] })
 
-  const admin = getAdminClient()
-  const pattern = `%${q}%`
+  const { people, error } = await fetchFirmPeople()
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
-  const [{ data, error }, { data: leadData, error: leadError }] = await Promise.all([
-    admin
-      .from('v_matter_pipeline')
-      .select('matter_id, matter_name, client_name, client_email, client_phone')
-      .or(
-        `client_name.ilike.${pattern},client_email.ilike.${pattern},client_phone.ilike.${pattern},matter_name.ilike.${pattern}`,
-      )
-      .limit(15),
-    admin
-      .from('client_intake')
-      .select('id, first_name, last_name, full_name, email, phone')
-      .is('matter_id', null)
-      .or(
-        `first_name.ilike.${pattern},last_name.ilike.${pattern},full_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern}`,
-      )
-      .order('updated_at', { ascending: false })
-      .limit(15),
-  ])
+  const needle = q.toLocaleLowerCase()
+  const matches = people
+    .filter(person => [
+      person.name,
+      person.email,
+      person.phone,
+      person.detail,
+      person.matterNumber,
+    ].some(value => value?.toLocaleLowerCase().includes(needle)))
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name))
 
-  if (error) {
-    // Fallback: search client_intake + matters if view filter fails
-    const { data: intakes } = await admin
-      .from('client_intake')
-      .select('id, first_name, last_name, email, phone, matter_id')
-      .or(
-        `first_name.ilike.${pattern},last_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern}`,
-      )
-      .not('matter_id', 'is', null)
-      .limit(15)
+  const label = (person: (typeof matches)[number]) =>
+    [person.name, person.detail, person.email ?? person.phone].filter(Boolean).join(' · ')
 
-    const matters = (intakes ?? []).map((ci) => ({
-      id: ci.matter_id as string,
-      label:
-        `${ci.first_name ?? ''} ${ci.last_name ?? ''}`.trim() +
-        (ci.email ? ` · ${ci.email}` : ''),
-    }))
-    const leads = leadError ? [] : (leadData ?? []).map((lead) => ({
-      id: lead.id as string,
-      label:
-        (lead.full_name?.trim() || `${lead.first_name ?? ''} ${lead.last_name ?? ''}`.trim() || 'Unnamed lead') +
-        (lead.email ? ` · ${lead.email}` : ''),
-    }))
-    return NextResponse.json({ matters, leads })
-  }
+  const unique = <T extends { id: string }>(items: T[]) =>
+    Array.from(new Map(items.map(item => [item.id, item])).values()).slice(0, 15)
 
-  const matters = (data ?? []).map((m) => ({
-    id: m.matter_id as string,
-    label:
-      (m.client_name?.trim() || m.matter_name || m.matter_id.slice(0, 8)) +
-      (m.client_email ? ` · ${m.client_email}` : ''),
-  }))
+  const matters = unique(matches.flatMap(person =>
+    person.source === 'intake' && person.matterId
+      ? [{ id: person.matterId, label: label(person) }]
+      : [],
+  ))
+  const leads = unique(matches.flatMap(person =>
+    person.source === 'intake' && person.leadId
+      ? [{ id: person.leadId, label: label(person) }]
+      : [],
+  ))
+  const contacts = unique(matches.flatMap(person =>
+    person.contactId
+      ? [{ id: person.contactId, label: label(person) }]
+      : [],
+  ))
 
-  const leads = leadError ? [] : (leadData ?? []).map((lead) => ({
-    id: lead.id as string,
-    label:
-      (lead.full_name?.trim() || `${lead.first_name ?? ''} ${lead.last_name ?? ''}`.trim() || 'Unnamed lead') +
-      (lead.email ? ` · ${lead.email}` : ''),
-  }))
-
-  return NextResponse.json({ matters, leads })
+  return NextResponse.json({ matters, leads, contacts })
 }
