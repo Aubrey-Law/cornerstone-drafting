@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 const idSchema = z.string().uuid()
 const statusValues = ['draft', 'scheduled', 'running', 'paused', 'completed', 'cancelled'] as const
 const typeValues = ['newsletter', 'nurture'] as const
-const providerValues = ['sendgrid', 'mailersend', 'resend', 'other'] as const
+const providerValues = ['mailgun', 'sendgrid', 'mailersend', 'resend', 'other'] as const
 
 type Context = { params: Promise<{ id: string }> }
 

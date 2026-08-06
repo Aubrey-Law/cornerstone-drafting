@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/apiAuth'
+import { createDeliveryToken, unsubscribeTokenHash } from '@/lib/crm/mailgunCampaigns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { parseCampaignAudienceRules, type CrmPeopleFilter } from '@/lib/queries/cornerstoneCrm'
 
@@ -20,12 +21,13 @@ type CampaignPersonRow = {
   last_name: string | null
   lead_id: string | null
   cornerstone_matter_id: string | null
+  marketing_status: 'unknown' | 'opted_in' | 'opted_out'
 }
 
 function audienceFilterQuery(admin: ReturnType<typeof getAdminClient>, rules: AudienceRules) {
   let query = admin
     .from('cornerstone_crm_people')
-    .select('id, email, first_name, last_name, lead_id, cornerstone_matter_id, company_name, city')
+    .select('id, email, first_name, last_name, lead_id, cornerstone_matter_id, company_name, city, marketing_status')
     .limit(MAX_CAMPAIGN_AUDIENCE)
 
   if (rules.search) {
@@ -44,7 +46,7 @@ function audienceFilterQuery(admin: ReturnType<typeof getAdminClient>, rules: Au
     query = query.not('email', 'is', null).neq('email', '')
   }
 
-  if (!rules.includeOptedOut) query = query.eq('campaign_opt_out', false)
+  query = query.eq('marketing_status', 'opted_in')
   const lifecycleStatuses = rules.lifecycleStatuses
     .filter(Boolean)
     .filter((value): value is CrmPeopleFilter['lifecycle'] => value !== 'all')
@@ -58,7 +60,7 @@ function personName(person: { first_name: string | null; last_name: string | nul
   return fullName || person.email || 'Contact'
 }
 
-export async function POST(req: Request, { params }: Context) {
+async function previewAudience(req: Request, params: Context) {
   const auth = await requireAdmin(req)
   if (auth.err) return auth.err
 
@@ -69,7 +71,7 @@ export async function POST(req: Request, { params }: Context) {
   const admin = getAdminClient()
   const { data: campaign, error: campaignError } = await admin
     .from('cornerstone_crm_campaigns')
-    .select('id, audience_rules, status')
+    .select('id, audience_rules, status, type')
     .eq('id', parsedId.data)
     .maybeSingle()
 
@@ -87,9 +89,41 @@ export async function POST(req: Request, { params }: Context) {
 
   const peopleList = (selectedPeople ?? []) as CampaignPersonRow[]
 
-  const valid = audienceRules.onlyWithEmail
-    ? peopleList.filter(row => !!row.email?.trim())
-    : peopleList
+  const valid = peopleList.filter(row => {
+    if (row.marketing_status !== 'opted_in') return false
+    if (campaign.type === 'nurture' && row.cornerstone_matter_id) return false
+    return !audienceRules.onlyWithEmail || !!row.email?.trim()
+  })
+
+  const missingConsent = peopleList.filter(row => row.marketing_status !== 'opted_in').length
+  const clientExcluded = campaign.type === 'nurture'
+    ? peopleList.filter(row => row.marketing_status === 'opted_in' && !!row.cornerstone_matter_id).length
+    : 0
+  const missingEmail = audienceRules.onlyWithEmail
+    ? peopleList.filter(row => !row.email?.trim()).length
+    : 0
+  return { campaign, audienceRules, peopleList, valid, missingConsent, clientExcluded, missingEmail }
+}
+
+export async function GET(req: Request, { params }: Context) {
+  const result = await previewAudience(req, params)
+  if (result instanceof NextResponse) return result
+  return NextResponse.json({
+    eligible: result.valid.length,
+    excluded: result.peopleList.length - result.valid.length,
+    exclusionReasons: {
+      missingExplicitConsent: result.missingConsent,
+      clientsExcludedFromNurture: result.clientExcluded,
+      missingEmail: result.missingEmail,
+    },
+    sampleRecipients: result.valid.slice(0, 5).map(person => personName(person)),
+  })
+}
+
+export async function POST(req: Request, { params }: Context) {
+  const result = await previewAudience(req, params)
+  if (result instanceof NextResponse) return result
+  const { campaign, audienceRules, valid } = result
 
   if (!valid.length) {
     return NextResponse.json({ queued: 0, added: 0, updated: 0, campaignId: campaign.id })
@@ -110,14 +144,45 @@ export async function POST(req: Request, { params }: Context) {
     .eq('campaign_id', campaign.id)
 
   const existingSet = new Set((existing ?? []).map(row => row.person_id as string))
-  const { data: upserted, error: upsertError } = await admin
+  const { error: upsertError } = await admin
     .from('cornerstone_crm_campaign_recipients')
-    .upsert(recipientRows, { onConflict: 'campaign_id,person_id', ignoreDuplicates: false })
-    .select('person_id')
+    .upsert(recipientRows, { onConflict: 'campaign_id,person_id', ignoreDuplicates: true })
 
   if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 })
 
-  const affectedRows = upserted ?? recipientRows
+  const { data: recipients, error: recipientsError } = await admin
+    .from('cornerstone_crm_campaign_recipients')
+    .select('id, person_id')
+    .eq('campaign_id', campaign.id)
+    .in('person_id', valid.map(person => person.id))
+  if (recipientsError) return NextResponse.json({ error: recipientsError.message }, { status: 500 })
+
+  const { data: steps, error: stepsError } = await admin
+    .from('cornerstone_crm_campaign_steps')
+    .select('id, delay_days')
+    .eq('campaign_id', campaign.id)
+    .eq('is_active', true)
+  if (stepsError) return NextResponse.json({ error: stepsError.message }, { status: 500 })
+
+  const now = Date.now()
+  const deliveryRows = (recipients ?? []).flatMap(recipient => (steps ?? []).map(step => {
+    const token = createDeliveryToken()
+    return {
+      campaign_id: campaign.id,
+      campaign_recipient_id: recipient.id,
+      step_id: step.id,
+      scheduled_at: new Date(now + step.delay_days * 24 * 60 * 60 * 1000).toISOString(),
+      delivery_token: token,
+      delivery_token_hash: unsubscribeTokenHash(token),
+    }
+  }))
+  if (deliveryRows.length) {
+    const { error: deliveryError } = await admin
+      .from('cornerstone_crm_campaign_deliveries')
+      .upsert(deliveryRows, { onConflict: 'campaign_recipient_id,step_id', ignoreDuplicates: true })
+    if (deliveryError) return NextResponse.json({ error: deliveryError.message }, { status: 500 })
+  }
+
   const addedCount = recipientRows.filter(row => !existingSet.has(row.person_id)).length
 
   await admin
@@ -127,7 +192,7 @@ export async function POST(req: Request, { params }: Context) {
 
   return NextResponse.json({
     campaignId: campaign.id,
-    queued: affectedRows.length,
+    queued: deliveryRows.length,
     added: addedCount,
     updated: Math.max(0, affectedRows.length - addedCount),
     sampleRecipients: valid.slice(0, 3).map(person => personName(person)),

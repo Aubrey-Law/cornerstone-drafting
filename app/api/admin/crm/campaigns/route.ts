@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 const CAMPAIGN_TYPES = ['newsletter', 'nurture'] as const
 const CAMPAIGN_STATUSES = ['draft', 'scheduled', 'running', 'paused', 'completed', 'cancelled'] as const
-const EMAIL_PROVIDERS = ['sendgrid', 'mailersend', 'resend', 'other'] as const
+const EMAIL_PROVIDERS = ['mailgun', 'sendgrid', 'mailersend', 'resend', 'other'] as const
 
 const createBodySchema = z.object({
   name: z.string().trim().min(1),
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
   }
 
   const { name, type, subject, bodyText, bodyHtml, audienceRules } = parsed.data
-  const emailProvider = parsed.data.emailProvider ?? 'sendgrid'
+  const emailProvider = parsed.data.emailProvider ?? 'mailgun'
   const status = parsed.data.status ?? 'draft'
 
   const sanitizedHtml = typeof bodyHtml === 'string' ? sanitizeEmailHtml(bodyHtml) : ''
@@ -117,6 +117,16 @@ export async function POST(req: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const { error: stepError } = await admin.from('cornerstone_crm_campaign_steps').insert({
+    campaign_id: data.id,
+    step_order: 1,
+    delay_days: 0,
+    subject: data.subject,
+    body_text: data.body_text,
+    body_html: data.body_html,
+  })
+  if (stepError) return NextResponse.json({ error: stepError.message }, { status: 500 })
 
   return NextResponse.json(
     {

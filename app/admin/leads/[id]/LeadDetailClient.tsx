@@ -41,6 +41,7 @@ import {
   LEAD_DETAIL_RAIL_WIDTH,
 } from '@/components/leads/LeadFieldsRail'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
+import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
@@ -666,6 +667,9 @@ export function LeadDetailClient({
               />
             </div>
           )}
+          <div className="mb-4">
+            <MarketingProfileCard intakeId={lead.id} />
+          </div>
 
           <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
             <TabsList className="w-full justify-start overflow-x-auto bg-background">

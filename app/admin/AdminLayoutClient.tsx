@@ -66,6 +66,7 @@ export const adminNavItems: { href: string; label: string; icon: React.ElementTy
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
   { href: '/admin/leads', label: 'Leads', icon: UserPlus },
   { href: '/admin/crm', label: 'CRM', icon: Send },
+  { href: '/admin/crm/people', label: 'People', icon: BookUser },
   { href: '/admin/crm/campaigns', label: 'Campaigns', icon: Mail },
   { href: '/admin/inbox', label: 'Inbox', icon: Mail },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },

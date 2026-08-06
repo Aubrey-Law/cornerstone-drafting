@@ -74,6 +74,7 @@ import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { MatterProgressTimeline } from './MatterProgressTimeline'
+import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
 import { useMatterNotes } from './useMatterNotes'
@@ -903,6 +904,7 @@ function MatterDetailClientInner({
                   details={matterDetails}
                   intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
                 />
+                <MarketingProfileCard intakeId={liveIntakeId} />
                 <MatterOverviewHero
                   matter={matter}
                   nextAction={nextAction}

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Check, Mail, Pause, Play, RefreshCw, Send, Square } from 'lucide-react'
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { formatDateTime } from '@/lib/utils'
@@ -19,11 +20,10 @@ import { formatDateTime } from '@/lib/utils'
 type CampaignAction = 'queue' | 'run' | 'sendAll'
 
 type CampaignRunPayload = {
-  campaignId: string
+  claimed: number
   sent: number
-  failed: number
-  processed: number
-  nextQueued: number
+  suppressed: number
+  uncertain: number
 }
 
 type CampaignQueuePayload = {
@@ -37,6 +37,8 @@ interface CrmCampaignDetailClientProps {
   initialCampaign: CrmCampaignListItem
 }
 
+type CampaignStep = { id: string; step_order: number; delay_days: number; subject: string; body_text: string; is_active: boolean }
+
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -47,6 +49,20 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
   const [campaign, setCampaign] = useState(initialCampaign)
   const [runLimit, setRunLimit] = useState(200)
   const [busy, setBusy] = useState<CampaignAction | null>(null)
+  const [steps, setSteps] = useState<CampaignStep[]>([])
+  const [stepSubject, setStepSubject] = useState('')
+  const [stepBody, setStepBody] = useState('')
+  const [stepDelay, setStepDelay] = useState(14)
+
+  useEffect(() => {
+    if (!token) return
+    void apiRequest(`/api/admin/crm/campaigns/${initialCampaign.id}/steps`)
+      .then(response => response?.json())
+      .then(payload => setSteps(payload?.steps ?? []))
+      .catch(() => undefined)
+  // apiRequest reads the current token and is intentionally not a dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, initialCampaign.id])
 
   const statusLabel = useMemo(() => {
     const map: Record<CrmCampaignListItem['status'], string> = {
@@ -140,18 +156,16 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
         const runPayload = payload as CampaignRunPayload
         setCampaign(current => ({
           ...current,
-          status: (runPayload.nextQueued ?? 0) > 0 ? 'running' : 'completed',
+          status: runPayload.uncertain ? 'paused' : 'running',
           recipientCounts: {
             ...current.recipientCounts,
             sent: current.recipientCounts.sent + (runPayload?.sent ?? 0),
-            failed: current.recipientCounts.failed + (runPayload?.failed ?? 0),
-            queued: typeof runPayload?.nextQueued === 'number'
-              ? runPayload.nextQueued
-              : Math.max(0, current.recipientCounts.queued - (runPayload?.processed ?? 0)),
+            failed: current.recipientCounts.failed + (runPayload?.uncertain ?? 0),
+            queued: Math.max(0, current.recipientCounts.queued - (runPayload?.sent ?? 0)),
           },
           updatedAt: new Date().toISOString(),
         }))
-        toast.success(`Sent ${runPayload?.sent ?? 0} messages (failed ${runPayload?.failed ?? 0})`)
+        toast.success(`Submitted ${runPayload?.sent ?? 0} messages`)
       }
 
       router.refresh()
@@ -189,8 +203,8 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
 
         const runPayload = payload as CampaignRunPayload
         sends += runPayload?.sent ?? 0
-        fails += runPayload?.failed ?? 0
-        nextQueued = typeof runPayload?.nextQueued === 'number' ? runPayload.nextQueued : 0
+        fails += runPayload?.uncertain ?? 0
+        nextQueued = 0
 
         setCampaign(current => ({
           ...current,
@@ -198,7 +212,7 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
           recipientCounts: {
             ...current.recipientCounts,
             sent: current.recipientCounts.sent + (runPayload?.sent ?? 0),
-            failed: current.recipientCounts.failed + (runPayload?.failed ?? 0),
+            failed: current.recipientCounts.failed + (runPayload?.uncertain ?? 0),
             queued: nextQueued,
           },
           updatedAt: new Date().toISOString(),
@@ -219,6 +233,21 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
     } finally {
       setBusy(null)
     }
+  }
+
+  const addStep = async () => {
+    if (!token || !stepSubject.trim() || !stepBody.trim()) return
+    const response = await apiRequest(`/api/admin/crm/campaigns/${campaign.id}/steps`, {
+      method: 'POST',
+      body: JSON.stringify({ subject: stepSubject, bodyText: stepBody, delayDays: stepDelay }),
+    })
+    const payload = await response?.json().catch(() => null)
+    if (!response?.ok) return toast.error(payload?.error ?? 'Could not add nurture step')
+    setSteps(current => [...current, payload.step])
+    setStepSubject('')
+    setStepBody('')
+    setStepDelay(14)
+    toast.success('Nurture step added')
   }
 
   return (
@@ -361,6 +390,24 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
           </div>
         </CardContent>
       </Card>
+
+      {campaign.type === 'nurture' && (
+        <Card>
+          <CardHeader><CardTitle>Nurture steps</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {steps.map(step => <div key={step.id} className="rounded border p-3 text-sm">
+              <p className="font-medium">Step {step.step_order}: {step.subject}</p>
+              <p className="mt-1 text-muted-foreground">Send {step.delay_days === 0 ? 'immediately' : `${step.delay_days} days after enrollment`}</p>
+            </div>)}
+            {campaign.status === 'draft' && <div className="space-y-2 rounded border border-dashed p-3">
+              <Label>Add step</Label>
+              <Input value={stepSubject} onChange={event => setStepSubject(event.target.value)} placeholder="Step subject" />
+              <Textarea value={stepBody} onChange={event => setStepBody(event.target.value)} placeholder="Step email body" rows={4} />
+              <div className="flex flex-wrap items-center gap-2"><Input className="w-32" type="number" min={0} value={stepDelay} onChange={event => setStepDelay(Math.max(0, Number(event.target.value) || 0))} /><span className="text-sm text-muted-foreground">days after enrollment</span><Button type="button" size="sm" onClick={() => void addStep()}>Add step</Button></div>
+            </div>}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

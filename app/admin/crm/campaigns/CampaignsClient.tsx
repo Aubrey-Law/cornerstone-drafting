@@ -213,7 +213,7 @@ export function CrmCampaignsClient({ initialCampaigns }: { initialCampaigns: Crm
           subject,
           bodyText: body,
           audienceRules: audience,
-          emailProvider: 'sendgrid',
+          emailProvider: 'mailgun',
         }),
       })
 
@@ -264,6 +264,17 @@ export function CrmCampaignsClient({ initialCampaigns }: { initialCampaigns: Crm
 
     try {
       const url = `/api/admin/crm/campaigns/${campaignId}/${action}`
+      if (action === 'queue') {
+        const previewResponse = await apiRequest(url)
+        const preview = await previewResponse?.json().catch(() => null)
+        if (!previewResponse?.ok) {
+          toast.error(preview?.error ?? 'Could not preview the audience')
+          return
+        }
+        const reasons = preview?.exclusionReasons ?? {}
+        const exclusions = Object.values(reasons).reduce<number>((total, value) => total + (typeof value === 'number' ? value : 0), 0)
+        if (!window.confirm(`Queue ${preview?.eligible ?? 0} explicit-opt-in recipients? ${exclusions} records are excluded by consent, recipient type, or email rules.`)) return
+      }
       const body = action === 'run' ? (limit ? { limit } : {}) : undefined
       const response = await apiRequest(url, {
         method: 'POST',
@@ -298,11 +309,11 @@ export function CrmCampaignsClient({ initialCampaigns }: { initialCampaigns: Crm
           campaign.id === campaignId
             ? {
               ...campaign,
-              status: (runPayload.nextQueued ?? 0) > 0 ? 'running' : 'completed',
+              status: runPayload.uncertain ? 'paused' : 'running',
               recipientCounts: {
                 ...campaign.recipientCounts,
                 sent: campaign.recipientCounts.sent + (runPayload?.sent ?? 0),
-                failed: campaign.recipientCounts.failed + (runPayload?.failed ?? 0),
+                failed: campaign.recipientCounts.failed + (runPayload?.uncertain ?? 0),
                 queued: typeof runPayload?.nextQueued === 'number'
                   ? runPayload.nextQueued
                   : Math.max(0, campaign.recipientCounts.queued - (runPayload?.processed ?? 0)),
