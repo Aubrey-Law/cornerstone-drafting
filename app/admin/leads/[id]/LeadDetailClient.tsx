@@ -672,10 +672,6 @@ export function LeadDetailClient({
               />
             </div>
           )}
-          <div className="mb-4">
-            <MarketingProfileCard intakeId={lead.id} />
-          </div>
-
           <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
             <TabsList className="w-full justify-start overflow-x-auto bg-background">
               <TabsTrigger value="plan">Plan</TabsTrigger>
@@ -689,7 +685,7 @@ export function LeadDetailClient({
               </TabsTrigger>
               <TabsTrigger value="sla">SLA plan</TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
-              <TabsTrigger value="communications">Comms</TabsTrigger>
+              <TabsTrigger value="communications">Communications</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
               <TabsTrigger value="people">People</TabsTrigger>
               <TabsTrigger value="assets">Assets</TabsTrigger>
@@ -745,7 +741,8 @@ export function LeadDetailClient({
               {timeline}
             </TabsContent>
 
-            <TabsContent value="communications" className="mt-4">
+            <TabsContent value="communications" className="mt-4 space-y-4">
+              <MarketingProfileCard intakeId={lead.id} />
               <RecordCommunicationsCard
                 record={{ type: 'lead', id: lead.id }}
                 recipientName={clientName}
