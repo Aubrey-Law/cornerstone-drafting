@@ -85,6 +85,8 @@ export async function registerDraftDocumentRow(
     content_type: contentType,
     folder: 'draft',
     folder_id: null,
+    source: 'firm',
+    shared_at: null,
     uploaded_by: args.actorId,
     generation_id: args.generationId,
     generation_engine: args.generationEngine,

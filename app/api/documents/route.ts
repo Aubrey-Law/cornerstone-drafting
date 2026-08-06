@@ -56,7 +56,8 @@ export async function POST(req: Request) {
   if (!(await userCanAccessMatter(sb, user, matterId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (!(await isAdminUser(sb, user)) && !isClientUploadFolder(folder)) {
+  const userIsAdmin = await isAdminUser(sb, user)
+  if (!userIsAdmin && !isClientUploadFolder(folder)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   if (!r2Key.startsWith(`matters/${matterId}/${folder}/`)) {
@@ -73,6 +74,8 @@ export async function POST(req: Request) {
       content_type: contentType ?? 'application/octet-stream',
       folder,
       folder_id: folderId,
+      source: userIsAdmin ? 'firm' : 'client',
+      shared_at: ['review', 'signed', 'final'].includes(folder) ? new Date().toISOString() : null,
       uploaded_by: user.id,
     })
     .select(MATTER_DOCUMENT_COLUMNS)

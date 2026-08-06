@@ -92,6 +92,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         content_type: PDF_CONTENT_TYPE,
         folder: 'review',
         folder_id: null,
+        source: 'firm',
+        shared_at: new Date().toISOString(),
         uploaded_by: user.id,
         generation_id: doc.generation_id ?? null,
         generation_engine: doc.generation_engine ?? null,

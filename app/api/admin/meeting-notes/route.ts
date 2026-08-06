@@ -114,6 +114,8 @@ export async function POST(req: Request) {
       size: bytes.byteLength,
       content_type: 'text/markdown',
       folder: 'meeting-notes',
+      source: 'meeting-notes',
+      shared_at: null,
       uploaded_by: userId,
     })
     .select('*')

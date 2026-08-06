@@ -113,6 +113,8 @@ export async function POST(req: Request) {
       content_type: contentType,
       folder,
       folder_id: folderId,
+      source: isAdmin ? 'firm' : 'client',
+      shared_at: isFirmSharedFolder(folder as MatterDocument['folder']) ? new Date().toISOString() : null,
       uploaded_by: user.id,
     })
     .select(MATTER_DOCUMENT_COLUMNS)

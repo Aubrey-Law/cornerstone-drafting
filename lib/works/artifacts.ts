@@ -80,6 +80,7 @@ export async function promoteRunArtifacts(args: { runId: string; matterId: strin
     let { data: document, error: insertError } = await db.from('matter_documents').insert({
       matter_id: args.matterId, r2_key: artifact.r2_key, name: artifact.filename,
       size: artifact.size_bytes, content_type: artifact.content_type, folder: 'intake',
+      source: 'client', shared_at: null,
       uploaded_by: args.userId, generation_id: args.runId, generation_engine: 'node',
       marker_count: 0, missing_count: 0,
     }).select('*').single()
