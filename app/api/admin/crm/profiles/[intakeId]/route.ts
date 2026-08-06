@@ -13,6 +13,25 @@ const bodySchema = z.object({
 })
 type Context = { params: Promise<{ intakeId: string }> }
 
+async function resolveMarketingProfileStage(admin: ReturnType<typeof getAdminClient>) {
+  const preferred = await admin
+    .from('cornerstone_crm_stages')
+    .select('id')
+    .eq('slug', 'new_inquiry')
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (preferred.error || preferred.data) return preferred
+
+  return admin
+    .from('cornerstone_crm_stages')
+    .select('id')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+}
+
 export async function GET(req: Request, { params }: Context) {
   const auth = await requireAdmin(req)
   if (auth.err) return auth.err
@@ -48,7 +67,7 @@ export async function PUT(req: Request, { params }: Context) {
   const admin = getAdminClient()
   const [{ data: intake, error: intakeError }, { data: stage, error: stageError }, { data: existing }] = await Promise.all([
     admin.from('client_intake').select('id, email, phone').eq('id', intakeId).maybeSingle(),
-    admin.from('cornerstone_crm_stages').select('id').eq('is_default', true).maybeSingle(),
+    resolveMarketingProfileStage(admin),
     admin.from('cornerstone_crm_people').select('stage_id, marketing_status, marketing_segment, topic_preferences, preferred_frequency, duplicate_review_status').eq('client_intake_id', intakeId).maybeSingle(),
   ])
   if (intakeError || !intake) return NextResponse.json({ error: intakeError?.message ?? 'Lead or client record not found' }, { status: 404 })
