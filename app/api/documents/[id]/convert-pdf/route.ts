@@ -21,7 +21,8 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 /**
  * POST /api/documents/[id]/convert-pdf
  * Converts the active DOCX via the external LibreOffice worker and registers a PDF
- * matter_documents row in the review folder (for client share).
+ * matter_documents row. The PDF is created unshared — the attorney decides when the
+ * client sees it via the share toggle.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getDocumentApiUser(req)
@@ -87,10 +88,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         name: pdfName,
         size: pdfBytes.byteLength,
         content_type: PDF_CONTENT_TYPE,
-        folder: 'review',
+        folder: 'draft',
         folder_id: null,
         source: 'firm',
-        shared_at: new Date().toISOString(),
+        shared_at: null,
         uploaded_by: user.id,
         generation_id: doc.generation_id ?? null,
         generation_engine: doc.generation_engine ?? null,

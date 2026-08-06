@@ -380,7 +380,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         return
       }
       if (!res.ok) throw new Error(body.error ?? 'Conversion failed')
-      toast.success('PDF created in Review folder')
+      toast.success('PDF created — use the share toggle to send it to the client')
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not convert to PDF')

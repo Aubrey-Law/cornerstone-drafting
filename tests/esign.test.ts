@@ -197,7 +197,8 @@ describe('esign webhook route source shape', () => {
 
   it('stores the signed pdf and flips the engagement flag last', () => {
     expect(source).toContain('putFileToR2')
-    expect(source).toContain("folder: 'signed'")
+    expect(source).toContain("source: 'firm'")
+    expect(source).toContain('shared_at: new Date().toISOString()')
     expect(source).toContain('engagement_signed: true')
     expect(source).toContain('uploaded_by: null')
     expect(source).toContain('duplicate')
