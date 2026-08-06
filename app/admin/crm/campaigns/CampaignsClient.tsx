@@ -75,11 +75,10 @@ interface QueueCampaignResult {
 }
 
 interface RunCampaignResult {
-  campaignId: string
+  claimed: number
   sent: number
-  failed: number
-  processed: number
-  nextQueued: number
+  suppressed: number
+  uncertain: number
 }
 
 function campaignStatusLabel(status: CrmCampaignListItem['status']) {
@@ -314,9 +313,7 @@ export function CrmCampaignsClient({ initialCampaigns }: { initialCampaigns: Crm
                 ...campaign.recipientCounts,
                 sent: campaign.recipientCounts.sent + (runPayload?.sent ?? 0),
                 failed: campaign.recipientCounts.failed + (runPayload?.uncertain ?? 0),
-                queued: typeof runPayload?.nextQueued === 'number'
-                  ? runPayload.nextQueued
-                  : Math.max(0, campaign.recipientCounts.queued - (runPayload?.processed ?? 0)),
+                queued: Math.max(0, campaign.recipientCounts.queued - (runPayload?.claimed ?? 0)),
               },
             }
             : campaign,
