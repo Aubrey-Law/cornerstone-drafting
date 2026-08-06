@@ -52,8 +52,11 @@ export async function POST(request: NextRequest) {
     })
     .select('id')
     .maybeSingle()
-  if (eventError?.code === '23505' || !event) return NextResponse.json({ ok: true, duplicate: true })
-  if (eventError) return NextResponse.json({ error: eventError.message }, { status: 500 })
+  if (eventError) {
+    if (eventError.code === '23505') return NextResponse.json({ ok: true, duplicate: true })
+    return NextResponse.json({ error: eventError.message }, { status: 500 })
+  }
+  if (!event) return NextResponse.json({ ok: true, duplicate: true })
 
   const token = eventData['user-variables']?.crm_delivery_token
   if (!token) return NextResponse.json({ ok: true, correlated: false })
