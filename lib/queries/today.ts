@@ -60,8 +60,6 @@ export interface TodayData {
   overdueTasks: TaskRow[]
   /** Open tasks due today (firm timezone). */
   tasksDueToday: TaskRow[]
-  /** Calls not yet linked to a lead or matter. */
-  unassignedCallCount: number
   activeMatterCount: number
   /** Rows the attorney can act on — never counts client-owned aging rows. */
   needsYou: number
@@ -103,7 +101,7 @@ export async function fetchTodayData(): Promise<TodayData> {
   const calendarFrom = new Date(firmNoonUtc - 18 * 60 * 60 * 1000).toISOString()
   const calendarTo = new Date(firmNoonUtc + 18 * 60 * 60 * 1000).toISOString()
 
-  const [aging, mattersRes, unreadRes, callsRes, openTasks, appointmentsRes] = await Promise.all([
+  const [aging, mattersRes, unreadRes, openTasks, appointmentsRes] = await Promise.all([
     fetchMatterAging(),
     admin
       .from('v_matter_pipeline')
@@ -116,13 +114,6 @@ export async function fetchTodayData(): Promise<TodayData> {
       .select('matter_id, created_at')
       .eq('sender_role', 'client')
       .is('read_at', null),
-    admin
-      .from('calls')
-      .select('id', { count: 'exact', head: true })
-      .is('matter_id', null)
-      .is('lead_id', null)
-      .is('contact_id', null)
-      .is('triage_dismissed_at', null),
     fetchTasks({ status: 'open', limit: 500 }),
     admin
       .from('appointments')
@@ -135,7 +126,6 @@ export async function fetchTodayData(): Promise<TodayData> {
 
   if (mattersRes.error) console.error('fetchTodayData matters error:', mattersRes.error)
   if (unreadRes.error) console.error('fetchTodayData unread messages error:', unreadRes.error)
-  if (callsRes.error) console.error('fetchTodayData calls error:', callsRes.error)
   if (appointmentsRes.error) console.error('fetchTodayData appointments error:', appointmentsRes.error)
 
   const matters = (mattersRes.data ?? []) as PipelineMatter[]
@@ -271,7 +261,6 @@ export async function fetchTodayData(): Promise<TodayData> {
     appointmentsToday,
     overdueTasks,
     tasksDueToday,
-    unassignedCallCount: callsRes.count ?? 0,
     activeMatterCount: matters.length,
     needsYou:
       overdueTasks.length + tasksDueToday.length + waitingOnYou.length + unreadThreads.length

@@ -15,7 +15,6 @@ import type { LeadEditableField } from '@/lib/leads/details'
 import { parseLeadTab, type LeadTab } from '@/lib/leads/leadPageTabs'
 import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
 import type {
-  LeadTimelineCall,
   LeadTimelineMeeting,
   LeadTimelineNote,
 } from '@/lib/leads/timeline'
@@ -83,12 +82,10 @@ type LeadDetailClientProps = {
   initialActivity: LeadActivityRow[]
   initialNotes?: LeadTimelineNote[]
   initialMeetingNotes?: LeadTimelineMeeting[]
-  initialCalls?: LeadTimelineCall[]
   actorNames?: Record<string, string>
   firmTimezone?: string
   nextAppointmentAt?: string | null
   lastTouchAt?: string | null
-  callsError?: string | null
   actorError?: string | null
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
@@ -154,12 +151,10 @@ export function LeadDetailClient({
   initialActivity,
   initialNotes = [],
   initialMeetingNotes = [],
-  initialCalls = [],
   actorNames = {},
   firmTimezone = FIRM_TIMEZONE,
   nextAppointmentAt = null,
   lastTouchAt,
-  callsError = null,
   actorError = null,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
@@ -526,7 +521,6 @@ export function LeadDetailClient({
     ...activity.map(row => row.created_at),
     ...initialNotes.map(note => note.createdAt),
     ...initialMeetingNotes.map(note => note.createdAt),
-    ...initialCalls.map(call => call.started_at),
   ])
   const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
   const lastMeetingAt = newestTimestamp(initialMeetingNotes.map(note => note.date || note.createdAt))
@@ -561,7 +555,6 @@ export function LeadDetailClient({
   const timelineCount = activity.length
     + initialNotes.length
     + initialMeetingNotes.length
-    + initialCalls.length
   const documentsCount = documents.length + (activeAgreement ? 1 : 0)
 
   const timeline = (
@@ -570,10 +563,8 @@ export function LeadDetailClient({
       leadPhone={lead.phone}
       initialNotes={initialNotes}
       initialMeetingNotes={initialMeetingNotes}
-      initialCalls={initialCalls}
       initialActivity={activity}
       actorNames={actorNames}
-      callsError={callsError}
       actorError={actorError}
       dataRefreshWarning={dataRefreshWarning}
       activityRefreshWarning={activityRefreshWarning}
@@ -819,11 +810,9 @@ export function LeadDetailClient({
                 leadPhone={lead.phone}
                 initialNotes={initialNotes}
                 initialMeetingNotes={initialMeetingNotes}
-                initialCalls={initialCalls}
-                initialActivity={activity}
+                          initialActivity={activity}
                 actorNames={actorNames}
-                callsError={callsError}
-                actorError={actorError}
+                          actorError={actorError}
                 dataRefreshWarning={dataRefreshWarning}
                 activityRefreshWarning={activityRefreshWarning}
                 currentUser={currentUser}

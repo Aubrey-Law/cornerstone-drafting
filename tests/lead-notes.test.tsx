@@ -25,21 +25,18 @@ describe('lead notes', () => {
       initialNotes={notes}
       initialMeetingNotes={meetings}
       initialActivity={[{ id: 'a1', event_type: 'status_changed', title: 'Status changed', detail: null, actor_id: null, created_at: '2026-07-04T00:00:00Z' }]}
-      initialCalls={[{ id: 'c1', direction: 'inbound', status: 'completed', participant_number: '+16175551212', started_at: '2026-07-02T12:00:00Z', duration_seconds: 60, recording_url: 'https://example.com/recording', voicemail_url: null, summary: 'Call summary', firm_user_email: 'attorney@example.com' }]}
       currentUser={{ id: 'u1', role: 'attorney' }}
     />)
     expect(screen.getByText('Internal only')).toBeTruthy()
     expect([...screen.getByLabelText('Lead timeline').querySelectorAll('article')].map(row => row.textContent)).toEqual([
       expect.stringContaining('Status changed'),
       expect.stringContaining('Planning call'),
-      expect.stringContaining('(617) 555-1212'),
       expect.stringContaining('Newest note'),
       expect.stringContaining('Older note'),
     ])
     expect(screen.queryByText('Discussed the plan in detail.')).toBeNull()
     const toggle=screen.getByRole('button', { name: /Planning call/ });expect(toggle.getAttribute('aria-expanded')).toBe('false');await user.click(toggle);expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('Discussed the plan in detail.')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Recording for call with (617) 555-1212' })).toBeTruthy()
   })
 
   it('creates, edits, and deletes an ordinary note', async () => {
@@ -119,7 +116,7 @@ describe('lead notes', () => {
     expect(screen.queryAllByRole('button', { name: 'Delete note' })).toHaveLength(2)
   })
 
-  it('filters timeline kinds and keeps one calls-empty footer', async () => {
+  it('filters timeline kinds', async () => {
     const user = userEvent.setup()
     render(<LeadTimelineCard
       leadId="l1"
@@ -129,7 +126,6 @@ describe('lead notes', () => {
       currentUser={{ id: 'u1', role: 'attorney' }}
     />)
 
-    expect(screen.getAllByText('No calls logged yet.')).toHaveLength(1)
     const logCall = screen.getByRole('button', { name: 'Log call' }) as HTMLButtonElement
     expect(logCall.disabled).toBe(true)
     expect(logCall.getAttribute('aria-describedby')).toBe('lead-log-call-help')
@@ -206,40 +202,4 @@ describe('lead notes', () => {
     expect(detail).toEqual([{ number: '+16175551212' }])
   })
 
-  it('omits an empty duration marker while retaining real call durations', () => {
-    const baseCall = {
-      id: 'c1',
-      direction: 'inbound' as const,
-      status: 'completed',
-      participant_number: '+16175551212',
-      started_at: '2026-07-02T12:00:00Z',
-      recording_url: null,
-      voicemail_url: null,
-      summary: null,
-      firm_user_email: null,
-    }
-    const { rerender } = render(
-      <LeadTimelineCard
-        leadId="l1"
-        initialNotes={[]}
-        initialMeetingNotes={[]}
-        initialCalls={[{ ...baseCall, duration_seconds: null }]}
-        currentUser={{ id: 'u1', role: 'attorney' }}
-      />,
-    )
-
-    expect(screen.getByText('inbound · completed')).toBeTruthy()
-    expect(screen.queryByText('—')).toBeNull()
-
-    rerender(
-      <LeadTimelineCard
-        leadId="l1"
-        initialNotes={[]}
-        initialMeetingNotes={[]}
-        initialCalls={[{ ...baseCall, duration_seconds: 125 }]}
-        currentUser={{ id: 'u1', role: 'attorney' }}
-      />,
-    )
-    expect(screen.getByText('inbound · completed · 2:05')).toBeTruthy()
-  })
 })

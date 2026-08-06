@@ -14,8 +14,6 @@ export const dynamic = 'force-dynamic'
 
 type ExistingCall = RetellCallRowInsert & {
   id?: string
-  matter_id?: string | null
-  lead_id?: string | null
 }
 
 // The former mergeCallRow() lived here. It is now public.upsert_retell_call in
@@ -70,7 +68,7 @@ export async function POST(req: Request) {
   }
 
   const result = (Array.isArray(data) ? data[0] : data) as
-    | { matter_id: string | null; lead_id: string | null; previous_summary: string | null; conflict: boolean }
+    | { previous_summary: string | null; conflict: boolean }
     | undefined
 
   if (!result) {
@@ -90,17 +88,13 @@ export async function POST(req: Request) {
     const { data: mergedRow } = await admin
       .from('calls')
       .select(
-        'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload, matter_id, lead_id',
+        'external_call_id, provider, direction, status, from_number, to_number, participant_number, firm_user_id, firm_user_email, started_at, answered_at, ended_at, duration_seconds, recording_url, voicemail_url, transcript, summary, raw_payload',
       )
       .eq('external_call_id', row.external_call_id)
       .maybeSingle()
 
     await notifyRetellCallAnalyzed(
-      retellRowToNotifyInput({
-        ...(mergedRow as ExistingCall | null ?? row),
-        matter_id: result.matter_id,
-        lead_id: result.lead_id,
-      }),
+      retellRowToNotifyInput((mergedRow as ExistingCall | null) ?? row),
       { previousSummary: result.previous_summary ?? null },
     )
   }

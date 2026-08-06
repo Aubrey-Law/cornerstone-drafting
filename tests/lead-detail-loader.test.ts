@@ -39,18 +39,6 @@ const harness = vi.hoisted(() => {
     created_at: '2026-07-22T10:00:00Z',
     updated_at: '2026-07-22T10:00:00Z',
   }]
-  const calls = [{
-    id: 'call-1',
-    direction: 'inbound',
-    status: 'completed',
-    participant_number: '+16175550100',
-    started_at: '2026-07-23T11:00:00Z',
-    duration_seconds: 120,
-    recording_url: null,
-    voicemail_url: null,
-    summary: null,
-    firm_user_email: 'attorney@example.com',
-  }]
   const rows: Record<string, unknown> = {
     client_intake: rawLead,
     contacts: null,
@@ -58,7 +46,6 @@ const harness = vi.hoisted(() => {
     lead_notes: notes,
     lead_meeting_notes: meetings,
     appointments: { start_time: '2026-07-30T14:00:00Z' },
-    calls,
     users: [
       { id: 'user-1', display_name: 'Alice Attorney', email: 'alice@example.com' },
       { id: 'user-2', display_name: null, email: 'ben@example.com' },
@@ -98,7 +85,6 @@ const harness = vi.hoisted(() => {
     hydrate: vi.fn(async () => hydratedLead),
     hydratedLead,
     rawLead,
-    calls,
     errors,
     rows,
     inCalls,
@@ -139,13 +125,13 @@ describe('LeadDetailPage intake loader', () => {
     expect(harness.hydrate).toHaveBeenCalledWith(harness.admin, harness.rawLead)
     expect((page.props as { lead: unknown }).lead).toBe(harness.hydratedLead)
     expect(page.props).toMatchObject({
-      initialCalls: harness.calls,
       actorNames: {
         'user-1': 'Alice Attorney',
         'user-2': 'ben@example.com',
       },
       nextAppointmentAt: '2026-07-30T14:00:00Z',
-      lastTouchAt: '2026-07-23T11:00:00Z',
+      // Newest of activity, notes and meeting notes — calls no longer count.
+      lastTouchAt: '2026-07-22T10:00:00Z',
     })
   })
 
@@ -156,7 +142,6 @@ describe('LeadDetailPage intake loader', () => {
 
     expect(page.props).toMatchObject({
       initialActivity: [expect.objectContaining({ id: 'activity-1' })],
-      initialCalls: harness.calls,
       actorNames: {},
       actorError: 'actor lookup failed',
     })

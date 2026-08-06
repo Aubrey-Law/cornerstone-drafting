@@ -1,6 +1,5 @@
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import { formatPhoneDisplay } from '@/lib/phone'
-import { appUrl } from '@/lib/urls'
 
 const DEFAULT_SUMMARY_EMAIL = 'scott@aubreylegal.com'
 const SMS_EXTENSION_PATTERN = /\b(?:ext\.?|extension|x)\s*[0-9][0-9 .-]*$/i
@@ -14,8 +13,6 @@ export interface RetellNotifyInput {
   participant_number: string
   duration_seconds: number | null
   summary: string | null
-  matter_id?: string | null
-  lead_id?: string | null
 }
 
 export function parseRetellSummaryEmails(
@@ -59,16 +56,6 @@ function durationLabel(secs: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function retellCallsAdminUrl(matterId?: string | null, leadId?: string | null): string {
-  if (matterId?.trim()) {
-    return appUrl(`/admin/matters/${matterId.trim()}?tab=calls`)
-  }
-  if (leadId?.trim()) {
-    return appUrl(`/admin/crm/opportunities/${leadId.trim()}`)
-  }
-  return appUrl('/admin/inbox?scope=unlinked_calls')
-}
-
 export function formatRetellAlertEmail(row: RetellNotifyInput): {
   subject: string
   text: string
@@ -76,7 +63,6 @@ export function formatRetellAlertEmail(row: RetellNotifyInput): {
 } {
   const caller = formatPhoneDisplay(row.participant_number) || row.participant_number
   const summary = row.summary?.trim() || '(No summary)'
-  const link = retellCallsAdminUrl(row.matter_id, row.lead_id)
   const subject = `Retell call: ${caller}`
 
   const text = [
@@ -91,8 +77,6 @@ export function formatRetellAlertEmail(row: RetellNotifyInput): {
     '',
     'Summary:',
     summary,
-    '',
-    `View: ${link}`,
   ].join('\n')
 
   const html = `<div style="font-family:sans-serif;font-size:14px;color:#222;line-height:1.45">
@@ -101,8 +85,7 @@ export function formatRetellAlertEmail(row: RetellNotifyInput): {
   <p style="margin:0 0 8px"><strong>Direction:</strong> ${escapeHtml(row.direction)} · <strong>Status:</strong> ${escapeHtml(row.status)} · <strong>Duration:</strong> ${escapeHtml(durationLabel(row.duration_seconds))}</p>
   <p style="margin:0 0 12px"><strong>From:</strong> ${escapeHtml(formatPhoneDisplay(row.from_number) || row.from_number)} → <strong>To:</strong> ${escapeHtml(formatPhoneDisplay(row.to_number) || row.to_number)}</p>
   <p style="margin:0 0 4px"><strong>Summary</strong></p>
-  <p style="margin:0 0 16px;white-space:pre-wrap">${escapeHtml(summary)}</p>
-  <p style="margin:0"><a href="${escapeHtml(link)}" style="color:#1a6b72">Open in Cornerstone →</a></p>
+  <p style="margin:0;white-space:pre-wrap">${escapeHtml(summary)}</p>
 </div>`
 
   return { subject, text, html }

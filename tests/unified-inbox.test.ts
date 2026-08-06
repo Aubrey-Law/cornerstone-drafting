@@ -16,20 +16,19 @@ function item(partial: Partial<CommunicationItem> & Pick<CommunicationItem, 'id'
 }
 
 describe('mergeCommunicationItems', () => {
-  it('interleaves all four sources chronologically', () => {
+  it('interleaves every source chronologically', () => {
     const merged = mergeCommunicationItems(
       [item({ id: 'p1', channel: 'portal', direction: 'inbound', created_at: '2026-08-01T10:00:00Z' })],
       [item({ id: 's1', channel: 'sms', direction: 'outbound', created_at: '2026-08-01T09:00:00Z' })],
-      [item({ id: 'c1', channel: 'call', direction: 'inbound', created_at: '2026-08-01T11:00:00Z' })],
       [item({ id: 'e1', channel: 'email', direction: 'outbound', created_at: '2026-08-01T08:00:00Z' })],
     )
-    expect(merged.map(m => m.id)).toEqual(['e1', 's1', 'p1', 'c1'])
+    expect(merged.map(m => m.id)).toEqual(['e1', 's1', 'p1'])
   })
 
   it('orders identical timestamps deterministically by channel then id', () => {
     const at = '2026-08-01T10:00:00Z'
     const a = [
-      item({ id: 'z', channel: 'call', direction: 'inbound', created_at: at }),
+      item({ id: 'z', channel: 'email', direction: 'inbound', created_at: at }),
       item({ id: 'b', channel: 'portal', direction: 'inbound', created_at: at }),
       item({ id: 'a', channel: 'portal', direction: 'inbound', created_at: at }),
       item({ id: 'm', channel: 'sms', direction: 'inbound', created_at: at }),
@@ -50,13 +49,6 @@ describe('resolveReplyChannel', () => {
     expect(resolveReplyChannel(items, 'matter')).toBe('sms')
   })
 
-  it('falls back past a missed call to the newest sendable inbound channel', () => {
-    const items = [
-      item({ id: '1', channel: 'portal', direction: 'inbound', created_at: '2026-08-01T09:00:00Z' }),
-      item({ id: '2', channel: 'call', direction: 'inbound', created_at: '2026-08-01T11:00:00Z' }),
-    ]
-    expect(resolveReplyChannel(items, 'matter')).toBe('portal')
-  })
 
   it('defaults to portal for matters and email for leads with no inbound', () => {
     const items = [
@@ -107,42 +99,7 @@ describe('waitingSince', () => {
     expect(waitingSince(items)).toBeNull()
   })
 
-  it('tracks missed inbound calls without demanding a typed reply channel', () => {
-    const items = [
-      item({
-        id: '1',
-        channel: 'call',
-        direction: 'inbound',
-        created_at: '2026-08-01T09:00:00Z',
-        call: {
-          participant_number: '+16175550101',
-          recording_url: null,
-          voicemail_url: null,
-          needs_response: true,
-        },
-      }),
-    ]
-    expect(waitingSince(items)).toBe('2026-08-01T09:00:00Z')
-    expect(resolveReplyChannel(items, 'lead')).toBe('email')
-  })
 
-  it('does not put a completed inbound conversation in the attention queue', () => {
-    const items = [
-      item({
-        id: '1',
-        channel: 'call',
-        direction: 'inbound',
-        created_at: '2026-08-01T09:00:00Z',
-        call: {
-          participant_number: '+16175550101',
-          recording_url: null,
-          voicemail_url: null,
-          needs_response: false,
-        },
-      }),
-    ]
-    expect(waitingSince(items)).toBeNull()
-  })
 })
 
 describe('threadBucket', () => {

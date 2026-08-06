@@ -213,8 +213,7 @@ export function buildFirmPeople(
       raw === 'lead' ? 'lead' : raw === 'lost' ? 'lost' : 'hired'
 
     // Clients thread through the matter, leads through the intake — the same
-    // split `fetchContactsDirectory` makes, and what `calls_single_record_link`
-    // forces (only one of matter_id / lead_id may be set).
+    // split `fetchContactsDirectory` makes.
     const isClient = relationshipStatus === 'hired'
     const matterId = isClient ? intake.matter_id : null
     const matterNumber = isClient ? matter?.matter_number ?? null : null

@@ -30,16 +30,6 @@ interface EmailSendResponse {
   provider?: string
 }
 
-interface CallItemRow {
-  id: string
-  direction: 'inbound' | 'outbound'
-  status: string
-  started_at: string
-  duration_seconds: number | null
-  summary: string | null
-  firm_user_email: string | null
-}
-
 export function useMatterCommunications({
   matterId,
   token,
@@ -62,30 +52,8 @@ export function useMatterCommunications({
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailSending, setEmailSending] = useState(false)
-  const [calls, setCalls] = useState<CallItemRow[]>([])
 
   useEffect(() => setEmailTo(initialEmailTo), [initialEmailTo])
-
-  useEffect(() => {
-    if (!token) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const rows = await apiRequest<unknown>(
-          `/api/admin/matters/${matterId}/calls?limit=100`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-        if (cancelled) return
-        const list = Array.isArray(rows)
-          ? rows
-          : (rows as { calls?: unknown[] } | null)?.calls ?? []
-        setCalls(Array.isArray(list) ? list as CallItemRow[] : [])
-      } catch {
-        // Calls stay out of the timeline if history is unavailable.
-      }
-    })()
-    return () => { cancelled = true }
-  }, [matterId, token])
 
   const loadPortalMessages = useCallback(async () => {
     if (!token) return
@@ -223,17 +191,7 @@ export function useMatterCommunications({
       sender: m.direction === 'inbound' ? m.recipient_name : m.actor_name ?? 'Firm',
       created_at: m.created_at,
     })),
-    calls.map(c => ({
-      id: c.id,
-      channel: 'call' as const,
-      direction: c.direction,
-      body: c.summary?.trim() || `${c.direction === 'inbound' ? 'Inbound' : 'Outbound'} call`,
-      meta: [c.status, c.duration_seconds != null ? `${c.duration_seconds}s` : null]
-        .filter(Boolean).join(' · ') || null,
-      sender: c.direction === 'outbound' ? c.firm_user_email : null,
-      created_at: c.started_at,
-    })),
-  ), [portalMessages, smsMessages, calls])
+  ), [portalMessages, smsMessages])
 
   /** Locked-composer send: same endpoints as the per-channel senders above. */
   const sendOnChannel = useCallback(async (channel: 'portal' | 'sms', body: string): Promise<boolean> => {

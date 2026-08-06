@@ -26,21 +26,6 @@ const meetings = [
   },
 ]
 
-const calls = [
-  {
-    id: 'call-1',
-    direction: 'inbound' as const,
-    status: 'completed',
-    participant_number: '+16175551212',
-    started_at: '2026-07-25T14:00:00.000Z',
-    duration_seconds: 125,
-    recording_url: 'https://recordings.example/call-1',
-    voicemail_url: null,
-    summary: 'Client confirmed the meeting.',
-    firm_user_email: 'attorney@example.com',
-  },
-]
-
 const activity = [
   {
     id: 'activity-1',
@@ -57,7 +42,6 @@ describe('lead timeline normalization', () => {
     const result = buildLeadTimeline({
       notes,
       meetings,
-      calls: [],
       activity: [],
       actorNames: { 'user-1': 'Alice Attorney', 'user-2': 'Ben Attorney' },
     })
@@ -86,47 +70,10 @@ describe('lead timeline normalization', () => {
     expect(result[0].body).toContain('Attendees: Jane Client, Scott Attorney')
   })
 
-  it('normalizes calls and preserves their source data for call metadata and recording controls', () => {
-    const result = buildLeadTimeline({
-      notes: [],
-      meetings: [],
-      calls,
-      activity: [],
-      actorNames: {},
-    })
-
-    expect(result).toEqual([
-      expect.objectContaining({
-        id: 'call:call-1',
-        kind: 'call',
-        title: 'Inbound call',
-        actorId: null,
-        actorName: 'attorney@example.com',
-        occurredAt: calls[0].started_at,
-        call: calls[0],
-      }),
-    ])
-  })
-
-  it('omits a meaningless duration separator for calls without a duration', () => {
-    const result = buildLeadTimeline({
-      notes: [],
-      meetings: [],
-      calls: [{ ...calls[0], duration_seconds: null }],
-      activity: [],
-      actorNames: {},
-    })
-
-    expect(result[0].body).toContain('inbound · completed')
-    expect(result[0].body).not.toContain('—')
-    expect(result[0].body).not.toContain('completed ·')
-  })
-
   it('sorts all sources newest first and labels unknown actors as System', () => {
     const result = buildLeadTimeline({
       notes,
       meetings,
-      calls,
       activity,
       actorNames: { 'user-1': 'Alice Attorney', 'user-2': 'Ben Attorney' },
     })
@@ -135,7 +82,6 @@ describe('lead timeline normalization', () => {
       'system:activity-1',
       'meeting:meeting-1',
       'note:note-1',
-      'call:call-1',
     ])
     expect(result[0]).toMatchObject({
       kind: 'system',
@@ -145,18 +91,16 @@ describe('lead timeline normalization', () => {
     })
   })
 
-  it('filters all, notes plus meetings, calls, and system activity', () => {
+  it('filters all, notes plus meetings, and system activity', () => {
     const items = buildLeadTimeline({
       notes,
       meetings,
-      calls,
       activity,
       actorNames: {},
     })
 
-    expect(filterLeadTimeline(items, 'all')).toHaveLength(4)
+    expect(filterLeadTimeline(items, 'all')).toHaveLength(3)
     expect(filterLeadTimeline(items, 'notes').map(item => item.kind)).toEqual(['meeting', 'note'])
-    expect(filterLeadTimeline(items, 'calls').map(item => item.kind)).toEqual(['call'])
     expect(filterLeadTimeline(items, 'system').map(item => item.kind)).toEqual(['system'])
   })
 })
@@ -166,7 +110,6 @@ describe('lead timeline echo dedupe', () => {
     const result = buildLeadTimeline({
       notes,
       meetings: [],
-      calls: [],
       activity: [
         {
           id: 'note-echo',
@@ -187,7 +130,6 @@ describe('lead timeline echo dedupe', () => {
     const result = buildLeadTimeline({
       notes: [],
       meetings,
-      calls: [],
       activity: [
         {
           id: 'meeting-echo',
@@ -208,7 +150,6 @@ describe('lead timeline echo dedupe', () => {
     const result = buildLeadTimeline({
       notes,
       meetings: [],
-      calls: [],
       activity: [
         {
           id: 'different-actor',

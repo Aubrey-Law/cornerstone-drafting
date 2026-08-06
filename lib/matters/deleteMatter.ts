@@ -65,7 +65,6 @@ export async function deleteMatter(admin: SupabaseClient, matterId: string) {
     ['matter_assistant_messages', () => admin.from('matter_assistant_messages').delete().eq('matter_id', matterId)],
     ['pipeline_aging_snooze', () => admin.from('pipeline_aging_snooze').delete().eq('entity', 'matter').eq('entity_id', matterId)],
     ['sms_messages', () => admin.from('sms_messages').delete().eq('matter_id', matterId)],
-    ['calls', () => admin.from('calls').delete().eq('matter_id', matterId)],
     ['email_log', () => admin.from('email_log').delete().eq('matter_id', matterId)],
   ]
 

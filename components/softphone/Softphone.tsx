@@ -624,8 +624,6 @@ export default function Softphone() {
           durationSeconds: wrapUp.durationSeconds,
           outcome: wrapUpOutcome,
           notes: notes || null,
-          matterId: wrapUp.entry?.matterId ?? null,
-          leadId: wrapUp.entry?.leadId ?? null,
         }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Could not save the call')
@@ -780,13 +778,7 @@ export default function Softphone() {
             {wrapUp.entry?.name ?? formatPhone(wrapUp.participantNumber) ?? 'Unknown caller'}
           </p>
           <p className="mt-0.5 text-[10px] text-muted-foreground">
-            {wrapUp.entry?.matterNumber
-              ? `Logging to ${wrapUp.entry.matterNumber}`
-              : wrapUp.entry?.leadId
-                ? 'Logging to lead record'
-                : wrapUp.entry
-                  ? 'Saved to the call log'
-                  : 'No matching client — saved to the call log'}
+            {wrapUp.entry ? 'Saved to the call log' : 'No matching client — saved to the call log'}
           </p>
 
           <div className="mt-4 flex gap-1.5" role="group" aria-label="Outcome">

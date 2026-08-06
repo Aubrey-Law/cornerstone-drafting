@@ -22,7 +22,6 @@ export async function GET(req: Request) {
     { count: today.unreadThreads.length, label: 'client message thread(s) unread' },
     { count: today.intakeReview.length, label: 'intake(s) ready for review' },
     { count: today.intakeToSend.length, label: 'matter(s) still need their intake sent' },
-    { count: today.unassignedCallCount, label: 'call(s) not linked to a lead or matter' },
   ].filter(item => item.count > 0)
 
   // Quiet day → no email. The digest only speaks when something needs the attorney.

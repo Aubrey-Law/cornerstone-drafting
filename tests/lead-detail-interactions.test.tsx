@@ -359,33 +359,6 @@ describe('lead detail page', () => {
     expect(screen.getByText('Lead · day 1')).toBeTruthy()
   })
 
-  it('renders server-loaded calls without fetching the lead calls route', () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    render(
-      <LeadDetailClient
-        lead={lead}
-        spouse={spouse}
-        initialActivity={[]}
-        initialCalls={[{
-          id: 'call-1',
-          direction: 'inbound',
-          status: 'completed',
-          participant_number: '+16175550100',
-          started_at: '2026-07-24T09:00:00Z',
-          duration_seconds: 120,
-          recording_url: null,
-          voicemail_url: null,
-          summary: 'Discussed planning goals.',
-          firm_user_email: 'attorney@example.com',
-        }]}
-      />,
-    )
-
-    showTab('Timeline')
-    expect(screen.getByText('Discussed planning goals.')).toBeTruthy()
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/calls'))).toBe(false)
-  })
-
   it.each(['hired', 'lost'])('hides the next-action ribbon for a %s lead', leadStatus => {
     const { rerender } = render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
     expect(screen.getByText('Send intake to get the facts')).toBeTruthy()

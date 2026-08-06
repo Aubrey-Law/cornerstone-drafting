@@ -15,7 +15,7 @@ export const MATTER_TABS = [
 
 export type MatterTab = (typeof MATTER_TABS)[number]
 
-export const COMMUNICATION_CHANNELS = ['all', 'portal', 'sms', 'email', 'calls'] as const
+export const COMMUNICATION_CHANNELS = ['all', 'portal', 'sms', 'email'] as const
 
 export type CommunicationChannel = (typeof COMMUNICATION_CHANNELS)[number]
 

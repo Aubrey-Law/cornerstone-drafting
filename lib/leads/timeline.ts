@@ -1,16 +1,3 @@
-export type LeadTimelineCall = {
-  id: string
-  direction: 'inbound' | 'outbound'
-  status: string
-  participant_number: string
-  started_at: string
-  duration_seconds: number | null
-  recording_url: string | null
-  voicemail_url: string | null
-  summary: string | null
-  firm_user_email: string | null
-}
-
 export type LeadTimelineNote = {
   id: string
   body: string
@@ -39,24 +26,22 @@ export type LeadTimelineActivity = {
 export type LeadTimelineSources = {
   notes: LeadTimelineNote[]
   meetings: LeadTimelineMeeting[]
-  calls: LeadTimelineCall[]
   activity: LeadTimelineActivity[]
   actorNames: Record<string, string>
 }
 
 export type LeadTimelineItem = {
   id: string
-  kind: 'note' | 'meeting' | 'call' | 'system'
+  kind: 'note' | 'meeting' | 'system'
   title: string
   body: string | null
   actorId: string | null
   actorName: string
   occurredAt: string
   editableNoteId?: string
-  call?: LeadTimelineCall
 }
 
-export type LeadTimelineFilter = 'all' | 'notes' | 'calls' | 'system'
+export type LeadTimelineFilter = 'all' | 'notes' | 'system'
 
 const ECHO_WINDOW_MS = 5_000
 
@@ -88,21 +73,6 @@ function meetingBody(meeting: LeadTimelineMeeting): string {
     meeting.attendees.length > 0 ? `Attendees: ${meeting.attendees.join(', ')}` : null,
   ].filter(Boolean)
   return [meeting.body, ...metadata].filter(Boolean).join('\n')
-}
-
-function durationLabel(seconds: number | null): string | null {
-  if (!seconds || seconds <= 0) return null
-  const minutes = Math.floor(seconds / 60)
-  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
-}
-
-function callBody(call: LeadTimelineCall): string {
-  const metadata = [
-    call.direction,
-    call.status,
-    durationLabel(call.duration_seconds),
-  ].filter(Boolean).join(' · ')
-  return [call.participant_number, metadata, call.summary].filter(Boolean).join('\n')
 }
 
 function recognizedEchoKind(
@@ -144,16 +114,6 @@ export function buildLeadTimeline(sources: LeadTimelineSources): LeadTimelineIte
     actorName: actorName(meeting.actorId, sources.actorNames),
     occurredAt: meeting.createdAt,
   }))
-  const callItems: LeadTimelineItem[] = sources.calls.map(call => ({
-    id: `call:${call.id}`,
-    kind: 'call',
-    title: `${call.direction === 'inbound' ? 'Inbound' : 'Outbound'} call`,
-    body: callBody(call),
-    actorId: null,
-    actorName: call.firm_user_email ?? 'System',
-    occurredAt: call.started_at,
-    call,
-  }))
   const noteLikeItems = [...noteItems, ...meetingItems]
 
   // Current lead_activity rows expose no note-provenance identifier. Keep this
@@ -170,7 +130,7 @@ export function buildLeadTimeline(sources: LeadTimelineSources): LeadTimelineIte
       occurredAt: activity.created_at,
     }))
 
-  return [...noteLikeItems, ...callItems, ...systemItems]
+  return [...noteLikeItems, ...systemItems]
     .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))
 }
 
@@ -180,6 +140,5 @@ export function filterLeadTimeline(
 ): LeadTimelineItem[] {
   if (filter === 'all') return items
   if (filter === 'notes') return items.filter(item => item.kind === 'note' || item.kind === 'meeting')
-  if (filter === 'calls') return items.filter(item => item.kind === 'call')
   return items.filter(item => item.kind === 'system')
 }

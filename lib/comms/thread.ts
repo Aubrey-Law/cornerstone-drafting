@@ -1,7 +1,7 @@
 import { firmDateKey } from '@/lib/firmDate'
 
-/** Timeline channels. `call` appears in the timeline but cannot be replied on. */
-export type CommChannel = 'portal' | 'sms' | 'email' | 'call'
+/** Timeline channels. Calls are not part of a record's timeline. */
+export type CommChannel = 'portal' | 'sms' | 'email'
 export type SendableChannel = 'portal' | 'sms' | 'email'
 
 export interface CommunicationItem {
@@ -9,16 +9,10 @@ export interface CommunicationItem {
   channel: CommChannel
   direction: 'inbound' | 'outbound'
   body: string
-  /** Channel-specific detail: SMS status, email subject, call outcome… */
+  /** Channel-specific detail: SMS status, email subject… */
   meta?: string | null
   sender?: string | null
   created_at: string
-  call?: {
-    participant_number: string
-    recording_url: string | null
-    voicemail_url: string | null
-    needs_response: boolean
-  }
 }
 
 /**
@@ -28,7 +22,7 @@ export interface CommunicationItem {
  */
 export const DEFAULT_REPLY_SLA_HOURS = 24
 
-const CHANNEL_ORDER: Record<CommChannel, number> = { portal: 0, sms: 1, email: 2, call: 3 }
+const CHANNEL_ORDER: Record<CommChannel, number> = { portal: 0, sms: 1, email: 2 }
 
 /**
  * Merge per-channel item lists into one chronological timeline. Identical
@@ -49,9 +43,9 @@ export function mergeCommunicationItems(...lists: CommunicationItem[][]): Commun
 
 /**
  * The reply channel is locked to the newest inbound item the firm can answer
- * in kind. Calls are not sendable and portal messages are matter-only, so
- * both fall through to the next sendable inbound channel; with none, a matter
- * defaults to portal and a lead to email.
+ * in kind. Portal messages are matter-only, so they fall through to the next
+ * sendable inbound channel; with none, a matter defaults to portal and a lead
+ * to email.
  */
 export function resolveReplyChannel(
   items: CommunicationItem[],
@@ -65,7 +59,6 @@ export function resolveReplyChannel(
   for (let i = sorted.length - 1; i >= 0; i--) {
     const item = sorted[i]
     if (item.direction !== 'inbound') continue
-    if (item.channel === 'call') continue
     if (item.channel === 'portal' && !portalAvailable) continue
     return item.channel
   }
@@ -73,10 +66,8 @@ export function resolveReplyChannel(
 }
 
 /**
- * Newest inbound message or missed-call event with no later outbound reply.
- * Calls never demand a typed reply (they fall back per `resolveReplyChannel`),
- * but missed calls and voicemails still need attention. Any later outbound
- * touch — message, email or call back — answers the thread.
+ * Newest inbound message with no later outbound reply. Any later outbound
+ * touch — message or email — answers the thread.
  */
 export function waitingSince(items: CommunicationItem[]): string | null {
   let lastInbound = Number.NEGATIVE_INFINITY
@@ -86,11 +77,7 @@ export function waitingSince(items: CommunicationItem[]): string | null {
     const at = Date.parse(item.created_at)
     if (item.direction === 'outbound') {
       if (at > lastOutbound) lastOutbound = at
-    } else if (
-      item.channel === 'portal' ||
-      item.channel === 'sms' ||
-      (item.channel === 'call' && item.call?.needs_response)
-    ) {
+    } else if (item.channel === 'portal' || item.channel === 'sms') {
       if (at > lastInbound) {
         lastInbound = at
         lastInboundIso = item.created_at
@@ -149,7 +136,6 @@ export const CHANNEL_LABEL: Record<CommChannel, string> = {
   portal: 'Portal',
   sms: 'Text',
   email: 'Email',
-  call: 'Call',
 }
 
 /** One row of the firm-wide thread list (`v_communication_threads` + state). */
