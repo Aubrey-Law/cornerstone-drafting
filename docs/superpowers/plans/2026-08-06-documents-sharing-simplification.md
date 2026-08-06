@@ -2459,7 +2459,45 @@ Run: `grep -rn --include="*.ts" --include="*.tsx" "folder" app components lib`
 
 Delete the `folder:` line from each insert object it reports — the eight writers from Task 3 plus the two upload routes from Task 7. Every one of them now sets `source` and `shared_at`, which is sufficient. Also delete any surviving `folder: doc.folder` audit-metadata entries; the ones in `bulk-download` and `combine` went with their audit calls in Task 4.
 
-Two known sites that the earlier tasks deliberately left alone and that MUST be fixed here:
+Three known sites that the earlier tasks deliberately left alone and that MUST be fixed here:
+
+- `app/(portal)/documents/PortalDocumentList.tsx:86-87` still splits the page into two
+  sections off `doc.folder`:
+
+  ```ts
+  const sharedDrafts = documents.filter(doc => doc.folder === 'review')
+  const signedDocuments = documents.filter(doc => doc.folder === 'signed' || doc.folder === 'final')
+  ```
+
+  Those headings ("Documents for your review" / "Signed documents") encode a distinction
+  that no longer exists — every document reaching this component is simply shared. Delete
+  both `const` lines, and replace the two-section `[...].map(section => ...)` block at
+  lines 155-179 with a single section:
+
+  ```tsx
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="border-b border-border bg-muted/40 px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Shared documents</p>
+          <p className="text-xs text-muted-foreground">
+            {documents.length} document{documents.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        {documents.map((doc) => (
+          <DocumentRow
+            key={doc.id}
+            doc={doc}
+            anyPending={pending !== null}
+            viewPending={pending?.id === doc.id && pending.action === 'view'}
+            downloadPending={pending?.id === doc.id && pending.action === 'download'}
+            onAction={handleDocumentAction}
+          />
+        ))}
+      </section>
+  ```
+
+  The `documents.length === 0` early-return above already covers the empty case, so the
+  per-section `empty` strings are no longer needed.
+
 
 - `app/api/admin/matters/[id]/assistant/route.ts:49` still does `.select('name, folder, marker_count')`, and line 44 interpolates `${d.folder}` into an LLM prompt string. Change the select to `'name, source, shared_at, marker_count'` and the prompt line to `` `- ${d.name} (${d.shared_at ? 'shared' : 'internal'}, markers=${d.marker_count ?? '?'})` `` — the prompt was telling the model which folder a draft sat in, and shared-vs-internal is the equivalent fact now.
 - `app/api/documents/route.ts` `POST` still speaks folder vocabulary in its `r2Key.startsWith(...)` check and its `shared_at: [...].includes(folder)` expression. Task 7 rewrites both; confirm they are gone rather than assuming.
