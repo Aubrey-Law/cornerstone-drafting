@@ -126,6 +126,10 @@ export function LeadsClient({
   const [engagementLead, setEngagementLead] = useState<LeadRow | null>(null)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
 
+  useEffect(() => {
+    if (searchParams?.get('create') === '1') setDialogOpen(true)
+  }, [searchParams])
+
   const baseLeads = useMemo(
     () =>
       initialLeads.filter(l => {
@@ -434,7 +438,7 @@ export function LeadsClient({
             </Button>
             <Button size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4" />
-              Create lead matter
+              New lead
             </Button>
           </>
         }

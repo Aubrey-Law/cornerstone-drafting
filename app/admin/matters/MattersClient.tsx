@@ -119,6 +119,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   const [view, setView] = useState<MatterListView>('table')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
+  const [createChoiceOpen, setCreateChoiceOpen] = useState(false)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const createRequestIdRef = useRef<string | null>(null)
@@ -390,9 +391,9 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
               <Database className="h-3.5 w-3.5" />
               Import from Lawmatics
             </Button>
-            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+            <Button type="button" size="sm" onClick={() => setCreateChoiceOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
-              Create Matter
+              New
             </Button>
           </div>
         </div>
@@ -528,9 +529,9 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
             <Briefcase className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">{emptyMessage}</p>
             {!loadError && matters.length === 0 && (
-              <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+              <Button type="button" size="sm" onClick={() => setCreateChoiceOpen(true)}>
                 <Plus className="h-3.5 w-3.5" />
-                Create Matter
+                New
               </Button>
             )}
           </div>
@@ -664,6 +665,25 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
           </div>
         )}
       </div>
+
+      <Dialog open={createChoiceOpen} onOpenChange={setCreateChoiceOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create a record</DialogTitle>
+            <DialogDescription>
+              Choose a lead for a prospective client, or a matter for a client already retained by the firm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2 sm:grid-cols-2">
+            <Button type="button" variant="outline" asChild>
+              <Link href="/admin/leads?create=1">New lead</Link>
+            </Button>
+            <Button type="button" onClick={() => { setCreateChoiceOpen(false); setCreateOpen(true) }}>
+              New matter
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={createOpen}
