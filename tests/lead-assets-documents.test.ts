@@ -35,7 +35,7 @@ describe('lead assets and document management', () => {
 
     expect(leadDocuments).toContain('<MatterDocumentsTab')
     expect(leadDocuments).toContain('onDocumentsChanged={onDocumentsChanged}')
-    expect(matterDocuments).toContain('await uploadDocument(file, matterId, uploadFolder)')
+    expect(matterDocuments).toContain('await uploadDocument(file, matterId)')
     expect(matterDocuments).toContain('recordLabel =')
   })
 })
