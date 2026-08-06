@@ -12,12 +12,6 @@ describe('contact communications schema', () => {
   it('adds a contact association to both message tables', () => {
     const migration = source(MIGRATION)
     expect(migration).toMatch(/alter table public\.sms_messages\s+add column if not exists contact_id uuid references public\.contacts\(id\)/i)
-    expect(migration).toMatch(/alter table public\.calls\s+add column if not exists contact_id uuid references public\.contacts\(id\)/i)
-  })
-
-  it('leaves the calls matter/lead exclusivity constraint alone', () => {
-    // contact_id is orthogonal to that either/or — a contact inherits a matter.
-    expect(source(MIGRATION)).not.toMatch(/drop constraint if exists calls_single_record_link/i)
   })
 
   it('widens thread keys so a contact thread can hold triage state', () => {
@@ -35,25 +29,8 @@ describe('contact communications schema', () => {
   })
 
   it('attributes an inbound message to the contact it came from', () => {
-    const migration = source(MIGRATION)
-    expect(migration).toMatch(/new\.contact_id := matched_contact/i)
-    // Both triggers, not just the SMS one.
-    expect(migration.match(/new\.contact_id := matched_contact/gi)?.length).toBe(2)
-  })
-
-  it('revives the dead lead branch in calls_autoassign', () => {
-    // The old branch required `ci.matter_id IS NULL`, which the leads/matters
-    // unification made permanently false, so lead calls landed on the
-    // opportunity matter and lead call history rendered empty.
-    const migration = source(MIGRATION)
-    expect(migration).toMatch(/coalesce\(m\.relationship_status, 'hired'\) <> 'hired'/i)
-    expect(migration).toMatch(/coalesce\(m\.relationship_status, 'hired'\) = 'hired'/i)
-    expect(migration).not.toMatch(/where ci\.matter_id is null/i)
-  })
-
-  it('reads lead calls from the matter too, for history recorded before the fix', () => {
-    expect(source('app/api/admin/leads/[id]/calls/route.ts'))
-      .toMatch(/lead_id\.eq\.\$\{leadId\},matter_id\.eq\.\$\{lead\.matter_id\}/)
+    // Calls no longer link to a record, so only the SMS trigger does this.
+    expect(source(MIGRATION)).toMatch(/new\.contact_id := matched_contact/i)
   })
 })
 
@@ -143,7 +120,6 @@ describe('contact communications routes', () => {
   const routes = [
     'app/api/admin/contacts/[id]/send-sms/route.ts',
     'app/api/admin/contacts/[id]/sms-messages/route.ts',
-    'app/api/admin/contacts/[id]/calls/route.ts',
   ]
 
   it('gates every contact comms route behind requireAdmin', () => {
@@ -161,8 +137,6 @@ describe('contact communications routes', () => {
   it('scopes contact reads to the contact, never to its household', () => {
     // A trustee must not be shown the client's history under their own name.
     expect(source('app/api/admin/contacts/[id]/sms-messages/route.ts'))
-      .toMatch(/\.eq\('contact_id', contactId\)/)
-    expect(source('app/api/admin/contacts/[id]/calls/route.ts'))
       .toMatch(/\.eq\('contact_id', contactId\)/)
   })
 })

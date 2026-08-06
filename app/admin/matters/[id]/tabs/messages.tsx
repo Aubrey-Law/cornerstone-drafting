@@ -122,7 +122,6 @@ const CHANNEL_CHIPS: Array<{ key: CommunicationChannel; label: string }> = [
   { key: 'portal', label: 'Portal' },
   { key: 'sms', label: 'SMS' },
   { key: 'email', label: 'Email' },
-  { key: 'calls', label: 'Calls' },
 ]
 
 export interface MatterCommunicationsTabProps extends MatterMessagesSectionsProps, SchedulingActionsProps {
@@ -175,7 +174,7 @@ export function MatterCommunicationsTab({
         <div>
           <h3 className="text-sm font-semibold">Communications</h3>
           <p className="text-xs text-muted-foreground">
-            Portal messages, SMS, email, and logged calls for this matter — one timeline.
+            Portal messages, SMS and email for this matter — one timeline.
           </p>
         </div>
         <div className="flex justify-end gap-2">

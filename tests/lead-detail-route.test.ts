@@ -301,15 +301,12 @@ describe('lead detail workflow loader contract', () => {
     )
   })
 
-  it('loads initial lead calls newest-first and resolves timeline actors with one users query', () => {
+  it('resolves timeline actors with one users query and loads no calls', () => {
     const page = source('app/admin/leads/[id]/page.tsx')
-    expect(page).toMatch(
-      /from\('calls'\)[\s\S]*?select\('id, direction, status, participant_number, started_at, duration_seconds, recording_url, voicemail_url, summary, firm_user_email'\)[\s\S]*?eq\('lead_id', id\)[\s\S]*?order\('started_at', \{ ascending: false \}\)[\s\S]*?limit\(50\)/,
-    )
+    expect(page).not.toMatch(/from\('calls'\)/)
     expect(page.match(/from\('users'\)/g)).toHaveLength(1)
     expect(page).toMatch(/new Set\([\s\S]*?actor_id/)
     expect(page).toMatch(/select\('id, display_name, email'\)[\s\S]*?in\('id', actorIds\)/)
-    expect(page).toMatch(/initialCalls=\{calls \?\? \[\]\}/)
     expect(page).toMatch(/actorNames=\{actorNames\}/)
   })
 

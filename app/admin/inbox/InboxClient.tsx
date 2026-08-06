@@ -1,9 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Archive, ChevronDown, ChevronRight, Inbox as InboxIcon, MailOpen, PauseCircle, PhoneMissed } from 'lucide-react'
+import { Archive, ChevronDown, ChevronRight, Inbox as InboxIcon, MailOpen, PauseCircle } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
@@ -24,14 +23,10 @@ import {
 } from '@/components/layout/ResponsiveDetailRail'
 import { CommunicationThread, type ThreadChannelFilter } from '@/components/comms/CommunicationThread'
 import { ConversationRow } from '@/components/comms/ConversationRow'
-import { AssignCallDialog } from '@/components/calls/AssignCallDialog'
-import { CallRow } from '@/components/calls/CallRow'
-import type { LinkedCallRow } from '@/components/calls/types'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { apiRequest } from '@/lib/clientApi'
 import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
-import { formatPhoneDisplay } from '@/lib/phone'
 import {
   threadBucket,
   threadIsUnread,
@@ -40,14 +35,13 @@ import {
   type ThreadBucket,
 } from '@/lib/comms/thread'
 
-type ScopeKey = 'needs_reply' | 'all' | 'snoozed' | 'unlinked_calls'
+type ScopeKey = 'needs_reply' | 'all' | 'snoozed'
 
 const CHANNEL_CHIPS: Array<{ key: ThreadChannelFilter; label: string }> = [
   { key: 'all', label: 'All channels' },
   { key: 'portal', label: 'Portal' },
   { key: 'sms', label: 'Texts' },
   { key: 'email', label: 'Email' },
-  { key: 'calls', label: 'Calls' },
 ]
 
 const SNOOZE_OPTIONS = [
@@ -58,7 +52,6 @@ const SNOOZE_OPTIONS = [
 
 interface InboxClientProps {
   initialThreads: InboxThread[]
-  initialUnlinkedCalls: LinkedCallRow[]
   initialScope?: ScopeKey
   initialChannel?: ThreadChannelFilter
   smsConfigured: boolean
@@ -134,22 +127,16 @@ function CollapsedGroup({
 
 export function InboxClient({
   initialThreads,
-  initialUnlinkedCalls,
   initialScope = 'needs_reply',
   initialChannel = 'all',
   smsConfigured,
 }: InboxClientProps) {
   const token = useAccessToken()
-  const router = useRouter()
   const mobile = useIsMobileDetailViewport()
   const [threads, setThreads] = useState(initialThreads)
-  const [unlinkedCalls, setUnlinkedCalls] = useState(initialUnlinkedCalls)
   const [scope, setScope] = useState<ScopeKey>(initialScope)
   const [channel, setChannel] = useState<ThreadChannelFilter>(initialChannel)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [selectedCallId, setSelectedCallId] = useState<string | null>(null)
-  const [assigningCall, setAssigningCall] = useState<LinkedCallRow | null>(null)
-  const [dismissingCallId, setDismissingCallId] = useState<string | null>(null)
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false)
   const [items, setItems] = useState<CommunicationItem[]>([])
   const [itemsLoading, setItemsLoading] = useState(false)
@@ -160,22 +147,16 @@ export function InboxClient({
   const returnFocusKeyRef = useRef<string | null>(null)
 
   useEffect(() => setThreads(initialThreads), [initialThreads])
-  useEffect(() => setUnlinkedCalls(initialUnlinkedCalls), [initialUnlinkedCalls])
 
   const selected = useMemo(
     () => threads.find(t => t.thread_key === selectedKey) ?? null,
     [threads, selectedKey],
   )
-  const selectedCall = useMemo(
-    () => unlinkedCalls.find(call => call.id === selectedCallId) ?? null,
-    [unlinkedCalls, selectedCallId],
-  )
 
   const filtered = useMemo(
     () => threads.filter(thread => {
       if (channel !== 'all') {
-        const wanted = channel === 'calls' ? 'call' : channel
-        const hasChannel = thread.channels?.includes(wanted) ?? thread.last_channel === wanted
+        const hasChannel = thread.channels?.includes(channel) ?? thread.last_channel === channel
         if (!hasChannel) return false
       }
       return true
@@ -193,14 +174,11 @@ export function InboxClient({
   }, [filtered])
 
   const channelCounts = useMemo(() => {
-    const counts: Record<ThreadChannelFilter, number> = { all: 0, portal: 0, sms: 0, email: 0, calls: 0 }
+    const counts: Record<ThreadChannelFilter, number> = { all: 0, portal: 0, sms: 0, email: 0 }
     for (const thread of threads) {
       counts.all += 1
       const channels = thread.channels ?? [thread.last_channel]
-      for (const present of channels) {
-        if (present === 'call') counts.calls += 1
-        else counts[present] += 1
-      }
+      for (const present of channels) counts[present] += 1
     }
     return counts
   }, [threads])
@@ -353,7 +331,6 @@ export function InboxClient({
   const selectScope = useCallback((next: ScopeKey) => {
     setScope(next)
     setSelectedKey(null)
-    setSelectedCallId(null)
     setMobileThreadOpen(false)
   }, [])
 
@@ -363,39 +340,9 @@ export function InboxClient({
     setMobileThreadOpen(false)
   }, [])
 
-  const openUnlinkedCall = useCallback((call: LinkedCallRow) => {
-    returnFocusKeyRef.current = `call:${call.id}`
-    setSelectedCallId(call.id)
-    setSelectedKey(null)
-    setMobileThreadOpen(true)
-    requestAnimationFrame(() => threadHeadingRef.current?.focus())
-  }, [])
-
-  const dismissUnlinkedCall = useCallback(async (call: LinkedCallRow) => {
-    if (!token) return
-    setDismissingCallId(call.id)
-    try {
-      await apiRequest(`/api/admin/calls/${call.id}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dismissed: true }),
-      }, 'Could not dismiss call')
-      setUnlinkedCalls(previous => previous.filter(row => row.id !== call.id))
-      setSelectedCallId(null)
-      setMobileThreadOpen(false)
-      invalidateSidebarCountsClient()
-      toast.success('Call dismissed from triage')
-    } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : 'Could not dismiss call')
-    } finally {
-      setDismissingCallId(null)
-    }
-  }, [token])
-
   // Shortcuts live on the list container, not document, so ⌘K and the
   // calendar's bindings are untouched.
   const handleListKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (scope === 'unlinked_calls') return
     if (event.metaKey || event.ctrlKey || event.altKey) return
     const index = rowOrder.findIndex(t => t.thread_key === selectedKey)
     const move = (delta: number) => {
@@ -421,7 +368,7 @@ export function InboxClient({
         break
       default: break
     }
-  }, [scope, rowOrder, selectedKey, selected, openThread, archiveThread, toggleUnread])
+  }, [rowOrder, selectedKey, selected, openThread, archiveThread, toggleUnread])
 
   const renderRow = (thread: InboxThread) => (
     <ConversationRow
@@ -430,34 +377,6 @@ export function InboxClient({
       selected={thread.thread_key === selectedKey}
       onSelect={() => openThread(thread)}
     />
-  )
-
-  const renderUnlinkedCall = (call: LinkedCallRow) => (
-    <li key={call.id}>
-      <button
-        type="button"
-        id={`inbox-row-call:${call.id}`}
-        aria-current={selectedCallId === call.id ? 'true' : undefined}
-        onClick={() => openUnlinkedCall(call)}
-        className={cn(
-          'flex min-h-11 w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
-          selectedCallId === call.id && 'bg-accent/60',
-        )}
-      >
-        <PhoneMissed className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-sm font-medium">
-              {formatPhoneDisplay(call.participant_number) ?? call.participant_number}
-            </span>
-            <span className="shrink-0 text-[11px] text-muted-foreground">{formatDate(call.started_at)}</span>
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            {call.summary?.trim() || `${call.direction === 'inbound' ? 'Inbound' : 'Outbound'} · ${call.status}`}
-          </span>
-        </span>
-      </button>
-    </li>
   )
 
   const threadPane = selected ? (
@@ -559,49 +478,6 @@ export function InboxClient({
     />
   )
 
-  const callPane = selectedCall ? (
-    <div className="flex min-h-0 w-full flex-1 flex-col gap-3 rounded-lg border border-border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h2 ref={threadHeadingRef} tabIndex={-1} className="text-base font-semibold outline-none">
-            Unlinked call
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Link this call to the person or record it belongs to, or dismiss it from triage.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" size="sm" onClick={() => setAssigningCall(selectedCall)}>
-            Link call
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={dismissingCallId === selectedCall.id}
-            onClick={() => void dismissUnlinkedCall(selectedCall)}
-          >
-            Dismiss
-          </Button>
-        </div>
-      </div>
-      <div className="rounded-md border border-border">
-        <CallRow call={selectedCall} />
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Dismissing removes the call from this queue without deleting the call record.
-      </p>
-    </div>
-  ) : (
-    <EmptyState
-      icon={PhoneMissed}
-      title="Select an unlinked call"
-      description="Choose a call to identify or dismiss."
-      className="hidden flex-1 rounded-lg border border-border bg-card md:flex"
-    />
-  )
-
-  const activePane = scope === 'unlinked_calls' ? callPane : threadPane
 
   return (
     <AdminPageShell aria-label="Inbox">
@@ -609,7 +485,7 @@ export function InboxClient({
         eyebrow="Communications"
         icon={InboxIcon}
         title="Inbox"
-        description="Client conversations, missed-call follow-up and unlinked-call triage in one queue."
+        description="Client conversations across portal, text and email in one queue."
       />
 
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -622,28 +498,17 @@ export function InboxClient({
         <FilterChip selected={scope === 'snoozed'} count={buckets.snoozed.length} onClick={() => selectScope('snoozed')}>
           Snoozed
         </FilterChip>
-        <FilterChip
-          selected={scope === 'unlinked_calls'}
-          count={unlinkedCalls.length}
-          onClick={() => selectScope('unlinked_calls')}
-        >
-          Unlinked calls
-        </FilterChip>
-        {scope !== 'unlinked_calls' ? (
-          <>
-            <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
-            {CHANNEL_CHIPS.map(chip => (
-              <FilterChip
-                key={chip.key}
-                selected={channel === chip.key}
-                count={chip.key === 'all' ? undefined : channelCounts[chip.key]}
-                onClick={() => selectChannel(chip.key)}
-              >
-                {chip.label}
-              </FilterChip>
-            ))}
-          </>
-        ) : null}
+        <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
+        {CHANNEL_CHIPS.map(chip => (
+          <FilterChip
+            key={chip.key}
+            selected={channel === chip.key}
+            count={chip.key === 'all' ? undefined : channelCounts[chip.key]}
+            onClick={() => selectChannel(chip.key)}
+          >
+            {chip.label}
+          </FilterChip>
+        ))}
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[392px_minmax(0,1fr)]">
@@ -655,20 +520,7 @@ export function InboxClient({
           onKeyDown={handleListKeyDown}
           className="min-h-0 overflow-y-auto outline-none"
         >
-          {scope === 'unlinked_calls' ? (
-            unlinkedCalls.length === 0 ? (
-              <EmptyState
-                icon={PhoneMissed}
-                title="Every call is linked"
-                description="No calls need identification or dismissal."
-                className="rounded-lg border border-border bg-card"
-              />
-            ) : (
-              <GroupShell title="Unlinked calls" count={unlinkedCalls.length} accent>
-                {unlinkedCalls.map(renderUnlinkedCall)}
-              </GroupShell>
-            )
-          ) : rowOrder.length === 0 && buckets.snoozed.length === 0 ? (
+          {rowOrder.length === 0 && buckets.snoozed.length === 0 ? (
             <EmptyState
               icon={InboxIcon}
               title="Inbox zero"
@@ -715,7 +567,7 @@ export function InboxClient({
 
         {mobile ? (
           <ResponsiveDetailRail
-            open={mobileThreadOpen && Boolean(scope === 'unlinked_calls' ? selectedCall : selected)}
+            open={mobileThreadOpen && Boolean(selected)}
             onOpenChange={open => {
               setMobileThreadOpen(open)
               if (!open && returnFocusKeyRef.current) {
@@ -725,25 +577,12 @@ export function InboxClient({
             label="Conversation"
             mobileClassName="flex w-[min(24rem,100vw)] flex-col p-3"
           >
-            {activePane}
+            {threadPane}
           </ResponsiveDetailRail>
         ) : (
-          activePane
+          threadPane
         )}
       </div>
-      {assigningCall ? (
-        <AssignCallDialog
-          call={assigningCall}
-          onClose={() => setAssigningCall(null)}
-          onAssigned={() => {
-            setUnlinkedCalls(previous => previous.filter(call => call.id !== assigningCall.id))
-            setSelectedCallId(null)
-            setAssigningCall(null)
-            setMobileThreadOpen(false)
-            router.refresh()
-          }}
-        />
-      ) : null}
     </AdminPageShell>
   )
 }

@@ -4,7 +4,6 @@ export interface SidebarCounts {
   draftingNeedsDesignCount: number
   agingRedCount: number
   agingAmberCount: number
-  unassignedCallsCount: number
   tasksOverdueCount: number
 }
 
@@ -21,16 +20,12 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   draftingNeedsDesignCount: 0,
   agingRedCount: 0,
   agingAmberCount: 0,
-  unassignedCallsCount: 0,
   tasksOverdueCount: 0,
 }
 
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
   if (href === '/admin/inbox' && counts.inboxNeedsReplyCount > 0) {
-    return { value: counts.inboxNeedsReplyCount + counts.unassignedCallsCount, tone: 'accent' }
-  }
-  if (href === '/admin/inbox' && counts.unassignedCallsCount > 0) {
-    return { value: counts.unassignedCallsCount, tone: 'accent' }
+    return { value: counts.inboxNeedsReplyCount, tone: 'accent' }
   }
   if (href === '/admin/matters' && counts.intakeReviewCount > 0) {
     return { value: counts.intakeReviewCount, tone: 'destructive' }
@@ -58,7 +53,6 @@ export function mergeSidebarCounts(
     draftingNeedsDesignCount: next.draftingNeedsDesignCount ?? prev.draftingNeedsDesignCount,
     agingRedCount: next.agingRedCount ?? prev.agingRedCount,
     agingAmberCount: next.agingAmberCount ?? prev.agingAmberCount,
-    unassignedCallsCount: next.unassignedCallsCount ?? prev.unassignedCallsCount,
     tasksOverdueCount: next.tasksOverdueCount ?? prev.tasksOverdueCount,
   }
 }

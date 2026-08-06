@@ -4,7 +4,7 @@ import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { isSmsConfigured } from '@/lib/communications/config'
-import { newestTimestamp, type LeadTimelineCall } from '@/lib/leads/timeline'
+import { newestTimestamp } from '@/lib/leads/timeline'
 import { fetchTasksForLead } from '@/lib/queries/tasks'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
@@ -78,7 +78,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     notesResult,
     meetingsResult,
     appointmentResult,
-    callsResult,
   ] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
     admin.from('contacts').select('*').eq('client_intake_id', id).eq('relationship_type', 'spouse').maybeSingle(),
@@ -92,11 +91,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       .order('start_time', { ascending: true })
       .limit(1)
       .maybeSingle(),
-    admin.from('calls')
-      .select('id, direction, status, participant_number, started_at, duration_seconds, recording_url, voicemail_url, summary, firm_user_email')
-      .eq('lead_id', id)
-      .order('started_at', { ascending: false })
-      .limit(50),
   ])
 
   const { data: lead, error: leadError } = leadResult
@@ -105,7 +99,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { data: notes, error: notesError } = notesResult
   const { data: meetings, error: meetingsError } = meetingsResult
   const { data: appointment, error: appointmentError } = appointmentResult
-  const { data: calls, error: callsError } = callsResult
 
   if (leadError) console.error('Could not load lead detail', { leadId: id, error: leadError })
   if (!lead || !lead.lead_status) notFound()
@@ -114,12 +107,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (notesError) console.error('Could not load lead notes', { leadId: id, error: notesError })
   if (meetingsError) console.error('Could not load lead meeting notes', { leadId: id, error: meetingsError })
   if (appointmentError) console.error('Could not load lead appointment', { leadId: id, error: appointmentError })
-  if (callsError) console.error('Could not load lead calls', { leadId: id, error: callsError })
 
   const activityRows = (activity ?? []) as LeadActivityLoaderRow[]
   const noteRows = (notes ?? []) as LeadNoteLoaderRow[]
   const meetingRows = (meetings ?? []) as LeadMeetingNoteLoaderRow[]
-  const callRows = (calls ?? []) as LeadTimelineCall[]
   const actorIds = [...new Set(
     [
       ...activityRows,
@@ -146,7 +137,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     ...activityRows.map(row => row.created_at),
     ...noteRows.map(row => row.created_at),
     ...meetingRows.map(row => row.created_at),
-    ...callRows.map(row => row.started_at),
   ])
 
   const hydratedLead = await hydrateIntakeWithContacts(admin, lead) as typeof lead & Record<string, unknown>
@@ -175,12 +165,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       initialActivity={activityRows}
       initialNotes={noteRows.map(mapNote)}
       initialMeetingNotes={meetingRows.map(mapMeeting)}
-      initialCalls={calls ?? []}
       actorNames={actorNames}
       firmTimezone={schedulingSettings.timezone}
       nextAppointmentAt={appointment?.start_time ?? null}
       lastTouchAt={lastTouchAt}
-      callsError={callsError?.message ?? null}
       actorError={actorResult.error?.message ?? null}
       activeAgreement={agreement}
       peopleMatter={peopleMatter}

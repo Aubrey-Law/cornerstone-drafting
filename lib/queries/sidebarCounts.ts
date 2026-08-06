@@ -20,18 +20,11 @@ function countOrZero(result: CountResult, label: string): number {
 export async function fetchSidebarCounts(): Promise<SidebarCounts> {
   const admin = getAdminClient()
 
-  const [intakeReview, unassignedCalls, openMattersRes] = await Promise.all([
+  const [intakeReview, openMattersRes] = await Promise.all([
     admin
       .from('v_matter_pipeline')
       .select('matter_id', { count: 'exact', head: true })
       .eq('stage', 'intake_review'),
-    admin
-      .from('calls')
-      .select('id', { count: 'exact', head: true })
-      .is('matter_id', null)
-      .is('lead_id', null)
-      .is('contact_id', null)
-      .is('triage_dismissed_at', null),
     admin
       .from('v_matter_pipeline')
       .select('matter_id')
@@ -39,7 +32,6 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
   ])
 
   const intakeReviewCount = countOrZero(intakeReview, 'intake review')
-  const unassignedCallsCount = countOrZero(unassignedCalls, 'unassigned calls')
 
   let draftingNeedsDesignCount = 0
   const openMatterIds = ((openMattersRes.data ?? []) as Array<{ matter_id: string }>).map(row => row.matter_id)
@@ -91,7 +83,6 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     draftingNeedsDesignCount,
     agingRedCount,
     agingAmberCount,
-    unassignedCallsCount,
     tasksOverdueCount,
   }
 }

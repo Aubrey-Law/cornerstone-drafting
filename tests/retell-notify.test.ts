@@ -4,7 +4,6 @@ import {
   formatRetellAlertSms,
   parseRetellSummaryEmails,
   parseRetellSummarySmsTo,
-  retellCallsAdminUrl,
   shouldNotifyRetellAnalyzed,
 } from '@/lib/retell/notifyFormat'
 import { MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
@@ -38,7 +37,7 @@ describe('retell notify helpers', () => {
     expect(shouldNotifyRetellAnalyzed('Hello', 'Hello again')).toBe(true)
   })
 
-  it('formats email subject and body with summary + admin link', () => {
+  it('formats email subject and body with the summary', () => {
     const { subject, text, html } = formatRetellAlertEmail({
       external_call_id: 'call_1',
       direction: 'inbound',
@@ -48,15 +47,15 @@ describe('retell notify helpers', () => {
       participant_number: '+16175551212',
       duration_seconds: 95,
       summary: 'Caller asked about a trust.',
-      matter_id: null,
     })
 
     expect(subject).toContain('617')
     expect(text).toContain('Caller asked about a trust.')
     expect(text).toContain('1:35')
-    expect(text).toContain('/admin/inbox?scope=unlinked_calls')
     expect(html).toContain('Caller asked about a trust.')
-    expect(html).toContain('/admin/inbox?scope=unlinked_calls')
+    // Calls have no record page to open, so the alert carries no deep link.
+    expect(text).not.toContain('/admin/')
+    expect(html).not.toContain('/admin/')
   })
 
   it('formats SMS within length limit', () => {
@@ -76,7 +75,4 @@ describe('retell notify helpers', () => {
     expect(body.endsWith('…')).toBe(true)
   })
 
-  it('links lead-associated calls to the lead detail page', () => {
-    expect(retellCallsAdminUrl(null, 'lead-123')).toContain('/admin/crm/opportunities/lead-123')
-  })
 })

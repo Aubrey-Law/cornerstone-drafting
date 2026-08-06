@@ -55,7 +55,6 @@ interface TodayQueueProps {
   intakeToSend: TodayMatterItem[]
   overdueTasks: TaskRow[]
   tasksDueToday: TaskRow[]
-  unassignedCallCount: number
 }
 
 type TabKey = 'you' | 'clients' | 'snoozed'
@@ -328,7 +327,6 @@ export function TodayQueue({
   intakeToSend,
   overdueTasks,
   tasksDueToday,
-  unassignedCallCount,
 }: TodayQueueProps) {
   const router = useRouter()
   const token = useAccessToken()
@@ -624,9 +622,6 @@ export function TodayQueue({
           key: `send:${m.matter_id}`,
           run: () => router.push(`/admin/matters/${m.matter_id}`),
         })),
-        ...(unassignedCallCount > 0
-          ? [{ key: 'calls', run: () => router.push('/admin/inbox?scope=unlinked_calls') }]
-          : []),
       ]
     }
     if (tab === 'clients') {
@@ -657,7 +652,6 @@ export function TodayQueue({
     overdueTaskRows,
     dueTodayTaskRows,
     completeTask,
-    unassignedCallCount,
     router,
     runPrimary,
     nudgeRow,
@@ -967,23 +961,6 @@ export function TodayQueue({
                     focused={focusKey === `send:${m.matter_id}`}
                   />
                 ))}
-              </ul>
-            </>
-          )}
-
-          {unassignedCallCount > 0 && (
-            <>
-              <GroupHeader title="Calls" count={unassignedCallCount} />
-              <ul className="rounded-lg border border-border bg-card">
-                <SimpleRow
-                  id="calls"
-                  href="/admin/inbox?scope=unlinked_calls"
-                  icon={Phone}
-                  primary={`${unassignedCallCount} call${unassignedCallCount === 1 ? '' : 's'} not linked`}
-                  secondary="Link each call to a lead or matter"
-                  cta="Review calls"
-                  focused={focusKey === 'calls'}
-                />
               </ul>
             </>
           )}

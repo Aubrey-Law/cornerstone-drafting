@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { SetupBanner } from '@/components/SetupBanner'
 import { linkifyText } from '@/lib/linkify'
-import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { MAX_LEAD_SMS_BODY_LENGTH, MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
 import {
   CHANNEL_LABEL,
@@ -18,7 +17,7 @@ import {
   type CommunicationItem,
 } from '@/lib/comms/thread'
 
-export type ThreadChannelFilter = 'all' | 'portal' | 'sms' | 'email' | 'calls'
+export type ThreadChannelFilter = 'all' | 'portal' | 'sms' | 'email'
 
 export interface CommunicationThreadProps {
   items: CommunicationItem[]
@@ -52,7 +51,6 @@ const FILTER_CHANNEL: Record<Exclude<ThreadChannelFilter, 'all'>, CommChannel> =
   portal: 'portal',
   sms: 'sms',
   email: 'email',
-  calls: 'call',
 }
 
 const TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
@@ -177,7 +175,7 @@ export function CommunicationThread({
           <li className="text-xs text-muted-foreground">Loading…</li>
         ) : visible.length === 0 ? (
           <li className="text-xs text-muted-foreground">
-            {channelFilter === 'all' ? 'No messages yet.' : `No ${channelFilter === 'calls' ? 'calls' : `${channelFilter} messages`} yet.`}
+            {channelFilter === 'all' ? 'No messages yet.' : `No ${channelFilter} messages yet.`}
           </li>
         ) : (
           visible.map(item => (
@@ -198,31 +196,6 @@ export function CommunicationThread({
                 <time dateTime={item.created_at}>{TIME_FORMAT.format(new Date(item.created_at))}</time>
               </div>
               <p className="whitespace-pre-wrap">{linkifyText(item.body)}</p>
-              {item.channel === 'call' && item.call ? (
-                <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
-                  <CallPhoneLink phone={item.call.participant_number} className="text-primary" />
-                  {item.call.voicemail_url ? (
-                    <a
-                      href={item.call.voicemail_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline"
-                    >
-                      Voicemail
-                    </a>
-                  ) : null}
-                  {item.call.recording_url && item.call.recording_url !== item.call.voicemail_url ? (
-                    <a
-                      href={item.call.recording_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline"
-                    >
-                      Recording
-                    </a>
-                  ) : null}
-                </div>
-              ) : null}
             </li>
           ))
         )}

@@ -33,16 +33,6 @@ interface SmsMessageRow {
   created_at: string
 }
 
-interface CallRowLite {
-  id: string
-  direction: 'inbound' | 'outbound'
-  status: string
-  started_at: string
-  duration_seconds: number | null
-  summary: string | null
-  firm_user_email: string | null
-}
-
 export interface RecordCommunicationsCardProps {
   record: CommsRecord
   recipientName: string
@@ -54,11 +44,11 @@ export interface RecordCommunicationsCardProps {
   /** When false, the SMS composer is replaced with this explanation. */
   smsSendable?: boolean
   smsDisabledReason?: string
-  defaultChannel?: 'sms' | 'email' | 'calls'
+  defaultChannel?: 'sms' | 'email'
 }
 
 /**
- * Merged SMS / email / call timeline for a lead or matter record, self-fetching
+ * Merged SMS / email timeline for a lead or matter record, self-fetching
  * so it can drop into the lead Communications tab or the contact side panel.
  * Renders the shared `CommunicationThread` — the inbox and matter tab use the
  * same timeline and composer.
@@ -79,7 +69,6 @@ export function RecordCommunicationsCard({
     defaultChannel && defaultChannel !== 'sms' ? defaultChannel : 'all',
   )
   const [messages, setMessages] = useState<SmsMessageRow[]>([])
-  const [calls, setCalls] = useState<CallRowLite[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
 
@@ -90,19 +79,10 @@ export function RecordCommunicationsCard({
   const loadMessages = useCallback(async () => {
     if (!token) return
     try {
-      const [smsRows, callRows] = await Promise.all([
-        apiRequest<SmsMessageRow[]>(`${recordBase}/sms-messages`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => []),
-        apiRequest<unknown>(`${recordBase}/calls?limit=50`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => []),
-      ])
+      const smsRows = await apiRequest<SmsMessageRow[]>(`${recordBase}/sms-messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => [])
       setMessages(Array.isArray(smsRows) ? smsRows : [])
-      const callList = Array.isArray(callRows)
-        ? callRows
-        : (callRows as { calls?: unknown[] } | null)?.calls ?? []
-      setCalls(Array.isArray(callList) ? callList as CallRowLite[] : [])
     } finally {
       setLoading(false)
     }
@@ -123,17 +103,7 @@ export function RecordCommunicationsCard({
       sender: m.direction === 'inbound' ? recipientName : m.recipient_name ? `To ${m.recipient_name}` : 'Firm',
       created_at: m.created_at,
     })),
-    calls.map(c => ({
-      id: c.id,
-      channel: 'call' as const,
-      direction: c.direction,
-      body: c.summary?.trim() || `${c.direction === 'inbound' ? 'Inbound' : 'Outbound'} call`,
-      meta: [c.status, c.duration_seconds != null ? `${c.duration_seconds}s` : null]
-        .filter(Boolean).join(' · ') || null,
-      sender: c.direction === 'outbound' ? c.firm_user_email : null,
-      created_at: c.started_at,
-    })),
-  ), [messages, calls, recipientName])
+  ), [messages, recipientName])
 
   const sendSms = useCallback(async (_channel: 'portal' | 'sms', body: string): Promise<boolean> => {
     if (!token || !body.trim()) return false
@@ -166,7 +136,6 @@ export function RecordCommunicationsCard({
     { key: 'all', label: 'All' },
     { key: 'sms', label: 'SMS' },
     { key: 'email', label: 'Email' },
-    { key: 'calls', label: 'Calls' },
   ]
 
   return (

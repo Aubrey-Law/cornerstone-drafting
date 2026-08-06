@@ -108,11 +108,13 @@ describe('ContactSidePanel', () => {
     expect(fetched.some(u => u.includes('/api/admin/matters/m1/sms-messages'))).toBe(false)
   })
 
-  it('reads a standalone contact’s own calls', async () => {
+  it('never reaches for a call history route', async () => {
+    // Calls are not associated with a contact, so none exists to fetch.
     renderPanel(standalone)
     await waitFor(() => {
-      expect(fetched.some(u => u.includes('/api/admin/contacts/c1/calls'))).toBe(true)
+      expect(fetched.some(u => u.includes('/api/admin/contacts/c1/sms-messages'))).toBe(true)
     })
+    expect(fetched.some(u => u.includes('/calls'))).toBe(false)
   })
 
   it('scopes the email composer to the contact so no record is attached', async () => {

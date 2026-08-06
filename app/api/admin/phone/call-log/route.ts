@@ -23,17 +23,15 @@ interface Body {
   durationSeconds?: number
   outcome?: string
   notes?: string | null
-  matterId?: string | null
-  leadId?: string | null
 }
 
 /**
  * POST /api/admin/phone/call-log
  *
- * Persists the softphone wrap-up: outcome, notes, and the matter or lead the
- * call belongs to. Attaches to the row the provider webhook already created
- * when it can (by external id, else the most recent matching call), and
- * inserts a row when the webhook hasn't arrived or isn't configured.
+ * Persists the softphone wrap-up: outcome, notes and duration. Attaches to the
+ * row the provider webhook already created when it can (by external id, else
+ * the most recent matching call), and inserts a row when the webhook hasn't
+ * arrived or isn't configured. Calls are not associated with a record.
  */
 export async function POST(req: Request) {
   const { err, userId, user } = await requireAdmin(req)
@@ -87,21 +85,10 @@ export async function POST(req: Request) {
     existingId = (data?.id as string | undefined) ?? null
   }
 
-  // calls_single_record_link: a call links to a matter OR a lead, never both.
-  const matterId = body.matterId ?? null
-  const leadId = matterId ? null : (body.leadId ?? null)
-
   if (existingId) {
     const patch: Record<string, unknown> = { status, summary, direction }
-    // don't overwrite a webhook-reported duration or auto-assigned links with nulls
+    // don't overwrite a webhook-reported duration with null
     if (durationSeconds !== null) patch.duration_seconds = durationSeconds
-    if (matterId) {
-      patch.matter_id = matterId
-      patch.lead_id = null
-    } else if (leadId) {
-      patch.lead_id = leadId
-      patch.matter_id = null
-    }
     const { error } = await admin.from('calls').update(patch).eq('id', existingId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true, callId: existingId, mode: 'updated' })
@@ -114,8 +101,6 @@ export async function POST(req: Request) {
       status,
       summary,
       direction,
-      matter_id: matterId,
-      lead_id: leadId,
       duration_seconds: durationSeconds,
       participant_number: formatPhoneDisplay(body.participantNumber ?? '') || body.participantNumber || digits,
       provider: voiceProvider(),

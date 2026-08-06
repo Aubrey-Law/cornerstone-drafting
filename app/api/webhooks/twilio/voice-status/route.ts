@@ -9,7 +9,6 @@ export const dynamic = 'force-dynamic'
 
 type ExistingCall = TwilioCallRowInsert & {
   id?: string
-  matter_id?: string | null
 }
 
 function mergeCallRow(existing: ExistingCall | null, incoming: TwilioCallRowInsert): TwilioCallRowInsert {

@@ -47,7 +47,6 @@ export async function POST(req: Request) {
       `Intakes still to send: ${today.intakeToSend.map(matter =>
         `${matter.client_name ?? matter.matter_name ?? 'Unnamed'} [link: /admin/matters/${matter.matter_id}]`,
       ).join('; ') || 'none'}`,
-      `Calls not linked to a lead/matter: ${today.unassignedCallCount}`,
     ].join('\n')
 
     const anthropic = await getAnthropicClient()

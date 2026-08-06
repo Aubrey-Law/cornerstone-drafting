@@ -11,14 +11,13 @@ describe('sidebar badges', () => {
       draftingNeedsDesignCount: 4,
       agingRedCount: 1,
       agingAmberCount: 3,
-      unassignedCallsCount: 5,
+      inboxNeedsReplyCount: 5,
     }
 
     expect(getNavBadge('/admin/matters', counts)).toEqual({ value: 2, tone: 'destructive' })
     // Aging is folded into Drafting: overdue (red) takes priority on that badge.
     expect(getNavBadge('/admin/drafting', counts)).toEqual({ value: 1, tone: 'destructive' })
     expect(getNavBadge('/admin/inbox', counts)).toEqual({ value: 5, tone: 'accent' })
-    expect(getNavBadge('/admin/calls', counts)).toBeNull()
     expect(getNavBadge('/admin/settings', counts)).toBeNull()
   })
 
@@ -45,10 +44,6 @@ describe('sidebar badges', () => {
     expect(route).toContain("tags: [SIDEBAR_COUNTS_TAG]")
     expect(route).toContain('fetchSidebarCounts')
     expect(counts).toContain("eq('stage', 'intake_review')")
-    expect(counts).toContain("is('matter_id', null)")
-    expect(counts).toContain("is('lead_id', null)")
-    expect(counts).toContain("is('contact_id', null)")
-    expect(counts).toContain("is('triage_dismissed_at', null)")
     expect(counts).toContain('fetchMatterAgingTiles')
     expect(layout).toContain('/api/admin/sidebar-counts')
     expect(layout).toContain('getNavBadge(item.href, badgeCounts)')

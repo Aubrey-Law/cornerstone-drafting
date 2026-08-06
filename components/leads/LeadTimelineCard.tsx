@@ -2,9 +2,8 @@
 
 import dynamic from 'next/dynamic'
 import { useMemo, useState } from 'react'
-import { CalendarDays, CircleDot, MessageSquareText, Phone } from 'lucide-react'
+import { CalendarDays, CircleDot, MessageSquareText } from 'lucide-react'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
-import { CallRow } from '@/components/calls/CallRow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FormattedNote } from '@/components/notes/FormattedNote'
@@ -15,7 +14,6 @@ import {
   buildLeadTimeline,
   filterLeadTimeline,
   type LeadTimelineActivity,
-  type LeadTimelineCall,
   type LeadTimelineFilter,
   type LeadTimelineItem,
   type LeadTimelineMeeting,
@@ -53,9 +51,7 @@ type Props = {
   initialNotes: LeadTimelineNote[]
   initialMeetingNotes: LeadTimelineMeeting[]
   initialActivity?: LeadTimelineActivity[]
-  initialCalls?: LeadTimelineCall[]
   actorNames?: Record<string, string>
-  callsError?: string | null
   actorError?: string | null
   dataRefreshWarning?: string | null
   activityRefreshWarning?: string | null
@@ -71,7 +67,6 @@ type Props = {
 const FILTERS: Array<{ value: LeadTimelineFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'notes', label: 'Notes' },
-  { value: 'calls', label: 'Calls' },
   { value: 'system', label: 'System' },
 ]
 
@@ -101,7 +96,6 @@ function mapMeetingNoteApiRow(row: LeadMeetingNoteApiRow): LeadTimelineMeeting {
 function markerIcon(kind: LeadTimelineItem['kind']) {
   if (kind === 'note') return MessageSquareText
   if (kind === 'meeting') return CalendarDays
-  if (kind === 'call') return Phone
   return CircleDot
 }
 
@@ -111,9 +105,7 @@ export function LeadTimelineCard({
   initialNotes,
   initialMeetingNotes,
   initialActivity = [],
-  initialCalls = [],
   actorNames = {},
-  callsError = null,
   actorError = null,
   dataRefreshWarning = null,
   activityRefreshWarning: externalActivityRefreshWarning = null,
@@ -143,10 +135,9 @@ export function LeadTimelineCard({
   const items = useMemo(() => buildLeadTimeline({
     notes,
     meetings,
-    calls: initialCalls,
     activity: initialActivity,
     actorNames,
-  }), [notes, meetings, initialCalls, initialActivity, actorNames])
+  }), [notes, meetings, initialActivity, actorNames])
   const visibleItems = filterLeadTimeline(items, effectiveFilter)
 
   async function call(url: string, method: string, payload?: unknown) {
@@ -232,7 +223,6 @@ export function LeadTimelineCard({
   }
 
   function renderBody(item: LeadTimelineItem) {
-    if (item.kind === 'call' && item.call) return <CallRow call={item.call} />
     if (item.kind === 'meeting') {
       const meetingNote = meetings.find(candidate => `meeting:${candidate.id}` === item.id)
       if (!meetingNote || expandedMeetingId !== meetingNote.id) return null
@@ -373,11 +363,9 @@ export function LeadTimelineCard({
                   ) : (
                     <p className="text-sm font-medium">{item.title}</p>
                   )}
-                  {item.kind !== 'call' && (
-                    <p className="text-xs text-muted-foreground">
-                      {item.actorName} · <time dateTime={item.occurredAt}>{formatDateTime(item.occurredAt)}</time>
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {item.actorName} · <time dateTime={item.occurredAt}>{formatDateTime(item.occurredAt)}</time>
+                  </p>
                 </div>
 
                 {note && editingNoteId === note.id ? (
@@ -418,12 +406,6 @@ export function LeadTimelineCard({
         {visibleItems.length === 0 && <p className="py-3 text-sm text-muted-foreground">No timeline items for this filter.</p>}
       </div>
 
-      {initialCalls.length === 0 && !callsError && (
-        <p className="mt-4 text-xs text-muted-foreground">No calls logged yet.</p>
-      )}
-      {callsError && (
-        <p className="mt-4 text-xs text-muted-foreground">Calls unavailable: {callsError}</p>
-      )}
       {actorError && (
         <p className="mt-4 text-xs text-muted-foreground">Actor names unavailable: {actorError}</p>
       )}

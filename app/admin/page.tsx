@@ -41,7 +41,6 @@ export default async function AdminTodayPage() {
     today.unreadThreads.length === 0 && 'No unread client messages',
     today.intakeReview.length === 0 && 'No intakes waiting on review',
     today.intakeToSend.length === 0 && 'Every open matter has its intake out',
-    today.unassignedCallCount === 0 && 'All calls are linked to leads or matters',
   ].filter(Boolean) as string[]
 
   return (
@@ -72,7 +71,6 @@ export default async function AdminTodayPage() {
             intakeToSend={today.intakeToSend.map(toMatterItem)}
             overdueTasks={today.overdueTasks}
             tasksDueToday={today.tasksDueToday}
-            unassignedCallCount={today.unassignedCallCount}
           />
         </div>
 
