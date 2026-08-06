@@ -74,7 +74,7 @@ export function DesignSectionNav({
           type="checkbox"
           checked={hideUnusedDecisions}
           onChange={event => onHideUnusedChange(event.target.checked)}
-          className="mt-0.5 h-3.5 w-3.5 accent-accent"
+          className="mt-0.5 h-3.5 w-3.5 accent-primary"
         />
         <span className="text-[11px] leading-4 text-foreground">
           Hide what this plan doesn&apos;t use
