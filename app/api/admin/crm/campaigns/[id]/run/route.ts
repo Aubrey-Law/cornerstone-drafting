@@ -134,7 +134,7 @@ export async function POST(req: Request, { params }: Context) {
       userId,
     })
 
-    if (result.ok) {
+    if (result.ok && (result.status === 'sent' || result.status === 'redirected')) {
       await admin.from('cornerstone_crm_campaign_recipients').update({
         provider_status: 'sent',
         provider_message_id: result.resendId ?? null,
@@ -148,7 +148,7 @@ export async function POST(req: Request, { params }: Context) {
     await admin.from('cornerstone_crm_campaign_recipients').update({
       provider_status: 'failed',
       provider_message_id: null,
-      error_code: result.error || `send_failed_${result.status}`,
+      error_code: result.ok ? `send_not_delivered_${result.status}` : result.error || `send_failed_${result.status}`,
       last_event_at: new Date().toISOString(),
     }).eq('id', recipient.id)
     failed += 1
