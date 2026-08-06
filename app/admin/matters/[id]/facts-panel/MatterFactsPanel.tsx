@@ -10,11 +10,14 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatAssetCurrency } from '@/lib/assets/format'
 import { ageInYearsFromDob, formatDobWithAge, toDateInputValue } from '@/lib/dob'
 import { normalizeTargetSigningDate, targetSigningDateInput } from '@/lib/matterDates'
-import { MATTER_PLAN_TYPE_OPTIONS, normalizePlanType } from '@/lib/matterPlanType'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
+import { resolveDraftingDate, DRAFTING_DATE_COLUMNS } from '@/lib/matter/draftingDates'
+import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
+import { isCoupleMatter, MATTER_TYPE_OPTIONS, normalizeMatterType } from '@/lib/matter/matterType'
 import { cn, formatDate } from '@/lib/utils'
 import type { MatterTab } from '@/lib/matterPageTabs'
+import { MARKETING_CONSENT_LABEL, type MarketingConsentStatus } from '@/lib/crm/consent'
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterActivity, PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -55,6 +58,10 @@ export interface MatterFactsPanelProps {
   matterId: string
   details: MatterDetailsRow | null
   designSheetPlanType: string | null
+  /** Design-sheet-owned plan facts, resolved server-side and read-only here. */
+  planMirror?: MatterPlanMirror
+  /** CRM marketing consent, shown read-only; the Communications tab edits it. */
+  marketingConsent?: MarketingConsentStatus
   estate: MatterEstateSnapshot
   /** Kept from the previous rail — the panel must not drop the readiness dial. */
   readinessItems: MatterReadinessItem[]
@@ -98,11 +105,6 @@ const TAX_DECISION_OPTIONS = [
   { value: 'not-reviewed', label: 'Not reviewed' },
 ]
 
-/** Matches the check the overview hero uses, so both agree on showing spouse. */
-function isMarried(maritalStatus: string | null | undefined): boolean {
-  return maritalStatus?.trim().toLowerCase() === 'married'
-}
-
 function initialsFor(name: string): string {
   return name
     .trim()
@@ -144,6 +146,8 @@ export function MatterFactsPanel({
   matterId,
   details,
   designSheetPlanType,
+  planMirror = EMPTY_PLAN_MIRROR,
+  marketingConsent = 'unknown',
   estate,
   readinessItems,
   activity,
@@ -257,10 +261,30 @@ export function MatterFactsPanel({
     ?? [client?.address_line1, client?.city, client?.state, client?.zip].filter(Boolean).join(', ')
 
   const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
-  const matterPlanType = normalizePlanType(details?.plan_type ?? matter.plan_type ?? 'TBD')
   const spouseName = [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' ')
     || matter.spouse_name
     || ''
+  const spouseDob = spouse?.date_of_birth ?? matter.spouse_dob ?? null
+  // Matter type, not marital status, decides whether the spouse surfaces show.
+  const isCouple = isCoupleMatter(details, maritalStatus)
+  const planLabel = designSheetPlanType || planMirror.planType
+    ? designPlanTypeLabel(designSheetPlanType ?? planMirror.planType)
+    : '—'
+  const county = details?.jurisdiction_county ?? ''
+  const draftsDue = resolveDraftingDate(details, 'drafts_due')
+  const draftsReview = resolveDraftingDate(details, 'drafts_review')
+  const revisions = resolveDraftingDate(details, 'revisions')
+  const designHref = `/admin/drafting/${matterId}?step=design`
+  const planFlagChips = [
+    { label: 'Real estate', on: planMirror.hasRealEstate },
+    { label: 'Credit shelter', on: planMirror.creditShelter },
+    {
+      label: 'Minor children',
+      on: planMirror.hasMinorChildren
+        || Boolean(client?.has_minor_children ?? matter.has_minor_children),
+    },
+    { label: 'Pets', on: planMirror.hasPets },
+  ]
 
   const saveStatus = savingField
     ? 'Saving…'
@@ -419,15 +443,24 @@ export function MatterFactsPanel({
                 {formatDobWithAge(dob)}
               </p>
             )}
+            <InlineText
+              label="County"
+              value={county}
+              onSave={next => onSaveField('jurisdiction_county', next)}
+            />
             <ReadOnlyRow label="Minor children" onClick={() => onOpenTab('people')}>
               {minorChildrenLabel(children, client?.has_minor_children ?? matter.has_minor_children)}
+            </ReadOnlyRow>
+            {/* Consent belongs to the CRM profile; the Communications tab edits it. */}
+            <ReadOnlyRow label="Consent" onClick={() => onOpenTab('communications')}>
+              {MARKETING_CONSENT_LABEL[marketingConsent]}
             </ReadOnlyRow>
           </>
         )}
       </PanelSection>
 
       {/* Spouse */}
-      {isMarried(maritalStatus) && (
+      {isCouple && (
         <PanelSection
           id="facts-spouse"
           title="Spouse"
@@ -471,6 +504,16 @@ export function MatterFactsPanel({
                 value={spouse.phone ?? matter.spouse_phone ?? ''}
                 onSave={next => saveSpouseField('phone', next || null)}
               />
+              <InlineDate
+                label="Date of birth"
+                value={toDateInputValue(spouseDob)}
+                onSave={next => saveSpouseField('date_of_birth', next || null)}
+              />
+              {spouseDob && (
+                <p className="px-1.5 text-right text-[11px] text-muted-foreground tabular-nums">
+                  {formatDobWithAge(spouseDob)}
+                </p>
+              )}
             </>
           ) : (
             <button
@@ -506,24 +549,12 @@ export function MatterFactsPanel({
           options={PRACTICE_AREA_OPTIONS}
           onSave={next => onSaveField('practice_area', next)}
         />
-        {designSheetPlanType ? (
-          <ReadOnlyRow label="Plan">
-            <Link
-              href={`/admin/drafting/${matterId}?step=design`}
-              className="font-semibold text-accent hover:underline"
-            >
-              {designPlanTypeLabel(designSheetPlanType)}
-            </Link>
-          </ReadOnlyRow>
-        ) : (
-          <InlineSelect
-            label="Plan"
-            accent
-            value={matterPlanType}
-            options={MATTER_PLAN_TYPE_OPTIONS}
-            onSave={next => onSaveField('plan_type', next)}
-          />
-        )}
+        {/* The design sheet owns plan composition — read-only, link out to edit. */}
+        <ReadOnlyRow label="Plan">
+          <Link href={designHref} className="font-semibold text-accent hover:underline">
+            {planLabel}
+          </Link>
+        </ReadOnlyRow>
         <InlineText
           label="Lead source"
           value={details?.referral_source ?? matter.referral_source ?? ''}
@@ -559,6 +590,58 @@ export function MatterFactsPanel({
         </div>
       </PanelSection>
 
+      {/* Plan flags — what the plan has to cover. Chips read from the design
+          sheet; the ones the design sheet owns link back to it to change. */}
+      <PanelSection
+        id="facts-flags"
+        title="Plan flags"
+        open={open.flags}
+        onToggle={() => toggle('flags')}
+        hint={
+          !open.flags
+            ? planFlagChips.filter(chip => chip.on).map(chip => chip.label).join(' · ') || undefined
+            : undefined
+        }
+      >
+        <div className="flex flex-wrap gap-1.5 px-1.5 pb-1">
+          {planFlagChips.map(chip => (
+            <span
+              key={chip.label}
+              className={cn(
+                'rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold',
+                chip.on
+                  ? 'border-accent/30 bg-accent/10 text-accent'
+                  : 'border-border bg-muted text-muted-foreground',
+              )}
+            >
+              {chip.on ? chip.label : `No ${chip.label.toLowerCase()}`}
+            </span>
+          ))}
+        </div>
+        <ReadOnlyRow label="Trust name">
+          {planMirror.trustName ? (
+            <Link href={designHref} className="font-semibold text-accent hover:underline">
+              {planMirror.trustName}
+            </Link>
+          ) : (
+            '—'
+          )}
+        </ReadOnlyRow>
+        <InlineSelect
+          label="Matter type"
+          accent
+          value={normalizeMatterType(details?.matter_type) ?? (isCouple ? 'couple' : 'individual')}
+          options={MATTER_TYPE_OPTIONS}
+          onSave={next => onSaveField('matter_type', next)}
+        />
+        <ReadOnlyRow label="County">{county || '—'}</ReadOnlyRow>
+        <p className="px-1.5 pt-1 text-[11px] leading-snug text-muted-foreground">
+          Matter type — not marital status — decides whether the spouse section and
+          second-death provisions appear. Trust name, plan and credit shelter are
+          read-only mirrors of the design sheet.
+        </p>
+      </PanelSection>
+
       {/* Dates */}
       <PanelSection
         id="facts-dates"
@@ -572,19 +655,9 @@ export function MatterFactsPanel({
         }
       >
         <InlineDate
-          label="Intake received"
-          value={toDateInputValue(details?.intake_date ?? details?.intake_completed_at ?? null)}
-          onSave={next => onSaveField('intake_date', next || null)}
-        />
-        <InlineDate
           label="Engagement signed"
           value={toDateInputValue(details?.engagement_signed_at ?? null)}
           onSave={next => onSaveField('engagement_signed_at', next || null)}
-        />
-        <InlineDate
-          label="Design meeting"
-          value={toDateInputValue(details?.design_meeting_date ?? null)}
-          onSave={next => onSaveField('design_meeting_date', next || null)}
         />
         <InlineDate
           label="Target signing"
@@ -594,6 +667,39 @@ export function MatterFactsPanel({
             'scheduled_signing_date',
             next ? normalizeTargetSigningDate(next) : null,
           )}
+        />
+        <InlineDate
+          label="Design meeting"
+          value={toDateInputValue(details?.design_meeting_date ?? null)}
+          onSave={next => onSaveField('design_meeting_date', next || null)}
+        />
+        {/* Drafts due has no column — it is derived from target signing or nothing. */}
+        <ReadOnlyRow label="Drafts due">
+          <span className="tabular-nums">
+            {draftsDue.value ? formatDate(draftsDue.value) : '—'}
+          </span>
+          {draftsDue.derived && (
+            <span className="text-[9.5px] font-semibold uppercase tracking-[.05em] text-accent">
+              auto
+            </span>
+          )}
+        </ReadOnlyRow>
+        <InlineDate
+          label="Drafts review"
+          derived={draftsReview.derived}
+          value={draftsReview.value}
+          onSave={next => onSaveField(DRAFTING_DATE_COLUMNS.drafts_review!, next || null)}
+        />
+        <InlineDate
+          label="Revisions"
+          derived={revisions.derived}
+          value={revisions.value}
+          onSave={next => onSaveField(DRAFTING_DATE_COLUMNS.revisions!, next || null)}
+        />
+        <InlineDate
+          label="Plan signed"
+          value={toDateInputValue(details?.signing_date ?? matter.signing_date ?? null)}
+          onSave={next => onSaveField('signing_date', next || null)}
         />
       </PanelSection>
 

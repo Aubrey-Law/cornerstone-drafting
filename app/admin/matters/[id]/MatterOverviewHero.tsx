@@ -9,6 +9,8 @@ import type { MatterNextAction } from '@/lib/matterNextAction'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel } from '@/lib/matter/unreviewedUploads'
 import type { PipelineMatter } from '@/types/database'
+import type { MatterDetailsRow } from '@/types/matter-details'
+import { isCoupleMatter } from '@/lib/matter/matterType'
 import {
   resolveIntakeReviewTarget,
   type IntakeReadinessFlag,
@@ -17,6 +19,7 @@ import {
 
 interface MatterOverviewHeroProps {
   matter: PipelineMatter
+  details?: MatterDetailsRow | null
   nextAction: MatterNextAction
   unreadPortalCount: number
   unreviewedUploadCounts?: UnreviewedUploadCounts
@@ -28,10 +31,6 @@ interface MatterOverviewHeroProps {
   onUnreadClick?: () => void
   onReviewFlagsClick?: () => void
   onReviewUploads?: () => void
-}
-
-function isMarried(maritalStatus: string | null | undefined): boolean {
-  return maritalStatus?.trim().toLowerCase() === 'married'
 }
 
 function ContactLine({ label, name, email, phone }: { label: string; name: string | null; email: string | null; phone: string | null }) {
@@ -51,6 +50,7 @@ function ContactLine({ label, name, email, phone }: { label: string; name: strin
 
 export function MatterOverviewHero({
   matter,
+  details = null,
   nextAction,
   unreadPortalCount,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
@@ -67,7 +67,7 @@ export function MatterOverviewHero({
   const isEngagementAction = nextAction.kind === 'send-engagement' || nextAction.kind === 'waiting-engagement'
   const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
   const uploadDetail = formatUnreviewedUploadDetail(unreviewedUploadCounts)
-  const showSpouse = isMarried(matter.marital_status)
+  const showSpouse = isCoupleMatter(details, matter.marital_status)
   const groupedFlags = reviewFlags.reduce<Record<IntakeReadinessResolutionKind, IntakeReadinessFlag[]>>(
     (groups, flag) => {
       const kind = flag.resolutionKind

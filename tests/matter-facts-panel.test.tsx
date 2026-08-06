@@ -200,7 +200,7 @@ describe('MatterFactsPanel', () => {
     const user = userEvent.setup()
     renderPanel()
     await screen.findByText('margaret.chen@example.com')
-    for (const label of ['Email', 'Phone', 'Address', 'Date of birth', 'Minor children']) {
+    for (const label of ['Email', 'Phone', 'Address', 'Date of birth', 'County', 'Minor children', 'Consent']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     for (const label of ['Practice area', 'Plan', 'Lead source', 'Flat fee']) {
@@ -208,7 +208,10 @@ describe('MatterFactsPanel', () => {
     }
     // Dates ships collapsed by default, so open it before asserting its rows.
     await user.click(screen.getByRole('button', { name: /^dates/i }))
-    for (const label of ['Intake received', 'Engagement signed', 'Design meeting', 'Target signing']) {
+    for (const label of [
+      'Engagement signed', 'Target signing', 'Design meeting',
+      'Drafts due', 'Drafts review', 'Revisions', 'Plan signed',
+    ]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
   })

@@ -12,12 +12,15 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { MatterOverviewContacts } from './MatterOverviewContacts'
 import { MatterAdditionalContactsTab } from './MatterAdditionalContactsTab'
+import { MatterFiduciaryCard } from './MatterFiduciaryCard'
+import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 
 interface MatterPeopleTabProps {
   matterId: string
   matter: PipelineMatter
   initialContacts: MatterContact[]
+  planMirror?: MatterPlanMirror
   recordLabel?: 'matter' | 'lead'
 }
 
@@ -31,6 +34,7 @@ export function MatterPeopleTab({
   matterId,
   matter,
   initialContacts,
+  planMirror = EMPTY_PLAN_MIRROR,
   recordLabel = 'matter',
 }: MatterPeopleTabProps) {
   const [addRequest, setAddRequest] = useState<PersonAddRequest | null>(null)
@@ -62,6 +66,10 @@ export function MatterPeopleTab({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {recordLabel === 'matter' && (
+        <MatterFiduciaryCard matterId={matterId} planMirror={planMirror} />
+      )}
 
       <div id="household" className="scroll-mt-24">
         <MatterOverviewContacts matterId={matterId} matter={matter} addRequest={addRequest} />

@@ -80,6 +80,7 @@ import {
   getDocumentUrl,
   getDocumentViewerUrl,
   renameDocument,
+  setDocumentReviewed,
   setDocumentShared,
   uploadDocument,
 } from '@/lib/documents'
@@ -89,7 +90,15 @@ import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
 import { documentDisplayTitle } from '@/lib/documentDisplayTitle'
 import { useFileDrop } from '@/hooks/useFileDrop'
 
-type Scope = 'all' | 'shared' | 'client'
+type Scope = 'all' | 'unreviewed' | 'shared' | 'client'
+
+/**
+ * A client upload nobody has signed off on yet. Firm-generated documents are
+ * never "unreviewed" in this sense — the badge is about incoming files.
+ */
+function isDocumentUnreviewed(doc: MatterDocument): boolean {
+  return doc.source === 'client' && !doc.reviewed_at
+}
 
 function formatBytes(size: number) {
   if (!Number.isFinite(size) || size <= 0) return '-'
@@ -176,6 +185,7 @@ export function MatterDocumentsTab({
 
   const counts = useMemo(() => ({
     all: visibleDocuments.length,
+    unreviewed: visibleDocuments.filter(isDocumentUnreviewed).length,
     shared: visibleDocuments.filter(isDocumentShared).length,
     client: visibleDocuments.filter(doc => doc.source === 'client').length,
   }), [visibleDocuments])
@@ -183,6 +193,7 @@ export function MatterDocumentsTab({
   const filteredDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return visibleDocuments.filter(doc => {
+      if (scope === 'unreviewed' && !isDocumentUnreviewed(doc)) return false
       if (scope === 'shared' && !isDocumentShared(doc)) return false
       if (scope === 'client' && doc.source !== 'client') return false
       if (normalized && !doc.name.toLowerCase().includes(normalized)) return false
@@ -358,8 +369,22 @@ export function MatterDocumentsTab({
     }
   }
 
+  const handleMarkReviewed = async (doc: MatterDocument) => {
+    setBusy(`review:${doc.id}`)
+    try {
+      await setDocumentReviewed(doc.id, true)
+      toast.success(`Marked ${doc.name} reviewed`)
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not mark reviewed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const scopes: Array<{ value: Scope; label: string; count: number }> = [
     { value: 'all', label: 'All', count: counts.all },
+    { value: 'unreviewed', label: 'Unreviewed', count: counts.unreviewed },
     { value: 'shared', label: 'Shared', count: counts.shared },
     { value: 'client', label: 'From client', count: counts.client },
   ]
@@ -553,6 +578,14 @@ export function MatterDocumentsTab({
                           </p>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
+                            {isDocumentUnreviewed(doc) && (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-border bg-amber-bg text-[10px] text-amber"
+                              >
+                                Unreviewed
+                              </Badge>
+                            )}
                             {issues > 0 && (
                               <span className="text-xs font-medium text-amber">
                                 {issues} issue{issues === 1 ? '' : 's'}
@@ -595,6 +628,14 @@ export function MatterDocumentsTab({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {isDocumentUnreviewed(doc) && (
+                              <DropdownMenuItem
+                                disabled={busy === `review:${doc.id}`}
+                                onSelect={() => void handleMarkReviewed(doc)}
+                              >
+                                <Eye className="mr-2 h-4 w-4" />Mark reviewed
+                              </DropdownMenuItem>
+                            )}
                             {isDocumentPdf(doc) && (
                               <DropdownMenuItem onSelect={() => void openDocument(doc, 'view')}>
                                 <FileSearch className="mr-2 h-4 w-4" />Open original

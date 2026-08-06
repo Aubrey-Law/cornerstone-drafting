@@ -16,7 +16,8 @@ describe('useSectionState', () => {
     const { result } = renderHook(() => useSectionState())
     expect(result.current.open).toEqual(DEFAULT_SECTION_STATE)
     expect(DEFAULT_SECTION_STATE).toEqual({
-      contact: true, spouse: true, matter: true, dates: false, notes: false, activity: false,
+      contact: true, spouse: true, matter: true, flags: true,
+      dates: false, notes: false, activity: false,
     })
   })
 

@@ -18,6 +18,11 @@ import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { CommunicationThread } from '@/components/comms/CommunicationThread'
 import type { CommunicationItem } from '@/lib/comms/thread'
 import type { CommunicationChannel } from '@/lib/matterPageTabs'
+import {
+  MARKETING_CONSENT_LABEL,
+  canSendNurture,
+  type MarketingConsentStatus,
+} from '@/lib/crm/consent'
 
 export interface SchedulingActionsProps {
   onSendSchedulingLink: () => void
@@ -130,6 +135,11 @@ export interface MatterCommunicationsTabProps extends MatterMessagesSectionsProp
   /** What sends log to — matter number when assigned, else the client name. */
   recordLabel: string
   onSendOnChannel: (channel: 'portal' | 'sms', body: string) => Promise<boolean>
+  /** CRM marketing consent — gates nurture sends, never matter correspondence. */
+  marketingConsent?: MarketingConsentStatus
+  /** The marketing profile card; consent is edited here, not on Overview. */
+  marketingCard?: React.ReactNode
+  onSendNurture?: () => void
 }
 
 export function MatterCommunicationsTab({
@@ -143,8 +153,12 @@ export function MatterCommunicationsTab({
   clientPhone,
   recordLabel,
   onSendOnChannel,
+  marketingConsent = 'unknown',
+  marketingCard,
+  onSendNurture,
   ...messageProps
 }: MatterCommunicationsTabProps) {
+  const nurtureAllowed = canSendNurture(marketingConsent)
   const {
     portalLoading,
     smsLoading,
@@ -171,8 +185,33 @@ export function MatterCommunicationsTab({
           <Button type="button" size="sm" variant="outline" onClick={onBookForClient}>
             Book for client…
           </Button>
+          {/* Nurture is marketing: only an explicit opt-in clears it. */}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!nurtureAllowed}
+            title={
+              nurtureAllowed
+                ? undefined
+                : `Marketing consent is ${MARKETING_CONSENT_LABEL[marketingConsent].toLowerCase()} — record an opt-in first.`
+            }
+            onClick={onSendNurture}
+          >
+            Send nurture email
+          </Button>
         </div>
       </div>
+
+      {marketingCard}
+
+      {!nurtureAllowed && (
+        <p className="text-xs text-muted-foreground">
+          Nurture email is blocked: marketing consent is{' '}
+          {MARKETING_CONSENT_LABEL[marketingConsent].toLowerCase()}. Portal messages, SMS
+          and one-to-one email about this matter are unaffected.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 overflow-x-auto">

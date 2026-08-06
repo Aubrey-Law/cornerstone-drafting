@@ -15,7 +15,8 @@ const WRITABLE_FIELDS = new Set([
   // Core / shared
   'practice_area', 'matter_number', 'open_date', 'target_close_date', 'closed_date',
   'scheduled_signing_date', 'signing_date', 'documents_filed_date',
-  'flat_fee_amount', 'billing_type', 'est_estate_value', 'tax_exposure', 'plan_type',
+  'flat_fee_amount', 'billing_type', 'est_estate_value', 'tax_exposure',
+  'matter_type',
   'referral_source', 'lawmatics_id', 'clio_matter_number', 'matter_status_notes',
   'iolta_required', 'internal_notes',
   'intake_date', 'hired_date', 'design_meeting_date', 'draft_sent_date',
@@ -24,7 +25,7 @@ const WRITABLE_FIELDS = new Set([
   'responsible_attorney', 'co_counsel', 'paralegal_assigned',
   'jurisdiction_state', 'jurisdiction_county', 'urgency',
   // V1 — Estate Planning (ep_)
-  'trust_type', 'credit_shelter_provisions', 'trust_funding_status', 'deed_recorded',
+  'trust_funding_status', 'deed_recorded',
   'ep_plan_category', 'ep_trust_type', 'ep_ancillary_docs',
   'ep_funding_status', 'ep_deed_transfers_needed', 'ep_beneficiary_updates_needed',
   'ep_powers_of_attorney_status', 'ep_healthcare_proxy_status',
@@ -65,6 +66,17 @@ const WRITABLE_FIELDS = new Set([
   'legal_plan_service_start', 'legal_plan_service_end', 'client_status',
 ])
 
+// Plan composition belongs to the design sheet. The matter page renders these
+// read-only and links out; rejecting them here means a stale client, a script
+// or a future component cannot quietly create a second source of truth.
+const DESIGN_SHEET_OWNED_FIELDS = new Set([
+  'plan_type',
+  'trust_type',
+  'trust_name',
+  'credit_shelter_provisions',
+  'fiduciary_appointments',
+])
+
 export async function PATCH(req: Request) {
   const { err } = await requireAdmin(req)
   if (err) return err
@@ -72,6 +84,13 @@ export async function PATCH(req: Request) {
   const { matterId, field, value, manual } = await req.json()
   if (!matterId || !field) {
     return NextResponse.json({ error: 'matterId and field are required' }, { status: 400 })
+  }
+
+  if (DESIGN_SHEET_OWNED_FIELDS.has(field)) {
+    return NextResponse.json(
+      { error: `"${field}" is owned by the design sheet — edit it there` },
+      { status: 400 },
+    )
   }
 
   if (!WRITABLE_FIELDS.has(field)) {
@@ -191,23 +210,6 @@ export async function PATCH(req: Request) {
       .filter(Boolean)
       .join(' — ')
     return NextResponse.json({ error: detail || 'Unknown DB error' }, { status: 500 })
-  }
-
-  if (field === 'plan_type') {
-    const { data: matter } = await admin
-      .from('matters')
-      .select('client_intake_id')
-      .eq('id', matterId)
-      .maybeSingle()
-    if (matter?.client_intake_id) {
-      const { error: intakeErr } = await admin
-        .from('client_intake')
-        .update({ plan_type: normalizedValue })
-        .eq('id', matter.client_intake_id)
-      if (intakeErr) {
-        return NextResponse.json({ error: intakeErr.message }, { status: 500 })
-      }
-    }
   }
 
   return NextResponse.json({ row: data })
