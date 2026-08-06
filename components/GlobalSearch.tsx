@@ -5,15 +5,13 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   Briefcase,
   BookOpen,
-  BookUser,
   Clock,
   FilePenLine,
-  Phone,
   Search,
   Settings,
   Sparkles,
   Sun,
-  UserPlus,
+  UsersRound,
 } from 'lucide-react'
 import {
   CommandDialog,
@@ -35,14 +33,12 @@ interface MatterResult {
 
 const NAV_ITEMS = [
   { label: 'Today', href: '/admin', icon: Sun },
-  { label: 'Leads', href: '/admin/leads', icon: UserPlus },
+  { label: 'CRM', href: '/admin/crm/opportunities', icon: UsersRound },
   { label: 'Matters', href: '/admin/matters', icon: Briefcase },
-  { label: 'Contacts', href: '/admin/contacts', icon: BookUser },
   { label: 'Drafting', href: '/admin/drafting', icon: FilePenLine },
   { label: 'Assistant', href: '/admin/assistant', icon: Sparkles },
   { label: 'Library', href: '/admin/works', icon: BookOpen },
   { label: 'Aging', href: '/admin/pipeline/aging', icon: Clock },
-  { label: 'Calls', href: '/admin/calls', icon: Phone },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ]
 

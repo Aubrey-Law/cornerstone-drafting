@@ -23,37 +23,26 @@ describe('matter stage route', () => {
   })
 })
 
-describe('drafting hub pipeline views', () => {
-  it('wires kanban and table views with stage update helper', () => {
+describe('drafting queue boundary', () => {
+  it('keeps stage management on Matters and drafting actions on Drafting', () => {
     const hubSource = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/drafting/DraftingHubClient.tsx'),
-      'utf8',
-    )
-    const kanbanSource = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/MatterPipelineKanban.tsx'),
-      'utf8',
-    )
-    // Drag-and-drop and the stage save live in the board shared with /admin/matters.
-    const boardSource = fs.readFileSync(
-      path.join(process.cwd(), 'components/matter/MatterStageBoard.tsx'),
       'utf8',
     )
     const tableSource = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'),
       'utf8',
     )
-    const updateSource = fs.readFileSync(
-      path.join(process.cwd(), 'lib/drafting/updateMatterStage.ts'),
+    const mattersSource = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/matters/MattersClient.tsx'),
       'utf8',
     )
 
-    expect(hubSource).toContain('MatterPipelineKanban')
     expect(hubSource).toContain('MatterPipelineTable')
-    expect(kanbanSource).toContain('MatterStageBoard')
-    expect(boardSource).toContain('draggable')
-    expect(boardSource).toContain("updateMatterStage")
-    expect(tableSource).toContain("updateMatterStage")
-    expect(updateSource).toContain('/api/admin/matters/')
-    expect(updateSource).toContain('/stage')
+    expect(hubSource).not.toContain('MatterPipelineKanban')
+    expect(tableSource).toContain('hubNextAction')
+    expect(tableSource).not.toContain('updateMatterStage')
+    expect(tableSource).not.toContain('<select')
+    expect(mattersSource).toContain('MatterStageBoard')
   })
 })

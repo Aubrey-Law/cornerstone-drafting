@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,15 +14,21 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
-import type { AdminCallRow } from './CallsPageClient'
+import type { LinkedCallRow } from './types'
 
 interface Option {
   id: string
   label: string
 }
 
+interface SearchResults {
+  matters?: Option[]
+  leads?: Option[]
+  contacts?: Option[]
+}
+
 interface Props {
-  call: AdminCallRow
+  call: LinkedCallRow
   onClose: () => void
   onAssigned: () => void
 }
@@ -32,12 +38,14 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
   const [query, setQuery] = useState('')
   const [matters, setMatters] = useState<Option[]>([])
   const [leads, setLeads] = useState<Option[]>([])
+  const [contacts, setContacts] = useState<Option[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!query.trim() || !token) {
       setMatters([])
       setLeads([])
+      setContacts([])
       return
     }
     const handle = setTimeout(async () => {
@@ -45,14 +53,15 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) return
-      const json = await res.json()
+      const json = await res.json() as SearchResults
       setMatters(json.matters ?? [])
       setLeads(json.leads ?? [])
+      setContacts(json.contacts ?? [])
     }, 200)
     return () => clearTimeout(handle)
   }, [query, token])
 
-  async function assign(target: { matterId: string } | { leadId: string }) {
+  async function assign(target: { matterId: string } | { leadId: string } | { contactId: string }) {
     if (!token) return
     setSubmitting(true)
     const res = await fetch(`/api/admin/calls/${call.id}/assign`, {
@@ -65,13 +74,16 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
     })
     setSubmitting(false)
     if (!res.ok) {
-      toast.error('Failed to assign call')
+      const json = await res.json().catch(() => ({})) as { error?: string }
+      toast.error(json.error ?? 'Failed to link call')
       return
     }
     toast.success('Call linked')
     invalidateSidebarCountsClient()
     onAssigned()
   }
+
+  const noResults = matters.length === 0 && leads.length === 0 && contacts.length === 0
 
   return (
     <Dialog
@@ -86,57 +98,71 @@ export function AssignCallDialog({ call, onClose, onAssigned }: Props) {
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="assign-call-search">Search leads and matters</Label>
+            <Label htmlFor="assign-call-search">Search people, leads and matters</Label>
             <Input
               id="assign-call-search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Name, email, phone…"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Name, email, phone or matter number…"
               autoFocus
             />
           </div>
-          {matters.length > 0 ? (
-            <div>
-              <div className="text-xs font-semibold text-muted-foreground">Matters</div>
-              {matters.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  disabled={submitting}
-                  className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
-                  onClick={() => void assign({ matterId: m.id })}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {leads.length > 0 ? (
-            <div>
-              <div className="text-xs font-semibold text-muted-foreground">Leads</div>
-              {leads.map((lead) => (
-                <button
-                  key={lead.id}
-                  type="button"
-                  disabled={submitting}
-                  className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
-                  onClick={() => void assign({ leadId: lead.id })}
-                >
-                  {lead.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {matters.length === 0 && leads.length === 0 && query.trim() ? (
+          <OptionGroup
+            title="Matters"
+            options={matters}
+            disabled={submitting}
+            onSelect={(id) => void assign({ matterId: id })}
+          />
+          <OptionGroup
+            title="Leads"
+            options={leads}
+            disabled={submitting}
+            onSelect={(id) => void assign({ leadId: id })}
+          />
+          <OptionGroup
+            title="Contacts"
+            options={contacts}
+            disabled={submitting}
+            onSelect={(id) => void assign({ contactId: id })}
+          />
+          {noResults && query.trim() ? (
             <div className="text-sm text-muted-foreground">No matches.</div>
           ) : null}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function OptionGroup({
+  title,
+  options,
+  disabled,
+  onSelect,
+}: {
+  title: string
+  options: Option[]
+  disabled: boolean
+  onSelect: (id: string) => void
+}) {
+  if (options.length === 0) return null
+  return (
+    <div>
+      <div className="text-xs font-semibold text-muted-foreground">{title}</div>
+      {options.map(option => (
+        <button
+          key={option.id}
+          type="button"
+          disabled={disabled}
+          className="block w-full rounded px-2 py-1 text-left hover:bg-accent disabled:opacity-50"
+          onClick={() => onSelect(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   )
 }

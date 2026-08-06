@@ -350,7 +350,7 @@ export async function fetchCrmPeople(limit = 200): Promise<{ people: CrmPeopleRo
       const lead = person.lead_id ? leadById.get(person.lead_id) : null
       const matter = person.cornerstone_matter_id ? matterById.get(person.cornerstone_matter_id) : null
       const sourceHref = person.lead_id
-        ? `/admin/leads/${person.lead_id}`
+        ? `/admin/crm/opportunities/${person.lead_id}`
         : person.cornerstone_matter_id
           ? `/admin/matters/${person.cornerstone_matter_id}`
           : null

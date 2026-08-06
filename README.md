@@ -35,7 +35,7 @@ Dev server: [http://localhost:3002](http://localhost:3002)
 |-------|---------|
 | `/admin/matters` | Create and manage matters |
 | `/admin/matters/[id]` | Overview, documents, contacts, communications |
-| `/admin/drafting` | Drafting hub (kanban / table) |
+| `/admin/drafting` | Drafting next-action queue |
 | `/admin/drafting/[matterId]` | Design → Generate → Review workspace |
 | `/admin/pipeline/aging` | Matter-only SLA aging dashboard |
 | `/admin/calls` | Unassigned call triage |

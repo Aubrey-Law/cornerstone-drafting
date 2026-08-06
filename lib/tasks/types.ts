@@ -214,7 +214,7 @@ export function taskProgress(task: Pick<TaskRow, 'task_type' | 'status' | 'check
 
 export function taskRecordHref(task: Pick<TaskRow, 'matter_id' | 'lead_id'>): string | null {
   if (task.matter_id) return `/admin/matters/${task.matter_id}`
-  if (task.lead_id) return `/admin/leads/${task.lead_id}`
+  if (task.lead_id) return `/admin/crm/opportunities/${task.lead_id}`
   return null
 }
 

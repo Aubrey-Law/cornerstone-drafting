@@ -64,6 +64,7 @@ import type {
 } from '@/lib/leads/viewTypes'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTab } from '@/app/admin/matters/[id]/MatterPeopleTab'
+import { MatterSlaTab } from '@/app/admin/matters/[id]/tabs/sla'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -215,7 +216,11 @@ export function LeadDetailClient({
   // never waits on a router round trip.
   const urlTab = parseLeadTab(searchParams?.get('tab'))
   const [activeTab, setActiveTab] = useState<LeadTab>(urlTab)
+  const [slaTabVisited, setSlaTabVisited] = useState(urlTab === 'sla')
   useEffect(() => { setActiveTab(urlTab) }, [urlTab])
+  useEffect(() => {
+    if (activeTab === 'sla') setSlaTabVisited(true)
+  }, [activeTab])
 
   function changeTab(tab: LeadTab) {
     setActiveTab(tab)
@@ -582,9 +587,9 @@ export function LeadDetailClient({
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
-        <Link href="/admin/leads" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <Link href="/admin/crm/opportunities" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" />
-          Leads
+          Opportunities
         </Link>
         <span aria-hidden className="text-xs text-muted-foreground">/</span>
         <span className="flex min-w-0 items-center gap-1.5">
@@ -682,6 +687,7 @@ export function LeadDetailClient({
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="sla">SLA plan</TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
               <TabsTrigger value="communications">Comms</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
@@ -720,6 +726,20 @@ export function LeadDetailClient({
                 onTasksChanged={() => void taskCounts.refresh()}
               />
             </TabsContent>
+
+            {lead.matter_id ? (
+              slaTabVisited ? (
+                <MatterSlaTab matterId={lead.matter_id} enabled />
+              ) : (
+                <TabsContent value="sla" />
+              )
+            ) : (
+              <TabsContent value="sla" className="mt-4">
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  The SLA plan is unavailable because this opportunity is not linked to its matter record.
+                </p>
+              </TabsContent>
+            )}
 
             <TabsContent value="timeline" className="mt-4">
               {timeline}

@@ -40,15 +40,15 @@ export async function dispatchDueCampaignDeliveries(campaignId?: string, limit =
   const stepIds = [...new Set((deliveries ?? []).map(row => row.step_id))]
   const campaignIds = [...new Set((deliveries ?? []).map(row => row.campaign_id))]
   const [{ data: recipients }, { data: steps }, { data: campaigns }] = await Promise.all([
-    admin.from('cornerstone_crm_campaign_recipients').select('id, person_id').in('id', recipientIds),
+    admin.from('cornerstone_crm_campaign_recipients').select('id, person_id, snapshot_email').in('id', recipientIds),
     admin.from('cornerstone_crm_campaign_steps').select('id, subject, body_text, body_html').in('id', stepIds),
     admin.from('cornerstone_crm_campaigns').select('id, type').in('id', campaignIds),
   ])
   const recipientsById = new Map((recipients ?? []).map(row => [row.id, row]))
   const peopleIds = [...new Set((recipients ?? []).map(row => row.person_id))]
   const { data: people } = await admin
-    .from('cornerstone_crm_people')
-    .select('id, email, marketing_status, cornerstone_matter_id')
+    .from('v_cornerstone_crm_people')
+    .select('id, marketing_status, cornerstone_matter_id')
     .in('id', peopleIds)
   const peopleById = new Map((people ?? []).map(row => [row.id, row]))
   const stepsById = new Map((steps ?? []).map(row => [row.id, row]))
@@ -59,19 +59,20 @@ export async function dispatchDueCampaignDeliveries(campaignId?: string, limit =
   for (const delivery of deliveries ?? []) {
     const recipient = recipientsById.get(delivery.campaign_recipient_id)
     const person = recipient ? peopleById.get(recipient.person_id) : null
+    const snapshotEmail = recipient?.snapshot_email ?? null
     const campaign = campaignsById.get(delivery.campaign_id)
     const step = stepsById.get(delivery.step_id)
     const recordKind: MarketingRecordKind = person?.cornerstone_matter_id ? 'client' : 'lead'
     if (!person || !campaign || !step || !canEnrollMarketingProfile({
       marketingStatus: person.marketing_status,
       recordKind,
-      email: person.email,
+      email: snapshotEmail,
     }, campaign.type as CampaignKind)) {
       suppressIds.push(delivery.id)
       continue
     }
     const list = groups.get(delivery.step_id) ?? []
-    list.push({ id: delivery.id, recipientId: delivery.campaign_recipient_id, email: person.email!.trim(), token: delivery.delivery_token })
+    list.push({ id: delivery.id, recipientId: delivery.campaign_recipient_id, email: snapshotEmail!.trim(), token: delivery.delivery_token })
     groups.set(delivery.step_id, list)
   }
   if (suppressIds.length) {

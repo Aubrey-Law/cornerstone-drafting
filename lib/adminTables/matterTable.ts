@@ -2,19 +2,10 @@ import type { MatterListRow } from '@/lib/queries/matters'
 import { stageInfo, type StageGroup } from '@/types/database'
 import { compareNullable, normalizeSearchText, stableSort, timestamp } from '@/lib/collections'
 
-/**
- * `lifecycle` filters the consolidated list, which now carries leads alongside
- * hired matters. `open` is the working default — everything still in play,
- * whether or not it has been signed — so the list does not turn into an archive
- * the moment leads arrive.
- */
-export type MatterLifecycleFilter = 'open' | 'lead' | 'hired' | 'closed' | 'all'
-
 export type MatterTableFilters = {
   search: string
   practice: string
   stageGroup: StageGroup | 'all'
-  lifecycle: MatterLifecycleFilter
 }
 
 export type MatterSortKey = 'last_activity' | 'newest' | 'oldest' | 'client_asc' | 'client_desc' | 'matter_number'
@@ -23,7 +14,6 @@ export const EMPTY_MATTER_TABLE_FILTERS: MatterTableFilters = {
   search: '',
   practice: 'all',
   stageGroup: 'all',
-  lifecycle: 'open',
 }
 
 export type MatterListView = 'board' | 'table'
@@ -69,23 +59,8 @@ export function filterAndSortMatters(
 ): MatterListRow[] {
   const search = normalizeSearchText(filters.search)
   const practice = normalizeSearchText(filters.practice)
-  const filtered = matters.filter(
-    matter =>
-      matchesLifecycle(matter, filters.lifecycle)
-      && matchesMatter(matter, search, practice, filters.stageGroup),
-  )
+  const filtered = matters.filter(matter => matchesMatter(matter, search, practice, filters.stageGroup))
   return stableSort(filtered, (left, right) => compareMatters(left, right, sortKey))
-}
-
-export function matchesLifecycle(
-  matter: MatterListRow,
-  lifecycle: MatterLifecycleFilter,
-): boolean {
-  const status = matter.relationship_status || 'hired'
-  if (lifecycle === 'all') return true
-  if (lifecycle === 'open') return status === 'lead' || status === 'hired'
-  if (lifecycle === 'closed') return status === 'lost' || status === 'declined'
-  return status === lifecycle
 }
 
 function matchesMatter(

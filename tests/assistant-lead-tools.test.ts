@@ -48,7 +48,7 @@ describe('assistant lead creation tool', () => {
     expect(JSON.parse(result.content)).toMatchObject({
       ok: true,
       lead_id: 'lead-1',
-      url: '/admin/leads/lead-1',
+      url: '/admin/crm/opportunities/lead-1',
     })
     expect(events).toContainEqual(expect.objectContaining({
       tool: CREATE_LEAD_TOOL_NAME,

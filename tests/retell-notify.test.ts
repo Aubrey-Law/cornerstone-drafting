@@ -54,9 +54,9 @@ describe('retell notify helpers', () => {
     expect(subject).toContain('617')
     expect(text).toContain('Caller asked about a trust.')
     expect(text).toContain('1:35')
-    expect(text).toContain('/admin/calls')
+    expect(text).toContain('/admin/inbox?scope=unlinked_calls')
     expect(html).toContain('Caller asked about a trust.')
-    expect(html).toContain('/admin/calls')
+    expect(html).toContain('/admin/inbox?scope=unlinked_calls')
   })
 
   it('formats SMS within length limit', () => {
@@ -77,6 +77,6 @@ describe('retell notify helpers', () => {
   })
 
   it('links lead-associated calls to the lead detail page', () => {
-    expect(retellCallsAdminUrl(null, 'lead-123')).toContain('/admin/leads/lead-123')
+    expect(retellCallsAdminUrl(null, 'lead-123')).toContain('/admin/crm/opportunities/lead-123')
   })
 })

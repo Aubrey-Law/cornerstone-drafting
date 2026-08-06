@@ -26,7 +26,7 @@ type CampaignPersonRow = {
 
 function audienceFilterQuery(admin: ReturnType<typeof getAdminClient>, rules: AudienceRules) {
   let query = admin
-    .from('cornerstone_crm_people')
+    .from('v_cornerstone_crm_people')
     .select('id, email, first_name, last_name, lead_id, cornerstone_matter_id, company_name, city, marketing_status')
     .limit(MAX_CAMPAIGN_AUDIENCE)
 
@@ -133,6 +133,18 @@ export async function POST(req: Request, { params }: Context) {
   const recipientRows = valid.map(person => ({
     campaign_id: campaign.id,
     person_id: person.id,
+    snapshot_email: person.email,
+    snapshot_first_name: person.first_name,
+    snapshot_last_name: person.last_name,
+    snapshot_marketing_status: person.marketing_status,
+    snapshot_person: {
+      person_id: person.id,
+      email: person.email,
+      first_name: person.first_name,
+      last_name: person.last_name,
+      lead_id: person.lead_id,
+      matter_id: person.cornerstone_matter_id,
+    },
     provider_status: 'queued',
     provider_message_id: null,
     error_code: null,

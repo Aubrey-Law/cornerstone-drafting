@@ -107,9 +107,39 @@ describe('waitingSince', () => {
     expect(waitingSince(items)).toBeNull()
   })
 
-  it('ignores inbound calls — they fall back rather than demand a typed reply', () => {
+  it('tracks missed inbound calls without demanding a typed reply channel', () => {
     const items = [
-      item({ id: '1', channel: 'call', direction: 'inbound', created_at: '2026-08-01T09:00:00Z' }),
+      item({
+        id: '1',
+        channel: 'call',
+        direction: 'inbound',
+        created_at: '2026-08-01T09:00:00Z',
+        call: {
+          participant_number: '+16175550101',
+          recording_url: null,
+          voicemail_url: null,
+          needs_response: true,
+        },
+      }),
+    ]
+    expect(waitingSince(items)).toBe('2026-08-01T09:00:00Z')
+    expect(resolveReplyChannel(items, 'lead')).toBe('email')
+  })
+
+  it('does not put a completed inbound conversation in the attention queue', () => {
+    const items = [
+      item({
+        id: '1',
+        channel: 'call',
+        direction: 'inbound',
+        created_at: '2026-08-01T09:00:00Z',
+        call: {
+          participant_number: '+16175550101',
+          recording_url: null,
+          voicemail_url: null,
+          needs_response: false,
+        },
+      }),
     ]
     expect(waitingSince(items)).toBeNull()
   })

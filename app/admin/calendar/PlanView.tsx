@@ -81,7 +81,7 @@ export function PlanView({
                     {item.label}
                   </Link>
                 ) : item.leadId ? (
-                  <Link href={`/admin/leads/${item.leadId}`} className="text-xs font-semibold text-foreground hover:underline">
+                  <Link href={`/admin/crm/opportunities/${item.leadId}`} className="text-xs font-semibold text-foreground hover:underline">
                     {item.label}
                   </Link>
                 ) : (

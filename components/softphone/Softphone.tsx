@@ -203,10 +203,10 @@ export default function Softphone() {
       return `/admin/matters/${dialedEntry.matterId}?tab=communications&channel=sms`
     }
     if (dialedEntry.leadId) {
-      return `/admin/leads/${dialedEntry.leadId}?tab=communications`
+      return `/admin/crm/opportunities/${dialedEntry.leadId}?tab=communications`
     }
     if (dialedEntry.contactId) {
-      return `/admin/contacts?selected=contact:${dialedEntry.contactId}`
+      return `/admin/crm/people?selected=contact:${dialedEntry.contactId}`
     }
     return null
   }, [dialedEntry])

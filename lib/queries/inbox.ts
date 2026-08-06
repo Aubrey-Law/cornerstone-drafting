@@ -4,6 +4,10 @@ import {
   type CommunicationItem,
   type InboxThread,
 } from '@/lib/comms/thread'
+import type { LinkedCallRow } from '@/components/calls/types'
+
+const INBOX_CALL_COLUMNS =
+  'id, direction, status, participant_number, started_at, duration_seconds, recording_url, voicemail_url, summary, firm_user_email, matter_id, lead_id, contact_id, triage_dismissed_at' as const
 
 export interface FetchInboxThreadsOptions {
   limit?: number
@@ -52,6 +56,23 @@ export async function fetchInboxNeedsReplyCount(): Promise<number> {
   return count ?? 0
 }
 
+/** Calls that still need a human to identify their record or dismiss them. */
+export async function fetchUnlinkedInboxCalls(limit = 200): Promise<LinkedCallRow[]> {
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('calls')
+    .select(INBOX_CALL_COLUMNS)
+    .is('matter_id', null)
+    .is('lead_id', null)
+    .is('contact_id', null)
+    .is('triage_dismissed_at', null)
+    .order('started_at', { ascending: false })
+    .limit(Math.min(Math.max(1, Math.trunc(limit)), 200))
+
+  if (error) throw new Error(error.message)
+  return (data ?? []) as LinkedCallRow[]
+}
+
 export interface ParsedThreadKey {
   recordType: 'matter' | 'lead' | 'contact'
   recordId: string
@@ -77,7 +98,7 @@ export async function fetchThreadItems(key: ParsedThreadKey): Promise<Communicat
     .limit(500)
   const callsQuery = admin
     .from('calls')
-    .select('id, direction, status, summary, duration_seconds, started_at, firm_user_email')
+    .select('id, direction, status, participant_number, summary, duration_seconds, started_at, firm_user_email, recording_url, voicemail_url')
     .order('started_at', { ascending: true })
     .limit(200)
 
@@ -188,6 +209,9 @@ interface CallRow {
   duration_seconds: number | null
   started_at: string
   firm_user_email: string | null
+  participant_number: string
+  recording_url: string | null
+  voicemail_url: string | null
 }
 
 function callRows(rows: unknown[]): CommunicationItem[] {
@@ -201,5 +225,13 @@ function callRows(rows: unknown[]): CommunicationItem[] {
       .join(' · ') || null,
     sender: row.direction === 'outbound' ? row.firm_user_email : null,
     created_at: row.started_at,
+    call: {
+      participant_number: row.participant_number,
+      recording_url: row.recording_url,
+      voicemail_url: row.voicemail_url,
+      needs_response:
+        row.direction === 'inbound' &&
+        (Boolean(row.voicemail_url) || ['missed', 'no-answer', 'voicemail'].includes(row.status)),
+    },
   }))
 }

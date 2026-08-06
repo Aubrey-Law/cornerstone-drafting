@@ -28,6 +28,13 @@ const SENTRY_BUILD_PLUGIN_ENABLED =
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      { source: '/admin/leads', destination: '/admin/crm/opportunities', permanent: true },
+      { source: '/admin/leads/:path*', destination: '/admin/crm/opportunities/:path*', permanent: true },
+      { source: '/admin/contacts', destination: '/admin/crm/people', permanent: true },
+    ];
+  },
   transpilePackages: ['@aubrey-law/estate-fields'],
   outputFileTracingRoot: path.resolve(process.cwd()),
   // The engagement-agreement Word template and document-generation assets are

@@ -334,7 +334,7 @@ export function DayAgenda({
           {rail.followUps.length ? rail.followUps.map(item => (
             <Link
               key={item.id}
-              href={item.matterId ? `/admin/matters/${item.matterId}?tab=tasks` : `/admin/leads/${item.leadId}`}
+              href={item.matterId ? `/admin/matters/${item.matterId}?tab=tasks` : `/admin/crm/opportunities/${item.leadId}`}
               className="block rounded px-2 py-1.5 text-xs text-foreground hover:bg-muted"
             >
               {item.title}

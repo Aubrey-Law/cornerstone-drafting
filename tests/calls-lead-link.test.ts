@@ -16,10 +16,12 @@ describe('call lead linking', () => {
   })
 
   it('only counts calls with neither association as unlinked', () => {
-    for (const file of ['app/admin/calls/page.tsx', 'lib/queries/sidebarCounts.ts', 'lib/queries/today.ts']) {
+    for (const file of ['lib/queries/inbox.ts', 'lib/queries/sidebarCounts.ts', 'lib/queries/today.ts']) {
       const contents = source(file)
       expect(contents).toMatch(/\.is\('matter_id', null\)/)
       expect(contents).toMatch(/\.is\('lead_id', null\)/)
+      expect(contents).toMatch(/\.is\('contact_id', null\)/)
+      expect(contents).toMatch(/\.is\('triage_dismissed_at', null\)/)
     }
   })
 

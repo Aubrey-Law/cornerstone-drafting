@@ -305,7 +305,7 @@ export function TasksClient({
             const href = focused.matter_id
               ? `/admin/matters/${focused.matter_id}?tab=tasks`
               : focused.lead_id
-                ? `/admin/leads/${focused.lead_id}?tab=tasks`
+                ? `/admin/crm/opportunities/${focused.lead_id}?tab=tasks`
                 : null
             if (href) router.push(href)
           }

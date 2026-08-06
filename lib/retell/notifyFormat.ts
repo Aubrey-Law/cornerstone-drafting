@@ -64,9 +64,9 @@ export function retellCallsAdminUrl(matterId?: string | null, leadId?: string | 
     return appUrl(`/admin/matters/${matterId.trim()}?tab=calls`)
   }
   if (leadId?.trim()) {
-    return appUrl(`/admin/leads/${leadId.trim()}`)
+    return appUrl(`/admin/crm/opportunities/${leadId.trim()}`)
   }
-  return appUrl('/admin/calls')
+  return appUrl('/admin/inbox?scope=unlinked_calls')
 }
 
 export function formatRetellAlertEmail(row: RetellNotifyInput): {

@@ -1,11 +1,8 @@
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
 
-export type HubSortKey = 'updated' | 'client' | 'stage'
-export type HubReadinessBucket = 'ready' | 'needs_design' | 'needs_setup'
-export type HubReadinessFilter = 'all' | HubReadinessBucket | 'quiet'
-export type DraftingHubView = 'kanban' | 'table'
-
-export const DRAFTING_HUB_VIEW_KEY = 'drafting-hub-view'
+export type HubSortKey = 'updated' | 'client' | 'action'
+export type HubNextActionKey = 'design' | 'setup' | 'generate' | 'review' | 'revise'
+export type HubActionFilter = 'all' | HubNextActionKey | 'quiet'
 
 /** Days without activity before a matter is flagged as quiet in the hub and the matter list. */
 export const QUIET_DAYS = 10
@@ -35,10 +32,14 @@ export function matchesHubSearch(item: DraftingHubMatter, query: string): boolea
   return tokens.every(token => haystack.includes(token))
 }
 
-export function hubReadinessBucket(item: DraftingHubMatter): HubReadinessBucket {
-  if (!item.designSheet) return 'needs_design'
-  if (item.includedDocumentLabels.length === 0) return 'needs_setup'
-  return 'ready'
+export function hubNextActionKey(item: DraftingHubMatter): HubNextActionKey {
+  const stage = item.matter.stage
+  if (stage === 'revision') return 'revise'
+  if (stage === 'client_review' || stage === 'drafts_approved') return 'review'
+  if (!item.designSheet) return 'design'
+  if (item.setupBlockers.length > 0 || item.includedDocumentLabels.length === 0) return 'setup'
+  if (item.draftCount === 0) return 'generate'
+  return 'review'
 }
 
 export function hubSortTimestamp(item: DraftingHubMatter): number {
@@ -49,11 +50,29 @@ export function hubSortTimestamp(item: DraftingHubMatter): number {
   return pick ? Date.parse(pick) : 0
 }
 
-export function hubReadinessLabel(item: DraftingHubMatter) {
-  const bucket = hubReadinessBucket(item)
-  if (bucket === 'needs_design') return { label: 'Needs design', tone: 'warning' as const }
-  if (bucket === 'needs_setup') return { label: 'Setup needed', tone: 'warning' as const }
-  return { label: 'Ready', tone: 'success' as const }
+export function hubNextAction(item: DraftingHubMatter) {
+  const key = hubNextActionKey(item)
+  if (key === 'design') {
+    return { key, label: 'Start design', detail: 'No design sheet yet', tone: 'warning' as const }
+  }
+  if (key === 'setup') {
+    const detail = item.setupBlockers.length > 0
+      ? `${item.setupBlockers.length} setup blocker${item.setupBlockers.length === 1 ? '' : 's'}`
+      : 'Select documents'
+    return { key, label: 'Complete setup', detail, tone: 'warning' as const }
+  }
+  if (key === 'generate') {
+    return { key, label: 'Generate documents', detail: 'Design is ready', tone: 'success' as const }
+  }
+  if (key === 'revise') {
+    return { key, label: 'Revise documents', detail: 'Client or attorney changes', tone: 'warning' as const }
+  }
+  return {
+    key,
+    label: 'Review & share',
+    detail: `${item.draftCount} current draft${item.draftCount === 1 ? '' : 's'}`,
+    tone: 'info' as const,
+  }
 }
 
 export function sortHubMatters(list: DraftingHubMatter[], sortKey: HubSortKey): DraftingHubMatter[] {
@@ -61,8 +80,15 @@ export function sortHubMatters(list: DraftingHubMatter[], sortKey: HubSortKey): 
     if (sortKey === 'client') {
       return (a.matter.client_name ?? '').localeCompare(b.matter.client_name ?? '', undefined, { sensitivity: 'base' })
     }
-    if (sortKey === 'stage') {
-      return (a.matter.stage ?? '').localeCompare(b.matter.stage ?? '')
+    if (sortKey === 'action') {
+      const order: Record<HubNextActionKey, number> = {
+        design: 0,
+        setup: 1,
+        generate: 2,
+        review: 3,
+        revise: 4,
+      }
+      return order[hubNextActionKey(a)] - order[hubNextActionKey(b)]
     }
     return hubSortTimestamp(b) - hubSortTimestamp(a)
   })
@@ -85,15 +111,4 @@ export function hubDaysSinceActivity(item: DraftingHubMatter): number | null {
 export function isHubQuiet(item: DraftingHubMatter): boolean {
   const days = hubDaysSinceActivity(item)
   return days !== null && days >= QUIET_DAYS
-}
-
-export function readDraftingHubView(): DraftingHubView {
-  if (typeof window === 'undefined') return 'kanban'
-  const raw = window.localStorage.getItem(DRAFTING_HUB_VIEW_KEY)
-  return raw === 'table' ? 'table' : 'kanban'
-}
-
-export function writeDraftingHubView(view: DraftingHubView) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(DRAFTING_HUB_VIEW_KEY, view)
 }

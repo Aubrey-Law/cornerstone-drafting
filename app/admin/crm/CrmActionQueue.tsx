@@ -78,7 +78,7 @@ export function CrmActionQueue({ tasks, operations, view }: { tasks: TaskRow[]; 
         </CardHeader>
         <CardContent className="space-y-2">
           {visibleTasks.slice(0, 30).map(task => {
-            const href = task.matter_id ? `/admin/matters/${task.matter_id}` : task.lead_id ? `/admin/leads/${task.lead_id}` : '/admin/tasks'
+            const href = task.matter_id ? `/admin/matters/${task.matter_id}` : task.lead_id ? `/admin/crm/opportunities/${task.lead_id}` : '/admin/tasks'
             const overdueTask = isTaskOverdue(task)
             return (
               <Link key={task.id} href={href} className="flex items-center justify-between gap-3 rounded-md border p-3 transition-colors hover:bg-muted/50">

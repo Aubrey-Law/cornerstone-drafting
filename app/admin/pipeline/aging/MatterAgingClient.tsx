@@ -408,7 +408,7 @@ export default function MatterAgingClient({ initialRows, initialTiles }: MatterA
                     />
                   </TableCell>
                   <TableCell className="font-medium">
-                    <Link href={row.entity === 'lead' ? `/admin/leads/${row.id}` : `/admin/matters/${row.id}`} className="hover:underline">
+                    <Link href={row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`} className="hover:underline">
                       {row.client_name ?? '—'}
                     </Link>
                   </TableCell>

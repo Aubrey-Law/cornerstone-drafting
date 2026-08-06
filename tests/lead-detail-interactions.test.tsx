@@ -14,6 +14,7 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
+vi.mock('@/components/crm/MarketingProfileCard', () => ({ MarketingProfileCard: () => null }))
 
 import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
 import { LeadIntakeCard } from '@/app/admin/leads/[id]/LeadIntakeCard'
@@ -24,7 +25,7 @@ const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred
 afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset() })
 
 /** The workspace is tabbed; most assertions need their tab on screen first. */
-function showTab(name: 'Plan' | 'Timeline' | 'Intake' | 'Documents' | 'Notes') {
+function showTab(name: 'Plan' | 'SLA plan' | 'Timeline' | 'Intake' | 'Documents' | 'Notes') {
   // Radix tabs activate on mouse down, not click.
   act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) })) })
 }
@@ -135,6 +136,23 @@ describe('lead detail page', () => {
       Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
     expect(precedes(rail, ribbon)).toBe(true)
     expect(precedes(ribbon, tabs)).toBe(true)
+  })
+
+  it('loads the matter-owned SLA plan only after its lead tab is opened', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ tasks: [], progress: null }),
+    } as Response)
+
+    render(<LeadDetailClient lead={{ ...lead, matter_id: 'm1' }} spouse={spouse} initialActivity={[]} />)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    showTab('SLA plan')
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/matters/m1/tasks', expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer token' }),
+      }))
+    })
   })
 
   it('integrates every supplied activity row into the unified timeline', () => {

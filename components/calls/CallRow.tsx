@@ -1,21 +1,11 @@
 'use client'
 
 import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Voicemail } from 'lucide-react'
-import { formatPhoneDisplay } from '@/lib/phone'
 import { formatDate } from '@/lib/utils'
+import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
+import type { CallRowData } from './types'
 
-export interface CallRowData {
-  id: string
-  direction: 'inbound' | 'outbound'
-  status: string
-  participant_number: string
-  started_at: string
-  duration_seconds: number | null
-  recording_url: string | null
-  voicemail_url: string | null
-  summary: string | null
-  firm_user_email: string | null
-}
+export type { CallRowData } from './types'
 
 function durationLabel(secs: number | null): string | null {
   if (!secs || secs <= 0) return null
@@ -36,7 +26,6 @@ function iconFor(call: CallRowData): { Icon: typeof PhoneIncoming; label: string
 
 export function CallRow({ call }: { call: CallRowData }) {
   const { Icon, label } = iconFor(call)
-  const phone = formatPhoneDisplay(call.participant_number)
   const metadata = [
     call.direction,
     call.status,
@@ -48,24 +37,37 @@ export function CallRow({ call }: { call: CallRowData }) {
       <Icon className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-label={label} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="font-medium">{phone}</span>
+          <CallPhoneLink phone={call.participant_number} className="font-medium" />
           <span className="text-xs text-muted-foreground">{formatDate(call.started_at)}</span>
         </div>
         <div className="text-xs text-muted-foreground">
           {metadata}
         </div>
         {call.summary ? <div className="mt-1 text-sm">{call.summary}</div> : null}
-        {call.recording_url ? (
-          <a
-            href={call.recording_url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Recording for call with ${phone}`}
-            className="text-xs text-primary underline"
-          >
-            Recording
-          </a>
-        ) : null}
+        <div className="flex flex-wrap gap-3">
+          {call.voicemail_url ? (
+            <a
+              href={call.voicemail_url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open voicemail recording"
+              className="text-xs text-primary underline"
+            >
+              Voicemail
+            </a>
+          ) : null}
+          {call.recording_url && call.recording_url !== call.voicemail_url ? (
+            <a
+              href={call.recording_url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open call recording"
+              className="text-xs text-primary underline"
+            >
+              Recording
+            </a>
+          ) : null}
+        </div>
       </div>
     </div>
   )

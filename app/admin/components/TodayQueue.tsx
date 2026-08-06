@@ -74,7 +74,7 @@ function rowKey(row: TodayQueueRow) {
 }
 
 function rowHref(row: TodayQueueRow) {
-  return row.entity === 'lead' ? `/admin/leads/${row.id}` : `/admin/matters/${row.id}`
+  return row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`
 }
 
 function daysCell(row: TodayQueueRow) {
@@ -602,7 +602,7 @@ export function TodayQueue({
           const href = task.matter_id
             ? `/admin/matters/${task.matter_id}?tab=tasks`
             : task.lead_id
-              ? `/admin/leads/${task.lead_id}?tab=tasks`
+              ? `/admin/crm/opportunities/${task.lead_id}?tab=tasks`
               : '/admin/tasks'
           router.push(href)
         },
@@ -625,7 +625,7 @@ export function TodayQueue({
           run: () => router.push(`/admin/matters/${m.matter_id}`),
         })),
         ...(unassignedCallCount > 0
-          ? [{ key: 'calls', run: () => router.push('/admin/calls') }]
+          ? [{ key: 'calls', run: () => router.push('/admin/inbox?scope=unlinked_calls') }]
           : []),
       ]
     }
@@ -977,7 +977,7 @@ export function TodayQueue({
               <ul className="rounded-lg border border-border bg-card">
                 <SimpleRow
                   id="calls"
-                  href="/admin/calls"
+                  href="/admin/inbox?scope=unlinked_calls"
                   icon={Phone}
                   primary={`${unassignedCallCount} call${unassignedCallCount === 1 ? '' : 's'} not linked`}
                   secondary="Link each call to a lead or matter"
