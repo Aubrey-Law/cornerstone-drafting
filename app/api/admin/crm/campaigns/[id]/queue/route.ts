@@ -60,11 +60,11 @@ function personName(person: { first_name: string | null; last_name: string | nul
   return fullName || person.email || 'Contact'
 }
 
-async function previewAudience(req: Request, params: Context) {
+async function previewAudience(req: Request, context: Context) {
   const auth = await requireAdmin(req)
   if (auth.err) return auth.err
 
-  const id = await params.then(p => p.id)
+  const id = (await context.params).id
   const parsedId = idSchema.safeParse(id)
   if (!parsedId.success) return NextResponse.json({ error: 'Invalid campaign id' }, { status: 400 })
 
@@ -123,7 +123,8 @@ export async function GET(req: Request, { params }: Context) {
 export async function POST(req: Request, { params }: Context) {
   const result = await previewAudience(req, params)
   if (result instanceof NextResponse) return result
-  const { campaign, audienceRules, valid } = result
+  const { campaign, valid } = result
+  const admin = getAdminClient()
 
   if (!valid.length) {
     return NextResponse.json({ queued: 0, added: 0, updated: 0, campaignId: campaign.id })
@@ -194,7 +195,7 @@ export async function POST(req: Request, { params }: Context) {
     campaignId: campaign.id,
     queued: deliveryRows.length,
     added: addedCount,
-    updated: Math.max(0, affectedRows.length - addedCount),
+    updated: 0,
     sampleRecipients: valid.slice(0, 3).map(person => personName(person)),
   })
 }
