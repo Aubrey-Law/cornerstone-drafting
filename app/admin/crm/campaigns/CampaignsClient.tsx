@@ -47,6 +47,15 @@ const LIFECYCLE_OPTIONS: Array<CrmPeopleFilter['lifecycle']> = [
   'converted',
   'closed_lost',
 ]
+const LIFECYCLE_OPTIONS_WITHOUT_ALL: Array<CrmPeopleFilter['lifecycle']> = [
+  'new',
+  'contacted',
+  'nurture',
+  'qualified',
+  'working',
+  'converted',
+  'closed_lost',
+]
 
 const STATUS_ORDER: CampaignStatus[] = ['all', 'draft', 'running', 'scheduled', 'completed', 'paused', 'cancelled']
 
@@ -93,23 +102,23 @@ function normalizeAudienceRuleSelection(
   selected: CrmCampaignAudienceRules,
   lifecycle: CrmPeopleFilter['lifecycle'],
   selectedState: boolean,
-) {
+): CrmCampaignAudienceRules {
   const options = selected.lifecycleStatuses
   if (selectedState) {
-    if (lifecycle === 'all') return { ...selected, lifecycleStatuses: [...LIFECYCLE_OPTIONS] }
+    if (lifecycle === 'all') return { ...selected, lifecycleStatuses: [...LIFECYCLE_OPTIONS_WITHOUT_ALL, 'all'] }
     const next = new Set(options)
     next.add(lifecycle)
     next.delete('all')
-    return { ...selected, lifecycleStatuses: [...next] }
+    return { ...selected, lifecycleStatuses: [...next] as Array<CrmPeopleFilter['lifecycle']> }
   }
 
-  if (lifecycle === 'all') return { ...selected, lifecycleStatuses: ['new', 'contacted', 'nurture', 'qualified', 'working', 'converted', 'closed_lost'] }
+  if (lifecycle === 'all') return { ...selected, lifecycleStatuses: [...LIFECYCLE_OPTIONS_WITHOUT_ALL] }
   const next = new Set(options)
   next.delete(lifecycle)
   if (!next.size) {
-    return { ...selected, lifecycleStatuses: ['new', 'contacted', 'nurture', 'qualified', 'working', 'converted', 'closed_lost'] }
+    return { ...selected, lifecycleStatuses: [...LIFECYCLE_OPTIONS_WITHOUT_ALL] }
   }
-  return { ...selected, lifecycleStatuses: [...next] }
+  return { ...selected, lifecycleStatuses: [...next] as Array<CrmPeopleFilter['lifecycle']> }
 }
 
 function isLifecycleSelected(selected: CrmCampaignAudienceRules, lifecycle: CrmPeopleFilter['lifecycle']) {
