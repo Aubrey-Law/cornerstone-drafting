@@ -551,8 +551,14 @@ export interface MatterDocument {
   name: string
   size: number
   content_type: string
+  /** @deprecated Removed in the cleanup migration. Use `shared_at` and `source`. */
   folder: 'draft' | 'final' | 'client' | 'review' | 'signed' | 'intake' | 'meeting-notes'
+  /** @deprecated Always null. Removed in the cleanup migration. */
   folder_id: string | null
+  /** Set when the document is visible to the client. Null means firm-only. */
+  shared_at: string | null
+  /** Provenance, written automatically at creation. Never gates anything. */
+  source: 'firm' | 'client' | 'meeting-notes'
   uploaded_by: string | null
   created_at: string
   // Generation-run provenance + review state (nullable; absent on uploads and

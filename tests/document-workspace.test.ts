@@ -21,6 +21,8 @@ function doc(overrides: Partial<MatterDocument>): MatterDocument {
     content_type: overrides.content_type ?? 'application/pdf',
     folder: overrides.folder ?? 'draft',
     folder_id: null,
+    shared_at: null,
+    source: 'firm',
     uploaded_by: null,
     created_at: '2026-07-16T00:00:00Z',
     ...overrides,
