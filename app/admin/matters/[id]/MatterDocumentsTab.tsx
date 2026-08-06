@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowDownAZ,
+  ChevronRight,
   Combine,
   Download,
   Eye,
@@ -13,6 +15,7 @@ import {
   Pencil,
   Search,
   Share2,
+  SlidersHorizontal,
   Trash2,
   Undo2,
   Upload,
@@ -31,14 +34,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,8 +54,10 @@ import {
 } from '@/components/ui/dialog'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -68,10 +65,15 @@ import { CombineWordDraftsDialog } from '@/components/drafting/CombineWordDrafts
 import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
 import { DocumentStatusBadges } from '@/components/documents/DocumentStatusBadges'
 import {
+  DOCUMENT_FOLDERS,
   buildDocumentStatusBadges,
+  documentFolderKey,
+  documentFolderLabel,
+  formatDocumentSize,
   isDocumentPdf,
   isDocumentShared,
   isDocumentWord,
+  type DocumentFolderKey,
 } from '@/lib/documentWorkspace'
 import {
   deleteDocument,
@@ -89,8 +91,16 @@ import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
 import { documentDisplayTitle } from '@/lib/documentDisplayTitle'
 import { useFileDrop } from '@/hooks/useFileDrop'
+import { DocumentTypeIcon, FolderIcon } from './DocumentTypeIcon'
 
 type Scope = 'all' | 'unreviewed' | 'shared' | 'client'
+type SortKey = 'name' | 'date' | 'size'
+
+const SORT_LABELS: Record<SortKey, string> = {
+  name: 'Name',
+  date: 'Date',
+  size: 'Size',
+}
 
 /**
  * A client upload nobody has signed off on yet. Firm-generated documents are
@@ -98,13 +108,6 @@ type Scope = 'all' | 'unreviewed' | 'shared' | 'client'
  */
 function isDocumentUnreviewed(doc: MatterDocument): boolean {
   return doc.source === 'client' && !doc.reviewed_at
-}
-
-function formatBytes(size: number) {
-  if (!Number.isFinite(size) || size <= 0) return '-'
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function auditLabel(event: DocumentAccessAudit) {
@@ -144,6 +147,9 @@ export function MatterDocumentsTab({
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<Scope>('all')
+  const [openFolder, setOpenFolder] = useState<DocumentFolderKey | null>(null)
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortAscending, setSortAscending] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -163,6 +169,7 @@ export function MatterDocumentsTab({
     if (!target) return
     setScope('all')
     setQuery('')
+    setOpenFolder(null)
     setHighlightedDocumentId(target.id)
     const scrollTimer = window.setTimeout(() => {
       window.document.getElementById(`document-row-${target.id}`)?.scrollIntoView({
@@ -190,7 +197,8 @@ export function MatterDocumentsTab({
     client: visibleDocuments.filter(doc => doc.source === 'client').length,
   }), [visibleDocuments])
 
-  const filteredDocuments = useMemo(() => {
+  /** Scope + search, before the folder narrows the result any further. */
+  const matchingDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return visibleDocuments.filter(doc => {
       if (scope === 'unreviewed' && !isDocumentUnreviewed(doc)) return false
@@ -200,6 +208,35 @@ export function MatterDocumentsTab({
       return true
     })
   }, [query, scope, visibleDocuments])
+
+  /** Folder tiles summarise what survived the scope and search, not the raw set. */
+  const folders = useMemo(() => DOCUMENT_FOLDERS.map(folder => {
+    const contents = matchingDocuments.filter(doc => documentFolderKey(doc) === folder.key)
+    return {
+      ...folder,
+      documents: contents,
+      size: contents.reduce((sum, doc) => sum + (doc.size || 0), 0),
+    }
+  }), [matchingDocuments])
+
+  const sortDocuments = useCallback((docs: MatterDocument[]) => {
+    const direction = sortAscending ? 1 : -1
+    return [...docs].sort((a, b) => {
+      if (sortKey === 'size') return direction * ((a.size || 0) - (b.size || 0))
+      if (sortKey === 'date') return direction * (a.created_at ?? '').localeCompare(b.created_at ?? '')
+      return direction * a.name.localeCompare(b.name)
+    })
+  }, [sortAscending, sortKey])
+
+  /**
+   * At the root every file is listed under the folder tiles, so the flat view
+   * staff already rely on survives; opening a folder narrows to its contents.
+   */
+  const listedDocuments = useMemo(() => sortDocuments(
+    openFolder === null
+      ? matchingDocuments
+      : matchingDocuments.filter(doc => documentFolderKey(doc) === openFolder),
+  ), [matchingDocuments, openFolder, sortDocuments])
 
   const selectedDocuments = useMemo(
     () => visibleDocuments.filter(doc => selectedIds.has(doc.id)),
@@ -213,28 +250,28 @@ export function MatterDocumentsTab({
   )
 
   const allVisibleSelected =
-    filteredDocuments.length > 0 && filteredDocuments.every(doc => selectedIds.has(doc.id))
+    listedDocuments.length > 0 && listedDocuments.every(doc => selectedIds.has(doc.id))
 
   const refresh = useCallback(async () => {
     await onDocumentsChanged()
   }, [onDocumentsChanged])
+
+  const setSelection = (docs: MatterDocument[], checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      for (const doc of docs) {
+        if (checked) next.add(doc.id)
+        else next.delete(doc.id)
+      }
+      return next
+    })
+  }
 
   const toggleSelected = (docId: string, checked: boolean) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (checked) next.add(docId)
       else next.delete(docId)
-      return next
-    })
-  }
-
-  const toggleAllVisible = (checked: boolean) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      for (const doc of filteredDocuments) {
-        if (checked) next.add(doc.id)
-        else next.delete(doc.id)
-      }
       return next
     })
   }
@@ -388,6 +425,7 @@ export function MatterDocumentsTab({
     { value: 'shared', label: 'Shared', count: counts.shared },
     { value: 'client', label: 'From client', count: counts.client },
   ]
+  const activeScope = scopes.find(option => option.value === scope) ?? scopes[0]
 
   return (
     <div className="space-y-4">
@@ -409,6 +447,7 @@ export function MatterDocumentsTab({
             </div>
           </div>
         )}
+
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-sm font-semibold">
@@ -459,38 +498,96 @@ export function MatterDocumentsTab({
           </div>
         )}
 
-        <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-1" role="group" aria-label="Filter documents">
-            {scopes.map(option => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={scope === option.value}
-                onClick={() => setScope(option.value)}
-                className={cn(
-                  'rounded-md px-2.5 py-1.5 text-sm transition-colors',
-                  scope === option.value
-                    ? 'bg-primary/10 font-semibold text-foreground'
-                    : 'text-muted-foreground hover:bg-muted/50',
-                )}
-              >
-                {option.label} <span className="tabular-nums">{option.count}</span>
-              </button>
-            ))}
-          </div>
-          <div className="relative sm:w-64">
+        {/* Toolbar: select-all, search, filter, sort — the file-manager header row. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+          <Checkbox
+            checked={allVisibleSelected}
+            onCheckedChange={checked => setSelection(listedDocuments, checked === true)}
+            aria-label="Select all listed documents"
+          />
+          <div className="relative min-w-[12rem] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={query}
               onChange={event => setQuery(event.target.value)}
               className="h-9 pl-8 text-sm"
-              placeholder="Search documents"
+              placeholder="Search for files and folders…"
+              aria-label="Search documents"
             />
           </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                {activeScope.label}
+                <span className="tabular-nums">{activeScope.count}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Show</DropdownMenuLabel>
+              {scopes.map(option => (
+                <DropdownMenuCheckboxItem
+                  key={option.value}
+                  checked={scope === option.value}
+                  onCheckedChange={() => setScope(option.value)}
+                >
+                  {option.label} <span className="ml-1 tabular-nums text-muted-foreground">{option.count}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+                <ArrowDownAZ className="h-3.5 w-3.5" />
+                Sort: {SORT_LABELS[sortKey]} {sortAscending ? '↑' : '↓'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+              {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+                <DropdownMenuCheckboxItem
+                  key={key}
+                  checked={sortKey === key}
+                  onCheckedChange={() => setSortKey(key)}
+                >
+                  {SORT_LABELS[key]}
+                </DropdownMenuCheckboxItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setSortAscending(value => !value)}>
+                {sortAscending ? 'Descending' : 'Ascending'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+
+        {openFolder !== null && (
+          <nav
+            aria-label="Folder breadcrumb"
+            className="flex items-center gap-1 border-b border-border px-4 py-2 text-xs"
+          >
+            <button
+              type="button"
+              className="rounded px-1.5 py-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              onClick={() => setOpenFolder(null)}
+            >
+              All documents
+            </button>
+            <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden />
+            <span aria-current="page" className="px-1.5 py-1 font-medium">
+              {documentFolderLabel(openFolder)}
+            </span>
+          </nav>
+        )}
 
         {selectedDocuments.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-3">
+            <span className="text-xs text-muted-foreground">
+              {selectedDocuments.length} selected
+            </span>
             <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'bulk-download'} onClick={() => void handleDownloadSelected()}>
               {busy === 'bulk-download' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               Download selected
@@ -515,7 +612,7 @@ export function MatterDocumentsTab({
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading documents...
           </div>
-        ) : filteredDocuments.length === 0 ? (
+        ) : matchingDocuments.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <FileText className="mx-auto h-8 w-8 text-muted-foreground/60" />
             <p className="mt-3 text-sm font-medium">
@@ -528,141 +625,162 @@ export function MatterDocumentsTab({
             </p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
+          <ul className="divide-y divide-border">
+            {openFolder === null && folders.map(folder => (
+              <li key={folder.key}>
+                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30">
                   <Checkbox
-                    checked={allVisibleSelected}
-                    onCheckedChange={checked => toggleAllVisible(checked === true)}
-                    aria-label="Select all visible documents"
+                    checked={folder.documents.length > 0
+                      && folder.documents.every(doc => selectedIds.has(doc.id))}
+                    disabled={folder.documents.length === 0}
+                    onCheckedChange={checked => setSelection(folder.documents, checked === true)}
+                    aria-label={`Select everything in ${folder.label}`}
                   />
-                </TableHead>
-                <TableHead>Document</TableHead>
-                <TableHead>From</TableHead>
-                <TableHead>Shared</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDocuments.map(doc => {
-                const issues = (doc.marker_count ?? 0) + (doc.missing_count ?? 0)
-                return (
-                  <TableRow
-                    key={doc.id}
-                    id={`document-row-${doc.id}`}
-                    data-state={selectedIds.has(doc.id) ? 'selected' : undefined}
-                    className={cn(highlightedDocumentId === doc.id && 'bg-amber-bg ring-1 ring-inset ring-amber-border')}
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default disabled:opacity-60"
+                    disabled={folder.documents.length === 0}
+                    onClick={() => setOpenFolder(folder.key)}
                   >
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(doc.id)}
-                        onCheckedChange={checked => toggleSelected(doc.id, checked === true)}
-                        aria-label={`Select ${doc.name}`}
-                      />
-                    </TableCell>
-                    <TableCell className="max-w-[360px] whitespace-normal">
-                      <div className="flex items-start gap-2">
-                        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                          <p
-                            className="break-words text-sm font-medium"
-                            title={doc.name}
-                            aria-label={`${documentDisplayTitle(doc.name, clientName)}. Full filename: ${doc.name}`}
-                          >
-                            {documentDisplayTitle(doc.name, clientName)}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {formatBytes(doc.size)}
-                            {doc.created_at ? ` · ${formatDateTime(doc.created_at)}` : ''}
-                          </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
-                            {isDocumentUnreviewed(doc) && (
-                              <Badge
-                                variant="outline"
-                                className="border-amber-border bg-amber-bg text-[10px] text-amber"
-                              >
-                                Unreviewed
-                              </Badge>
-                            )}
-                            {issues > 0 && (
-                              <span className="text-xs font-medium text-amber">
-                                {issues} issue{issues === 1 ? '' : 's'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[11px]">
-                        {doc.source === 'client' ? 'Client' : 'Firm'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={isDocumentShared(doc)}
-                        disabled={busy === 'share' || busy === 'unshare'}
-                        onCheckedChange={checked => void handleShare([doc], checked)}
-                        aria-label={`Share ${doc.name} with the client`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
+                    <FolderIcon />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{folder.label}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {folder.documents.length} item{folder.documents.length === 1 ? '' : 's'} · {folder.description}
+                      </span>
+                    </span>
+                    <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:block">
+                      {formatDocumentSize(folder.size)}
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  </button>
+                </div>
+              </li>
+            ))}
+
+            {listedDocuments.map(doc => {
+              const issues = (doc.marker_count ?? 0) + (doc.missing_count ?? 0)
+              return (
+                <li
+                  key={doc.id}
+                  id={`document-row-${doc.id}`}
+                  className={cn(
+                    'flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-muted/30',
+                    selectedIds.has(doc.id) && 'bg-muted/40',
+                    highlightedDocumentId === doc.id && 'bg-amber-bg ring-1 ring-inset ring-amber-border',
+                  )}
+                >
+                  <Checkbox
+                    checked={selectedIds.has(doc.id)}
+                    onCheckedChange={checked => toggleSelected(doc.id, checked === true)}
+                    aria-label={`Select ${doc.name}`}
+                  />
+                  <DocumentTypeIcon name={doc.name} />
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="truncate text-sm font-medium"
+                      title={doc.name}
+                      aria-label={`${documentDisplayTitle(doc.name, clientName)}. Full filename: ${doc.name}`}
+                    >
+                      {documentDisplayTitle(doc.name, clientName)}
+                    </p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      {openFolder === null && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {documentFolderLabel(documentFolderKey(doc))}
+                        </span>
+                      )}
+                      <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
+                      {isDocumentUnreviewed(doc) && (
+                        <Badge
                           variant="outline"
-                          className="h-8 gap-1 text-xs"
-                          aria-label={isDocumentPdf(doc) ? `Preview PDF ${doc.name}` : `View ${doc.name}`}
-                          onClick={() => isDocumentPdf(doc) ? setPreviewTarget(doc) : void openDocument(doc, 'view')}
+                          className="border-amber-border bg-amber-bg text-[10px] text-amber"
                         >
-                          {busy === `view:${doc.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
-                          View
+                          Unreviewed
+                        </Badge>
+                      )}
+                      {issues > 0 && (
+                        <span className="text-xs font-medium text-amber">
+                          {issues} issue{issues === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground lg:block">
+                    {doc.created_at ? formatDateTime(doc.created_at) : '—'}
+                  </span>
+                  <span className="hidden w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:block">
+                    {formatDocumentSize(doc.size)}
+                  </span>
+                  <Badge variant="outline" className="shrink-0 text-[11px]">
+                    {doc.source === 'client' ? 'Client' : 'Firm'}
+                  </Badge>
+                  <Switch
+                    checked={isDocumentShared(doc)}
+                    disabled={busy === 'share' || busy === 'unshare'}
+                    onCheckedChange={checked => void handleShare([doc], checked)}
+                    aria-label={`Share ${doc.name} with the client`}
+                  />
+
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1 text-xs"
+                      aria-label={isDocumentPdf(doc) ? `Preview PDF ${doc.name}` : `View ${doc.name}`}
+                      onClick={() => isDocumentPdf(doc) ? setPreviewTarget(doc) : void openDocument(doc, 'view')}
+                    >
+                      {busy === `view:${doc.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                      View
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label={`Actions for ${doc.name}`}>
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label={`Actions for ${doc.name}`}>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {isDocumentUnreviewed(doc) && (
-                              <DropdownMenuItem
-                                disabled={busy === `review:${doc.id}`}
-                                onSelect={() => void handleMarkReviewed(doc)}
-                              >
-                                <Eye className="mr-2 h-4 w-4" />Mark reviewed
-                              </DropdownMenuItem>
-                            )}
-                            {isDocumentPdf(doc) && (
-                              <DropdownMenuItem onSelect={() => void openDocument(doc, 'view')}>
-                                <FileSearch className="mr-2 h-4 w-4" />Open original
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onSelect={() => void openDocument(doc, 'download')}>
-                              <Download className="mr-2 h-4 w-4" />Download
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => { setRenameTarget(doc); setRenameValue(doc.name) }}>
-                              <Pencil className="mr-2 h-4 w-4" />Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => void openAudit(doc)}>
-                              <History className="mr-2 h-4 w-4" />History
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(doc)}>
-                              <Trash2 className="mr-2 h-4 w-4" />Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {isDocumentUnreviewed(doc) && (
+                          <DropdownMenuItem
+                            disabled={busy === `review:${doc.id}`}
+                            onSelect={() => void handleMarkReviewed(doc)}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />Mark reviewed
+                          </DropdownMenuItem>
+                        )}
+                        {isDocumentPdf(doc) && (
+                          <DropdownMenuItem onSelect={() => void openDocument(doc, 'view')}>
+                            <FileSearch className="mr-2 h-4 w-4" />Open original
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onSelect={() => void openDocument(doc, 'download')}>
+                          <Download className="mr-2 h-4 w-4" />Download
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => { setRenameTarget(doc); setRenameValue(doc.name) }}>
+                          <Pencil className="mr-2 h-4 w-4" />Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => void openAudit(doc)}>
+                          <History className="mr-2 h-4 w-4" />History
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(doc)}>
+                          <Trash2 className="mr-2 h-4 w-4" />Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </li>
+              )
+            })}
+
+            {listedDocuments.length === 0 && (
+              <li className="px-6 py-10 text-center text-sm text-muted-foreground">
+                This folder is empty in the current view.
+              </li>
+            )}
+          </ul>
         )}
       </section>
 

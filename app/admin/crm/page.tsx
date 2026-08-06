@@ -1,5 +1,45 @@
-import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
+import { getCachedClaims } from '@/lib/supabaseServer'
+import { fetchCrmDashboard } from '@/lib/queries/crmDashboard'
+import { PageHeader } from '@/components/PageHeader'
+import { CrmPipelineCard } from './CrmPipelineCard'
+import { CrmStatCards } from './CrmStatCards'
+import { CrmTasksCard } from './CrmTasksCard'
+import { LeadSourcesCard } from './LeadSourcesCard'
+import { RecentPeopleTable } from './RecentPeopleTable'
 
-export default function AdminCrmPage() {
-  redirect('/admin/crm/opportunities')
+export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'CRM' }
+
+export default async function AdminCrmPage() {
+  const auth = await getCachedClaims()
+  const { snapshot, tasks, error } = await fetchCrmDashboard(auth?.id ?? null)
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="CRM"
+        description="People, pipeline, and follow-up across the firm's whole book."
+      />
+
+      {error && (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-red-bg px-4 py-3 text-sm text-destructive"
+        >
+          CRM data could not be fully loaded: {error}
+        </div>
+      )}
+
+      <CrmStatCards snapshot={snapshot} />
+
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+        <LeadSourcesCard sources={snapshot.leadSources} />
+        <CrmTasksCard tasks={tasks} />
+        <CrmPipelineCard stages={snapshot.pipeline} />
+      </div>
+
+      <RecentPeopleTable people={snapshot.recentPeople} />
+    </div>
+  )
 }

@@ -81,6 +81,29 @@ export interface BillingNudge {
   legalPlan: BillingPlan | null
 }
 
+/** One bar of the six-month collections chart on the finance dashboard. */
+export interface CollectionsPoint {
+  /** YYYY-MM. */
+  month: string
+  /** Short month name, e.g. `Feb`. */
+  label: string
+  amount: number
+}
+
+/** A logged payment flattened with its client context for the activity table. */
+export interface RecentPaymentRow {
+  id: string
+  billingItemId: string
+  matterId: string
+  clientName: string
+  matterNumber: string | null
+  label: string
+  kind: BillingKind
+  method: BillingPaymentMethod
+  amount: number
+  receivedAt: string
+}
+
 export interface BillingSnapshot {
   rows: BillingLedgerRow[]
   selectedMonth: string
@@ -91,6 +114,14 @@ export interface BillingSnapshot {
   collectedYtd: { amount: number; goal: number; progressPercent: number }
   averageDaysToCollect: { all: number | null; flatFee: number | null; planClaim: number | null }
   aging: { current: number; days31To60: number; days61Plus: number }
+  /** Six months of collections ending at `selectedMonth`, oldest first. */
+  collectionsTrend: { points: CollectionsPoint[]; deltaPercent: number | null }
+  /** Costs billed in the selected month — the firm's outlay, not its revenue. */
+  costsMonth: { amount: number; priorAmount: number; deltaPercent: number | null }
+  /** Work that is billable but not yet invoiced, plus what has aged past due. */
+  pendingInvoices: { amount: number; count: number; overdueCount: number; overdueAmount: number }
+  /** Most recent payments across every matter, newest first. */
+  recentPayments: RecentPaymentRow[]
   openClaims: BillingLedgerRow[]
   unpreparedClaims: UnpreparedClaim[]
   nudges: BillingNudge[]

@@ -45,6 +45,33 @@ const snapshot: BillingSnapshot = {
   collectedYtd: { amount: 250_000, goal: 12_000_000, progressPercent: 2 },
   averageDaysToCollect: { all: 19, flatFee: 19, planClaim: null },
   aging: { current: 0, days31To60: 330_000, days61Plus: 0 },
+  collectionsTrend: {
+    points: [
+      { month: '2026-02', label: 'Feb', amount: 0 },
+      { month: '2026-03', label: 'Mar', amount: 25_000 },
+      { month: '2026-04', label: 'Apr', amount: 40_000 },
+      { month: '2026-05', label: 'May', amount: 35_000 },
+      { month: '2026-06', label: 'Jun', amount: 50_000 },
+      { month: '2026-07', label: 'Jul', amount: 100_000 },
+    ],
+    deltaPercent: 100,
+  },
+  costsMonth: { amount: 15_500, priorAmount: 20_000, deltaPercent: -23 },
+  pendingInvoices: { amount: 0, count: 0, overdueCount: 1, overdueAmount: 330_000 },
+  recentPayments: [
+    {
+      id: '33333333-3333-4333-8333-333333333333',
+      billingItemId: '11111111-1111-4111-8111-111111111111',
+      matterId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      clientName: 'Chen, Marcus & Lily',
+      matterNumber: '2026-EP-Chen-014',
+      label: 'Flat fee — Joint trust package',
+      kind: 'flat_fee',
+      method: 'check',
+      amount: 150_000,
+      receivedAt: '2026-07-18T16:00:00.000Z',
+    },
+  ],
   rows: [
     {
       id: '11111111-1111-4111-8111-111111111111',
@@ -128,8 +155,10 @@ describe('billing workspace', () => {
 
     expect(screen.getByRole('heading', { name: 'Billing' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open.*1/ }).getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByText('Chen, Marcus & Lily')).toBeTruthy()
-    expect(screen.queryByText("O'Brien, Kathleen")).toBeNull()
+    // Scoped to the ledger: the client also appears in the recent-payments rail.
+    const ledger = within(screen.getByRole('table'))
+    expect(ledger.getByText('Chen, Marcus & Lily')).toBeTruthy()
+    expect(ledger.queryByText("O'Brien, Kathleen")).toBeNull()
     expect(screen.getAllByText('Overdue')).toHaveLength(2)
   })
 

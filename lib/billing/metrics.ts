@@ -6,6 +6,8 @@ import type {
   BillingNudge,
   BillingPayment,
   BillingSnapshot,
+  CollectionsPoint,
+  RecentPaymentRow,
   RevenueCategory,
   RevenueRollup,
   UnpreparedClaim,
@@ -174,6 +176,75 @@ function buildRevenue(rows: BillingLedgerRow[], today: string): BillingSnapshot[
   return result
 }
 
+const MONTH_LABELS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const
+
+function percentDelta(current: number, prior: number): number | null {
+  if (prior === 0) return null
+  return Math.round(((current - prior) / prior) * 100)
+}
+
+/**
+ * Six months of collections ending at `selectedMonth`. Anchored on the selected
+ * month rather than today so the chart moves with the month picker.
+ */
+function buildCollectionsTrend(
+  payments: BillingPayment[],
+  selectedMonth: string,
+  months = 6,
+): BillingSnapshot['collectionsTrend'] {
+  const [year, month] = selectedMonth.split('-').map(Number)
+  const points: CollectionsPoint[] = []
+  for (let offset = months - 1; offset >= 0; offset -= 1) {
+    const anchor = new Date(Date.UTC(year, month - 1 - offset, 1))
+    const key = anchor.toISOString().slice(0, 7)
+    const bounds = monthBounds(key)
+    points.push({
+      month: key,
+      label: MONTH_LABELS[anchor.getUTCMonth()],
+      amount: payments
+        .filter(payment => inDateRange(payment.receivedAt, bounds.start, bounds.end))
+        .reduce((sum, payment) => sum + payment.amount, 0),
+    })
+  }
+  const latest = points.at(-1)
+  const previous = points.at(-2)
+  return {
+    points,
+    deltaPercent: latest && previous ? percentDelta(latest.amount, previous.amount) : null,
+  }
+}
+
+/** Newest payments across every matter, joined back to their ledger row. */
+function buildRecentPayments(
+  rows: BillingLedgerRow[],
+  payments: BillingPayment[],
+  limit = 8,
+): RecentPaymentRow[] {
+  const rowById = new Map(rows.map(row => [row.id, row]))
+  return [...payments]
+    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt) || b.id.localeCompare(a.id))
+    .slice(0, limit)
+    .flatMap((payment): RecentPaymentRow[] => {
+      const row = rowById.get(payment.billingItemId)
+      if (!row) return []
+      return [{
+        id: payment.id,
+        billingItemId: payment.billingItemId,
+        matterId: row.matterId,
+        clientName: row.clientName,
+        matterNumber: row.matterNumber,
+        label: row.label,
+        kind: row.kind,
+        method: payment.method,
+        amount: payment.amount,
+        receivedAt: payment.receivedAt,
+      }]
+    })
+}
+
 function buildNudges(
   rows: BillingLedgerRow[],
   unpreparedClaims: UnpreparedClaim[],
@@ -259,6 +330,14 @@ export function buildBillingSnapshot(input: {
   const ytd = input.payments
     .filter(payment => inDateRange(payment.receivedAt, yearStart, yearEnd))
     .reduce((sum, payment) => sum + payment.amount, 0)
+  const costsMonth = rows
+    .filter(row => row.kind === 'cost' && inDateRange(row.createdAt, bounds.start, bounds.end))
+    .reduce((sum, row) => sum + row.amountBilled, 0)
+  const costsPriorMonth = rows
+    .filter(row => row.kind === 'cost' && inDateRange(row.createdAt, bounds.priorStart, bounds.priorEnd))
+    .reduce((sum, row) => sum + row.amountBilled, 0)
+  const toInvoice = rows.filter(row => row.status === 'to_invoice')
+  const overdue = open.filter(row => row.overdue)
   const paidDurations = rows
     .filter(row => row.paidAt && row.invoicedAt)
     .map(row => ({
@@ -287,8 +366,7 @@ export function buildBillingSnapshot(input: {
     collectedMonth: {
       amount: monthAmount,
       priorAmount,
-      deltaPercent:
-        priorAmount === 0 ? null : Math.round(((monthAmount - priorAmount) / priorAmount) * 100),
+      deltaPercent: percentDelta(monthAmount, priorAmount),
     },
     collectedYtd: {
       amount: ytd,
@@ -311,6 +389,19 @@ export function buildBillingSnapshot(input: {
         .reduce((sum, row) => sum + row.balance, 0),
       days61Plus: open.filter(row => row.ageDays >= 61).reduce((sum, row) => sum + row.balance, 0),
     },
+    collectionsTrend: buildCollectionsTrend(input.payments, input.selectedMonth),
+    costsMonth: {
+      amount: costsMonth,
+      priorAmount: costsPriorMonth,
+      deltaPercent: percentDelta(costsMonth, costsPriorMonth),
+    },
+    pendingInvoices: {
+      amount: toInvoice.reduce((sum, row) => sum + row.balance, 0),
+      count: toInvoice.length,
+      overdueCount: overdue.length,
+      overdueAmount: overdue.reduce((sum, row) => sum + row.balance, 0),
+    },
+    recentPayments: buildRecentPayments(rows, input.payments),
     openClaims: open.filter(row => row.kind === 'plan_claim'),
     unpreparedClaims: input.unpreparedClaims,
     nudges: buildNudges(
