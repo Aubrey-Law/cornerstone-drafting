@@ -12,6 +12,8 @@
  * rls-coverage.test.ts.
  */
 
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   isAdminUser,
@@ -203,5 +205,30 @@ describe('userCanReadDocument', () => {
     })
     const doc = { matter_id: 'm1', shared_at: '2026-08-01T00:00:00Z', uploaded_by: null }
     expect(await userCanReadDocument(sb, client, doc)).toBe(true)
+  })
+})
+
+describe('document share route', () => {
+  const routeSource = fs.readFileSync(
+    path.join(process.cwd(), 'app/api/documents/[id]/route.ts'),
+    'utf8',
+  )
+
+  it('accepts a shared flag and audits share/unshare', () => {
+    expect(routeSource).toContain('const isShareToggle = typeof shared === \'boolean\'')
+    expect(routeSource).toContain("shared ? 'share' : 'unshare'")
+    expect(routeSource).toContain('shared_at: shared ? new Date().toISOString() : null')
+  })
+
+  it('has no sharing gates left', () => {
+    expect(routeSource).not.toContain('confirmed')
+    expect(routeSource).not.toContain('canPromoteDraft')
+    expect(routeSource).not.toContain('wordDocShareBlockReason')
+    expect(routeSource).not.toContain('pdf_required')
+  })
+
+  it('does not audit plain reads or fail closed on audit errors', () => {
+    expect(routeSource).not.toContain('audit_failed')
+    expect(routeSource).not.toContain('if (!audit.ok)')
   })
 })

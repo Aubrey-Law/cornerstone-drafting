@@ -206,15 +206,10 @@ export async function deleteDocument(docId: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete document')
 }
 
-/**
- * Update a document's folder. Set `confirmed: true` when the caller has
- * already shown the attorney-review-gate confirmation modal (required by the
- * server when moving a draft to a client-visible folder).
- */
-export async function updateDocumentFolder(
+/** Show or hide a document in the client portal. */
+export async function setDocumentShared(
   docId: string,
-  folder: MatterDocument['folder'],
-  options: { confirmed?: boolean } = {},
+  shared: boolean,
 ): Promise<MatterDocument> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
@@ -222,11 +217,11 @@ export async function updateDocumentFolder(
   const res = await fetch(`/api/documents/${docId}`, {
     method: 'PATCH',
     headers: authHeaders(token),
-    body: JSON.stringify({ folder, confirmed: options.confirmed === true }),
+    body: JSON.stringify({ shared }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? 'Failed to update document folder')
+    throw new Error(body?.error ?? 'Failed to update sharing')
   }
   const { document } = await res.json()
   return document as MatterDocument
@@ -234,8 +229,7 @@ export async function updateDocumentFolder(
 
 /**
  * Mark a generated draft as attorney-reviewed (or clear it). Recorded with the
- * reviewer + timestamp and required by the server before a draft can be
- * promoted to a client-visible folder.
+ * reviewer + timestamp. Informational only — it gates nothing.
  */
 export async function setDocumentReviewed(docId: string, reviewed: boolean): Promise<MatterDocument> {
   const token = await getToken()
