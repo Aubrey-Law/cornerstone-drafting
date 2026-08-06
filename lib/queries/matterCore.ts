@@ -25,6 +25,14 @@ function normalizeFlags(m: PipelineMatter): PipelineMatter {
 export const PIPELINE_MATTER_COLUMNS =
   'matter_id, matter_name, stage, status, flags, matter_created, client_name, client_email, client_phone, client_dob, client_address, spouse_name, spouse_email, spouse_phone, spouse_dob, spouse_address, plan_type, marital_status, has_minor_children, taxable_estate, intake_status, intake_sent_at, design_status, intake_submitted_at, drafts_sent_at, signing_date, documents_executed_at, next_appointment, next_appointment_type, practice_area, referral_source, fee_amount, opened_at, client_status' as const
 
+/**
+ * The consolidated view's columns. Kept separate from PIPELINE_MATTER_COLUMNS
+ * because `v_matter_pipeline` does not have these two — selecting them from it
+ * would error for every one of its other callers.
+ */
+export const PIPELINE_MATTER_ALL_COLUMNS =
+  `${PIPELINE_MATTER_COLUMNS}, relationship_status, matter_number` as const
+
 function addressFromIntake(row: Record<string, unknown> | null | undefined): string | null {
   if (!row) return null
   const street = [row.address_line1, row.address_line2].filter(Boolean).join(' ').trim()
@@ -33,7 +41,10 @@ function addressFromIntake(row: Record<string, unknown> | null | undefined): str
   return address || null
 }
 
-async function fetchMatterFallback(id: string): Promise<PipelineMatter | null> {
+async function fetchMatterFallback(
+  id: string,
+  includeLeads: boolean,
+): Promise<PipelineMatter | null> {
   const supabase = getAdminClient()
   const { data: matter, error: matterError } = await supabase
     .from('matters')
@@ -46,7 +57,7 @@ async function fetchMatterFallback(id: string): Promise<PipelineMatter | null> {
     return null
   }
   if (!matter) return null
-  if (matter.relationship_status !== 'hired') return null
+  if (!includeLeads && matter.relationship_status !== 'hired') return null
 
   const intakeId = (matter.client_intake_id ?? null) as string | null
   const [{ data: intake, error: intakeError }, { data: spouse, error: spouseError }, { data: designSheet }, { data: details }] = await Promise.all([
@@ -102,17 +113,34 @@ async function fetchMatterFallback(id: string): Promise<PipelineMatter | null> {
   return normalizeFlags(fallback)
 }
 
-export async function fetchMatter(id: string): Promise<PipelineMatter | null> {
+/**
+ * Load one matter's pipeline row.
+ *
+ * `includeLeads` reads the consolidated view instead of the hired-only one, for
+ * the surfaces where a lead is just a matter. It is opt-in rather than the
+ * default because the drafting pages ask for a matter meaning a signed one, and
+ * silently handing them a lead would take them somewhere they cannot work.
+ *
+ * Both the view and the fallback have to agree: the fallback reads `matters`
+ * directly, so without the same flag it would reject the lead the view just
+ * declined to return, and the caller would see null either way.
+ */
+export async function fetchMatter(
+  id: string,
+  options: { includeLeads?: boolean } = {},
+): Promise<PipelineMatter | null> {
+  const includeLeads = options.includeLeads === true
   const supabase = getAdminClient()
   const { data, error } = await supabase
-    .from('v_matter_pipeline')
+    // The consolidated view is a superset, so the same column list works.
+    .from(includeLeads ? 'v_matter_pipeline_all' : 'v_matter_pipeline')
     .select(PIPELINE_MATTER_COLUMNS)
     .eq('matter_id', id)
     .single()
 
   if (error) {
     console.error('fetchMatter error:', error)
-    return fetchMatterFallback(id)
+    return fetchMatterFallback(id, includeLeads)
   }
   return data
     ? normalizeFlags({

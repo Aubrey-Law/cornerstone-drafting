@@ -326,9 +326,18 @@ function DesignSheetPageContent({
         title: group.title,
         blockingCount: counts?.blocking.length ?? 0,
         optionalCount: counts?.optional.length ?? 0,
+        blockingLabels: counts?.blocking.map(item => item.label) ?? [],
+        optionalLabels: counts?.optional.map(item => item.label) ?? [],
       }
     }),
-    { id: REVIEW_GROUP.id, title: REVIEW_GROUP.title, blockingCount: 0, optionalCount: 0 },
+    {
+      id: REVIEW_GROUP.id,
+      title: REVIEW_GROUP.title,
+      blockingCount: 0,
+      optionalCount: 0,
+      blockingLabels: [],
+      optionalLabels: [],
+    },
   ], [groupReadiness, groups])
 
   // One section at a time: the active group falls back to the first visible
@@ -669,6 +678,8 @@ function DesignSheetPageContent({
                     ) : undefined}
                     blockingCount={groupReadiness.get(activeGroup.id)?.blocking.length ?? 0}
                     optionalCount={groupReadiness.get(activeGroup.id)?.optional.length ?? 0}
+                    blockingLabels={groupReadiness.get(activeGroup.id)?.blocking.map(item => item.label) ?? []}
+                    optionalLabels={groupReadiness.get(activeGroup.id)?.optional.map(item => item.label) ?? []}
                     scrollMarginTop={STICKY_CONTENT_OFFSET}
                   >
                     {activeGroup.render()}

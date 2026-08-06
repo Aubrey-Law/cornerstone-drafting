@@ -30,6 +30,8 @@ function renderCard(details: Record<string, unknown> | null, onSaveField = vi.fn
       matter={matter}
       matterId="m1"
       matterNumber={null}
+      matterStatus="active"
+      onStatusChange={vi.fn()}
       details={details}
       onSaveField={onSaveField}
       esignEnabled

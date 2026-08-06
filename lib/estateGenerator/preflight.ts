@@ -25,6 +25,23 @@ export interface EstateDraftPreflightDocument {
   filename: string
 }
 
+/** Which person's documents a blank generator field belongs to. */
+export type EstateDraftPreflightSubjectKind = 'client' | 'spouse' | 'young-adult'
+
+/**
+ * A blank required field, attributed to the package (and person) that needs it.
+ * Without the attribution, a field that is filled in for the client but blank
+ * for the spouse's companion documents looks like the client's field is still
+ * empty — so the attorney "fixes" a field that was never the problem.
+ */
+export interface EstateDraftPreflightMissingField {
+  path: string
+  packageName: string
+  subjectKind: EstateDraftPreflightSubjectKind
+  /** Name of the person, when the package is for someone other than the client. */
+  subjectName: string | null
+}
+
 export interface EstateDraftPreflight {
   matterId: string
   designSheetId: string | null
@@ -36,12 +53,44 @@ export interface EstateDraftPreflight {
   unsupportedDocumentLabels: string[]
   documentsToGenerate: EstateDraftPreflightDocument[]
   missing: string[]
+  missingFields: EstateDraftPreflightMissingField[]
   warnings: string[]
   error?: string
 }
 
+const SPOUSE_PACKAGE_NAMES = new Set<string>([
+  'spouse-incapacity-documents',
+  'spouse-pourover-will',
+  'spouse-testamentary-trust-will',
+])
+
+function subjectKindForPackage(packageName: string): EstateDraftPreflightSubjectKind {
+  if (packageName === 'young-adult-estate-plan') return 'young-adult'
+  return SPOUSE_PACKAGE_NAMES.has(packageName) ? 'spouse' : 'client'
+}
+
 function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)))
+}
+
+function uniqueMissingFields(
+  fields: EstateDraftPreflightMissingField[],
+): EstateDraftPreflightMissingField[] {
+  const seen = new Set<string>()
+  const result: EstateDraftPreflightMissingField[] = []
+
+  for (const field of fields) {
+    const key = `${field.path}|${field.packageName}|${field.subjectName ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(field)
+  }
+
+  return result
+}
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
 function fallbackPackageConfigMissing(root: string, packageName: EstateGeneratorPackage): boolean {
@@ -75,7 +124,9 @@ export function buildEstateDraftPreflight(
   )
   const documentsToGenerate: EstateDraftPreflightDocument[] = []
   const missing: string[] = []
+  const missingFields: EstateDraftPreflightMissingField[] = []
   const missingTemplateFiles: string[] = []
+  const spouseName = textOrNull((data.spouse as Record<string, unknown> | undefined)?.full_name)
   const warnings = [...estateGeneratorCoverageWarnings(payload)]
   const blockingError = estateGeneratorBlockingError(payload)
 
@@ -87,10 +138,25 @@ export function buildEstateDraftPreflight(
     if (packageName === 'young-adult-estate-plan' && packageDataItems.length === 0) {
       warnings.push('Young Adult Estate Plan selected, but no child with a DOB from age 17.5 through 25 was found.')
     }
+    const subjectKind = subjectKindForPackage(packageName)
     for (const packageData of packageDataItems) {
       const context = buildNodeEstateContext({ data: packageData, state, root })
-      missing.push(...missingRequiredFields(context, config.required_fields))
-      missing.push(...conditionalMissingFieldsForPackage(packageName, context))
+      const packageMissing = [
+        ...missingRequiredFields(context, config.required_fields),
+        ...conditionalMissingFieldsForPackage(packageName, context),
+      ]
+      const subjectName = subjectKind === 'client'
+        ? null
+        : subjectKind === 'spouse'
+          ? spouseName
+          : textOrNull((packageData.client as Record<string, unknown> | undefined)?.full_name)
+      missing.push(...packageMissing)
+      missingFields.push(...packageMissing.map(path => ({
+        path,
+        packageName,
+        subjectKind,
+        subjectName,
+      })))
     }
     missingTemplateFiles.push(
       ...config.documents
@@ -144,6 +210,7 @@ export function buildEstateDraftPreflight(
     unsupportedDocumentLabels,
     documentsToGenerate,
     missing: uniqueMissing,
+    missingFields: uniqueMissingFields(missingFields),
     warnings: uniqueStrings(warnings),
     error,
   }

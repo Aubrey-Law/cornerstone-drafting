@@ -1,4 +1,19 @@
 import type { FiduciarySlot, FiduciaryRole } from '@/types/database'
+import {
+  firstAvailablePrincipalOrder,
+  namedPrincipalSlots,
+  normalizeFiduciarySlots,
+  principalSlotsByPriority,
+  repairFiduciarySlotOrdering,
+} from '@/lib/designSheet/fiduciarySlotOrdering'
+
+export {
+  firstAvailablePrincipalOrder,
+  namedPrincipalSlots,
+  normalizeFiduciarySlots,
+  principalSlotsByPriority,
+  repairFiduciarySlotOrdering,
+}
 
 // ── Slot factories ───────────────────────────────────────────────────────────
 
@@ -15,42 +30,6 @@ export function defaultPrimarySlot(): FiduciarySlot[] {
  * - duplicate slot ids (setSlotContact updates every match)
  * - multiple non-co principals at the same order (draft joins their names)
  */
-export function normalizeFiduciarySlots(slots: FiduciarySlot[]): FiduciarySlot[] {
-  const seenIds = new Set<string>()
-  const principalOrders = new Set<number>()
-  const next: FiduciarySlot[] = []
-
-  const sorted = [...slots].sort((a, b) => {
-    if (a.order !== b.order) return a.order - b.order
-    return a.is_co === b.is_co ? 0 : a.is_co ? 1 : -1
-  })
-
-  for (const slot of sorted) {
-    let id = slot.id
-    if (!id || seenIds.has(id)) {
-      id = crypto.randomUUID()
-    }
-    seenIds.add(id)
-
-    if (!slot.is_co) {
-      if (principalOrders.has(slot.order)) {
-        // Extra principal at this order — keep only the first; drop empty dupes,
-        // otherwise promote filled dupes to the next free alternate order.
-        if (!slot.contact_id) continue
-        let order = slot.order + 1
-        while (principalOrders.has(order)) order += 1
-        principalOrders.add(order)
-        next.push({ ...slot, id, order })
-        continue
-      }
-      principalOrders.add(slot.order)
-    }
-
-    next.push(id === slot.id ? slot : { ...slot, id })
-  }
-
-  return next
-}
 
 // ── Slot mutations (all return new arrays) ──────────────────────────────────
 
@@ -71,17 +50,28 @@ export function addBackupAgent(slots: FiduciarySlot[]): FiduciarySlot[] {
 }
 
 export function removeAlternate(slots: FiduciarySlot[], order: number): FiduciarySlot[] {
-  if (order === 0) return slots // never remove primary
-  const filtered = slots.filter(s => s.order !== order)
+  const normalized = normalizeFiduciarySlots(slots)
+  const firstPrincipalOrder = normalized
+    .filter(slot => !slot.is_co)
+    .sort((a, b) => a.order - b.order)[0]
+    ?.order
+
+  if (order === firstPrincipalOrder || firstPrincipalOrder == null) return normalized
+
+  const filtered = normalized.filter(s => s.order !== order)
   // Re-number: orders above the removed one shift down by 1
   return normalizeFiduciarySlots(
     filtered.map(s => s.order > order ? { ...s, order: s.order - 1 } : s),
   )
 }
 
-export function addCo(slots: FiduciarySlot[], order: number): FiduciarySlot[] {
+export function addCo(
+  slots: FiduciarySlot[],
+  order: number,
+  maxCo = 3,
+): FiduciarySlot[] {
   const normalized = normalizeFiduciarySlots(slots)
-  if (coSlotsForOrder(normalized, order).length >= 3) return normalized
+  if (coSlotsForOrder(normalized, order).length >= maxCo) return normalized
   const idx = normalized.findIndex(s => s.order === order && !s.is_co)
   if (idx === -1) return normalized
   const next = [...normalized]
@@ -191,8 +181,8 @@ export const ROLE_CONFIG: Record<FiduciaryRole, RoleConfig> = {
     primaryLabel: 'Primary Agent',
     altLabel: 'Alternate Agent',
     coLabel: 'Co-Agent',
-    allowCo: false, // HCP cannot have co-agents
-    maxCo: 0,
+    allowCo: true,
+    maxCo: 1,
   },
   guardian: {
     title: 'Guardian',

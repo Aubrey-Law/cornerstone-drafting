@@ -157,6 +157,41 @@ export function compareTasks(a: TaskRow, b: TaskRow): number {
   return a.created_at < b.created_at ? -1 : 1
 }
 
+/** One matter/lead section of the task queue, in render order. */
+export interface TaskRecordGroup {
+  key: string
+  label: string
+  tasks: TaskRow[]
+}
+
+/**
+ * Group tasks by the record they hang off — alphabetical by display name, with
+ * unlinked work last. Keyed by record id, not name, so two clients who share a
+ * name stay in separate sections.
+ */
+export function groupTasksByRecord(tasks: TaskRow[]): TaskRecordGroup[] {
+  const NO_RECORD = 'none'
+  const groups = new Map<string, TaskRecordGroup>()
+
+  for (const task of tasks) {
+    const key = task.matter_id ?? task.lead_id ?? NO_RECORD
+    const label = key === NO_RECORD
+      ? 'No related matter'
+      : task.record_name?.trim() || 'Unnamed record'
+    const existing = groups.get(key)
+    if (existing) existing.tasks.push(task)
+    else groups.set(key, { key, label, tasks: [task] })
+  }
+
+  const linked = [...groups.values()].filter(group => group.key !== NO_RECORD)
+  linked.sort((a, b) => a.label.localeCompare(b.label))
+
+  const unlinked = groups.get(NO_RECORD)
+  const ordered = unlinked ? [...linked, unlinked] : linked
+  for (const group of ordered) group.tasks.sort(compareTasks)
+  return ordered
+}
+
 export function taskProgress(task: Pick<TaskRow, 'task_type' | 'status' | 'checklist'>): {
   done: number
   total: number

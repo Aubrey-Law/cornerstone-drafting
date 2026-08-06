@@ -8,6 +8,37 @@ export interface DesignSectionNavGroup {
   title: string
   blockingCount: number
   optionalCount: number
+  /** Names of the open decisions, so the count badge says what it counts. */
+  blockingLabels?: string[]
+  optionalLabels?: string[]
+}
+
+function joinLabels(labels: string[]): string {
+  return labels.join(' · ')
+}
+
+/**
+ * A bare count next to a group name reads as "Plan structure 4" — to sighted
+ * users and screen readers alike. Name the open decisions instead.
+ */
+function navGroupAriaLabel(group: DesignSectionNavGroup): string {
+  const parts = [group.title]
+  const blocking = group.blockingLabels ?? []
+  const optional = group.optionalLabels ?? []
+
+  if (group.blockingCount > 0) {
+    parts.push(blocking.length > 0
+      ? `${group.blockingCount} blocking: ${blocking.join(', ')}`
+      : `${group.blockingCount} blocking`)
+  }
+  if (group.optionalCount > 0) {
+    parts.push(optional.length > 0
+      ? `${group.optionalCount} optional: ${optional.join(', ')}`
+      : `${group.optionalCount} optional`)
+  }
+  if (parts.length === 1) parts.push('complete')
+
+  return parts.join(' — ')
 }
 
 interface DesignSectionNavProps {
@@ -58,6 +89,7 @@ export function DesignSectionNav({
             key={group.id}
             type="button"
             aria-current={group.id === activeGroupId ? 'page' : undefined}
+            aria-label={navGroupAriaLabel(group)}
             onClick={() => onSelectGroup(group.id)}
             className={cn(
               'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium hover:bg-muted',
@@ -76,12 +108,22 @@ export function DesignSectionNav({
             />
             <span className="min-w-0 flex-1">{group.title}</span>
             {group.blockingCount > 0 ? (
-              <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+              <span
+                title={`${group.blockingCount} blocking${
+                  group.blockingLabels?.length ? `: ${joinLabels(group.blockingLabels)}` : ''
+                }`}
+                className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+              >
                 {group.blockingCount}
               </span>
             ) : null}
             {group.optionalCount > 0 ? (
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+              <span
+                title={`${group.optionalCount} optional${
+                  group.optionalLabels?.length ? `: ${joinLabels(group.optionalLabels)}` : ''
+                }`}
+                className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+              >
                 {group.optionalCount}
               </span>
             ) : null}

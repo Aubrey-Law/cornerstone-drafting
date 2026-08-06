@@ -4,6 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
+import { applySlaAnchor, ensureEstatePlanningSlaTasks } from '@/lib/slaTasks/generate'
+import { firmDateKey } from '@/lib/firmDate'
 
 /**
  * Hire the opportunity matter linked to an intake, carrying over the quoted
@@ -88,6 +90,26 @@ export async function createMatterFromIntake(
     await ensureDesignSheetSeededFromIntake(matterId)
   } catch (e) {
     console.warn('design sheet seed on lead conversion skipped:', e)
+  }
+
+  // The engagement being signed is what starts the SLA clock, and this is the
+  // path the e-sign webhook takes. Idempotent, so a re-fired webhook or a
+  // manual hire after the fact does not duplicate the checklist.
+  await ensureEstatePlanningSlaTasks(matterId, { practiceArea })
+
+  // Day 0. A lead already carries its checklist, so the tasks above are a no-op
+  // and the 28-day plan is still undated — replaying the engagement anchor is
+  // what actually starts the firm clock. The signature date itself is stamped
+  // on the matter inside convert_lead_to_matter, keeping conversion one write.
+  try {
+    const signedAt = intake.engagement_signed_at ?? new Date().toISOString()
+    const dayZero = firmDateKey(signedAt)
+    if (dayZero) {
+      const anchored = await applySlaAnchor(admin, matterId, 'engagement', dayZero)
+      if (!anchored.ok) console.warn('[sla-tasks] day-zero anchor skipped', matterId, anchored.error)
+    }
+  } catch (e) {
+    console.warn('[sla-tasks] day-zero anchor failed for matter', matterId, e)
   }
 
   try {

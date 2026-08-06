@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
+import { ensureEstatePlanningSlaTasks } from '@/lib/slaTasks/generate'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -91,6 +92,10 @@ export async function POST(req: Request) {
       } catch (e) {
         console.warn('design sheet seed on create skipped:', e)
       }
+
+      // Kick off the SLA checklist. Also best-effort and idempotent — a retry
+      // of the same submission must not double-generate it.
+      await ensureEstatePlanningSlaTasks(row.matter_id, { practiceArea })
 
       return NextResponse.json({
         matterId: row.matter_id,

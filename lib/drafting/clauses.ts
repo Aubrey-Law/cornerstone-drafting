@@ -37,7 +37,17 @@ export interface DraftContext {
   excluded_guardian?: string
   excluded_guardian_2?: string
   provisions: string[]
-  distribution_method: 'per_stirpes' | 'per_capita'
+  /**
+   * How residuary shares pass to descendants. Named apart from the design sheet's
+   * `distribution_method` column on purpose — that column holds the residual
+   * beneficiary method (outright / staggered / …), an unrelated decision, and the
+   * shared name is what let a stale key drive these gates unnoticed.
+   *
+   * Null when the design sheet asks for a representation this library has no clause
+   * for — currently "by right of representation". Callers must refuse to draft the
+   * affected documents rather than fall through to whichever gate happens to match.
+   */
+  descendant_representation: 'per_stirpes' | 'per_capita' | null
   staggered_ages?: string
   plan_type: string
   has_alt1_hcp: boolean
@@ -279,7 +289,7 @@ Upon the death of the Surviving Spouse, after payment of any applicable death ta
     section: 'Distribution on Death of Surviving Spouse',
     order: 72,
     always: false,
-    include: (ctx) => ctx.distribution_method === 'per_stirpes',
+    include: (ctx) => ctx.descendant_representation === 'per_stirpes',
     text: `The Trustee shall divide the trust property into as many equal shares as there shall be children of the Grantors then living and deceased children of the Grantors leaving descendants then living. The Trustee shall allot one share to each child then living and one share to each deceased child leaving descendants then living, such shares to be held and distributed per stirpes.`,
   },
 
@@ -289,7 +299,7 @@ Upon the death of the Surviving Spouse, after payment of any applicable death ta
     section: 'Distribution on Death of Surviving Spouse',
     order: 72,
     always: false,
-    include: (ctx) => ctx.distribution_method === 'per_capita',
+    include: (ctx) => ctx.descendant_representation === 'per_capita',
     text: `The Trustee shall divide the trust property equally among all then living descendants of the Grantors, per capita at each generation.`,
   },
 
@@ -1269,4 +1279,28 @@ export function getClausesForDocument(docType: string, ctx: DraftContext): Claus
     .filter(c => c.document.includes(docType))
     .filter(c => c.always || (c.include && c.include(ctx)))
     .sort((a, b) => a.order - b.order)
+}
+
+/** Clauses selected by `descendant_representation`. */
+const REPRESENTATION_GATED_CLAUSE_IDS = new Set([
+  'jt_distribution_per_stirpes',
+  'jt_distribution_per_capita',
+])
+
+/**
+ * Documents that lose their descendant-distribution provision when
+ * `descendant_representation` is null. Derived from the clause library so adding a
+ * representation-gated clause to another document extends this automatically.
+ *
+ * Without this the gates simply both evaluate false and the document drafts with no
+ * distribution language at all — a silent omission in the provision that decides who
+ * inherits.
+ */
+export function documentsNeedingDescendantRepresentation(): Set<string> {
+  const documents = new Set<string>()
+  for (const clause of ALL_CLAUSES) {
+    if (!REPRESENTATION_GATED_CLAUSE_IDS.has(clause.id)) continue
+    for (const document of clause.document) documents.add(document)
+  }
+  return documents
 }

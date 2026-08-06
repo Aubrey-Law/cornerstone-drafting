@@ -59,10 +59,21 @@ describe('draft route generation-run wiring', () => {
 
   it('stamps one generation id per request with engine and marker counts', () => {
     expect(routeSource).toContain('const generationId = randomUUID()')
+    // The provenance branch inserts directly; the standard branch registers via
+    // the shared lib/drafting/persistGeneratedDocument helper.
     expect(routeSource).toContain('generation_id: generationId')
-    expect(routeSource).toContain('generation_engine: generationEngine')
-    expect(routeSource).toContain('marker_count: scan.markerCount')
-    expect(routeSource).toContain('missing_count: scan.missingFields.length')
+    expect(routeSource).toContain('generationId,')
+    expect(routeSource).toContain('generationEngine,')
+    expect(routeSource).toContain('markerCount: scan.markerCount')
+    expect(routeSource).toContain('missingCount: scan.missingFields.length')
+    const persistSource = fs.readFileSync(
+      path.join(process.cwd(), 'lib/drafting/persistGeneratedDocument.ts'),
+      'utf8',
+    )
+    expect(persistSource).toContain('generation_id: args.generationId')
+    expect(persistSource).toContain('generation_engine: args.generationEngine')
+    expect(persistSource).toContain('marker_count: args.markerCount')
+    expect(persistSource).toContain('missing_count: args.missingCount')
   })
 
   it('captures prior non-superseded drafts before inserting and supersedes after upload', () => {

@@ -3,7 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { resolveMatterId } from '@/lib/buildDraftPayload'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
-import { getClausesForDocument } from '@/lib/drafting/clauses'
+import { documentsNeedingDescendantRepresentation, getClausesForDocument } from '@/lib/drafting/clauses'
 import { buildDraftContext } from '@/lib/drafting/context'
 import { completeLlmText, resolveLlmConfig } from '@/lib/llm'
 import { PROMPT_INJECTION_GUARDRAIL, quoteUserContent } from '@/lib/anthropic'
@@ -93,6 +93,21 @@ export async function POST(req: NextRequest) {
   }
 
   const ctx = buildDraftContext(designSheet as Record<string, unknown>)
+
+  // Both representation gates evaluate false when this is null, so the document
+  // would draft with no descendant-distribution provision at all. Refuse instead:
+  // a missing clause in the provision that decides who inherits must not be
+  // something the attorney has to notice on their own.
+  if (ctx.descendant_representation == null && documentsNeedingDescendantRepresentation().has(clauseKey)) {
+    return NextResponse.json(
+      {
+        error: 'This plan uses "by right of representation", which the clause library does not cover. '
+          + 'Choose per stirpes or per capita at each generation in Trust Details, or add a by-representation clause.',
+      },
+      { status: 400 },
+    )
+  }
+
   const clauses = getClausesForDocument(clauseKey, ctx)
 
   if (!clauses.length) {
@@ -126,7 +141,7 @@ Client context:
 - Married: ${ctx.is_married}
 - Has children: ${ctx.has_children}${ctx.has_minor_children ? ' (including minors)' : ''}
 - Provisions: ${ctx.provisions.join(', ') || 'standard'}
-- Distribution: ${ctx.distribution_method}${ctx.staggered_ages ? `, ages ${ctx.staggered_ages}` : ''}
+- Descendant representation: ${ctx.descendant_representation}${ctx.staggered_ages ? `, ages ${ctx.staggered_ages}` : ''}
 
 CRITICAL: Keep ALL [PLACEHOLDER] values exactly as written with square brackets — a separate system fills these in after you finish. Output ONLY the document text. No preamble, no explanation, no markdown formatting.`,
       messages: [{

@@ -5,10 +5,12 @@ import { describe, expect, it } from 'vitest'
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8')
 
 describe('fiduciary grid UI', () => {
-  it('uses the required six-column overflow-safe grid and existing slot helpers', () => {
+  it('uses an overflow-safe roster-plus-roles grid and existing slot helpers', () => {
     const source = read('app/admin/drafting/[matterId]/design/sections/FiduciaryGrid.tsx')
 
-    expect(source).toContain("'168px repeat(5, minmax(96px, 1fr))'")
+    // Column count follows the roles being rendered — the matrix is used twice, once
+    // for the per-party roles and once for the shared child-related ones.
+    expect(source).toContain('`168px repeat(${roles.length}, minmax(96px, 1fr))`')
     expect(source).toContain('overflow-x-auto')
     expect(source).toContain('setPrimaryContact')
     expect(source).toContain('normalizeFiduciarySlots')

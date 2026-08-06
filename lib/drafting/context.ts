@@ -2,6 +2,8 @@ import { DraftContext } from './clauses'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { designSheetString, isDesignSheetMarried } from '@/lib/draftPayload/designSheetFields'
 import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
+import { getTrustDetails } from '@/lib/designSheetTrustDetails'
+import type { DesignSheet } from '@/types/database'
 import type { FiduciarySlotRow } from '@/lib/draftPayload/types'
 
 type DesignSheetChildRow = {
@@ -48,12 +50,47 @@ function hasNamedLegacyCo(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-function hasFilledCoSlot(slots: FiduciarySlotRow[], order = 0): boolean {
-  return slots.some(slot => slot.order === order && slot.is_co && slot.contact_id != null)
+function hasFilledCoSlot(slots: FiduciarySlotRow[], order?: number): boolean {
+  if (typeof order === 'number') {
+    return slots.some(slot => slot.order === order && slot.is_co && slot.contact_id != null)
+  }
+  return slots.some(slot => slot.is_co && slot.contact_id != null)
 }
 
 function hasCoAgent(designSheet: DesignSheetCoFields, slots: FiduciarySlotRow[], legacyKey: keyof DesignSheetCoFields): boolean {
   return hasNamedLegacyCo(designSheet[legacyKey]) || hasFilledCoSlot(slots)
+}
+
+/**
+ * How residuary shares pass to descendants, for the per stirpes / per capita clause
+ * gates in ./clauses.
+ *
+ * The live control is `decisions.trust_details.representation_type`. Deliberately NOT
+ * the `distribution_method` column: despite the name that holds the residual
+ * beneficiary method (outright / staggered / trust-for-life / custom), an unrelated
+ * decision. `decisions.distribution_method` is a legacy key no current UI writes —
+ * reading it alone pinned every matter to the `per_stirpes` default and made the
+ * per capita clause unreachable — so it now only serves older matters that carry one.
+ */
+function descendantRepresentation(
+  designSheet: Record<string, unknown>,
+  decisions: Record<string, unknown>,
+): 'per_stirpes' | 'per_capita' | null {
+  const representation = getTrustDetails(
+    designSheet as unknown as Pick<DesignSheet, 'decisions'>,
+  ).representation_type
+
+  if (representation === 'per_capita_each_generation') return 'per_capita'
+  if (representation === 'per_stirpes') return 'per_stirpes'
+
+  // "By right of representation" is a third, distinct choice with no clause of its
+  // own, and which of the other two it equates to is jurisdiction-dependent — under
+  // the Massachusetts UPC (G.L. c. 190B, § 2-106) it is per capita at each
+  // generation, elsewhere it tracks per stirpes. It used to collapse into per
+  // stirpes here, silently changing who inherits. Callers refuse to draft instead.
+  if (representation === 'by_representation') return null
+
+  return decisions.distribution_method === 'per_capita' ? 'per_capita' : 'per_stirpes'
 }
 
 /**
@@ -120,7 +157,7 @@ export function buildDraftContext(designSheet: Record<string, unknown>): DraftCo
     excluded_guardian_2: undefined,
 
     provisions: (decisions.provisions as string[]) ?? [],
-    distribution_method: ((decisions.distribution_method as string) ?? 'per_stirpes') as 'per_stirpes' | 'per_capita',
+    descendant_representation: descendantRepresentation(designSheet, decisions),
     staggered_ages: decisions.staggered_ages ? String(decisions.staggered_ages) : undefined,
 
     plan_type: normalizedPlanType ?? String(designSheet.plan_type ?? decisions.plan_type ?? 'pour_over'),

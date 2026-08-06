@@ -35,11 +35,12 @@ describe('standing intake link integration', () => {
   })
 
   it('makes intake templates and link actions available from lead detail', () => {
-    const dialog = fs.readFileSync(path.join(process.cwd(), 'components/leads/LeadCommunicationDialog.tsx'), 'utf8')
     const detail = fs.readFileSync(path.join(process.cwd(), 'app/admin/leads/[id]/LeadDetailClient.tsx'), 'utf8')
     const card = fs.readFileSync(path.join(process.cwd(), 'app/admin/leads/[id]/LeadIntakeCard.tsx'), 'utf8')
-    expect(dialog).toContain("['manual', 'intake_invite']")
-    expect(dialog).toContain('intake_link: props.intakeUrl')
+    // The lead-only dialog became the shared CommunicationDialog, so the
+    // intake-invite templates and link variable now live at the call site.
+    expect(detail).toContain("['manual', 'intake_invite']")
+    expect(detail).toContain('intake_link: intakeUrl')
     expect(card).toContain('Email link')
     expect(card).toContain('Text link')
     expect(detail).toContain('rotateIntakeUrl')

@@ -7,6 +7,9 @@ import {
   buildStaggeredTiersFromPreset,
   buildTrustNameSuggestions,
   getTrustDetails,
+  normalizeResidualBeneficiaryMethod,
+  resolveResidualBeneficiaryMethod,
+  RESIDUAL_BENEFICIARY_METHODS,
   STAGGERED_DISTRIBUTION_PRESETS,
 } from '@/lib/designSheetTrustDetails'
 
@@ -112,5 +115,67 @@ describe('staggered distribution quick fill', () => {
     expect(trustDetailsSource).toContain('Quick fill:')
     expect(trustDetailsSource).toContain('STAGGERED_DISTRIBUTION_PRESETS.map')
     expect(trustDetailsSource).toContain('buildStaggeredTiersFromPreset(preset')
+  })
+})
+
+// Regression: the design sheet's option value was `trust-for-life` while the union is
+// `trust_for_life`, and an `as ResidualBeneficiaryMethod` cast at the change handler
+// hid it. Sheets written then still carry the hyphen, and without normalisation a
+// lifetime trust resolved as a staged distribution.
+describe('residual beneficiary method normalisation', () => {
+  it('accepts the canonical values', () => {
+    for (const method of RESIDUAL_BENEFICIARY_METHODS) {
+      expect(normalizeResidualBeneficiaryMethod(method)).toBe(method)
+    }
+  })
+
+  it('folds the legacy hyphenated spelling', () => {
+    expect(normalizeResidualBeneficiaryMethod('trust-for-life')).toBe('trust_for_life')
+  })
+
+  it('rejects anything that is not a method', () => {
+    expect(normalizeResidualBeneficiaryMethod('per stirpes')).toBeNull()
+    expect(normalizeResidualBeneficiaryMethod('')).toBeNull()
+    expect(normalizeResidualBeneficiaryMethod(null)).toBeNull()
+    expect(normalizeResidualBeneficiaryMethod(42)).toBeNull()
+  })
+
+  it('normalises a legacy value stored in trust_details', () => {
+    const sheet = { decisions: { trust_details: { residual_beneficiary_method: 'trust-for-life' } } }
+    expect(getTrustDetails(sheet as never).residual_beneficiary_method).toBe('trust_for_life')
+  })
+
+  it('resolves from trust_details only, normalising legacy spellings', () => {
+    expect(resolveResidualBeneficiaryMethod({
+      decisions: { trust_details: { residual_beneficiary_method: 'trust-for-life' } },
+    } as never)).toBe('trust_for_life')
+
+    expect(resolveResidualBeneficiaryMethod({
+      decisions: { trust_details: { residual_beneficiary_method: 'per stirpes' } },
+    } as never)).toBeNull()
+
+    expect(resolveResidualBeneficiaryMethod({ decisions: {} } as never)).toBeNull()
+  })
+})
+
+// Regression: the section wrote the residual beneficiary method to both
+// decisions.trust_details and the `distribution_method` column, and the two drifted
+// — some live sheets carry a column value with no trust_details entry. trust_details
+// is now the only written home; the column is read-only legacy.
+describe('residual beneficiary method has a single writer', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx'),
+    'utf8',
+  )
+
+  it('writes only trust_details when the method changes', () => {
+    expect(source).toContain("updateTrustDetails({ residual_beneficiary_method: method })")
+    expect(source).not.toContain("onChange('distribution_method'")
+  })
+
+  it('anchors the readiness blocker to the rendered field', () => {
+    // designSheetReadiness targets `residual_beneficiary_method`, which resolves to
+    // id="design-field-residual_beneficiary_method".
+    expect(source).toContain('fieldName="residual_beneficiary_method"')
   })
 })

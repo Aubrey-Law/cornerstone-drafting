@@ -19,7 +19,7 @@ import {
 import { formatCurrency } from '@/lib/format'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import { cn } from '@/lib/utils'
-import type { LeadListRow } from '@/lib/leads/viewTypes'
+import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 
 const DRAG_TYPE = 'text/lead-id'
 
@@ -34,11 +34,13 @@ interface LeadsBoardProps {
   openMenuLeadId?: string | null
   onMenuOpenChange?: (leadId: string, open: boolean) => void
   onEdit: (lead: LeadListRow) => void
+  onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
   onArchive: (lead: LeadListRow) => void
   onMarkLost: (lead: LeadListRow) => void
+  onMarkDeclined: (lead: LeadListRow) => void
   onReopen: (lead: LeadListRow) => void
 }
 
@@ -65,6 +67,7 @@ function stateChip(lead: LeadListRow): { label: string; tone: 'done' | 'pending'
   if (column === 'intake_complete') return { label: 'Intake complete', tone: 'done' }
   if (column === 'hired') return { label: 'Hired', tone: 'done' }
   if (column === 'lost') return { label: 'Lost', tone: 'muted' }
+  if (column === 'declined') return { label: 'Declined', tone: 'muted' }
   return null
 }
 
@@ -84,11 +87,13 @@ export function LeadsBoard({
   openMenuLeadId = null,
   onMenuOpenChange,
   onEdit,
+  onStatusChange,
   onSendIntake,
   onSendEngagement,
   onHire,
   onArchive,
   onMarkLost,
+  onMarkDeclined,
   onReopen,
 }: LeadsBoardProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -108,6 +113,7 @@ export function LeadsBoard({
     else if (drop.kind === 'send_engagement') onSendEngagement(lead)
     else if (drop.kind === 'hire') onHire(lead)
     else if (drop.kind === 'mark_lost') onMarkLost(lead)
+    else if (drop.kind === 'mark_declined') onMarkDeclined(lead)
     else onReopen(lead)
   }
 
@@ -172,6 +178,7 @@ export function LeadsBoard({
                     onMenuOpenChange={onMenuOpenChange}
                     onActivate={onActivate}
                     onEdit={onEdit}
+                    onStatusChange={onStatusChange}
                     onSendIntake={onSendIntake}
                     onSendEngagement={onSendEngagement}
                     onHire={onHire}
@@ -199,6 +206,7 @@ function BoardCard({
   onMenuOpenChange,
   onActivate,
   onEdit,
+  onStatusChange,
   onSendIntake,
   onSendEngagement,
   onHire,
@@ -215,6 +223,7 @@ function BoardCard({
   onMenuOpenChange?: (leadId: string, open: boolean) => void
   onActivate: (lead: LeadListRow) => void
   onEdit: (lead: LeadListRow) => void
+  onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
   onSendIntake: (lead: LeadListRow) => void
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
@@ -273,6 +282,7 @@ function BoardCard({
               ? { open: menuOpen, onOpenChange: (open: boolean) => onMenuOpenChange(lead.id, open) }
               : {})}
             onEdit={onEdit}
+            onStatusChange={onStatusChange}
             onSendIntake={onSendIntake}
             onSendEngagement={onSendEngagement}
             onHire={onHire}

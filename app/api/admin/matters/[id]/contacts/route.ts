@@ -22,6 +22,8 @@ const CLIENT_FIELDS = new Set([
   'first_name', 'middle_name', 'last_name', 'email', 'phone',
   'address_line1', 'city', 'state', 'zip',
   'suffix', 'preferred_name', 'preferred_pronoun', 'date_of_birth',
+  // Edited inline from the matter facts panel's identity header and Contact section.
+  'full_name', 'marital_status', 'has_minor_children',
 ])
 
 const CONTACT_FIELDS = new Set([
@@ -78,7 +80,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const [intakeRes, contactsRes] = await Promise.all([
     admin
       .from('client_intake')
-      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, date_of_birth, email, phone, address_line1, city, state, zip')
+      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, date_of_birth, email, phone, address_line1, city, state, zip, full_name, marital_status, has_minor_children')
       .eq('id', intakeId)
       .single(),
     admin

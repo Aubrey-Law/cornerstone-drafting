@@ -93,10 +93,10 @@ export function loadBundledEstateClauseSnapshot({
   jurisdiction,
   allowDraft = false,
 }: LoadBundledEstateClauseSnapshotArgs): EstateClauseSnapshot {
-  if (jurisdiction !== 'MA') {
-    throw new Error(`Unsupported estate clause jurisdiction: ${jurisdiction}`)
-  }
   const warnings: string[] = []
+  if (jurisdiction !== 'MA') {
+    warnings.push(`Estate clause metadata is currently maintained for MA only; rendering state ${jurisdiction} with MA clauses.`)
+  }
   const winners = loadDirectory({ root, directory: path.join(root, 'clauses'), warnings })
   const stateClauses = loadDirectory({
     root,

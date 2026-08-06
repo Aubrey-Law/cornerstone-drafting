@@ -2,6 +2,7 @@ import { getTrustPlanningType } from '@/lib/designSheetDocumentInclusions'
 import {
   getTrustDetails,
   getTrustNameFormat,
+  normalizeResidualBeneficiaryMethod,
   type ResidualBeneficiaryMethod,
   type TrustCoTrusteeDecision,
   type TrustDetailsProvisions,
@@ -20,7 +21,6 @@ export interface DraftPayloadTrustProvisions extends TrustDetailsProvisions {
   client_name_format: DraftPayloadTrustNameFormat
   spouse_name_format: DraftPayloadTrustNameFormat
   residual_beneficiary: string | null
-  distribution_method: string | null
   distribution_age: number | null
   staggered_distributions: StaggeredTier[]
   remote_beneficiary: string | null
@@ -35,7 +35,6 @@ type TrustProvisionsInput = Pick<
   | 'trust_protector'
   | 'trust_protector_name'
   | 'residual_beneficiary'
-  | 'distribution_method'
   | 'distribution_age'
   | 'staggered_distributions'
   | 'remote_beneficiary'
@@ -93,16 +92,25 @@ export function trustCoTrusteesAction(decision: TrustCoTrusteeDecision | null): 
   }
 }
 
+/**
+ * Map the residual beneficiary method onto the generator's descendant-distribution
+ * vocabulary, or null when nothing usable is set.
+ *
+ * Null is deliberate: this used to fall through to `'staged'`, so a matter where
+ * nobody picked a method — or where the stored value was unrecognised — still
+ * generated a complete staged-distribution trust. Callers must leave the field
+ * absent so the draft preflight reports it instead of emitting a distribution
+ * provision the attorney never chose.
+ */
 export function descendantsDistributionMethod(
   residualMethod: ResidualBeneficiaryMethod | null,
-  distributionMethod: string | null | undefined,
-): string {
-  const method = residualMethod ?? (distributionMethod as ResidualBeneficiaryMethod | null)
+): string | null {
+  const method = normalizeResidualBeneficiaryMethod(residualMethod)
   if (method === 'outright') return 'outright'
   if (method === 'staggered') return 'staged'
-  if (method === 'trust_for_life' || distributionMethod === 'trust-for-life') return 'trust_for_life'
+  if (method === 'trust_for_life') return 'trust_for_life'
   if (method === 'custom') return 'custom'
-  return 'staged'
+  return null
 }
 
 export function defaultDraftPayloadTrustProvisions(
@@ -115,7 +123,6 @@ export function defaultDraftPayloadTrustProvisions(
       trust_protector: false,
       trust_protector_name: null,
       residual_beneficiary: null,
-      distribution_method: null,
       distribution_age: null,
       staggered_distributions: [],
       remote_beneficiary: 'heirs_at_law',
@@ -146,7 +153,6 @@ export function draftPayloadTrustProvisions(sheet: TrustProvisionsInput): DraftP
     client_name_format: getTrustNameFormat(sheet, 'client'),
     spouse_name_format: getTrustNameFormat(sheet, 'spouse'),
     residual_beneficiary: sheet.residual_beneficiary ?? null,
-    distribution_method: sheet.distribution_method ?? null,
     distribution_age: sheet.distribution_age ?? null,
     staggered_distributions: Array.isArray(sheet.staggered_distributions) ? sheet.staggered_distributions : [],
     remote_beneficiary: sheet.remote_beneficiary ?? null,

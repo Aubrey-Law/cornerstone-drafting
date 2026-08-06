@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCachedClaims, getCachedUserRole } from '@/lib/supabaseServer'
 import { getFirmConfig } from '@/lib/firmConfig'
-import { isVoiceConfigured } from '@/lib/communications/config'
+import { isSmsConfigured, isVoiceConfigured } from '@/lib/communications/config'
 import { resolveFirmModel } from '@/lib/firmModels'
 import { ANTHROPIC_MODEL_OPTIONS } from '@/lib/userPreferences'
 import AdminLayoutClient from './AdminLayoutClient'
@@ -56,6 +56,7 @@ export default async function AdminLayout({
           userName={userName}
           userInitials={userInitials}
           voiceEnabled={isVoiceConfigured()}
+          smsEnabled={isSmsConfigured()}
           assistantModelLabel={await assistantModelLabel()}
         >
           {children}

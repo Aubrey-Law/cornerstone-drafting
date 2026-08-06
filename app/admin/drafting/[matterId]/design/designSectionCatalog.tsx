@@ -28,6 +28,7 @@ import { FamilySection } from './sections/FamilySection'
 import { PlanDesignSection } from './sections/PlanDesignSection'
 import { AssetsSection } from './sections/AssetsSection'
 import { GoalsSection } from './sections/GoalsSection'
+import { AdditionalVariablesSection } from './sections/AdditionalVariablesSection'
 import { ResiduarySection } from './sections/ResiduarySection'
 import FiduciariesSection from './sections/FiduciariesSection'
 import {
@@ -61,11 +62,11 @@ const DESIGN_SHEET_GROUP_CATALOG: Array<{
   title: string
   subtitle: string
 }> = [
-  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Facts from intake', subtitle: 'Client, family, and asset facts' },
-  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Family', subtitle: 'Will terms and family distributions' },
+  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Intake Details', subtitle: 'Client, family, and asset facts' },
   { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Contacts, trustees, personal representatives, agents, and guardians' },
-  { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Plan structure', subtitle: 'Plan type, documents, and execution mechanics' },
-  { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust terms', subtitle: 'Trust structure, beneficiaries, and provisions' },
+  { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Estate Plan Details', subtitle: 'Plan type, documents, and execution mechanics' },
+  { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust', subtitle: 'Trust structure, beneficiaries, and provisions' },
+  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Last Will and Testament', subtitle: 'Will title and legacy will details' },
   { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers' },
   { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives' },
   { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning' },
@@ -189,9 +190,6 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
       <FamilySection
         sheet={sheet}
         onChange={updateField}
-        contacts={contacts}
-        onAddContact={handleAddContact}
-        onUpdateContact={handleUpdateContact}
       />
     ),
     [DESIGN_SECTION_IDS.fiduciaries]: () => (
@@ -244,7 +242,12 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         onUpdateContact={handleUpdateContact}
       />
     ),
-    [DESIGN_SECTION_IDS.attorneyNotes]: () => <GoalsSection sheet={sheet} onChange={updateField} />,
+    [DESIGN_SECTION_IDS.attorneyNotes]: () => (
+      <>
+        <GoalsSection sheet={sheet} onChange={updateField} />
+        <AdditionalVariablesSection sheet={sheet} onChange={updateField} />
+      </>
+    ),
   }
 
   const subtitles: Partial<Record<string, string>> = {

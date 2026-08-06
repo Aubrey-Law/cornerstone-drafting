@@ -86,12 +86,16 @@ ${args.text}
     throw error
   }
 
-  const proposed = coerceDesignSheetImport(parsed)
+  const { proposed, rejected } = coerceDesignSheetImport(parsed)
   const preview = buildDesignSheetImportPreview({
     currentSheet: currentSheet as Record<string, unknown> | null,
     proposed,
   })
 
-  if (preview.length === 0) throw new Error('No design-sheet fields were found')
-  return { proposed, preview }
+  // Rejections alone are still a result worth returning: the attorney needs to see
+  // that the document said something for a field rather than that nothing was found.
+  if (preview.length === 0 && rejected.length === 0) {
+    throw new Error('No design-sheet fields were found')
+  }
+  return { proposed, preview, rejected }
 }

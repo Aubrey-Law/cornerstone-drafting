@@ -12,6 +12,7 @@ export type LeadBoardColumnKey =
   | 'engagement'
   | 'hired'
   | 'lost'
+  | 'declined'
 
 export type LeadBoardColumn = {
   key: LeadBoardColumnKey
@@ -27,6 +28,7 @@ export const LEAD_BOARD_COLUMNS: LeadBoardColumn[] = [
   { key: 'engagement', label: 'Engagement', hint: 'Drop to send the engagement agreement' },
   { key: 'hired', label: 'Hired', hint: 'Drop to create the matter' },
   { key: 'lost', label: 'Lost', hint: 'Drop to mark a lead lost' },
+  { key: 'declined', label: 'Declined', hint: 'Leads turned away at discovery' },
 ]
 
 /** What a drop resolves to; `none` carries the reason to show the user. */
@@ -35,6 +37,7 @@ export type LeadBoardDrop =
   | { kind: 'send_engagement' }
   | { kind: 'hire' }
   | { kind: 'mark_lost' }
+  | { kind: 'mark_declined' }
   | { kind: 'reopen' }
   | { kind: 'none'; reason: string | null }
 
@@ -50,6 +53,9 @@ function engagementStarted(lead: LeadListRow): boolean {
 
 export function leadBoardColumn(lead: LeadListRow): LeadBoardColumnKey {
   if (lead.lead_status === 'lost') return 'lost'
+  // Without this a declined lead is placed by its timestamps, so one turned
+  // away before any intake went out would sit in New looking brand new.
+  if (lead.lead_status === 'declined') return 'declined'
   if (lead.lead_status === 'hired') return 'hired'
   // An engagement can go out before the intake is finished, so it wins.
   if (engagementStarted(lead)) return 'engagement'
@@ -81,6 +87,12 @@ export function resolveBoardDrop(lead: LeadListRow, target: LeadBoardColumnKey):
       ? { kind: 'reopen' }
       : { kind: 'none', reason: 'Drop a lost lead on New to reopen it first.' }
   }
+  if (from === 'declined') {
+    return target === 'new'
+      ? { kind: 'reopen' }
+      : { kind: 'none', reason: 'Drop a declined lead on New to reopen it first.' }
+  }
+  if (target === 'declined') return { kind: 'mark_declined' }
   if (target === 'lost') return { kind: 'mark_lost' }
   if (target === 'new') {
     return { kind: 'none', reason: 'Leads only return to New when a lost lead is reopened.' }
@@ -90,5 +102,8 @@ export function resolveBoardDrop(lead: LeadListRow, target: LeadBoardColumnKey):
     return { kind: 'none', reason: 'Intake completes when the client submits it.' }
   }
   if (target === 'engagement') return { kind: 'send_engagement' }
-  return { kind: 'hire' }
+  // Hiring is named explicitly rather than left as the fallback: as a catch-all
+  // it meant any column added later silently hired the lead on drop.
+  if (target === 'hired') return { kind: 'hire' }
+  return { kind: 'none', reason: null }
 }

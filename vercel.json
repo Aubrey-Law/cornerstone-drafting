@@ -15,6 +15,10 @@
       "schedule": "0 12 * * 1-5"
     },
     {
+      "path": "/api/cron/sla-task-nudges",
+      "schedule": "0 12 * * 1-5"
+    },
+    {
       "path": "/api/cron/appointment-reminders",
       "schedule": "0 * * * *"
     },

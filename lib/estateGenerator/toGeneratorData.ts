@@ -73,6 +73,8 @@ export interface EstateGeneratorData {
   funding_plan: Record<string, unknown>
   homestead: Record<string, unknown>
   tax: Record<string, unknown>
+  /** Attorney-defined template variables, referenced in templates as `extras.*`. */
+  extras: Record<string, string>
   drafting_notes?: string
 }
 
@@ -284,6 +286,12 @@ function testamentaryCoTrustee(payload: DraftPayload) {
   return person(payload.fiduciaries.trustee_co)
 }
 
+function spouseTestamentaryCoTrustee(payload: DraftPayload) {
+  const structure = payload.will_provisions.trustee_structure
+  if (structure && structure !== 'co_trustees') return person(null)
+  return person(payload.fiduciaries.spouse_trustee_co)
+}
+
 function testamentaryCoTrusteesAction(
   value: DraftPayload['will_provisions']['cotrustee_decision_standard'],
 ): string {
@@ -434,10 +442,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   const hasMinorChildren = payload.matter.minor_children
   const trustProvisions = payload.trust_provisions ?? defaultDraftPayloadTrustProvisions()
   const distributionAges = payload.trust?.distribution_ages ?? []
-  const descendantsMethod = descendantsDistributionMethod(
-    trustProvisions.residual_beneficiary_method,
-    trustProvisions.distribution_method,
-  )
+  const descendantsMethod = descendantsDistributionMethod(trustProvisions.residual_beneficiary_method)
   const distributionAge = trustProvisions.distribution_age ?? distributionAges[0] ?? null
   const staggerAges = trustProvisions.staggered_distributions
     .map(tier => tier.age)
@@ -506,6 +511,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   }
 
   return {
+    extras: payload.extras ?? {},
     client: {
       ...compactObject({
         full_name: payload.client.full_name,
@@ -638,7 +644,9 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         distribution_method: payload.will_provisions.tangible_property_distribution ?? 'memorandum',
       },
       descendants_distribution: {
-        method: descendantsMethod,
+        // Absent, not defaulted, when no method is set — the preflight's
+        // required-field check is what surfaces it to the attorney.
+        method: descendantsMethod ?? undefined,
         distribution_age: distributionAge?.toString(),
         stage_1_age: (staggerAges[0] ?? distributionAges[0])?.toString(),
         stage_2_age: (staggerAges[1] ?? distributionAges[1])?.toString(),
@@ -705,7 +713,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       },
       spouse_executor: {
         primary: fiduciaryPerson(fiduciaryDetails?.spouse_executor.primary, payload.fiduciaries.spouse_pr_primary),
-        co_primary: person(null),
+        co_primary: person(payload.fiduciaries.spouse_pr_co_primary),
         successor: fiduciaryPerson(fiduciaryDetails?.spouse_executor.successor, payload.fiduciaries.spouse_pr_successor),
         co_successor: person(null),
         second_successor: person(null),
@@ -732,7 +740,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       },
       spouse_testamentary_trustee: {
         primary: fiduciaryPerson(undefined, payload.fiduciaries.spouse_trustee_successor),
-        co_primary: person(null),
+        co_primary: spouseTestamentaryCoTrustee(payload),
         successor: person(null),
         co_trustees_action: testamentaryCoTrusteesAction(payload.will_provisions.cotrustee_decision_standard),
       },
@@ -745,7 +753,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       },
       spouse_agent: {
         primary: fiduciaryPerson(fiduciaryDetails?.spouse_agent.primary, payload.fiduciaries.spouse_dpoa_primary),
-        co_primary: person(null),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.spouse_agent.co_primary, payload.fiduciaries.spouse_dpoa_co),
         successor: fiduciaryPerson(fiduciaryDetails?.spouse_agent.successor, payload.fiduciaries.spouse_dpoa_successor),
         co_agents_action: poaCoAgentsAction(payload.dpoa_provisions.coagent_manner),
         primary_has_spouse: Boolean(payload.client.full_name),
@@ -758,9 +766,17 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
           relationship: payload.fiduciaries.hcp_primary_relationship ?? null,
           address: payload.fiduciaries.hcp_primary_address ?? payload.client.address ?? '',
         }),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.co_primary, payload.fiduciaries.hcp_co, {
+          relationship: payload.fiduciaries.hcp_co_relationship ?? null,
+          address: payload.fiduciaries.hcp_co_address ?? '',
+        }),
         alternate: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.alternate, payload.fiduciaries.hcp_successor, {
           relationship: payload.fiduciaries.hcp_successor_relationship ?? null,
           address: payload.fiduciaries.hcp_successor_address ?? '',
+        }),
+        co_alternate: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.co_alternate, payload.fiduciaries.hcp_successor_co, {
+          relationship: payload.fiduciaries.hcp_successor_co_relationship ?? null,
+          address: payload.fiduciaries.hcp_successor_co_address ?? '',
         }),
         second_alternate: person(null),
       },
@@ -769,10 +785,22 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
           relationship: payload.fiduciaries.spouse_hcp_primary_relationship ?? null,
           address: payload.fiduciaries.spouse_hcp_primary_address ?? payload.client.address ?? '',
         }),
+        co_primary: fiduciaryPerson(fiduciaryDetails?.spouse_healthcare_agent.co_primary, payload.fiduciaries.spouse_hcp_co, {
+          relationship: payload.fiduciaries.spouse_hcp_co_relationship ?? null,
+          address: payload.fiduciaries.spouse_hcp_co_address ?? '',
+        }),
         alternate: fiduciaryPerson(fiduciaryDetails?.spouse_healthcare_agent.alternate, payload.fiduciaries.spouse_hcp_successor, {
           relationship: payload.fiduciaries.spouse_hcp_successor_relationship ?? null,
           address: payload.fiduciaries.spouse_hcp_successor_address ?? '',
         }),
+        co_alternate: fiduciaryPerson(
+          fiduciaryDetails?.spouse_healthcare_agent.co_alternate,
+          payload.fiduciaries.spouse_hcp_successor_co,
+          {
+            relationship: payload.fiduciaries.spouse_hcp_successor_co_relationship ?? null,
+            address: payload.fiduciaries.spouse_hcp_successor_co_address ?? '',
+          },
+        ),
       },
       anatomical_gift: hcpProvisions.anatomical_gift,
       anatomical_specified: hcpProvisions.anatomical_specified ?? '',
@@ -814,8 +842,20 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     charitable_gifts: charitableGifts,
     guardians: {
       primary: fiduciaryPerson(fiduciaryDetails?.guardians.primary, payload.fiduciaries.guardian_primary),
+      co_primary: fiduciaryPerson(
+        fiduciaryDetails?.guardians.co_primary,
+        payload.fiduciaries.guardian_co,
+      ),
       successor: fiduciaryPerson(fiduciaryDetails?.guardians.successor, payload.fiduciaries.guardian_successor),
+      co_successor: fiduciaryPerson(
+        fiduciaryDetails?.guardians.co_successor,
+        payload.fiduciaries.guardian_co_successor,
+      ),
       second_successor: fiduciaryPerson(fiduciaryDetails?.guardians.second_successor, payload.fiduciaries.guardian_second_successor),
+      co_second_successor: fiduciaryPerson(
+        fiduciaryDetails?.guardians.co_second_successor,
+        payload.fiduciaries.guardian_co_second_successor,
+      ),
       temporary: fiduciaryPerson(fiduciaryDetails?.guardians.temporary, payload.fiduciaries.temp_guardian_primary),
       temporary_co: fiduciaryPerson(fiduciaryDetails?.guardians.temporary_co, payload.fiduciaries.temp_guardian_co),
       temporary_successor: fiduciaryPerson(fiduciaryDetails?.guardians.temporary_successor, payload.fiduciaries.temp_guardian_successor),

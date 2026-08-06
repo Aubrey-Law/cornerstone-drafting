@@ -9,7 +9,7 @@ import { isMicrosoftConfigured } from '@/lib/microsoftCalendar'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
-import type { IntakeReadinessFlag } from '@/lib/intakeReadiness'
+import { resolveIntakeReviewFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterActivity } from '@/types/database'
@@ -40,6 +40,7 @@ type LeadActivityLoaderRow = {
 }
 type MatterShellRow = {
   client_intake_id: string | null
+  relationship_status?: string | null
   matter_number?: string | null
   matter_number_manual?: boolean | null
   portal_uploads_reviewed_at?: string | null
@@ -60,8 +61,8 @@ type ClientIntakeShellRow = {
 
 const MATTER_NOTE_COLUMNS_WITH_PROVENANCE = 'id, matter_id, note_type, body, author, created_at, source_lead_note_id'
 const MATTER_NOTE_COLUMNS_BASE = 'id, matter_id, note_type, body, author, created_at'
-const MATTER_SHELL_COLUMNS_FULL = 'client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at'
-const MATTER_SHELL_COLUMNS_BASE = 'client_intake_id, matter_number'
+const MATTER_SHELL_COLUMNS_FULL = 'client_intake_id, relationship_status, matter_number, matter_number_manual, portal_uploads_reviewed_at'
+const MATTER_SHELL_COLUMNS_BASE = 'client_intake_id, relationship_status, matter_number'
 const CLIENT_INTAKE_COLUMNS_FULL = 'id, intake_sent_at, intake_completed_at, uploads_reviewed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note'
 const CLIENT_INTAKE_COLUMNS_BASE = 'id, intake_sent_at, email, first_name, status, user_id, client_user_id'
 
@@ -125,7 +126,6 @@ async function loadMatterShell(admin: ReturnType<typeof getAdminClient>, matterI
     .from('matters')
     .select(MATTER_SHELL_COLUMNS_FULL)
     .eq('id', matterId)
-    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (!full.error) return full.data as MatterShellRow | null
@@ -136,7 +136,6 @@ async function loadMatterShell(admin: ReturnType<typeof getAdminClient>, matterI
     .from('matters')
     .select(MATTER_SHELL_COLUMNS_BASE)
     .eq('id', matterId)
-    .eq('relationship_status', 'hired')
     .maybeSingle()
 
   if (base.error) throw new Error(`Could not load matter history: ${base.error.message}`)
@@ -224,7 +223,8 @@ export default async function MatterDetailPage({ params }: Params) {
   const admin = getAdminClient()
   const id = await resolveMatterId(rawId, admin)
   const [matter, contacts, agingSummary] = await Promise.all([
-    fetchMatter(id),
+    // A lead is a matter here; without this the page 404s on every one of them.
+    fetchMatter(id, { includeLeads: true }),
     fetchMatterContacts(id),
     fetchMatterAgingSummary(id),
   ])
@@ -251,6 +251,8 @@ export default async function MatterDetailPage({ params }: Params) {
   if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
+  // Rows predating the consolidated view carry no lifecycle value; they are all hired.
+  const relationshipStatus = (matterRow?.relationship_status as string | null) ?? 'hired'
   const initialEstateSnapshot = await fetchMatterEstateSnapshot(intakeId)
   let clientIntakeRow: ClientIntakeShellRow | null = null
 
@@ -265,7 +267,14 @@ export default async function MatterDetailPage({ params }: Params) {
   const matterNumber = (matterRow?.matter_number ?? detailsRow?.matter_number ?? null) as string | null
   const matterNumberManual = Boolean(matterRow?.matter_number_manual)
   const designSheetSeeded = Boolean(designSheet?.id) && !isDesignSheetUnseeded(designSheet)
-  const reviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
+  // The stored flags are a snapshot of the intake submission. Resolve them against
+  // the design sheet so anything the attorney has since answered — a named
+  // fiduciary, a filled-in DOB — stops being reported as outstanding.
+  const storedReviewFlags = ((designSheet as { intake_review_flags?: IntakeReadinessFlag[] } | null)?.intake_review_flags ?? []) as IntakeReadinessFlag[]
+  const reviewFlags = resolveIntakeReviewFlags(
+    storedReviewFlags,
+    designSheet as unknown as Record<string, unknown> | null,
+  )
   const resyncPreviewCount = intakeSnapshot && designSheet
     ? buildIntakeResyncPreview({
         currentSheet: designSheet as unknown as Record<string, unknown>,
@@ -292,6 +301,7 @@ export default async function MatterDetailPage({ params }: Params) {
       contacts={contacts}
       agingSummary={agingSummary}
       intakeId={intakeId}
+      relationshipStatus={relationshipStatus}
       clientIntakeRow={clientIntakeRow}
       matterNumber={matterNumber}
       matterNumberManual={matterNumberManual}

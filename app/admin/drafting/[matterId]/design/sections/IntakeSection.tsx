@@ -147,7 +147,6 @@ export function IntakeSection({
   const suffix = textValue(intake.suffix)
   const spouseFirstName = textValue(intake.spouse_first_name)
   const spouseLastName = textValue(intake.spouse_last_name)
-  const children = recordArray(intake.children)
   const planningObjectives = textValue(intake.planning_objectives)
   const specialNotes = textValue(intake.special_notes)
   const specialCircumstances = textArray(intake.special_circumstances)
@@ -165,7 +164,6 @@ export function IntakeSection({
   const hasBusiness = booleanValue(intake.has_business) === true
   const hasInvestments = booleanValue(intake.has_investments) === true
   const hasSpouse = !!(spouseFirstName || spouseLastName)
-  const hasChildren = children.length > 0
   const hasAssets = hasRealProperty || hasRetirement || hasLifeInsurance || hasBusiness || hasInvestments || realEstateExtended.length > 0 || financialAccounts.length > 0
   const hasExistingDocs = [intake.has_will, intake.has_trust, intake.has_poa, intake.has_hcp].some(value => booleanValue(value) === true)
   const hasMinorChildren = booleanValue(intake.has_minor_children) === true
@@ -246,23 +244,6 @@ export function IntakeSection({
           <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
             <ReadField label="Phone" value={formatPhoneDisplay(intake.spouse_phone)} />
             <ReadField label="Email" value={intake.spouse_email} />
-          </div>
-        </SectionBlock>
-      )}
-
-      {/* Children */}
-      {hasChildren && (
-        <SectionBlock title="Children">
-          <div className="space-y-3">
-            {children.map((child, i) => (
-              <div key={i} className="rounded-lg border border-border bg-muted/40 p-3">
-                <div className="grid grid-cols-3 gap-x-6">
-                  <ReadField label="Name" value={child.name} />
-                  <ReadDobField label="Date of Birth" value={child.date_of_birth ?? child.dob} />
-                  <ReadField label="Relationship" value={child.relationship} />
-                </div>
-              </div>
-            ))}
           </div>
         </SectionBlock>
       )}

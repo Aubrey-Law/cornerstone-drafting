@@ -130,6 +130,23 @@ REVOKE INSERT, UPDATE, DELETE ON public.billing_items FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.billing_payments FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.billing_events FROM authenticated;
 
+-- The engagement-seeding trigger below fires on `fee_payment_status`, and a
+-- CREATE TRIGGER ... UPDATE OF <column> is checked when the trigger is created,
+-- not when it runs. The column is properly introduced (backfilled from
+-- fee_collected, defaulted, made NOT NULL, constrained) in
+-- 20260811000000_matter_fee_payment_status.sql, which lands later in the
+-- sequence. That was fine on a database where this migration had already run,
+-- but it made the chain unreplayable from scratch — a fresh `supabase db reset`
+-- or a new staging project died right here.
+--
+-- Declaring the bare column makes this migration self-sufficient without
+-- duplicating the later one: ADD COLUMN IF NOT EXISTS is a no-op there, and the
+-- backfill, default, NOT NULL and CHECK still belong to it. The function body
+-- below reads the column through coalesce(), so a nullable column with no
+-- default is safe in the window between the two migrations.
+ALTER TABLE public.matter_details
+  ADD COLUMN IF NOT EXISTS fee_payment_status text;
+
 CREATE OR REPLACE FUNCTION public.seed_engagement_billing_item()
 RETURNS trigger
 LANGUAGE plpgsql

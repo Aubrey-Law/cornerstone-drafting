@@ -138,20 +138,36 @@ const DIRECTORY = [
   {
     digits: '7815551212',
     name: 'Margaret Whitfield',
+    detail: '2026-EP-0142',
     matterId: 'm1',
     matterNumber: '2026-EP-0142',
     leadId: null,
+    contactId: null,
     practiceArea: 'Estate Planning',
     stage: 'drafting',
   },
   {
     digits: '6175559090',
     name: 'Harold Pike',
+    detail: 'Lead',
     matterId: null,
     matterNumber: null,
     leadId: 'l1',
+    contactId: null,
     practiceArea: null,
     stage: 'Lead',
+  },
+  // A standalone contact — the population the directory used to omit entirely.
+  {
+    digits: '6175557070',
+    name: 'Rita Referrer',
+    detail: 'Referring CPA',
+    matterId: null,
+    matterNumber: null,
+    leadId: null,
+    contactId: 'c1',
+    practiceArea: null,
+    stage: null,
   },
 ]
 
@@ -290,6 +306,13 @@ describe('softphone rail pane', () => {
     await user.type(search, '6175559090')
     expect(screen.getByText('Harold Pike')).toBeTruthy()
     expect(screen.getByText('Lead')).toBeTruthy()
+
+    // A contact with no matter is findable by name and by role, and labelled
+    // as one rather than falling back to "Lead".
+    await user.clear(search)
+    await user.type(search, 'referring')
+    expect(screen.getByText('Rita Referrer')).toBeTruthy()
+    expect(screen.getByText('Referring CPA')).toBeTruthy()
   })
 
   it('fills the dialer from a directory result', async () => {
@@ -314,6 +337,45 @@ describe('softphone rail pane', () => {
     expect(screen.getByRole('link', { name: 'SMS' }).getAttribute('href')).toBe(
       '/admin/matters/m1?tab=communications&channel=sms',
     )
+  })
+
+  it('opens the lead record when the number belongs to a lead', async () => {
+    // Regression: the button keyed off matterId alone, so it was dead for
+    // every lead and contact the firm directory now carries.
+    mockFetch()
+    renderPhone()
+    await screen.findByText('Ready')
+
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '6175559090' } })
+
+    const link = screen.getByRole('link', { name: 'SMS' })
+    expect(link.getAttribute('href')).toBe('/admin/leads/l1?tab=communications')
+    expect(link.getAttribute('aria-disabled')).toBe('false')
+  })
+
+  it('opens the contact panel when the number belongs to a contact', async () => {
+    mockFetch()
+    renderPhone()
+    await screen.findByText('Ready')
+
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '6175557070' } })
+
+    expect(screen.getByRole('link', { name: 'SMS' }).getAttribute('href')).toBe(
+      '/admin/contacts?selected=contact:c1',
+    )
+  })
+
+  it('leaves SMS disabled for a number nobody in the directory owns', async () => {
+    mockFetch()
+    renderPhone()
+    await screen.findByText('Ready')
+
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '9995551234' } })
+
+    // No href, so it is not a link at all — queried by text, not by role.
+    const link = screen.getByText('SMS')
+    expect(link.getAttribute('href')).toBeNull()
+    expect(link.getAttribute('aria-disabled')).toBe('true')
   })
 
   it('prefills the dialer from a click-to-call event', async () => {

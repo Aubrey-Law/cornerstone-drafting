@@ -88,6 +88,7 @@ function basePayload(overrides: Partial<DraftPayload> = {}): DraftPayload {
       temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
+      spouse_pr_co_primary: null,
       spouse_pr_primary: null,
       spouse_pr_successor: null,
       spouse_dpoa_primary: null,
@@ -99,6 +100,7 @@ function basePayload(overrides: Partial<DraftPayload> = {}): DraftPayload {
       spouse_hcp_successor_address: null,
       spouse_hcp_successor_relationship: null,
       spouse_trustee_successor: null,
+      spouse_trustee_co: null,
     },
     documents: {
       include_trust: true,
@@ -198,7 +200,6 @@ describe('draft payload trust provisions wiring', () => {
       trust_protector: true,
       trust_protector_name: 'Protector Person',
       residual_beneficiary: 'descendants',
-      distribution_method: 'outright',
       distribution_age: 30,
       staggered_distributions: [],
       remote_beneficiary: 'named',
@@ -245,7 +246,31 @@ describe('draft payload trust provisions wiring', () => {
   it('maps co-trustee decision standards for generator templates', () => {
     expect(trustCoTrusteesAction('joint_majority')).toBe('joint')
     expect(trustCoTrusteesAction('independent')).toBe('independent')
-    expect(descendantsDistributionMethod('outright', 'staggered')).toBe('outright')
-    expect(descendantsDistributionMethod(null, 'staggered')).toBe('staged')
+    expect(descendantsDistributionMethod('outright')).toBe('outright')
+  })
+})
+
+// Regression: this used to end in a bare `return 'staged'`, so a matter where nobody
+// picked a method — or one carrying an unrecognised legacy value — still generated a
+// complete staged-distribution trust. Null leaves the generator field absent so the
+// draft preflight reports it instead.
+describe('descendantsDistributionMethod', () => {
+  it('maps each recognised method', () => {
+    expect(descendantsDistributionMethod('outright')).toBe('outright')
+    expect(descendantsDistributionMethod('staggered')).toBe('staged')
+    expect(descendantsDistributionMethod('trust_for_life')).toBe('trust_for_life')
+    expect(descendantsDistributionMethod('custom')).toBe('custom')
+  })
+
+  it('accepts the legacy hyphenated spelling', () => {
+    expect(descendantsDistributionMethod('trust-for-life' as never)).toBe('trust_for_life')
+  })
+
+  it('returns null when nothing is set rather than defaulting to staged', () => {
+    expect(descendantsDistributionMethod(null)).toBeNull()
+  })
+
+  it('returns null for a value that is not a residual beneficiary method', () => {
+    expect(descendantsDistributionMethod('per stirpes' as never)).toBeNull()
   })
 })

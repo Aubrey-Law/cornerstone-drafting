@@ -3,6 +3,7 @@ import {
   addCo,
   normalizeFiduciarySlots,
   removeCo,
+  removeAlternate,
   setSlotContact,
   slotsByOrder,
 } from '@/app/admin/drafting/[matterId]/design/sections/fiduciary-helpers'
@@ -43,6 +44,16 @@ describe('design sheet fiduciary co-agent slots', () => {
       { id: 'primary', contact_id: null, is_co: false, order: 0 },
       { id: 'co-2', contact_id: 'b', is_co: true, order: 0 },
     ])
+  })
+
+  it('does not remove the first principal even if it is not order 0', () => {
+    const slots: FiduciarySlot[] = [
+      { id: 'primary', contact_id: 'client', is_co: false, order: 4 },
+      { id: 'co-1', contact_id: 'co', is_co: true, order: 4 },
+      { id: 'backup', contact_id: 'backup', is_co: false, order: 5 },
+    ]
+
+    expect(removeAlternate(slots, 4)).toEqual(slots)
   })
 })
 

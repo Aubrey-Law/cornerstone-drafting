@@ -9,11 +9,17 @@ describe('matter activity redesign', () => {
       'utf8',
     )
 
+    const meta = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/matters/[id]/activityEventMeta.tsx'),
+      'utf8',
+    )
+
     expect(activity).toContain('groupActivityByDay')
-    expect(activity).toContain('Generated ')
-    expect(activity).toContain('documentRefs')
     expect(activity).toContain('?tab=documents&document=')
     expect(activity).toContain('max-w-[70ch]')
+    // Draft titling and document-ref parsing moved to the shared module.
+    expect(meta).toContain('Generated ')
+    expect(meta).toContain('documentRefs')
   })
 
   it('returns IDs from both draft persistence branches while keeping filenames', () => {

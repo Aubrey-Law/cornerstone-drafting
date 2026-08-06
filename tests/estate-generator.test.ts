@@ -104,6 +104,7 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
       temp_guardian_co: null,
       temp_guardian_successor: null,
       temp_guardian_second_successor: null,
+      spouse_pr_co_primary: null,
       spouse_pr_primary: null,
       spouse_pr_successor: null,
       spouse_dpoa_primary: null,
@@ -115,6 +116,7 @@ function payload(overrides: DraftPayloadOverride = {}): DraftPayload {
       spouse_hcp_successor_address: null,
       spouse_hcp_successor_relationship: null,
       spouse_trustee_successor: null,
+      spouse_trustee_co: null,
     },
     documents: {
       include_trust: true,
@@ -817,7 +819,16 @@ describe('estate generator mapping', () => {
   })
 
   it('builds the JSON shape expected by the estate generator', () => {
-    const data = toEstateGeneratorData(payload())
+    const data = toEstateGeneratorData(payload({
+      fiduciaries: {
+        hcp_co: 'Cal Care',
+        hcp_co_address: '3 Health Ave',
+        hcp_co_relationship: 'friend',
+        hcp_successor_co: 'Dana Alternate Co',
+        hcp_successor_co_address: '4 Health Ave',
+        hcp_successor_co_relationship: 'colleague',
+      },
+    }))
 
     expect(data.client).toMatchObject({
       full_name: 'Jane Example',
@@ -843,7 +854,9 @@ describe('estate generator mapping', () => {
     })
     expect(data.healthcare.agent).toMatchObject({
       primary: { full_name: 'Harper Proxy', address: '1 Care Way' },
+      co_primary: { full_name: 'Cal Care', address: '3 Health Ave', relationship: 'friend' },
       alternate: { full_name: 'Riley Proxy', address: '2 Care Way' },
+      co_alternate: { full_name: 'Dana Alternate Co', address: '4 Health Ave', relationship: 'colleague' },
     })
     expect(data.execution).toMatchObject({
       signing_scheduled: true,
@@ -995,6 +1008,12 @@ describe('estate generator mapping', () => {
         spouse_hcp_primary_address: '3 Care Lane',
         spouse_hcp_successor: 'Remy Spouse Alternate',
         spouse_hcp_successor_address: '4 Care Lane',
+        spouse_hcp_co: 'Spouse Co Care',
+        spouse_hcp_co_address: '5 Spouse Care Lane',
+        spouse_hcp_co_relationship: 'parent',
+        spouse_hcp_successor_co: 'Spouse Co Alternate',
+        spouse_hcp_successor_co_address: '6 Spouse Co Lane',
+        spouse_hcp_successor_co_relationship: 'sibling',
       },
     }))
 
@@ -1010,9 +1029,19 @@ describe('estate generator mapping', () => {
           full_name: 'Harper Spouse Proxy',
           address: '3 Care Lane',
         },
+        co_primary: {
+          full_name: 'Spouse Co Care',
+          address: '5 Spouse Care Lane',
+          relationship: 'parent',
+        },
         alternate: {
           full_name: 'Remy Spouse Alternate',
           address: '4 Care Lane',
+        },
+        co_alternate: {
+          full_name: 'Spouse Co Alternate',
+          address: '6 Spouse Co Lane',
+          relationship: 'sibling',
         },
       },
     })

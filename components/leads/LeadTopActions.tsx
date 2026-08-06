@@ -15,8 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-
-type MutableLeadStatus = 'lead' | 'lost'
+import type { MutableLeadStatus } from '@/lib/leads/viewTypes'
 
 type Props = {
   busy: boolean
@@ -64,6 +63,9 @@ export function LeadTopActions({
   const active = status === 'lead'
   const hired = status === 'hired'
   const lost = status === 'lost'
+  const declined = status === 'declined'
+  // Both closed states reopen the same way, so the menu offers one Reactivate.
+  const closed = lost || declined
   const canViewMatter = hired && Boolean(matterId)
 
   return (
@@ -124,12 +126,17 @@ export function LeadTopActions({
                 Mark lost
               </DropdownMenuItem>
             )}
+            {active && (
+              <DropdownMenuItem onClick={() => onStatusChange('declined')}>
+                Decline — not a fit
+              </DropdownMenuItem>
+            )}
             {active && snoozed && (
               <DropdownMenuItem onClick={onClearSnooze}>
                 Clear snooze
               </DropdownMenuItem>
             )}
-            {lost && (
+            {closed && (
               <DropdownMenuItem onClick={() => onStatusChange('lead')}>
                 Reactivate
               </DropdownMenuItem>
@@ -201,12 +208,17 @@ export function LeadTopActions({
               Mark lost
             </DropdownMenuItem>
           )}
+          {active && (
+            <DropdownMenuItem onClick={() => onStatusChange('declined')}>
+              Decline — not a fit
+            </DropdownMenuItem>
+          )}
           {active && snoozed && (
             <DropdownMenuItem onClick={onClearSnooze}>
               Clear snooze
             </DropdownMenuItem>
           )}
-          {lost && (
+          {closed && (
             <DropdownMenuItem onClick={() => onStatusChange('lead')}>
               Reactivate
             </DropdownMenuItem>

@@ -25,7 +25,6 @@ function sourceSheet(): DesignSheet {
     goals_notes: 'Private notes about the prior client',
     plan_type: 'pour_over',
     is_joint: true,
-    distribution_method: 'staggered',
     stagger_age_1: 25,
     utma_age: 21,
     pr_structure: 'spouse_first',
@@ -36,7 +35,11 @@ function sourceSheet(): DesignSheet {
     decisions: {
       document_inclusions: { trust: true, will: true, dpoa: true, healthcare: false },
       dpoa_provisions: { all_basic_powers: true },
-      trust_details: { protect_us_trust_status: true, special_trustee_instructions: 'Call the prior client first' },
+      trust_details: {
+        protect_us_trust_status: true,
+        residual_beneficiary_method: 'staggered',
+        special_trustee_instructions: 'Call the prior client first',
+      },
       deed: { property_address: '1 Prior St' },
       funding_plan: { accounts: ['prior account'] },
       excluded_person: { name: 'Prior Uncle' },
@@ -49,9 +52,29 @@ describe('extractPlanStructure', () => {
     const patch = extractPlanStructure(sourceSheet())
     expect(patch.plan_type).toBe('pour_over')
     expect(patch.is_joint).toBe(true)
-    expect(patch.distribution_method).toBe('staggered')
     expect(patch.stagger_age_1).toBe(25)
     expect(patch.pr_structure).toBe('spouse_first')
+  })
+
+  it('carries the residual beneficiary method across in trust_details', () => {
+    const patch = extractPlanStructure(sourceSheet()) as Record<string, unknown>
+    const trustDetails = (patch.decisions as Record<string, unknown>).trust_details as Record<string, unknown>
+
+    expect(trustDetails.residual_beneficiary_method).toBe('staggered')
+  })
+
+  // The source may predate the trust_details block entirely; the method still has to
+  // land in the canonical home rather than be dropped.
+  it('lands the method even when the source has no trust_details block', () => {
+    const source = sourceSheet() as unknown as Record<string, unknown>
+    const decisions = source.decisions as Record<string, unknown>
+    delete decisions.trust_details
+    decisions.trust_details = { residual_beneficiary_method: 'custom' }
+
+    const patch = extractPlanStructure(source as never) as Record<string, unknown>
+    const trustDetails = (patch.decisions as Record<string, unknown>).trust_details as Record<string, unknown>
+
+    expect(trustDetails.residual_beneficiary_method).toBe('custom')
   })
 
   it('never copies identity data, people, assets, or notes', () => {

@@ -6,6 +6,7 @@ import {
 } from '@/lib/designSheetDocumentInclusions'
 import { getPersistedRealEstateTransfer } from '@/lib/designSheetRealEstateTransfer'
 import { getContactProfiles } from '@/lib/designSheet/fiduciaryDocumentInclusions'
+import { principalOrderByPriority } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { getRelationshipLabel, structuredFromContactProfile } from '@/lib/kinship/relationshipLabels'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import type { DraftPayload } from '@/lib/draftPayload/types'
@@ -156,9 +157,16 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     return slots[`${role}_${party}_${priority}_${co ? 'co' : 'seq'}`]?.name ?? null
   }
 
-  function getAddr(role: string, party: string, priority: number): string | null {
-    return slots[`${role}_${party}_${priority}_seq`]?.address ??
-           slots[`${role}_${party}_${priority}_co`]?.address ?? null
+  function getAddr(role: string, party: string, priority: number, co = false): string | null {
+    if (co) {
+      return slots[`${role}_${party}_${priority}_co`]?.address
+        ?? slots[`${role}_${party}_${priority}_seq`]?.address
+        ?? null
+    }
+
+    return slots[`${role}_${party}_${priority}_seq`]?.address
+      ?? slots[`${role}_${party}_${priority}_co`]?.address
+      ?? null
   }
 
   function getRel(role: string, party: string, priority: number): string | null {
@@ -182,8 +190,14 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     hcp_primary_address:      getAddr('hcp', 'client', 1),
     hcp_primary_relationship: getRel('hcp', 'client', 1),
     hcp_successor:              get('hcp', 'client', 2),
+    hcp_co:                     get('hcp', 'client', 1, true),
+    hcp_co_relationship:        getRel('hcp', 'client', 1),
+    hcp_co_address:             getAddr('hcp', 'client', 1),
     hcp_successor_address:      getAddr('hcp', 'client', 2),
     hcp_successor_relationship: getRel('hcp', 'client', 2),
+    hcp_successor_co:           get('hcp', 'client', 2, true),
+    hcp_successor_co_address:   getAddr('hcp', 'client', 2),
+    hcp_successor_co_relationship: getRel('hcp', 'client', 2),
     // Client — trustee
     trustee_initial:              get('trustee', 'client', 1),
     trustee_co:                   get('trustee', 'client', 1, true),
@@ -193,28 +207,40 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     trustee_co_second_successor:  get('trustee', 'client', 3, true),
     // Guardian
     guardian_primary:          get('guardian', 'client', 1),
+    guardian_co:               get('guardian', 'client', 1, true),
     guardian_successor:        get('guardian', 'client', 2),
+    guardian_co_successor:     get('guardian', 'client', 2, true),
     guardian_second_successor: get('guardian', 'client', 3),
+    guardian_co_second_successor: get('guardian', 'client', 3, true),
     // Temporary Guardian — design-sheet only (no contact_role); filled by slot overlay
     temp_guardian_primary:          null,
     temp_guardian_co:               null,
     temp_guardian_successor:        null,
     temp_guardian_second_successor: null,
     // Spouse — executor / PR
-    spouse_pr_primary:   get('executor', 'spouse', 1),
-    spouse_pr_successor: get('executor', 'spouse', 2),
+    spouse_pr_primary:    get('executor', 'spouse', 1),
+    spouse_pr_co_primary: get('executor', 'spouse', 1, true),
+    spouse_pr_successor:  get('executor', 'spouse', 2),
     // Spouse — DPOA / POA
     spouse_dpoa_primary:   get('poa', 'spouse', 1),
+    spouse_dpoa_co:        get('poa', 'spouse', 1, true),
     spouse_dpoa_successor: get('poa', 'spouse', 2),
     // Spouse — HCP
     spouse_hcp_primary:              get('hcp', 'spouse', 1),
     spouse_hcp_primary_address:      getAddr('hcp', 'spouse', 1),
     spouse_hcp_primary_relationship: getRel('hcp', 'spouse', 1),
+    spouse_hcp_co:                   get('hcp', 'spouse', 1, true),
+    spouse_hcp_co_address:           getAddr('hcp', 'spouse', 1, true),
+    spouse_hcp_co_relationship:      getRel('hcp', 'spouse', 1),
     spouse_hcp_successor:              get('hcp', 'spouse', 2),
     spouse_hcp_successor_address:      getAddr('hcp', 'spouse', 2),
     spouse_hcp_successor_relationship: getRel('hcp', 'spouse', 2),
+    spouse_hcp_successor_co:           get('hcp', 'spouse', 2, true),
+    spouse_hcp_successor_co_address:   getAddr('hcp', 'spouse', 2, true),
+    spouse_hcp_successor_co_relationship: getRel('hcp', 'spouse', 2),
     // Spouse — trustee
     spouse_trustee_successor: get('trustee', 'spouse', 2),
+    spouse_trustee_co:        get('trustee', 'spouse', 2, true),
   }
 }
 
@@ -228,13 +254,17 @@ export function overlayDesignSheetFiduciarySlots(
   const contactsById = new Map(contacts.map(contact => [contact.id, contact]))
   const next = { ...base }
 
-  function slotContact(slots: FiduciarySlotRow[], order: number, co = false): ContactRow | null {
-    const slot = slots.find(item => item.order === order && item.is_co === co)
-    return slot?.contact_id ? contactsById.get(slot.contact_id) ?? null : null
+  function slotContact(slots: FiduciarySlotRow[], order: number, co = false): FiduciarySlotRow | null {
+    const mappedOrder = principalOrderByPriority(slots, order)
+    if (mappedOrder === null) return null
+    const slot = slots.find(item => item.order === mappedOrder && item.is_co === co)
+    return slot?.contact_id ? slot : null
   }
 
   function slotNames(slots: FiduciarySlotRow[], order: number, co = false): string | null | undefined {
-    const matchingSlots = slots.filter(item => item.order === order && item.is_co === co)
+    const mappedOrder = principalOrderByPriority(slots, order)
+    if (mappedOrder === null) return undefined
+    const matchingSlots = slots.filter(item => item.order === mappedOrder && item.is_co === co)
     if (matchingSlots.length === 0) return undefined
     const names = matchingSlots.map(slot => {
       if (slot?.contact_id === CLIENT_PRIMARY_CONTACT_ID) return client.full_name || null
@@ -245,20 +275,20 @@ export function overlayDesignSheetFiduciarySlots(
     return names.length > 0 ? names.join(', ') : null
   }
 
-  function slotAddress(slots: FiduciarySlotRow[], order: number): string | null | undefined {
-    const slot = slots.find(item => item.order === order && !item.is_co)
+  function slotAddress(slots: FiduciarySlotRow[], order: number, co = false): string | null | undefined {
+    const slot = slotContact(slots, order, co)
     if (slot?.contact_id === CLIENT_PRIMARY_CONTACT_ID) return client.address
     if (slot?.contact_id === SPOUSE_PRIMARY_CONTACT_ID) return spouse?.address ?? null
-    const contact = slotContact(slots, order)
+    const contact = slot?.contact_id ? contactsById.get(slot.contact_id) ?? null : null
     return contact ? contact.address_line1 ?? null : undefined
   }
 
-  function slotRelationship(slots: FiduciarySlotRow[], order: number): string | null | undefined {
-    const slot = slots.find(item => item.order === order && !item.is_co)
+  function slotRelationship(slots: FiduciarySlotRow[], order: number, co = false): string | null | undefined {
+    const slot = slotContact(slots, order, co)
     if (slot?.contact_id === CLIENT_PRIMARY_CONTACT_ID || slot?.contact_id === SPOUSE_PRIMARY_CONTACT_ID) {
       return 'Spouse'
     }
-    const contact = slotContact(slots, order)
+    const contact = slot?.contact_id ? contactsById.get(slot.contact_id) ?? null : null
     if (!contact) return undefined
 
     const profiles = designSheet ? getContactProfiles(designSheet) : {}
@@ -301,16 +331,25 @@ export function overlayDesignSheetFiduciarySlots(
 
   const hcp = getDesignSlots(designSheet, 'hcp_slots')
   applyName('hcp_primary', hcp, 0)
+  applyName('hcp_co', hcp, 0, true)
   if (slotAddress(hcp, 0) !== undefined) next.hcp_primary_address = slotAddress(hcp, 0) ?? null
   if (slotRelationship(hcp, 0) !== undefined) next.hcp_primary_relationship = slotRelationship(hcp, 0) ?? null
   applyName('hcp_successor', hcp, 1)
+  applyName('hcp_successor_co', hcp, 1, true)
   if (slotAddress(hcp, 1) !== undefined) next.hcp_successor_address = slotAddress(hcp, 1) ?? null
   if (slotRelationship(hcp, 1) !== undefined) next.hcp_successor_relationship = slotRelationship(hcp, 1) ?? null
+  if (slotAddress(hcp, 0, true) !== undefined) next.hcp_co_address = slotAddress(hcp, 0, true) ?? null
+  if (slotRelationship(hcp, 0, true) !== undefined) next.hcp_co_relationship = slotRelationship(hcp, 0, true) ?? null
+  if (slotAddress(hcp, 1, true) !== undefined) next.hcp_successor_co_address = slotAddress(hcp, 1, true) ?? null
+  if (slotRelationship(hcp, 1, true) !== undefined) next.hcp_successor_co_relationship = slotRelationship(hcp, 1, true) ?? null
 
   const guardian = getDesignSlots(designSheet, 'guardian_slots')
   applyName('guardian_primary', guardian, 0)
+  applyName('guardian_co', guardian, 0, true)
   applyName('guardian_successor', guardian, 1)
+  applyName('guardian_co_successor', guardian, 1, true)
   applyName('guardian_second_successor', guardian, 2)
+  applyName('guardian_co_second_successor', guardian, 2, true)
 
   const tempGuardian = getDesignSlots(designSheet, 'temporary_guardian_slots')
   applyName('temp_guardian_primary', tempGuardian, 0)
@@ -320,22 +359,31 @@ export function overlayDesignSheetFiduciarySlots(
 
   const spouseExecutor = getDesignSlots(designSheet, 'spouse_executor_slots')
   applyName('spouse_pr_primary', spouseExecutor, 0)
+  applyName('spouse_pr_co_primary', spouseExecutor, 0, true)
   applyName('spouse_pr_successor', spouseExecutor, 1)
 
   const spousePoa = getDesignSlots(designSheet, 'spouse_poa_slots')
   applyName('spouse_dpoa_primary', spousePoa, 0)
+  applyName('spouse_dpoa_co', spousePoa, 0, true)
   applyName('spouse_dpoa_successor', spousePoa, 1)
 
   const spouseHcp = getDesignSlots(designSheet, 'spouse_hcp_slots')
   applyName('spouse_hcp_primary', spouseHcp, 0)
+  applyName('spouse_hcp_co', spouseHcp, 0, true)
   if (slotAddress(spouseHcp, 0) !== undefined) next.spouse_hcp_primary_address = slotAddress(spouseHcp, 0) ?? null
   if (slotRelationship(spouseHcp, 0) !== undefined) next.spouse_hcp_primary_relationship = slotRelationship(spouseHcp, 0) ?? null
   applyName('spouse_hcp_successor', spouseHcp, 1)
+  applyName('spouse_hcp_successor_co', spouseHcp, 1, true)
   if (slotAddress(spouseHcp, 1) !== undefined) next.spouse_hcp_successor_address = slotAddress(spouseHcp, 1) ?? null
   if (slotRelationship(spouseHcp, 1) !== undefined) next.spouse_hcp_successor_relationship = slotRelationship(spouseHcp, 1) ?? null
+  if (slotAddress(spouseHcp, 0, true) !== undefined) next.spouse_hcp_co_address = slotAddress(spouseHcp, 0, true) ?? null
+  if (slotRelationship(spouseHcp, 0, true) !== undefined) next.spouse_hcp_co_relationship = slotRelationship(spouseHcp, 0, true) ?? null
+  if (slotAddress(spouseHcp, 1, true) !== undefined) next.spouse_hcp_successor_co_address = slotAddress(spouseHcp, 1, true) ?? null
+  if (slotRelationship(spouseHcp, 1, true) !== undefined) next.spouse_hcp_successor_co_relationship = slotRelationship(spouseHcp, 1, true) ?? null
 
   const spouseTrustee = getDesignSlots(designSheet, 'spouse_trustee_slots')
   applyName('spouse_trustee_successor', spouseTrustee, 0)
+  applyName('spouse_trustee_co', spouseTrustee, 0, true)
 
   return next
 }
@@ -363,6 +411,9 @@ export function emptyFiduciarySlots(): DraftPayload['fiduciaries'] {
     trustee_second_successor: null,
     trustee_co_second_successor: null,
     guardian_primary: null,
+    guardian_co: null,
+    guardian_co_successor: null,
+    guardian_co_second_successor: null,
     guardian_successor: null,
     guardian_second_successor: null,
     temp_guardian_primary: null,
@@ -370,16 +421,25 @@ export function emptyFiduciarySlots(): DraftPayload['fiduciaries'] {
     temp_guardian_successor: null,
     temp_guardian_second_successor: null,
     spouse_pr_primary: null,
+    spouse_pr_co_primary: null,
     spouse_pr_successor: null,
     spouse_dpoa_primary: null,
+    spouse_dpoa_co: null,
     spouse_dpoa_successor: null,
     spouse_hcp_primary: null,
+    spouse_hcp_co: null,
     spouse_hcp_primary_address: null,
     spouse_hcp_primary_relationship: null,
     spouse_hcp_successor: null,
+    spouse_hcp_successor_co: null,
     spouse_hcp_successor_address: null,
     spouse_hcp_successor_relationship: null,
+    spouse_hcp_co_address: null,
+    spouse_hcp_successor_co_address: null,
+    spouse_hcp_co_relationship: null,
+    spouse_hcp_successor_co_relationship: null,
     spouse_trustee_successor: null,
+    spouse_trustee_co: null,
   }
 }
 
@@ -411,9 +471,13 @@ function applyLegacyDesignSheetFiduciaries(
 
   fill('hcp_primary', designSheet.hcp_primary)
   fill('hcp_successor', designSheet.hcp_alt1)
+  fill('hcp_co', designSheet.hcp_co)
+  fill('hcp_successor_co', designSheet.hcp_alt1_co)
 
   fill('guardian_primary', designSheet.guardian_primary)
+  fill('guardian_co', designSheet.guardian_co)
   fill('guardian_successor', designSheet.guardian_alt1)
+  fill('guardian_co_successor', designSheet.guardian_alt1_co)
 
   return next
 }

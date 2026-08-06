@@ -9,10 +9,12 @@ import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import {
+  matterStatusLabel,
   stageLabel,
   type MatterActivity,
   type MatterContact,
   type MatterStage,
+  type MatterStatus,
   type PipelineMatter,
 } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -37,8 +39,6 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { formatDate } from '@/lib/utils'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import {
   type CommunicationChannel,
@@ -73,7 +73,6 @@ import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
-import { MatterOverviewFactsRail } from './MatterOverviewFactsRail'
 import { MatterProgressTimeline } from './MatterProgressTimeline'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
@@ -82,20 +81,21 @@ import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
 import { MatterCommunicationsTab } from './tabs/messages'
 import { MatterBillingTab } from './tabs/billing'
+import { MatterSlaTab } from './tabs/sla'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
+import { MatterFactsPanel } from './facts-panel/MatterFactsPanel'
 import {
   isMobileDetailViewport,
   ResponsiveDetailRail,
 } from '@/components/layout/ResponsiveDetailRail'
 import { MatterStageStrip } from './MatterStageStrip'
+import { MatterLeadActions } from './MatterLeadActions'
+import type { MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { MatterBlockerBanner } from './MatterBlockerBanner'
-import {
-  buildMatterReadinessItems,
-  MatterReadinessDial,
-  type MatterReadinessItem,
-} from './MatterReadinessDial'
+import { buildMatterReadinessItems } from './MatterReadinessDial'
+import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { useMatterCommunications } from './useMatterCommunications'
 import { useMatterDocuments } from './useMatterDocuments'
 
@@ -108,6 +108,8 @@ interface MatterDetailClientProps {
   contacts: MatterContact[]
   agingSummary?: MatterAgingSummary | null
   intakeId?: string | null
+  /** lead | hired | lost | declined. A lead is a matter that nobody has signed yet. */
+  relationshipStatus?: string
   clientIntakeRow?: {
     id: string
     intake_sent_at: string | null
@@ -147,91 +149,6 @@ export default function MatterDetailClient(props: MatterDetailClientProps) {
   )
 }
 
-function RailDate({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-right text-xs tabular-nums">{value ? formatDate(value) : '—'}</dd>
-    </div>
-  )
-}
-
-/**
- * Persistent record context: who the matter is for, how close it is to
- * draftable, the standing matter facts, and the dates that drive the calendar.
- * Scrolls independently of the tab panel beside it.
- */
-function MatterFactsRail({
-  matter,
-  matterId,
-  details,
-  designSheetPlanType,
-  estate,
-  readinessItems,
-}: {
-  matter: PipelineMatter
-  matterId: string
-  details: MatterDetailsRow | null
-  designSheetPlanType: string | null
-  estate: MatterEstateSnapshot
-  readinessItems: MatterReadinessItem[]
-}) {
-  const clientName = matter.client_name || matter.matter_name || 'Matter'
-  const initials = clientName
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('')
-  // No city column exists on matter_details — county and state are the finest
-  // location grain the record actually carries.
-  const locationLine = [
-    practiceAreaLabel(details?.practice_area ?? matter.practice_area),
-    details?.jurisdiction_county,
-    details?.jurisdiction_state,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-
-  return (
-    <div className="h-full w-full overflow-y-auto bg-card p-4">
-      <div className="flex items-start gap-3">
-        <Avatar className="size-10">
-          <AvatarFallback className="text-xs">{initials || '—'}</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{clientName}</p>
-          {matter.spouse_name && (
-            <p className="truncate text-xs text-muted-foreground">&amp; {matter.spouse_name}</p>
-          )}
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={locationLine}>
-            {locationLine || '—'}
-          </p>
-        </div>
-      </div>
-
-      <MatterReadinessDial items={readinessItems} className="mt-4" />
-
-      <MatterOverviewFactsRail
-        matterId={matterId}
-        details={details}
-        designSheetPlanType={designSheetPlanType}
-        estate={estate}
-        className="mt-4 border-t border-border pt-4"
-      />
-
-      <div className="mt-4 border-t border-border pt-4">
-        <h3 className="text-sm font-semibold">Dates</h3>
-        <dl className="mt-1">
-          <RailDate label="Open date" value={details?.open_date ?? matter.matter_created} />
-          <RailDate label="Design meeting" value={details?.design_meeting_date} />
-          <RailDate label="Target signing" value={details?.scheduled_signing_date} />
-        </dl>
-      </div>
-    </div>
-  )
-}
-
 function MatterDetailShell({ matter }: MatterDetailClientProps) {
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
@@ -253,6 +170,7 @@ function MatterDetailClientInner({
   contacts: initialContacts,
   agingSummary = null,
   intakeId: initialIntakeId = null,
+  relationshipStatus = 'hired',
   clientIntakeRow = null,
   matterNumber: initialMatterNumber = null,
   matterNumberManual = false,
@@ -288,6 +206,8 @@ function MatterDetailClientInner({
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [stageSaving, setStageSaving] = useState(false)
+  const [leadActionBusy, setLeadActionBusy] = useState(false)
+  const [statusSaving, setStatusSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
   const { documents, loading: docsLoading, reload: loadDocuments } = useMatterDocuments(matter.matter_id)
@@ -299,6 +219,7 @@ function MatterDetailClientInner({
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
+  const [slaTabVisited, setSlaTabVisited] = useState(false)
   const [factsRailOpen, setFactsRailOpen] = useState(false)
 
   useEffect(() => {
@@ -306,27 +227,22 @@ function MatterDetailClientInner({
   }, [])
 
   const {
+    items: communicationItems,
+    sendOnChannel,
     portalMessages,
     portalLoading,
-    portalDraft,
     portalSending,
-    smsMessages,
     smsLoading,
-    smsDraft,
     smsRecipient,
     smsSending,
     emailTo,
     emailSubject,
     emailBody,
     emailSending,
-    setPortalDraft,
-    setSmsDraft,
     setSmsRecipient,
     setEmailTo,
     setEmailSubject,
     setEmailBody,
-    sendPortalMessage,
-    sendSms,
     sendEmail,
   } = useMatterCommunications({
     matterId: matter.matter_id,
@@ -336,6 +252,9 @@ function MatterDetailClientInner({
 
   const [activity, setActivity] = useState<MatterActivity[]>(initialActivity)
   const activityLoading = false
+  // Header Email/Text open the same composer the lead page uses, AI drafting
+  // included, rather than only switching to the communications tab.
+  const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
 
   useEffect(() => {
     setUnreviewedUploadCounts(initialUnreviewedUploadCounts)
@@ -410,6 +329,7 @@ function MatterDetailClientInner({
   useEffect(() => {
     if (activeTab === 'assets') setAssetsTabVisited(true)
     if (activeTab === 'billing') setBillingTabVisited(true)
+    if (activeTab === 'sla') setSlaTabVisited(true)
   }, [activeTab])
 
   useEffect(() => {
@@ -583,6 +503,29 @@ function MatterDetailClientInner({
     }
   }, [handleMarkPortalUploadsReviewed, openIntakeSheet, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
 
+  const handleStatusChange = async (status: MatterStatus) => {
+    if (!token || status === (matter.status ?? 'active')) return
+    setStatusSaving(true)
+    const previous = matter.status
+    setMatter(m => ({ ...m, status }))
+    try {
+      const res = await fetch(`/api/admin/matters/${matter.matter_id}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not update status')
+      toast.success(`Matter ${matterStatusLabel(status).toLowerCase()}`)
+      router.refresh()
+    } catch (e) {
+      setMatter(m => ({ ...m, status: previous }))
+      toast.error(e instanceof Error ? e.message : 'Could not update status')
+    } finally {
+      setStatusSaving(false)
+    }
+  }
+
   const handleStageChange = async (stage: MatterStage) => {
     if (!token || stage === matter.stage) return
     setStageSaving(true)
@@ -606,6 +549,49 @@ function MatterDetailClientInner({
       toast.error(e instanceof Error ? e.message : 'Could not update stage')
     } finally {
       setStageSaving(false)
+    }
+  }
+
+  const handleHire = async () => {
+    if (!token || !liveIntakeId) return
+    setLeadActionBusy(true)
+    try {
+      const res = await fetch(`/api/admin/leads/${liveIntakeId}/convert`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not hire this matter')
+      toast.success(body.matterNumber ? `Hired — ${body.matterNumber}` : 'Matter hired')
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not hire this matter')
+    } finally {
+      setLeadActionBusy(false)
+    }
+  }
+
+  const handleLeadStatusChange = async (status: MutableLeadStatus) => {
+    if (!token || !liveIntakeId) return
+    setLeadActionBusy(true)
+    try {
+      const res = await fetch(`/api/admin/leads/${liveIntakeId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not update this matter')
+      toast.success(
+        status === 'lost' ? 'Marked lost'
+        : status === 'declined' ? 'Declined'
+        : 'Reactivated',
+      )
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update this matter')
+    } finally {
+      setLeadActionBusy(false)
     }
   }
 
@@ -789,6 +775,8 @@ function MatterDetailClientInner({
         showHealthBadge={blockerCount === 0}
         factsRailOpen={factsRailOpen}
         onToggleFactsRail={() => setFactsRailOpen(open => !open)}
+        onEmail={() => setComposerChannel('email')}
+        onText={() => setComposerChannel('sms')}
         onOpenIntake={() => void openIntakeSheet()}
         onImportIntake={() => setImportIntakeOpen(true)}
         onUnlockIntake={() => void handleUnlockIntake()}
@@ -817,20 +805,44 @@ function MatterDetailClientInner({
           open={factsRailOpen}
           onOpenChange={setFactsRailOpen}
           label="Matter facts"
-          desktopClassName="w-80 border-r border-border bg-card"
+          desktopClassName="w-[352px] border-r border-border bg-card"
           mobileClassName="bg-card"
         >
-          <MatterFactsRail
+          <MatterFactsPanel
             matter={matter}
             matterId={matterId}
             details={matterDetails}
             designSheetPlanType={designSheetPlanType}
             estate={initialEstateSnapshot}
             readinessItems={readinessItems}
+            activity={activity}
+            noteText={noteText}
+            onNoteTextChange={setNoteText}
+            onAddNote={() => void handleAddNote()}
+            noteSaving={noteSaving}
+            noteCount={linkedNotes.length}
+            latestNoteAt={linkedNotes[0]?.created_at ?? null}
+            onSaveField={handleSaveMatterDetailField}
+            savingField={savingField}
+            lastSavedAt={lastSavedAt}
+            error={matterDetailsError}
+            onOpenTab={tab => setActiveTab(tab)}
           />
         </ResponsiveDetailRail>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+          {relationshipStatus !== 'hired' && (
+            <div className="border-b border-border bg-card px-4 py-3">
+              <MatterLeadActions
+                relationshipStatus={relationshipStatus}
+                intakeId={liveIntakeId}
+                busy={leadActionBusy}
+                onHire={() => void handleHire()}
+                onStatusChange={status => void handleLeadStatusChange(status)}
+              />
+            </div>
+          )}
+
           <div className="border-b border-border bg-card px-4 py-2">
             <MatterStageStrip
               stage={matter.stage}
@@ -865,6 +877,7 @@ function MatterDetailClientInner({
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="sla">SLA plan</TabsTrigger>
                 <TabsTrigger value="people">People</TabsTrigger>
                 <TabsTrigger value="assets">Assets</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -928,6 +941,9 @@ function MatterDetailClientInner({
                   matterId={matterId}
                   matterNumber={matterNum}
                   matterNumberManual={matterNumberManual}
+                  matterStatus={matter.status ?? 'active'}
+                  onStatusChange={status => void handleStatusChange(status)}
+                  statusSaving={statusSaving}
                   details={matterDetails}
                   designSheetPlanType={designSheetPlanType}
                   onSaveField={handleSaveMatterDetailField}
@@ -984,6 +1000,8 @@ function MatterDetailClientInner({
                 />
               </TabsContent>
 
+              <MatterSlaTab matterId={matterId} enabled={slaTabVisited} />
+
               <MatterPeopleTab
                 matterId={matterId}
                 matter={matter}
@@ -1017,13 +1035,14 @@ function MatterDetailClientInner({
                 matterId={matter.matter_id}
                 channel={communicationChannel}
                 onChannelChange={channel => setActiveTab('communications', undefined, channel)}
-                portalMessages={portalMessages}
+                items={communicationItems}
+                clientName={matter.client_name || matter.matter_name || 'Client'}
+                clientPhone={matter.client_phone || null}
+                recordLabel={matterNum ?? (matter.client_name || matter.matter_name || 'this matter')}
+                onSendOnChannel={sendOnChannel}
                 portalLoading={portalLoading}
-                portalDraft={portalDraft}
                 portalSending={portalSending}
-                smsMessages={smsMessages}
                 smsLoading={smsLoading}
-                smsDraft={smsDraft}
                 smsRecipient={smsRecipient}
                 smsSending={smsSending}
                 emailTo={emailTo}
@@ -1032,14 +1051,10 @@ function MatterDetailClientInner({
                 emailSending={emailSending}
                 smsEnabled={smsEnabled}
                 emailSendEnabled={emailSendEnabled}
-                setPortalDraft={setPortalDraft}
-                setSmsDraft={setSmsDraft}
                 setSmsRecipient={setSmsRecipient}
                 setEmailTo={setEmailTo}
                 setEmailSubject={setEmailSubject}
                 setEmailBody={setEmailBody}
-                onSendPortal={() => void sendPortalMessage()}
-                onSendSms={() => void sendSms()}
                 onSendEmail={() => void sendEmail()}
                 onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
                 onBookForClient={() => setBookForClientOpen(true)}
@@ -1182,6 +1197,21 @@ function MatterDetailClientInner({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CommunicationDialog
+        open={composerChannel !== null}
+        channel={composerChannel ?? 'email'}
+        target={{ type: 'matter', id: matter.matter_id, recipient: 'client' }}
+        recipientName={matter.client_name ?? 'Client'}
+        recipientEmail={matter.client_email ?? null}
+        recipientPhone={matter.client_phone ?? null}
+        token={token}
+        onOpenChange={open => { if (!open) setComposerChannel(null) }}
+        onSent={() => {
+          toast.success(composerChannel === 'sms' ? 'Text sent' : 'Email sent')
+          router.refresh()
+        }}
+      />
     </div>
   )
 }

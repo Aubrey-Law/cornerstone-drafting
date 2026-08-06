@@ -23,10 +23,15 @@ export function loadNodeEstateStateRules(
   state: string,
   root = resolveNodeEstateGeneratorRoot(),
 ): NodeEstateStateRules {
-  const stateCode = normalizeJurisdictionStateCode(state, '')
-  const rulesPath = path.join(root, 'states', stateCode, 'rules.json')
-  if (!stateCode || !fs.existsSync(rulesPath)) {
-    throw new Error(`Unsupported state: ${state}. This project is currently configured for MA only.`)
+  const stateCode = normalizeJurisdictionStateCode(state, 'MA')
+  const candidates = new Set<string>([stateCode, 'MA'])
+
+  for (const candidate of candidates) {
+    const rulesPath = path.join(root, 'states', candidate, 'rules.json')
+    if (fs.existsSync(rulesPath)) {
+      return readJsonFile<NodeEstateStateRules>(rulesPath)
+    }
   }
-  return readJsonFile<NodeEstateStateRules>(rulesPath)
+
+  return { state: stateCode }
 }

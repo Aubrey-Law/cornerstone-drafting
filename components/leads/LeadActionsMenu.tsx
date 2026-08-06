@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { leadListName } from '@/components/leads/LeadsTable'
-import type { LeadListRow } from '@/lib/leads/viewTypes'
+import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 
 export type LeadActionsMenuProps = {
   lead: LeadListRow
@@ -22,6 +22,7 @@ export type LeadActionsMenuProps = {
   onSendEngagement: (lead: LeadListRow) => void
   onHire: (lead: LeadListRow) => void
   onArchive: (lead: LeadListRow) => void
+  onStatusChange: (lead: LeadListRow, status: MutableLeadStatus) => void
 }
 
 export function LeadActionsMenu({
@@ -35,8 +36,13 @@ export function LeadActionsMenu({
   onSendEngagement,
   onHire,
   onArchive,
+  onStatusChange,
 }: LeadActionsMenuProps) {
-  const hired = lead.lead_status === 'hired'
+  const status = lead.lead_status ?? 'lead'
+  const hired = status === 'hired'
+  const active = status === 'lead'
+  // Both closed outcomes reopen the same way, so one Reactivate covers them.
+  const closed = status === 'lost' || status === 'declined'
 
   return (
     <DropdownMenu {...(onOpenChange ? { open: open ?? false, onOpenChange } : {})}>
@@ -53,7 +59,7 @@ export function LeadActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onSelect={() => onEdit(lead)}>Edit</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onEdit(lead)}>Edit details</DropdownMenuItem>
         {!hired && (
           <DropdownMenuItem onSelect={() => onSendIntake(lead)}>
             {lead.intake_sent_at ? 'Resend intake' : 'Send intake'}
@@ -65,6 +71,17 @@ export function LeadActionsMenu({
           </DropdownMenuItem>
         )}
         {!hired && <DropdownMenuItem onSelect={() => onHire(lead)}>Hire matter</DropdownMenuItem>}
+        {active && (
+          <DropdownMenuItem onSelect={() => onStatusChange(lead, 'lost')}>Mark lost</DropdownMenuItem>
+        )}
+        {active && (
+          <DropdownMenuItem onSelect={() => onStatusChange(lead, 'declined')}>
+            Decline — not a fit
+          </DropdownMenuItem>
+        )}
+        {closed && (
+          <DropdownMenuItem onSelect={() => onStatusChange(lead, 'lead')}>Reactivate</DropdownMenuItem>
+        )}
         {!hired && (
           <>
             <DropdownMenuSeparator />

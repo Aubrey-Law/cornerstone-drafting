@@ -22,7 +22,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -30,6 +29,7 @@ import {
   TASK_SOURCES,
   TASK_SOURCE_LABEL,
   compareTasks,
+  groupTasksByRecord,
   taskDueGroup,
   type TaskPriority,
   type TaskRow,
@@ -44,6 +44,8 @@ import { TaskTemplateSheet, type TaskTemplate } from '@/components/tasks/TaskTem
 import { TaskDetailSheet } from '@/components/tasks/TaskDetailSheet'
 
 type ScopeKey = 'mine' | 'team' | 'unassigned'
+
+type GroupKey = 'due' | 'matter'
 
 interface Assignee {
   id: string
@@ -154,6 +156,7 @@ export function TasksClient({
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all')
   const [assigneeFilter, setAssigneeFilter] = useState<string | 'all'>('all')
   const [openOnly, setOpenOnly] = useState(true)
+  const [groupBy, setGroupBy] = useState<GroupKey>('due')
   const [laterOpen, setLaterOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -243,6 +246,11 @@ export function TasksClient({
     return buckets
   }, [scoped])
 
+  const recordGroups = useMemo(
+    () => (groupBy === 'matter' ? groupTasksByRecord(scoped) : []),
+    [groupBy, scoped],
+  )
+
   const doneTodayScoped = useMemo(
     () => (openOnly ? [] : doneToday).filter(task => {
       if (scope === 'mine' && task.assignee_id !== viewerId) return false
@@ -257,13 +265,12 @@ export function TasksClient({
   // What J/K walk through, in the order the groups render.
   const focusOrder = useMemo(
     () => [
-      ...groups.overdue,
-      ...groups.today,
-      ...groups.week,
-      ...(laterOpen ? groups.later : []),
+      ...(groupBy === 'matter'
+        ? recordGroups.flatMap(group => group.tasks)
+        : [...groups.overdue, ...groups.today, ...groups.week, ...(laterOpen ? groups.later : [])]),
       ...(doneOpen ? doneTodayScoped : []),
     ],
-    [groups, laterOpen, doneOpen, doneTodayScoped],
+    [groupBy, recordGroups, groups, laterOpen, doneOpen, doneTodayScoped],
   )
 
   useEffect(() => {
@@ -489,17 +496,18 @@ export function TasksClient({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="sm" className="h-7 text-xs">
-                Group: Due date
+                Group: {groupBy === 'matter' ? 'Matter' : 'Due date'}
                 <ChevronDown className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuLabel className="text-xs">Group by</DropdownMenuLabel>
-              <DropdownMenuItem disabled>Due date</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <p className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
-                Other groupings arrive with saved views.
-              </p>
+              <DropdownMenuItem onSelect={() => { setGroupBy('due'); setFocusId(null) }}>
+                Due date
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setGroupBy('matter'); setFocusId(null) }}>
+                Matter
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground lg:inline-flex">
@@ -522,23 +530,33 @@ export function TasksClient({
         />
       ) : (
         <div>
-          <GroupShell title="Overdue" count={groups.overdue.length} accent>
-            {groups.overdue.map(renderRow)}
-          </GroupShell>
-          <GroupShell title={`Today · ${TODAY_LABEL.format(new Date())}`} count={groups.today.length}>
-            {groups.today.map(renderRow)}
-          </GroupShell>
-          <GroupShell title="This week" count={groups.week.length}>
-            {groups.week.map(renderRow)}
-          </GroupShell>
-          <CollapsedGroup
-            title="Later"
-            count={groups.later.length}
-            open={laterOpen}
-            onToggle={() => setLaterOpen(prev => !prev)}
-          >
-            {groups.later.map(renderRow)}
-          </CollapsedGroup>
+          {groupBy === 'matter' ? (
+            recordGroups.map(group => (
+              <GroupShell key={group.key} title={group.label} count={group.tasks.length}>
+                {group.tasks.map(renderRow)}
+              </GroupShell>
+            ))
+          ) : (
+            <>
+              <GroupShell title="Overdue" count={groups.overdue.length} accent>
+                {groups.overdue.map(renderRow)}
+              </GroupShell>
+              <GroupShell title={`Today · ${TODAY_LABEL.format(new Date())}`} count={groups.today.length}>
+                {groups.today.map(renderRow)}
+              </GroupShell>
+              <GroupShell title="This week" count={groups.week.length}>
+                {groups.week.map(renderRow)}
+              </GroupShell>
+              <CollapsedGroup
+                title="Later"
+                count={groups.later.length}
+                open={laterOpen}
+                onToggle={() => setLaterOpen(prev => !prev)}
+              >
+                {groups.later.map(renderRow)}
+              </CollapsedGroup>
+            </>
+          )}
           <CollapsedGroup
             title="Done today"
             count={doneTodayScoped.length}

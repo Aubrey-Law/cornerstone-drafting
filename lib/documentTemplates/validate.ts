@@ -1,12 +1,4 @@
-import { buildDraftPayload } from '@/lib/buildDraftPayload'
-import { normalizeJurisdictionStateCode } from '@/lib/jurisdictionState'
-import { toEstateGeneratorData } from '@/lib/estateGenerator/toGeneratorData'
-import { resolveNodeEstateGeneratorRoot, loadNodeEstatePackage } from '@/lib/estateGenerator/node/config'
-import { buildNodeEstateContext } from '@/lib/estateGenerator/node/context'
-import { createNodeClauseStore } from '@/lib/estateGenerator/node/clauses'
-import { dataForNodeEstatePackage } from '@/lib/estateGenerator/node/packageData'
-import { renderNodeEstateDocxTemplate } from '@/lib/estateGenerator/node/templateRenderer'
-import type { NodeEstateData, NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
+import { renderSingleTemplateForMatter } from '@/lib/drafting/quickDraft'
 import { renderRealEstateTransferDocx } from '@/lib/realEstateTransfer/generate'
 import { DEED_TEMPLATE_VARIANTS, DOCUMENT_TYPES, type RealEstateTransferDocType } from '@/lib/realEstateTransfer/fields'
 import { buildFormStateFromDesignSheet } from '@/lib/designSheetRealEstateTransfer'
@@ -45,42 +37,23 @@ function invalid(matterId: string, error: unknown): CandidateValidationResult {
 }
 
 async function validateEstate(templateId: string, buffer: Buffer, matterId: string): Promise<CandidateValidationResult> {
-  const definition = getDocumentTemplateDefinition(templateId)!
-  const payload = await buildDraftPayload(matterId)
-  const root = resolveNodeEstateGeneratorRoot()
-  const templateRelative = definition.bundledPath.replace(/^tools\/aubreylaw-docgeneration\//, '')
-  const packageName = definition.packageNames.find(name => {
-    try {
-      return loadNodeEstatePackage(name as NodeEstatePackageName, root).documents.some(doc => doc.template === templateRelative)
-    } catch {
-      return false
-    }
-  }) as NodeEstatePackageName | undefined
-  if (!packageName) throw new Error('No estate package references this template.')
-  const config = loadNodeEstatePackage(packageName, root)
-  const document = config.documents.find(item => item.template === templateRelative)!
-  const data = toEstateGeneratorData(payload) as unknown as NodeEstateData
-  const packageData = dataForNodeEstatePackage(data, packageName)
-  const state = normalizeJurisdictionStateCode(payload.client.state)
-  const context = buildNodeEstateContext({ data: packageData, state, root })
-  const clauses = createNodeClauseStore({ root, state, allowDraft: true })
-  const rendered = renderNodeEstateDocxTemplate({ templateBuffer: buffer, context, clauses })
+  const rendered = await renderSingleTemplateForMatter({ matterId, templateId, templateBuffer: buffer })
   const unresolved = rendered.unresolvedMarkers
   const report: DocumentTemplateValidationReport = {
     valid: unresolved.length === 0,
     generatedAt: new Date().toISOString(),
     matterId,
-    outputFilename: document.output,
+    outputFilename: rendered.outputFilename,
     unresolvedMarkers: unresolved,
     missingFields: rendered.missingFields,
-    warnings: clauses.report.warnings,
+    warnings: rendered.warnings,
     ...(unresolved.length ? { error: 'Rendered preview contains unresolved template markers.' } : {}),
   }
   return {
     report,
     preview: rendered.buffer,
     previewContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    previewFilename: document.output,
+    previewFilename: rendered.outputFilename,
   }
 }
 

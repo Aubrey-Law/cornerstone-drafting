@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { BookUser, Plus, Users } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { BookUser, Mail, Phone, Plus, Users } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SearchField } from '@/components/SearchField'
 import { FilterChip } from '@/components/FilterChip'
@@ -25,6 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import {
@@ -75,10 +76,22 @@ interface ContactsClientProps {
 
 export function ContactsClient({ contacts, smsEnabled }: ContactsClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [filters, setFilters] = useState(EMPTY_CONTACT_TABLE_FILTERS)
   const [sortKey, setSortKey] = useState<ContactSortKey>('name_asc')
   const [addOpen, setAddOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // Deep link from the softphone: /admin/contacts?selected=contact:<uuid>.
+  // A bare uuid works too, so the caller doesn't have to know the namespace.
+  const requestedId = searchParams?.get('selected') ?? null
+  useEffect(() => {
+    if (!requestedId) return
+    const match = contacts.find(contact =>
+      contact.id === requestedId || contact.id === `contact:${requestedId}`,
+    )
+    if (match) setSelectedId(match.id)
+  }, [requestedId, contacts])
 
   const counts = useMemo(() => countContactsByKind(contacts), [contacts])
   const visible = useMemo(
@@ -178,6 +191,7 @@ export function ContactsClient({ contacts, smsEnabled }: ContactsClientProps) {
                     <TableHead>Phone</TableHead>
                     <TableHead className={cn('md:table-cell', selected ? 'hidden xl:table-cell' : 'hidden')}>Location</TableHead>
                     <TableHead className={cn(selected ? 'hidden' : 'hidden lg:table-cell')}>Practice</TableHead>
+                    <TableHead className="w-[76px] text-right">Reach</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -247,6 +261,40 @@ export function ContactsClient({ contacts, smsEnabled }: ContactsClientProps) {
                         </TableCell>
                         <TableCell className={cn('text-muted-foreground', selected ? 'hidden' : 'hidden lg:table-cell')}>
                           {contact.practice_area ? practiceAreaLabel(contact.practice_area) : '—'}
+                        </TableCell>
+                        {/* Reach anyone without opening the panel first. Email
+                            opens the panel, which hosts the composer. */}
+                        <TableCell className="text-right whitespace-nowrap">
+                          {contact.phone && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              aria-label={`Call ${contact.name}`}
+                              onClick={event => {
+                                event.stopPropagation()
+                                openStaffSoftphone({ number: contact.phone ?? undefined })
+                              }}
+                            >
+                              <Phone className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {contact.email && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              aria-label={`Email ${contact.name}`}
+                              onClick={event => {
+                                event.stopPropagation()
+                                setSelectedId(contact.id)
+                              }}
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     )

@@ -3,13 +3,15 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { sanitizeEmailHtml } from '@/lib/email/templateShared'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
-type ContextType = 'matter' | 'lead' | 'general'
+type ContextType = 'matter' | 'lead' | 'contact' | 'general'
+
+const CONTEXT_TYPES: ContextType[] = ['matter', 'lead', 'contact', 'general']
 
 function contextFromUrl(req: Request): { contextType: ContextType; contextId: string | null } | null {
   const url = new URL(req.url)
-  const contextType = url.searchParams.get('contextType')
+  const contextType = url.searchParams.get('contextType') as ContextType | null
   const contextId = url.searchParams.get('contextId')?.trim() || null
-  if (contextType !== 'matter' && contextType !== 'lead' && contextType !== 'general') return null
+  if (!contextType || !CONTEXT_TYPES.includes(contextType)) return null
   if (contextType === 'general' && contextId) return null
   if (contextType !== 'general' && !contextId) return null
   return { contextType, contextId }

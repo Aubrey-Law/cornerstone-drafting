@@ -12,6 +12,7 @@ import {
   FilePenLine,
   ListTodo,
   LogOut,
+  Mail,
   Menu,
   PanelLeftClose,
   PanelLeft,
@@ -63,6 +64,7 @@ export const adminNavItems: { href: string; label: string; icon: React.ElementTy
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
   { href: '/admin/leads', label: 'Leads', icon: UserPlus },
+  { href: '/admin/inbox', label: 'Inbox', icon: Mail },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
   { href: '/admin/contacts', label: 'Contacts', icon: BookUser },
   { href: '/admin/billing', label: 'Billing', icon: ReceiptText },
@@ -80,6 +82,7 @@ interface AdminLayoutClientProps {
   userName: string
   userInitials: string
   voiceEnabled?: boolean
+  smsEnabled?: boolean
   assistantModelLabel?: string | null
   /**
    * Forces the compact icon rail and hides the collapse toggle without writing
@@ -95,6 +98,7 @@ export default function AdminLayoutClient({
   userName,
   userInitials,
   voiceEnabled = false,
+  smsEnabled = false,
   assistantModelLabel = null,
   forceCollapsed,
 }: AdminLayoutClientProps) {
@@ -305,6 +309,7 @@ export default function AdminLayoutClient({
           <AdminRail
             rail={rail}
             voiceEnabled={voiceEnabled}
+            smsEnabled={smsEnabled}
             matterDisplayName={matterDisplayName}
             assistantModelLabel={assistantModelLabel}
             tasksOverdue={badgeCounts.tasksOverdueCount}

@@ -1,6 +1,8 @@
 import type { DesignSheet, DesignSheetUpdate } from '@/types/database'
 import { toDateInputValue } from '@/lib/dob'
+import type { FiduciarySlot } from '@/types/database'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
+import { repairFiduciarySlotOrdering } from '@/lib/designSheet/fiduciarySlotOrdering'
 
 const SYSTEM_COLUMNS = new Set(['id', 'matter_id', 'client_intake_id', 'created_at', 'updated_at'])
 const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
@@ -13,11 +15,14 @@ const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
 const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
   'contact_profiles',
   'deed',
+  // Dropped column. Listed here so a value still present on an old inflated row is
+  // stripped from the sheet rather than folded into the decisions blob.
   'distribution_method',
   'document_inclusions',
   'dpoa_provisions',
   'estate_plan_design',
   'excluded_guardian',
+  'extras',
   'excluded_guardians',
   'excluded_person',
   'fiduciary_contact_details',
@@ -99,6 +104,21 @@ function mergeFiduciarySlotColumn(columnValue: unknown, decisionsValue: unknown)
   if (isFiduciarySlotArray(columnValue) && columnValue.length > 0) return columnValue
   if (isFiduciarySlotArray(decisionsValue) && decisionsValue.length > 0) return decisionsValue
   return columnValue ?? decisionsValue ?? []
+}
+
+function repairFiduciarySlotCollection(value: unknown): unknown {
+  if (!isFiduciarySlotArray(value)) return value
+  return repairFiduciarySlotOrdering(value as FiduciarySlot[])
+}
+
+function repairFiduciarySlotColumns(target: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...target }
+  for (const key of FIDUCIARY_SLOT_COLUMN_KEYS) {
+    const raw = next[key]
+    if (raw === undefined) continue
+    next[key] = repairFiduciarySlotCollection(raw)
+  }
+  return next
 }
 
 // Columns added by 20260715000000_lite_design_sheets_intake_columns.sql — intake seed
@@ -189,7 +209,6 @@ const WRITABLE_DESIGN_SHEET_COLUMNS = new Set([
   'remote_beneficiary_charities',
   'residual_beneficiary_individuals',
   'staggered_distributions',
-  'distribution_method',
   'distribution_age',
   // Universal additions present on lite
   'client_aka',
@@ -266,8 +285,9 @@ export function stripDecisionOnlyTopLevelMirrors<T extends Record<string, unknow
 }
 
 export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
-  const input = formatPhoneFieldsDeep(data) as Record<string, unknown>
+  const input = repairFiduciarySlotColumns(formatPhoneFieldsDeep(data) as Record<string, unknown>)
   const payload: Record<string, unknown> = {}
+  const callerSuppliedDecisions = input.decisions !== undefined
   // Start from the canonical decisions object. inflateDesignSheetRow mirrors decision
   // keys onto the sheet top-level for convenience; those mirrors go stale when the UI
   // updates only `decisions` (e.g. document_inclusions.trust) and must NOT win here.
@@ -279,8 +299,11 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
 
     if (WRITABLE_DESIGN_SHEET_COLUMNS.has(key)) {
       payload[key] = normalizeColumnValue(key, value)
-    } else if (!(key in decisions) && !DECISION_ONLY_TOP_LEVEL_KEYS.has(key)) {
+    } else if (!DECISION_ONLY_TOP_LEVEL_KEYS.has(key)) {
       // Lite-only template fields without a dedicated column land in decisions jsonb.
+      // The stale-mirror hazard is confined to the decision namespaces skipped above,
+      // so ordinary fields must overwrite their decisions copy — guarding on
+      // `!(key in decisions)` froze every one of them at its first saved value.
       decisions[key] = value
     }
   }
@@ -293,7 +316,58 @@ export function buildDesignSheetPersistencePayload(data: DesignSheetUpdate) {
     }
   }
 
-  payload.decisions = decisions
+  // Only write the decisions column when the caller actually had something to say
+  // about it. Partial patches list columns only (asset intake sync, intake re-sync),
+  // and emitting `{}` for those replaced the attorney's entire decision blob —
+  // document inclusions, trust details, DPOA/health care provisions — with nothing.
+  if (callerSuppliedDecisions || Object.keys(decisions).length > 0) {
+    payload.decisions = decisions
+  }
+  return payload
+}
+
+/**
+ * Merge a client PATCH onto the stored sheet and build the row payload to write.
+ *
+ * `incomingDecisions` is the client's authoritative decisions blob and wins over
+ * anything the payload builder derived from the stored row — the stored row's
+ * top-level values are by definition the pre-edit ones.
+ */
+export function buildDesignSheetSavePayload(args: {
+  existingSheet: DesignSheet | null
+  incomingSheet: Record<string, unknown>
+  incomingDecisions: Record<string, unknown>
+}) {
+  const { existingSheet, incomingSheet, incomingDecisions } = args
+  const hasIncomingDecisions = Object.keys(incomingDecisions).length > 0
+  const existingDecisions = existingSheet && isRecord(existingSheet.decisions)
+    ? existingSheet.decisions
+    : {}
+
+  const sheetForPersistence = existingSheet
+    ? ({
+        ...existingSheet,
+        ...incomingSheet,
+        decisions: hasIncomingDecisions ? incomingDecisions : existingDecisions,
+      } as DesignSheetUpdate)
+    : ({
+        ...incomingSheet,
+        decisions: hasIncomingDecisions
+          ? incomingDecisions
+          : (incomingSheet as DesignSheetUpdate).decisions,
+      } as DesignSheetUpdate)
+
+  const payload = buildDesignSheetPersistencePayload(formatPhoneFieldsDeep(sheetForPersistence))
+
+  if (hasIncomingDecisions) {
+    const cleanedDecisions = { ...incomingDecisions }
+    for (const key of SYSTEM_COLUMNS) delete cleanedDecisions[key]
+    payload.decisions = {
+      ...(isRecord(payload.decisions) ? payload.decisions : {}),
+      ...cleanedDecisions,
+    }
+  }
+
   return payload
 }
 
@@ -340,5 +414,7 @@ export function inflateDesignSheetRow(row: Record<string, unknown> | null): Desi
     }
   }
 
-  return stripDecisionOnlyTopLevelMirrors(sheet) as unknown as DesignSheet
+  const repaired = repairFiduciarySlotColumns(sheet)
+
+  return stripDecisionOnlyTopLevelMirrors(repaired) as unknown as DesignSheet
 }

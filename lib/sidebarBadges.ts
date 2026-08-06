@@ -1,4 +1,5 @@
 export interface SidebarCounts {
+  inboxNeedsReplyCount: number
   intakeReviewCount: number
   draftingNeedsDesignCount: number
   agingRedCount: number
@@ -15,6 +16,7 @@ export interface SidebarBadge {
 }
 
 export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
+  inboxNeedsReplyCount: 0,
   intakeReviewCount: 0,
   draftingNeedsDesignCount: 0,
   agingRedCount: 0,
@@ -24,6 +26,9 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
 }
 
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
+  if (href === '/admin/inbox' && counts.inboxNeedsReplyCount > 0) {
+    return { value: counts.inboxNeedsReplyCount, tone: 'accent' }
+  }
   if (href === '/admin/matters' && counts.intakeReviewCount > 0) {
     return { value: counts.intakeReviewCount, tone: 'destructive' }
   }
@@ -48,6 +53,7 @@ export function mergeSidebarCounts(
 ): SidebarCounts {
   if (!next) return prev
   return {
+    inboxNeedsReplyCount: next.inboxNeedsReplyCount ?? prev.inboxNeedsReplyCount,
     intakeReviewCount: next.intakeReviewCount ?? prev.intakeReviewCount,
     draftingNeedsDesignCount: next.draftingNeedsDesignCount ?? prev.draftingNeedsDesignCount,
     agingRedCount: next.agingRedCount ?? prev.agingRedCount,

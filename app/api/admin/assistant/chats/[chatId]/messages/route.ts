@@ -17,6 +17,7 @@ import {
 import { designSheetImportExecutor } from '@/lib/adminChat/designSheetTool'
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
 import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
+import { templateBuilderSystemPromptNote, templateBuilderToolExecutors } from '@/lib/templateBuilder/assistantTools'
 
 export const maxDuration = 120
 
@@ -80,6 +81,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
     ...(contextMatterId ? [designSheetImportExecutor(contextMatterId, auth.userId)] : []),
     ...workflowToolExecutors({ userId: auth.userId, email: auth.user?.email ?? null }),
     ...calendarPlanningToolExecutors(),
+    ...templateBuilderToolExecutors(auth.userId),
   ]
 
   // Mike OSS handoff convention: an attached workflow becomes a [Workflow: ...]
@@ -96,7 +98,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
   const events: Record<string, unknown>[] = []
 
   return createAdminChatStream({
-    system: context.systemPrompt + workflowSystemPromptNote() + calendarPlanningSystemPromptNote(),
+    system: context.systemPrompt + workflowSystemPromptNote() + calendarPlanningSystemPromptNote() + templateBuilderSystemPromptNote(),
     messages,
     tools,
     maxIterations: 6,

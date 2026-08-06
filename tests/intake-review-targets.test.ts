@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   getIntakeReadinessFlags,
@@ -51,5 +53,82 @@ describe('intake review flag targets', () => {
       .toBe('attorney_judgment')
     expect(flags.find(item => item.key === 'client_poa_missing')?.resolutionKind)
       .toBe('attorney_judgment')
+  })
+})
+
+// Spouse, children, and fiduciaries live in `contacts` — client_intake.spouse_*
+// and client_intake.fiduciary_entries were dropped. The readiness rules read the
+// hydrated `_spouse` / `_fid_*` keys, so an unhydrated row flags data the
+// attorney did enter.
+describe('contacts-backed readiness flags', () => {
+  const married = {
+    marital_status: 'married',
+    date_of_birth: '1980-01-01',
+    county: 'Middlesex',
+  }
+
+  it('clears the spouse date-of-birth flag from the hydrated spouse contact', () => {
+    const hydrated = getIntakeReadinessFlags({
+      ...married,
+      _spouse: { first_name: 'John', last_name: 'Example', date_of_birth: '1979-02-02' },
+    })
+    expect(hydrated.some(item => item.key === 'spouse_dob_missing')).toBe(false)
+
+    const unhydrated = getIntakeReadinessFlags(married)
+    expect(unhydrated.some(item => item.key === 'spouse_dob_missing')).toBe(true)
+  })
+
+  it('clears fiduciary flags from hydrated contact entries', () => {
+    const flags = getIntakeReadinessFlags({
+      ...married,
+      _fid_trustee_client: [{ first_name: 'Taylor', last_name: 'Trustee' }],
+      _fid_personal_rep_client: [{ first_name: 'Pat', last_name: 'Executor' }],
+    })
+
+    expect(flags.some(item => item.key === 'client_trustee_missing')).toBe(false)
+    expect(flags.some(item => item.key === 'client_personal_rep_missing')).toBe(false)
+    expect(flags.some(item => item.key === 'client_poa_missing')).toBe(true)
+  })
+})
+
+// Every reader of a raw client_intake row must hydrate before it evaluates or
+// forwards spouse / children / fiduciary data, since those columns were dropped.
+describe('raw client_intake readers hydrate contacts', () => {
+  const CALLERS: Array<[file: string, hydrator: string]> = [
+    ['app/actions/adminIntake.ts', 'hydrateIntakeWithContacts'],
+    ['lib/calendarAttention.ts', 'applyContactIntakeData'],
+    ['app/api/admin/works/runs/route.ts', 'hydrateIntakeWithContacts'],
+    ['app/api/intake/route.ts', 'hydrateIntakeWithContacts'],
+    ['lib/adminChat/engine.ts', 'loadSpouseContact'],
+  ]
+
+  it.each(CALLERS)('%s hydrates via %s', (file, hydrator) => {
+    const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8')
+    expect(source).toContain("select('*')")
+    expect(source).toContain(hydrator)
+  })
+
+  it('reads intake contacts in one batch on the calendar attention path', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'lib/calendarAttention.ts'), 'utf8')
+    // Per-appointment hydration would issue a query per row in the loop.
+    expect(source).toContain(".in('client_intake_id', intakeIds)")
+    expect(source).toContain('contactsByIntake.get(row.id) ?? []')
+  })
+})
+
+describe('admin intake review flag computation', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'app/actions/adminIntake.ts'), 'utf8')
+
+  it('hydrates the intake row with contacts before computing flags', () => {
+    expect(source).toContain('async function recomputeIntakeReviewFlags(')
+    expect(source).toContain('hydrated = await hydrateIntakeWithContacts(admin, intakeRow, intakeId)')
+    expect(source).toContain('getIntakeReadinessFlags(hydrated as IntakeRow)')
+  })
+
+  it('routes every flag computation through the hydrating helper', () => {
+    const directCalls = source.match(/getIntakeReadinessFlags\(/g) ?? []
+    expect(directCalls).toHaveLength(1)
+    expect(source).not.toContain('getIntakeReadinessFlags(intakeRow as IntakeRow)')
+    expect((source.match(/recomputeIntakeReviewFlags\(admin, intakeId\)/g) ?? []).length).toBe(2)
   })
 })

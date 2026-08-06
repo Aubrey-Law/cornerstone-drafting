@@ -16,6 +16,7 @@ import {
   textToEmailHtml,
 } from '@/lib/email/templateShared'
 import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
+import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { railRecordForPath } from './RailActivityPane'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -49,7 +50,9 @@ interface ComposeDocument {
 }
 
 interface ComposeContext {
-  recordType: 'matter' | 'lead'
+  // 'contact' is used by the contacts page for people with no lead or matter
+  // behind them. Such a send carries neither matterId nor leadId.
+  recordType: 'matter' | 'lead' | 'contact'
   recordId: string
   recipientName: string | null
   recipientEmail: string | null
@@ -271,14 +274,12 @@ function AddressField({
 }
 
 interface ManualEmailComposerProps {
-  recordOverride?: { type: 'matter' | 'lead'; id: string } | null
+  recordOverride?: { type: 'matter' | 'lead' | 'contact'; id: string } | null
   templateCategories?: string[]
   onSent?: () => void | Promise<void>
   embedded?: boolean
   variableValues?: Record<string, string | null | undefined>
   initialContext?: ComposeContext
-  subjectText?: string
-  bodyText?: string
 }
 
 export function ManualEmailComposer({
@@ -288,8 +289,6 @@ export function ManualEmailComposer({
   embedded = false,
   variableValues = {},
   initialContext,
-  subjectText,
-  bodyText,
 }: ManualEmailComposerProps = {}) {
   const pathname = usePathname()
   const record = recordOverride === undefined ? railRecordForPath(pathname) : recordOverride
@@ -328,8 +327,6 @@ export function ManualEmailComposer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftExistedRef = useRef(false)
   const defaultRecipientRef = useRef('')
-  const seededSubjectRef = useRef<string | null>(null)
-  const seededBodyTextRef = useRef<string | null>(null)
 
   const recordType = record?.type ?? null
   const recordId = record?.id ?? null
@@ -351,20 +348,24 @@ export function ManualEmailComposer({
     value: resolvedVariables[option.key] ?? undefined,
   }))
 
-  useEffect(() => {
-    if (subjectText === undefined && bodyText === undefined) return
-    if (subjectText !== undefined && subjectText !== seededSubjectRef.current) {
-      setSubject(subjectText)
-      seededSubjectRef.current = subjectText
-    }
-    if (bodyText !== undefined && bodyText !== seededBodyTextRef.current) {
-      setBodyHtml(bodyText ? textToEmailHtml(bodyText) : '')
-      seededBodyTextRef.current = bodyText
-    }
-    if (subjectText !== undefined || bodyText !== undefined) {
-      setTemplateId(ONE_OFF)
-    }
-  }, [bodyText, subjectText])
+  // Drafting needs a record to read context from, so the button only exists
+  // when the pane is scoped to one. A bare contact has no such context.
+  const draftRoute = record?.type === 'matter'
+    ? `/api/admin/matters/${record.id}/draft-reply`
+    : record?.type === 'lead'
+      ? `/api/admin/leads/${record.id}/draft-reply`
+      : null
+
+  /** Both draft routes answer with "Subject: …" on line one, then the body. */
+  function applyAiDraft(draft: string) {
+    const match = draft.match(/^Subject:\s*(.+)\n+([\s\S]*)$/)
+    const nextSubject = match ? match[1].trim() : ''
+    const nextBody = match ? match[2].trim() : draft.trim()
+    setSubject(nextSubject || 'Follow-up')
+    setBodyHtml(textToEmailHtml(nextBody))
+    // An AI draft is the operator's own words now, not a template render.
+    setTemplateId(ONE_OFF)
+  }
 
   useEffect(() => {
     if (initialContext) {
@@ -373,7 +374,13 @@ export function ManualEmailComposer({
       setTo(value => value || initialContext.recipientEmail || '')
       return
     }
-    if (!recordType || !recordId) {
+    // Only leads and matters have a compose context to fetch; a contact-scoped
+    // pane is always given one via `initialContext`.
+    if (recordType !== 'matter' && recordType !== 'lead') {
+      setContext(null)
+      return
+    }
+    if (!recordId) {
       setContext(null)
       return
     }
@@ -536,7 +543,7 @@ export function ManualEmailComposer({
   // dropped into the body without leaving the pane.
   useEffect(() => {
     setSchedulingTypes([])
-    if (!recordType || !recordId || !token) return
+    if ((recordType !== 'matter' && recordType !== 'lead') || !recordId || !token) return
     let cancelled = false
     const query = recordType === 'matter' ? `matterId=${recordId}` : `leadId=${recordId}`
     void (async () => {
@@ -764,6 +771,7 @@ export function ManualEmailComposer({
           text: emailHtmlToText(bodyHtml),
           matterId: context?.recordType === 'matter' ? context.recordId : undefined,
           leadId: context?.recordType === 'lead' ? context.recordId : undefined,
+          contactId: context?.recordType === 'contact' ? context.recordId : undefined,
           documentIds: selectedDocumentIds,
           includeSignature,
         }),
@@ -932,6 +940,14 @@ export function ManualEmailComposer({
             <label htmlFor="rail-email-subject" className="text-[11px] font-medium text-muted-foreground">
               Subject
             </label>
+            {draftRoute && (
+              <DraftWithAiButton
+                apiPath={draftRoute}
+                channel="email"
+                notes={emailHtmlToText(bodyHtml)}
+                onDraft={applyAiDraft}
+              />
+            )}
             <select
               aria-label="Insert subject variable"
               defaultValue=""

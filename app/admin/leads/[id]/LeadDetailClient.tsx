@@ -45,7 +45,7 @@ import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
-import { LeadCommunicationDialog } from '@/components/leads/LeadCommunicationDialog'
+import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
 import { LeadTimelineCard } from '@/components/leads/LeadTimelineCard'
 import {
@@ -59,6 +59,7 @@ import type {
   LeadActivityViewRow,
   LeadDetailRecord,
   LeadSpouseRecord,
+  MutableLeadStatus,
 } from '@/lib/leads/viewTypes'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTab } from '@/app/admin/matters/[id]/MatterPeopleTab'
@@ -350,7 +351,7 @@ export function LeadDetailClient({
     }
   }
 
-  async function persistStatus(status: 'lead' | 'lost') {
+  async function persistStatus(status: MutableLeadStatus) {
     setError(null)
     setBusy(true)
     try {
@@ -488,7 +489,7 @@ export function LeadDetailClient({
     void action(`/api/admin/leads/${lead.id}/convert`)().finally(endInteraction)
   }
 
-  async function handleTopStatusChange(status: 'lead' | 'lost') {
+  async function handleTopStatusChange(status: MutableLeadStatus) {
     if (!beginInteraction()) return
     try {
       await persistStatus(status)
@@ -840,15 +841,22 @@ export function LeadDetailClient({
         open={bookForClientOpen}
         onOpenChange={setBookForClientOpen}
       />
-      <LeadCommunicationDialog
+      <CommunicationDialog
         open={communicationChannel !== null}
         channel={communicationChannel ?? 'email'}
-        leadId={lead.id}
-        clientName={clientName}
-        clientFirstName={lead.preferred_name?.trim() || lead.first_name?.trim() || clientName}
-        email={lead.email ?? ''}
-        phone={lead.phone ?? ''}
-        intakeUrl={intakeUrl}
+        target={{ type: 'lead', id: lead.id }}
+        recipientName={clientName}
+        recipientEmail={lead.email ?? ''}
+        recipientPhone={lead.phone ?? ''}
+        templateCategories={['manual', 'intake_invite']}
+        variableValues={{
+          client_name: clientName,
+          client_first_name: lead.preferred_name?.trim() || lead.first_name?.trim() || clientName,
+          first_name: lead.preferred_name?.trim() || lead.first_name?.trim() || clientName,
+          lead_name: clientName,
+          intake_link: intakeUrl,
+          intakeUrl,
+        }}
         initialMessage={communicationInitialMessage}
         token={token}
         onOpenChange={open => {

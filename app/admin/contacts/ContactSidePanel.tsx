@@ -1,14 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect } from 'react'
-import { ExternalLink, Phone, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ExternalLink, Mail, MessageSquare, Phone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
+import { CommunicationDialog, type CommunicationTarget } from '@/components/comms/CommunicationDialog'
+import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
-import { CONTACT_KIND_LABELS, type ContactDirectoryRow } from '@/lib/adminTables/contactTable'
+import {
+  CONTACT_KIND_LABELS,
+  contactRowId,
+  type ContactDirectoryRow,
+} from '@/lib/adminTables/contactTable'
 
 interface ContactSidePanelProps {
   contact: ContactDirectoryRow
@@ -26,6 +33,10 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePanelProps) {
+  const router = useRouter()
+  const token = useAccessToken()
+  const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -36,12 +47,29 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
 
   const location = [contact.city, contact.state].filter(Boolean).join(', ')
   const tel = phoneTelHref(contact.phone)
+  const firstName = contact.name.trim().split(/\s+/)[0] || 'contact'
+  const contactId = contactRowId(contact.id)
 
-  // Intake-backed rows text the person themself; relationship contacts only
-  // have a wired SMS path when they're the spouse on a hired matter.
-  const smsSendable = contact.relationship_type === null
-    || (contact.thread?.type === 'matter' && contact.relationship_type === 'spouse')
+  // A contacts-table row threads through itself, not through the household it
+  // hangs off — otherwise a trustee's panel shows the client's whole message
+  // history under the trustee's name. Intake rows keep their lead/matter thread.
+  const reachable = Boolean(contact.phone || contact.email)
+  const record = !reachable
+    ? null
+    : contactId
+      ? { type: 'contact' as const, id: contactId }
+      : contact.thread
   const smsRole = contact.relationship_type === 'spouse' ? 'spouse' as const : 'client' as const
+
+  // The composer targets the same record the thread does, so a reply lands in
+  // the timeline shown right below it.
+  const composerTarget: CommunicationTarget | null = contactId
+    ? { type: 'contact', id: contactId }
+    : contact.thread
+      ? contact.thread.type === 'matter'
+        ? { type: 'matter', id: contact.thread.id, recipient: smsRole }
+        : { type: 'lead', id: contact.thread.id }
+      : null
 
   return (
     <aside
@@ -79,6 +107,37 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
       </header>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
+        {composerTarget && (contact.email || contact.phone) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {contact.phone && (
+              <Button
+                type="button" size="sm" variant="outline"
+                onClick={() => openStaffSoftphone({ number: contact.phone ?? undefined })}
+              >
+                <Phone className="h-3.5 w-3.5" />
+                Call
+              </Button>
+            )}
+            <Button
+              type="button" size="sm" variant="outline"
+              disabled={!contact.email}
+              onClick={() => setComposerChannel('email')}
+            >
+              <Mail className="h-3.5 w-3.5" />
+              Email
+            </Button>
+            <Button
+              type="button" size="sm" variant="outline"
+              disabled={!contact.phone || !smsEnabled}
+              title={smsEnabled ? undefined : 'Texting is not configured yet'}
+              onClick={() => setComposerChannel('sms')}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Text
+            </Button>
+          </div>
+        )}
+
         <section className="rounded-md border border-border px-3 py-1.5">
           <InfoRow label="Email">
             {contact.email
@@ -98,42 +157,44 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
           {contact.relationship && <InfoRow label="Relationship">{contact.relationship}</InfoRow>}
         </section>
 
-        {contact.thread ? (
+        {record ? (
           <section>
+            {/* The card carries its own Call button alongside the channel chips. */}
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Activity & communications
             </h3>
             <RecordCommunicationsCard
               key={contact.id}
-              record={contact.thread}
+              record={record}
               recipientName={contact.name}
               recipientEmail={contact.email}
               recipientPhone={contact.phone}
               smsEnabled={smsEnabled}
               smsRecipientRole={smsRole}
-              smsSendable={smsSendable}
-              smsDisabledReason="Texting from here is wired for leads, clients, and spouses. Use the call button to reach this contact."
+              smsSendable={Boolean(contact.phone)}
+              smsDisabledReason="No phone number on file, so there's nothing to text."
             />
           </section>
         ) : (
-          <section className="space-y-2 rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-            <p>
-              This contact isn&apos;t linked to a lead or matter, so there&apos;s no message history to show.
-            </p>
-            {contact.phone && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => openStaffSoftphone({ number: contact.phone ?? undefined })}
-              >
-                <Phone className="h-3.5 w-3.5" />
-                Call {contact.name.split(' ')[0]}
-              </Button>
-            )}
-          </section>
+          <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+            No phone or email on file, so there&apos;s no way to reach this contact yet.
+          </p>
         )}
       </div>
+
+      {composerTarget && (
+        <CommunicationDialog
+          open={composerChannel !== null}
+          channel={composerChannel ?? 'email'}
+          target={composerTarget}
+          recipientName={contact.name}
+          recipientEmail={contact.email}
+          recipientPhone={contact.phone}
+          token={token}
+          onOpenChange={open => { if (!open) setComposerChannel(null) }}
+          onSent={() => router.refresh()}
+        />
+      )}
     </aside>
   )
 }
