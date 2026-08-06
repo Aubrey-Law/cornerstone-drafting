@@ -120,7 +120,7 @@ describe('progress', () => {
 describe('record links', () => {
   it('points at the matter or the lead, and nowhere when unattached', () => {
     expect(taskRecordHref(task({ matter_id: 'm1' }))).toBe('/admin/matters/m1')
-    expect(taskRecordHref(task({ lead_id: 'l1' }))).toBe('/admin/leads/l1')
+    expect(taskRecordHref(task({ lead_id: 'l1' }))).toBe('/admin/crm/opportunities/l1')
     expect(taskRecordHref(task())).toBeNull()
   })
 })

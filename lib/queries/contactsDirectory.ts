@@ -101,7 +101,7 @@ export async function fetchContactsDirectory(): Promise<{ rows: ContactDirectory
     // Clients live on the matter record; leads (and lost leads) on the lead record.
     const href = kind === 'client' && intake.matter_id
       ? `/admin/matters/${intake.matter_id}`
-      : `/admin/leads/${intake.id}`
+      : `/admin/crm/opportunities/${intake.id}`
     intakeHrefById.set(intake.id, href)
     // Comms (SMS/email/calls) thread through the same record.
     const thread: { type: 'lead' | 'matter'; id: string } = kind === 'client' && intake.matter_id

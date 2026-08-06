@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const facts = [
       `Active matters: ${today.activeMatterCount}`,
       `Overdue / at-risk (worst first): ${today.atRisk.slice(0, 8).map(row =>
-        `${row.client_name ?? 'Unnamed'} (${engineStageLabel(row.current_stage)}, ${row.days_over_sla && row.days_over_sla > 0 ? `${row.days_over_sla}d over SLA` : `${row.days_in_stage}d in stage`}, ball in ${row.owner === 'client' ? 'client' : 'attorney'} court) [link: ${row.entity === 'lead' ? `/admin/leads/${row.id}` : `/admin/matters/${row.id}`}]`,
+        `${row.client_name ?? 'Unnamed'} (${engineStageLabel(row.current_stage)}, ${row.days_over_sla && row.days_over_sla > 0 ? `${row.days_over_sla}d over SLA` : `${row.days_in_stage}d in stage`}, ball in ${row.owner === 'client' ? 'client' : 'attorney'} court) [link: ${row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`}]`,
       ).join('; ') || 'none'}`,
       `Unread client messages: ${today.unreadThreads.map(thread =>
         `${thread.client_name ?? 'Unnamed'} (${thread.unread_count}) [link: /admin/matters/${thread.matter_id}?tab=communications]`,

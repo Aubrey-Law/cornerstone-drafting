@@ -53,7 +53,7 @@ export const createLeadToolExecutor: AdminChatToolExecutor = {
       practiceArea: typeof fields.practice_area === 'string' ? fields.practice_area : 'EP',
       feeQuoted: typeof fields.fee_quoted === 'number' ? fields.fee_quoted : null,
     })
-    const url = `/admin/leads/${created.leadId}`
+    const url = `/admin/crm/opportunities/${created.leadId}`
     emit({
       tool: CREATE_LEAD_TOOL_NAME,
       tool_use_id: toolUseId,

@@ -54,7 +54,7 @@ export function railRecordForPath(pathname: string): RailRecord | null {
   const matter = pathname.match(/^\/admin\/(?:matters|drafting)\/([a-zA-Z0-9-]+)/)
   if (matter && matter[1] !== 'new') return { type: 'matter', id: matter[1] }
 
-  const lead = pathname.match(/^\/admin\/leads\/([a-zA-Z0-9-]+)/)
+  const lead = pathname.match(/^\/admin\/(?:leads|crm\/opportunities)\/([a-zA-Z0-9-]+)/)
   if (lead && lead[1] !== 'new') return { type: 'lead', id: lead[1] }
 
   return null

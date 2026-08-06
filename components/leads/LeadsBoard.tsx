@@ -261,7 +261,7 @@ function BoardCard({
         <div className="flex items-start justify-between gap-1">
           {/* Plain clicks open the record side panel; modified clicks keep the link. */}
           <Link
-            href={`/admin/leads/${lead.id}`}
+            href={`/admin/crm/opportunities/${lead.id}`}
             className="min-w-0 flex-1"
             onClick={event => {
               if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return

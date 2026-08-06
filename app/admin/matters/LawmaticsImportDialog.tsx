@@ -92,7 +92,7 @@ export default function LawmaticsImportDialog({ open, onOpenChange, defaultTarge
       setError(null)
       if (typeof data.leadId === 'string') {
         toast.success(data.created ? 'Lead imported from Lawmatics' : 'Opened existing Lawmatics lead')
-        router.push(`/admin/leads/${data.leadId}`)
+        router.push(`/admin/crm/opportunities/${data.leadId}`)
       } else if (typeof data.matterId === 'string') {
         toast.success(data.created ? 'Matter imported from Lawmatics' : 'Opened existing Lawmatics matter')
         router.push(`/admin/matters/${data.matterId}`)

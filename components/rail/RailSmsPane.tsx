@@ -43,8 +43,8 @@ function recipientFromEntry(entry: DirectoryEntry): SmsRecipient | null {
 
 const RECORD_HREF: Record<SmsRecipient['kind'], (id: string) => string> = {
   matter: id => `/admin/matters/${id}?tab=communications&channel=sms`,
-  lead: id => `/admin/leads/${id}?tab=communications`,
-  contact: id => `/admin/contacts?selected=contact:${id}`,
+  lead: id => `/admin/crm/opportunities/${id}?tab=communications`,
+  contact: id => `/admin/crm/people?selected=contact:${id}`,
 }
 
 interface RailSmsPaneProps {

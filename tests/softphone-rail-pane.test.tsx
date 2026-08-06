@@ -349,7 +349,7 @@ describe('softphone rail pane', () => {
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '6175559090' } })
 
     const link = screen.getByRole('link', { name: 'SMS' })
-    expect(link.getAttribute('href')).toBe('/admin/leads/l1?tab=communications')
+    expect(link.getAttribute('href')).toBe('/admin/crm/opportunities/l1?tab=communications')
     expect(link.getAttribute('aria-disabled')).toBe('false')
   })
 
@@ -361,7 +361,7 @@ describe('softphone rail pane', () => {
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '6175557070' } })
 
     expect(screen.getByRole('link', { name: 'SMS' }).getAttribute('href')).toBe(
-      '/admin/contacts?selected=contact:c1',
+      '/admin/crm/people?selected=contact:c1',
     )
   })
 

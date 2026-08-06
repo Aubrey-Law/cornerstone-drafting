@@ -56,6 +56,7 @@ describe('rail record scope', () => {
     expect(railRecordForPath('/admin/matters/abc')).toEqual({ type: 'matter', id: 'abc' })
     expect(railRecordForPath('/admin/drafting/abc/design')).toEqual({ type: 'matter', id: 'abc' })
     expect(railRecordForPath('/admin/leads/lead-1')).toEqual({ type: 'lead', id: 'lead-1' })
+    expect(railRecordForPath('/admin/crm/opportunities/lead-1')).toEqual({ type: 'lead', id: 'lead-1' })
     expect(railRecordForPath('/admin/leads/new')).toBeNull()
     expect(railRecordForPath('/admin/calendar')).toBeNull()
   })

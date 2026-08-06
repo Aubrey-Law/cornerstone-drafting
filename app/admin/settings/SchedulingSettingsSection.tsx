@@ -547,7 +547,7 @@ export function SchedulingSettingsSection() {
                   </Link>
                 ) : a.linkedLeadId ? (
                   <Link
-                    href={`/admin/leads/${a.linkedLeadId}`}
+                    href={`/admin/crm/opportunities/${a.linkedLeadId}`}
                     className="text-xs text-primary underline"
                   >
                     View lead

@@ -77,6 +77,6 @@ describe('retell notify helpers', () => {
   })
 
   it('links lead-associated calls to the lead detail page', () => {
-    expect(retellCallsAdminUrl(null, 'lead-123')).toContain('/admin/leads/lead-123')
+    expect(retellCallsAdminUrl(null, 'lead-123')).toContain('/admin/crm/opportunities/lead-123')
   })
 })

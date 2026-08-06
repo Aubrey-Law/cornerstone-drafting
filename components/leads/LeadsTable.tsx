@@ -161,7 +161,7 @@ export function LeadsTable({
                 <TableCell className="font-medium">
                   {/* Plain clicks open the record side panel; modified clicks keep the link. */}
                   <Link
-                    href={`/admin/leads/${lead.id}`}
+                    href={`/admin/crm/opportunities/${lead.id}`}
                     className="hover:underline"
                     onClick={event => {
                       if (!onActivate || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return

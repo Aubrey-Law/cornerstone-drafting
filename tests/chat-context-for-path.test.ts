@@ -18,9 +18,12 @@ describe('chatContextForPath', () => {
     })
   })
 
-  it('scopes to the lead on a lead detail page', () => {
+  it('scopes to the opportunity on current and legacy detail routes', () => {
     expect(chatContextForPath('/admin/leads/lead-123')).toEqual({
-      type: 'lead', id: 'lead-123', label: 'This lead',
+      type: 'lead', id: 'lead-123', label: 'This opportunity',
+    })
+    expect(chatContextForPath('/admin/crm/opportunities/lead-123')).toEqual({
+      type: 'lead', id: 'lead-123', label: 'This opportunity',
     })
   })
 

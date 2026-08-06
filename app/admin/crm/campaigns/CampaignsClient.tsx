@@ -343,7 +343,7 @@ export function CrmCampaignsClient({ initialCampaigns }: { initialCampaigns: Crm
               Refresh
             </Button>
             <Button type="button" asChild variant="secondary" size="sm">
-              <Link href="/admin/crm">People</Link>
+              <Link href="/admin/crm/people">People</Link>
             </Button>
           </div>
         }
