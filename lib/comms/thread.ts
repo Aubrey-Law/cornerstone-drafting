@@ -13,6 +13,12 @@ export interface CommunicationItem {
   meta?: string | null
   sender?: string | null
   created_at: string
+  call?: {
+    participant_number: string
+    recording_url: string | null
+    voicemail_url: string | null
+    needs_response: boolean
+  }
 }
 
 /**
@@ -67,8 +73,9 @@ export function resolveReplyChannel(
 }
 
 /**
- * Newest inbound message with no later outbound reply. Calls never demand a
- * typed reply (they fall back per `resolveReplyChannel`), but any outbound
+ * Newest inbound message or missed-call event with no later outbound reply.
+ * Calls never demand a typed reply (they fall back per `resolveReplyChannel`),
+ * but missed calls and voicemails still need attention. Any later outbound
  * touch — message, email or call back — answers the thread.
  */
 export function waitingSince(items: CommunicationItem[]): string | null {
@@ -79,7 +86,11 @@ export function waitingSince(items: CommunicationItem[]): string | null {
     const at = Date.parse(item.created_at)
     if (item.direction === 'outbound') {
       if (at > lastOutbound) lastOutbound = at
-    } else if (item.channel === 'portal' || item.channel === 'sms') {
+    } else if (
+      item.channel === 'portal' ||
+      item.channel === 'sms' ||
+      (item.channel === 'call' && item.call?.needs_response)
+    ) {
       if (at > lastInbound) {
         lastInbound = at
         lastInboundIso = item.created_at
@@ -158,6 +169,8 @@ export interface InboxThread {
   last_direction: 'inbound' | 'outbound'
   last_preview: string | null
   last_message_at: string
+  /** Every channel present in the thread. Optional during migration rollout. */
+  channels?: CommChannel[] | null
   unread_count: number
   waiting_since: string | null
   snoozed_until: string | null

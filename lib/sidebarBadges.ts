@@ -27,7 +27,10 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
 
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
   if (href === '/admin/inbox' && counts.inboxNeedsReplyCount > 0) {
-    return { value: counts.inboxNeedsReplyCount, tone: 'accent' }
+    return { value: counts.inboxNeedsReplyCount + counts.unassignedCallsCount, tone: 'accent' }
+  }
+  if (href === '/admin/inbox' && counts.unassignedCallsCount > 0) {
+    return { value: counts.unassignedCallsCount, tone: 'accent' }
   }
   if (href === '/admin/matters' && counts.intakeReviewCount > 0) {
     return { value: counts.intakeReviewCount, tone: 'destructive' }
@@ -40,9 +43,6 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
   }
   if (href === '/admin/tasks' && counts.tasksOverdueCount > 0) {
     return { value: counts.tasksOverdueCount, tone: 'destructive' }
-  }
-  if (href === '/admin/calls' && counts.unassignedCallsCount > 0) {
-    return { value: counts.unassignedCallsCount, tone: 'accent' }
   }
   return null
 }

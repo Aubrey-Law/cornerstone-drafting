@@ -54,9 +54,9 @@ describe('retell notify helpers', () => {
     expect(subject).toContain('617')
     expect(text).toContain('Caller asked about a trust.')
     expect(text).toContain('1:35')
-    expect(text).toContain('/admin/calls')
+    expect(text).toContain('/admin/inbox?scope=unlinked_calls')
     expect(html).toContain('Caller asked about a trust.')
-    expect(html).toContain('/admin/calls')
+    expect(html).toContain('/admin/inbox?scope=unlinked_calls')
   })
 
   it('formats SMS within length limit', () => {
