@@ -10,7 +10,7 @@ const CAMPAIGN_LIFECYCLE_STATUSES = [
   'working',
   'converted',
   'closed_lost',
-]
+] as const
 const CAMPAIGN_STATUSES = ['draft', 'scheduled', 'running', 'paused', 'completed', 'cancelled'] as const
 const CAMPAIGN_TYPES = ['newsletter', 'nurture'] as const
 
@@ -222,8 +222,8 @@ function clampCampaignLifecycleStatuses(raw: unknown): CrmPeopleFilter['lifecycl
   if (!Array.isArray(raw)) return [...CAMPAIGN_LIFECYCLE_STATUSES]
   const normalized = raw
     .map(item => (typeof item === 'string' ? item.toLowerCase().trim() : ''))
-    .filter((item): item is CrmPeopleFilter['lifecycle'] =>
-      CAMPAIGN_LIFECYCLE_STATUSES.includes(item as CrmPeopleFilter['lifecycle']),
+    .filter((item): item is Exclude<CrmPeopleFilter['lifecycle'], 'all'> =>
+      CAMPAIGN_LIFECYCLE_STATUSES.includes(item as (typeof CAMPAIGN_LIFECYCLE_STATUSES)[number]),
     )
   const distinct = [...new Set(normalized)]
   return distinct.length > 0 ? distinct : [...CAMPAIGN_LIFECYCLE_STATUSES]
