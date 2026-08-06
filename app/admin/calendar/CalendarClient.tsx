@@ -1314,7 +1314,7 @@ function TimeGrid(props: {
                         </span>
                       )}
                       {matterChip && (
-                        <span className="mt-0.5 inline-block max-w-full truncate rounded-full border border-navy-12 bg-white/75 px-1.5 text-[9px] font-medium text-secondary-foreground">
+                        <span className="mt-0.5 inline-block max-w-full truncate rounded-full border border-navy-12 bg-background/80 px-1.5 text-[9px] font-medium text-foreground">
                           ↗ {matterChip}
                         </span>
                       )}

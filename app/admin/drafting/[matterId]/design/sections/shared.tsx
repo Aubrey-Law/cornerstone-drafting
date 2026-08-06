@@ -247,8 +247,8 @@ export function SlotStateToggle({ slotKey: _slotKey, state, onChange }: {
             className={cn(
               'rounded px-2 py-0.5 transition-all text-[10px] leading-tight font-medium',
               isActive && opt.value === 'filled' && 'bg-card text-foreground shadow-sm',
-              isActive && opt.value === 'pending_client' && 'bg-amber-100 text-amber-700 shadow-sm dark:bg-amber-900/40 dark:text-amber-300',
-              isActive && opt.value === 'optional' && 'bg-blue-100 text-blue-700 shadow-sm dark:bg-blue-900/40 dark:text-blue-300',
+              isActive && opt.value === 'pending_client' && 'bg-amber-bg text-amber shadow-sm',
+              isActive && opt.value === 'optional' && 'bg-blue-bg text-blue shadow-sm',
               !isActive && 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -686,18 +686,18 @@ export function SectionBlock({ title, subtitle, children }: {
 
 export function AttorneyNoteBanner({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 dark:border-amber-700/50 dark:bg-amber-950/30">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-amber-400" />
-      <p className="text-[13px] leading-relaxed text-warning dark:text-amber-200">{children}</p>
+    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+      <p className="text-[13px] leading-relaxed text-warning">{children}</p>
     </div>
   )
 }
 
 export function ClientDecisionCallout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700/50 dark:bg-amber-950/30">
-      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-700 dark:text-amber-300">
+    <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-border bg-amber-bg px-3 py-2">
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber" />
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber">
         Client decision required — {children}
       </span>
     </div>
@@ -749,7 +749,7 @@ export const AccordionSection = forwardRef<AccordionSectionHandle, AccordionSect
           <span
             className={cn(
               'flex h-[1.75rem] w-[1.75rem] shrink-0 items-center justify-center rounded-[calc(var(--radius)-2px)] transition-colors',
-              isOpen ? 'bg-accent/12' : 'bg-secondary'
+              isOpen ? 'bg-primary/12' : 'bg-secondary'
             )}
           >
             {icon}
@@ -787,7 +787,7 @@ export function AccordionBadge({ variant = 'core', children }: {
         'inline-flex items-center rounded-full px-[0.4rem] py-[0.125rem] text-[0.625rem] font-medium',
         variant === 'core' && 'bg-muted text-muted-foreground',
         variant === 'warn' && 'bg-warning/10 text-warning',
-        variant === 'lp' && 'bg-accent/10 text-accent',
+        variant === 'lp' && 'bg-primary/10 text-primary',
       )}
     >
       {children}
@@ -810,13 +810,13 @@ export function InheritanceCard({ title, description, selected, onClick }: {
       className={cn(
         'flex flex-col items-start rounded-lg border-2 p-4 text-left transition-colors',
         selected
-          ? 'border-accent bg-accent/10'
+          ? 'border-primary bg-primary/10'
           : 'border-border bg-card hover:border-muted-foreground'
       )}
     >
       <div className={cn(
         'mb-2 flex h-5 w-5 items-center justify-center rounded-full border-2',
-        selected ? 'border-accent bg-accent' : 'border-border'
+        selected ? 'border-primary bg-primary' : 'border-border'
       )}>
         {selected && <Check className="h-3 w-3 text-white" />}
       </div>

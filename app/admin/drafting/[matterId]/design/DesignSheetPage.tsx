@@ -108,9 +108,9 @@ const REVIEW_GROUP = {
 
 /** Transient highlight applied to a blocker's target so the eye lands on the right decision. */
 function flashDesignTarget(target: HTMLElement) {
-  target.classList.add('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
+  target.classList.add('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background')
   window.setTimeout(() => {
-    target.classList.remove('ring-2', 'ring-accent', 'ring-offset-2', 'ring-offset-background')
+    target.classList.remove('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background')
   }, 1600)
 }
 
@@ -488,7 +488,7 @@ function DesignSheetPageContent({
       <DesignValidationProvider value={validationValue}>
         <div
           ref={scrollContainerRef}
-          className="guided-interview min-h-0 overflow-y-auto bg-background"
+          className="guided-interview guided-zinc min-h-0 overflow-y-auto bg-background"
           style={{ height: pageHeight }}
         >
           <ClonePlanDialog
@@ -670,7 +670,7 @@ function DesignSheetPageContent({
                         type="button"
                         variant="link"
                         size="sm"
-                        className="h-auto shrink-0 px-1 text-xs text-accent"
+                        className="h-auto shrink-0 px-1 text-xs text-primary"
                         onClick={() => setIntakeSnapshotOpen(true)}
                       >
                         View intake snapshot
