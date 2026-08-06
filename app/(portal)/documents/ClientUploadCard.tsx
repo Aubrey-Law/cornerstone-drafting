@@ -1,13 +1,14 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Upload, FileText, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { uploadDocument } from '@/lib/documents'
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES } from '@/lib/documentUpload'
 import type { MatterDocument } from '@/types/database'
-import { formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
+import { useFileDrop } from '@/hooks/useFileDrop'
 
 const ACCEPT_ATTR = '.pdf,.doc,.docx,.xlsx,.csv,.txt,.md,.jpg,.jpeg,.png,.tif,.tiff'
 
@@ -29,7 +30,7 @@ export default function ClientUploadCard({ matterId, matterClosed, initialUpload
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
 
-  async function handleFiles(files: FileList | null) {
+  const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return
     setUploading(true)
     setProgress(0)
@@ -56,7 +57,10 @@ export default function ClientUploadCard({ matterId, matterClosed, initialUpload
     setProgress(null)
     setUploading(false)
     if (inputRef.current) inputRef.current.value = ''
-  }
+  }, [matterId])
+
+  // Must run before the matterClosed early return — hooks cannot be conditional.
+  const { isDragging, dropProps } = useFileDrop(handleFiles, uploading || matterClosed)
 
   if (matterClosed) {
     return (
@@ -70,12 +74,29 @@ export default function ClientUploadCard({ matterId, matterClosed, initialUpload
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
+    <div
+      {...dropProps}
+      className={cn(
+        'relative rounded-xl border border-border bg-card p-6 transition-colors',
+        isDragging && 'border-primary ring-2 ring-inset ring-primary/40',
+      )}
+    >
+      {isDragging && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-primary/5 backdrop-blur-[1px]"
+        >
+          <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-card px-4 py-2 text-sm font-medium shadow-sm">
+            <Upload className="h-4 w-4 text-primary" />
+            Drop files to upload
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Need to send us something?</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            PDF, Word, Excel, CSV, text, or image — {formatSize(MAX_UPLOAD_BYTES)} max.
+            Drag files here or use the button — PDF, Word, Excel, CSV, text, or image, {formatSize(MAX_UPLOAD_BYTES)} max.
           </p>
         </div>
         <Button
