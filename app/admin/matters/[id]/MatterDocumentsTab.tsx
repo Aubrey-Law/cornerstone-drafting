@@ -310,7 +310,7 @@ export function MatterDocumentsTab({
     if (!file) return
     setUploading(true)
     try {
-      await uploadDocument(file, matterId, uploadFolder)
+      await uploadDocument(file, matterId)
       toast.success(`Uploaded ${file.name}`)
       await refresh()
     } catch (error) {

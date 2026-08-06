@@ -4,36 +4,27 @@ import { getR2Client, R2_BUCKET } from '@/lib/r2'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import {
-  isAdminUser,
-  isClientUploadFolder,
-  userCanAccessMatter,
-} from '@/lib/documentSecurity'
+import { isAdminUser, userCanAccessMatter } from '@/lib/documentSecurity'
 import {
   MAX_UPLOAD_BYTES,
   inferContentType,
   safeUploadFilename,
 } from '@/lib/documentUpload'
 
-const VALID_FOLDERS = new Set(['draft', 'final', 'client', 'review', 'signed', 'intake', 'meeting-notes'])
-
 // POST /api/documents/upload-url
-// body: { matterId, filename, contentType, folder }
+// body: { matterId, filename, contentType, contentLength }
 // returns: { uploadUrl, r2Key }
 export async function POST(req: Request) {
   const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { matterId, filename, contentType, folder = 'client', contentLength } = await req.json()
+  const { matterId, filename, contentType, contentLength } = await req.json()
   if (!matterId || !filename || !contentType) {
     return NextResponse.json({ error: 'Missing matterId, filename, or contentType' }, { status: 400 })
   }
   const resolvedType = inferContentType(filename, contentType)
   if (!resolvedType) {
     return NextResponse.json({ error: 'File type not permitted' }, { status: 400 })
-  }
-  if (!VALID_FOLDERS.has(folder)) {
-    return NextResponse.json({ error: `Invalid folder: ${folder}` }, { status: 400 })
   }
   const size = Number(contentLength)
   if (!Number.isFinite(size) || size <= 0 || size > MAX_UPLOAD_BYTES) {
@@ -47,9 +38,7 @@ export async function POST(req: Request) {
   if (!(await userCanAccessMatter(admin, user, matterId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (!(await isAdminUser(admin, user)) && !isClientUploadFolder(folder)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const source = (await isAdminUser(admin, user)) ? 'firm' : 'client'
 
   // Closed matters are read-only — no new uploads.
   const { data: matterStatus } = await admin
@@ -66,7 +55,7 @@ export async function POST(req: Request) {
 
   const timestamp = Date.now()
   const safeFilename = safeUploadFilename(filename)
-  const r2Key = `matters/${matterId}/${folder}/${timestamp}-${safeFilename}`
+  const r2Key = `matters/${matterId}/${source}/${timestamp}-${safeFilename}`
 
   const r2 = getR2Client()
   try {

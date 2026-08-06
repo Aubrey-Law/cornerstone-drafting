@@ -35,12 +35,12 @@ export async function GET(req: Request) {
 }
 
 // POST /api/documents
-// body: { matterId, r2Key, name, size, contentType, folder }
+// body: { matterId, r2Key, name, size, contentType }
 export async function POST(req: Request) {
   const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { matterId, r2Key, name, size, contentType, folder = 'client', folderId = null } = await req.json()
+  const { matterId, r2Key, name, size, contentType } = await req.json()
   if (!matterId || !r2Key || !name) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
@@ -50,10 +50,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const userIsAdmin = await isAdminUser(sb, user)
-  if (!userIsAdmin && folder !== 'client') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  if (!r2Key.startsWith(`matters/${matterId}/${folder}/`)) {
+  const source = userIsAdmin ? 'firm' : 'client'
+  if (!r2Key.startsWith(`matters/${matterId}/${source}/`)) {
     return NextResponse.json({ error: 'Invalid document key' }, { status: 400 })
   }
 
@@ -65,10 +63,9 @@ export async function POST(req: Request) {
       name,
       size: size ?? 0,
       content_type: contentType ?? 'application/octet-stream',
-      folder,
-      folder_id: folderId,
-      source: userIsAdmin ? 'firm' : 'client',
-      shared_at: ['review', 'signed', 'final'].includes(folder) ? new Date().toISOString() : null,
+      folder: userIsAdmin ? 'draft' : 'client',
+      source,
+      shared_at: null,
       uploaded_by: user.id,
     })
     .select(MATTER_DOCUMENT_COLUMNS)

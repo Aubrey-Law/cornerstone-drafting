@@ -36,9 +36,7 @@ export function toMicrosoftOfficeViewerUrl(url: string, mode: 'view' | 'embed' =
 export async function uploadDocument(
   file: File,
   matterId: string,
-  folder: MatterDocument['folder'] = 'client',
   onProgress?: (pct: number) => void,
-  folderId?: string | null,
 ): Promise<MatterDocument> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
@@ -46,8 +44,6 @@ export async function uploadDocument(
   const form = new FormData()
   form.append('file', file)
   form.append('matterId', matterId)
-  form.append('folder', folder)
-  if (folderId) form.append('folderId', folderId)
 
   const document = await new Promise<MatterDocument>((resolve, reject) => {
     const xhr = new XMLHttpRequest()

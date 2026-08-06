@@ -332,7 +332,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     }
     setUploadingPdf(true)
     try {
-      await uploadDocument(file, matterId, 'review')
+      await uploadDocument(file, matterId)
       toast.success('PDF shared with client')
       router.refresh()
     } catch (e) {
