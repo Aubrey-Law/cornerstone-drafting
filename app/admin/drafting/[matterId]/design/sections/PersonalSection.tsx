@@ -273,7 +273,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
                     isDeceased
                       ? 'bg-muted/60'
                       : child.is_minor
-                        ? 'bg-blue-50/60 dark:bg-blue-950/20'
+                        ? 'bg-blue-bg'
                         : 'bg-card'
                   }`}
                 >
@@ -347,7 +347,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
                               type="checkbox"
                               checked={child.is_minor}
                               onChange={e => updateChild(idx, { is_minor: e.target.checked })}
-                              className="h-3 w-3 accent-blue-600"
+                              className="h-3 w-3 accent-primary"
                             />
                             Treat as minor
                           </label>
@@ -358,7 +358,7 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
                   <button
                     type="button"
                     onClick={() => removeChild(idx)}
-                    className="ml-3 mt-6 rounded p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive"
+                    className="ml-3 mt-6 rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                     title="Remove child"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

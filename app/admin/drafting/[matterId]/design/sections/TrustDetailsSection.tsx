@@ -95,8 +95,8 @@ const SPOUSAL_TRUST_FUNDING_OPTIONS: { value: TrustPlanningType; label: string; 
 
 function SectionHelp({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800/40 dark:bg-blue-950/20">
-      <p className="text-[11px] text-blue-700 dark:text-blue-300">{children}</p>
+    <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2">
+      <p className="text-[11px] text-blue">{children}</p>
     </div>
   )
 }

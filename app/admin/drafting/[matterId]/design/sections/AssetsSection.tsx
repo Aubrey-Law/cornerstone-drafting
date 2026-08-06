@@ -15,7 +15,7 @@ const CATEGORIES: { value: AssetItem['category']; label: string; color: string }
   { value: 'retirement',     label: 'Retirement',        color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800/50' },
   { value: 'life_insurance', label: 'Life Insurance',    color: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-800/50' },
   { value: 'business',       label: 'Business Interest', color: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-300 dark:border-teal-800/50' },
-  { value: 'other',          label: 'Other',             color: 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800/40 dark:text-gray-300 dark:border-gray-700/60' },
+  { value: 'other',          label: 'Other',             color: 'bg-muted text-muted-foreground border-border' },
 ]
 
 function categoryMeta(cat: AssetItem['category']) {

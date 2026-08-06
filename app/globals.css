@@ -86,13 +86,13 @@
    retheme: these pins restore the pre-retheme light palette and radius inside
    .guided-interview so its Tailwind semantic utilities (bg-card, border-input,
    bg-accent/10, rounded-lg, …) keep resolving to the old values.
-   Light-scoped only: the admin drafting pages that reuse .guided-interview
-   keep normal dark-mode tokens (guided.css --gi-* dark overrides still apply). */
-.guided-interview {
+   The admin drafting surfaces (design sheet, review/generate steps) opt out of
+   the freeze — and into the zinc theme — via the .guided-zinc modifier below. */
+.guided-interview:not(.guided-zinc) {
   --radius: 0.625rem;
 }
-:root:not(.dark) .guided-interview,
-.light .guided-interview {
+:root:not(.dark) .guided-interview:not(.guided-zinc),
+.light .guided-interview:not(.guided-zinc) {
   --background: #EDF1F7;
   --foreground: #111827;
   --card: #ffffff;
@@ -113,4 +113,45 @@
   --input: #C9D3E0;
   --ring: #1E4A8C;
   --teal-bg: #dcf7ef;
+}
+
+/* ── Guided zinc re-skin (attorney-facing design sheet / drafting steps) ────
+   Remaps guided.css's --gi-* tokens onto the app theme so these admin surfaces
+   follow the zinc retheme in both modes, while keeping guided.css's structural
+   styling. The var() references flip automatically with .dark. The doubled
+   .dark selector out-specifies guided.css's own `.dark .guided-interview`
+   dark-value block. Amber warning and blue info tokens are left to guided.css
+   (functional hues, kept app-wide). */
+.guided-interview.guided-zinc,
+.dark .guided-interview.guided-zinc {
+  --gi-navy: var(--brand-navy);
+  --gi-heading: var(--foreground);
+  --gi-teal: var(--primary);
+  --gi-teal-deep: var(--brand-teal-hover);
+  --gi-page: var(--background);
+  --gi-surface: var(--card);
+  --gi-surface-alt: var(--muted);
+  --gi-border: var(--border);
+  --gi-faint-border: var(--input);
+  --gi-divider: var(--border);
+  --gi-border-open: var(--primary);
+  --gi-ink: var(--foreground);
+  --gi-strong: var(--text-secondary);
+  --gi-muted: var(--muted-foreground);
+  --gi-faint: var(--gray-mid);
+  --gi-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* guided.css hardcodes a teal focus glow and forces white text on filled
+   accent controls; in dark zinc the primary fill is near-white, so both need
+   theme-aware overrides. */
+.guided-interview.guided-zinc input:not([type='checkbox']):not([type='radio']):focus-visible,
+.guided-interview.guided-zinc textarea:focus-visible,
+.guided-interview.guided-zinc [data-slot='select-trigger']:focus-visible {
+  box-shadow: 0 0 0 2px var(--teal-12);
+}
+.guided-interview.guided-zinc .bg-accent.text-white,
+.guided-interview.guided-zinc button.bg-accent.text-white,
+.guided-interview.guided-zinc button.hover\:bg-accent:hover {
+  color: var(--primary-foreground) !important;
 }

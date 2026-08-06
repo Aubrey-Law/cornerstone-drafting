@@ -383,7 +383,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   }
 
   return (
-    <div className="guided-interview space-y-4">
+    <div className="guided-interview guided-zinc space-y-4">
       <GuidedIntroCard
         pct={sharedDrafts.length > 0 && recentDrafts.every(d => effectiveReviewedAt(d)) ? 100 : recentDrafts.length > 0 ? 50 : 0}
         title="Review and share drafts"
@@ -481,7 +481,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               return (
                 <div
                   key={doc.id}
-                  className={`flex flex-wrap items-center gap-3 px-4 py-3 ${isOpen ? 'bg-accent/5' : ''}`}
+                  className={`flex flex-wrap items-center gap-3 px-4 py-3 ${isOpen ? 'bg-primary/5' : ''}`}
                 >
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
@@ -747,7 +747,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                     if (e.key === 'ArrowLeft') { e.preventDefault(); nudgeAssistantWidth(24) }
                     if (e.key === 'ArrowRight') { e.preventDefault(); nudgeAssistantWidth(-24) }
                   }}
-                  className="hidden w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-accent focus:bg-accent focus:outline-none lg:block"
+                  className="hidden w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary focus:bg-primary focus:outline-none lg:block"
                 />
                 <aside
                   className="min-h-[280px] w-full shrink-0 border-t border-border lg:min-h-0 lg:w-[var(--assistant-w)] lg:border-t-0"
