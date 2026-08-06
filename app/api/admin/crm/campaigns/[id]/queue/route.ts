@@ -60,11 +60,11 @@ function personName(person: { first_name: string | null; last_name: string | nul
   return fullName || person.email || 'Contact'
 }
 
-async function previewAudience(req: Request, context: Context) {
+async function previewAudience(req: Request, params: Context['params']) {
   const auth = await requireAdmin(req)
   if (auth.err) return auth.err
 
-  const id = (await context.params).id
+  const id = (await params).id
   const parsedId = idSchema.safeParse(id)
   if (!parsedId.success) return NextResponse.json({ error: 'Invalid campaign id' }, { status: 400 })
 
