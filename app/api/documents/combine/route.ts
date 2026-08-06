@@ -8,10 +8,7 @@ import {
   isDocxDocument,
   loadR2Bytes,
 } from '@/lib/documentApiHelpers'
-import {
-  auditDocumentAccess,
-  userCanReadDocument,
-} from '@/lib/documentSecurity'
+import { userCanReadDocument } from '@/lib/documentSecurity'
 import type { MatterDocument } from '@/types/database'
 
 export const runtime = 'nodejs'
@@ -89,21 +86,6 @@ async function combineSelectedDocuments(req: Request) {
   for (const doc of docs) {
     if (!(await userCanReadDocument(admin, user, doc))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
-
-  for (const doc of docs) {
-    const audit = await auditDocumentAccess(admin, user, doc, 'download', {
-      bulk: true,
-      folder: doc.folder,
-      document_name: doc.name,
-      route: '/api/documents/combine',
-    })
-    if (!audit.ok) {
-      return NextResponse.json(
-        { error: 'Audit log write failed; combine aborted' },
-        { status: 500 },
-      )
     }
   }
 

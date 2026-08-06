@@ -614,15 +614,13 @@ export interface DocumentAccessAudit {
   user_id: string | null
   user_email: string | null
   action:
-    | 'view'
-    | 'download'
-    | 'folder_change'
+    | 'share'
+    | 'unshare'
     | 'delete'
-    | 'export'
-    | 'review'
     | 'rename'
-    | 'edit'
+    | 'review'
     | 'convert'
+    | 'edit'
     | 'version'
   metadata: Record<string, unknown>
   created_at: string

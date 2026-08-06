@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auditDocumentAccess, userCanReadDocument } from '@/lib/documentSecurity'
+import { userCanReadDocument } from '@/lib/documentSecurity'
 import { getDocumentApiUser, isDocxDocument, loadR2Bytes } from '@/lib/documentApiHelpers'
 import { extractTrackedChangeIds } from '@/lib/docxTrackedChanges'
 import { loadActiveVersion } from '@/lib/documentVersions'
@@ -26,13 +26,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   if (!isDocxDocument(doc)) {
     return NextResponse.json({ error: 'Not a DOCX document' }, { status: 415 })
-  }
-
-  const audit = await auditDocumentAccess(sb, user, doc, 'view', {
-    route: '/api/documents/[id]/tracked-change-ids',
-  })
-  if (!audit.ok) {
-    return NextResponse.json({ error: 'Audit log write failed; access denied', code: 'audit_failed' }, { status: 503 })
   }
 
   const version = await loadActiveVersion(sb, id, versionId)

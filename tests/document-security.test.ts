@@ -12,14 +12,11 @@
  * rls-coverage.test.ts.
  */
 
-import fs from 'node:fs'
-import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   isAdminUser,
-  isClientVisibleDocument,
-  isClientUploadFolder,
   userCanAccessMatter,
+  userCanReadDocument,
 } from '@/lib/documentSecurity'
 
 // ─── Stub client builder ────────────────────────────────────────────────────
@@ -81,51 +78,6 @@ describe('isAdminUser', () => {
     // `email === ADMIN_EMAIL` would grant admin on a missing user row.
     const sb = stubAdmin({ users: { data: null, error: null } })
     expect(await isAdminUser(sb, { id: 'u1', email: 'scott@aubreylegal.com' })).toBe(false)
-  })
-})
-
-describe('isClientVisibleDocument', () => {
-  it('hides documents whose folder is draft/drafts', () => {
-    expect(isClientVisibleDocument({ folder: 'draft' })).toBe(false)
-    expect(isClientVisibleDocument({ folder: 'Drafts' })).toBe(false)
-    expect(isClientVisibleDocument({ folder: ' DRAFTS ' })).toBe(false)
-  })
-
-  it('shows other folders', () => {
-    expect(isClientVisibleDocument({ folder: 'review' })).toBe(true)
-    expect(isClientVisibleDocument({ folder: 'signed' })).toBe(true)
-    expect(isClientVisibleDocument({ folder: 'final' })).toBe(true)
-    expect(isClientVisibleDocument({ folder: 'intake' })).toBe(true)
-  })
-})
-
-describe('document folder promotion route', () => {
-  it('requires confirmation and audit metadata before drafts become client-visible', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'app/api/documents/[id]/route.ts'), 'utf8')
-
-    expect(source).toContain("const CLIENT_VISIBLE_FOLDERS: ReadonlySet<DocFolder> = new Set(['review', 'signed', 'final', 'intake', 'client'])")
-    expect(source).toContain("const INTERNAL_SOURCE_FOLDERS: ReadonlySet<DocFolder> = new Set(['draft', 'meeting-notes'])")
-    expect(source).toContain('promotionToClientVisible && confirmed !== true')
-    expect(source).toContain("code: 'promotion_not_confirmed'")
-    expect(source).toContain("auditDocumentAccess(sb, user, data, 'folder_change'")
-    expect(source).toContain('from_folder: fromFolder')
-    expect(source).toContain('to_folder: toFolder')
-    expect(source).toContain('promotion_to_client_visible: promotionToClientVisible')
-    expect(source).toContain('confirmation_flag: confirmed === true')
-  })
-})
-
-describe('isClientUploadFolder', () => {
-  it('allows client and intake', () => {
-    expect(isClientUploadFolder('client')).toBe(true)
-    expect(isClientUploadFolder('intake')).toBe(true)
-  })
-  it('rejects everything else', () => {
-    expect(isClientUploadFolder('draft')).toBe(false)
-    expect(isClientUploadFolder('review')).toBe(false)
-    expect(isClientUploadFolder('signed')).toBe(false)
-    expect(isClientUploadFolder('final')).toBe(false)
-    expect(isClientUploadFolder('')).toBe(false)
   })
 })
 
@@ -209,5 +161,47 @@ describe('userCanAccessMatter', () => {
       v_matter_pipeline: { data: { matter_id: 'matter-1', client_email: user.email }, error: null },
     })
     expect(await userCanAccessMatter(sb, user, 'matter-1')).toBe(false)
+  })
+})
+
+describe('userCanReadDocument', () => {
+  const client = { id: 'client-1', email: 'c@example.com', email_confirmed_at: '2026-01-01T00:00:00Z' }
+
+  it('allows an admin to read an unshared document', async () => {
+    const sb = stubAdmin({ users: { data: { role: 'attorney' }, error: null } })
+    const doc = { matter_id: 'm1', shared_at: null, uploaded_by: 'someone-else' }
+    expect(await userCanReadDocument(sb, client, doc)).toBe(true)
+  })
+
+  it('denies a client an unshared document they did not upload', async () => {
+    // The matter itself IS accessible, so the only thing that can deny this
+    // read is shared_at being null on a document the client did not upload.
+    const sb = stubAdmin({
+      users: { data: { role: 'client' }, error: null },
+      matters: [{ data: { id: 'm1' }, error: null }, { data: { id: 'm1' }, error: null }],
+      client_intake: { data: null, error: null },
+    })
+    const doc = { matter_id: 'm1', shared_at: null, uploaded_by: 'someone-else' }
+    expect(await userCanReadDocument(sb, client, doc)).toBe(false)
+  })
+
+  it('allows a client an unshared document they uploaded themselves', async () => {
+    const sb = stubAdmin({
+      users: { data: { role: 'client' }, error: null },
+      matters: [{ data: { id: 'm1' }, error: null }, { data: { id: 'm1' }, error: null }],
+      client_intake: { data: null, error: null },
+    })
+    const doc = { matter_id: 'm1', shared_at: null, uploaded_by: 'client-1' }
+    expect(await userCanReadDocument(sb, client, doc)).toBe(true)
+  })
+
+  it('allows a client a shared document on a matter they own', async () => {
+    const sb = stubAdmin({
+      users: { data: { role: 'client' }, error: null },
+      matters: [{ data: { id: 'm1' }, error: null }, { data: { id: 'm1' }, error: null }],
+      client_intake: { data: null, error: null },
+    })
+    const doc = { matter_id: 'm1', shared_at: '2026-08-01T00:00:00Z', uploaded_by: null }
+    expect(await userCanReadDocument(sb, client, doc)).toBe(true)
   })
 })

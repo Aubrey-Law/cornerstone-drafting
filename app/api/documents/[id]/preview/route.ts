@@ -1,7 +1,7 @@
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { NextResponse } from 'next/server'
 import { getBearerUser } from '@/lib/apiAuth'
-import { auditDocumentAccess, userCanReadDocument } from '@/lib/documentSecurity'
+import { userCanReadDocument } from '@/lib/documentSecurity'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -38,17 +38,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     doc.name.toLowerCase().endsWith('.docx')
   if (!isDocx) {
     return NextResponse.json({ error: 'Preview is only available for DOCX documents' }, { status: 415 })
-  }
-
-  const audit = await auditDocumentAccess(sb, user, doc, 'view', {
-    route: '/api/documents/[id]/preview',
-    preview_type: 'docx-html',
-  })
-  if (!audit.ok) {
-    return NextResponse.json(
-      { error: 'Audit log write failed; access denied', code: 'audit_failed' },
-      { status: 503 },
-    )
   }
 
   try {

@@ -79,13 +79,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = (await req.json().catch(() => null)) as RedlineBody | null
   if (!body) return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
 
-  const audit = await auditDocumentAccess(sb, user, doc, 'edit', {
+  await auditDocumentAccess(sb, user, doc, 'edit', {
     route: '/api/documents/[id]/edits',
     mode: body.instruction ? 'ai' : 'direct',
   })
-  if (!audit.ok) {
-    return NextResponse.json({ error: 'Audit log write failed; access denied', code: 'audit_failed' }, { status: 503 })
-  }
 
   try {
     await ensureInitialVersion({

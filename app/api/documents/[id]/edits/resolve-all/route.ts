@@ -37,14 +37,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ resolved: 0, remaining_pending: 0 })
   }
 
-  const audit = await auditDocumentAccess(sb, user, doc, 'edit', {
+  await auditDocumentAccess(sb, user, doc, 'edit', {
     route: '/api/documents/[id]/edits/resolve-all',
     mode,
     count: pending.length,
   })
-  if (!audit.ok) {
-    return NextResponse.json({ error: 'Audit log write failed; access denied', code: 'audit_failed' }, { status: 503 })
-  }
 
   const version = await loadActiveVersion(sb, id)
   if (!version) return NextResponse.json({ error: 'No active version' }, { status: 404 })

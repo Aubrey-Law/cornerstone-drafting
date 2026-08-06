@@ -54,12 +54,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Only DOCX documents can be converted' }, { status: 415 })
   }
 
-  const audit = await auditDocumentAccess(sb, user, doc, 'convert', {
+  await auditDocumentAccess(sb, user, doc, 'convert', {
     route: '/api/documents/[id]/convert-pdf',
   })
-  if (!audit.ok) {
-    return NextResponse.json({ error: 'Audit log write failed; access denied', code: 'audit_failed' }, { status: 503 })
-  }
 
   try {
     await ensureInitialVersion({
