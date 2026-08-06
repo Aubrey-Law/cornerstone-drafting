@@ -34,11 +34,12 @@ describe('Inbox call triage consolidation', () => {
     expect(sql).toMatch(/max\(occurred_at\) filter \(where needs_response\)/i)
   })
 
-  it('links calls to contacts as well as leads and matters', () => {
-    expect(source('components/calls/AssignCallDialog.tsx')).toMatch(/contactId: id/)
-    const assign = source('app/api/admin/calls/[id]/assign/route.ts')
-    expect(assign).toMatch(/contactId: z\.string/)
-    expect(assign).toMatch(/contact_id: contactId/)
+  it('leaves dismissal as the only triage action on an unlinked call', () => {
+    const inbox = source('app/admin/inbox/InboxClient.tsx')
+    expect(inbox).not.toMatch(/AssignCallDialog/)
+    expect(inbox).not.toMatch(/Link call/)
+    expect(inbox).toMatch(/dismissUnlinkedCall\(selectedCall\)/)
+    expect(fs.existsSync(path.join(process.cwd(), 'components/calls/AssignCallDialog.tsx'))).toBe(false)
   })
 
   it('redirects the retired Calls page into Inbox triage', () => {

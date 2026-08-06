@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Archive, ChevronDown, ChevronRight, Inbox as InboxIcon, MailOpen, PauseCircle, PhoneMissed } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
@@ -24,7 +23,6 @@ import {
 } from '@/components/layout/ResponsiveDetailRail'
 import { CommunicationThread, type ThreadChannelFilter } from '@/components/comms/CommunicationThread'
 import { ConversationRow } from '@/components/comms/ConversationRow'
-import { AssignCallDialog } from '@/components/calls/AssignCallDialog'
 import { CallRow } from '@/components/calls/CallRow'
 import type { LinkedCallRow } from '@/components/calls/types'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
@@ -140,7 +138,6 @@ export function InboxClient({
   smsConfigured,
 }: InboxClientProps) {
   const token = useAccessToken()
-  const router = useRouter()
   const mobile = useIsMobileDetailViewport()
   const [threads, setThreads] = useState(initialThreads)
   const [unlinkedCalls, setUnlinkedCalls] = useState(initialUnlinkedCalls)
@@ -148,7 +145,6 @@ export function InboxClient({
   const [channel, setChannel] = useState<ThreadChannelFilter>(initialChannel)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null)
-  const [assigningCall, setAssigningCall] = useState<LinkedCallRow | null>(null)
   const [dismissingCallId, setDismissingCallId] = useState<string | null>(null)
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false)
   const [items, setItems] = useState<CommunicationItem[]>([])
@@ -567,23 +563,18 @@ export function InboxClient({
             Unlinked call
           </h2>
           <p className="text-xs text-muted-foreground">
-            Link this call to the person or record it belongs to, or dismiss it from triage.
+            This call is not tied to a person or record. Dismiss it once it has been handled.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button type="button" size="sm" onClick={() => setAssigningCall(selectedCall)}>
-            Link call
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={dismissingCallId === selectedCall.id}
-            onClick={() => void dismissUnlinkedCall(selectedCall)}
-          >
-            Dismiss
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={dismissingCallId === selectedCall.id}
+          onClick={() => void dismissUnlinkedCall(selectedCall)}
+        >
+          Dismiss
+        </Button>
       </div>
       <div className="rounded-md border border-border">
         <CallRow call={selectedCall} />
@@ -731,19 +722,6 @@ export function InboxClient({
           activePane
         )}
       </div>
-      {assigningCall ? (
-        <AssignCallDialog
-          call={assigningCall}
-          onClose={() => setAssigningCall(null)}
-          onAssigned={() => {
-            setUnlinkedCalls(previous => previous.filter(call => call.id !== assigningCall.id))
-            setSelectedCallId(null)
-            setAssigningCall(null)
-            setMobileThreadOpen(false)
-            router.refresh()
-          }}
-        />
-      ) : null}
     </AdminPageShell>
   )
 }

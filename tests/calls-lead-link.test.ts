@@ -25,13 +25,12 @@ describe('call lead linking', () => {
     }
   })
 
-  it('exposes calls on lead detail and accepts lead assignment', () => {
+  it('exposes calls on lead detail', () => {
     const page = source('app/admin/leads/[id]/page.tsx')
     const client = source('app/admin/leads/[id]/LeadDetailClient.tsx')
     expect(page).toMatch(/initialCalls=\{calls \?\? \[\]\}/)
     expect(client).toMatch(/<LeadTimelineCard[\s\S]*initialCalls=\{initialCalls\}/)
     expect(client).not.toMatch(/<CallList/)
-    expect(source('app/api/admin/calls/[id]/assign/route.ts')).toMatch(/leadId/)
     expect(source('app/api/admin/leads/[id]/calls/route.ts')).toMatch(/\.eq\('lead_id', leadId\)/)
   })
 })
