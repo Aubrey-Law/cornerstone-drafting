@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Combine,
   Download,
@@ -87,6 +87,7 @@ import { cn, formatDateTime } from '@/lib/utils'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
 import { documentDisplayTitle } from '@/lib/documentDisplayTitle'
+import { useFileDrop } from '@/hooks/useFileDrop'
 
 type Scope = 'all' | 'shared' | 'client'
 
@@ -203,9 +204,9 @@ export function MatterDocumentsTab({
   const allVisibleSelected =
     filteredDocuments.length > 0 && filteredDocuments.every(doc => selectedIds.has(doc.id))
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     await onDocumentsChanged()
-  }
+  }, [onDocumentsChanged])
 
   const toggleSelected = (docId: string, checked: boolean) => {
     setSelectedIds(prev => {
@@ -278,21 +279,33 @@ export function MatterDocumentsTab({
     }
   }
 
-  const handleUpload = async (files: FileList | null) => {
-    const file = files?.[0]
-    if (!file) return
+  const handleUpload = useCallback(async (files: FileList | null) => {
+    const list = Array.from(files ?? [])
+    if (list.length === 0) return
     setUploading(true)
+    // Upload sequentially and count outcomes rather than failing the whole
+    // batch on one bad file — a rejected scan shouldn't discard the others.
+    let uploaded = 0
     try {
-      await uploadDocument(file, matterId)
-      toast.success(`Uploaded ${file.name}`)
-      await refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not upload document')
+      for (const file of list) {
+        try {
+          await uploadDocument(file, matterId)
+          uploaded += 1
+        } catch (error) {
+          toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `Could not upload ${file.name}`)
+        }
+      }
+      if (uploaded > 0) {
+        toast.success(uploaded === 1 ? `Uploaded ${list[0].name}` : `Uploaded ${uploaded} documents`)
+        await refresh()
+      }
     } finally {
       setUploading(false)
       if (uploadInputRef.current) uploadInputRef.current.value = ''
     }
-  }
+  }, [matterId, refresh])
+
+  const { isDragging, dropProps } = useFileDrop(handleUpload, uploading)
 
   const handleRename = async () => {
     const doc = renameTarget
@@ -353,20 +366,38 @@ export function MatterDocumentsTab({
 
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-border bg-card">
+      <section
+        {...dropProps}
+        className={cn(
+          'relative rounded-lg border border-border bg-card transition-colors',
+          isDragging && 'border-primary ring-2 ring-inset ring-primary/40',
+        )}
+      >
+        {isDragging && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-primary/5 backdrop-blur-[1px]"
+          >
+            <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-card px-4 py-2 text-sm font-medium shadow-sm">
+              <Upload className="h-4 w-4 text-primary" />
+              Drop files to upload
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-sm font-semibold">
               {recordLabel === 'lead' ? 'Lead documents' : 'Matter documents'}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Everything filed to this {recordLabel}. Flip the switch to show a document in the client portal.
+              Everything filed to this {recordLabel}. Drag files anywhere onto this panel, or use Upload. Flip the switch to show a document in the client portal.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <input
               ref={uploadInputRef}
               type="file"
+              multiple
               className="hidden"
               onChange={event => void handleUpload(event.target.files)}
             />
