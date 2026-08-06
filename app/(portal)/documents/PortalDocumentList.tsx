@@ -23,23 +23,6 @@ function formatDate(date: string) {
   })
 }
 
-/** Status chip: tells the client whether a document is waiting on them. */
-function documentStatus(doc: MatterDocument): { label: string; className: string } {
-  if (doc.folder === 'review') {
-    return {
-      label: 'Action needed · please review',
-      className: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-    }
-  }
-  if (doc.folder === 'signed' || doc.folder === 'final') {
-    return {
-      label: 'Signed copy · no action needed',
-      className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-    }
-  }
-  return { label: 'Shared document', className: 'bg-muted text-muted-foreground' }
-}
-
 function DocumentRow({
   doc,
   anyPending,
@@ -57,14 +40,11 @@ function DocumentRow({
     <div className="flex flex-col gap-3 border-b border-border p-4 transition-colors last:border-b-0 hover:bg-muted/40 sm:flex-row sm:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-[10px] font-bold uppercase text-muted-foreground">
-          PDF
+          {(doc.name.split('.').pop() ?? 'file').slice(0, 4)}
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <p className="truncate text-sm font-medium text-foreground">{doc.name}</p>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${documentStatus(doc).className}`}>
-              {documentStatus(doc).label}
-            </span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {formatSize(doc.size)} · Shared {formatDate(doc.created_at)}
