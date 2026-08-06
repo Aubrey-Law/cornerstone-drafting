@@ -1,5 +1,3 @@
-import { isClientPortalFirmDocument } from '@/lib/documentSharing'
-import { filterClientVisibleDocuments } from '@/lib/documentSecurity'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { MatterDocument } from '@/types/database'
@@ -12,9 +10,7 @@ import type { MatterDocument } from '@/types/database'
  * did not come out of that ownership check.
  */
 
-/**
- * Firm-shared PDFs in review / signed / final for the client portal.
- */
+/** Everything the firm has shared with the client, newest first. */
 export async function fetchSharedDocuments(matterId: string): Promise<MatterDocument[]> {
   const admin = getAdminClient()
 
@@ -22,18 +18,17 @@ export async function fetchSharedDocuments(matterId: string): Promise<MatterDocu
     .from('matter_documents')
     .select(MATTER_DOCUMENT_COLUMNS)
     .eq('matter_id', matterId)
-    .in('folder', ['review', 'signed', 'final'])
+    .not('shared_at', 'is', null)
     .order('created_at', { ascending: false })
 
   if (error) {
     console.error('fetchSharedDocuments error:', error)
     return []
   }
-  const visible = await filterClientVisibleDocuments(admin, data ?? [])
-  return visible.filter(isClientPortalFirmDocument)
+  return (data ?? []) as MatterDocument[]
 }
 
-/** Documents the client uploaded themselves (folder = 'client'). */
+/** Documents the client uploaded themselves. */
 export async function fetchClientUploads(
   matterId: string,
   userId: string,
@@ -43,7 +38,7 @@ export async function fetchClientUploads(
     .from('matter_documents')
     .select(MATTER_DOCUMENT_COLUMNS)
     .eq('matter_id', matterId)
-    .eq('folder', 'client')
+    .eq('source', 'client')
     .eq('uploaded_by', userId)
     .order('created_at', { ascending: false })
 

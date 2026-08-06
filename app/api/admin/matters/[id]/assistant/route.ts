@@ -48,7 +48,7 @@ async function buildMatterContext(
       .from('matter_documents')
       .select('name, folder, marker_count')
       .eq('matter_id', matterId)
-      .eq('folder', 'draft')
+      .eq('source', 'firm')
       .is('superseded_at', null)
       .limit(20)
     docSummary = (drafts ?? [])

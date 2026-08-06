@@ -511,7 +511,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       .from('matter_documents')
       .select('id, name')
       .eq('matter_id', canonicalMatterId)
-      .eq('folder', 'draft')
+      .eq('source', 'firm')
       .is('superseded_at', null)
     const priorDrafts = (priorDraftRows ?? []) as Array<{ id: string; name: string }>
 

@@ -166,7 +166,7 @@ async function fetchHubDraftRollupsLegacy(
     .from('matter_documents')
     .select('id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by')
     .in('matter_id', matterIds)
-    .eq('folder', 'draft')
+    .eq('source', 'firm')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -401,7 +401,7 @@ export async function fetchDraftingHubMatter(matterId: string): Promise<{
         'id, matter_id, name, size, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by',
       )
       .eq('matter_id', matterId)
-      .eq('folder', 'draft')
+      .eq('source', 'firm')
       .order('created_at', { ascending: false }),
     admin.from('matters').select('id, matter_number').eq('id', matterId).maybeSingle(),
   ])

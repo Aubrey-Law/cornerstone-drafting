@@ -23,7 +23,7 @@ export default async function DraftingWorkspacePage({
     .from('matter_documents')
     .select(MATTER_DOCUMENT_COLUMNS)
     .eq('matter_id', matterId)
-    .eq('folder', 'review')
+    .not('shared_at', 'is', null)
     .order('created_at', { ascending: false })
 
   return (

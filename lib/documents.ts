@@ -295,13 +295,16 @@ export async function getDocumentAuditEvents({
   return (body.events ?? []) as DocumentAccessAudit[]
 }
 
-/** List documents for a matter, optionally filtered by folder. */
-export async function listDocuments(matterId: string, folder?: string): Promise<MatterDocument[]> {
+/** List documents for a matter, optionally filtered by provenance. */
+export async function listDocuments(
+  matterId: string,
+  source?: MatterDocument['source'],
+): Promise<MatterDocument[]> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
 
   const params = new URLSearchParams({ matterId })
-  if (folder) params.set('folder', folder)
+  if (source) params.set('source', source)
 
   const res = await fetch(`/api/documents?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
