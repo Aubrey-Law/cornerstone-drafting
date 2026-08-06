@@ -536,7 +536,10 @@ In `app/api/documents/[id]/versions/route.ts:26-31`, keep the audit call — `'v
 
 Apply the same unwrap to `app/api/documents/[id]/convert-pdf/route.ts` (action `'convert'`), `app/api/documents/[id]/edits/route.ts`, `app/api/documents/[id]/edits/resolve-all/route.ts`, and `app/api/documents/[id]/edits/[editId]/_resolve.ts` (action `'edit'`): drop `const audit = ` and delete the following `if (!audit.ok)` block, leaving a bare `await auditDocumentAccess(...)`.
 
-After this step no file contains the string `audit.ok` or `audit_failed`.
+After this step the only file still containing `audit.ok` / `audit_failed` is
+`app/api/documents/[id]/route.ts`, which has five more such sites. Leave it alone — Task 6
+replaces that file wholesale, and its `'folder_change'` audit becomes `'share'`/`'unshare'`
+there. The grep comes back clean after Task 6, not after this task.
 
 - [ ] **Step 6: Run the tests and check the audit surface**
 
