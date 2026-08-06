@@ -1,8 +1,8 @@
 # Contacts & Fiduciaries
 
-**Section ID:** `contacts-fiduciaries`  
-**UI:** `app/admin/drafting/[matterId]/design/sections/ContactsFiduciariesSection.tsx`  
-**Source files:** `lib/designSheet/fiduciaryDocumentInclusions.ts`, `lib/kinship/relationshipLabels.ts`
+**Section IDs:** `fiduciaries`; legacy readiness/deep-link alias `contacts-fiduciaries`
+**UI:** `app/admin/drafting/[matterId]/design/sections/FiduciariesSection.tsx` and `FiduciaryGrid.tsx`
+**Source files:** `app/admin/drafting/[matterId]/design/sections/fiduciary-blocks.tsx`, `lib/kinship/relationshipLabels.ts`
 
 ## Design sheet fields
 
@@ -29,7 +29,7 @@
 
 ## Generator mapping
 
-Contacts are **not** exported as a list to `EstateGeneratorData`. They resolve `contact_id` values in fiduciary slot arrays during `buildFiduciariesFromDesignSheet()` (`lib/draftPayload/helpers.ts`).
+Contacts are managed from the fiduciary grid's contact roster. The active UI edits names and relationships; some persisted contact-profile and document-inclusion metadata below is retained for payload compatibility but is not currently exposed as roster controls. Contacts are **not** exported as a list to `EstateGeneratorData`; they resolve `contact_id` values in fiduciary slot arrays during `buildFiduciariesFromDesignSheet()` (`lib/draftPayload/helpers.ts`).
 
 Resolved contact fields used today:
 

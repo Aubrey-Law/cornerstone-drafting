@@ -1,18 +1,11 @@
 'use client'
 
 import {
-  useCallback,
   useId,
-  useMemo,
   useState,
   type ReactNode,
 } from 'react'
-import { useRouter } from 'next/navigation'
-import { Check, Loader2, Save, ChevronRight, Plus, Trash2 } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
-import { useAutoSave, type SaveStatus } from '@/hooks/useAutoSave'
-import { useContacts } from '@/hooks/useContacts'
-import { toast } from 'sonner'
+import { Check, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { composedAddressOneLine, wizardStreetLine } from '@/lib/intakeContactAddress'
 import { ContactPickerField } from '@/components/intake/FiduciaryContactPicker'
@@ -41,10 +34,7 @@ import {
   TextInput,
   ToggleSwitch,
 } from '@/components/intake/IntakeFormPrimitives'
-import { StepReferral } from '@/components/intake/IntakeReferralStep'
-import { StepPersonal } from '@/components/intake/IntakePersonalStep'
-import { StepFamily, StepSpouse } from '@/components/intake/IntakeFamilySteps'
-import { StepChildren, type ChildEntry } from '@/components/intake/IntakeChildrenStep'
+import type { ChildEntry } from '@/components/intake/IntakeChildrenStep'
 import {
   INTAKE_ASSET_TOTALS_KEYS,
   INTAKE_ASSET_TYPE_OPTIONS,
@@ -61,7 +51,6 @@ export { StepPersonal } from '@/components/intake/IntakePersonalStep'
 export { StepFamily, StepSpouse } from '@/components/intake/IntakeFamilySteps'
 export { StepChildren, type ChildEntry } from '@/components/intake/IntakeChildrenStep'
 // ─── Brand Colors ──────────────────────────────────────────────
-const NAVY = '#1f2d5a'
 const TEAL = '#1b6b72'
 
 const SUFFIXES = SUFFIX_OPTIONS.map((o) => o.value)
@@ -359,14 +348,6 @@ export interface AdditionalContactEntry {
   [key: string]: unknown
 }
 
-export interface StepDef {
-  id: string
-  title: string
-  subtitle: string
-  timeEstimate: number // minutes
-  condition?: (data: Record<string, unknown>) => boolean
-}
-
 // ─── Step Props ────────────────────────────────────────────────
 export interface StepProps {
   data: Record<string, unknown>
@@ -375,28 +356,6 @@ export interface StepProps {
   publicIntakeToken?: string
 }
 
-// ─── Step Definitions ──────────────────────────────────────────
-export const ALL_STEPS: StepDef[] = [
-  { id: 'referral', title: 'Getting Started', subtitle: 'How did you find us?', timeEstimate: 1 },
-  { id: 'personal', title: 'Personal Information', subtitle: 'Name, contact & address', timeEstimate: 5 },
-  { id: 'family', title: 'Family', subtitle: 'Marital status & dependents', timeEstimate: 2 },
-  { id: 'spouse', title: 'Spouse Information', subtitle: "Spouse's details", timeEstimate: 3, condition: (d) => d.marital_status === 'married' },
-  { id: 'children', title: 'Children', subtitle: "Children's information", timeEstimate: 3, condition: (d) => d.has_children === true },
-  { id: 'estate', title: 'Financial', subtitle: 'Assets & financial overview', timeEstimate: 5 },
-  { id: 'goals', title: 'Goals & Wishes', subtitle: 'Priorities & special wishes', timeEstimate: 4 },
-  {
-    id: 'additional_contacts',
-    title: 'Additional Contacts',
-    subtitle: 'Other people you may name as fiduciaries (optional)',
-    timeEstimate: 3,
-  },
-  { id: 'fiduciaries', title: 'Your Fiduciaries', subtitle: 'Trustees, agents & proxies', timeEstimate: 7 },
-  { id: 'spouse_fiduciaries', title: "Spouse's Fiduciaries", subtitle: "Spouse's trustees & agents", timeEstimate: 5, condition: (d) => d.marital_status === 'married' },
-  { id: 'guardian', title: 'Guardian for Minors', subtitle: 'Care for minor children', timeEstimate: 2, condition: (d) => d.has_minor_children === true },
-  { id: 'review', title: 'Review & Submit', subtitle: 'Confirm & submit', timeEstimate: 2 },
-]
-
-// Step segment groupings (kept for reference)
 // ─── Step Components ───────────────────────────────────────────
 
 // ─── Financial Asset Types & Helpers ──────────────────────────
@@ -1718,368 +1677,5 @@ export function StepReview({
       intakeId={intakeId}
       publicIntakeToken={publicIntakeToken}
     />
-  )
-}
-
-// ─── Save Status Badge ─────────────────────────────────────────
-export function SaveStatusBadge({ status }: { status: SaveStatus }) {
-  return (
-    <div className="flex items-center gap-1.5 text-xs text-gray-500">
-      {status === 'saving' && <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...</>}
-      {status === 'saved' && <><Save className="h-3.5 w-3.5 text-green-500" /> Saved</>}
-      {status === 'dirty' && <><span className="h-2 w-2 rounded-full bg-amber-500" /> Unsaved changes</>}
-      {status === 'error' && <><span className="h-2 w-2 rounded-full bg-red-500" /> Save error</>}
-    </div>
-  )
-}
-
-// ─── Main Wizard ───────────────────────────────────────────────
-export default function IntakeWizard({
-  initialData,
-  intakeId,
-  publicIntakeToken,
-}: {
-  initialData: Record<string, unknown>
-  intakeId: string
-  publicIntakeToken?: string
-}) {
-  const router = useRouter()
-  const [data, setData] = useState<Record<string, unknown>>(() => {
-    const base = { ...initialData }
-
-    // Unpack financial_details JSONB → financial_* top-level keys
-    const fd = base.financial_details as Record<string, unknown> | undefined
-    if (fd && typeof fd === 'object') {
-      for (const [k, v] of Object.entries(fd)) {
-        base[`financial_${k}`] = v
-      }
-      delete base.financial_details
-    }
-
-    // F4a: review_choices is now a top-level column, not nested in
-    // fiduciary_entries. Hydrate the overlay from there first.
-    if (base.review_choices && typeof base.review_choices === 'object') {
-      base._review_choices = base.review_choices
-    }
-
-    // Unpack fiduciary_entries JSONB → _fid_* keys + _children
-    const fe = base.fiduciary_entries as Record<string, unknown> | undefined
-    if (fe && typeof fe === 'object') {
-      for (const [k, v] of Object.entries(fe)) {
-        if (k === 'children') {
-          base._children = v
-        } else if (k === 'additional_contacts') {
-          base._additional_contacts = v
-        } else if (k === 'review_choices') {
-          // Only hydrate from JSONB if the top-level column was empty
-          // (handles legacy rows; new rows use the column).
-          if (!base._review_choices) base._review_choices = v
-        } else {
-          base[`_${k}`] = v   // fid_poa_client → _fid_poa_client
-        }
-      }
-      delete base.fiduciary_entries
-    }
-
-    // Build _spouse from individual spouse_* DB columns (if not already set)
-    if (!base._spouse && (base.spouse_first_name || base.spouse_last_name)) {
-      base._spouse = {
-        first_name:        base.spouse_first_name        ?? '',
-        last_name:         base.spouse_last_name         ?? '',
-        middle_name:       base.spouse_middle_name       ?? '',
-        suffix:            base.spouse_suffix            ?? '',
-        prior_names:       base.spouse_prior_names       ?? '',
-        preferred_name:    base.spouse_preferred_name    ?? '',
-        preferred_pronoun: base.spouse_preferred_pronoun ?? '',
-        date_of_birth:     base.spouse_date_of_birth     ?? '',
-        is_us_citizen:     base.spouse_is_us_citizen     ?? true,
-        phone:             formatPhoneInput(typeof base.spouse_phone === 'string' ? base.spouse_phone : ''),
-        email:             base.spouse_email             ?? '',
-      }
-    }
-
-    if (base.preferred_pronoun == null && base.pronouns != null) {
-      base.preferred_pronoun = base.pronouns
-    }
-
-    return base
-  })
-  const [currentStepIndex, setCurrentStepIndex] = useState(() => {
-    const saved = initialData.current_step as number
-    return saved ? Math.max(0, saved - 1) : 0
-  })
-  const [submitting, setSubmitting] = useState(false)
-
-  const { status: saveStatus, debouncedSave, saveNow } = useAutoSave(intakeId, 1500, publicIntakeToken)
-  const { saveSpouse, saveChildren, saveFiduciaries, saveAdditionalContacts } = useContacts(intakeId)
-
-  // Active steps based on current data conditions
-  const activeSteps = useMemo(
-    () => ALL_STEPS.filter((s) => !s.condition || s.condition(data)),
-    [data]
-  )
-
-  const currentStep = activeSteps[currentStepIndex]
-
-  const update = useCallback(
-    (field: string, value: unknown) => {
-      setData((prev) => {
-        const next = { ...prev, [field]: value }
-        debouncedSave(next)
-        return next
-      })
-    },
-    [debouncedSave]
-  )
-
-  // Save contacts and step on navigation
-  async function persistContactsForStep(stepId: string) {
-    if (stepId === 'spouse' && data._spouse) {
-      await saveSpouse(data._spouse as Record<string, string>)
-    }
-    if (stepId === 'children' && data._children) {
-      await saveChildren(data._children as ChildEntry[])
-    }
-    if (stepId === 'additional_contacts') {
-      await saveAdditionalContacts(((data._additional_contacts as AdditionalContactEntry[]) ?? []))
-    }
-    const fiduciarySteps: Record<string, [string, 'client' | 'spouse'][]> = {
-      fiduciaries: [
-        ['trustee', 'client'],
-        ['personal_rep', 'client'],
-        ['poa', 'client'],
-        ['hcp', 'client'],
-      ],
-      spouse_fiduciaries: [
-        ['personal_rep', 'spouse'],
-        ['poa', 'spouse'],
-        ['hcp', 'spouse'],
-      ],
-      guardian: [['guardian', 'client']],
-    }
-    const roles = fiduciarySteps[stepId]
-    if (roles) {
-      for (const [role, party] of roles) {
-        const key = `_fid_${role}_${party}`
-        const entries = data[key] as FiduciaryEntry[] | undefined
-        if (entries && entries.length > 0) {
-          await saveFiduciaries(entries, role, party)
-        }
-      }
-    }
-  }
-
-  // Persist contacts for every active step. Forward navigation already saves
-  // each step on leave, but submit may happen after editing an earlier step
-  // and jumping ahead — flush all active steps so nothing is left unsaved.
-  // Iterating activeSteps (not every step) avoids persisting stale groups,
-  // e.g. spouse fiduciaries when the client isn't married.
-  async function persistAllContacts() {
-    for (const step of activeSteps) {
-      await persistContactsForStep(step.id)
-    }
-  }
-
-  async function goToStep(index: number) {
-    // Save current step data
-    saveNow({ ...data, current_step: index + 1 })
-    await persistContactsForStep(currentStep.id)
-    setCurrentStepIndex(index)
-  }
-
-  async function handleNext() {
-    if (currentStepIndex < activeSteps.length - 1) {
-      await goToStep(currentStepIndex + 1)
-    }
-  }
-
-  async function handlePrevious() {
-    if (currentStepIndex > 0) {
-      await goToStep(currentStepIndex - 1)
-    }
-  }
-
-  async function handleSubmit() {
-    setSubmitting(true)
-    try {
-      // Save all pending contacts across every active step (not just the
-      // current one) so edits to earlier fiduciary/contact steps can't be
-      // dropped when submitting.
-      await persistAllContacts()
-
-      if (publicIntakeToken) {
-        // Public token path — use the API route with X-Intake-Token header
-        const res = await fetch('/api/intake', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Intake-Token': publicIntakeToken,
-          },
-          body: JSON.stringify({ existingId: intakeId, status: 'submitted' }),
-        })
-        if (!res.ok) {
-          toast.error('Failed to submit questionnaire. Please try again.')
-          setSubmitting(false)
-          return
-        }
-      } else {
-        // Authenticated session path — route through API for consistent matter creation
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session?.access_token) {
-          toast.error('Your session has expired. Please refresh and try again.')
-          setSubmitting(false)
-          return
-        }
-        const res = await fetch('/api/intake', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ existingId: intakeId, status: 'submitted' }),
-        })
-        if (!res.ok) {
-          toast.error('Failed to submit questionnaire. Please try again.')
-          setSubmitting(false)
-          return
-        }
-      }
-
-      router.refresh()
-    } catch {
-      toast.error('An unexpected error occurred.')
-      setSubmitting(false)
-    }
-  }
-
-  // Completed steps (any step before current is considered complete)
-  const completedStepIds = new Set(activeSteps.slice(0, currentStepIndex).map((s) => s.id))
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-8">
-
-        {/* Step indicator */}
-        <div className="mb-8">
-          {/* Per-step progress bars */}
-          <div className="mb-3 flex gap-1">
-            {activeSteps.map((_, i) => (
-              <div
-                key={i}
-                className="h-1 flex-1 rounded-full transition-all duration-200"
-                style={{
-                  background: i < currentStepIndex ? TEAL : i === currentStepIndex ? `${TEAL}99` : '#e5e7eb',
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Step label row */}
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-widest text-gray-400">
-                Step {currentStepIndex + 1} of {activeSteps.length}
-              </p>
-              <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-                {currentStep.title}
-              </h1>
-              {currentStep.subtitle && (
-                <p className="mt-1 text-sm text-gray-500">{currentStep.subtitle}</p>
-              )}
-            </div>
-            <div className="mt-1 shrink-0">
-              <SaveStatusBadge status={saveStatus} />
-            </div>
-          </div>
-        </div>
-
-        {/* Card */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-          {currentStep.id === 'referral' && <StepReferral data={data} update={update} />}
-          {currentStep.id === 'personal' && <StepPersonal data={data} update={update} />}
-          {currentStep.id === 'family' && <StepFamily data={data} update={update} />}
-          {currentStep.id === 'spouse' && <StepSpouse data={data} update={update} />}
-          {currentStep.id === 'children' && <StepChildren data={data} update={update} />}
-          {currentStep.id === 'estate' && <StepEstate data={data} update={update} />}
-          {currentStep.id === 'goals' && <StepGoals data={data} update={update} />}
-          {currentStep.id === 'additional_contacts' && <StepAdditionalContacts data={data} update={update} />}
-          {currentStep.id === 'fiduciaries' && <StepFiduciaries data={data} update={update} intakeId={intakeId} />}
-          {currentStep.id === 'spouse_fiduciaries' && <StepSpouseFiduciaries data={data} update={update} intakeId={intakeId} />}
-          {currentStep.id === 'guardian' && <StepGuardian data={data} update={update} intakeId={intakeId} />}
-          {currentStep.id === 'review' && (
-            <StepReview data={data} intakeId={intakeId} publicIntakeToken={publicIntakeToken} />
-          )}
-
-          {/* Navigation */}
-          <div className="mt-8 flex items-center justify-between border-t border-gray-100 pt-6">
-            <button
-              type="button"
-              onClick={handlePrevious}
-              disabled={currentStepIndex === 0}
-              className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Previous
-            </button>
-
-            {currentStep.id === 'review' ? (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-lg px-6 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
-                style={{ backgroundColor: NAVY }}
-              >
-                {submitting ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</>
-                ) : (
-                  'Submit Questionnaire'
-                )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold text-white transition-colors"
-                style={{ backgroundColor: TEAL }}
-              >
-                Continue
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Clickable step nav — visible on all sizes */}
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          {activeSteps.map((step, idx) => {
-            const isActive = idx === currentStepIndex
-            const isCompleted = completedStepIds.has(step.id)
-            const isClickable = isCompleted || isActive || idx === currentStepIndex + 1
-            return (
-              <button
-                key={step.id}
-                onClick={() => isClickable ? goToStep(idx) : undefined}
-                disabled={!isClickable}
-                title={step.title}
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors',
-                  isActive
-                    ? 'text-white'
-                    : isCompleted
-                      ? 'text-white'
-                      : isClickable
-                        ? 'border border-gray-300 bg-white text-gray-500 hover:border-gray-400'
-                        : 'cursor-default border border-gray-200 bg-white text-gray-300'
-                )}
-                style={isActive ? { backgroundColor: TEAL } : isCompleted ? { backgroundColor: TEAL, opacity: 0.75 } : {}}
-              >
-                {isCompleted && !isActive ? <Check className="h-3.5 w-3.5" /> : idx + 1}
-              </button>
-            )
-          })}
-        </div>
-
-      </div>
-    </div>
   )
 }

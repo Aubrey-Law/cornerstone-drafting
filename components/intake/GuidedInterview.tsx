@@ -32,7 +32,7 @@ import {
   type DesignDocumentInclusions,
   type DesignDocumentKey,
 } from '@/lib/designSheetDocumentInclusions'
-import { unpackInitialData } from './IntakeStepPage'
+import { unpackInitialIntakeData } from '@/lib/intake/unpackInitialData'
 import { GuidedSection } from './GuidedSection'
 import { IntakeQuestionnaireReview } from './IntakeQuestionnaireReview'
 import {
@@ -119,7 +119,7 @@ export default function GuidedInterview({
 }: GuidedInterviewProps) {
   const router = useRouter()
   const isAttorney = mode === 'attorney'
-  const [data, setData] = useState<Record<string, unknown>>(() => unpackInitialData(initialData))
+  const [data, setData] = useState<Record<string, unknown>>(() => unpackInitialIntakeData(initialData))
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const [reviewOpen, setReviewOpen] = useState(false)

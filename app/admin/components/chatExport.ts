@@ -70,14 +70,3 @@ export async function downloadChatAsDocx(messages: FloatingChatMessage[], baseNa
   const blob = new Blob([new Uint8Array(buffer)], { type: DOCX_BLOB_TYPE })
   triggerDownload(blob, `${baseName}.docx`)
 }
-
-export async function downloadSimpleChatAsDocx(
-  messages: Array<{ role: 'user' | 'assistant'; text: string; timestamp?: string }>,
-  baseName: string,
-  title?: string,
-) {
-  const { simpleChatToDocxMessages } = await import('@/lib/chatDocx')
-  const buffer = await buildChatDocxBuffer(simpleChatToDocxMessages(messages), { title })
-  const blob = new Blob([new Uint8Array(buffer)], { type: DOCX_BLOB_TYPE })
-  triggerDownload(blob, `${baseName}.docx`)
-}

@@ -1,7 +1,7 @@
 # Fiduciary Role Assignment
 
 **Section ID:** `fiduciaries`  
-**UI:** `app/admin/drafting/[matterId]/design/sections/FiduciariesSection.tsx` (+ EP/LP subcomponents)  
+**UI:** `app/admin/drafting/[matterId]/design/sections/FiduciariesSection.tsx` with `FiduciaryGrid.tsx`
 **Source files:** `lib/draftPayload/helpers.ts` (`buildFiduciariesFromDesignSheet`, `overlayDesignSheetFiduciarySlots`)
 
 ## Design sheet fields
@@ -89,4 +89,4 @@ Spouse packages swap client/spouse data via `dataForNodeEstatePackage()` in the 
 | **Structured kinship** on contacts | Not on fiduciary JSON paths |
 | **Fiduciary display toggles** | Phone/address/email not on `fiduciaries.*` objects |
 | Temporary guardian | Slots supported (primary + co + alternates); `temporary-delegation-parental-powers` uses `guardians.temporary` / `temporary_co` |
-| LP practice area | `FiduciariesSectionLP` uses separate `lp_design_sheet_data` — not in standard EP generator path |
+| LP practice area | The unified section receives `lpData`; the standard EP generator path remains separate. |

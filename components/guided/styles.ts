@@ -6,12 +6,6 @@ export const guidedPageStyle: CSSProperties = {
   padding: '26px 20px 60px',
 }
 
-export const guidedEmbeddedPageStyle: CSSProperties = {
-  minHeight: '100%',
-  background: 'var(--gi-page)',
-  padding: '20px 16px 40px',
-}
-
 export const guidedCardStyle: CSSProperties = {
   background: 'var(--gi-surface)',
   border: '1px solid var(--gi-border)',
@@ -26,22 +20,6 @@ export const guidedKickerStyle: CSSProperties = {
   textTransform: 'uppercase',
   color: 'var(--gi-faint)',
   marginBottom: 3,
-}
-
-export const guidedSubLabelStyle: CSSProperties = {
-  font: '600 11px/1.4 var(--gi-sans)',
-  color: 'var(--gi-muted)',
-  marginBottom: 6,
-}
-
-export const guidedPillStyle: CSSProperties = {
-  display: 'inline-block',
-  font: '600 12px/1.3 var(--gi-sans)',
-  color: 'var(--gi-teal)',
-  background: 'rgba(26,107,114,.1)',
-  border: '1px solid rgba(26,107,114,.3)',
-  padding: '6px 11px',
-  borderRadius: 999,
 }
 
 export const guidedPrimaryButtonStyle: CSSProperties = {

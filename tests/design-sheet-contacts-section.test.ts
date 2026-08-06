@@ -76,17 +76,7 @@ describe('design sheet contacts UI cleanup', () => {
     expect(trustDetails).toContain('spouse_trust_name')
   })
 
-  it('adds Statular-style contacts and fiduciaries section', () => {
-    const section = fs.readFileSync(
-      path.join(designRoot, 'sections/ContactsFiduciariesSection.tsx'),
-      'utf8',
-    )
-    expect(section).toContain('All Fiduciaries and Decisionmakers')
-    expect(section).toContain('FIDUCIARY_DOCUMENT_INCLUSION_OPTIONS')
-    expect(section).toContain('Add Fiduciary')
-    expect(section).toContain('Add Beneficiary')
-    expect(section).toContain('All Beneficiaries')
-
+  it('uses the unified fiduciaries section and removes the superseded implementation', () => {
     const catalog = fs.readFileSync(
       path.join(designRoot, 'designSectionCatalog.tsx'),
       'utf8',
@@ -94,6 +84,9 @@ describe('design sheet contacts UI cleanup', () => {
     expect(catalog).toContain('DESIGN_SECTION_IDS.fiduciaries')
     expect(catalog).toContain('<FiduciariesSection')
     expect(catalog).not.toContain('<ContactsFiduciariesSection')
+    expect(fs.existsSync(
+      path.join(designRoot, 'sections/ContactsFiduciariesSection.tsx'),
+    )).toBe(false)
   })
 
   it('registers contacts section in readiness labels', () => {
