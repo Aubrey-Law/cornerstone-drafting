@@ -18,6 +18,7 @@ import {
   PanelLeft,
   PanelRight,
   Phone,
+  Send,
   ReceiptText,
   Settings,
   Sparkles,
@@ -64,6 +65,8 @@ export const adminNavItems: { href: string; label: string; icon: React.ElementTy
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
   { href: '/admin', label: 'Today', icon: Sun, exact: true },
   { href: '/admin/leads', label: 'Leads', icon: UserPlus },
+  { href: '/admin/crm', label: 'CRM', icon: Send },
+  { href: '/admin/crm/campaigns', label: 'Campaigns', icon: Mail },
   { href: '/admin/inbox', label: 'Inbox', icon: Mail },
   { href: '/admin/matters', label: 'Matters', icon: Briefcase },
   { href: '/admin/contacts', label: 'Contacts', icon: BookUser },
