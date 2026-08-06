@@ -142,10 +142,30 @@ export interface MatterDetailsRow {
 
   // ── Status + Legal Plan ──
   matter_status?: string | null
+  /** Display name derived from `billing_type` — never an independent answer. */
   legal_plan?: string | null
   legal_plan_id?: string | null
   legal_plan_type?: string | null
   legal_plan_service_start?: string | null
   legal_plan_service_end?: string | null
   client_status?: string | null
+
+  // ── V3 — Matter page schema coverage ──
+  // See supabase/migrations/20260903000000_matter_page_schema_coverage.sql.
+  /** Free text behind the "Other" option on the referral picklist. */
+  referral_source_other?: string | null
+  ep_has_real_estate?: boolean | null
+  ep_has_pets?: boolean | null
+  ep_anticipated_inheritance?: boolean | null
+  ep_accounts_retitled?: boolean | null
+  legal_plan_member_id?: string | null
+  claim_amount?: number | null
+  claim_submitted_date?: string | null
+  reimbursement_received_date?: string | null
+  payment_link_sent_at?: string | null
+  work_started_date?: string | null
+  work_finished_date?: string | null
+  closing_package_sent_date?: string | null
+  /** Drives the header pill and the weekly ops board. */
+  next_action_date?: string | null
 }

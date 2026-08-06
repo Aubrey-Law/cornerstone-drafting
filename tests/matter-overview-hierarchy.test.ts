@@ -17,7 +17,8 @@ describe('matter overview hierarchy', () => {
 
     expect(client).toContain('>People</TabsTrigger>')
     expect(client).toContain('>Assets</TabsTrigger>')
-    expect(client).toContain('>Documents</TabsTrigger>')
+    expect(client).toContain('>People</TabsTrigger>')
+    expect(client).toMatch(/Documents\s*\n\s*\{unreviewedUploadCounts\.total > 0/)
     expect(client).not.toContain('People {contacts.length}')
     expect(client).not.toContain('Assets {initialEstateSnapshot.assetCount}')
     expect(client).not.toContain('Documents {documents.length}')
@@ -28,7 +29,7 @@ describe('matter overview hierarchy', () => {
   })
 
   it('uses read-first editable panels and exposes persistent save state', () => {
-    const essentials = fs.readFileSync(path.join(matterDir, 'MatterEssentialsCard.tsx'), 'utf8')
+    const essentials = fs.readFileSync(path.join(matterDir, 'MatterDetailsCard.tsx'), 'utf8')
     const saveHook = fs.readFileSync(path.join(matterDir, 'useMatterDetailsSave.ts'), 'utf8')
 
     expect(essentials).toContain('ReadFirstPanel')

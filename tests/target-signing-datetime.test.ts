@@ -5,7 +5,7 @@ const read = (path: string) => fs.readFileSync(path, 'utf8')
 
 describe('target signing date', () => {
   it('uses separate date-only controls for target and actual signing', () => {
-    const card = read('app/admin/matters/[id]/MatterEssentialsCard.tsx')
+    const card = read('app/admin/matters/[id]/MatterDetailsCard.tsx')
     expect(card).toContain('<FieldLabel>Target signing date</FieldLabel>')
     expect(card).toContain('type="date"')
     expect(card).toContain("'scheduled_signing_date'")

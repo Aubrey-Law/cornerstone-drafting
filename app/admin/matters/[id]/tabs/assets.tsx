@@ -12,6 +12,8 @@ import { AssetTable } from '@/components/assets/AssetTable'
 import { BulkAssetsDialog } from '@/components/assets/BulkAssetsDialog'
 import { AssetFormDialog } from '@/components/assets/AssetFormDialog'
 import { computeAssetAggregates, groupAssetsByCategory } from '@/lib/assets/aggregates'
+import { computeMatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
+import { EstateTaxExposureCard } from '@/components/assets/EstateTaxExposureCard'
 import { ASSET_CATEGORIES, ASSET_CHART_COLORS } from '@/lib/assets/categories'
 import { buildOwnershipLabels } from '@/lib/assets/labels'
 import type { AssetIntakeInput, AssetIntakeRow } from '@/types/assetIntake'
@@ -27,6 +29,9 @@ interface MatterAssetsTabProps {
   accessToken: string | null
   enabled?: boolean
   onAssetCountChange?: (count: number) => void
+  /** matter_details.ep_anticipated_inheritance, and how to write it. */
+  anticipatedInheritance?: boolean
+  onAnticipatedInheritanceChange?: (next: boolean) => void
 }
 
 function MatterAssetsTabImpl({
@@ -38,6 +43,8 @@ function MatterAssetsTabImpl({
   accessToken,
   enabled = true,
   onAssetCountChange,
+  anticipatedInheritance = false,
+  onAnticipatedInheritanceChange,
 }: MatterAssetsTabProps) {
   const [filter, setFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
@@ -74,6 +81,16 @@ function MatterAssetsTabImpl({
   }, [maritalStatus, spouseName])
 
   const aggregates = useMemo(() => computeAssetAggregates(assets), [assets])
+  // The same computation the rail tiles read, so the two never disagree.
+  const estate = useMemo(
+    () => computeMatterEstateSnapshot(assets.map(asset => ({
+      category: asset.category,
+      value: asset.value,
+      details: asset.details as Record<string, unknown> | null,
+      updated_at: asset.updated_at,
+    }))),
+    [assets],
+  )
   const groups = useMemo(
     () => groupAssetsByCategory(assets, filter === 'all' ? null : filter),
     [assets, filter],
@@ -282,6 +299,12 @@ function MatterAssetsTabImpl({
         </div>
       ) : (
         <>
+          <EstateTaxExposureCard
+            estate={estate}
+            anticipatedInheritance={anticipatedInheritance}
+            onAnticipatedInheritanceChange={next => onAnticipatedInheritanceChange?.(next)}
+          />
+
           <div className="grid gap-6 rounded-lg border border-border bg-card p-4 md:grid-cols-3 md:p-6">
             <AssetPortfolioSummary aggregates={aggregates} married={marriedForTax} />
             <AssetDonutChart title="Asset allocation" segments={allocationSegments} />

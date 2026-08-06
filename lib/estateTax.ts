@@ -35,6 +35,16 @@ export function calculateMAEstateTax(grossEstate: number): number {
   return Math.max(0, tentativeTax(adjusted) - 99600)
 }
 
+/**
+ * The same tax, with a credit-shelter plan in place. A two-trust plan parks the
+ * first spouse's $2,000,000 exemption in the shelter trust, so only what is
+ * left is taxed at the second death. Reuses the credit table above rather than
+ * restating any of it.
+ */
+export function calculateMAEstateTaxWithCreditShelter(grossEstate: number): number {
+  return calculateMAEstateTax(Math.max(0, grossEstate - MA_ESTATE_TAX_EXEMPTION))
+}
+
 /** IRS basic exclusion amount (indexed annually). 2025 figure. */
 export const FEDERAL_ESTATE_TAX_EXEMPTION = 13_990_000
 export const FEDERAL_ESTATE_TAX_RATE = 0.40

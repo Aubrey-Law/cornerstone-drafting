@@ -23,12 +23,15 @@ import {
 import { CallPhoneLink } from '@/components/phone/CallPhoneLink'
 import { cn } from '@/lib/utils'
 import type { MatterAgingSummary } from '@/lib/queries/matterOverview'
+import { presentNextAction } from '@/lib/matter/nextActionDate'
 import { stageGroupColor, stageLabel, type PipelineMatter } from '@/types/database'
 
 interface MatterDetailHeaderProps {
   matter: PipelineMatter
   matterNumber: string | null
   agingSummary: MatterAgingSummary | null
+  /** matter_details.next_action_date — the attorney's own "come back to me". */
+  nextActionDate?: string | null
   intakeCompleted: boolean
   intakeId: string | null
   unlocking: boolean
@@ -76,6 +79,7 @@ export function MatterDetailHeader({
   matter,
   matterNumber,
   agingSummary,
+  nextActionDate = null,
   intakeCompleted,
   intakeId,
   unlocking,
@@ -90,6 +94,7 @@ export function MatterDetailHeader({
   onDelete,
 }: MatterDetailHeaderProps) {
   const health = showHealthBadge ? healthPresentation(agingSummary) : null
+  const nextAction = presentNextAction(nextActionDate)
   const stageColors = stageGroupColor(matter.stage)
   const clientName = matter.client_name || matter.matter_name || 'Matter'
 
@@ -127,6 +132,19 @@ export function MatterDetailHeader({
         {health && (
           <Badge variant="outline" className={cn('shrink-0 text-[10px]', health.className)}>
             {health.label}
+          </Badge>
+        )}
+        {nextAction && (
+          <Badge
+            variant="outline"
+            title={`Next action ${nextAction.date}`}
+            className={cn(
+              'hidden shrink-0 text-[10px] lg:inline-flex',
+              nextAction.tone === 'overdue' && 'border-red-strong-border bg-red-strong-bg text-red-strong',
+              nextAction.tone === 'today' && 'border-amber-border bg-amber-bg text-amber',
+            )}
+          >
+            {nextAction.label}
           </Badge>
         )}
       </div>

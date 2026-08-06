@@ -15,9 +15,18 @@ interface Props {
   matter: PipelineMatter
   intakeId: string | null
   enabled?: boolean
+  anticipatedInheritance?: boolean
+  onAnticipatedInheritanceChange?: (next: boolean) => void
 }
 
-export function MatterOverviewAssets({ matterId, matter, intakeId, enabled = true }: Props) {
+export function MatterOverviewAssets({
+  matterId,
+  matter,
+  intakeId,
+  enabled = true,
+  anticipatedInheritance = false,
+  onAnticipatedInheritanceChange,
+}: Props) {
   const token = useAccessToken()
 
   return (
@@ -36,14 +45,21 @@ export function MatterOverviewAssets({ matterId, matter, intakeId, enabled = tru
         maritalStatus={matter.marital_status}
         accessToken={token}
         enabled={enabled}
+        anticipatedInheritance={anticipatedInheritance}
+        onAnticipatedInheritanceChange={onAnticipatedInheritanceChange}
       />
     </section>
   )
 }
 
-export function MatterAssetsTabContent({ matterId, matter, intakeId, enabled = true }: Props) {
-  const token = useAccessToken()
-
+export function MatterAssetsTabContent({
+  matterId,
+  matter,
+  intakeId,
+  enabled = true,
+  anticipatedInheritance = false,
+  onAnticipatedInheritanceChange,
+}: Props) {
   return (
     <TabsContent value="assets" className="space-y-4">
       <MatterOverviewAssets
@@ -51,6 +67,8 @@ export function MatterAssetsTabContent({ matterId, matter, intakeId, enabled = t
         matter={matter}
         intakeId={intakeId}
         enabled={enabled}
+        anticipatedInheritance={anticipatedInheritance}
+        onAnticipatedInheritanceChange={onAnticipatedInheritanceChange}
       />
     </TabsContent>
   )

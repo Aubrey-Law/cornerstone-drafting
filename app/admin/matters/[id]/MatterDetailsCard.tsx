@@ -19,14 +19,13 @@ import {
   engagementStatusLabel,
 } from '@/lib/engagementStatus'
 import { designPlanTypeLabel } from '@/lib/designPlanType'
-import { MATTER_PLAN_TYPE_OPTIONS, normalizePlanType } from '@/lib/matterPlanType'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { normalizeTargetSigningDate, targetSigningDateInput } from '@/lib/matterDates'
 import { MATTER_STATUSES, type MatterStatus, type PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import { ReadFirstPanel, ReadValue } from './ReadFirstPanel'
 
-interface MatterEssentialsCardProps {
+interface MatterDetailsCardProps {
   matter: PipelineMatter
   matterId: string
   matterNumber: string | null
@@ -73,7 +72,7 @@ function paymentStatus(details: MatterDetailsRow | null) {
   return 'Unpaid'
 }
 
-export function MatterEssentialsCard({
+export function MatterDetailsCard({
   matter,
   matterId,
   matterNumber,
@@ -91,16 +90,13 @@ export function MatterEssentialsCard({
   engagementSending = false,
   onSendEngagement,
   onDraftEngagement,
-}: MatterEssentialsCardProps) {
+}: MatterDetailsCardProps) {
   const [generatingNumber, setGeneratingNumber] = useState(false)
   const [numberIsManual, setNumberIsManual] = useState(matterNumberManual)
   const engagementStatus = deriveEngagementStatus(details)
-  const matterPlanType = normalizePlanType(details?.plan_type ?? matter.plan_type ?? 'TBD')
   const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
   const actualSigningDate = matter.signing_date ?? details?.signing_date ?? null
-  const planLabel = designSheetPlanType
-    ? designPlanTypeLabel(designSheetPlanType)
-    : MATTER_PLAN_TYPE_OPTIONS.find(option => option.value === matterPlanType)?.label ?? matterPlanType
+  const planLabel = designSheetPlanType ? designPlanTypeLabel(designSheetPlanType) : '—'
 
   const generateMatterNumber = async () => {
     setGeneratingNumber(true)
@@ -138,7 +134,7 @@ export function MatterEssentialsCard({
 
   return (
     <ReadFirstPanel
-      title="Matter essentials"
+      title="Matter details"
       readView={readView}
       savingField={savingField}
       lastSavedAt={lastSavedAt}
@@ -204,16 +200,10 @@ export function MatterEssentialsCard({
           />
         </label>
 
+        {/* Plan composition belongs to the design sheet — shown, never edited here. */}
         <div className="space-y-1.5">
           <FieldLabel>Plan composition</FieldLabel>
-          <Select value={matterPlanType} onValueChange={value => void onSaveField('plan_type', value)}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {MATTER_PLAN_TYPE_OPTIONS.map(option => (
-                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <p className="flex h-9 items-center text-sm font-medium">{planLabel}</p>
           <Link className="text-xs font-medium text-accent hover:underline" href={`/admin/drafting/${matterId}?step=design`}>
             Open design sheet
           </Link>

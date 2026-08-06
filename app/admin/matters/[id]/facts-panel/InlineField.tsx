@@ -175,20 +175,32 @@ export function InlineDate({
   label,
   value,
   emphasized = false,
+  derived = false,
   onSave,
 }: {
   label: string
   /** `YYYY-MM-DD`, or empty when unset. */
   value: string
   emphasized?: boolean
+  /** The shown value came from another date, not from a stored column. */
+  derived?: boolean
   onSave: (next: string) => void | Promise<void>
 }) {
   return (
     <div className={cn(ROW, 'hover:bg-muted')}>
-      <span className={cn(LABEL, emphasized && 'font-semibold text-foreground')}>{label}</span>
+      <span className={cn(LABEL, emphasized && 'font-semibold text-foreground')}>
+        {label}
+        {derived && (
+          <span className="ml-1 text-[9.5px] font-semibold uppercase tracking-[.05em] text-accent">
+            auto
+          </span>
+        )}
+      </span>
       <input
         type="date"
         aria-label={label}
+        // Keyed on the value so a derived date re-renders when its anchor moves.
+        key={value}
         defaultValue={value}
         onBlur={event => {
           if (event.target.value !== value) void onSave(event.target.value)

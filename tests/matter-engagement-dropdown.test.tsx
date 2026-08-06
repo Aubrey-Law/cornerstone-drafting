@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { MatterEssentialsCard } from '@/app/admin/matters/[id]/MatterEssentialsCard'
+import { MatterDetailsCard } from '@/app/admin/matters/[id]/MatterDetailsCard'
 import type { PipelineMatter } from '@/types/database'
 
 if (!HTMLElement.prototype.hasPointerCapture) {
@@ -26,7 +26,7 @@ const matter = {
 
 function renderCard(details: Record<string, unknown> | null, onSaveField = vi.fn()) {
   render(
-    <MatterEssentialsCard
+    <MatterDetailsCard
       matter={matter}
       matterId="m1"
       matterNumber={null}

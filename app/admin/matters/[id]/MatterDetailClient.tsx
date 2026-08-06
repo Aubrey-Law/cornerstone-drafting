@@ -18,6 +18,8 @@ import {
   type PipelineMatter,
 } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
+import type { MarketingConsentStatus } from '@/lib/crm/consent'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -63,14 +65,12 @@ import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { MatterOverviewHero } from './MatterOverviewHero'
-import { MatterEssentialsCard } from './MatterEssentialsCard'
-import { MatterLegalPlanCard } from './MatterLegalPlanCard'
+import { MatterDetailsCard } from './MatterDetailsCard'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
 import { useMatterDetailsSave } from './useMatterDetailsSave'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { MatterActivityTab } from './MatterActivityTab'
 import { MatterAssetsTabContent } from './MatterOverviewAssets'
-import { MatterPortalUploadsCard } from './MatterPortalUploadsCard'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { MatterProgressTimeline } from './MatterProgressTimeline'
@@ -123,6 +123,8 @@ interface MatterDetailClientProps {
   matterNumberManual?: boolean
   matterDetails?: MatterDetailsRow | null
   designSheetPlanType?: string | null
+  planMirror?: MatterPlanMirror
+  marketingConsent?: MarketingConsentStatus
   initialEstateSnapshot: MatterEstateSnapshot
   initialNotes?: MatterNoteRow[]
   initialLeadNotes?: Array<{ id: string; lead_id: string; body: string; created_at: string; note_type: 'internal' | 'system' }>
@@ -172,6 +174,8 @@ function MatterDetailClientInner({
   matterNumberManual = false,
   matterDetails: initialMatterDetails = null,
   designSheetPlanType = null,
+  planMirror = EMPTY_PLAN_MIRROR,
+  marketingConsent = 'unknown',
   initialEstateSnapshot,
   initialNotes = [],
   initialLeadNotes = [],
@@ -210,7 +214,6 @@ function MatterDetailClientInner({
   const [deleting, setDeleting] = useState(false)
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
   const [unlocking, setUnlocking] = useState(false)
-  const [portalUploadsOpen, setPortalUploadsOpen] = useState(false)
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
@@ -288,7 +291,6 @@ function MatterDetailClientInner({
   )
 
   const practiceArea = normalizePracticeArea(matterDetails?.practice_area ?? matter.practice_area)
-  const showLegalPlan = practiceArea === 'EP-LP'
   const showProbate = practiceArea === 'Probate'
 
   const setActiveTab = useCallback((
@@ -484,19 +486,17 @@ function MatterDetailClientInner({
     }
   }, [handleMarkIntakeUploadsReviewed, liveIntakeId, matterId])
 
+  // Portal uploads now live on the Documents tab behind its Unreviewed filter,
+  // so reviewing them is a tab switch rather than a card on Overview.
   const handleReviewUploads = useCallback(() => {
     if (unreviewedUploadCounts.intake > 0) {
       void openIntakeSheet()
       return
     }
     if (unreviewedUploadCounts.portal > 0) {
-      setPortalUploadsOpen(true)
-      void handleMarkPortalUploadsReviewed()
-      window.requestAnimationFrame(() => {
-        document.getElementById('portal-uploads')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
+      setActiveTab('documents')
     }
-  }, [handleMarkPortalUploadsReviewed, openIntakeSheet, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
+  }, [openIntakeSheet, setActiveTab, unreviewedUploadCounts.intake, unreviewedUploadCounts.portal])
 
   const handleStatusChange = async (status: MatterStatus) => {
     if (!token || status === (matter.status ?? 'active')) return
@@ -521,7 +521,7 @@ function MatterDetailClientInner({
     }
   }
 
-  const handleStageChange = async (stage: MatterStage) => {
+  const handleStageChange = useCallback(async (stage: MatterStage) => {
     if (!token || stage === matter.stage) return
     setStageSaving(true)
     const previous = matter.stage
@@ -545,7 +545,23 @@ function MatterDetailClientInner({
     } finally {
       setStageSaving(false)
     }
-  }
+  }, [matter.stage, router, token])
+
+  const [closingMatter, setClosingMatter] = useState(false)
+  /**
+   * Close-out stamps the date and moves the stage in one action, so a matter
+   * can never sit at `closed` with no closed_date (or the reverse).
+   */
+  const handleCloseMatter = useCallback(async () => {
+    if (closingMatter) return
+    setClosingMatter(true)
+    try {
+      await handleSaveMatterDetailField('closed_date', new Date().toISOString().slice(0, 10))
+      await handleStageChange('closed')
+    } finally {
+      setClosingMatter(false)
+    }
+  }, [closingMatter, handleSaveMatterDetailField, handleStageChange])
 
   const handleSendIntake = async () => {
     if (!token) {
@@ -679,6 +695,15 @@ function MatterDetailClientInner({
       ),
     [matter, matterDetails, esignEnabled, reviewFlags],
   )
+  // max(communications.created_at) — the rail's quiet chip is derived from the
+  // same timeline the Communications tab shows, never a stored column.
+  const lastContactAt = useMemo(
+    () => communicationItems.reduce<string | null>(
+      (latest, item) => (!latest || item.created_at > latest ? item.created_at : latest),
+      null,
+    ),
+    [communicationItems],
+  )
   const unreadPortalCount = useMemo(
     () => portalMessages.filter(m => m.sender_role === 'client' && !m.read_at).length,
     [portalMessages],
@@ -721,6 +746,7 @@ function MatterDetailClientInner({
         matter={matter}
         matterNumber={matterNum}
         agingSummary={agingSummary}
+        nextActionDate={matterDetails?.next_action_date ?? null}
         intakeCompleted={intakeCompleted}
         intakeId={liveIntakeId}
         unlocking={unlocking}
@@ -765,6 +791,9 @@ function MatterDetailClientInner({
             matterId={matterId}
             details={matterDetails}
             designSheetPlanType={designSheetPlanType}
+            planMirror={planMirror}
+            marketingConsent={marketingConsent}
+            lastContactAt={lastContactAt}
             estate={initialEstateSnapshot}
             readinessItems={readinessItems}
             activity={activity}
@@ -820,7 +849,14 @@ function MatterDetailClientInner({
                 <TabsTrigger value="sla">SLA plan</TabsTrigger>
                 <TabsTrigger value="people">People</TabsTrigger>
                 <TabsTrigger value="assets">Assets</TabsTrigger>
-                <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="documents" className="gap-1.5">
+                  Documents
+                  {unreviewedUploadCounts.total > 0 && (
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] tabular-nums">
+                      {unreviewedUploadCounts.total}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="billing">Billing</TabsTrigger>
                 <TabsTrigger value="communications" className="gap-1.5">
                   Communications
@@ -843,9 +879,30 @@ function MatterDetailClientInner({
                   details={matterDetails}
                   intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
                 />
-                <MarketingProfileCard intakeId={liveIntakeId} />
+                {/* Matter details leads the tab: the standing facts come before
+                    the next action that depends on them. */}
+                <MatterDetailsCard
+                  matter={matter}
+                  matterId={matterId}
+                  matterNumber={matterNum}
+                  matterNumberManual={matterNumberManual}
+                  matterStatus={matter.status ?? 'active'}
+                  onStatusChange={status => void handleStatusChange(status)}
+                  statusSaving={statusSaving}
+                  details={matterDetails}
+                  designSheetPlanType={designSheetPlanType}
+                  onSaveField={handleSaveMatterDetailField}
+                  savingField={savingField}
+                  lastSavedAt={lastSavedAt}
+                  error={matterDetailsError}
+                  esignEnabled={esignEnabled}
+                  engagementSending={sendingEngagement}
+                  onSendEngagement={() => void handleSendEngagement()}
+                  onDraftEngagement={() => void handleDraftEngagement()}
+                />
                 <MatterOverviewHero
                   matter={matter}
+                  details={matterDetails}
                   nextAction={nextAction}
                   unreadPortalCount={unreadPortalCount}
                   unreviewedUploadCounts={unreviewedUploadCounts}
@@ -877,34 +934,6 @@ function MatterDetailClientInner({
                   onSendIntake={() => void handleSendIntake()}
                   onCopyIntakeUrl={() => void copyIntakeUrl()}
                 />
-                <MatterEssentialsCard
-                  matter={matter}
-                  matterId={matterId}
-                  matterNumber={matterNum}
-                  matterNumberManual={matterNumberManual}
-                  matterStatus={matter.status ?? 'active'}
-                  onStatusChange={status => void handleStatusChange(status)}
-                  statusSaving={statusSaving}
-                  details={matterDetails}
-                  designSheetPlanType={designSheetPlanType}
-                  onSaveField={handleSaveMatterDetailField}
-                  savingField={savingField}
-                  lastSavedAt={lastSavedAt}
-                  error={matterDetailsError}
-                  esignEnabled={esignEnabled}
-                  engagementSending={sendingEngagement}
-                  onSendEngagement={() => void handleSendEngagement()}
-                  onDraftEngagement={() => void handleDraftEngagement()}
-                />
-                {showLegalPlan && (
-                  <MatterLegalPlanCard
-                    details={matterDetails}
-                    onSaveField={handleSaveMatterDetailField}
-                    savingField={savingField}
-                    lastSavedAt={lastSavedAt}
-                    error={matterDetailsError}
-                  />
-                )}
                 {showProbate && (
                   <MatterProbateEssentialsCard
                     details={matterDetails}
@@ -922,12 +951,6 @@ function MatterDetailClientInner({
                     />
                   </div>
                 )}
-                <MatterPortalUploadsCard
-                  matterId={matterId}
-                  open={portalUploadsOpen}
-                  onOpenChange={setPortalUploadsOpen}
-                  onOpened={() => void handleMarkPortalUploadsReviewed()}
-                />
                 </div>
               </TabsContent>
 
@@ -947,6 +970,7 @@ function MatterDetailClientInner({
                 matterId={matterId}
                 matter={matter}
                 initialContacts={contacts}
+                planMirror={planMirror}
               />
 
               <MatterAssetsTabContent
@@ -954,6 +978,9 @@ function MatterDetailClientInner({
                 matter={matter}
                 intakeId={liveIntakeId}
                 enabled={assetsTabVisited}
+                anticipatedInheritance={Boolean(matterDetails?.ep_anticipated_inheritance)}
+                onAnticipatedInheritanceChange={next =>
+                  void handleSaveMatterDetailField('ep_anticipated_inheritance', next)}
               />
 
               <TabsContent value="documents" className="space-y-4">
@@ -970,7 +997,15 @@ function MatterDetailClientInner({
                 />
               </TabsContent>
 
-              <MatterBillingTab matterId={matterId} enabled={billingTabVisited} />
+              <MatterBillingTab
+                matterId={matterId}
+                enabled={billingTabVisited}
+                details={matterDetails}
+                onSaveField={handleSaveMatterDetailField}
+                onCloseMatter={handleCloseMatter}
+                closing={closingMatter}
+                alreadyClosed={matter.stage === 'closed'}
+              />
 
               <MatterCommunicationsTab
                 matterId={matter.matter_id}
@@ -999,6 +1034,8 @@ function MatterDetailClientInner({
                 onSendEmail={() => void sendEmail()}
                 onSendSchedulingLink={() => setSchedulingLinkOpen(true)}
                 onBookForClient={() => setBookForClientOpen(true)}
+                marketingConsent={marketingConsent}
+                marketingCard={<MarketingProfileCard intakeId={liveIntakeId} />}
               />
 
               <MatterNotesTab

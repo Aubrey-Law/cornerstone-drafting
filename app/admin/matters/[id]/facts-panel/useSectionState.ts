@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 
 export const FACTS_PANEL_SECTION_STORAGE_KEY = 'al.matterRail.openSections.v1'
 
-export type FactsPanelSection = 'contact' | 'spouse' | 'matter' | 'dates' | 'notes' | 'activity'
+export type FactsPanelSection =
+  | 'contact' | 'spouse' | 'matter' | 'flags' | 'dates' | 'notes' | 'activity'
 
 export type SectionState = Record<FactsPanelSection, boolean>
 
@@ -12,6 +13,7 @@ export const DEFAULT_SECTION_STATE: SectionState = {
   contact: true,
   spouse: true,
   matter: true,
+  flags: true,
   dates: false,
   notes: false,
   activity: false,

@@ -4,6 +4,8 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
+import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
+import { reconcileEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 
 // PATCH /api/admin/matter-details
 // Body: { matterId: string; field: string; value: unknown }
@@ -15,7 +17,8 @@ const WRITABLE_FIELDS = new Set([
   // Core / shared
   'practice_area', 'matter_number', 'open_date', 'target_close_date', 'closed_date',
   'scheduled_signing_date', 'signing_date', 'documents_filed_date',
-  'flat_fee_amount', 'billing_type', 'est_estate_value', 'tax_exposure', 'plan_type',
+  'flat_fee_amount', 'billing_type', 'est_estate_value', 'tax_exposure',
+  'matter_type',
   'referral_source', 'lawmatics_id', 'clio_matter_number', 'matter_status_notes',
   'iolta_required', 'internal_notes',
   'intake_date', 'hired_date', 'design_meeting_date', 'draft_sent_date',
@@ -24,7 +27,7 @@ const WRITABLE_FIELDS = new Set([
   'responsible_attorney', 'co_counsel', 'paralegal_assigned',
   'jurisdiction_state', 'jurisdiction_county', 'urgency',
   // V1 — Estate Planning (ep_)
-  'trust_type', 'credit_shelter_provisions', 'trust_funding_status', 'deed_recorded',
+  'trust_funding_status', 'deed_recorded',
   'ep_plan_category', 'ep_trust_type', 'ep_ancillary_docs',
   'ep_funding_status', 'ep_deed_transfers_needed', 'ep_beneficiary_updates_needed',
   'ep_powers_of_attorney_status', 'ep_healthcare_proxy_status',
@@ -63,7 +66,58 @@ const WRITABLE_FIELDS = new Set([
   // Status + Legal Plan
   'matter_status', 'legal_plan', 'legal_plan_id', 'legal_plan_type',
   'legal_plan_service_start', 'legal_plan_service_end', 'client_status',
+  // V3 — matter page schema coverage
+  'referral_source_other',
+  'ep_has_real_estate', 'ep_has_pets', 'ep_anticipated_inheritance', 'ep_accounts_retitled',
+  'legal_plan_member_id', 'claim_amount', 'claim_submitted_date',
+  'reimbursement_received_date', 'payment_link_sent_at',
+  'work_started_date', 'work_finished_date', 'closing_package_sent_date',
+  'next_action_date',
 ])
+
+// Plan composition belongs to the design sheet. The matter page renders these
+// read-only and links out; rejecting them here means a stale client, a script
+// or a future component cannot quietly create a second source of truth.
+const DESIGN_SHEET_OWNED_FIELDS = new Set([
+  'plan_type',
+  'trust_type',
+  'trust_name',
+  'credit_shelter_provisions',
+  'fiduciary_appointments',
+])
+
+/** Columns a stage-task gate reads — a write to any of them re-reconciles. */
+const PLAN_GATE_FIELDS = new Set([
+  'ep_has_real_estate',
+  'ep_has_pets',
+  'ep_deed_transfers_needed',
+  'ep_separate_trusts',
+  'ep_signing_method',
+  'billing_type',
+])
+
+/**
+ * A plan flag decides which items the open stage task carries. Fold the change
+ * in now rather than waiting for the next stage entry — a matter already in
+ * drafting should pick up the deed the moment real estate is flagged.
+ */
+async function reconcilePlanGates(
+  admin: ReturnType<typeof getAdminClient>,
+  matterId: string,
+): Promise<void> {
+  const { data: matter } = await admin
+    .from('matters')
+    .select('stage')
+    .eq('id', matterId)
+    .maybeSingle()
+  if (!matter?.stage) return
+  try {
+    await reconcileEngineStageTask(admin, matterId, matter.stage as string)
+  } catch (e) {
+    // Never fail the field save because the checklist could not be updated.
+    console.error('matter-details plan gate reconcile failed', e)
+  }
+}
 
 export async function PATCH(req: Request) {
   const { err } = await requireAdmin(req)
@@ -72,6 +126,13 @@ export async function PATCH(req: Request) {
   const { matterId, field, value, manual } = await req.json()
   if (!matterId || !field) {
     return NextResponse.json({ error: 'matterId and field are required' }, { status: 400 })
+  }
+
+  if (DESIGN_SHEET_OWNED_FIELDS.has(field)) {
+    return NextResponse.json(
+      { error: `"${field}" is owned by the design sheet — edit it there` },
+      { status: 400 },
+    )
   }
 
   if (!WRITABLE_FIELDS.has(field)) {
@@ -162,6 +223,33 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ row })
   }
 
+  if (field === 'billing_type') {
+    // One enum for how a matter is paid; legal_plan follows it as the display
+    // name so the two columns can never disagree again.
+    const normalized = normalizeMatterBillingType(normalizedValue)
+    if (normalizedValue !== null && !normalized) {
+      return NextResponse.json({ error: 'Invalid billing type' }, { status: 400 })
+    }
+    const { data: row, error: billingError } = await admin
+      .from('matter_details')
+      .upsert(
+        {
+          client_id: matterId,
+          billing_type: normalized,
+          legal_plan: legalPlanDisplayName(normalized),
+        },
+        { onConflict: 'client_id' },
+      )
+      .select()
+      .single()
+    if (billingError) {
+      console.error('matter-details billing type update failed', { matterId, value, billingError })
+      return NextResponse.json({ error: billingError.message }, { status: 500 })
+    }
+    await reconcilePlanGates(admin, matterId)
+    return NextResponse.json({ row })
+  }
+
   if (field === 'matter_number') {
     // matter_number lives on two tables; setMatterNumber keeps them in sync.
     try {
@@ -193,22 +281,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: detail || 'Unknown DB error' }, { status: 500 })
   }
 
-  if (field === 'plan_type') {
-    const { data: matter } = await admin
-      .from('matters')
-      .select('client_intake_id')
-      .eq('id', matterId)
-      .maybeSingle()
-    if (matter?.client_intake_id) {
-      const { error: intakeErr } = await admin
-        .from('client_intake')
-        .update({ plan_type: normalizedValue })
-        .eq('id', matter.client_intake_id)
-      if (intakeErr) {
-        return NextResponse.json({ error: intakeErr.message }, { status: 500 })
-      }
-    }
-  }
+  if (PLAN_GATE_FIELDS.has(field)) await reconcilePlanGates(admin, matterId)
 
   return NextResponse.json({ row: data })
 }

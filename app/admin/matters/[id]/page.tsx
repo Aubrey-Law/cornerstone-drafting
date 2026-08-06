@@ -10,6 +10,8 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { isDesignSheetUnseeded, buildIntakeResyncPreview } from '@/lib/designSheet/seedFromIntake'
 import { resolveIntakeReviewFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
+import { buildMatterPlanMirror } from '@/lib/matter/planMirror'
+import { normalizeMarketingConsent, type MarketingConsentStatus } from '@/lib/crm/consent'
 import type { MatterNoteRow } from '@/app/actions/matterNotes'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import type { MatterActivity } from '@/types/database'
@@ -175,6 +177,24 @@ async function loadClientIntakeShell(admin: ReturnType<typeof getAdminClient>, i
   return normalizeClientIntakeShell(base.data as Partial<ClientIntakeShellRow> | null)
 }
 
+/** Marketing consent is read-only on the rail; the Communications tab edits it. */
+async function loadMarketingConsent(
+  admin: ReturnType<typeof getAdminClient>,
+  intakeId: string | null,
+): Promise<MarketingConsentStatus> {
+  if (!intakeId) return 'unknown'
+  const { data, error } = await admin
+    .from('cornerstone_crm_people')
+    .select('marketing_status')
+    .eq('client_intake_id', intakeId)
+    .maybeSingle()
+  if (error) {
+    console.warn('Marketing consent unavailable; showing unknown:', error.message)
+    return 'unknown'
+  }
+  return normalizeMarketingConsent(data?.marketing_status)
+}
+
 async function loadIntakeSnapshotOptional(matterId: string): Promise<IntakeSnapshot | null> {
   try {
     return await fetchIntakeForMatter(matterId)
@@ -288,6 +308,17 @@ export default async function MatterDetailPage({ params }: Params) {
   ).catch(() => ({ intake: 0, portal: 0, total: 0 }))
 
   const initialTaskCounts = recordTaskCounts(await fetchTasksForMatter(id, 'open'))
+  const marketingConsent = await loadMarketingConsent(admin, intakeId)
+
+  // Plan composition and fiduciaries belong to the design sheet; the matter
+  // page renders them read-only, so resolve them to names here rather than
+  // shipping the whole sheet to the client.
+  const planMirror = buildMatterPlanMirror(
+    designSheet,
+    contacts,
+    (detailsRow ?? null) as MatterDetailsRow | null,
+    { clientName: matter.client_name, spouseName: matter.spouse_name },
+  )
 
   return (
     <MatterDetailClient
@@ -302,6 +333,8 @@ export default async function MatterDetailPage({ params }: Params) {
       matterNumberManual={matterNumberManual}
       matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
+      planMirror={planMirror}
+      marketingConsent={marketingConsent}
       initialEstateSnapshot={initialEstateSnapshot}
       unreviewedUploadCounts={unreviewedUploadCounts}
       initialNotes={notes as MatterNoteRow[]}

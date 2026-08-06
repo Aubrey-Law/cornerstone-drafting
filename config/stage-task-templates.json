@@ -1,18 +1,30 @@
 {
-  "$schema": "aubreylaw.stage-task-templates.v1",
+  "$schema": "aubreylaw.stage-task-templates.v2",
   "description": "Task templates that fire when a matter enters an attorney-owned stage. Turns each SLA into a concrete to-do (or checklist) in the app's task system. Client-owned stages are handled by the nudge engine, not tasks. Each task carries a soft internal due date (buffer) and the hard SLA deadline.",
+
+  "v2_additions": {
+    "gate": "On a checklist item or on a whole template. Either a plan-flag key (real_estate, credit_shelter, minor_children, pets, diy_signing, legal_plan) or an array of design-sheet plan types. Absent means always. Turning a flag on mid-stage appends its items to the open task; turning it off removes only items that are still incomplete — completed work is never deleted.",
+    "produces_document": "On a checklist item: that item IS the document's status. There is no document_checklist column set, and none is coming — the checklist is the checklist."
+  },
 
   "scope": {
     "owners_covered": ["attorney"],
     "client_stages": "Not tasked — driven by the nudge engine (see nudge_schedule / config/nudge-templates.json).",
-    "date_bounded_stages": "Discovery/PMPS/Signing are client-scheduled; no attorney work task. Signing prep is folded into the Closeout-adjacent stages where attorney action is real."
+    "date_bounded_stages": "Discovery/PMPS is client-scheduled; no attorney work task.",
+    "untasked_engine_keys": {
+      "design_input": "Pre-design-meeting intake handling. The intake surfaces drive it; a task would duplicate them.",
+      "client_review": "The client's move. The nudge engine chases it; an attorney task would only be noise.",
+      "approved": "Also the client's move — waiting on them to schedule.",
+      "matter_closed": "End state. Nothing left to do.",
+      "note": "This gap is deliberate, not an oversight. UNTASKED_ENGINE_KEYS in types/database.ts is the same list, and a test holds the two together."
+    }
   },
 
   "due_date_model": {
     "description": "Two dates per task. The soft date is the internal target that creates urgency before the SLA bites; the hard date is the SLA itself, which drives the dashboard red flag.",
     "fields": {
       "soft_due_at": "stage_entered_at + soft_lead_days (business days). Internal target.",
-      "hard_due_at": "stage_entered_at + sla_days (business days). The SLA; matches stage_sla.",
+      "hard_due_at": "stage_entered_at + sla_days (business days). The SLA; matches stage_sla. Null sla_days means no hard deadline — the task recurs on its soft date instead.",
       "computed_in": "business days, America/New_York, excluding firm_holidays (reuse business_days_elapsed inverse)."
     },
     "display_rule": "Surface soft_due_at as the task's working due date; show hard_due_at as the SLA badge. Task goes amber at soft_due_at, red at hard_due_at."
@@ -20,9 +32,18 @@
 
   "granularity_rationale": {
     "proposal_ea_out": "Single headline task — it's one fast generate-and-send action; a checklist would be overkill.",
-    "drafting": "Checklist — this is the multi-step block (generate, QA, format, PDF, send) and the place sub-steps get dropped.",
+    "design": "Checklist — the design meeting produces decisions, and the gated items are the ones a plan without that flag must not carry.",
+    "drafting": "Checklist — this is the multi-step block (generate, QA, format, PDF, send) and the place sub-steps get dropped. Each drafted document is one item, so the checklist is the document status.",
     "revisions": "Short checklist — pull structured changes, edit, cross-check, resend; cross-check is the step that protects against inconsistency.",
-    "closeout": "Checklist — funding package, summary, portal stage update, deliver; several discrete deliverables."
+    "signing_scheduled": "Checklist — signing prep is real attorney work even though the appointment itself is client-scheduled.",
+    "closeout": "Checklist — funding package, summary, portal stage update, deliver; several discrete deliverables.",
+    "funding": "Checklist on a 30-day recurring check-in. Null SLA by design: a matter waiting three months on a county clerk should not sit permanently red for a delay nobody at the firm can act on."
+  },
+
+  "plan_types": {
+    "trust": ["pour_over"],
+    "will": ["outright_will", "testamentary_trust"],
+    "note": "Values are lib/designPlanType.ts DesignPlanType keys. Only pour_over carries a funded revocable trust, so the certificate of trust and the assignment of personal property gate on it alone."
   },
 
   "templates": [
@@ -38,9 +59,38 @@
         "sla_days": 1,
         "priority": "high",
         "description": "Auto-generate the proposal and EA from PMPS data and route to SignWell. Should go out before the next task begins.",
-        "checklist": [],
+        "checklist": [
+          { "text": "Generate the proposal and EA from PMPS data", "produces_document": "engagement_agreement" },
+          { "text": "Route to SignWell" }
+        ],
         "links": ["matter", "signwell_request"],
+        "batch_tag": "intake",
         "on_complete_hint": "Completing this typically coincides with the matter advancing to EA Pending Signature."
+      }
+    },
+    {
+      "stage_key": "design",
+      "fires_on": "stage_entry",
+      "track": "ALL",
+      "task": {
+        "title": "Design the plan — {client_name}",
+        "type": "checklist",
+        "owner": "attorney",
+        "soft_lead_days": 3,
+        "sla_days": 5,
+        "priority": "high",
+        "description": "Turn the intake into a design sheet the generator can run. The SLA starts at the design meeting, not at intake.",
+        "checklist": [
+          { "text": "Review intake responses and flag gaps" },
+          { "text": "Run the MA estate tax analysis" },
+          { "text": "Seed the design sheet from intake" },
+          { "text": "Confirm fiduciary appointments" },
+          { "text": "Confirm credit shelter approach", "gate": "credit_shelter" },
+          { "text": "Collect the current deed and title", "gate": "real_estate" },
+          { "text": "Confirm guardian nomination", "gate": "minor_children" }
+        ],
+        "links": ["matter", "design_sheet"],
+        "batch_tag": "design"
       }
     },
     {
@@ -54,13 +104,26 @@
         "soft_lead_days": 3,
         "sla_days": 5,
         "priority": "high",
-        "description": "Generate, review, and send the draft package. Batch with other matters at this stage.",
+        "description": "Generate, review, and send the draft package. Batch with other matters at this stage. Each document is one checklist item — ticking it is what says the document exists.",
         "checklist": [
-          "Run document generator from design payload",
-          "Review output against design sheet / questionnaire (catch placeholder + field errors)",
-          "Cross-check named parties consistent across all documents",
-          "Format and convert to PDF",
-          "Send drafts to client with review summary + revision-intake form link"
+          { "text": "Run document generator from design payload" },
+          { "text": "Draft the revocable trust", "produces_document": "revocable_trust", "gate": ["pour_over"] },
+          { "text": "Draft the pour-over will", "produces_document": "pour_over_will", "gate": ["pour_over"] },
+          { "text": "Draft the last will and testament", "produces_document": "last_will", "gate": ["outright_will", "testamentary_trust"] },
+          { "text": "Draft the durable power of attorney", "produces_document": "durable_power_of_attorney" },
+          { "text": "Draft the health care proxy", "produces_document": "health_care_proxy" },
+          { "text": "Draft the HIPAA authorization", "produces_document": "hipaa_authorization" },
+          { "text": "Draft the living will", "produces_document": "living_will" },
+          { "text": "Draft the certificate of trust", "produces_document": "certificate_of_trust", "gate": ["pour_over"] },
+          { "text": "Draft the assignment of personal property", "produces_document": "assignment_personal_property", "gate": ["pour_over"] },
+          { "text": "Draft the personal property memorandum", "produces_document": "personal_property_memo" },
+          { "text": "Draft the transfer deed", "produces_document": "deed_transfer", "gate": "real_estate" },
+          { "text": "Draft the pet trust provisions", "produces_document": "pet_trust_provisions", "gate": "pets" },
+          { "text": "Draft the temporary delegation", "produces_document": "temp_delegation_guardianship", "gate": "minor_children" },
+          { "text": "Review output against the design sheet" },
+          { "text": "Cross-check named parties across all documents" },
+          { "text": "Format and convert to PDF" },
+          { "text": "Send drafts with review summary + revision form" }
         ],
         "links": ["matter", "design_payload", "portal_drafts"],
         "batch_tag": "drafting_qa"
@@ -79,15 +142,37 @@
         "priority": "high",
         "description": "Process the structured revision request. Handle in the Tue/Thu revision batch.",
         "checklist": [
-          "Open structured revision request; sort by triage (fast / substantive / question)",
-          "Make fast (mechanical) edits across documents",
-          "Make substantive edits; cross-check ripple across related documents",
-          "Resolve or reply to any 'question' items",
-          "Re-send revised drafts to client for review"
+          { "text": "Triage the structured revision request" },
+          { "text": "Make mechanical edits across documents" },
+          { "text": "Make substantive edits and cross-check ripple" },
+          { "text": "Resolve or reply to question items" },
+          { "text": "Re-send revised drafts" }
         ],
         "links": ["matter", "revision_request", "portal_drafts"],
         "batch_tag": "revisions",
         "round_cap_check": { "LP": 1, "NONLP": 2, "over_cap": "Flag for fee conversation before processing." }
+      }
+    },
+    {
+      "stage_key": "signing_scheduled",
+      "fires_on": "stage_entry",
+      "track": "ALL",
+      "task": {
+        "title": "Prepare the signing — {client_name}",
+        "type": "checklist",
+        "owner": "attorney",
+        "soft_lead_days": 2,
+        "sla_days": 3,
+        "priority": "normal",
+        "description": "The appointment is the client's to schedule; the preparation is not. Fires on entry so the package is ready before the date arrives.",
+        "checklist": [
+          { "text": "Confirm the appointment with the client" },
+          { "text": "Print and assemble the signing package" },
+          { "text": "Arrange notary and witnesses" },
+          { "text": "Send DIY signing instructions", "produces_document": "diy_signing_instructions", "gate": "diy_signing" }
+        ],
+        "links": ["matter", "portal_signing"],
+        "batch_tag": "signing"
       }
     },
     {
@@ -103,14 +188,38 @@
         "priority": "normal",
         "description": "Produce and deliver the post-signing package; close the matter.",
         "checklist": [
-          "Generate funding / closeout package",
-          "Generate and send estate plan summary",
-          "Confirm executed documents stored to OneDrive matter folder",
-          "Update matter stage to closed in the app",
-          "Deliver package to client (portal + email)"
+          { "text": "Confirm executed documents stored to OneDrive" },
+          { "text": "Send the closing letter", "produces_document": "closing_letter" },
+          { "text": "Generate and send the estate plan summary", "produces_document": "estate_plan_summary" },
+          { "text": "Record the work finished date" },
+          { "text": "Submit the legal plan claim", "gate": "legal_plan" }
         ],
         "links": ["matter", "onedrive_folder", "portal_closeout"],
         "batch_tag": "closeout"
+      }
+    },
+    {
+      "stage_key": "funding",
+      "fires_on": "stage_entry",
+      "track": "ALL",
+      "gate": ["pour_over"],
+      "task": {
+        "title": "Fund the trust — {client_name}",
+        "type": "checklist",
+        "owner": "attorney",
+        "soft_lead_days": 30,
+        "sla_days": null,
+        "priority": "normal",
+        "description": "Retitling, beneficiary changes and waiting on the county run for as long as they run. A 30-day check-in, not a deadline.",
+        "checklist": [
+          { "text": "Send funding instructions and checklist", "produces_document": "funding_instructions" },
+          { "text": "Record the deed", "gate": "real_estate" },
+          { "text": "Retitle accounts into the trust" },
+          { "text": "Update beneficiary designations" },
+          { "text": "Confirm funding complete with the client" }
+        ],
+        "links": ["matter", "portal_funding"],
+        "batch_tag": "funding"
       }
     }
   ],
@@ -118,10 +227,17 @@
   "fire_logic": {
     "on_stage_entry": [
       "When a matter enters an attorney-owned stage, look up the matching template by stage_key.",
-      "Compute soft_due_at = stage_entered_at + soft_lead_days (business days); hard_due_at = stage_entered_at + sla_days.",
+      "Skip the template entirely when its own `gate` does not pass for this matter.",
+      "Build the checklist from the items whose `gate` passes.",
+      "Compute soft_due_at = stage_entered_at + soft_lead_days (business days); hard_due_at = stage_entered_at + sla_days, or null when sla_days is null.",
       "Interpolate title/description tokens: {client_name}, {review_round}, {matter_id}.",
       "Create the task (or checklist with sub-items) in the app's task system, assigned to the attorney, with batch_tag for grouping.",
       "Idempotency: one task per (matter_id, stage_key, stage_entered_at) — same pin as the nudge log, so a re-entry into the stage (e.g. revisions round 2) creates a fresh task."
+    ],
+    "on_plan_flag_change": [
+      "Reconcile the open task for the current stage against the flags as they now stand.",
+      "A flag turned on appends its items, unchecked, at the end.",
+      "A flag turned off removes only items that are still incomplete. A completed item stays — it records work that actually happened, and deleting it would erase the record."
     ],
     "on_stage_exit": "Optionally auto-complete or archive the open task for the stage being left, so stale tasks don't linger when the exit trigger fires.",
     "matters_table_assumption": "Reuses stage_entered_at, track, current_stage already required by the stage engine. No new matter fields."
@@ -137,10 +253,10 @@
       "title": "text",
       "type": "single | checklist",
       "soft_due_at": "timestamptz",
-      "hard_due_at": "timestamptz",
+      "hard_due_at": "timestamptz null",
       "status": "open | done | archived",
       "batch_tag": "text null",
-      "checklist": "jsonb (array of { text, done })",
+      "checklist": "jsonb (array of { text, done, produces_document?, gate? })",
       "created_at": "timestamptz default now()",
       "unique": "(matter_id, stage_key, stage_entered_at)"
     }
@@ -151,6 +267,7 @@
     "rules": [
       "My Queue task list = stage_tasks where status='open', ordered by hard_due_at, then soft_due_at.",
       "Amber when now >= soft_due_at; red when now >= hard_due_at (mirrors v_matter_aging health).",
+      "A task with a null hard_due_at never goes red — it recurs on its soft date instead.",
       "batch_tag lets the attorney filter to a work block: all 'drafting_qa' together, all 'revisions' on Tue/Thu."
     ]
   }

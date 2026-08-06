@@ -165,6 +165,81 @@ export const GROUP_COLORS: Record<StageGroup, { dot: string; bg: string; text: s
   closed: { dot: 'var(--stage-closed)', bg: 'var(--stage-closed-bg)', text: 'var(--stage-closed-text)' },
 }
 
+/* ─── Engine stage keys ───────────────────────────────────────────────────── */
+
+/**
+ * The pipeline stage a matter sits in. `MatterStage` is the historical name;
+ * `MatterPipelineStage` says which of the two stage vocabularies is meant,
+ * because the engine has its own.
+ */
+export type MatterPipelineStage = MatterStage
+
+export const MATTER_PIPELINE_STAGES: MatterPipelineStage[] = STAGES.map(stage => stage.key)
+
+/**
+ * The engine keys a matter can be on — exactly the range of the SQL function
+ * `map_matter_stage_to_engine()`. The two drifted once already; a test now
+ * asserts they still agree.
+ */
+export const MATTER_ENGINE_KEYS = [
+  'design_input',
+  'design',
+  'drafting',
+  'client_review',
+  'revisions',
+  'approved',
+  'signing_scheduled',
+  'closeout',
+  'funding',
+  'matter_closed',
+] as const
+
+export type MatterEngineKey = (typeof MATTER_ENGINE_KEYS)[number]
+
+/**
+ * Engine keys that belong to leads, not matters. `proposal_ea_out` fires off
+ * the engagement going out — before there is a matter stage to map — which is
+ * why `map_matter_stage_to_engine()` has never returned it.
+ */
+export const LEAD_ENGINE_KEYS = ['proposal_ea_out'] as const
+
+export type LeadEngineKey = (typeof LEAD_ENGINE_KEYS)[number]
+
+export type EngineKey = MatterEngineKey | LeadEngineKey
+
+/** Mirrors `map_matter_stage_to_engine()`. Keep the two in step. */
+export const PIPELINE_TO_ENGINE: Record<MatterPipelineStage, MatterEngineKey> = {
+  intake: 'design_input',
+  intake_review: 'design_input',
+  // Split out of design_input so the design SLA starts at the design meeting
+  // rather than back at intake.
+  design: 'design',
+  drafting: 'drafting',
+  client_review: 'client_review',
+  drafts_approved: 'approved',
+  revision: 'revisions',
+  signing_scheduled: 'signing_scheduled',
+  signing_complete: 'signing_scheduled',
+  post_execution: 'closeout',
+  funding: 'funding',
+  closed: 'matter_closed',
+}
+
+/**
+ * Engine keys that deliberately carry no task template.
+ *
+ * `client_review` and `approved` are the client's move — the nudge engine
+ * chases those, and an attorney task would only be noise. `matter_closed` is
+ * the end state; there is nothing left to do. `design_input` is pre-design-
+ * meeting intake handling, which the intake surfaces already drive.
+ */
+export const UNTASKED_ENGINE_KEYS = [
+  'design_input',
+  'client_review',
+  'approved',
+  'matter_closed',
+] as const
+
 export function stageInfo(key: MatterStage): StageInfo {
   return STAGES.find(s => s.key === key) ?? STAGES[0]
 }
