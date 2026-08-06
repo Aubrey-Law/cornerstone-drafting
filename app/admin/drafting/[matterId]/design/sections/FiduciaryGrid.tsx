@@ -359,13 +359,17 @@ function RoleMatrix<T extends FiduciaryGridRole>({
   flashField: string | null
   writeSlots: (field: FiduciarySlotField, updater: (slots: FiduciarySlot[]) => FiduciarySlot[]) => void
 }) {
-  if (roles.length === 0) return null
   type CoTarget = { role: T; order: number }
   const [targetedCo, setTargetedCo] = useState<CoTarget | null>(null)
 
   useEffect(() => {
     setTargetedCo(null)
   }, [scopeResetKey])
+
+  // Must sit below the hooks. Above them, the hook call order depends on
+  // `roles`, and React throws "Rendered more hooks than during the previous
+  // render" the first time that array goes from empty to populated.
+  if (roles.length === 0) return null
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">

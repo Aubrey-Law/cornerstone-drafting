@@ -34,6 +34,11 @@ const PUBLIC_ROUTE_SUFFIXES = [
   // Telnyx fetches this fixed-destination TeXML instruction document when an
   // inbound call arrives; it accepts no caller-controlled input or user data.
   'voice/telnyx/inbound/route.ts',
+  // One-click unsubscribe from a marketing email. Authorization is possession
+  // of an unguessable 256-bit token (same pattern as scheduling/manage), which
+  // is format-checked then looked up; an unknown token 404s. Requiring a
+  // session here would break CAN-SPAM one-click unsubscribe.
+  'unsubscribe/[token]/route.ts',
 ] as const
 
 function listRouteFiles(dir = API_ROOT, acc: string[] = []): string[] {
@@ -107,6 +112,10 @@ describe('API route auth coverage', () => {
           /verifyCalcomSignature\b/,
           /verifyCalendlySignature\b/,
           /verifyFirmaWebhookSignature\b/,
+          // Mailgun signs webhooks with an HMAC over timestamp+token rather
+          // than a header, so the check is a local helper: HMAC-SHA256 with
+          // timingSafeEqual and a 15-minute replay window, 401 on failure.
+          /hasValidSignature\b/,
           // Intake uploads: invite-token or bearer auth resolved in a shared helper.
           /resolveIntakeUploadAccess\b/,
         ]),
