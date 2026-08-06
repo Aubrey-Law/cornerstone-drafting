@@ -66,7 +66,6 @@ import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { MatterOverviewHero } from './MatterOverviewHero'
 import { MatterDetailsCard } from './MatterDetailsCard'
-import { MatterLegalPlanCard } from './MatterLegalPlanCard'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
 import { useMatterDetailsSave } from './useMatterDetailsSave'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
@@ -292,7 +291,6 @@ function MatterDetailClientInner({
   )
 
   const practiceArea = normalizePracticeArea(matterDetails?.practice_area ?? matter.practice_area)
-  const showLegalPlan = practiceArea === 'EP-LP'
   const showProbate = practiceArea === 'Probate'
 
   const setActiveTab = useCallback((
@@ -523,7 +521,7 @@ function MatterDetailClientInner({
     }
   }
 
-  const handleStageChange = async (stage: MatterStage) => {
+  const handleStageChange = useCallback(async (stage: MatterStage) => {
     if (!token || stage === matter.stage) return
     setStageSaving(true)
     const previous = matter.stage
@@ -547,7 +545,23 @@ function MatterDetailClientInner({
     } finally {
       setStageSaving(false)
     }
-  }
+  }, [matter.stage, router, token])
+
+  const [closingMatter, setClosingMatter] = useState(false)
+  /**
+   * Close-out stamps the date and moves the stage in one action, so a matter
+   * can never sit at `closed` with no closed_date (or the reverse).
+   */
+  const handleCloseMatter = useCallback(async () => {
+    if (closingMatter) return
+    setClosingMatter(true)
+    try {
+      await handleSaveMatterDetailField('closed_date', new Date().toISOString().slice(0, 10))
+      await handleStageChange('closed')
+    } finally {
+      setClosingMatter(false)
+    }
+  }, [closingMatter, handleSaveMatterDetailField, handleStageChange])
 
   const handleSendIntake = async () => {
     if (!token) {
@@ -681,6 +695,15 @@ function MatterDetailClientInner({
       ),
     [matter, matterDetails, esignEnabled, reviewFlags],
   )
+  // max(communications.created_at) — the rail's quiet chip is derived from the
+  // same timeline the Communications tab shows, never a stored column.
+  const lastContactAt = useMemo(
+    () => communicationItems.reduce<string | null>(
+      (latest, item) => (!latest || item.created_at > latest ? item.created_at : latest),
+      null,
+    ),
+    [communicationItems],
+  )
   const unreadPortalCount = useMemo(
     () => portalMessages.filter(m => m.sender_role === 'client' && !m.read_at).length,
     [portalMessages],
@@ -769,6 +792,7 @@ function MatterDetailClientInner({
             designSheetPlanType={designSheetPlanType}
             planMirror={planMirror}
             marketingConsent={marketingConsent}
+            lastContactAt={lastContactAt}
             estate={initialEstateSnapshot}
             readinessItems={readinessItems}
             activity={activity}
@@ -909,15 +933,6 @@ function MatterDetailClientInner({
                   onSendIntake={() => void handleSendIntake()}
                   onCopyIntakeUrl={() => void copyIntakeUrl()}
                 />
-                {showLegalPlan && (
-                  <MatterLegalPlanCard
-                    details={matterDetails}
-                    onSaveField={handleSaveMatterDetailField}
-                    savingField={savingField}
-                    lastSavedAt={lastSavedAt}
-                    error={matterDetailsError}
-                  />
-                )}
                 {showProbate && (
                   <MatterProbateEssentialsCard
                     details={matterDetails}
@@ -978,7 +993,15 @@ function MatterDetailClientInner({
                 />
               </TabsContent>
 
-              <MatterBillingTab matterId={matterId} enabled={billingTabVisited} />
+              <MatterBillingTab
+                matterId={matterId}
+                enabled={billingTabVisited}
+                details={matterDetails}
+                onSaveField={handleSaveMatterDetailField}
+                onCloseMatter={handleCloseMatter}
+                closing={closingMatter}
+                alreadyClosed={matter.stage === 'closed'}
+              />
 
               <MatterCommunicationsTab
                 matterId={matter.matter_id}

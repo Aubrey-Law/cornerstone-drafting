@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
+import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
 
 // PATCH /api/admin/matter-details
 // Body: { matterId: string; field: string; value: unknown }
@@ -64,6 +65,13 @@ const WRITABLE_FIELDS = new Set([
   // Status + Legal Plan
   'matter_status', 'legal_plan', 'legal_plan_id', 'legal_plan_type',
   'legal_plan_service_start', 'legal_plan_service_end', 'client_status',
+  // V3 — matter page schema coverage
+  'referral_source_other',
+  'ep_has_real_estate', 'ep_has_pets', 'ep_anticipated_inheritance', 'ep_accounts_retitled',
+  'legal_plan_member_id', 'claim_amount', 'claim_submitted_date',
+  'reimbursement_received_date', 'payment_link_sent_at',
+  'work_started_date', 'work_finished_date', 'closing_package_sent_date',
+  'next_action_date',
 ])
 
 // Plan composition belongs to the design sheet. The matter page renders these
@@ -177,6 +185,32 @@ export async function PATCH(req: Request) {
       if (leadError) {
         return NextResponse.json({ error: leadError.message }, { status: 500 })
       }
+    }
+    return NextResponse.json({ row })
+  }
+
+  if (field === 'billing_type') {
+    // One enum for how a matter is paid; legal_plan follows it as the display
+    // name so the two columns can never disagree again.
+    const normalized = normalizeMatterBillingType(normalizedValue)
+    if (normalizedValue !== null && !normalized) {
+      return NextResponse.json({ error: 'Invalid billing type' }, { status: 400 })
+    }
+    const { data: row, error: billingError } = await admin
+      .from('matter_details')
+      .upsert(
+        {
+          client_id: matterId,
+          billing_type: normalized,
+          legal_plan: legalPlanDisplayName(normalized),
+        },
+        { onConflict: 'client_id' },
+      )
+      .select()
+      .single()
+    if (billingError) {
+      console.error('matter-details billing type update failed', { matterId, value, billingError })
+      return NextResponse.json({ error: billingError.message }, { status: 500 })
     }
     return NextResponse.json({ row })
   }

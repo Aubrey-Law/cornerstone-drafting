@@ -15,6 +15,12 @@ import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { resolveDraftingDate, DRAFTING_DATE_COLUMNS } from '@/lib/matter/draftingDates'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
 import { isCoupleMatter, MATTER_TYPE_OPTIONS, normalizeMatterType } from '@/lib/matter/matterType'
+import {
+  REFERRAL_SOURCE_OPTIONS,
+  normalizeReferralSource,
+  quietDays,
+  referralSourceOtherFallback,
+} from '@/lib/matter/referralSource'
 import { cn, formatDate } from '@/lib/utils'
 import type { MatterTab } from '@/lib/matterPageTabs'
 import { MARKETING_CONSENT_LABEL, type MarketingConsentStatus } from '@/lib/crm/consent'
@@ -62,6 +68,8 @@ export interface MatterFactsPanelProps {
   planMirror?: MatterPlanMirror
   /** CRM marketing consent, shown read-only; the Communications tab edits it. */
   marketingConsent?: MarketingConsentStatus
+  /** max(communications.created_at) — the quiet chip is derived, never stored. */
+  lastContactAt?: string | null
   estate: MatterEstateSnapshot
   /** Kept from the previous rail — the panel must not drop the readiness dial. */
   readinessItems: MatterReadinessItem[]
@@ -148,6 +156,7 @@ export function MatterFactsPanel({
   designSheetPlanType,
   planMirror = EMPTY_PLAN_MIRROR,
   marketingConsent = 'unknown',
+  lastContactAt = null,
   estate,
   readinessItems,
   activity,
@@ -271,6 +280,9 @@ export function MatterFactsPanel({
     ? designPlanTypeLabel(designSheetPlanType ?? planMirror.planType)
     : '—'
   const county = details?.jurisdiction_county ?? ''
+  const referralSource = normalizeReferralSource(details?.referral_source ?? matter.referral_source)
+  // Derived from the communications timeline — never a stored last_client_contact.
+  const quiet = quietDays(lastContactAt)
   const draftsDue = resolveDraftingDate(details, 'drafts_due')
   const draftsReview = resolveDraftingDate(details, 'drafts_review')
   const revisions = resolveDraftingDate(details, 'revisions')
@@ -395,6 +407,20 @@ export function MatterFactsPanel({
         onToggle={() => toggle('contact')}
         hint={!open.contact ? client?.email ?? matter.client_email : undefined}
       >
+        {quiet !== null && (
+          <div className="px-1.5 pb-1">
+            <span
+              className={cn(
+                'rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold',
+                quiet >= 21
+                  ? 'border-amber-border bg-amber-bg text-amber'
+                  : 'border-border bg-muted text-muted-foreground',
+              )}
+            >
+              Quiet {quiet} day{quiet === 1 ? '' : 's'}
+            </span>
+          </div>
+        )}
         {loadingContacts ? skeleton : (
           <>
             <InlineText
@@ -555,11 +581,22 @@ export function MatterFactsPanel({
             {planLabel}
           </Link>
         </ReadOnlyRow>
-        <InlineText
+        <InlineSelect
           label="Lead source"
-          value={details?.referral_source ?? matter.referral_source ?? ''}
+          value={referralSource}
+          options={[...REFERRAL_SOURCE_OPTIONS]}
           onSave={next => onSaveField('referral_source', next)}
         />
+        {referralSource === 'other' && (
+          <InlineText
+            label="Lead source detail"
+            value={referralSourceOtherFallback(
+              details?.referral_source ?? matter.referral_source,
+              details?.referral_source_other,
+            )}
+            onSave={next => onSaveField('referral_source_other', next)}
+          />
+        )}
 
         <div className="mx-1.5 mt-1.5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
           <div className="bg-card px-2.5 py-2">

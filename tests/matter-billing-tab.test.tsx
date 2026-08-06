@@ -75,10 +75,17 @@ function respondWith(view: {
   })
 }
 
-function renderTab(enabled = true) {
+function renderTab(enabled = true, overrides: Partial<React.ComponentProps<typeof MatterBillingTab>> = {}) {
   return render(
     <Tabs value="billing">
-      <MatterBillingTab matterId={MATTER_ID} enabled={enabled} />
+      <MatterBillingTab
+        matterId={MATTER_ID}
+        enabled={enabled}
+        details={{ billing_type: 'flat_fee', flat_fee_amount: 4800 }}
+        onSaveField={vi.fn().mockResolvedValue(undefined)}
+        onCloseMatter={vi.fn().mockResolvedValue(undefined)}
+        {...overrides}
+      />
     </Tabs>,
   )
 }
@@ -136,8 +143,7 @@ describe('MatterBillingTab', () => {
     respondWith({ rows: [row({ overdue: true, ageDays: 64 })] })
     renderTab()
 
-    // Fees table plus the balance-card pill.
-    expect(await screen.findAllByText('Overdue')).toHaveLength(2)
+    expect(await screen.findAllByText('Overdue')).toHaveLength(1)
     expect(screen.queryByText('Partially paid')).toBeNull()
   })
 
@@ -236,15 +242,15 @@ describe('MatterBillingTab', () => {
     })
   })
 
-  it('nudges when a covered matter has no claim', async () => {
-    respondWith({ rows: [row()], legalPlan: 'metlife' })
-    renderTab()
+  it('nudges when a plan matter has no claim in the ledger', async () => {
+    respondWith({ rows: [row()] })
+    renderTab(true, { details: { billing_type: 'metlife' } })
 
-    expect(await screen.findByText('MetLife plan')).toBeTruthy()
+    expect(await screen.findByText('Legal plan, claim & work dates')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Start a claim' })).toBeTruthy()
   })
 
-  it('shows claim progress instead of the nudge once a claim exists', async () => {
+  it('drops the nudge once a claim exists', async () => {
     respondWith({
       rows: [
         row({
@@ -256,23 +262,51 @@ describe('MatterBillingTab', () => {
           balance: 480_000,
         }),
       ],
-      legalPlan: 'metlife',
       hasClaim: true,
     })
-    renderTab()
+    renderTab(true, { details: { billing_type: 'metlife' } })
 
-    // Appears twice: the fees-table row label and the rail card title.
-    expect(await screen.findAllByText('MetLife claim')).toHaveLength(2)
+    await screen.findByText('MetLife claim')
     expect(screen.queryByRole('button', { name: 'Start a claim' })).toBeNull()
     expect(screen.getAllByText('Claim submitted').length).toBeGreaterThan(0)
   })
 
-  it('hides the claim card when the matter has no plan', async () => {
+  it('renders no claim block at all for a flat-fee matter', async () => {
     respondWith({ rows: [row()] })
     renderTab()
 
     await screen.findByText('Flat fee — Joint trust package')
-    expect(screen.queryByText(/claim/i)).toBeNull()
+    expect(screen.getByText('Work dates')).toBeTruthy()
+    expect(screen.queryByLabelText('Claim amount')).toBeNull()
+    expect(screen.queryByLabelText('Member ID')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start a claim' })).toBeNull()
+  })
+
+  it('gates Close matter on all four close-out conditions', async () => {
+    respondWith({ rows: [row()] })
+    const { rerender } = renderTab()
+
+    const closeButton = await screen.findByRole('button', { name: 'Close matter' })
+    expect(closeButton.hasAttribute('disabled')).toBe(true)
+
+    // Flat fee, so the two claim gates are satisfied by definition; recording
+    // the work-finished and closing-package dates is all that remains.
+    rerender(
+      <Tabs value="billing">
+        <MatterBillingTab
+          matterId={MATTER_ID}
+          enabled
+          details={{
+            billing_type: 'flat_fee',
+            work_finished_date: '2026-08-01',
+            closing_package_sent_date: '2026-08-03',
+          }}
+          onSaveField={vi.fn().mockResolvedValue(undefined)}
+          onCloseMatter={vi.fn().mockResolvedValue(undefined)}
+        />
+      </Tabs>,
+    )
+    expect(screen.getByRole('button', { name: 'Close matter' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('surfaces a load failure with a retry', async () => {
@@ -347,7 +381,7 @@ describe('MatterBillingTab', () => {
   it('starts a claim from the plan nudge with the plan preselected', async () => {
     const user = userEvent.setup()
     respondWith({ rows: [row()], legalPlan: 'metlife' })
-    renderTab()
+    renderTab(true, { details: { billing_type: 'metlife' } })
 
     await user.click(await screen.findByRole('button', { name: 'Start a claim' }))
     const dialog = await screen.findByRole('dialog')

@@ -264,22 +264,44 @@ describe('MatterFactsPanel', () => {
   it('saves a matter details field through onSaveField', async () => {
     const user = userEvent.setup()
     const { onSaveField } = renderPanel()
-    await user.click(await screen.findByRole('button', { name: /Lead source/ }))
-    const input = screen.getByLabelText('Lead source')
+    await user.click(await screen.findByRole('button', { name: /County/ }))
+    const input = screen.getByLabelText('County')
     await user.clear(input)
-    await user.type(input, 'Seminar{Enter}')
-    await waitFor(() => expect(onSaveField).toHaveBeenCalledWith('referral_source', 'Seminar'))
+    await user.type(input, 'Middlesex{Enter}')
+    await waitFor(() => expect(onSaveField).toHaveBeenCalledWith('jurisdiction_county', 'Middlesex'))
+  })
+
+  it('picks the lead source from the enum rather than free text', async () => {
+    const user = userEvent.setup()
+    const { onSaveField } = renderPanel()
+    const select = await screen.findByLabelText('Lead source')
+    await user.selectOptions(select, 'seminar')
+    expect(onSaveField).toHaveBeenCalledWith('referral_source', 'seminar')
+  })
+
+  it('offers an Other detail field only when the source is Other', async () => {
+    const user = userEvent.setup()
+    renderPanel({ details: { ...DETAILS, referral_source: 'other', referral_source_other: 'Rotary breakfast' } })
+    expect(await screen.findByText('Lead source detail')).toBeTruthy()
+    cleanup()
+    renderPanel({ details: { ...DETAILS, referral_source: 'google' } })
+    await screen.findByLabelText('Lead source')
+    expect(screen.queryByText('Lead source detail')).toBeNull()
+    await user.click(document.body)
   })
 
   it('reverts on Escape without saving', async () => {
     const user = userEvent.setup()
-    const { onSaveField } = renderPanel()
-    await user.click(await screen.findByRole('button', { name: /Lead source/ }))
-    const input = screen.getByLabelText('Lead source')
+    const { onSaveField } = renderPanel({
+      details: { ...DETAILS, jurisdiction_county: 'Middlesex' },
+    })
+    await user.click(await screen.findByRole('button', { name: /County/ }))
+    const input = screen.getByLabelText('County')
     await user.clear(input)
     await user.type(input, 'Nope{Escape}')
     expect(onSaveField).not.toHaveBeenCalled()
-    expect(await screen.findByText('Referral — Dr. Alvarez')).toBeTruthy()
+    // County reads twice: editable in Contact, echoed read-only under Plan flags.
+    expect((await screen.findAllByText('Middlesex')).length).toBe(2)
   })
 
   it('saves a client contact field through the contacts route', async () => {

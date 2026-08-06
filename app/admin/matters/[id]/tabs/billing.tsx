@@ -28,23 +28,31 @@ import type {
   BillingPlan,
 } from '@/lib/billing/types'
 import { formatFirmDate } from '@/lib/format'
-import { cn } from '@/lib/utils'
+import type { MatterDetailsRow } from '@/types/matter-details'
+import {
+  CloseOutCard,
+  FeeTypeCard,
+  LegalPlanClaimCard,
+  MoneyInCard,
+  type SaveDetailField,
+} from './billing-cards'
 
 interface MatterBillingTabProps {
   matterId: string
   /** False until the tab is first opened, so its data loads lazily. */
   enabled: boolean
+  details: MatterDetailsRow | null
+  onSaveField: SaveDetailField
+  /** Stamps closed_date and moves the matter to the closed stage. */
+  onCloseMatter: () => Promise<void>
+  closing?: boolean
+  alreadyClosed?: boolean
 }
 
 interface MatterBillingView {
   rows: BillingLedgerRow[]
   legalPlan: BillingPlan | null
   hasClaim: boolean
-}
-
-const PLAN_LABEL: Record<BillingPlan, string> = {
-  metlife: 'MetLife',
-  legalease: 'LegalEASE',
 }
 
 function dayOf(iso: string | null): string {
@@ -213,124 +221,15 @@ function PaymentsCard({
   )
 }
 
-/** Rail: outstanding balance and collection progress. */
-function BalanceCard({ rows }: { rows: BillingLedgerRow[] }) {
-  const billed = rows.reduce((sum, row) => sum + row.amountBilled, 0)
-  const collected = rows.reduce((sum, row) => sum + row.collected, 0)
-  const balance = rows.reduce((sum, row) => sum + row.balance, 0)
-  const overdue = rows.some(row => row.overdue)
-  const percent = billed > 0 ? Math.round((collected / billed) * 100) : 100
-  const oldest = rows.filter(row => row.balance > 0).reduce(
-    (max, row) => Math.max(max, row.ageDays),
-    0,
-  )
-
-  return (
-    <Card>
-      <CardContent className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Balance
-          </span>
-          {rows.length > 0 && <BillingStatusBadge row={leastSettled(rows)} />}
-        </div>
-
-        <p className={cn('text-2xl font-semibold tabular-nums', overdue && 'text-destructive')}>
-          {billingMoney(balance)}
-        </p>
-
-        <div
-          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-valuenow={percent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Share of billed amount collected"
-        >
-          <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          <span className="tabular-nums">{billingMoney(collected)}</span> collected of{' '}
-          <span className="tabular-nums">{billingMoney(billed)}</span> billed
-        </p>
-        {balance > 0 && oldest > 0 && (
-          <p className="text-xs text-muted-foreground">{oldest} days since invoice</p>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-/** The row whose status the balance pill should mirror: least settled first. */
-const STATUS_RANK = {
-  to_invoice: 0,
-  invoiced: 1,
-  claim_submitted: 2,
-  partial: 3,
-  paid: 4,
-} as const
-
-function leastSettled(rows: BillingLedgerRow[]): BillingLedgerRow {
-  return rows.reduce((worst, row) => {
-    if (row.overdue && !worst.overdue) return row
-    if (worst.overdue && !row.overdue) return worst
-    return STATUS_RANK[row.status] < STATUS_RANK[worst.status] ? row : worst
-  })
-}
-
-/** Rail: legal plan claim status, or a nudge when a covered matter has none. */
-function PlanClaimCard({
-  rows,
-  legalPlan,
-  onStartClaim,
-}: {
-  rows: BillingLedgerRow[]
-  legalPlan: BillingPlan | null
-  onStartClaim: () => void
-}) {
-  const claims = rows.filter(row => row.kind === 'plan_claim')
-  if (claims.length === 0 && !legalPlan) return null
-
-  const planLabel = legalPlan ? PLAN_LABEL[legalPlan] : 'Legal plan'
-
-  return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle className="text-sm">{planLabel} plan</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {claims.length === 0 ? (
-          <>
-            <p className="text-xs text-muted-foreground">
-              This matter is covered by {planLabel}, but no claim has been started.
-            </p>
-            <Button variant="outline" size="sm" className="w-full" onClick={onStartClaim}>
-              Start a claim
-            </Button>
-          </>
-        ) : (
-          <ul className="space-y-3">
-            {claims.map(claim => (
-              <li key={claim.id} className="space-y-1">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium">{claim.label}</span>
-                  <BillingStatusBadge row={claim} />
-                </div>
-                <p className="text-xs tabular-nums text-muted-foreground">
-                  {billingMoney(claim.collected)} of {billingMoney(claim.amountBilled)} expected
-                  {claim.invoicedAt && ` · submitted ${dayOf(claim.invoicedAt)}`}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-export function MatterBillingTab({ matterId, enabled }: MatterBillingTabProps) {
+export function MatterBillingTab({
+  matterId,
+  enabled,
+  details,
+  onSaveField,
+  onCloseMatter,
+  closing = false,
+  alreadyClosed = false,
+}: MatterBillingTabProps) {
   const token = useAccessToken()
   const [view, setView] = useState<MatterBillingView | null>(null)
   const [loading, setLoading] = useState(false)
@@ -486,16 +385,30 @@ export function MatterBillingTab({ matterId, enabled }: MatterBillingTabProps) {
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-4">
+            <FeeTypeCard details={details} onSaveField={onSaveField} />
+            <LegalPlanClaimCard
+              details={details}
+              onSaveField={onSaveField}
+              hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
+              onStartClaim={openCharge}
+            />
             <FeesChargesCard rows={rows} onAddCharge={openCharge} />
             <PaymentsCard rows={rows} onLogPayment={() => openPayment()} />
           </div>
 
           <div className="space-y-4">
-            {rows.length > 0 && <BalanceCard rows={rows} />}
-            <PlanClaimCard
-              rows={rows}
-              legalPlan={view?.legalPlan ?? null}
-              onStartClaim={openCharge}
+            <MoneyInCard
+              details={details}
+              onSaveField={onSaveField}
+              billed={rows.reduce((sum, row) => sum + row.amountBilled, 0)}
+              collected={rows.reduce((sum, row) => sum + row.collected, 0)}
+            />
+            <CloseOutCard
+              details={details}
+              onSaveField={onSaveField}
+              onCloseMatter={() => void onCloseMatter()}
+              closing={closing}
+              alreadyClosed={alreadyClosed}
             />
             {(toInvoice.length > 0 || overdue.length > 0) && (
               <Card>
