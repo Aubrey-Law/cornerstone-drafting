@@ -484,7 +484,7 @@ export function TasksClient({
                 setOpenOnly(false)
                 setDoneOpen(true)
               }}
-              className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground"
             >
               Open only
               <X className="size-3" aria-hidden />

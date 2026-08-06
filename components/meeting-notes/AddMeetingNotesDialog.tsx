@@ -170,7 +170,7 @@ export function AddMeetingNotesDialog({
       <DialogContent className="grid max-h-[calc(100dvh-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="px-4 pb-4 pt-5 pr-10 sm:px-6">
           <DialogTitle className="flex items-center gap-2">
-            <NotebookPen className="h-4 w-4 text-accent" />
+            <NotebookPen className="h-4 w-4 text-primary" />
             Add meeting notes
           </DialogTitle>
           <DialogDescription>
@@ -221,7 +221,7 @@ export function AddMeetingNotesDialog({
                           className={cn(
                             'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors',
                             'hover:bg-muted/40 disabled:opacity-60',
-                            isPicked && 'bg-accent/5',
+                            isPicked && 'bg-primary/5',
                           )}
                         >
                           <div className="min-w-0 flex-1">
@@ -233,9 +233,9 @@ export function AddMeetingNotesDialog({
                             </p>
                           </div>
                           {isFetching ? (
-                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-accent" />
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
                           ) : isPicked ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent" />
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
                           ) : null}
                         </button>
                       </li>

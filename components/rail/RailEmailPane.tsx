@@ -833,7 +833,7 @@ export function ManualEmailComposer({
                 <button
                   type="button"
                   onClick={() => setShowCc(true)}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-accent"
+                  className="text-[11px] font-medium text-muted-foreground hover:text-primary"
                 >
                   Cc
                 </button>
@@ -842,7 +842,7 @@ export function ManualEmailComposer({
                 <button
                   type="button"
                   onClick={() => setShowBcc(true)}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-accent"
+                  className="text-[11px] font-medium text-muted-foreground hover:text-primary"
                 >
                   Bcc
                 </button>
@@ -866,7 +866,7 @@ export function ManualEmailComposer({
                   <button
                     type="button"
                     onClick={() => setTo(option.email)}
-                    className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:border-accent hover:text-accent"
+                    className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
                   >
                     {option.label}
                   </button>
@@ -881,7 +881,7 @@ export function ManualEmailComposer({
                           : [...parseAddressList(prev), option.email].join(', '),
                       )
                     }}
-                    className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-accent hover:text-accent"
+                    className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
                   >
                     +cc
                   </button>
@@ -979,7 +979,7 @@ export function ManualEmailComposer({
                   type="button"
                   onClick={() => setShowSchedulingPicker(prev => !prev)}
                   aria-expanded={showSchedulingPicker}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-accent"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-primary"
                 >
                   <CalendarPlus className="h-3.5 w-3.5" />
                   Scheduling link
@@ -1013,7 +1013,7 @@ export function ManualEmailComposer({
         </div>
 
         {unresolved.length > 0 && (
-          <p role="alert" className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+          <p role="alert" className="rounded-md border border-amber-border bg-amber-bg px-2.5 py-1.5 text-[11px] text-amber">
             Resolve or remove: {unresolved.join(', ')}
           </p>
         )}
@@ -1164,7 +1164,7 @@ export function ManualEmailComposer({
             </p>
           )}
           {mentionsAttachment && attachmentCount === 0 && (
-            <p className="text-[11px] text-amber-700">
+            <p className="text-[11px] text-amber">
               This message mentions an attachment, but none is selected.
             </p>
           )}
@@ -1216,7 +1216,7 @@ export function ManualEmailComposer({
           type="button"
           onClick={() => void send()}
           disabled={!ready || sending}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
           {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           {sending ? 'Sending…' : embedded ? 'Send email' : 'Send'}

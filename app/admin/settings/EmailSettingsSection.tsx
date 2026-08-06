@@ -336,7 +336,7 @@ export function EmailSettingsSection() {
           onClick={() => setLogoHeader(!data.emailLogoHeader)}
           className={cn(
             'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
-            data.emailLogoHeader ? 'bg-emerald-600' : 'bg-muted-foreground/30',
+            data.emailLogoHeader ? 'bg-success' : 'bg-muted-foreground/30',
           )}
         >
           <span
@@ -486,7 +486,7 @@ export function EmailSettingsSection() {
                     })}
                   </div>
                   {c.mode === 'redirect' && (
-                    <div className="mt-1 text-[10px] text-blue-800 dark:text-blue-300">
+                    <div className="mt-1 text-[10px] text-blue">
                       Redirects to <code className="font-sans">{data.testInbox}</code>
                     </div>
                   )}

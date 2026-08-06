@@ -388,7 +388,7 @@ export function MatterFactsPanel({
               'ep_ma_estate_taxable',
               event.target.value === 'not-reviewed' ? null : event.target.value === 'tax-sensitive',
             )}
-            className="h-5.5 rounded-full border border-transparent bg-accent/10 px-1.5 text-[10.5px] font-semibold text-accent focus:outline-none"
+            className="h-5.5 rounded-full border border-transparent bg-primary/10 px-1.5 text-[10.5px] font-semibold text-primary focus:outline-none"
           >
             {TAX_DECISION_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -401,7 +401,7 @@ export function MatterFactsPanel({
           <button
             type="button"
             onClick={collapseAll}
-            className="font-semibold text-accent hover:underline"
+            className="font-semibold text-primary hover:underline"
           >
             Collapse all
           </button>
@@ -556,7 +556,7 @@ export function MatterFactsPanel({
             <button
               type="button"
               onClick={() => onOpenTab('people')}
-              className="px-1.5 text-[11.5px] text-accent hover:underline"
+              className="px-1.5 text-[11.5px] text-primary hover:underline"
             >
               Add a spouse on the People tab
             </button>
@@ -573,7 +573,7 @@ export function MatterFactsPanel({
         hint={
           <Link
             href={`/admin/drafting/${matterId}?step=design`}
-            className="font-semibold text-accent hover:underline"
+            className="font-semibold text-primary hover:underline"
             onClick={event => event.stopPropagation()}
           >
             Open design
@@ -588,7 +588,7 @@ export function MatterFactsPanel({
         />
         {/* The design sheet owns plan composition — read-only, link out to edit. */}
         <ReadOnlyRow label="Plan">
-          <Link href={designHref} className="font-semibold text-accent hover:underline">
+          <Link href={designHref} className="font-semibold text-primary hover:underline">
             {planLabel}
           </Link>
         </ReadOnlyRow>
@@ -669,7 +669,7 @@ export function MatterFactsPanel({
             const className = cn(
               'rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold',
               chip.on
-                ? 'border-accent/30 bg-accent/10 text-accent'
+                ? 'border-primary/30 bg-primary/10 text-primary'
                 : 'border-border bg-muted text-muted-foreground',
             )
             const label = chip.on ? chip.label : `No ${chip.label.toLowerCase()}`
@@ -692,7 +692,7 @@ export function MatterFactsPanel({
         </div>
         <ReadOnlyRow label="Trust name">
           {planMirror.trustName ? (
-            <Link href={designHref} className="font-semibold text-accent hover:underline">
+            <Link href={designHref} className="font-semibold text-primary hover:underline">
               {planMirror.trustName}
             </Link>
           ) : (
@@ -751,7 +751,7 @@ export function MatterFactsPanel({
             {draftsDue.value ? formatDate(draftsDue.value) : '—'}
           </span>
           {draftsDue.derived && (
-            <span className="text-[9.5px] font-semibold uppercase tracking-[.05em] text-accent">
+            <span className="text-[9.5px] font-semibold uppercase tracking-[.05em] text-primary">
               auto
             </span>
           )}

@@ -256,7 +256,7 @@ export function DesignSheetImportDialog({
       <DialogContent className="max-h-[88vh] overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="border-b px-5 py-4 pr-12">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Upload className="h-4 w-4 text-accent" />
+            <Upload className="h-4 w-4 text-primary" />
             Import Design Sheet
           </DialogTitle>
           <DialogDescription>
@@ -279,7 +279,7 @@ export function DesignSheetImportDialog({
                 disabled={submitting}
                 className={cn(
                   'flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60',
-                  dragOver && 'border-accent bg-muted/60',
+                  dragOver && 'border-primary bg-muted/60',
                 )}
               >
                 <Upload className="h-7 w-7 text-muted-foreground" />
@@ -295,7 +295,7 @@ export function DesignSheetImportDialog({
               />
               {file && (
                 <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2">
-                  <FileText className="h-4 w-4 text-accent" />
+                  <FileText className="h-4 w-4 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{file.name}</p>
                     <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>

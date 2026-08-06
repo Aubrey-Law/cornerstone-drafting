@@ -157,7 +157,7 @@ export default function ImportIntakeDialog({
       <DialogContent className="grid max-h-[calc(100dvh-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="px-4 pb-4 pt-5 pr-10 sm:px-6">
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-accent" />
+            <Sparkles className="h-4 w-4 text-primary" />
             Import Intake
           </DialogTitle>
           <DialogDescription>
@@ -218,7 +218,7 @@ export default function ImportIntakeDialog({
                 disabled={submitting}
                 className={cn(
                   'flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60',
-                  dragOver && 'border-accent bg-muted/60',
+                  dragOver && 'border-primary bg-muted/60',
                 )}
               >
                 <Upload className="h-7 w-7 text-muted-foreground" />
@@ -238,7 +238,7 @@ export default function ImportIntakeDialog({
               />
               {file && (
                 <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2">
-                  <FileText className="h-4 w-4 text-accent" />
+                  <FileText className="h-4 w-4 text-primary" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{file.name}</p>
                     <p className="text-xs text-muted-foreground">

@@ -58,7 +58,7 @@ export function PanelActivity({
       <button
         type="button"
         onClick={onOpenTab}
-        className="mt-2.5 text-[11px] font-semibold text-accent hover:underline"
+        className="mt-2.5 text-[11px] font-semibold text-primary hover:underline"
       >
         Open activity tab
       </button>

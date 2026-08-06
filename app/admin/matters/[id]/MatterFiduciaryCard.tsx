@@ -24,7 +24,7 @@ export function MatterFiduciaryCard({ matterId, planMirror }: MatterFiduciaryCar
       <CardHeader className="border-b">
         <CardTitle className="text-sm">Fiduciary appointments</CardTitle>
         <div className="col-start-2 row-span-2 row-start-1 self-start justify-self-end">
-          <Link href={designHref} className="text-xs font-medium text-accent hover:underline">
+          <Link href={designHref} className="text-xs font-medium text-primary hover:underline">
             Edit on the design sheet
           </Link>
         </div>
@@ -33,7 +33,7 @@ export function MatterFiduciaryCard({ matterId, planMirror }: MatterFiduciaryCar
         {!anyNamed ? (
           <p className="text-xs text-muted-foreground">
             No fiduciaries named yet.{' '}
-            <Link href={designHref} className="font-medium text-accent hover:underline">
+            <Link href={designHref} className="font-medium text-primary hover:underline">
               Open the design sheet
             </Link>{' '}
             to appoint them.

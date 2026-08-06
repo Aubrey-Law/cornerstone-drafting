@@ -7,6 +7,10 @@
  * - `themes.*.legacy` — shadcn/Tailwind aliases mapped from semantic roles
  *
  * Add a new theme by defining `themes.<name>` and running `npm run theme:generate`.
+ *
+ * Current theme: monochrome zinc (shadcnuikit CRM), Outfit UI face. The
+ * `brand.navy` / `brand.teal` fields are legacy aliases now mapped to neutrals
+ * (dark inverse surface / primary respectively).
  */
 
 export type ThemeId = 'light' | 'dark'
@@ -30,6 +34,7 @@ export type SemanticTokens = {
     default: string
     strong: string
     focus: string
+    input: string
   }
   brand: {
     navy: string
@@ -81,50 +86,52 @@ export type ThemeDefinition = {
   extended: Record<string, string>
 }
 
-/** Fixed brand + neutral primitives (OKLCH where possible). */
+/** Fixed brand + neutral primitives (monochrome zinc palette). */
 export const primitives = {
-  // Counsel palette
-  brandNavy: '#141929',       // charcoal-navy sidebar
-  brandBlue: '#1E4A8C',       // sapphire primary (buttons, active states)
-  brandBlueHover: '#163a70',  // sapphire hover
-  brandBlueBright: '#2563EB', // active indicator / accent
-  white: 'oklch(0.99 0.005 85)',
-  black: 'oklch(0.12 0.02 262)',
+  // Zinc monochrome palette (shadcnuikit CRM). The legacy "navy"/"blue" names
+  // are kept so existing consumers keep compiling; they now map to neutrals.
+  brandNavy: '#18181b',       // dark inverse surface
+  brandBlue: '#09090b',       // near-black primary (buttons, active states)
+  brandBlueHover: '#27272b',  // primary hover
+  brandBlueBright: '#09090b', // active indicator / accent
+  white: '#ffffff',
+  black: '#09090b',
 } as const
 
 const lightSemantic: SemanticTokens = {
   bg: {
-    canvas: '#EDF1F7',         // cool slate canvas — deep enough that white cards read as distinct surfaces
-    subtle: '#DFE5EE',
-    muted: '#E7EBF2',
+    canvas: '#ffffff',
+    subtle: '#f4f4f6',
+    muted: '#f5f5f5',
     elevated: '#ffffff',
     inverse: primitives.brandNavy,
   },
   text: {
-    default: '#111827',
-    secondary: '#374151',
-    muted: '#4D5763',
-    inverse: primitives.white,
+    default: '#27272b',
+    secondary: '#3f3f46',
+    muted: '#737373',
+    inverse: '#fafafb',
     onBrand: primitives.white,
   },
   border: {
-    default: '#C9D3E0',
-    strong: '#94A3B8',
-    focus: primitives.brandBlue,
+    default: '#e4e4e8',
+    strong: '#9f9fa7',
+    focus: '#27272b',
+    input: '#d4d4da',
   },
   brand: {
     navy: primitives.brandNavy,
     teal: primitives.brandBlue,
     tealHover: primitives.brandBlueHover,
-    onNavy: '#E2E8F8',
+    onNavy: '#fafafb',
     onTeal: primitives.white,
   },
   feedback: {
     success: 'oklch(0.48 0.12 155)',
     successFg: primitives.white,
     warning: 'oklch(0.42 0.10 70)',
-    warningFg: 'oklch(0.99 0.005 85)',
-    error: 'oklch(0.48 0.18 25)',
+    warningFg: '#ffffff',
+    error: '#e7000b',
     errorFg: primitives.white,
     info: 'oklch(0.42 0.10 240)',
     infoFg: primitives.white,
@@ -132,81 +139,82 @@ const lightSemantic: SemanticTokens = {
   interactive: {
     primary: primitives.brandBlue,
     primaryFg: primitives.white,
-    secondary: '#DFE5EE',
-    secondaryFg: '#334155',
-    accent: primitives.brandBlue,
-    accentFg: primitives.white,
-    destructive: 'oklch(0.48 0.18 25)',
+    secondary: '#d4d4da',
+    secondaryFg: '#27272b',
+    accent: '#e4e4e8',
+    accentFg: '#27272b',
+    destructive: '#e7000b',
     destructiveFg: primitives.white,
   },
   sidebar: {
-    bg: primitives.brandNavy,
-    fg: '#E2E8F8',
-    primary: primitives.brandBlueBright,
+    bg: '#f4f4f6',
+    fg: '#71717b',
+    primary: primitives.brandBlue,
     primaryFg: primitives.white,
-    accent: 'rgba(30, 74, 140, 0.35)',
-    accentFg: '#E2E8F8',
-    border: 'rgba(255,255,255,0.07)',
-    ring: primitives.brandBlueBright,
+    accent: '#e4e4e8',
+    accentFg: '#09090b',
+    border: '#e4e4e8',
+    ring: '#27272b',
   },
 }
 
 const darkSemantic: SemanticTokens = {
   bg: {
-    canvas: 'oklch(0.14 0.03 240)',
-    subtle: 'oklch(0.18 0.03 240)',
-    muted: 'oklch(0.22 0.035 240)',
-    elevated: 'oklch(0.19 0.035 240)',
-    inverse: primitives.white,
+    canvas: '#09090b',
+    subtle: '#18181b',
+    muted: '#18181b',
+    elevated: '#09090b',
+    inverse: '#fafafb',
   },
   text: {
-    default: 'oklch(0.94 0.008 220)',
-    secondary: 'oklch(0.78 0.010 220)',
-    muted: 'oklch(0.78 0.012 220)',
-    inverse: 'oklch(0.14 0.03 240)',
-    onBrand: primitives.white,
+    default: '#e4e4e8',
+    secondary: '#d4d4da',
+    muted: '#9f9fa7',
+    inverse: '#09090b',
+    onBrand: '#18181b',
   },
   border: {
-    default: 'oklch(0.30 0.038 240)',
-    strong: 'oklch(0.38 0.04 240)',
-    focus: 'oklch(0.65 0.14 240)',
+    default: '#27272b',
+    strong: '#3f3f46',
+    focus: '#e4e4e8',
+    input: '#3f3f46',
   },
   brand: {
-    navy: 'oklch(0.16 0.03 240)',
-    teal: 'oklch(0.62 0.14 240)',
-    tealHover: 'oklch(0.55 0.14 240)',
-    onNavy: 'oklch(0.90 0.010 220)',
-    onTeal: primitives.white,
+    navy: '#27272b',
+    teal: '#fafafb',
+    tealHover: '#e4e4e8',
+    onNavy: '#e4e4e8',
+    onTeal: '#18181b',
   },
   feedback: {
     success: 'oklch(0.55 0.14 155)',
     successFg: primitives.white,
     warning: 'oklch(0.62 0.14 70)',
     warningFg: primitives.white,
-    error: 'oklch(0.55 0.18 25)',
+    error: '#ff6467',
     errorFg: primitives.white,
     info: 'oklch(0.62 0.14 240)',
     infoFg: primitives.white,
   },
   interactive: {
-    primary: 'oklch(0.58 0.16 240)',
-    primaryFg: primitives.white,
-    secondary: 'oklch(0.23 0.035 240)',
-    secondaryFg: 'oklch(0.94 0.008 220)',
-    accent: 'oklch(0.58 0.16 240)',
-    accentFg: primitives.white,
-    destructive: 'oklch(0.55 0.18 25)',
+    primary: '#fafafb',
+    primaryFg: '#18181b',
+    secondary: '#71717b',
+    secondaryFg: '#e4e4e8',
+    accent: '#18181b',
+    accentFg: '#e4e4e8',
+    destructive: '#ff6467',
     destructiveFg: primitives.white,
   },
   sidebar: {
-    bg: 'oklch(0.11 0.025 240)',
-    fg: 'oklch(0.90 0.010 220)',
-    primary: 'oklch(0.62 0.14 240)',
-    primaryFg: primitives.white,
-    accent: 'oklch(0.22 0.035 240)',
-    accentFg: 'oklch(0.88 0.012 220)',
-    border: 'oklch(0.28 0.036 240)',
-    ring: 'oklch(0.62 0.14 240)',
+    bg: '#18181b',
+    fg: '#e4e4e8',
+    primary: '#fafafb',
+    primaryFg: '#18181b',
+    accent: '#27272b',
+    accentFg: '#e4e4e8',
+    border: '#27272b',
+    ring: '#e4e4e8',
   },
 }
 
@@ -242,7 +250,7 @@ function legacyFromSemantic(s: SemanticTokens): LegacyTokens {
     '--destructive': s.interactive.destructive,
     '--destructive-foreground': s.interactive.destructiveFg,
     '--border': s.border.default,
-    '--input': s.border.default,
+    '--input': s.border.input,
     '--ring': s.border.focus,
     '--success': s.feedback.success,
     '--success-foreground': s.feedback.successFg,
@@ -274,15 +282,15 @@ function legacyFromSemantic(s: SemanticTokens): LegacyTokens {
 }
 
 const lightExtended: Record<string, string> = {
-  '--navy-06': 'rgba(20, 25, 41, 0.06)',
-  '--navy-12': 'rgba(20, 25, 41, 0.12)',
-  '--teal-12': 'rgba(30, 74, 140, 0.12)',
-  '--teal-30': 'rgba(30, 74, 140, 0.30)',
-  '--chart-1': 'oklch(0.646 0.222 41.116)',
-  '--chart-2': 'oklch(0.6 0.118 184.704)',
-  '--chart-3': 'oklch(0.398 0.07 227.392)',
-  '--chart-4': 'oklch(0.828 0.189 84.429)',
-  '--chart-5': 'oklch(0.769 0.188 70.08)',
+  '--navy-06': 'rgba(9, 9, 11, 0.06)',
+  '--navy-12': 'rgba(9, 9, 11, 0.12)',
+  '--teal-12': 'rgba(9, 9, 11, 0.12)',
+  '--teal-30': 'rgba(9, 9, 11, 0.30)',
+  '--chart-1': '#09090b',
+  '--chart-2': '#52525b',
+  '--chart-3': '#27272b',
+  '--chart-4': '#9f9fa7',
+  '--chart-5': '#d4d4da',
   '--amber': '#92400e',
   '--amber-bg': '#fffbeb',
   '--amber-border': '#fcd34d',
@@ -304,10 +312,10 @@ const lightExtended: Record<string, string> = {
   '--blue-strong-dark': '#1d4ed8',
   '--blue-strong-bg': '#dbeafe',
   '--blue-strong-border': '#93c5fd',
-  '--gray-mid': '#5c6470',
-  '--gray-soft': '#b6bec9',
-  '--gray-bg': '#e8eaed',
-  '--teal-bg': '#dcf7ef',
+  '--gray-mid': '#71717b',
+  '--gray-soft': '#d4d4da',
+  '--gray-bg': '#f4f4f6',
+  '--teal-bg': '#f4f4f6',
   '--stage-early': '#2563eb',
   '--stage-early-bg': '#dbeafe',
   '--stage-early-text': '#1e40af',
@@ -338,15 +346,15 @@ const lightExtended: Record<string, string> = {
 }
 
 const darkExtended: Record<string, string> = {
-  '--navy-06': 'oklch(0.22 0.03 262 / 0.5)',
-  '--navy-12': 'oklch(0.25 0.03 262 / 0.6)',
-  '--teal-12': 'oklch(0.25 0.04 195 / 0.5)',
-  '--teal-30': 'oklch(0.35 0.06 195 / 0.6)',
-  '--chart-1': 'oklch(0.62 0.18 41)',
-  '--chart-2': 'oklch(0.62 0.12 185)',
-  '--chart-3': 'oklch(0.55 0.08 227)',
-  '--chart-4': 'oklch(0.72 0.16 84)',
-  '--chart-5': 'oklch(0.70 0.16 70)',
+  '--navy-06': 'rgba(250, 250, 251, 0.06)',
+  '--navy-12': 'rgba(250, 250, 251, 0.12)',
+  '--teal-12': 'rgba(250, 250, 251, 0.12)',
+  '--teal-30': 'rgba(250, 250, 251, 0.30)',
+  '--chart-1': '#fafafb',
+  '--chart-2': '#9f9fa7',
+  '--chart-3': '#e4e4e8',
+  '--chart-4': '#52525b',
+  '--chart-5': '#3f3f46',
   '--amber': 'oklch(0.78 0.14 70)',
   '--amber-bg': 'oklch(0.22 0.05 75)',
   '--amber-border': 'oklch(0.50 0.12 75)',
@@ -368,10 +376,10 @@ const darkExtended: Record<string, string> = {
   '--blue-strong-dark': 'oklch(0.62 0.12 262)',
   '--blue-strong-bg': 'oklch(0.25 0.05 262)',
   '--blue-strong-border': 'oklch(0.42 0.08 262)',
-  '--gray-mid': 'oklch(0.68 0.008 262)',
-  '--gray-soft': 'oklch(0.48 0.008 262)',
-  '--gray-bg': 'oklch(0.22 0.03 262)',
-  '--teal-bg': 'oklch(0.22 0.04 195)',
+  '--gray-mid': '#9f9fa7',
+  '--gray-soft': '#52525b',
+  '--gray-bg': '#18181b',
+  '--teal-bg': '#27272b',
   '--stage-early': 'oklch(0.68 0.12 262)',
   '--stage-early-bg': 'oklch(0.22 0.04 262)',
   '--stage-early-text': 'oklch(0.78 0.10 262)',

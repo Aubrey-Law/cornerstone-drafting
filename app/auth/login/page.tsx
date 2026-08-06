@@ -17,7 +17,7 @@ const ADMIN_ROLES = ['attorney', 'admin'] as const
 // text-base on mobile (matching components/ui/input.tsx): iOS Safari auto-zooms
 // the page when focusing an input whose font-size is under 16px.
 const inputCls =
-  'mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-base md:text-sm text-foreground shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-muted-foreground'
+  'mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-base md:text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground'
 
 function GoogleIcon() {
   return (
@@ -194,7 +194,7 @@ function LoginForm() {
                 type="button"
                 onClick={() => void handlePasswordReset()}
                 disabled={resetLoading}
-                className="text-xs font-medium text-accent hover:underline disabled:opacity-50"
+                className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
               >
                 {resetLoading ? 'Sending…' : 'Forgot password?'}
               </button>
@@ -214,7 +214,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>

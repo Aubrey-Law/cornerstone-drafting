@@ -204,7 +204,7 @@ export default function WorksClient() {
                       onClick={() => setSelectedId(skill.id)}
                       className={`flex w-full items-start gap-3 p-4 text-left hover:bg-muted/50 ${selected?.id === skill.id ? 'bg-muted/60' : ''}`}
                     >
-                      <span className="mt-0.5 rounded-md bg-accent/20 p-2">
+                      <span className="mt-0.5 rounded-md bg-primary/10 p-2">
                         {skill.skill_type === 'tabular' ? <Table2 className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
                       </span>
                       <span className="min-w-0 flex-1">

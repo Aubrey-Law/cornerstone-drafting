@@ -7,6 +7,15 @@ import './globals.css'
 
 // Vendored latin-subset variable fonts (assets/fonts/) so production builds
 // don't reach Google's network. Latin-ext glyphs fall back to system fonts.
+// Outfit is the app-wide UI face; DM Sans stays on --font-sans because the
+// guided interview (client intake) pins its typography to that variable.
+const outfit = localFont({
+  src: '../assets/fonts/outfit-latin-var.woff2',
+  weight: '100 900',
+  display: 'swap',
+  variable: '--font-outfit',
+})
+
 const dmSans = localFont({
   src: '../assets/fonts/dm-sans-latin-var.woff2',
   weight: '100 1000',
@@ -54,7 +63,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${lora.variable} ${ebGaramond.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${dmSans.variable} ${lora.variable} ${ebGaramond.variable}`} suppressHydrationWarning>
       <head>
         {/* Optional: restores saved light/dark on admin; system mode uses CSS prefers-color-scheme */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />

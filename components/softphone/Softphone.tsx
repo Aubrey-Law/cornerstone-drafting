@@ -810,7 +810,7 @@ export default function Softphone() {
 
           {summaryDrafted && (
             <p className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <Sparkles size={11} aria-hidden className="text-accent" />
+              <Sparkles size={11} aria-hidden className="text-primary" />
               Drafted by the assistant — edit before saving
             </p>
           )}
@@ -1040,7 +1040,7 @@ export default function Softphone() {
           {briefing && liveAssistSentence && (
             <div className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5" aria-label="Live assist">
               <p className="flex items-center gap-1.5 text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                <Sparkles size={11} aria-hidden className="text-accent" />
+                <Sparkles size={11} aria-hidden className="text-primary" />
                 Live assist
               </p>
               <p className="mt-1 text-[11px] leading-relaxed">{liveAssistSentence}</p>
@@ -1050,7 +1050,7 @@ export default function Softphone() {
                     key={prompt}
                     type="button"
                     onClick={() => openCornerstoneAssistant({ prompt })}
-                    className="rounded-full border border-border bg-background px-2 py-1 text-[10px] font-medium hover:border-accent hover:text-accent"
+                    className="rounded-full border border-border bg-background px-2 py-1 text-[10px] font-medium hover:border-primary hover:text-primary"
                   >
                     {prompt}
                   </button>

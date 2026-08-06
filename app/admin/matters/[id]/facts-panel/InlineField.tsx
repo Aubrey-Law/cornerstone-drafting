@@ -158,7 +158,7 @@ export function InlineSelect({
         onChange={event => void onSave(event.target.value)}
         className={cn(
           'h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] hover:border-input hover:bg-background focus:border-ring focus:outline-none',
-          accent && 'font-semibold text-accent',
+          accent && 'font-semibold text-primary',
         )}
       >
         {options.map(option => (
@@ -191,7 +191,7 @@ export function InlineDate({
       <span className={cn(LABEL, emphasized && 'font-semibold text-foreground')}>
         {label}
         {derived && (
-          <span className="ml-1 text-[9.5px] font-semibold uppercase tracking-[.05em] text-accent">
+          <span className="ml-1 text-[9.5px] font-semibold uppercase tracking-[.05em] text-primary">
             auto
           </span>
         )}
@@ -207,7 +207,7 @@ export function InlineDate({
         }}
         className={cn(
           'h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] tabular-nums hover:border-input hover:bg-background focus:border-ring focus:outline-none',
-          emphasized && 'border-input bg-background font-semibold text-accent',
+          emphasized && 'border-input bg-background font-semibold text-primary',
         )}
       />
     </div>

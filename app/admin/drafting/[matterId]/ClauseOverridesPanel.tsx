@@ -102,7 +102,7 @@ export function ClauseOverridesPanel({ matterId, onMutated }: { matterId: string
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div>
           <h3 id="clause-overrides-title" className="flex items-center gap-2 text-sm font-semibold">
-            <ShieldCheck className="h-4 w-4 text-accent" />
+            <ShieldCheck className="h-4 w-4 text-primary" />
             Clause overrides
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">

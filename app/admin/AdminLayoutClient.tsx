@@ -196,7 +196,7 @@ export default function AdminLayoutClient({
                   aria-hidden="true"
                   className={cn(
                     'absolute -right-1 -top-1 h-2 w-2 rounded-full',
-                    badge.tone === 'destructive' ? 'bg-destructive' : 'bg-accent',
+                    badge.tone === 'destructive' ? 'bg-destructive' : 'bg-primary',
                   )}
                 />
               )}
@@ -210,7 +210,7 @@ export default function AdminLayoutClient({
                       'ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
                       badge.tone === 'destructive'
                         ? 'bg-destructive/15 text-destructive'
-                        : 'bg-accent/15 text-accent',
+                        : 'bg-primary/15 text-primary',
                     )}
                   >
                     {badge.value}

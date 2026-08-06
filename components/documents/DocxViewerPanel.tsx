@@ -318,7 +318,7 @@ export function DocxViewerPanel({
               type="button"
               onClick={() => focusEdit(index)}
               className={`block w-full rounded border p-2 text-left text-xs transition-colors ${
-                index === activeIndex ? 'border-accent bg-accent/10' : 'border-border bg-muted/40 hover:bg-muted/70'
+                index === activeIndex ? 'border-primary bg-primary/10' : 'border-border bg-muted/40 hover:bg-muted/70'
               }`}
             >
               {edit.reason ? <p className="mb-1 text-muted-foreground">{edit.reason}</p> : null}

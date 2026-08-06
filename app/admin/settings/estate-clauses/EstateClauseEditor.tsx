@@ -136,7 +136,7 @@ export function EstateClauseEditor({
       </div>
 
       {clause.latestChangeRequest && (
-        <aside className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        <aside className="rounded-md border border-amber-border bg-amber-bg p-3 text-sm">
           <p className="font-medium">Changes requested on revision {clause.latestChangeRequest.revisionNumber}</p>
           <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{clause.latestChangeRequest.comment}</p>
           <p className="mt-2 text-[11px] text-muted-foreground">Continue in this working draft, then save and submit a new immutable revision.</p>

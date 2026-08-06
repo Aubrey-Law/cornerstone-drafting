@@ -4,8 +4,8 @@
  */
 
 :root {
-  --font-inter: 'Geist', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
-  --radius: 0.625rem;
+  --font-inter: 'Outfit', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --radius: 0.5rem;
   --sidebar-width: 260px;
   --sidebar-min: 48px;
   --nav-width: 216px;

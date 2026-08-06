@@ -136,7 +136,7 @@ export function MatterStageBoard({
               aria-label={`${STAGE_GROUP_LABELS[group]} · ${items.length}`}
               className={cn(
                 'flex min-w-0 flex-col rounded-lg border bg-muted/20',
-                isTarget ? 'border-accent ring-2 ring-accent/20' : 'border-border',
+                isTarget ? 'border-primary ring-2 ring-primary/20' : 'border-border',
               )}
               onDragOver={e => {
                 e.preventDefault()
@@ -229,12 +229,12 @@ function BoardCard({
           'rounded-md border bg-card p-2.5 shadow-sm transition-opacity',
           dragging ? 'opacity-50' : 'opacity-100',
           updating && 'pointer-events-none opacity-60',
-          isQuiet ? 'border-red-strong-border hover:border-red-strong' : 'border-border hover:border-accent',
+          isQuiet ? 'border-red-strong-border hover:border-red-strong' : 'border-border hover:border-primary',
         )}
       >
         <div className="flex items-start justify-between gap-2">
           <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
-            <p className="truncate text-sm font-semibold text-foreground hover:text-accent">{card.title}</p>
+            <p className="truncate text-sm font-semibold text-foreground hover:text-primary">{card.title}</p>
             {card.subtitle && (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{card.subtitle}</p>
             )}
@@ -251,7 +251,7 @@ function BoardCard({
               <button
                 type="button"
                 disabled={updating}
-                className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 style={{ backgroundColor: stageColors.bg, color: stageColors.text }}
                 aria-label={`Stage for ${card.title}: ${stageLabel(card.stage)}`}
                 onClick={e => e.stopPropagation()}

@@ -337,7 +337,7 @@ export function FiduciaryContactImportDialog({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-accent" />
+            <Sparkles className="h-4 w-4 text-primary" />
             Import Contacts
           </DialogTitle>
           <DialogDescription>
@@ -396,7 +396,7 @@ export function FiduciaryContactImportDialog({
                 disabled={parsing || attaching}
                 className={cn(
                   'flex min-h-36 w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-background px-6 py-8 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60',
-                  dragOver && 'border-accent bg-muted/60',
+                  dragOver && 'border-primary bg-muted/60',
                 )}
               >
                 <Upload className="h-7 w-7 text-muted-foreground" />
@@ -413,8 +413,8 @@ export function FiduciaryContactImportDialog({
               {file && (
                 <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2">
                   {file.name.toLowerCase().endsWith('.xlsx')
-                    ? <FileSpreadsheet className="h-4 w-4 text-accent" />
-                    : <FileText className="h-4 w-4 text-accent" />}
+                    ? <FileSpreadsheet className="h-4 w-4 text-primary" />
+                    : <FileText className="h-4 w-4 text-primary" />}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{file.name}</p>
                     <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
