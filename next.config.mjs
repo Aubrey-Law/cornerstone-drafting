@@ -81,7 +81,6 @@ const nextConfig = {
       '@radix-ui/react-label',
       '@radix-ui/react-popover',
       '@radix-ui/react-select',
-      '@radix-ui/react-separator',
       '@radix-ui/react-slot',
       '@radix-ui/react-switch',
       '@radix-ui/react-tabs',

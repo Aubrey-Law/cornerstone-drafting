@@ -70,28 +70,23 @@ Allowed integration points only:
 - Matter create → `ensureDesignSheetSeededFromIntake`
 - Stage changes → existing `PATCH /api/admin/matters/[id]/stage`
 
-## Database (greenfield)
+## Database
 
-Use a **dedicated greenfield Supabase project** (not the live Aubrey Law firm DB).
-
-**Drafting baseline first** (creates `client_intake`, `matters`, etc.), then lite extensions:
-
-1. `20260705000000` … `20260708120000` — drafting baseline (7 files)
-2. `20260710000000_lite_intake_portal.sql`
-3. `20260710500000_lite_portal_messages.sql`
-4. `20260711000000_lite_matter_aging.sql`
-5. `20260712000000_lite_communications.sql`
+The timestamped files in `supabase/migrations/` are the canonical schema history. Do not
+copy old quick-fix SQL into the dashboard or edit an applied migration.
 
 ```bash
-# Remote greenfield project
-npx supabase link --project-ref <ref>
-npx supabase db push
+# Local only: destroys and rebuilds the local database
+sg docker -c "SUPABASE_AUTH_SITE_URL=http://localhost:3002 ./node_modules/.bin/supabase db reset"
 
-# Local
-sg docker -c "./node_modules/.bin/supabase db reset"
+# Linked shared database: inspect before applying anything
+npx supabase migration list --linked
+npx supabase db push --dry-run
 ```
 
-If you see `relation "public.client_intake" does not exist`, the baseline migrations were skipped — see [supabase/migrations/README.md](supabase/migrations/README.md).
+Never run `supabase db reset --linked` against the shared firm database. See
+[supabase/migrations/README.md](supabase/migrations/README.md) for the reconciliation and
+deployment workflow.
 
 ## Verification
 

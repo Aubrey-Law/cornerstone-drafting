@@ -59,13 +59,11 @@ that a fresh VM needs and must be done manually (kept out of the update script o
 
 ### Non-obvious gotchas
 
-- **`supabase/seed.sql` is mandatory for local dev** (added during setup). It (a) GRANTs
+- **`supabase/seed.sql` is mandatory for local dev** (added during setup). It GRANTs
   table privileges to `anon`/`authenticated` — the local stack's default privileges omit
   `SELECT`, which otherwise makes the `users`-role lookup in `proxy.ts` return null and
-  causes an infinite `/auth/login ↔ /admin/drafting` redirect loop (`ERR_TOO_MANY_REDIRECTS`);
-  and (b) adds columns the trimmed drafting-baseline migrations omit but the app code needs
-  (`contacts.is_minor`, `design_sheets.client_pronouns`, `design_sheets.spouse_pronouns`).
-  The hosted firm DB already has these; local greenfield does not.
+  causes an infinite `/auth/login ↔ /admin/drafting` redirect loop (`ERR_TOO_MANY_REDIRECTS`).
+  Schema changes belong in timestamped migrations, not the seed.
 - After any manual `ALTER TABLE`, run `NOTIFY pgrst, 'reload schema';` or PostgREST keeps
   serving the stale schema and reports "column ... does not exist".
 - The custom `custom_access_token` JWT hook is **not** enabled in local `config.toml`, so the
@@ -79,13 +77,11 @@ that a fresh VM needs and must be done manually (kept out of the update script o
   `@aubreylegal.com` domain gate. Clients use email/password (or OAuth without firm domain).
   Post-login: staff → `/admin/drafting` (or safe admin redirect); clients → `/dashboard`
   (or safe portal redirect: `/intake`, `/documents`, `/messages`).
-- Greenfield lite migrations (`20260710*`–`20260712*`) add intake columns, messages, aging,
-  SMS/calls/calendar_connections. Run `supabase db reset` locally after pulling.
+- Run `supabase db reset` locally after pulling migrations. Never use `--linked` against the
+  shared firm database.
 
-### Pre-existing check failures (not environment issues)
+### Verification baselines
 
-These fail on a clean checkout before any change; treat them as baseline, not regressions:
-- `npm run lint` — 5 errors (e.g. `prefer-const` in `lib/llm/providers/*`) + warnings.
-- `npm run typecheck` — type errors confined to `tests/*.test.ts`.
-- `npm test` — 3 failing tests (`design-sheet-readiness`, `design-sheet-spouse-fiduciaries`,
-  `draft-payload-children`); 394 pass.
+Do not rely on static failure counts here; they drift as tests and runtimes change. Run
+`npm run lint`, `npm run typecheck`, and `npm test`, then distinguish existing failures from
+regressions with a clean-checkout comparison when necessary.
