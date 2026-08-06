@@ -598,6 +598,7 @@ export function MatterFactsPanel({
           />
         )}
 
+        {/* Same snapshot the Assets tab renders — one computation, two surfaces. */}
         <div className="mx-1.5 mt-1.5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
           <div className="bg-card px-2.5 py-2">
             <div className="text-[10.5px] text-muted-foreground">Gross estate est.</div>
@@ -609,6 +610,18 @@ export function MatterFactsPanel({
             <div className="text-[10.5px] text-amber">Estimated MA tax</div>
             <div className="mt-px text-[15px] font-bold tracking-[-0.016em] text-amber tabular-nums">
               {formatAssetCurrency(estate.estimatedMaTax)}
+            </div>
+          </div>
+          <div className="bg-card px-2.5 py-2">
+            <div className="text-[10.5px] text-muted-foreground">With credit shelter</div>
+            <div className="mt-px text-[15px] font-bold tracking-[-0.016em] tabular-nums">
+              {formatAssetCurrency(estate.maTaxWithCreditShelter)}
+            </div>
+          </div>
+          <div className="bg-card px-2.5 py-2">
+            <div className="text-[10.5px] text-muted-foreground">Difference</div>
+            <div className="mt-px text-[15px] font-bold tracking-[-0.016em] text-green tabular-nums">
+              {formatAssetCurrency(estate.creditShelterSavings)}
             </div>
           </div>
         </div>
@@ -738,6 +751,16 @@ export function MatterFactsPanel({
           value={toDateInputValue(details?.signing_date ?? matter.signing_date ?? null)}
           onSave={next => onSaveField('signing_date', next || null)}
         />
+        {/* Not part of the plan timeline — this is what drives the header pill
+            and the weekly board, so it sits below a rule. */}
+        <div className="mx-1.5 mt-1.5 border-t border-dashed border-border pt-1.5">
+          <InlineDate
+            label="Next action"
+            emphasized
+            value={toDateInputValue(details?.next_action_date ?? null)}
+            onSave={next => onSaveField('next_action_date', next || null)}
+          />
+        </div>
       </PanelSection>
 
       {/* Notes */}

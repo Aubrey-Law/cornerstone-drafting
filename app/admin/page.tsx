@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { CalendarClock, CheckCircle2, Inbox } from 'lucide-react'
 import { ComingDueCard } from '@/app/admin/components/ComingDueCard'
+import { NextActionsCard } from '@/app/admin/components/NextActionsCard'
 import { DailyBriefCard } from '@/app/admin/components/DailyBriefCard'
 import { TodayQueue, type TodayMatterItem } from '@/app/admin/components/TodayQueue'
 import { TodayClearedCard } from '@/app/admin/components/TodayClearedCard'
@@ -106,6 +107,8 @@ export default async function AdminTodayPage() {
               </ul>
             )}
           </section>
+
+          <NextActionsCard />
 
           <ComingDueCard />
 

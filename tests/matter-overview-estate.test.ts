@@ -20,12 +20,50 @@ describe('matter estate snapshot', () => {
       assetCount: 0,
       ownedAssetValue: 0,
       deathBenefit: 0,
+      lifeInsuranceFace: 0,
+      businessInterests: 0,
+      anticipatedInheritance: 0,
       grossEstateEstimate: 0,
+      estateExcludingLifeInsurance: 0,
       totalDebt: 0,
       netInventoryValue: 0,
       estimatedMaTax: 0,
+      maTaxWithCreditShelter: 0,
+      creditShelterSavings: 0,
       latestAssetUpdatedAt: null,
     })
+  })
+
+  it('tracks life insurance face, business interests and anticipated inheritance', () => {
+    const snapshot = computeMatterEstateSnapshot([
+      asset({ category: 'life_insurance', value: 500_000, details: { face_value: 2_000_000 } }),
+      asset({ category: 'business', value: 900_000 }),
+      asset({ category: 'inheritance', value: 250_000 }),
+    ])
+
+    expect(snapshot.lifeInsuranceFace).toBe(2_000_000)
+    expect(snapshot.businessInterests).toBe(900_000)
+    expect(snapshot.anticipatedInheritance).toBe(250_000)
+    // Face value is reported beside the estate, never netted out of the tax base.
+    expect(snapshot.grossEstateEstimate).toBe(1_650_000)
+    expect(snapshot.estateExcludingLifeInsurance).toBe(0)
+  })
+
+  it('quantifies what a credit shelter saves on a taxable estate', () => {
+    const snapshot = computeMatterEstateSnapshot([asset({ category: 'bank', value: 4_000_000 })])
+
+    expect(snapshot.estimatedMaTax).toBeGreaterThan(0)
+    expect(snapshot.maTaxWithCreditShelter).toBeLessThan(snapshot.estimatedMaTax)
+    expect(snapshot.creditShelterSavings).toBe(
+      snapshot.estimatedMaTax - snapshot.maTaxWithCreditShelter,
+    )
+  })
+
+  it('leaves an estate under the exemption with nothing to save', () => {
+    const snapshot = computeMatterEstateSnapshot([asset({ category: 'bank', value: 900_000 })])
+
+    expect(snapshot.estimatedMaTax).toBe(0)
+    expect(snapshot.creditShelterSavings).toBe(0)
   })
 
   it('separates death benefits while including them in the conservative estate estimate', () => {

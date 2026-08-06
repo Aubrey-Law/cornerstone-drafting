@@ -60,10 +60,16 @@ const ESTATE = {
   assetCount: 3,
   ownedAssetValue: 3_000_000,
   deathBenefit: 420_000,
+  lifeInsuranceFace: 420_000,
+  businessInterests: 0,
+  anticipatedInheritance: 0,
   grossEstateEstimate: 3_420_000,
+  estateExcludingLifeInsurance: 3_000_000,
   totalDebt: 0,
   netInventoryValue: 3_420_000,
   estimatedMaTax: 118_400,
+  maTaxWithCreditShelter: 46_800,
+  creditShelterSavings: 71_600,
   latestAssetUpdatedAt: '2026-07-09T00:00:00.000Z',
 }
 

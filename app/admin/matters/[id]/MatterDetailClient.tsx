@@ -746,6 +746,7 @@ function MatterDetailClientInner({
         matter={matter}
         matterNumber={matterNum}
         agingSummary={agingSummary}
+        nextActionDate={matterDetails?.next_action_date ?? null}
         intakeCompleted={intakeCompleted}
         intakeId={liveIntakeId}
         unlocking={unlocking}
@@ -977,6 +978,9 @@ function MatterDetailClientInner({
                 matter={matter}
                 intakeId={liveIntakeId}
                 enabled={assetsTabVisited}
+                anticipatedInheritance={Boolean(matterDetails?.ep_anticipated_inheritance)}
+                onAnticipatedInheritanceChange={next =>
+                  void handleSaveMatterDetailField('ep_anticipated_inheritance', next)}
               />
 
               <TabsContent value="documents" className="space-y-4">
