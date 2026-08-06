@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const inserts: Array<{ table: string; values: Record<string, unknown> }> = []
+const leadQuery = vi.hoisted(() => ({
+  data: null as Record<string, unknown> | null,
+}))
 
 vi.mock('@/lib/supabaseAdmin', () => ({
   getAdminClient: () => ({
@@ -22,15 +25,8 @@ vi.mock('@/lib/supabaseAdmin', () => ({
       }),
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({
-            data: {
-              id: 'lead-1',
-              first_name: 'Avery',
-              last_name: 'Stone',
-              full_name: 'Avery Stone',
-              phone: '+15555550123',
-            },
-            error: null,
+          not: () => ({
+            maybeSingle: async () => ({ data: leadQuery.data, error: null }),
           }),
         }),
       }),
@@ -54,6 +50,14 @@ import { resolveLeadSmsTarget, sendOutboundSms } from '@/lib/sms/outbound'
 
 beforeEach(() => {
   inserts.length = 0
+  leadQuery.data = {
+    id: 'lead-1',
+    first_name: 'Avery',
+    last_name: 'Stone',
+    full_name: 'Avery Stone',
+    phone: '+15555550123',
+    matter_id: 'matter-1',
+  }
 })
 
 describe('lead-target outbound SMS', () => {
@@ -69,8 +73,20 @@ describe('lead-target outbound SMS', () => {
     expect(target?.recipientName).toBe('Avery Stone')
   })
 
+  it('includes the linked opportunity matter only when the caller requests route provenance', async () => {
+    const { target } = await resolveLeadSmsTarget('lead-1', { includeLinkedMatter: true })
+    expect(target).toMatchObject({ leadId: 'lead-1', matterId: 'matter-1' })
+  })
+
+  it('does not resolve a non-lead intake row', async () => {
+    leadQuery.data = null
+    const { target, error } = await resolveLeadSmsTarget('intake-only')
+    expect(target).toBeNull()
+    expect(error).toBe('Lead not found')
+  })
+
   it('writes sms_messages with lead_id and logs lead_activity, not matter_activity', async () => {
-    const { target } = await resolveLeadSmsTarget('lead-1')
+    const { target } = await resolveLeadSmsTarget('lead-1', { includeLinkedMatter: true })
     const result = await sendOutboundSms(target!, 'Book here: https://calendly.com/x', {
       id: 'user-1',
       email: 'staff@example.com',
@@ -79,10 +95,10 @@ describe('lead-target outbound SMS', () => {
 
     expect(result.ok).toBe(true)
     const smsInsert = inserts.find(i => i.table === 'sms_messages')
-    expect(smsInsert?.values).toMatchObject({ lead_id: 'lead-1', matter_id: null })
+    expect(smsInsert?.values).toMatchObject({ lead_id: 'lead-1', matter_id: 'matter-1' })
     expect(inserts.some(i => i.table === 'lead_activity')).toBe(true)
     expect(inserts.some(i => i.table === 'matter_activity')).toBe(false)
     const activity = inserts.find(i => i.table === 'lead_activity')
-    expect(activity?.values).toMatchObject({ lead_id: 'lead-1', event_type: 'sms' })
+    expect(activity?.values).toMatchObject({ lead_id: 'lead-1', event_type: 'sms_sent' })
   })
 })

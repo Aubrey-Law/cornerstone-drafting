@@ -446,19 +446,18 @@ describe('lead detail page', () => {
 
   it('opens the intake sheet for both fill and review ribbon intents', async () => {
     const user = userEvent.setup()
-    const { rerender } = render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+    const firstRender = render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     await user.click(screen.getByRole('button', { name: 'Fill it myself' }))
     expect(await screen.findByRole('dialog', { name: /Intake — Jane Doe/ })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Close' }))
+    firstRender.unmount()
 
-    rerender(
+    render(
       <LeadDetailClient
         lead={{ ...lead, intake_completed_at: '2026-07-24T12:00:00Z', updated_at: '2026-07-25T10:01:00Z' }}
         spouse={spouse}
         initialActivity={[]}
-        activeAgreement={{ id: 'a1' }}
-        lastTouchAt="2026-07-24T12:00:00Z"
       />,
     )
     await user.click(screen.getByRole('button', { name: 'Review intake' }))

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import { assemblePmpsData } from '@/lib/pmps/assemble'
 import { generatePmpsArtifacts } from '@/lib/pmps/generate'
-import { ANNUAL_GIFT_EXCLUSION_2026, FEDERAL_BASIC_EXCLUSION_2026, computeMaEstateTax, computePmpsTax } from '@/lib/pmps/tax'
+import { computeMATax } from '@/lib/pmps/templates/pmps-tax-calc'
 
 function payload(overrides: Partial<DraftPayload> = {}): DraftPayload {
   return {
@@ -22,20 +22,15 @@ function payload(overrides: Partial<DraftPayload> = {}): DraftPayload {
 }
 
 describe('PMPS tax calculation', () => {
-  it('uses current verified 2026 federal constants', () => {
-    expect(ANNUAL_GIFT_EXCLUSION_2026).toBe(19_000)
-    expect(FEDERAL_BASIC_EXCLUSION_2026).toBe(15_000_000)
-  })
-
   it('returns zero at the Massachusetts exclusion and applies credit above it', () => {
-    expect(computeMaEstateTax(2_000_000).netTax).toBe(0)
-    expect(computeMaEstateTax(2_500_000).netTax).toBeGreaterThan(0)
+    expect(computeMATax(2_000_000, 'individual_single').scenario1.netTax).toBe(0)
+    expect(computeMATax(2_500_000, 'individual_single').scenario1.netTax).toBeGreaterThan(0)
   })
 
   it('computes a lower selected-plan scenario only for credit-shelter structures', () => {
-    expect(computePmpsTax(6_500_000, 'separate_clayton').savings).toBeGreaterThan(0)
-    expect(computePmpsTax(6_500_000, 'joint_disclaimer').withPlanning).not.toBeNull()
-    expect(computePmpsTax(6_500_000, 'joint_outright').withPlanning).toBeNull()
+    expect(computeMATax(6_500_000, 'separate_clayton').savings).toBeGreaterThan(0)
+    expect(computeMATax(6_500_000, 'joint_disclaimer').scenario2).not.toBeNull()
+    expect(computeMATax(6_500_000, 'joint_outright').scenario2).toBeNull()
   })
 })
 

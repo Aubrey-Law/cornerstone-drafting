@@ -77,7 +77,7 @@ Re-verify quarterly.
 2. Verify env:
    - `R2_*` credentials and bucket name
    - `ESTATE_GENERATOR_ENGINE` (default `node`)
-3. On Vercel, confirm `npm run estate-generator:setup` succeeded in build logs (Python venv only needed for `python` engine).
+3. Confirm the configured Node generator or Supabase Storage templates are available.
 4. Test health: `curl -s "$HOST/api/health?check=full" | jq .`
 5. Fallback: set `ESTATE_GENERATOR_ENGINE=supabase` if Node packages fail but Storage templates exist.
 
@@ -97,7 +97,7 @@ Re-verify quarterly.
 ## Part 3 — Deployment
 
 1. Merge to main → Vercel production deploy.
-2. Build runs Python venv setup + Next build (see `vercel.json`).
+2. Build runs the estate-generator preflight + Next build (see `vercel.json`).
 3. No migration reset on shared firm database — app-only deploys are normal.
 4. After deploy: `/api/health?check=full` and sign-in smoke test.
 
@@ -326,7 +326,6 @@ rerun the release gate in preview, and perform a new deliberate cutover.
 
 ```bash
 npm ci
-npm run estate-generator:setup   # once, for Node/Python generators
 cp .env.local.save .env.local  # if available
 npm run dev                    # http://localhost:3002
 ```

@@ -18,7 +18,7 @@ export interface ResolvedSmsTarget {
   recipientName: string
   recipientRole: SmsRecipientRole
   phone: string | null
-  /** Exactly one of matterId / leadId is set. */
+  /** Leads may retain their linked opportunity matter for thread provenance. */
   matterId: string | null
   leadId?: string | null
   /**
@@ -98,12 +98,14 @@ export async function resolveMatterSmsTarget(
 
 export async function resolveLeadSmsTarget(
   leadId: string,
+  options: { includeLinkedMatter?: boolean } = {},
 ): Promise<{ target: ResolvedSmsTarget | null; error: string | null }> {
   const admin = getAdminClient()
   const { data: lead, error } = await admin
     .from('client_intake')
-    .select('id, first_name, last_name, full_name, phone')
+    .select('id, first_name, last_name, full_name, phone, matter_id')
     .eq('id', leadId)
+    .not('lead_status', 'is', null)
     .maybeSingle()
 
   if (error) return { target: null, error: error.message }
@@ -119,7 +121,7 @@ export async function resolveLeadSmsTarget(
       recipientName: name,
       recipientRole: 'client',
       phone: lead.phone,
-      matterId: null,
+      matterId: options.includeLinkedMatter ? lead.matter_id ?? null : null,
       leadId,
     },
     error: null,
@@ -295,7 +297,24 @@ export async function sendOutboundSms(
   // Three-way, not an either/or: a standalone contact has no matter_activity
   // and no lead_activity to write to (there is no contact_activity table).
   // That's fine — the sms_messages row is the record.
-  if (target.matterId) {
+  if (target.leadId) {
+    const { data: leadActivity, error: activityError } = await admin
+      .from('lead_activity')
+      .insert({
+        lead_id: target.leadId,
+        event_type: 'sms_sent',
+        title,
+        detail,
+        actor_id: actor.id,
+      })
+      .select()
+      .single()
+    if (activityError) {
+      console.error('sendOutboundSms: failed to log lead activity', activityError)
+    } else {
+      activity = leadActivity as Record<string, unknown>
+    }
+  } else if (target.matterId) {
     const { data: matterActivity, error: activityError } = await admin
       .from('matter_activity')
       .insert({
@@ -322,23 +341,6 @@ export async function sendOutboundSms(
       console.error('sendOutboundSms: failed to log matter activity', activityError)
     } else {
       activity = matterActivity as Record<string, unknown>
-    }
-  } else if (target.leadId) {
-    const { data: leadActivity, error: activityError } = await admin
-      .from('lead_activity')
-      .insert({
-        lead_id: target.leadId,
-        event_type: 'sms',
-        title,
-        detail,
-        actor_id: actor.id,
-      })
-      .select()
-      .single()
-    if (activityError) {
-      console.error('sendOutboundSms: failed to log lead activity', activityError)
-    } else {
-      activity = leadActivity as Record<string, unknown>
     }
   }
 

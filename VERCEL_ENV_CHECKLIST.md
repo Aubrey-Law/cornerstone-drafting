@@ -16,10 +16,8 @@
 
 | Variable | Purpose |
 |----------|---------|
-| `ESTATE_GENERATOR_ENGINE` | `node` (default). `supabase` uses Storage templates. `python` is reserved for subprocess tooling; bulk runs use node → supabase → per-doc fallback. |
+| `ESTATE_GENERATOR_ENGINE` | `node` (default). `supabase` uses Storage templates. Bulk runs use node → supabase → per-doc fallback. |
 | `ESTATE_CLAUSE_SOURCE` | `file` (default and rollback setting) or `database`. Keep production on `file` until the estate-clause release gate in `OPERATIONS_RUNBOOK.md` is green in preview. This is server-only; never prefix it with `NEXT_PUBLIC_`. |
-
-Python fallback uses the venv created by `npm run estate-generator:setup` during build.
 
 ## Shared fields package
 
@@ -264,8 +262,7 @@ Worth running because migration history is not proof of application: a row in `s
 
 ## Not used in this app
 
-- Lawmatics, DocuSeal / SignWell
-- Leads CRM / unified admin inbox / AI email triage
+- DocuSeal / SignWell
 - Portal hostname split (`NEXT_PUBLIC_PORTAL_HOST`) — single host, role-based routing
 - Full 12-category email settings matrix from aubrey-law-app
 

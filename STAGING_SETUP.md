@@ -73,7 +73,7 @@ Set Preview-scoped variables (see [VERCEL_ENV_CHECKLIST.md](VERCEL_ENV_CHECKLIST
 Build command (from `vercel.json`):
 
 ```bash
-npm run estate-generator:setup && npm run build:next
+npm run build:next
 ```
 
 ---
@@ -91,4 +91,4 @@ npm run estate-generator:setup && npm run build:next
 
 - Rotate staging service-role key if compromised.
 - Refresh seeded test matters after schema changes.
-- Confirm Python venv still builds on Vercel if using `ESTATE_GENERATOR_ENGINE=python`.
+- Smoke-test the Node generator and the Supabase Storage template fallback.
