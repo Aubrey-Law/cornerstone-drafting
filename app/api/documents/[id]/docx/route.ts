@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auditDocumentAccess, userCanReadDocument } from '@/lib/documentSecurity'
+import { userCanReadDocument } from '@/lib/documentSecurity'
 import {
   DOCX_CONTENT_TYPE,
   getDocumentApiUser,
@@ -30,14 +30,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   if (!isDocxDocument(doc)) {
     return NextResponse.json({ error: 'Not a DOCX document' }, { status: 415 })
-  }
-
-  const audit = await auditDocumentAccess(sb, user, doc, 'view', {
-    route: '/api/documents/[id]/docx',
-    version_id: versionId,
-  })
-  if (!audit.ok) {
-    return NextResponse.json({ error: 'Audit log write failed; access denied', code: 'audit_failed' }, { status: 503 })
   }
 
   try {

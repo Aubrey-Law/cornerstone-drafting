@@ -45,7 +45,7 @@ export default function ClientUploadCard({ matterId, matterClosed, initialUpload
         continue
       }
       try {
-        const doc = await uploadDocument(file, matterId, 'client', (pct) => setProgress(pct))
+        const doc = await uploadDocument(file, matterId, (pct) => setProgress(pct))
         setUploads((prev) => [doc, ...prev])
         toast.success(`${file.name} uploaded`)
       } catch (e) {

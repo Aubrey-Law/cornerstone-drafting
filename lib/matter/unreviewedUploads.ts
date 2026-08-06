@@ -55,7 +55,7 @@ export async function countUnreviewedPortalUploads(
     .from('matter_documents')
     .select('id', { count: 'exact', head: true })
     .eq('matter_id', matterId)
-    .eq('folder', 'client')
+    .eq('source', 'client')
     .gt('created_at', since)
 
   if (error) throw new Error(error.message)
@@ -120,7 +120,7 @@ export async function fetchUnreviewedUploadCountsForMatters(
         .from('matter_documents')
         .select('matter_id, created_at')
         .in('matter_id', matterIds)
-        .eq('folder', 'client'),
+        .eq('source', 'client'),
     ])
 
   if (intakeError) throw new Error(intakeError.message)

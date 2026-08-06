@@ -80,32 +80,28 @@ describe('drafting hub and workspace', () => {
   it('lets admins approve one recent draft into client review through the audited document API', () => {
     const review = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/ReviewStep.tsx'), 'utf8')
 
-    expect(review).toContain('updateDocumentFolder')
+    expect(review).toContain('setDocumentShared')
     expect(review).toContain('const [approvingId, setApprovingId] = useState<string | null>(null)')
     expect(review).toContain('const [promotedIds, setPromotedIds] = useState<Set<string>>(() => new Set())')
-    expect(review).toContain('const confirmPromotion = async')
-    expect(review).toContain("await updateDocumentFolder(doc.id, toFolder, { confirmed: true })")
+    expect(review).toContain('await setDocumentShared(doc.id, true)')
     expect(review).toContain("logMatterActivity(matterId, 'draft_promoted_to_review'")
     expect(review).toContain('setPromotedIds')
     expect(review).toContain('Share PDF')
     expect(review).toContain('<Send className="h-3.5 w-3.5" />')
   })
 
-  it('requires the shared attorney review dialog before approving a draft to client review', () => {
+  it('shares a draft with the client directly, with no promotion dialog', () => {
     const review = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/ReviewStep.tsx'), 'utf8')
     const approveSlice = review.slice(
       review.indexOf('const handleApprove'),
-      review.indexOf('const confirmPromotion'),
+      review.indexOf('const handleConvertPdf'),
     )
 
-    expect(review).toContain("import('@/components/documents/PromoteDocumentDialog')")
-    expect(review).toContain('const [pendingPromotion, setPendingPromotion] = useState<')
-    expect(review).toContain("{ doc: DraftingHubDocument; toFolder: MatterDocument['folder'] } | null")
-    expect(approveSlice).toContain("setPendingPromotion({ doc, toFolder: 'review' })")
+    expect(review).not.toContain('PromoteDocumentDialog')
+    expect(review).not.toContain('updateDocumentFolder')
+    expect(review).toContain('setDocumentShared')
+    expect(approveSlice).toContain('setDocumentShared(doc.id, true)')
     expect(approveSlice).not.toContain('window.confirm')
-    expect(review).toContain('<PromoteDocumentDialog')
-    expect(review).toContain('pending={pendingPromotion}')
-    expect(review).toContain('onConfirm={confirmPromotion}')
   })
 
   it('shows hub empty-state CTA and stage success toasts', () => {

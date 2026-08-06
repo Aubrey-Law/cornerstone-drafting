@@ -23,12 +23,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const audit = await auditDocumentAccess(sb, user, doc, 'version', {
+  await auditDocumentAccess(sb, user, doc, 'version', {
     route: '/api/documents/[id]/versions',
   })
-  if (!audit.ok) {
-    return NextResponse.json({ error: 'Audit log write failed; access denied', code: 'audit_failed' }, { status: 503 })
-  }
 
   try {
     const versions = await listDocumentVersions(sb, id)

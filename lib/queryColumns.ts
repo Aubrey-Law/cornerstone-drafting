@@ -1,1 +1,1 @@
-export const MATTER_DOCUMENT_COLUMNS = 'id, matter_id, r2_key, name, size, content_type, folder, folder_id, uploaded_by, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by, current_version_id' as const
+export const MATTER_DOCUMENT_COLUMNS = 'id, matter_id, r2_key, name, size, content_type, shared_at, source, uploaded_by, created_at, generation_id, generation_engine, marker_count, missing_count, superseded_at, reviewed_at, reviewed_by, current_version_id' as const

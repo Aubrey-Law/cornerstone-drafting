@@ -7,7 +7,7 @@ import {
 } from '@/lib/auth/safeRedirect'
 import { retellWebhookToRow, RETELL_UPSERT_EVENTS } from '@/lib/retell/normalize'
 import type { RetellWebhookPayload } from '@/lib/retell/types'
-import { isClientPortalFirmDocument } from '@/lib/documentSharing'
+import { isDocumentShared } from '@/lib/documentWorkspace'
 
 describe('mapMatterStageToEngine', () => {
   it('maps early stages to design_input', () => {
@@ -101,12 +101,8 @@ describe('retellWebhookToRow', () => {
 })
 
 describe('portal document visibility (lite)', () => {
-  it('keeps draft folders off the client portal', () => {
-    expect(
-      isClientPortalFirmDocument({ name: 'Trust.pdf', folder: 'draft', content_type: 'application/pdf' }),
-    ).toBe(false)
-    expect(
-      isClientPortalFirmDocument({ name: 'Trust.pdf', folder: 'review', content_type: 'application/pdf' }),
-    ).toBe(true)
+  it('keeps unshared documents off the client portal', () => {
+    expect(isDocumentShared({ shared_at: null })).toBe(false)
+    expect(isDocumentShared({ shared_at: '2026-08-06T00:00:00Z' })).toBe(true)
   })
 })

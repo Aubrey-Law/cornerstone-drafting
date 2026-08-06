@@ -6,10 +6,7 @@ import { Readable } from 'node:stream'
 import { getR2Client, R2_BUCKET } from '@/lib/r2'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
-import {
-  auditDocumentAccess,
-  userCanReadDocument,
-} from '@/lib/documentSecurity'
+import { userCanReadDocument } from '@/lib/documentSecurity'
 import type { MatterDocument } from '@/types/database'
 
 export const runtime = 'nodejs'
@@ -20,9 +17,9 @@ function safeFilename(name: string) {
   return name.replace(/[\/\\:*?"<>|]+/g, '_').replace(/^\.+/, '') || 'document'
 }
 
-function archiveEntryName(doc: Pick<MatterDocument, 'name' | 'folder'>, seen: Map<string, number>) {
+function archiveEntryName(doc: Pick<MatterDocument, 'name' | 'source'>, seen: Map<string, number>) {
   const base = safeFilename(doc.name)
-  const folder = safeFilename(doc.folder || 'documents')
+  const folder = safeFilename(doc.source || 'documents')
   const key = `${folder}/${base}`
   const count = seen.get(key) ?? 0
   seen.set(key, count + 1)
@@ -66,21 +63,6 @@ export async function POST(req: Request) {
   for (const doc of docs) {
     if (!(await userCanReadDocument(admin, user, doc))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
-
-  for (const doc of docs) {
-    const audit = await auditDocumentAccess(admin, user, doc, 'download', {
-      bulk: true,
-      folder: doc.folder,
-      document_name: doc.name,
-      route: '/api/documents/bulk-download',
-    })
-    if (!audit.ok) {
-      return NextResponse.json(
-        { error: 'Audit log write failed; bulk download aborted' },
-        { status: 500 },
-      )
     }
   }
 

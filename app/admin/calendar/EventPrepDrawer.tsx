@@ -21,7 +21,7 @@ interface EventDetail {
     lastTouch: { title: string; created_at: string } | null
   } | null
   checklist: Array<{ id: string; title: string; status: string; blocker: boolean }>
-  documents: Array<{ id: string; name: string; folder: string; generation_id: string | null }>
+  documents: Array<{ id: string; name: string; source: string; generation_id: string | null }>
   attendees: Array<{ name: string; email: string; status: string }>
 }
 
@@ -120,7 +120,7 @@ export function EventPrepDrawer({
                       <Link key={document.id} href={`/admin/matters/${appointment.linkedMatterId}?tab=documents`} className="flex items-center gap-2 border-b border-border py-2 text-xs text-foreground last:border-0 hover:underline">
                         <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="flex-1">{document.name}</span>
-                        <span className="text-[10px] text-muted-foreground">{document.generation_id ? 'Generated version' : document.folder}</span>
+                        <span className="text-[10px] text-muted-foreground">{document.generation_id ? 'Generated version' : document.source}</span>
                       </Link>
                     )) : <p className="text-xs text-muted-foreground">No current documents found.</p>}
                   </DrawerSection>

@@ -41,13 +41,10 @@ export async function resolveEdit(
     return NextResponse.json({ edit, remaining_pending: count ?? 0, already_resolved: true })
   }
 
-  const audit = await auditDocumentAccess(sb, user, doc, 'edit', {
+  await auditDocumentAccess(sb, user, doc, 'edit', {
     route: `/api/documents/[id]/edits/[editId]/${mode}`,
     edit_id: editId,
   })
-  if (!audit.ok) {
-    return NextResponse.json({ error: 'Audit log write failed; access denied', code: 'audit_failed' }, { status: 503 })
-  }
 
   const version = await loadActiveVersion(sb, id)
   if (!version) return NextResponse.json({ error: 'No active version' }, { status: 404 })

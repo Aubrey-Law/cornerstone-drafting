@@ -113,7 +113,8 @@ export async function POST(req: Request) {
       name: filename,
       size: bytes.byteLength,
       content_type: 'text/markdown',
-      folder: 'meeting-notes',
+      source: 'meeting-notes',
+      shared_at: null,
       uploaded_by: userId,
     })
     .select('*')
@@ -128,7 +129,6 @@ export async function POST(req: Request) {
     detail: `Meeting on ${meetingDate}${body.source ? ` (${body.source})` : ''}`,
     metadata: {
       document_id: data.id,
-      folder: 'meeting-notes',
       source: body.source ?? 'granola',
       source_url: body.sourceUrl ?? null,
       meeting_date: meetingDate,

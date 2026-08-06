@@ -1,13 +1,7 @@
-import { NextResponse, after } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getBearerUser } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import {
-  isAdminUser,
-  isClientUploadFolder,
-  userCanAccessMatter,
-} from '@/lib/documentSecurity'
-import { isFirmSharedFolder, pdfRequiredUploadReason } from '@/lib/documentSharing'
-import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
+import { isAdminUser, userCanAccessMatter } from '@/lib/documentSecurity'
 import {
   ALLOWED_MIME_TYPES,
   MAX_UPLOAD_BYTES,
@@ -16,9 +10,6 @@ import {
   safeUploadFilename,
 } from '@/lib/documentUpload'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
-import type { MatterDocument } from '@/types/database'
-
-const VALID_FOLDERS = new Set(['draft', 'final', 'client', 'review', 'signed', 'intake', 'meeting-notes'])
 
 // POST /api/documents/upload — multipart proxy upload (avoids browser → R2 CORS)
 export async function POST(req: Request) {
@@ -34,18 +25,12 @@ export async function POST(req: Request) {
 
   const file = form.get('file')
   const matterId = String(form.get('matterId') ?? '').trim()
-  const folder = String(form.get('folder') ?? 'client').trim()
-  const folderIdRaw = form.get('folderId')
-  const folderId = folderIdRaw && String(folderIdRaw).trim() ? String(folderIdRaw).trim() : null
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'Missing file' }, { status: 400 })
   }
   if (!matterId) {
     return NextResponse.json({ error: 'Missing matterId' }, { status: 400 })
-  }
-  if (!VALID_FOLDERS.has(folder)) {
-    return NextResponse.json({ error: `Invalid folder: ${folder}` }, { status: 400 })
   }
   if (file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
     return NextResponse.json(
@@ -66,18 +51,8 @@ export async function POST(req: Request) {
   if (!(await userCanAccessMatter(admin, user, matterId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const isAdmin = await isAdminUser(admin, user)
-  if (!isAdmin && !isClientUploadFolder(folder)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
 
-  const pdfBlock = isAdmin
-    ? pdfRequiredUploadReason(folder as MatterDocument['folder'], file.name, contentType)
-    : null
-  if (pdfBlock) {
-    return NextResponse.json({ error: pdfBlock, code: 'pdf_required' }, { status: 409 })
-  }
-
+  // Closed matters are read-only — no new uploads.
   const { data: matterStatus } = await admin
     .from('matters')
     .select('status')
@@ -90,9 +65,12 @@ export async function POST(req: Request) {
     )
   }
 
+  const isAdmin = await isAdminUser(admin, user)
+  const source = isAdmin ? 'firm' : 'client'
+
   const timestamp = Date.now()
   const safeFilename = safeUploadFilename(file.name)
-  const r2Key = `matters/${matterId}/${folder}/${timestamp}-${safeFilename}`
+  const r2Key = `matters/${matterId}/${source}/${timestamp}-${safeFilename}`
 
   try {
     const bytes = Buffer.from(await file.arrayBuffer())
@@ -111,18 +89,14 @@ export async function POST(req: Request) {
       name: file.name,
       size: file.size,
       content_type: contentType,
-      folder,
-      folder_id: folderId,
+      source: isAdmin ? 'firm' : 'client',
+      shared_at: null,
       uploaded_by: user.id,
     })
     .select(MATTER_DOCUMENT_COLUMNS)
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  if (isAdmin && isFirmSharedFolder(folder as MatterDocument['folder'])) {
-    after(() => notifyClientOfSharedDocument(matterId, file.name))
-  }
 
   return NextResponse.json({ document: data })
 }

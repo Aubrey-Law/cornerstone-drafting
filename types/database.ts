@@ -551,8 +551,10 @@ export interface MatterDocument {
   name: string
   size: number
   content_type: string
-  folder: 'draft' | 'final' | 'client' | 'review' | 'signed' | 'intake' | 'meeting-notes'
-  folder_id: string | null
+  /** Set when the document is visible to the client. Null means firm-only. */
+  shared_at: string | null
+  /** Provenance, written automatically at creation. Never gates anything. */
+  source: 'firm' | 'client' | 'meeting-notes'
   uploaded_by: string | null
   created_at: string
   // Generation-run provenance + review state (nullable; absent on uploads and
@@ -608,15 +610,13 @@ export interface DocumentAccessAudit {
   user_id: string | null
   user_email: string | null
   action:
-    | 'view'
-    | 'download'
-    | 'folder_change'
+    | 'share'
+    | 'unshare'
     | 'delete'
-    | 'export'
-    | 'review'
     | 'rename'
-    | 'edit'
+    | 'review'
     | 'convert'
+    | 'edit'
     | 'version'
   metadata: Record<string, unknown>
   created_at: string

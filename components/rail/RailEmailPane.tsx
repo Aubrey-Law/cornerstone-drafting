@@ -46,7 +46,7 @@ interface ComposeDocument {
   id: string
   name: string
   size: number | null
-  folder: string | null
+  source: string | null
 }
 
 interface ComposeContext {
@@ -1104,7 +1104,7 @@ export function ManualEmailComposer({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{doc.name}</span>
                       <span className="block text-[10px] text-muted-foreground">
-                        {[doc.folder, doc.size ? formatBytes(doc.size) : null].filter(Boolean).join(' · ')}
+                        {[doc.source, doc.size ? formatBytes(doc.size) : null].filter(Boolean).join(' · ')}
                       </span>
                     </span>
                   </label>

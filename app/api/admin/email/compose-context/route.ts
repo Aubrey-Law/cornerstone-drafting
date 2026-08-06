@@ -9,7 +9,7 @@ export interface EmailComposeDocument {
   id: string
   name: string
   size: number | null
-  folder: string | null
+  source: string | null
   createdAt: string | null
 }
 
@@ -56,7 +56,7 @@ export async function GET(req: Request) {
           .maybeSingle(),
         admin
           .from('matter_documents')
-          .select('id, name, size, folder, created_at')
+          .select('id, name, size, source, created_at')
           .eq('matter_id', matterId)
           .is('superseded_at', null)
           .order('created_at', { ascending: false })
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
           id: row.id as string,
           name: (row.name as string | null) ?? 'Document',
           size: (row.size as number | null) ?? null,
-          folder: (row.folder as string | null) ?? null,
+          source: (row.source as string | null) ?? null,
           createdAt: (row.created_at as string | null) ?? null,
         })),
       }

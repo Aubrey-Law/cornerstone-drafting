@@ -7,7 +7,6 @@ import {
   Eye,
   FileSearch,
   FileText,
-  FolderInput,
   History,
   Loader2,
   MoreHorizontal,
@@ -24,13 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import {
   Sheet,
   SheetContent,
@@ -64,10 +57,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { CombineWordDraftsDialog } from '@/components/drafting/CombineWordDraftsDialog'
-import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
-import { DocumentStatusBadges } from '@/components/documents/DocumentStatusBadges'
-import { PromoteDocumentDialog } from '@/components/documents/PromoteDocumentDialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,22 +64,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { CombineWordDraftsDialog } from '@/components/drafting/CombineWordDraftsDialog'
+import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
+import { DocumentStatusBadges } from '@/components/documents/DocumentStatusBadges'
 import {
-  buildSelectedDocumentEligibility,
   buildDocumentStatusBadges,
-  classifyDocumentVisibility,
-  DEFAULT_SHARE_FOLDER,
-  DEFAULT_UNSHARE_FOLDER,
-  DOCUMENT_FOLDERS,
-  documentFileType,
-  documentFolderDescription,
-  documentFolderLabel,
-  FIRM_SHARED_FOLDERS,
-  getDocumentShareEligibility,
   isDocumentPdf,
-  type DocumentFolder,
-  type FileTypeFilter,
-  type VisibilityFilter,
+  isDocumentShared,
+  isDocumentWord,
 } from '@/lib/documentWorkspace'
 import {
   deleteDocument,
@@ -99,13 +80,15 @@ import {
   getDocumentUrl,
   getDocumentViewerUrl,
   renameDocument,
-  updateDocumentFolder,
+  setDocumentShared,
   uploadDocument,
 } from '@/lib/documents'
 import { cn, formatDateTime } from '@/lib/utils'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
 import { documentDisplayTitle } from '@/lib/documentDisplayTitle'
+
+type Scope = 'all' | 'shared' | 'client'
 
 function formatBytes(size: number) {
   if (!Number.isFinite(size) || size <= 0) return '-'
@@ -115,16 +98,11 @@ function formatBytes(size: number) {
 }
 
 function auditLabel(event: DocumentAccessAudit) {
-  if (event.action === 'folder_change') {
-    const from = typeof event.metadata.from_folder === 'string' ? event.metadata.from_folder : null
-    const to = typeof event.metadata.to_folder === 'string' ? event.metadata.to_folder : null
-    if (from && to) return `${from} to ${to}`
-  }
+  if (event.action === 'share') return 'Shared with client'
+  if (event.action === 'unshare') return 'Unshared'
   if (event.action === 'rename') return 'Renamed'
   if (event.action === 'review') return 'Review state changed'
   if (event.action === 'delete') return 'Deleted'
-  if (event.action === 'version') return 'Version history viewed'
-  if (event.action === 'convert') return 'Converted'
   return event.action
 }
 
@@ -155,25 +133,15 @@ export function MatterDocumentsTab({
 }: MatterDocumentsTabProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [activeFolder, setActiveFolder] = useState<DocumentFolder>('draft')
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all')
-  const [typeFilter, setTypeFilter] = useState<FileTypeFilter>('all')
-  const [uploadFolder, setUploadFolder] = useState<DocumentFolder>('client')
+  const [scope, setScope] = useState<Scope>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [renameTarget, setRenameTarget] = useState<MatterDocument | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  const [moveTarget, setMoveTarget] = useState<MatterDocument | null>(null)
-  const [moveFolder, setMoveFolder] = useState<DocumentFolder>('draft')
-  const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
-  const [bulkMoveFolder, setBulkMoveFolder] = useState<DocumentFolder>('draft')
   const [deleteTarget, setDeleteTarget] = useState<MatterDocument | null>(null)
   const [previewTarget, setPreviewTarget] = useState<MatterDocument | null>(null)
-  const [pendingShareDocs, setPendingShareDocs] = useState<MatterDocument[]>([])
-  const [pendingShareFolder, setPendingShareFolder] = useState<DocumentFolder>(DEFAULT_SHARE_FOLDER)
   const [combineOpen, setCombineOpen] = useState(false)
-  const [auditOpen, setAuditOpen] = useState(false)
   const [auditTarget, setAuditTarget] = useState<MatterDocument | null>(null)
   const [auditEvents, setAuditEvents] = useState<DocumentAccessAudit[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
@@ -181,15 +149,13 @@ export function MatterDocumentsTab({
 
   useEffect(() => {
     if (!deepLinkedDocumentId) return
-    const document = documents.find(candidate => candidate.id === deepLinkedDocumentId)
-    if (!document) return
-    setActiveFolder(document.folder)
+    const target = documents.find(candidate => candidate.id === deepLinkedDocumentId)
+    if (!target) return
+    setScope('all')
     setQuery('')
-    setVisibilityFilter('all')
-    setTypeFilter('all')
-    setHighlightedDocumentId(document.id)
+    setHighlightedDocumentId(target.id)
     const scrollTimer = window.setTimeout(() => {
-      window.document.getElementById(`document-row-${document.id}`)?.scrollIntoView({
+      window.document.getElementById(`document-row-${target.id}`)?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       })
@@ -201,51 +167,41 @@ export function MatterDocumentsTab({
     }
   }, [deepLinkedDocumentId, documents])
 
+  // Meeting notes have their own card on the matter page.
+  const visibleDocuments = useMemo(
+    () => documents.filter(doc => doc.source !== 'meeting-notes'),
+    [documents],
+  )
+
+  const counts = useMemo(() => ({
+    all: visibleDocuments.length,
+    shared: visibleDocuments.filter(isDocumentShared).length,
+    client: visibleDocuments.filter(doc => doc.source === 'client').length,
+  }), [visibleDocuments])
+
   const filteredDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase()
-    return documents.filter(doc => {
-      if (doc.folder !== activeFolder) return false
+    return visibleDocuments.filter(doc => {
+      if (scope === 'shared' && !isDocumentShared(doc)) return false
+      if (scope === 'client' && doc.source !== 'client') return false
       if (normalized && !doc.name.toLowerCase().includes(normalized)) return false
-      if (visibilityFilter !== 'all' && classifyDocumentVisibility(doc) !== visibilityFilter) return false
-      if (typeFilter !== 'all' && documentFileType(doc) !== typeFilter) return false
       return true
     })
-  }, [activeFolder, documents, query, typeFilter, visibilityFilter])
-
-  const folderSummaries = useMemo(() => DOCUMENT_FOLDERS.map(folder => ({
-    ...folder,
-    count: documents.filter(doc => doc.folder === folder.value).length,
-  })), [documents])
-
-  const activeFolderSummary = folderSummaries.find(folder => folder.value === activeFolder)
+  }, [query, scope, visibleDocuments])
 
   const selectedDocuments = useMemo(
-    () => documents.filter(doc => selectedIds.has(doc.id)),
-    [documents, selectedIds],
-  )
-  const selectedEligibility = useMemo(
-    () => buildSelectedDocumentEligibility(selectedDocuments),
-    [selectedDocuments],
+    () => visibleDocuments.filter(doc => selectedIds.has(doc.id)),
+    [visibleDocuments, selectedIds],
   )
   const selectedCombinableDocs = useMemo(
     () => selectedDocuments
-      .filter(doc => selectedEligibility.combinableWordIds.includes(doc.id))
+      .filter(doc => isDocumentWord(doc) && doc.name.toLowerCase().endsWith('.docx'))
       .map(doc => ({ id: doc.id, name: doc.name })),
-    [selectedDocuments, selectedEligibility.combinableWordIds],
+    [selectedDocuments],
   )
 
-  const commandCounts = useMemo(() => ({
-    internal: documents.filter(doc => classifyDocumentVisibility(doc) === 'internal').length,
-    firmSharedPdfs: documents.filter(doc => classifyDocumentVisibility(doc) === 'firm-shared' && isDocumentPdf(doc)).length,
-    clientUploads: documents.filter(doc => classifyDocumentVisibility(doc) === 'client-upload').length,
-    portalUploadsNeedReview: unreviewedUploadCounts.portal,
-    markerIssues: documents.filter(doc => (doc.marker_count ?? 0) > 0 || (doc.missing_count ?? 0) > 0).length,
-    superseded: documents.filter(doc => Boolean(doc.superseded_at)).length,
-    versioned: documents.filter(doc => Boolean(doc.current_version_id)).length,
-  }), [documents, unreviewedUploadCounts.portal])
-
-  const allVisibleSelected = filteredDocuments.length > 0 && filteredDocuments.every(doc => selectedIds.has(doc.id))
-  const pendingShareDoc = pendingShareDocs[0] ?? null
+  const allVisibleSelected =
+    filteredDocuments.length > 0 && filteredDocuments.every(doc => selectedIds.has(doc.id))
 
   const refresh = async () => {
     await onDocumentsChanged()
@@ -292,6 +248,23 @@ export function MatterDocumentsTab({
     }
   }
 
+  const handleShare = async (docs: MatterDocument[], shared: boolean) => {
+    if (docs.length === 0) return
+    setBusy(shared ? 'share' : 'unshare')
+    try {
+      for (const doc of docs) {
+        await setDocumentShared(doc.id, shared)
+      }
+      const verb = shared ? 'Shared' : 'Unshared'
+      toast.success(`${verb} ${docs.length} document${docs.length === 1 ? '' : 's'}`)
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update sharing')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const handleDownloadSelected = async () => {
     if (selectedDocuments.length === 0) return
     setBusy('bulk-download')
@@ -310,7 +283,7 @@ export function MatterDocumentsTab({
     if (!file) return
     setUploading(true)
     try {
-      await uploadDocument(file, matterId, uploadFolder)
+      await uploadDocument(file, matterId)
       toast.success(`Uploaded ${file.name}`)
       await refresh()
     } catch (error) {
@@ -319,11 +292,6 @@ export function MatterDocumentsTab({
       setUploading(false)
       if (uploadInputRef.current) uploadInputRef.current.value = ''
     }
-  }
-
-  const openRename = (doc: MatterDocument) => {
-    setRenameTarget(doc)
-    setRenameValue(doc.name)
   }
 
   const handleRename = async () => {
@@ -338,101 +306,6 @@ export function MatterDocumentsTab({
       await refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not rename document')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const openMove = (doc: MatterDocument) => {
-    setMoveTarget(doc)
-    setMoveFolder(doc.folder)
-  }
-
-  const beginShare = (docs: MatterDocument[], toFolder: DocumentFolder = DEFAULT_SHARE_FOLDER) => {
-    const eligible = docs.filter(doc => getDocumentShareEligibility(doc).ok)
-    const blocked = docs.length - eligible.length
-    if (eligible.length === 0) {
-      toast.error(blocked > 1 ? 'No selected PDFs can be shared' : 'This PDF cannot be shared yet')
-      return
-    }
-    if (blocked > 0) {
-      toast.warning(`${blocked} selected document${blocked === 1 ? '' : 's'} blocked by sharing rules`)
-    }
-    setPendingShareDocs(eligible)
-    setPendingShareFolder(toFolder)
-  }
-
-  const handleConfirmedShare = async () => {
-    if (pendingShareDocs.length === 0) return
-    setBusy('share')
-    try {
-      for (const doc of pendingShareDocs) {
-        await updateDocumentFolder(doc.id, pendingShareFolder, { confirmed: true })
-      }
-      toast.success(`Shared ${pendingShareDocs.length} PDF${pendingShareDocs.length === 1 ? '' : 's'}`)
-      setPendingShareDocs([])
-      setMoveTarget(null)
-      setBulkMoveOpen(false)
-      await refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not share document')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const handleMove = async () => {
-    const doc = moveTarget
-    if (!doc) return
-    if (FIRM_SHARED_FOLDERS.has(moveFolder)) {
-      beginShare([doc], moveFolder)
-      return
-    }
-    setBusy(`move:${doc.id}`)
-    try {
-      await updateDocumentFolder(doc.id, moveFolder)
-      toast.success(`Moved to ${documentFolderLabel(moveFolder)}`)
-      setMoveTarget(null)
-      await refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not move document')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const handleBulkMove = async () => {
-    if (selectedDocuments.length === 0) return
-    if (FIRM_SHARED_FOLDERS.has(bulkMoveFolder)) {
-      beginShare(selectedDocuments, bulkMoveFolder)
-      return
-    }
-    setBusy('bulk-move')
-    try {
-      for (const doc of selectedDocuments) {
-        await updateDocumentFolder(doc.id, bulkMoveFolder)
-      }
-      toast.success(`Moved ${selectedDocuments.length} document${selectedDocuments.length === 1 ? '' : 's'}`)
-      setBulkMoveOpen(false)
-      await refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not move selected documents')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const handleUnshare = async (docs: MatterDocument[]) => {
-    if (docs.length === 0) return
-    setBusy('unshare')
-    try {
-      for (const doc of docs) {
-        await updateDocumentFolder(doc.id, DEFAULT_UNSHARE_FOLDER)
-      }
-      toast.success(`Unshared ${docs.length} document${docs.length === 1 ? '' : 's'}`)
-      await refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not unshare document')
     } finally {
       setBusy(null)
     }
@@ -461,18 +334,22 @@ export function MatterDocumentsTab({
 
   const openAudit = async (doc: MatterDocument) => {
     setAuditTarget(doc)
-    setAuditOpen(true)
     setAuditLoading(true)
     try {
-      const events = await getDocumentAuditEvents({ matterId, documentId: doc.id })
-      setAuditEvents(events)
+      setAuditEvents(await getDocumentAuditEvents({ matterId, documentId: doc.id }))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not load audit history')
+      toast.error(error instanceof Error ? error.message : 'Could not load history')
       setAuditEvents([])
     } finally {
       setAuditLoading(false)
     }
   }
+
+  const scopes: Array<{ value: Scope; label: string; count: number }> = [
+    { value: 'all', label: 'All', count: counts.all },
+    { value: 'shared', label: 'Shared', count: counts.shared },
+    { value: 'client', label: 'From client', count: counts.client },
+  ]
 
   return (
     <div className="space-y-4">
@@ -483,49 +360,27 @@ export function MatterDocumentsTab({
               {recordLabel === 'lead' ? 'Lead documents' : 'Matter documents'}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Upload, review, share, and organize every file tied to this {recordLabel}.
+              Everything filed to this {recordLabel}. Flip the switch to show a document in the client portal.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={uploadFolder} onValueChange={value => setUploadFolder(value as DocumentFolder)}>
-              <SelectTrigger size="sm" className="w-[170px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DOCUMENT_FOLDERS.map(folder => (
-                  <SelectItem key={folder.value} value={folder.value}>
-                    {folder.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2">
             <input
               ref={uploadInputRef}
               type="file"
               className="hidden"
               onChange={event => void handleUpload(event.target.files)}
             />
-            <Button type="button" size="sm" className="gap-1.5" disabled={uploading} onClick={() => uploadInputRef.current?.click()}>
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5"
+              disabled={uploading}
+              onClick={() => uploadInputRef.current?.click()}
+            >
               {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
               Upload
             </Button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-border px-4 py-2 text-xs text-muted-foreground">
-          {[
-            ['Internal drafts', commandCounts.internal],
-            ['Firm-shared PDFs', commandCounts.firmSharedPdfs],
-            ['Client uploads', commandCounts.clientUploads],
-            ['Portal uploads need review', commandCounts.portalUploadsNeedReview],
-            ['Marker issues', commandCounts.markerIssues],
-            ['Superseded', commandCounts.superseded],
-            ['Versioned', commandCounts.versioned],
-          ].map(([label, count]) => (
-            <span key={label} className={label === 'Marker issues' && Number(count) > 0 ? 'font-semibold text-amber' : ''}>
-              {label} <span className="font-semibold tabular-nums text-foreground">{count}</span>
-            </span>
-          ))}
         </div>
 
         {(unreviewedUploadCounts.intake > 0 || unreviewedUploadCounts.portal > 0) && (
@@ -548,38 +403,26 @@ export function MatterDocumentsTab({
           </div>
         )}
 
-        <div className="grid lg:grid-cols-[180px_minmax(0,1fr)]">
-          <nav aria-label="Document folders" className="border-b border-border p-3 lg:border-b-0 lg:border-r">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Folders</p>
-            <p className="sr-only">Select a folder to see its documents. Selected folder is indicated.</p>
-            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-1">
-            {folderSummaries.map(folder => {
-              const selected = folder.value === activeFolder
-              return (
-                <button
-                  key={folder.value}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setActiveFolder(folder.value)}
-                  className={cn(
-                    'flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
-                    selected
-                      ? 'bg-primary/10 font-semibold text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/50',
-                    folder.count === 0 && !selected && 'opacity-60',
-                  )}
-                >
-                  <span>{folder.label}</span>
-                  <span className="tabular-nums">{folder.count}</span>
-                </button>
-              )
-            })}
-            </div>
-          </nav>
-          <div className="min-w-0">
-
-        <div className="grid gap-2 border-b border-border px-4 py-3 md:grid-cols-[minmax(220px,1fr)_repeat(2,180px)]">
-          <div className="relative">
+        <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1" role="group" aria-label="Filter documents">
+            {scopes.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={scope === option.value}
+                onClick={() => setScope(option.value)}
+                className={cn(
+                  'rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                  scope === option.value
+                    ? 'bg-primary/10 font-semibold text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/50',
+                )}
+              >
+                {option.label} <span className="tabular-nums">{option.count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={query}
@@ -588,64 +431,27 @@ export function MatterDocumentsTab({
               placeholder="Search documents"
             />
           </div>
-          <Select value={visibilityFilter} onValueChange={value => setVisibilityFilter(value as VisibilityFilter)}>
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue placeholder="Visibility" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All visibility</SelectItem>
-              <SelectItem value="internal">Internal</SelectItem>
-              <SelectItem value="firm-shared">Firm shared</SelectItem>
-              <SelectItem value="client-upload">Client uploads</SelectItem>
-              <SelectItem value="intake">Intake</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={typeFilter} onValueChange={value => setTypeFilter(value as FileTypeFilter)}>
-            <SelectTrigger className="h-9 w-full">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="pdf">PDF</SelectItem>
-              <SelectItem value="word">Word</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{activeFolderSummary?.label ?? documentFolderLabel(activeFolder)}</span>
-          {activeFolderSummary?.description ? ` · ${activeFolderSummary.description}` : ''}
         </div>
 
         {selectedDocuments.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-3">
-          <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={selectedDocuments.length === 0 || busy === 'bulk-download'} onClick={() => void handleDownloadSelected()}>
-            {busy === 'bulk-download' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            Download selected
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={selectedDocuments.length === 0} onClick={() => setBulkMoveOpen(true)}>
-            <FolderInput className="h-3.5 w-3.5" />
-            Bulk move
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={selectedEligibility.shareableIds.length === 0} onClick={() => beginShare(selectedDocuments)}>
-            <Share2 className="h-3.5 w-3.5" />
-            Share PDFs
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={selectedEligibility.unshareableIds.length === 0 || busy === 'unshare'} onClick={() => void handleUnshare(selectedDocuments.filter(doc => selectedEligibility.unshareableIds.includes(doc.id)))}>
-            <Undo2 className="h-3.5 w-3.5" />
-            Unshare
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={selectedCombinableDocs.length < 2} onClick={() => setCombineOpen(true)}>
-            <Combine className="h-3.5 w-3.5" />
-            Combine Word documents
-          </Button>
-          {selectedEligibility.blockedShareIds.length > 0 && (
-            <span className="text-xs text-muted-foreground">
-              {selectedEligibility.blockedShareIds.length} selected blocked from sharing.
-            </span>
-          )}
-        </div>
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-3">
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'bulk-download'} onClick={() => void handleDownloadSelected()}>
+              {busy === 'bulk-download' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Download selected
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'share'} onClick={() => void handleShare(selectedDocuments.filter(doc => !isDocumentShared(doc)), true)}>
+              <Share2 className="h-3.5 w-3.5" />
+              Share
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'unshare'} onClick={() => void handleShare(selectedDocuments.filter(isDocumentShared), false)}>
+              <Undo2 className="h-3.5 w-3.5" />
+              Unshare
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={selectedCombinableDocs.length < 2} onClick={() => setCombineOpen(true)}>
+              <Combine className="h-3.5 w-3.5" />
+              Combine Word documents
+            </Button>
+          </div>
         )}
 
         {loading ? (
@@ -657,12 +463,12 @@ export function MatterDocumentsTab({
           <div className="px-6 py-12 text-center">
             <FileText className="mx-auto h-8 w-8 text-muted-foreground/60" />
             <p className="mt-3 text-sm font-medium">
-              {query.trim() || visibilityFilter !== 'all' || typeFilter !== 'all' ? 'No matching documents' : 'No documents in this folder'}
+              {query.trim() || scope !== 'all' ? 'No matching documents' : 'No documents yet'}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {query.trim() || visibilityFilter !== 'all' || typeFilter !== 'all'
-                ? 'Adjust the filters to see documents in this folder.'
-                : 'Upload a file or move documents here to fill this folder.'}
+              {query.trim() || scope !== 'all'
+                ? 'Clear the search or filter to see everything.'
+                : 'Upload a file to get started.'}
             </p>
           </div>
         ) : (
@@ -677,15 +483,14 @@ export function MatterDocumentsTab({
                   />
                 </TableHead>
                 <TableHead>Document</TableHead>
-                <TableHead>Folder</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>From</TableHead>
+                <TableHead>Shared</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredDocuments.map(doc => {
-                const shareEligibility = getDocumentShareEligibility(doc)
-                const firmShared = classifyDocumentVisibility(doc) === 'firm-shared'
+                const issues = (doc.marker_count ?? 0) + (doc.missing_count ?? 0)
                 return (
                   <TableRow
                     key={doc.id}
@@ -700,7 +505,7 @@ export function MatterDocumentsTab({
                         aria-label={`Select ${doc.name}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-[320px] whitespace-normal">
+                    <TableCell className="max-w-[360px] whitespace-normal">
                       <div className="flex items-start gap-2">
                         <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0">
@@ -715,23 +520,29 @@ export function MatterDocumentsTab({
                             {formatBytes(doc.size)}
                             {doc.created_at ? ` · ${formatDateTime(doc.created_at)}` : ''}
                           </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
+                            {issues > 0 && (
+                              <span className="text-xs font-medium text-amber">
+                                {issues} issue{issues === 1 ? '' : 's'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-[11px]">
-                        {documentFolderLabel(doc.folder)}
+                        {doc.source === 'client' ? 'Client' : 'Firm'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="whitespace-normal">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 1)} />
-                        {((doc.marker_count ?? 0) + (doc.missing_count ?? 0)) > 0 && (
-                          <span className="text-xs font-medium text-amber">
-                            {(doc.marker_count ?? 0) + (doc.missing_count ?? 0)} issue{((doc.marker_count ?? 0) + (doc.missing_count ?? 0)) === 1 ? '' : 's'}
-                          </span>
-                        )}
-                      </div>
+                    <TableCell>
+                      <Switch
+                        checked={isDocumentShared(doc)}
+                        disabled={busy === 'share' || busy === 'unshare'}
+                        onCheckedChange={checked => void handleShare([doc], checked)}
+                        aria-label={`Share ${doc.name} with the client`}
+                      />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
@@ -761,27 +572,11 @@ export function MatterDocumentsTab({
                             <DropdownMenuItem onSelect={() => void openDocument(doc, 'download')}>
                               <Download className="mr-2 h-4 w-4" />Download
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => openRename(doc)}>
+                            <DropdownMenuItem onSelect={() => { setRenameTarget(doc); setRenameValue(doc.name) }}>
                               <Pencil className="mr-2 h-4 w-4" />Rename
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => openMove(doc)}>
-                              <FolderInput className="mr-2 h-4 w-4" />Move
-                            </DropdownMenuItem>
-                            {!firmShared ? (
-                              <DropdownMenuItem
-                                disabled={!shareEligibility.ok}
-                                title={shareEligibility.ok ? 'Share PDF' : shareEligibility.reason}
-                                onSelect={() => beginShare([doc])}
-                              >
-                                <Share2 className="mr-2 h-4 w-4" />Share PDF
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem onSelect={() => void handleUnshare([doc])}>
-                                <Undo2 className="mr-2 h-4 w-4" />Unshare
-                              </DropdownMenuItem>
-                            )}
                             <DropdownMenuItem onSelect={() => void openAudit(doc)}>
-                              <History className="mr-2 h-4 w-4" />Audit
+                              <History className="mr-2 h-4 w-4" />History
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(doc)}>
@@ -797,15 +592,13 @@ export function MatterDocumentsTab({
             </TableBody>
           </Table>
         )}
-          </div>
-        </div>
       </section>
 
       <Dialog open={renameTarget !== null} onOpenChange={open => !open && setRenameTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename document</DialogTitle>
-            <DialogDescription>Update the display name shown in the matter file list.</DialogDescription>
+            <DialogDescription>Update the display name shown in the document list.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="document-name">Name</Label>
@@ -815,67 +608,6 @@ export function MatterDocumentsTab({
             <Button type="button" variant="outline" onClick={() => setRenameTarget(null)}>Cancel</Button>
             <Button type="button" disabled={!renameValue.trim() || busy?.startsWith('rename:')} onClick={() => void handleRename()}>
               Save name
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={moveTarget !== null} onOpenChange={open => !open && setMoveTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Move document</DialogTitle>
-            <DialogDescription>Choose a document folder. Firm-shared folders require PDFs.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Folder</Label>
-            <Select value={moveFolder} onValueChange={value => setMoveFolder(value as DocumentFolder)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DOCUMENT_FOLDERS.map(folder => (
-                  <SelectItem key={folder.value} value={folder.value}>
-                    {folder.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{documentFolderDescription(moveFolder)}</p>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setMoveTarget(null)}>Cancel</Button>
-            <Button type="button" disabled={!moveTarget || busy?.startsWith('move:')} onClick={() => void handleMove()}>
-              Move
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={bulkMoveOpen} onOpenChange={setBulkMoveOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Bulk move</DialogTitle>
-            <DialogDescription>Move selected documents to one folder.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Folder</Label>
-            <Select value={bulkMoveFolder} onValueChange={value => setBulkMoveFolder(value as DocumentFolder)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DOCUMENT_FOLDERS.map(folder => (
-                  <SelectItem key={folder.value} value={folder.value}>
-                    {folder.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setBulkMoveOpen(false)}>Cancel</Button>
-            <Button type="button" disabled={selectedDocuments.length === 0 || busy === 'bulk-move'} onClick={() => void handleBulkMove()}>
-              Move selected
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -896,12 +628,6 @@ export function MatterDocumentsTab({
         </AlertDialogContent>
       </AlertDialog>
 
-      <PromoteDocumentDialog
-        pending={pendingShareDoc ? { doc: pendingShareDoc, toFolder: pendingShareFolder } : null}
-        onCancel={() => setPendingShareDocs([])}
-        onConfirm={handleConfirmedShare}
-      />
-
       <DocumentPreviewDialog
         document={previewTarget}
         open={previewTarget !== null}
@@ -915,35 +641,30 @@ export function MatterDocumentsTab({
         defaultFilename="combined-matter-drafts.docx"
       />
 
-      <Sheet open={auditOpen} onOpenChange={setAuditOpen}>
+      <Sheet open={auditTarget !== null} onOpenChange={open => !open && setAuditTarget(null)}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
           <SheetHeader>
-            <SheetTitle>Document audit</SheetTitle>
+            <SheetTitle>Document history</SheetTitle>
             <SheetDescription>{auditTarget?.name ?? 'Recent document history'}</SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-3">
             {auditLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading audit history...
+                Loading history...
               </div>
             ) : auditEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No recent audit events.</p>
+              <p className="text-sm text-muted-foreground">No recorded history.</p>
             ) : (
               auditEvents.map(event => (
                 <div key={event.id} className="rounded-md border border-border p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium capitalize">{auditLabel(event)}</p>
+                      <p className="text-sm font-medium">{auditLabel(event)}</p>
                       <p className="text-xs text-muted-foreground">{event.user_email ?? 'Unknown user'}</p>
                     </div>
                     <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(event.created_at)}</span>
                   </div>
-                  {Object.keys(event.metadata ?? {}).length > 0 && (
-                    <pre className={cn('mt-2 max-h-32 overflow-auto rounded bg-muted p-2 text-[11px] text-muted-foreground')}>
-                      {JSON.stringify(event.metadata, null, 2)}
-                    </pre>
-                  )}
                 </div>
               ))
             )}

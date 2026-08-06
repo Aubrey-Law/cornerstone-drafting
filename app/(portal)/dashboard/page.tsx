@@ -225,7 +225,7 @@ export default async function PortalDashboardPage() {
             <ul className="mt-3 space-y-3">
               {documents.map(doc => (
                 <li key={doc.id} className="flex items-start gap-2.5">
-                  {doc.folder === 'client' ? (
+                  {doc.source === 'client' ? (
                     <Upload className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   ) : (
                     <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />

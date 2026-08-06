@@ -54,21 +54,15 @@ import {
   isPdfDocument,
   isWordDocument,
   setDocumentReviewed,
-  updateDocumentFolder,
+  setDocumentShared,
   uploadDocument,
 } from '@/lib/documents'
-import { canPromoteDraft } from '@/lib/drafting/reviewGate'
 import { logMatterActivity } from '@/lib/matterActivity'
 import { formatDateTime } from '@/lib/utils'
 import { type MatterDocument } from '@/types/database'
 import type { DraftingHubDocument, DraftingHubMatter } from '@/lib/queries/drafting'
 import { TabularReviewSection } from '@/components/drafting/TabularReviewSection'
 import { MatterAssistantPanel } from '@/components/drafting/MatterAssistantPanel'
-
-const PromoteDocumentDialog = dynamic(
-  () => import('@/components/documents/PromoteDocumentDialog').then(m => ({ default: m.PromoteDocumentDialog })),
-  { ssr: false },
-)
 
 const DocxViewerPanel = dynamic(
   () => import('@/components/documents/DocxViewerPanel').then(m => ({ default: m.DocxViewerPanel })),
@@ -100,9 +94,6 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set())
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [promotedIds, setPromotedIds] = useState<Set<string>>(() => new Set())
-  const [pendingPromotion, setPendingPromotion] = useState<
-    { doc: DraftingHubDocument; toFolder: MatterDocument['folder'] } | null
-  >(null)
 
   const [showPrevious, setShowPrevious] = useState(false)
   const autoExpandedSuperseded = useRef(false)
@@ -220,9 +211,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [bulkBusy, setBulkBusy] = useState<'review' | 'share' | null>(null)
   const [pendingBulkShare, setPendingBulkShare] = useState<DraftingHubDocument[] | null>(null)
   const bulkReviewables = recentDrafts.filter(d => !isWordDocument(d.name) && !effectiveReviewedAt(d))
-  const bulkShareables = recentDrafts.filter(d =>
-    isPdfDocument(d.name) && canPromoteDraft({ markerCount: d.markerCount, reviewedAt: effectiveReviewedAt(d) }).ok,
-  )
+  const bulkShareables = recentDrafts.filter(d => isPdfDocument(d.name))
 
   const handleMarkAllReviewed = async () => {
     if (bulkBusy) return
@@ -249,7 +238,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     let done = 0
     for (const doc of docs) {
       try {
-        await updateDocumentFolder(doc.id, 'review', { confirmed: true })
+        await setDocumentShared(doc.id, true)
         setPromotedIds(prev => new Set(prev).add(doc.id))
         done += 1
       } catch (e) {
@@ -314,53 +303,39 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
     }
   }
 
-  const handleApprove = (doc: DraftingHubDocument) => {
+  const handleApprove = async (doc: DraftingHubDocument) => {
     if (approvingId) return
-    if (!isPdfDocument(doc.name)) {
-      toast.error('Upload a PDF exported from Word before sharing with clients.')
-      return
+    setApprovingId(doc.id)
+    try {
+      await setDocumentShared(doc.id, true)
+      setPromotedIds(prev => new Set(prev).add(doc.id))
+      void logMatterActivity(matterId, 'draft_promoted_to_review', 'Draft shared with client', {
+        detail: `Shared ${doc.name} with the client`,
+        metadata: { documentId: doc.id, documentName: doc.name },
+      })
+      toast.success('Draft shared with client')
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not share draft')
+    } finally {
+      setApprovingId(null)
     }
-    setPendingPromotion({ doc, toFolder: 'review' })
   }
 
   const handleUploadSharedPdf = async (files: FileList | null) => {
     const file = files?.[0]
     if (!file || uploadingPdf) return
-    if (!isPdfDocument(file.name, file.type)) {
-      toast.error('Only PDF files can be shared with clients.')
-      return
-    }
     setUploadingPdf(true)
     try {
-      await uploadDocument(file, matterId, 'review')
-      toast.success('PDF shared with client')
+      const newDoc = await uploadDocument(file, matterId)
+      await setDocumentShared(newDoc.id, true)
+      toast.success('Document shared with client')
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not upload PDF')
     } finally {
       setUploadingPdf(false)
       if (pdfUploadRef.current) pdfUploadRef.current.value = ''
-    }
-  }
-
-  const confirmPromotion = async () => {
-    if (!pendingPromotion) return
-    const { doc, toFolder } = pendingPromotion
-    setApprovingId(doc.id)
-    try {
-      await updateDocumentFolder(doc.id, toFolder, { confirmed: true })
-      setPromotedIds(prev => new Set(prev).add(doc.id))
-      void logMatterActivity(matterId, 'draft_promoted_to_review', 'Draft shared with client', {
-        detail: `Shared ${doc.name} as a client-visible draft`,
-        metadata: { documentId: doc.id, documentName: doc.name, fromFolder: 'draft', toFolder },
-      })
-      toast.success('Draft shared with client')
-      setPendingPromotion(null)
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not share draft')
-    } finally {
-      setApprovingId(null)
     }
   }
 
@@ -380,7 +355,7 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         return
       }
       if (!res.ok) throw new Error(body.error ?? 'Conversion failed')
-      toast.success('PDF created in Review folder')
+      toast.success('PDF created — use the share toggle to send it to the client')
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not convert to PDF')
@@ -503,16 +478,6 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               const isWord = isWordDocument(doc.name)
               const isPdf = isPdfDocument(doc.name)
               const isOpen = viewerDoc?.id === doc.id
-              const gate = isPdf
-                ? canPromoteDraft({ markerCount: doc.markerCount, reviewedAt })
-                : { ok: typeof doc.markerCount !== 'number' || doc.markerCount === 0, reason: doc.markerCount && doc.markerCount > 0 ? 'markers' as const : undefined }
-              const gateTitle = gate.reason === 'markers'
-                ? 'Resolve the unresolved markers and regenerate before sharing'
-                : gate.reason === 'not_reviewed'
-                  ? 'Mark this draft reviewed before sharing'
-                  : isWord
-                    ? 'Export a PDF from Word and use Upload PDF to share'
-                    : undefined
               return (
                 <div
                   key={doc.id}
@@ -586,9 +551,8 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                       size="sm"
                       variant="outline"
                       className="h-8 gap-1.5 text-xs text-green hover:bg-green-bg"
-                      disabled={approvingId === doc.id || !gate.ok}
-                      title={gateTitle}
-                      onClick={() => handleApprove(doc)}
+                      disabled={approvingId === doc.id}
+                      onClick={() => void handleApprove(doc)}
                     >
                       {approvingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Share PDF
@@ -806,12 +770,6 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
         documentIds={recentDrafts.map(d => d.id)}
         documents={recentDrafts.map(d => ({ id: d.id, name: d.name }))}
         onOpenCitation={openCitationInViewer}
-      />
-
-      <PromoteDocumentDialog
-        pending={pendingPromotion}
-        onCancel={() => setPendingPromotion(null)}
-        onConfirm={confirmPromotion}
       />
 
       {combineOpen && (

@@ -27,12 +27,12 @@ describe('granola meeting notes integration', () => {
     expect(fetch).toContain('fetchGranolaNote')
   })
 
-  it('saves matter meeting notes to meeting-notes folder without lead support', () => {
+  it('saves matter meeting notes with the meeting-notes source without lead support', () => {
     const route = fs.readFileSync(
       path.join(process.cwd(), 'app/api/admin/meeting-notes/route.ts'),
       'utf8',
     )
-    expect(route).toContain("folder: 'meeting-notes'")
+    expect(route).toContain("source: 'meeting-notes'")
     expect(route).toContain('meeting-notes/')
     expect(route).not.toContain('lead')
     expect(route).toContain('matter_activity')

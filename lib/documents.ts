@@ -36,9 +36,7 @@ export function toMicrosoftOfficeViewerUrl(url: string, mode: 'view' | 'embed' =
 export async function uploadDocument(
   file: File,
   matterId: string,
-  folder: MatterDocument['folder'] = 'client',
   onProgress?: (pct: number) => void,
-  folderId?: string | null,
 ): Promise<MatterDocument> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
@@ -46,8 +44,6 @@ export async function uploadDocument(
   const form = new FormData()
   form.append('file', file)
   form.append('matterId', matterId)
-  form.append('folder', folder)
-  if (folderId) form.append('folderId', folderId)
 
   const document = await new Promise<MatterDocument>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -206,15 +202,10 @@ export async function deleteDocument(docId: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete document')
 }
 
-/**
- * Update a document's folder. Set `confirmed: true` when the caller has
- * already shown the attorney-review-gate confirmation modal (required by the
- * server when moving a draft to a client-visible folder).
- */
-export async function updateDocumentFolder(
+/** Show or hide a document in the client portal. */
+export async function setDocumentShared(
   docId: string,
-  folder: MatterDocument['folder'],
-  options: { confirmed?: boolean } = {},
+  shared: boolean,
 ): Promise<MatterDocument> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
@@ -222,11 +213,11 @@ export async function updateDocumentFolder(
   const res = await fetch(`/api/documents/${docId}`, {
     method: 'PATCH',
     headers: authHeaders(token),
-    body: JSON.stringify({ folder, confirmed: options.confirmed === true }),
+    body: JSON.stringify({ shared }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? 'Failed to update document folder')
+    throw new Error(body?.error ?? 'Failed to update sharing')
   }
   const { document } = await res.json()
   return document as MatterDocument
@@ -234,8 +225,7 @@ export async function updateDocumentFolder(
 
 /**
  * Mark a generated draft as attorney-reviewed (or clear it). Recorded with the
- * reviewer + timestamp and required by the server before a draft can be
- * promoted to a client-visible folder.
+ * reviewer + timestamp. Informational only — it gates nothing.
  */
 export async function setDocumentReviewed(docId: string, reviewed: boolean): Promise<MatterDocument> {
   const token = await getToken()
@@ -295,13 +285,16 @@ export async function getDocumentAuditEvents({
   return (body.events ?? []) as DocumentAccessAudit[]
 }
 
-/** List documents for a matter, optionally filtered by folder. */
-export async function listDocuments(matterId: string, folder?: string): Promise<MatterDocument[]> {
+/** List documents for a matter, optionally filtered by provenance. */
+export async function listDocuments(
+  matterId: string,
+  source?: MatterDocument['source'],
+): Promise<MatterDocument[]> {
   const token = await getToken()
   if (!token) throw new Error('Not authenticated')
 
   const params = new URLSearchParams({ matterId })
-  if (folder) params.set('folder', folder)
+  if (source) params.set('source', source)
 
   const res = await fetch(`/api/documents?${params}`, {
     headers: { Authorization: `Bearer ${token}` },

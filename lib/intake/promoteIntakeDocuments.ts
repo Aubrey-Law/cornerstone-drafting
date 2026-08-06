@@ -27,7 +27,8 @@ export async function promoteIntakeDocumentsToMatter(
         name: doc.name,
         size: doc.size,
         content_type: doc.content_type,
-        folder: 'intake',
+        source: 'client',
+        shared_at: null,
         uploaded_by: doc.uploaded_by,
         created_at: doc.created_at,
       })

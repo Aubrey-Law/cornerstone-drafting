@@ -2,15 +2,8 @@ import type { User } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MatterDocument } from '@/types/database'
 
-const CLIENT_HIDDEN_FOLDERS = new Set(['draft', 'drafts', 'meeting-notes', 'meeting_notes'])
-const CLIENT_UPLOAD_FOLDERS = new Set(['client', 'intake'])
-
 type AuthUser = Pick<User, 'id' | 'email'> & {
   email_confirmed_at?: string | null
-}
-
-function normalizeFolder(folder: string | null | undefined) {
-  return (folder ?? '').trim().toLowerCase()
 }
 
 export async function isAdminUser(
@@ -24,14 +17,6 @@ export async function isAdminUser(
     .eq('id', user.id)
     .maybeSingle()
   return !!profile && ['attorney', 'admin'].includes(profile.role)
-}
-
-export function isClientVisibleDocument(doc: { folder: string | null | undefined }) {
-  return !CLIENT_HIDDEN_FOLDERS.has(normalizeFolder(doc.folder))
-}
-
-export function isClientUploadFolder(folder: string) {
-  return CLIENT_UPLOAD_FOLDERS.has(normalizeFolder(folder))
 }
 
 export async function userCanAccessMatter(
@@ -88,66 +73,47 @@ export async function userCanAccessMatter(
   return true
 }
 
+/**
+ * The entire client visibility rule: a non-admin may read a document if the
+ * firm shared it, or if they uploaded it themselves — and in either case only
+ * on a matter they can access.
+ */
 export async function userCanReadDocument(
   admin: SupabaseClient,
   user: AuthUser,
-  doc: Pick<MatterDocument, 'matter_id' | 'folder' | 'folder_id'>,
+  doc: Pick<MatterDocument, 'matter_id' | 'shared_at' | 'uploaded_by'>,
 ) {
   if (await isAdminUser(admin, user)) return true
-  if (!isClientVisibleDocument(doc)) return false
-  if (doc.folder_id) {
-    const { data: folder } = await admin
-      .from('folders')
-      .select('name')
-      .eq('id', doc.folder_id)
-      .maybeSingle()
-
-    if (CLIENT_HIDDEN_FOLDERS.has(normalizeFolder(folder?.name))) return false
-  }
-
+  const ownUpload = doc.uploaded_by === user.id
+  if (!doc.shared_at && !ownUpload) return false
   return userCanAccessMatter(admin, user, doc.matter_id)
 }
 
-export async function filterClientVisibleDocuments<T extends { folder: MatterDocument['folder'] | null | undefined; folder_id?: string | null }>(
-  admin: SupabaseClient,
-  docs: T[],
-) {
-  const visibleByLegacyFolder = docs.filter(isClientVisibleDocument)
-  const folderIds = Array.from(
-    new Set(visibleByLegacyFolder.map((doc) => doc.folder_id).filter(Boolean) as string[]),
-  )
-
-  if (folderIds.length === 0) return visibleByLegacyFolder
-
-  const { data: hiddenFolders } = await admin
-    .from('folders')
-    .select('id')
-    .in('id', folderIds)
-    .in('name', ['Draft', 'Drafts', 'draft', 'drafts', 'Meeting Notes', 'meeting notes', 'meeting-notes'])
-
-  const hiddenFolderIds = new Set((hiddenFolders ?? []).map((folder) => folder.id))
-  return visibleByLegacyFolder.filter((doc) => !doc.folder_id || !hiddenFolderIds.has(doc.folder_id))
-}
-
+// 'convert' | 'edit' | 'version' belong to the versioning and tracked-changes
+// routes, which are out of scope for this change. 'view', 'download',
+// 'folder_change', and 'export' are gone.
 type AuditAction =
-  | 'download'
-  | 'view'
-  | 'folder_change'
+  | 'share'
+  | 'unshare'
   | 'delete'
-  | 'export'
-  | 'review'
   | 'rename'
-  | 'edit'
+  | 'review'
   | 'convert'
+  | 'edit'
   | 'version'
 
+/**
+ * Records what the firm did to a document. Best-effort: a failed write is
+ * logged and the operation proceeds. The record exists so the firm can
+ * reconstruct what a client received, not as an access-control mechanism.
+ */
 export async function auditDocumentAccess(
   admin: SupabaseClient,
   user: Pick<User, 'id' | 'email'>,
   doc: Pick<MatterDocument, 'id' | 'matter_id'>,
   action: AuditAction,
   metadata: Record<string, unknown> = {},
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<void> {
   const { error } = await admin.from('document_access_audit').insert({
     document_id: doc.id,
     matter_id: doc.matter_id,
@@ -156,12 +122,5 @@ export async function auditDocumentAccess(
     action,
     metadata,
   })
-
-  if (error) {
-    // Every access — read or mutation — is a compliance requirement for a
-    // law firm. Callers must check ok and refuse the operation on failure.
-    console.warn('document_access_audit insert failed:', error.message)
-    return { ok: false, error: error.message }
-  }
-  return { ok: true }
+  if (error) console.warn('document_access_audit insert failed:', error.message)
 }

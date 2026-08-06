@@ -5,14 +5,7 @@ import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
-import {
-  auditDocumentAccess,
-  isAdminUser,
-  userCanReadDocument,
-} from '@/lib/documentSecurity'
-import { canPromoteDraft } from '@/lib/drafting/reviewGate'
-import { isPdfDocument } from '@/lib/documents'
-import { isFirmSharedFolder, wordDocShareBlockReason } from '@/lib/documentSharing'
+import { auditDocumentAccess, isAdminUser, userCanReadDocument } from '@/lib/documentSecurity'
 import { notifyClientOfSharedDocument } from '@/lib/portalNotifications'
 
 // GET /api/documents/[id]  →  { url: signedDownloadUrl, document: MatterDocument }
@@ -20,7 +13,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const action = new URL(req.url).searchParams.get('action') === 'view' ? 'view' : 'download'
   const { id } = await params
   const sb = getAdminClient()
   const { data: doc, error } = await sb
@@ -34,14 +26,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const audit = await auditDocumentAccess(sb, user, doc, action, { route: '/api/documents/[id]' })
-  if (!audit.ok) {
-    return NextResponse.json(
-      { error: 'Audit log write failed; access denied', code: 'audit_failed' },
-      { status: 503 },
-    )
-  }
-
   const r2 = getR2Client()
   const url = await getSignedUrl(
     r2,
@@ -51,42 +35,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   return NextResponse.json({ url, document: doc })
 }
 
-const VALID_FOLDERS = ['draft', 'final', 'client', 'review', 'signed', 'intake', 'meeting-notes'] as const
-type DocFolder = (typeof VALID_FOLDERS)[number]
-const CLIENT_VISIBLE_FOLDERS: ReadonlySet<DocFolder> = new Set(['review', 'signed', 'final', 'intake', 'client'])
-// Folders that are internal-only and therefore require the attorney-review
-// confirmation modal before being promoted to any client-visible folder.
-const INTERNAL_SOURCE_FOLDERS: ReadonlySet<DocFolder> = new Set(['draft', 'meeting-notes'])
-
-// PATCH /api/documents/[id]  →  update folder (e.g. draft → review to share with client)
+// PATCH /api/documents/[id]
 //
-// Every folder change is logged to document_access_audit with the prior and
-// new folder so attorneys can prove which documents were promoted to client
-// visibility and when. If the audit row cannot be written the update is
-// rolled back and the request fails — promotion without an audit trail is
-// not allowed.
+// Three modes, all attorney-only:
+//   { shared: boolean }   toggle client visibility
+//   { name: string }      rename
+//   { reviewed: boolean } informational review marker (gates nothing)
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const { folder, confirmed, reviewed, name } = (await req.json()) as {
-    folder?: string
-    confirmed?: boolean
+  const { shared, reviewed, name } = (await req.json()) as {
+    shared?: boolean
     reviewed?: boolean
     name?: string
   }
-  // Three PATCH modes: a folder change, an attorney review-state toggle
-  // (`reviewed` with no folder), or a rename (`name` with no folder/review).
-  // The review toggle records sign-off that the promote gate below requires
-  // before a draft can become client-visible.
-  const isReviewToggle = folder === undefined && typeof reviewed === 'boolean'
-  const isRename = folder === undefined && reviewed === undefined && typeof name === 'string'
-  if (!isReviewToggle && !isRename) {
-    if (!folder) return NextResponse.json({ error: 'folder is required' }, { status: 400 })
-    if (!VALID_FOLDERS.includes(folder as DocFolder)) {
-      return NextResponse.json({ error: `Invalid folder: ${folder}` }, { status: 400 })
-    }
+
+  const isShareToggle = typeof shared === 'boolean'
+  const isReviewToggle = typeof reviewed === 'boolean'
+  const isRename = typeof name === 'string'
+  if (!isShareToggle && !isReviewToggle && !isRename) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
   const sb = getAdminClient()
@@ -94,173 +64,71 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const { data: existing, error: loadError } = await sb
     .from('matter_documents')
-    .select('id, matter_id, folder, name, content_type, generation_id, marker_count, missing_count, reviewed_at, reviewed_by')
+    .select('id, matter_id, name, shared_at')
     .eq('id', id)
     .single()
   if (loadError || !existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Review-state toggle: set/clear reviewed_at + reviewed_by, audited as 'review'.
+  if (isShareToggle) {
+    const wasShared = existing.shared_at !== null
+    const { data, error: shareErr } = await sb
+      .from('matter_documents')
+      .update({ shared_at: shared ? new Date().toISOString() : null })
+      .eq('id', id)
+      .select(MATTER_DOCUMENT_COLUMNS)
+      .single()
+    if (shareErr) return NextResponse.json({ error: shareErr.message }, { status: 500 })
+
+    await auditDocumentAccess(sb, user, data, shared ? 'share' : 'unshare', {
+      document_name: data.name,
+    })
+
+    if (shared && !wasShared) {
+      after(() => notifyClientOfSharedDocument(data.matter_id, data.name))
+    }
+    return NextResponse.json({ document: data })
+  }
+
   if (isReviewToggle) {
-    const reviewedAt = reviewed ? new Date().toISOString() : null
-    const reviewedBy = reviewed ? user.id : null
     const { data, error: reviewErr } = await sb
       .from('matter_documents')
-      .update({ reviewed_at: reviewedAt, reviewed_by: reviewedBy })
+      .update({
+        reviewed_at: reviewed ? new Date().toISOString() : null,
+        reviewed_by: reviewed ? user.id : null,
+      })
       .eq('id', id)
       .select(MATTER_DOCUMENT_COLUMNS)
       .single()
     if (reviewErr) return NextResponse.json({ error: reviewErr.message }, { status: 500 })
 
-    const audit = await auditDocumentAccess(sb, user, data, 'review', {
-      reviewed,
-      document_name: data.name,
-      route: '/api/documents/[id] PATCH (review)',
-    })
-    if (!audit.ok) {
-      await sb
-        .from('matter_documents')
-        .update({ reviewed_at: existing.reviewed_at, reviewed_by: existing.reviewed_by })
-        .eq('id', id)
-      return NextResponse.json({ error: 'Audit log write failed; review change reverted' }, { status: 500 })
-    }
+    await auditDocumentAccess(sb, user, data, 'review', { reviewed, document_name: data.name })
     return NextResponse.json({ document: data })
   }
 
-  // Rename: update the document's display name, audited as 'rename' with the
-  // prior name. Reverts the change if the audit row can't be written.
-  if (isRename) {
-    const trimmed = (name ?? '').trim()
-    if (!trimmed) return NextResponse.json({ error: 'name is required' }, { status: 400 })
-    if (trimmed === existing.name) return NextResponse.json({ document: existing })
+  const trimmed = (name ?? '').trim()
+  if (!trimmed) return NextResponse.json({ error: 'name is required' }, { status: 400 })
+  if (trimmed === existing.name) return NextResponse.json({ document: existing })
 
-    const { data, error: renameErr } = await sb
-      .from('matter_documents')
-      .update({ name: trimmed })
-      .eq('id', id)
-      .select(MATTER_DOCUMENT_COLUMNS)
-      .single()
-    if (renameErr) return NextResponse.json({ error: renameErr.message }, { status: 500 })
-
-    const audit = await auditDocumentAccess(sb, user, data, 'rename', {
-      previous_name: existing.name,
-      document_name: trimmed,
-      route: '/api/documents/[id] PATCH (rename)',
-    })
-    if (!audit.ok) {
-      await sb.from('matter_documents').update({ name: existing.name }).eq('id', id)
-      return NextResponse.json({ error: 'Audit log write failed; rename reverted' }, { status: 500 })
-    }
-    return NextResponse.json({ document: data })
-  }
-
-  if (existing.folder === folder) {
-    return NextResponse.json({ document: existing })
-  }
-
-  const fromFolder = existing.folder as DocFolder
-  const toFolder = folder as DocFolder
-  const promotionToClientVisible =
-    INTERNAL_SOURCE_FOLDERS.has(fromFolder) && CLIENT_VISIBLE_FOLDERS.has(toFolder)
-
-  const shareBlock = wordDocShareBlockReason(
-    existing.name,
-    (existing as { content_type?: string | null }).content_type,
-    toFolder,
-  )
-  if (shareBlock) {
-    return NextResponse.json(
-      { error: shareBlock, code: 'word_doc_not_shareable' },
-      { status: 409 },
-    )
-  }
-
-  if (isFirmSharedFolder(toFolder) && !isPdfDocument(existing.name, existing.content_type)) {
-    return NextResponse.json(
-      { error: 'Only PDF files can be shared with clients', code: 'pdf_required' },
-      { status: 409 },
-    )
-  }
-
-  if (isFirmSharedFolder(toFolder) && existing.generation_id) {
-    const gate = canPromoteDraft({
-      markerCount: existing.marker_count ?? null,
-      reviewedAt: existing.reviewed_at ?? null,
-    })
-    if (!gate.ok) {
-      if (gate.reason === 'markers') {
-        return NextResponse.json(
-          {
-            error: 'Generated PDFs with unresolved markers cannot be shared',
-            code: 'generated_pdf_has_markers',
-          },
-          { status: 409 },
-        )
-      }
-      return NextResponse.json(
-        {
-          error: 'Generated PDFs must be marked reviewed before sharing',
-          code: 'generated_pdf_not_reviewed',
-        },
-        { status: 409 },
-      )
-    }
-  }
-
-  // Server-side review-gate: any move from an internal-only folder
-  // (draft, meeting-notes) to a client-visible folder requires an explicit
-  // confirmation flag. The UI shows a modal that posts confirmed=true; a
-  // hand-crafted PATCH without the flag is rejected.
-  if (promotionToClientVisible && confirmed !== true) {
-    return NextResponse.json(
-      { error: 'Promoting an internal document to client-visible requires explicit confirmation', code: 'promotion_not_confirmed' },
-      { status: 409 },
-    )
-  }
-
-  const updatePayload: { folder: DocFolder } = { folder: toFolder }
-
-  const { data, error } = await sb
+  const { data, error: renameErr } = await sb
     .from('matter_documents')
-    .update(updatePayload)
+    .update({ name: trimmed })
     .eq('id', id)
     .select(MATTER_DOCUMENT_COLUMNS)
     .single()
+  if (renameErr) return NextResponse.json({ error: renameErr.message }, { status: 500 })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const audit = await auditDocumentAccess(sb, user, data, 'folder_change', {
-    from_folder: fromFolder,
-    to_folder: toFolder,
-    promotion_to_client_visible: promotionToClientVisible,
-    confirmation_flag: confirmed === true,
-    document_name: data.name,
-    route: '/api/documents/[id] PATCH',
+  await auditDocumentAccess(sb, user, data, 'rename', {
+    previous_name: existing.name,
+    document_name: trimmed,
   })
-
-  if (!audit.ok) {
-    // Compensating revert — restore the prior folder so we don't end up with a
-    // client-visible document and no audit trail.
-    await sb.from('matter_documents').update({ folder: fromFolder }).eq('id', id)
-    return NextResponse.json(
-      { error: 'Audit log write failed; folder change reverted' },
-      { status: 500 },
-    )
-  }
-
-  if (!isFirmSharedFolder(fromFolder) && isFirmSharedFolder(toFolder)) {
-    after(() => notifyClientOfSharedDocument(data.matter_id, data.name))
-  }
-
   return NextResponse.json({ document: data })
 }
 
 // DELETE /api/documents/[id]  →  audit, delete DB row, then best-effort R2 delete
 //
-// Order matters. The previous implementation deleted from R2 first and ignored
-// errors, which silently orphaned client-visible "ghost" rows on R2 success +
-// DB failure. We now write the audit row first, delete the DB row second, and
-// schedule the R2 cleanup last (any remaining R2 object is invisible to the
-// app and only costs storage).
+// Order matters: the DB row goes first so a partial failure leaves an orphaned
+// R2 object (invisible to the app, costs only storage) rather than a ghost row
+// pointing at nothing.
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -276,18 +144,11 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     .single()
   if (error || !doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const audit = await auditDocumentAccess(sb, user, doc, 'delete', {
-    folder: doc.folder,
-    r2_key: doc.r2_key,
+  await auditDocumentAccess(sb, user, doc, 'delete', {
     document_name: doc.name,
-    route: '/api/documents/[id] DELETE',
+    r2_key: doc.r2_key,
+    was_shared: doc.shared_at !== null,
   })
-  if (!audit.ok) {
-    return NextResponse.json(
-      { error: 'Audit log write failed; deletion aborted' },
-      { status: 500 },
-    )
-  }
 
   const { error: dbError } = await sb.from('matter_documents').delete().eq('id', id)
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 })
