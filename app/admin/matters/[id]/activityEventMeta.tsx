@@ -21,11 +21,11 @@ export interface EventMeta {
 }
 
 export const EVENT_META: Partial<Record<ActivityEventType, EventMeta>> = {
-  stage_changed: { icon: Activity, color: 'text-accent bg-accent/10', label: 'Stage changed activity' },
-  intake_sent: { icon: Send, color: 'text-accent bg-accent/10', label: 'Intake sent activity' },
+  stage_changed: { icon: Activity, color: 'text-primary bg-primary/10', label: 'Stage changed activity' },
+  intake_sent: { icon: Send, color: 'text-primary bg-primary/10', label: 'Intake sent activity' },
   intake_completed: { icon: CheckCircle2, color: 'text-success bg-success/10', label: 'Intake completed activity' },
   email_sent: { icon: Send, color: 'text-muted-foreground bg-muted', label: 'Email sent activity' },
-  draft_generated: { icon: FileText, color: 'text-accent bg-accent/10', label: 'Draft generated activity' },
+  draft_generated: { icon: FileText, color: 'text-primary bg-primary/10', label: 'Draft generated activity' },
   draft_promoted_to_review: { icon: CheckCircle2, color: 'text-success bg-success/10', label: 'Draft promoted to review activity' },
   matter_created: { icon: Info, color: 'text-muted-foreground bg-muted', label: 'Matter activity' },
 }

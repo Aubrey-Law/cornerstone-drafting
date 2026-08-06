@@ -12,7 +12,7 @@ export function FilterChip({ selected = false, count, className, children, ...pr
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors',
         selected
-          ? 'bg-accent text-accent-foreground'
+          ? 'bg-primary text-primary-foreground'
           : 'bg-muted text-muted-foreground hover:bg-muted/80',
         className,
       )}

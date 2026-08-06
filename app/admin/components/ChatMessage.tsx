@@ -147,7 +147,7 @@ function DesignSheetImportToolEventCard({
         type="button"
         onClick={() => onReviewDesignSheetImport?.(event)}
         disabled={!event.preview?.length || !event.proposed || !onReviewDesignSheetImport}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-semibold text-accent transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
         <ClipboardList className="h-3.5 w-3.5" />
         Review proposed updates
@@ -233,7 +233,7 @@ function ToolEventCard({
           href={event.signedUrl}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 inline-block font-semibold text-accent hover:underline"
+          className="mt-1 inline-block font-semibold text-primary hover:underline"
         >
           Open
         </a>
@@ -301,7 +301,7 @@ function HandoffBlock({
         {matterId ? (
           <Link
             href={`/admin/drafting/${matterId}`}
-            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <FilePenLine className="h-3.5 w-3.5" aria-hidden />
             Send to drafting
@@ -364,7 +364,7 @@ export function ChatMessage({ message, onReviewDesignSheetImport }: ChatMessageP
           'break-words px-3 py-2.5 text-sm leading-relaxed shadow-xs',
           hasHandoff ? 'w-full' : 'max-w-[82%]',
           isUser
-            ? 'whitespace-pre-wrap rounded-[12px_12px_2px_12px] bg-accent text-accent-foreground'
+            ? 'whitespace-pre-wrap rounded-[12px_12px_2px_12px] bg-primary text-primary-foreground'
             : 'rounded-[12px_12px_12px_2px] border border-border bg-muted text-foreground',
         )}
       >

@@ -43,7 +43,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="text-accent underline underline-offset-2"
+              className="text-primary underline underline-offset-2"
             >
               {children}
             </a>

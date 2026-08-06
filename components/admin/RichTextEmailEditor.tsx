@@ -300,7 +300,7 @@ export function RichTextEmailEditor({
         className={cn(
           'overflow-y-auto px-3 py-2 text-sm leading-relaxed outline-none',
           expanded ? 'min-h-[20rem] max-h-[60dvh]' : 'min-h-[9rem] max-h-[40dvh]',
-          '[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-accent [&_a]:underline',
+          '[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-primary [&_a]:underline',
           'empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]',
           disabled && 'opacity-60',
         )}

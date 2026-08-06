@@ -35,7 +35,7 @@ export function DesignFinalReview({ sheet, selectedDocKeys, blockingDetails, opt
     <section className="mb-4 rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4 text-accent" />Final review</p>
+          <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4 text-primary" />Final review</p>
           <p className="mt-1 text-xs text-muted-foreground">Only exceptions, unresolved work, and package choices are shown.</p>
         </div>
         <Badge className={cn('border-0', readinessComplete ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>

@@ -315,7 +315,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
                 <span className="font-medium">{analysis.title}</span>
                 <Badge variant="outline">{analysis.packageName}</Badge>
                 {analysis.templateSource === 'published' && <Badge variant="secondary">Published template</Badge>}
-                <span className={cn('ml-auto text-xs', missingUnanswered > 0 ? 'text-amber-600' : 'text-emerald-600')}>
+                <span className={cn('ml-auto text-xs', missingUnanswered > 0 ? 'text-amber' : 'text-success')}>
                   {missingUnanswered > 0
                     ? `${missingUnanswered} field${missingUnanswered === 1 ? '' : 's'} still unresolved`
                     : 'All fields resolved'}
@@ -351,7 +351,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
               )}
 
               {analysis.unresolvedMarkers.length > 0 && (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                <div className="rounded-md border border-amber-border bg-amber-bg p-3 text-xs text-amber">
                   <p className="font-medium">Unresolved template markers</p>
                   <ul className="mt-1 list-inside list-disc">
                     {analysis.unresolvedMarkers.slice(0, 8).map(marker => <li key={marker}>{marker}</li>)}
@@ -383,7 +383,7 @@ export default function QuickDraftPage({ matterId, matterLabel }: QuickDraftPage
                   Save to matter
                 </Button>
                 {savedDocumentName && (
-                  <span className="text-sm text-emerald-700">
+                  <span className="text-sm text-success">
                     Saved <span className="font-medium">{savedDocumentName}</span> to the Draft folder.
                   </span>
                 )}

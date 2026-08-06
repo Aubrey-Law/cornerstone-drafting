@@ -345,7 +345,7 @@ export function AdminRail({
                 className={cn(
                   'relative inline-flex h-11 items-center border-b-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   active
-                    ? 'gap-1.5 border-accent px-2.5 font-semibold text-foreground'
+                    ? 'gap-1.5 border-primary px-2.5 font-semibold text-foreground'
                     : 'w-[34px] justify-center border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >

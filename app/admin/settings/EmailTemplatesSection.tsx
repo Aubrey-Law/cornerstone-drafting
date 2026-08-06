@@ -67,7 +67,7 @@ function PlaceholderText({ text }: { text: string }) {
         /^\{\{\s*[\w.]+\s*\}\}$/.test(part) ? (
           <span
             key={i}
-            className="mx-0.5 inline-block rounded bg-accent/10 px-1 py-px font-mono text-[0.85em] font-medium text-accent"
+            className="mx-0.5 inline-block rounded bg-primary/10 px-1 py-px font-mono text-[0.85em] font-medium text-primary"
           >
             {part}
           </span>
@@ -260,7 +260,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
         />
         {showSignaturePreview && (
           <div
-            className="rounded-md border border-border bg-muted/30 p-3 text-sm leading-relaxed [&_a]:text-accent [&_a]:underline"
+            className="rounded-md border border-border bg-muted/30 p-3 text-sm leading-relaxed [&_a]:text-primary [&_a]:underline"
             dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(signatureHtml) || '<span>No signature configured.</span>' }}
           />
         )}
@@ -369,7 +369,7 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
                 <div className="mt-2 border-t border-border pt-2 text-sm text-muted-foreground">No body yet</div>
               ) : (
                 <div
-                  className="mt-2 border-t border-border pt-2 text-sm leading-relaxed text-foreground [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-accent [&_a]:underline"
+                  className="mt-2 border-t border-border pt-2 text-sm leading-relaxed text-foreground [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-primary [&_a]:underline"
                   dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(form.body) }}
                 />
               )}
@@ -428,12 +428,12 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-medium text-foreground">{template.name}</p>
                             {template.isDefault && (
-                              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">
+                              <span className="rounded bg-blue-bg px-1.5 py-0.5 text-[10px] font-medium text-blue">
                                 Default
                               </span>
                             )}
                             {!template.isActive && (
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                                 Inactive
                               </span>
                             )}

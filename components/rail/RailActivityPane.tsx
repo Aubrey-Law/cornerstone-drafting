@@ -34,12 +34,12 @@ interface RailActivityRow {
 const ROW_LIMIT = 50
 
 const EVENT_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
-  stage_changed: { icon: Activity, tone: 'text-accent bg-accent/10' },
-  intake_sent: { icon: Send, tone: 'text-accent bg-accent/10' },
+  stage_changed: { icon: Activity, tone: 'text-primary bg-primary/10' },
+  intake_sent: { icon: Send, tone: 'text-primary bg-primary/10' },
   intake_completed: { icon: CheckCircle2, tone: 'text-success bg-success/10' },
   email_sent: { icon: Send, tone: 'text-muted-foreground bg-muted' },
   sms_sent: { icon: Send, tone: 'text-muted-foreground bg-muted' },
-  draft_generated: { icon: FileText, tone: 'text-accent bg-accent/10' },
+  draft_generated: { icon: FileText, tone: 'text-primary bg-primary/10' },
   draft_promoted_to_review: { icon: CheckCircle2, tone: 'text-success bg-success/10' },
   note: { icon: Info, tone: 'text-muted-foreground bg-muted' },
 }

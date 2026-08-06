@@ -92,7 +92,7 @@ function SegmentedYesNo({
 }) {
   const buttonCls = (active: boolean) => cn(
     'rounded-[5px] px-3.5 py-1 text-xs font-medium transition-colors',
-    active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground',
+    active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
   )
   return (
     <div className="inline-flex gap-0.5 rounded-md bg-muted p-0.5">
@@ -449,7 +449,7 @@ export default function AdminIntakeSheet({
                   <button
                     type="button"
                     onClick={() => setManualAddress(v => !v)}
-                    className="text-[11px] text-accent hover:underline"
+                    className="text-[11px] text-primary hover:underline"
                   >
                     {manualAddress ? 'Use search' : 'Enter manually'}
                   </button>
@@ -635,7 +635,7 @@ export default function AdminIntakeSheet({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="mt-1 px-0 text-xs text-accent hover:bg-transparent hover:text-accent"
+                    className="mt-1 px-0 text-xs text-primary hover:bg-transparent hover:text-primary"
                     onClick={addChild}
                   >
                     + Add child

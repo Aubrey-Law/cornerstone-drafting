@@ -131,7 +131,7 @@ export function CombineWordDraftsDialog({
                 onDrop={event => event.preventDefault()}
                 className={`flex items-center gap-3 rounded-md border px-3 py-2 ${
                   isDragging
-                    ? 'border-accent bg-accent/10 opacity-60'
+                    ? 'border-primary bg-primary/10 opacity-60'
                     : 'border-border bg-muted/30'
                 }`}
               >

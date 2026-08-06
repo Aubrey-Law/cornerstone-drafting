@@ -138,7 +138,7 @@ export function MatterMeetingNotesCard({
                   </div>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-accent"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary"
                     disabled={downloadingId === doc.id}
                     onClick={() => void handleDownload(doc)}
                   >

@@ -90,7 +90,7 @@ export function MatterActivityTab({ activity, loading }: { activity: MatterActiv
                           {refs.map(reference => (
                             <li key={reference.id}>
                               <Link
-                                className="text-accent hover:underline"
+                                className="text-primary hover:underline"
                                 href={`?tab=documents&document=${encodeURIComponent(reference.id)}`}
                               >
                                 {reference.name}

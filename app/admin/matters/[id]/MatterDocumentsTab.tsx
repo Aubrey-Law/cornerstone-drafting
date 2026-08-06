@@ -552,7 +552,7 @@ export function MatterDocumentsTab({
                     key={doc.id}
                     id={`document-row-${doc.id}`}
                     data-state={selectedIds.has(doc.id) ? 'selected' : undefined}
-                    className={cn(highlightedDocumentId === doc.id && 'bg-amber-100/70 ring-1 ring-inset ring-amber-400 dark:bg-amber-950/30')}
+                    className={cn(highlightedDocumentId === doc.id && 'bg-amber-bg ring-1 ring-inset ring-amber-border')}
                   >
                     <TableCell>
                       <Checkbox

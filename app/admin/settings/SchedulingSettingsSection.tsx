@@ -161,7 +161,7 @@ export function SchedulingSettingsSection() {
   return (
     <div className="space-y-6">
       {outlookConnected === false && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="rounded-md border border-amber-border bg-amber-bg p-4 text-sm text-amber">
           <strong>Outlook is not connected.</strong> Booking pages will show “scheduling
           temporarily unavailable” until you connect Outlook in the{' '}
           <Link href="/admin/settings?tab=outlook" className="underline">
@@ -534,7 +534,7 @@ export function SchedulingSettingsSection() {
                   <p className="text-xs text-muted-foreground">
                     {fmtWhen(a.startTime)} · {a.attendeeEmail}
                     {!a.outlookSynced && a.status === 'scheduled' && (
-                      <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
+                      <span className="ml-2 text-amber">⚠ not on Outlook calendar</span>
                     )}
                   </p>
                 </div>

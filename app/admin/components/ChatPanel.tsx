@@ -701,7 +701,7 @@ export function ChatPanel({
             'inline-flex min-w-0 items-center rounded-full px-2 py-1 text-[11px] font-semibold',
             chatContext.type === 'general'
               ? 'bg-muted text-muted-foreground'
-              : 'bg-accent text-accent-foreground',
+              : 'bg-primary text-primary-foreground',
           )}
         >
           <span className="truncate">{contextPillText(chatContext, matterDisplayName)}</span>
@@ -710,7 +710,7 @@ export function ChatPanel({
           <button
             type="button"
             onClick={() => setOverrideGeneral(true)}
-            className="shrink-0 whitespace-nowrap rounded-sm text-[11px] font-semibold text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="shrink-0 whitespace-nowrap rounded-sm text-[11px] font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Switch to general
           </button>
@@ -735,7 +735,7 @@ export function ChatPanel({
                       saveNoteType === option.key
                         ? option.key === 'internal'
                           ? 'bg-brand-navy text-white'
-                          : 'bg-accent text-white'
+                          : 'bg-primary text-primary-foreground'
                         : 'bg-muted text-muted-foreground hover:bg-muted/80',
                     )}
                   >
@@ -835,11 +835,11 @@ export function ChatPanel({
                         textareaRef.current?.focus()
                       }}
                       className={cn(
-                        'flex w-full items-center gap-2 py-2 text-left text-sm text-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        'flex w-full items-center gap-2 py-2 text-left text-sm text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         index < prompts.length - 1 && 'border-b border-muted',
                       )}
                     >
-                      <PromptIcon className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+                      <PromptIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                       <span className="min-w-0 flex-1">{prompt}</span>
                     </button>
                   </li>
@@ -862,7 +862,7 @@ export function ChatPanel({
             {[0, 1, 2].map(index => (
               <span
                 key={index}
-                className="h-1.5 w-1.5 rounded-full bg-accent"
+                className="h-1.5 w-1.5 rounded-full bg-primary"
                 style={{ animation: 'cornerstone-chat-pulse 1s ease-in-out infinite', animationDelay: `${index * 120}ms` }}
               />
             ))}
@@ -944,7 +944,7 @@ export function ChatPanel({
             type="submit"
             disabled={!input.trim()}
             aria-label="Send message"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowUp size={18} />
           </button>

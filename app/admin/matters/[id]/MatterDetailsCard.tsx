@@ -122,7 +122,7 @@ export function MatterDetailsCard({
       <ReadValue label="Actual signing" value={actualSigningDate ? formatDateDetail(actualSigningDate) : '—'} />
       <ReadValue
         label="Plan composition"
-        value={<Link className="font-medium text-accent hover:underline" href={`/admin/drafting/${matterId}?step=design`}>{planLabel}</Link>}
+        value={<Link className="font-medium text-primary hover:underline" href={`/admin/drafting/${matterId}?step=design`}>{planLabel}</Link>}
       />
       <ReadValue label="Flat fee" value={currency(details?.flat_fee_amount ?? matter.fee_amount)} tabular />
       <ReadValue label="Payment status" value={paymentStatus(details)} />
@@ -204,7 +204,7 @@ export function MatterDetailsCard({
         <div className="space-y-1.5">
           <FieldLabel>Plan composition</FieldLabel>
           <p className="flex h-9 items-center text-sm font-medium">{planLabel}</p>
-          <Link className="text-xs font-medium text-accent hover:underline" href={`/admin/drafting/${matterId}?step=design`}>
+          <Link className="text-xs font-medium text-primary hover:underline" href={`/admin/drafting/${matterId}?step=design`}>
             Open design sheet
           </Link>
         </div>

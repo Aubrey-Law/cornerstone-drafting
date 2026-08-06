@@ -372,7 +372,7 @@ export function DocumentTemplatesSection() {
                               <p className="text-success">The selected matter resolves every field in this template.</p>
                             ) : (
                               <div>
-                                <p className="font-medium text-amber-600">
+                                <p className="font-medium text-amber">
                                   Missing for the selected matter ({report.perMatter.missingFields.length}):
                                 </p>
                                 <ul className="mt-1 list-inside list-disc text-muted-foreground">

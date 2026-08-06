@@ -252,12 +252,12 @@ export default function EngagementWorkspace({ agreement }: { agreement: Agreemen
                 onClick={() => setStep(id)}
                 className={cn(
                   'flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors',
-                  active ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  active ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                 )}
               >
                 <span className={cn(
                   'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
-                  complete ? 'bg-success/15 text-success' : active ? 'bg-accent text-white' : 'bg-muted text-muted-foreground',
+                  complete ? 'bg-success/15 text-success' : active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
                 )}>
                   {complete ? <CheckCircle2 className="h-3 w-3" /> : index + 1}
                 </span>
@@ -557,7 +557,7 @@ function ReviewEditor({
   onSaveRevision: () => void
 }) {
   return (
-    <div className="rounded-md border border-accent/30 bg-accent/5 p-4">
+    <div className="rounded-md border border-primary/30 bg-primary/5 p-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 className="text-sm font-semibold">In-app DOCX editor</h3>

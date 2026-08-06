@@ -26,7 +26,7 @@ export function MatterAssistantQuickPrompts({ prompts, className }: MatterAssist
           className="gap-1.5 text-xs"
           onClick={() => openCornerstoneAssistant({ prompt: item.prompt, send: true })}
         >
-          <Sparkles className="h-3.5 w-3.5 text-accent" />
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
           {item.label}
         </Button>
       ))}

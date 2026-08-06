@@ -50,8 +50,8 @@ export function MatterProgressTimeline({
             <span
               className={cn(
                 'relative z-10 mx-auto block h-4 w-4 rounded-full border-2',
-                complete && 'border-accent bg-accent',
-                current && 'border-accent bg-card',
+                complete && 'border-primary bg-primary',
+                current && 'border-primary bg-card',
                 !complete && !current && 'border-muted-foreground/30 bg-muted',
               )}
             />

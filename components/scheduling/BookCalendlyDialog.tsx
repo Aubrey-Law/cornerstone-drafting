@@ -97,7 +97,7 @@ export function BookCalendlyDialog({
             </div>
           </div>
           {booked ? (
-            <div className="rounded-md border border-green-600/30 bg-green-600/10 p-4 text-sm">
+            <div className="rounded-md border border-success/30 bg-success/10 p-4 text-sm">
               Booked — the appointment will appear on the timeline as soon as Calendly
               confirms it.
             </div>

@@ -174,14 +174,14 @@ export default function DraftingWorkspace({
                   className={cn(
                     'flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                     active
-                      ? 'border-accent bg-accent/10 text-accent'
+                      ? 'border-primary bg-primary/10 text-primary'
                       : 'border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                   )}
                 >
                   <span className={cn(
                     'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
                     status === 'complete' ? 'bg-success/15 text-success'
-                      : active ? 'bg-accent text-white'
+                      : active ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground',
                   )}>
                     {status === 'complete' ? <CheckCircle2 className="h-3 w-3" /> : idx + 1}

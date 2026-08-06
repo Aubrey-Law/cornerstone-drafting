@@ -91,7 +91,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                         <Calendar className="h-2.5 w-2.5" /> System
                       </span>
                     ) : (
-                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', isInternal ? 'bg-brand-navy/8 text-brand-navy' : 'bg-accent/8 text-accent')}>
+                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', isInternal ? 'bg-brand-navy/8 text-brand-navy' : 'bg-primary/8 text-primary')}>
                         {isInternal ? 'Internal' : 'Client comm.'}
                       </span>
                     )}
@@ -142,7 +142,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                             editingNoteType === type
                               ? type === 'Internal'
                                 ? 'bg-brand-navy text-white'
-                                : 'bg-accent text-white'
+                                : 'bg-primary text-primary-foreground'
                               : 'bg-page-bg text-text-tertiary hover:bg-border'
                           )}
                         >
@@ -203,7 +203,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
                 noteType === type
                   ? type === 'Internal'
                     ? 'bg-brand-navy text-white'
-                    : 'bg-accent text-white'
+                    : 'bg-primary text-primary-foreground'
                   : 'bg-page-bg text-text-tertiary hover:bg-border'
               )}
             >
@@ -214,7 +214,7 @@ function MatterNotesTabImpl(props: MatterNotesTabProps) {
         <div className="flex items-center justify-end gap-3">
           <Button
             size="sm"
-            className="gap-1 bg-accent text-xs text-white"
+            className="gap-1 bg-primary text-xs text-primary-foreground"
             disabled={!noteText.trim() || noteSaving}
             onClick={handleAddNote}
           >

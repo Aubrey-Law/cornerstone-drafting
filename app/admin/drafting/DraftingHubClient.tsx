@@ -160,7 +160,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
                   onClick={() => setActionFilter(chip.value)}
                   className={cn(
                     'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
-                    selected ? 'bg-accent text-white' : cn(chip.tone, 'hover:opacity-80'),
+                    selected ? 'bg-primary text-primary-foreground' : cn(chip.tone, 'hover:opacity-80'),
                   )}
                 >
                   {chip.label}

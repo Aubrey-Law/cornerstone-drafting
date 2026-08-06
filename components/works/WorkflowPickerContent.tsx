@@ -95,7 +95,7 @@ export function WorkflowPickerContent({ typeFilter, onPick, pickLabel = 'Use wor
                   onClick={() => setSelected(skill)}
                   className={`flex w-full items-start gap-2 p-3 text-left hover:bg-muted/50 ${selected?.id === skill.id ? 'bg-muted/60' : ''}`}
                 >
-                  <span className="mt-0.5 rounded-md bg-accent/20 p-1.5">
+                  <span className="mt-0.5 rounded-md bg-primary/10 p-1.5">
                     {skill.skill_type === 'tabular' ? <Table2 className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
                   </span>
                   <span className="min-w-0 flex-1">

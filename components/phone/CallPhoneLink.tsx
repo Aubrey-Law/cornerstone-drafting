@@ -43,7 +43,7 @@ export function CallPhoneLink({
       type="button"
       onClick={() => openStaffSoftphone({ number: phone ?? undefined })}
       title={`Call ${display}`}
-      className={cn('underline-offset-2 hover:text-accent hover:underline', className)}
+      className={cn('underline-offset-2 hover:text-primary hover:underline', className)}
     >
       {display}
     </button>

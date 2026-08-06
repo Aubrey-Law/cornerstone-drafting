@@ -250,7 +250,7 @@ function MatterAssetsTabImpl({
           className="gap-1.5"
           onClick={() => openCornerstoneAssistant({ prompt: 'Analyze MA estate tax exposure', send: true })}
         >
-          <Sparkles className="h-3.5 w-3.5 text-accent" />
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
           Analyze MA estate tax
         </Button>
         <Button
