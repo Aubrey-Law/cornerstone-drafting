@@ -10,10 +10,11 @@ import type { RetellWebhookPayload } from '@/lib/retell/types'
 import { isDocumentShared } from '@/lib/documentWorkspace'
 
 describe('mapMatterStageToEngine', () => {
-  it('maps early stages to design_input', () => {
+  it('maps the intake stages to design_input, and design to its own key', () => {
     expect(mapMatterStageToEngine('intake')).toBe('design_input')
     expect(mapMatterStageToEngine('intake_review')).toBe('design_input')
-    expect(mapMatterStageToEngine('design')).toBe('design_input')
+    // Split out so the design SLA starts at the design meeting, not at intake.
+    expect(mapMatterStageToEngine('design')).toBe('design')
   })
 
   it('maps mid and late stages', () => {

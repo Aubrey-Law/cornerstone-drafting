@@ -287,15 +287,26 @@ export function MatterFactsPanel({
   const draftsReview = resolveDraftingDate(details, 'drafts_review')
   const revisions = resolveDraftingDate(details, 'revisions')
   const designHref = `/admin/drafting/${matterId}?step=design`
-  const planFlagChips = [
-    { label: 'Real estate', on: planMirror.hasRealEstate },
+  // Real estate and pets are the firm's own answer and drive which items the
+  // stage-task checklist carries, so they toggle. Credit shelter and minor
+  // children are read-only: the design sheet and the household own those.
+  const planFlagChips: Array<{
+    label: string
+    on: boolean
+    field?: keyof MatterDetailsRow
+  }> = [
+    {
+      label: 'Real estate',
+      on: details?.ep_has_real_estate ?? planMirror.hasRealEstate,
+      field: 'ep_has_real_estate',
+    },
     { label: 'Credit shelter', on: planMirror.creditShelter },
     {
       label: 'Minor children',
       on: planMirror.hasMinorChildren
         || Boolean(client?.has_minor_children ?? matter.has_minor_children),
     },
-    { label: 'Pets', on: planMirror.hasPets },
+    { label: 'Pets', on: details?.ep_has_pets ?? planMirror.hasPets, field: 'ep_has_pets' },
   ]
 
   const saveStatus = savingField
@@ -654,19 +665,30 @@ export function MatterFactsPanel({
         }
       >
         <div className="flex flex-wrap gap-1.5 px-1.5 pb-1">
-          {planFlagChips.map(chip => (
-            <span
-              key={chip.label}
-              className={cn(
-                'rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold',
-                chip.on
-                  ? 'border-accent/30 bg-accent/10 text-accent'
-                  : 'border-border bg-muted text-muted-foreground',
-              )}
-            >
-              {chip.on ? chip.label : `No ${chip.label.toLowerCase()}`}
-            </span>
-          ))}
+          {planFlagChips.map(chip => {
+            const className = cn(
+              'rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold',
+              chip.on
+                ? 'border-accent/30 bg-accent/10 text-accent'
+                : 'border-border bg-muted text-muted-foreground',
+            )
+            const label = chip.on ? chip.label : `No ${chip.label.toLowerCase()}`
+            if (!chip.field) {
+              return <span key={chip.label} className={className}>{label}</span>
+            }
+            const field = chip.field
+            return (
+              <button
+                key={chip.label}
+                type="button"
+                aria-pressed={chip.on}
+                onClick={() => void onSaveField(field, !chip.on)}
+                className={cn(className, 'hover:brightness-95')}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
         <ReadOnlyRow label="Trust name">
           {planMirror.trustName ? (

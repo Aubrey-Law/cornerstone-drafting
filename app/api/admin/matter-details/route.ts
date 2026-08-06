@@ -5,6 +5,7 @@ import { setMatterNumber } from '@/lib/matterNumber'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
 import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
+import { reconcileEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
 
 // PATCH /api/admin/matter-details
 // Body: { matterId: string; field: string; value: unknown }
@@ -84,6 +85,39 @@ const DESIGN_SHEET_OWNED_FIELDS = new Set([
   'credit_shelter_provisions',
   'fiduciary_appointments',
 ])
+
+/** Columns a stage-task gate reads — a write to any of them re-reconciles. */
+const PLAN_GATE_FIELDS = new Set([
+  'ep_has_real_estate',
+  'ep_has_pets',
+  'ep_deed_transfers_needed',
+  'ep_separate_trusts',
+  'ep_signing_method',
+  'billing_type',
+])
+
+/**
+ * A plan flag decides which items the open stage task carries. Fold the change
+ * in now rather than waiting for the next stage entry — a matter already in
+ * drafting should pick up the deed the moment real estate is flagged.
+ */
+async function reconcilePlanGates(
+  admin: ReturnType<typeof getAdminClient>,
+  matterId: string,
+): Promise<void> {
+  const { data: matter } = await admin
+    .from('matters')
+    .select('stage')
+    .eq('id', matterId)
+    .maybeSingle()
+  if (!matter?.stage) return
+  try {
+    await reconcileEngineStageTask(admin, matterId, matter.stage as string)
+  } catch (e) {
+    // Never fail the field save because the checklist could not be updated.
+    console.error('matter-details plan gate reconcile failed', e)
+  }
+}
 
 export async function PATCH(req: Request) {
   const { err } = await requireAdmin(req)
@@ -212,6 +246,7 @@ export async function PATCH(req: Request) {
       console.error('matter-details billing type update failed', { matterId, value, billingError })
       return NextResponse.json({ error: billingError.message }, { status: 500 })
     }
+    await reconcilePlanGates(admin, matterId)
     return NextResponse.json({ row })
   }
 
@@ -245,6 +280,8 @@ export async function PATCH(req: Request) {
       .join(' — ')
     return NextResponse.json({ error: detail || 'Unknown DB error' }, { status: 500 })
   }
+
+  if (PLAN_GATE_FIELDS.has(field)) await reconcilePlanGates(admin, matterId)
 
   return NextResponse.json({ row: data })
 }
