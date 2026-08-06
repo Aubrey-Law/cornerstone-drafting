@@ -16,6 +16,15 @@ interface DesignSheetSummaryRow {
   updated_at?: string | null
 }
 
+/** Matter stages where document-production work is still an active next action. */
+export const DRAFTING_QUEUE_STAGES = [
+  'design',
+  'drafting',
+  'client_review',
+  'drafts_approved',
+  'revision',
+] as const
+
 interface DocSelectionRow {
   design_sheet_id: string
   doc_type: string | null
@@ -216,7 +225,7 @@ export async function fetchDraftingHubMatters(): Promise<{
   const { data: mattersRaw, error: mattersError } = await admin
     .from('v_matter_pipeline')
     .select('*')
-    .neq('stage', 'closed')
+    .in('stage', [...DRAFTING_QUEUE_STAGES])
     .order('matter_created', { ascending: false })
 
   if (mattersError) {

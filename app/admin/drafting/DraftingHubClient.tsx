@@ -1,65 +1,48 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDownAZ, Clock, Columns3, RefreshCw, Table2 } from 'lucide-react'
+import { ArrowDownAZ, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SearchField } from '@/components/SearchField'
-import MatterPipelineKanban from '@/app/admin/drafting/MatterPipelineKanban'
 import MatterPipelineTable from '@/app/admin/drafting/MatterPipelineTable'
 import { cn } from '@/lib/utils'
 import {
-  type DraftingHubView,
-  type HubReadinessFilter,
+  type HubActionFilter,
   type HubSortKey,
   QUIET_DAYS,
-  hubReadinessBucket,
+  hubNextActionKey,
   isHubQuiet,
   matchesHubSearch,
-  readDraftingHubView,
   sortHubMatters,
-  writeDraftingHubView,
 } from '@/lib/drafting/hubUtils'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
-import type { MatterStage } from '@/types/database'
 
 interface DraftingHubClientProps {
   matters: DraftingHubMatter[]
   loadError?: string | null
 }
 
-/** Readiness chips, in toolbar order. `tone` styles the unselected pill. */
-const READINESS_CHIPS: { value: HubReadinessFilter; label: string; tone: string }[] = [
+/** Next-action chips, in toolbar order. `tone` styles the unselected pill. */
+const ACTION_CHIPS: { value: HubActionFilter; label: string; tone: string }[] = [
   { value: 'all', label: 'All', tone: 'bg-muted text-muted-foreground' },
-  { value: 'ready', label: 'Ready', tone: 'bg-green-bg text-green' },
-  { value: 'needs_design', label: 'Needs design', tone: 'bg-amber-bg text-amber' },
-  { value: 'needs_setup', label: 'Setup', tone: 'bg-amber-bg text-amber' },
+  { value: 'design', label: 'Design', tone: 'bg-amber-bg text-amber' },
+  { value: 'setup', label: 'Setup', tone: 'bg-amber-bg text-amber' },
+  { value: 'generate', label: 'Generate', tone: 'bg-green-bg text-green' },
+  { value: 'review', label: 'Review', tone: 'bg-blue-bg text-blue' },
+  { value: 'revise', label: 'Revise', tone: 'bg-amber-bg text-amber' },
   { value: 'quiet', label: `Quiet ${QUIET_DAYS}d+`, tone: 'bg-red-bg text-red' },
 ]
 
 export default function DraftingHubClient({ matters: initialMatters, loadError = null }: DraftingHubClientProps) {
   const router = useRouter()
-  const [matters, setMatters] = useState(initialMatters)
-  const [view, setView] = useState<DraftingHubView>('kanban')
+  const matters = initialMatters
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<HubSortKey>('updated')
-  const [readinessFilter, setReadinessFilter] = useState<HubReadinessFilter>('all')
+  const [actionFilter, setActionFilter] = useState<HubActionFilter>('all')
   const [practiceFilter, setPracticeFilter] = useState<string>('all')
   const [focusedIndex, setFocusedIndex] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    setMatters(initialMatters)
-  }, [initialMatters])
-
-  useEffect(() => {
-    const stored = readDraftingHubView()
-    // Below md the board is too cramped, so default to the table without
-    // persisting the choice — kanban stays one click away.
-    const isNarrow = window.matchMedia('(max-width: 767px)').matches
-    setView(isNarrow && stored === 'kanban' ? 'table' : stored)
-  }, [])
 
   const practiceAreas = useMemo(() => {
     const set = new Set<string>()
@@ -75,16 +58,18 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
     [matters, search],
   )
 
-  const readinessCounts = useMemo(() => {
-    const counts: Record<HubReadinessFilter, number> = {
+  const actionCounts = useMemo(() => {
+    const counts: Record<HubActionFilter, number> = {
       all: searched.length,
-      ready: 0,
-      needs_design: 0,
-      needs_setup: 0,
+      design: 0,
+      setup: 0,
+      generate: 0,
+      review: 0,
+      revise: 0,
       quiet: 0,
     }
     for (const item of searched) {
-      counts[hubReadinessBucket(item)] += 1
+      counts[hubNextActionKey(item)] += 1
       if (isHubQuiet(item)) counts.quiet += 1
     }
     return counts
@@ -92,16 +77,16 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
 
   const filtered = useMemo(() => {
     let list = searched
-    if (readinessFilter === 'quiet') {
+    if (actionFilter === 'quiet') {
       list = list.filter(isHubQuiet)
-    } else if (readinessFilter !== 'all') {
-      list = list.filter(item => hubReadinessBucket(item) === readinessFilter)
+    } else if (actionFilter !== 'all') {
+      list = list.filter(item => hubNextActionKey(item) === actionFilter)
     }
     if (practiceFilter !== 'all') {
       list = list.filter(item => item.matter.practice_area === practiceFilter)
     }
     return sortHubMatters(list, sortKey)
-  }, [practiceFilter, readinessFilter, searched, sortKey])
+  }, [actionFilter, practiceFilter, searched, sortKey])
 
   useEffect(() => {
     setFocusedIndex(i => Math.min(i, Math.max(filtered.length - 1, 0)))
@@ -110,21 +95,6 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
   const openMatter = useCallback((matterId: string) => {
     router.push(`/admin/drafting/${matterId}`)
   }, [router])
-
-  const handleStageChange = useCallback((matterId: string, stage: MatterStage) => {
-    setMatters(current =>
-      current.map(item =>
-        item.matter.matter_id === matterId
-          ? { ...item, matter: { ...item.matter, stage } }
-          : item,
-      ),
-    )
-  }, [])
-
-  const switchView = useCallback((next: DraftingHubView) => {
-    setView(next)
-    writeDraftingHubView(next)
-  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -137,7 +107,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
         searchRef.current?.focus()
         return
       }
-      if (view !== 'table' || filtered.length === 0) return
+      if (filtered.length === 0) return
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         setFocusedIndex(i => Math.min(i + 1, filtered.length - 1))
@@ -151,25 +121,26 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [filtered, focusedIndex, openMatter, view])
+  }, [filtered, focusedIndex, openMatter])
 
   const emptyMessage = loadError
     ? `Could not load matters: ${loadError}`
     : matters.length === 0
-      ? 'No open matters yet. Create a matter to start drafting.'
-      : search.trim() || readinessFilter !== 'all' || practiceFilter !== 'all'
-        ? 'No matters match the current filters.'
-        : 'No matters to show.'
+      ? 'No matters currently need drafting work.'
+      : search.trim() || actionFilter !== 'all' || practiceFilter !== 'all'
+        ? 'No drafting work matches the current filters.'
+        : 'No drafting work to show.'
 
-  const hasActiveFilters = Boolean(search.trim() || readinessFilter !== 'all' || practiceFilter !== 'all')
-  const showCreateCta = !loadError && matters.length === 0 && !hasActiveFilters
   const showRetry = Boolean(loadError)
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="mr-1 text-xl font-semibold tracking-tight">Drafting</h1>
+          <div className="mr-1">
+            <h1 className="text-xl font-semibold tracking-tight">Drafting</h1>
+            <p className="text-[11px] text-muted-foreground">Next actions across active document work</p>
+          </div>
           <SearchField
             ref={searchRef}
             value={search}
@@ -178,22 +149,22 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
             aria-label="Search matters"
             containerClassName="max-w-xs min-w-[12rem] flex-1"
           />
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Readiness filter">
-            {READINESS_CHIPS.map(chip => {
-              const selected = readinessFilter === chip.value
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Next action filter">
+            {ACTION_CHIPS.map(chip => {
+              const selected = actionFilter === chip.value
               return (
                 <button
                   key={chip.value}
                   type="button"
                   aria-pressed={selected}
-                  onClick={() => setReadinessFilter(chip.value)}
+                  onClick={() => setActionFilter(chip.value)}
                   className={cn(
                     'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
                     selected ? 'bg-accent text-white' : cn(chip.tone, 'hover:opacity-80'),
                   )}
                 >
                   {chip.label}
-                  <span className="tabular-nums opacity-70">· {readinessCounts[chip.value]}</span>
+                  <span className="tabular-nums opacity-70">· {actionCounts[chip.value]}</span>
                 </button>
               )
             })}
@@ -209,7 +180,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
             >
               <option value="updated">Last activity</option>
               <option value="client">Client name</option>
-              <option value="stage">Stage</option>
+              <option value="action">Next action</option>
             </select>
           </label>
           {practiceAreas.length > 1 && (
@@ -225,38 +196,8 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
               ))}
             </select>
           )}
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-            <Link href="/admin/pipeline/aging">
-              <Clock className="h-3.5 w-3.5" aria-hidden />
-              SLA aging
-            </Link>
-          </Button>
-          <div className="inline-flex rounded-md border border-border bg-background p-0.5" role="group" aria-label="View mode">
-            <button
-              type="button"
-              onClick={() => switchView('kanban')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'kanban' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <Columns3 className="h-3.5 w-3.5" aria-hidden />
-              Kanban
-            </button>
-            <button
-              type="button"
-              onClick={() => switchView('table')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <Table2 className="h-3.5 w-3.5" aria-hidden />
-              Table
-            </button>
-          </div>
           <span className="hidden text-[10px] text-muted-foreground xl:inline">
-            {view === 'table' ? '↑↓ navigate · Enter open · / search' : 'Drag cards to change stage · / search'}
+            ↑↓ navigate · Enter open · / search
           </span>
         </div>
       </div>
@@ -273,25 +214,13 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
                     Retry
                   </Button>
                 )}
-                {showCreateCta && (
-                  <Button type="button" size="sm" asChild>
-                    <Link href="/admin/matters?create=1">Create matter</Link>
-                  </Button>
-                )}
               </div>
             </div>
-          ) : view === 'kanban' ? (
-            <MatterPipelineKanban
-              matters={filtered}
-              onOpen={openMatter}
-              onStageChange={handleStageChange}
-            />
           ) : (
             <MatterPipelineTable
               matters={filtered}
               focusedIndex={focusedIndex}
               onOpen={openMatter}
-              onStageChange={handleStageChange}
             />
           )}
         </div>

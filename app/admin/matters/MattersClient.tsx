@@ -119,7 +119,6 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   const [view, setView] = useState<MatterListView>('table')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [createOpen, setCreateOpen] = useState(false)
-  const [createChoiceOpen, setCreateChoiceOpen] = useState(false)
   const [lawmaticsOpen, setLawmaticsOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const createRequestIdRef = useRef<string | null>(null)
@@ -170,8 +169,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
     return Boolean(
       filters.search.trim()
       || filters.practice !== 'all'
-      || filters.stageGroup !== 'all'
-      || filters.lifecycle !== EMPTY_MATTER_TABLE_FILTERS.lifecycle,
+      || filters.stageGroup !== 'all',
     )
   }, [filters])
 
@@ -391,9 +389,9 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
               <Database className="h-3.5 w-3.5" />
               Import from Lawmatics
             </Button>
-            <Button type="button" size="sm" onClick={() => setCreateChoiceOpen(true)}>
+            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
-              New
+              New matter
             </Button>
           </div>
         </div>
@@ -450,21 +448,6 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
                 Table
               </button>
             </div>
-            <Select
-              value={filters.lifecycle}
-              onValueChange={value => updateFilter('lifecycle', value as MatterTableFilters['lifecycle'])}
-            >
-              <SelectTrigger size="sm" className="w-40" aria-label="Filter by lifecycle">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="open">Open · Leads + hired</SelectItem>
-                <SelectItem value="lead">Leads</SelectItem>
-                <SelectItem value="hired">Hired</SelectItem>
-                <SelectItem value="closed">Lost + declined</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
             <Select
               value={filters.practice}
               onValueChange={value => updateFilter('practice', value)}
@@ -529,9 +512,9 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
             <Briefcase className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">{emptyMessage}</p>
             {!loadError && matters.length === 0 && (
-              <Button type="button" size="sm" onClick={() => setCreateChoiceOpen(true)}>
+              <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-3.5 w-3.5" />
-                New
+                New matter
               </Button>
             )}
           </div>
@@ -593,13 +576,6 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
                           <span className="ml-1.5 text-[11px] text-muted-foreground">
                             {m.matter_number}
                           </span>
-                        )}
-                        {/* A lead has no matter number yet, so name the lifecycle
-                            instead of leaving the row looking like an unnumbered matter. */}
-                        {m.relationship_status && m.relationship_status !== 'hired' && (
-                          <Badge variant="outline" className="ml-1.5 text-[10px] capitalize">
-                            {m.relationship_status}
-                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -665,25 +641,6 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
           </div>
         )}
       </div>
-
-      <Dialog open={createChoiceOpen} onOpenChange={setCreateChoiceOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create a record</DialogTitle>
-            <DialogDescription>
-              Choose a lead for a prospective client, or a matter for a client already retained by the firm.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 py-2 sm:grid-cols-2">
-            <Button type="button" variant="outline" asChild>
-              <Link href="/admin/crm/opportunities?create=1">New opportunity</Link>
-            </Button>
-            <Button type="button" onClick={() => { setCreateChoiceOpen(false); setCreateOpen(true) }}>
-              New matter
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={createOpen}

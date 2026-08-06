@@ -7,10 +7,8 @@ vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => mocks.admin }))
 
 import { fetchMatter } from '@/lib/queries/matterCore'
 
-/**
- * A lead is a matter, so the matter page has to load one. Three separate places
- * filtered to `hired` on that path and each returned null on its own, which the
- * page turns into a 404 — so every one of them is pinned here.
+/** Shared queries may opt into lead-owned matter rows, while the Matters UI uses
+ * the hired-only default.
  */
 
 type Rows = { view?: Record<string, unknown> | null; matters?: Record<string, unknown> | null }
@@ -43,7 +41,7 @@ const hiredRow = { matter_id: 'm1', matter_name: 'Estate Plan', client_phone: nu
 
 beforeEach(() => vi.clearAllMocks())
 
-describe('loading a matter that is still a lead', () => {
+describe('matter query lifecycle views', () => {
   it('reads the hired-only view by default', async () => {
     const { views } = harness({ view: hiredRow })
     await fetchMatter('m1')
@@ -71,13 +69,12 @@ describe('loading a matter that is still a lead', () => {
     expect(result).not.toBeNull()
   })
 
-  it('the matter page asks for leads', () => {
+  it('keeps the matter page hired-only', () => {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/matters/[id]/page.tsx'),
       'utf8',
     )
-    expect(source).toContain('fetchMatter(id, { includeLeads: true })')
-    // The shell loader must not reintroduce a filter of its own.
-    expect(source).not.toContain("relationship_status', 'hired'")
+    expect(source).toContain('fetchMatter(id),')
+    expect(source).not.toContain('includeLeads: true')
   })
 })

@@ -40,7 +40,6 @@ type LeadActivityLoaderRow = {
 }
 type MatterShellRow = {
   client_intake_id: string | null
-  relationship_status?: string | null
   matter_number?: string | null
   matter_number_manual?: boolean | null
   portal_uploads_reviewed_at?: string | null
@@ -61,8 +60,8 @@ type ClientIntakeShellRow = {
 
 const MATTER_NOTE_COLUMNS_WITH_PROVENANCE = 'id, matter_id, note_type, body, author, created_at, source_lead_note_id'
 const MATTER_NOTE_COLUMNS_BASE = 'id, matter_id, note_type, body, author, created_at'
-const MATTER_SHELL_COLUMNS_FULL = 'client_intake_id, relationship_status, matter_number, matter_number_manual, portal_uploads_reviewed_at'
-const MATTER_SHELL_COLUMNS_BASE = 'client_intake_id, relationship_status, matter_number'
+const MATTER_SHELL_COLUMNS_FULL = 'client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at'
+const MATTER_SHELL_COLUMNS_BASE = 'client_intake_id, matter_number'
 const CLIENT_INTAKE_COLUMNS_FULL = 'id, intake_sent_at, intake_completed_at, uploads_reviewed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note'
 const CLIENT_INTAKE_COLUMNS_BASE = 'id, intake_sent_at, email, first_name, status, user_id, client_user_id'
 
@@ -223,8 +222,7 @@ export default async function MatterDetailPage({ params }: Params) {
   const admin = getAdminClient()
   const id = await resolveMatterId(rawId, admin)
   const [matter, contacts, agingSummary] = await Promise.all([
-    // A lead is a matter here; without this the page 404s on every one of them.
-    fetchMatter(id, { includeLeads: true }),
+    fetchMatter(id),
     fetchMatterContacts(id),
     fetchMatterAgingSummary(id),
   ])
@@ -251,8 +249,6 @@ export default async function MatterDetailPage({ params }: Params) {
   if (coreLoadError) throw new Error(`Could not load matter history: ${coreLoadError.message}`)
 
   const intakeId = (matterRow?.client_intake_id ?? null) as string | null
-  // Rows predating the consolidated view carry no lifecycle value; they are all hired.
-  const relationshipStatus = (matterRow?.relationship_status as string | null) ?? 'hired'
   const initialEstateSnapshot = await fetchMatterEstateSnapshot(intakeId)
   let clientIntakeRow: ClientIntakeShellRow | null = null
 
@@ -301,7 +297,6 @@ export default async function MatterDetailPage({ params }: Params) {
       contacts={contacts}
       agingSummary={agingSummary}
       intakeId={intakeId}
-      relationshipStatus={relationshipStatus}
       clientIntakeRow={clientIntakeRow}
       matterNumber={matterNumber}
       matterNumberManual={matterNumberManual}

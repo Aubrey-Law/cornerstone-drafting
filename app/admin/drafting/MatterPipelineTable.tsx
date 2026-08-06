@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
-import { toast } from 'sonner'
+import { ChevronRight } from 'lucide-react'
 import { useDebouncedPrefetch } from '@/lib/useDebouncedPrefetch'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -13,82 +12,47 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { cn, formatDate } from '@/lib/utils'
-import { hubLastActivityAt, hubReadinessLabel } from '@/lib/drafting/hubUtils'
-import { updateMatterStage } from '@/lib/drafting/updateMatterStage'
+import { hubLastActivityAt, hubNextAction } from '@/lib/drafting/hubUtils'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
-import { STAGES, stageLabel, type MatterStage } from '@/types/database'
 
 interface MatterPipelineTableProps {
   matters: DraftingHubMatter[]
   focusedIndex: number
   onOpen: (matterId: string) => void
-  onStageChange: (matterId: string, stage: MatterStage) => void
 }
 
 export default function MatterPipelineTable({
   matters,
   focusedIndex,
   onOpen,
-  onStageChange,
 }: MatterPipelineTableProps) {
-  const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleStageSelect = useCallback(async (item: DraftingHubMatter, nextStage: MatterStage) => {
-    const matterId = item.matter.matter_id
-    if (item.matter.stage === nextStage) return
-
-    setError(null)
-    setUpdatingId(matterId)
-    onStageChange(matterId, nextStage)
-
-    const result = await updateMatterStage(matterId, nextStage)
-    setUpdatingId(null)
-
-    if (!result.ok) {
-      setError(result.error)
-      onStageChange(matterId, item.matter.stage)
-      return
-    }
-    toast.success(`Moved to ${stageLabel(nextStage)}`)
-  }, [onStageChange])
-
   return (
-    <div className="space-y-2">
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="rounded-lg border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Client</TableHead>
-              <TableHead>Matter</TableHead>
-              <TableHead>Stage</TableHead>
-              <TableHead>Readiness</TableHead>
-              <TableHead className="text-right">Docs</TableHead>
-              <TableHead className="text-right">Drafts</TableHead>
-              <TableHead>Last activity</TableHead>
-              <TableHead>Practice</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {matters.map((item, index) => (
-              <MatterPipelineTableRow
-                key={item.matter.matter_id}
-                item={item}
-                index={index}
-                focusedIndex={focusedIndex}
-                updatingId={updatingId}
-                onOpen={onOpen}
-                onStageSelect={handleStageSelect}
-              />
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+    <div className="rounded-lg border border-border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Client</TableHead>
+            <TableHead>Matter</TableHead>
+            <TableHead>Next action</TableHead>
+            <TableHead className="text-right">Docs</TableHead>
+            <TableHead className="text-right">Drafts</TableHead>
+            <TableHead>Last drafting activity</TableHead>
+            <TableHead>Practice</TableHead>
+            <TableHead className="w-10" aria-label="Open drafting" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {matters.map((item, index) => (
+            <MatterPipelineTableRow
+              key={item.matter.matter_id}
+              item={item}
+              index={index}
+              focusedIndex={focusedIndex}
+              onOpen={onOpen}
+            />
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }
@@ -97,28 +61,23 @@ function MatterPipelineTableRow({
   item,
   index,
   focusedIndex,
-  updatingId,
   onOpen,
-  onStageSelect,
 }: {
   item: DraftingHubMatter
   index: number
   focusedIndex: number
-  updatingId: string | null
   onOpen: (matterId: string) => void
-  onStageSelect: (item: DraftingHubMatter, nextStage: MatterStage) => void
 }) {
   const matter = item.matter
-  const readiness = hubReadinessLabel(item)
+  const action = hubNextAction(item)
   const lastActivity = hubLastActivityAt(item)
   const focused = index === focusedIndex
-  const updating = updatingId === matter.matter_id
   const { schedulePrefetch, cancelPrefetch } = useDebouncedPrefetch(`/admin/drafting/${matter.matter_id}`)
 
   return (
     <TableRow
       data-state={focused ? 'selected' : undefined}
-      className={cn('cursor-pointer', updating && 'opacity-60')}
+      className="cursor-pointer"
       onClick={() => onOpen(matter.matter_id)}
       onMouseEnter={schedulePrefetch}
       onMouseLeave={cancelPrefetch}
@@ -136,28 +95,20 @@ function MatterPipelineTableRow({
           {[item.matterNumber, matter.matter_name || matter.plan_type].filter(Boolean).join(' · ') || '—'}
         </span>
       </TableCell>
-      <TableCell onClick={e => e.stopPropagation()}>
-        <select
-          value={matter.stage}
-          disabled={updating}
-          onChange={e => void onStageSelect(item, e.target.value as MatterStage)}
-          className="max-w-[10rem] rounded border border-border bg-background px-2 py-1 text-xs"
-          aria-label={`Stage for ${matter.client_name ?? 'matter'}`}
-        >
-          {STAGES.map(stage => (
-            <option key={stage.key} value={stage.key}>{stage.label}</option>
-          ))}
-        </select>
-      </TableCell>
       <TableCell>
-        <Badge
-          className={cn(
-            'border-0 text-[10px]',
-            readiness.tone === 'success' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
-          )}
-        >
-          {readiness.label}
-        </Badge>
+        <div className="space-y-1">
+          <Badge
+            className={cn(
+              'border-0 text-[10px]',
+              action.tone === 'success' && 'bg-success/10 text-success',
+              action.tone === 'info' && 'bg-blue-bg text-blue',
+              action.tone === 'warning' && 'bg-warning/10 text-warning',
+            )}
+          >
+            {action.label}
+          </Badge>
+          <span className="block text-[11px] text-muted-foreground">{action.detail}</span>
+        </div>
       </TableCell>
       <TableCell className="text-right tabular-nums">{item.includedDocumentLabels.length}</TableCell>
       <TableCell className="text-right tabular-nums">{item.draftCount}</TableCell>
@@ -166,6 +117,9 @@ function MatterPipelineTableRow({
       </TableCell>
       <TableCell className="max-w-[8rem] truncate text-muted-foreground">
         {matter.practice_area || '—'}
+      </TableCell>
+      <TableCell className="text-right">
+        <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" aria-hidden />
       </TableCell>
     </TableRow>
   )

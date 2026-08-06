@@ -64,6 +64,7 @@ import type {
 } from '@/lib/leads/viewTypes'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTab } from '@/app/admin/matters/[id]/MatterPeopleTab'
+import { MatterSlaTab } from '@/app/admin/matters/[id]/tabs/sla'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -215,7 +216,11 @@ export function LeadDetailClient({
   // never waits on a router round trip.
   const urlTab = parseLeadTab(searchParams?.get('tab'))
   const [activeTab, setActiveTab] = useState<LeadTab>(urlTab)
+  const [slaTabVisited, setSlaTabVisited] = useState(urlTab === 'sla')
   useEffect(() => { setActiveTab(urlTab) }, [urlTab])
+  useEffect(() => {
+    if (activeTab === 'sla') setSlaTabVisited(true)
+  }, [activeTab])
 
   function changeTab(tab: LeadTab) {
     setActiveTab(tab)
@@ -682,6 +687,7 @@ export function LeadDetailClient({
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="sla">SLA plan</TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
               <TabsTrigger value="communications">Comms</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
@@ -720,6 +726,20 @@ export function LeadDetailClient({
                 onTasksChanged={() => void taskCounts.refresh()}
               />
             </TabsContent>
+
+            {lead.matter_id ? (
+              slaTabVisited ? (
+                <MatterSlaTab matterId={lead.matter_id} enabled />
+              ) : (
+                <TabsContent value="sla" />
+              )
+            ) : (
+              <TabsContent value="sla" className="mt-4">
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  The SLA plan is unavailable because this opportunity is not linked to its matter record.
+                </p>
+              </TabsContent>
+            )}
 
             <TabsContent value="timeline" className="mt-4">
               {timeline}

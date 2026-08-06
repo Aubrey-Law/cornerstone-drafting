@@ -1,6 +1,26 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { hubNextActionKey } from '@/lib/drafting/hubUtils'
+import type { DraftingHubMatter } from '@/lib/queries/drafting'
+
+function draftingQueueItem(overrides: Partial<DraftingHubMatter> = {}): DraftingHubMatter {
+  return {
+    matter: { matter_id: 'matter-1', stage: 'drafting' },
+    matterNumber: '2026-001',
+    setupBlockers: [],
+    designSheet: { id: 'sheet-1', status: 'draft', version: 1, updatedAt: null },
+    documentInclusions: null,
+    includedDocumentLabels: ['Will'],
+    selectedTemplateCount: 1,
+    selectedTemplates: ['will'],
+    draftCount: 0,
+    recentDrafts: [],
+    supersededDrafts: [],
+    supersededDraftCount: 0,
+    ...overrides,
+  } as unknown as DraftingHubMatter
+}
 
 describe('drafting hub and workspace', () => {
   it('exposes drafting in admin navigation', () => {
@@ -16,6 +36,7 @@ describe('drafting hub and workspace', () => {
     expect(page).toContain("import { fetchDraftingHubMatters } from '@/lib/queries/drafting'")
     expect(page).toContain('<DraftingHubClient matters={matters} loadError={error} />')
     expect(query).toContain(".from('v_matter_pipeline')")
+    expect(query).toContain(".in('stage', [...DRAFTING_QUEUE_STAGES])")
     expect(query).toContain(".from('design_sheets')")
     expect(query).toContain(".from('doc_selections')")
     expect(query).toContain(".select('design_sheet_id, doc_type, variant, party, selected')")
@@ -108,16 +129,28 @@ describe('drafting hub and workspace', () => {
     expect(review).toContain('onConfirm={confirmPromotion}')
   })
 
-  it('shows hub empty-state CTA and stage success toasts', () => {
+  it('uses a focused next-action queue instead of a second matter-stage pipeline', () => {
     const hub = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/DraftingHubClient.tsx'), 'utf8')
-    // The kanban's stage save lives in the board shared with /admin/matters.
-    const board = fs.readFileSync(path.join(process.cwd(), 'components/matter/MatterStageBoard.tsx'), 'utf8')
     const table = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'), 'utf8')
 
-    expect(hub).toContain('/admin/matters?create=1')
+    expect(hub).toContain('Next actions across active document work')
+    expect(hub).toContain('Next action filter')
     expect(hub).toContain('router.refresh()')
-    expect(board).toContain("toast.success(`Moved to ${stageLabel(targetStage)}`)")
-    expect(table).toContain("toast.success(`Moved to ${stageLabel(nextStage)}`)")
+    expect(hub).not.toContain('MatterPipelineKanban')
+    expect(hub).not.toContain('/admin/matters?create=1')
+    expect(table).toContain('hubNextAction(item)')
+    expect(table).not.toContain('updateMatterStage')
+  })
+
+  it('derives one concrete drafting action from the document-work state', () => {
+    expect(hubNextActionKey(draftingQueueItem({ designSheet: null }))).toBe('design')
+    expect(hubNextActionKey(draftingQueueItem({ setupBlockers: ['Missing plan type'] }))).toBe('setup')
+    expect(hubNextActionKey(draftingQueueItem())).toBe('generate')
+    expect(hubNextActionKey(draftingQueueItem({ draftCount: 2 }))).toBe('review')
+    expect(hubNextActionKey(draftingQueueItem({
+      matter: { matter_id: 'matter-1', stage: 'revision' },
+      draftCount: 2,
+    }))).toBe('revise')
   })
 
   it('seeds intake values through the shared ensure helper', () => {
@@ -184,9 +217,7 @@ describe('drafting hub and workspace', () => {
   })
 
   it('prefetches drafting workspace routes on hub hover', () => {
-    const board = fs.readFileSync(path.join(process.cwd(), 'components/matter/MatterStageBoard.tsx'), 'utf8')
     const table = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/MatterPipelineTable.tsx'), 'utf8')
-    expect(board).toContain('useDebouncedPrefetch')
     expect(table).toContain('useDebouncedPrefetch')
   })
 

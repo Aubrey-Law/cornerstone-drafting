@@ -92,8 +92,6 @@ import {
   ResponsiveDetailRail,
 } from '@/components/layout/ResponsiveDetailRail'
 import { MatterStageStrip } from './MatterStageStrip'
-import { MatterLeadActions } from './MatterLeadActions'
-import type { MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { MatterBlockerBanner } from './MatterBlockerBanner'
 import { buildMatterReadinessItems } from './MatterReadinessDial'
 import { CommunicationDialog } from '@/components/comms/CommunicationDialog'
@@ -109,8 +107,6 @@ interface MatterDetailClientProps {
   contacts: MatterContact[]
   agingSummary?: MatterAgingSummary | null
   intakeId?: string | null
-  /** lead | hired | lost | declined. A lead is a matter that nobody has signed yet. */
-  relationshipStatus?: string
   clientIntakeRow?: {
     id: string
     intake_sent_at: string | null
@@ -171,7 +167,6 @@ function MatterDetailClientInner({
   contacts: initialContacts,
   agingSummary = null,
   intakeId: initialIntakeId = null,
-  relationshipStatus = 'hired',
   clientIntakeRow = null,
   matterNumber: initialMatterNumber = null,
   matterNumberManual = false,
@@ -207,7 +202,6 @@ function MatterDetailClientInner({
   const [intakeSheetOpen, setIntakeSheetOpen] = useState(false)
   const [importIntakeOpen, setImportIntakeOpen] = useState(false)
   const [stageSaving, setStageSaving] = useState(false)
-  const [leadActionBusy, setLeadActionBusy] = useState(false)
   const [statusSaving, setStatusSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
@@ -553,49 +547,6 @@ function MatterDetailClientInner({
     }
   }
 
-  const handleHire = async () => {
-    if (!token || !liveIntakeId) return
-    setLeadActionBusy(true)
-    try {
-      const res = await fetch(`/api/admin/leads/${liveIntakeId}/convert`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not hire this matter')
-      toast.success(body.matterNumber ? `Hired — ${body.matterNumber}` : 'Matter hired')
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not hire this matter')
-    } finally {
-      setLeadActionBusy(false)
-    }
-  }
-
-  const handleLeadStatusChange = async (status: MutableLeadStatus) => {
-    if (!token || !liveIntakeId) return
-    setLeadActionBusy(true)
-    try {
-      const res = await fetch(`/api/admin/leads/${liveIntakeId}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not update this matter')
-      toast.success(
-        status === 'lost' ? 'Marked lost'
-        : status === 'declined' ? 'Declined'
-        : 'Reactivated',
-      )
-      router.refresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not update this matter')
-    } finally {
-      setLeadActionBusy(false)
-    }
-  }
-
   const handleSendIntake = async () => {
     if (!token) {
       toast.error('Not signed in')
@@ -832,29 +783,15 @@ function MatterDetailClientInner({
         </ResponsiveDetailRail>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          {relationshipStatus !== 'hired' && (
-            <div className="border-b border-border bg-card px-4 py-3">
-              <MatterLeadActions
-                relationshipStatus={relationshipStatus}
-                intakeId={liveIntakeId}
-                busy={leadActionBusy}
-                onHire={() => void handleHire()}
-                onStatusChange={status => void handleLeadStatusChange(status)}
-              />
-            </div>
-          )}
-
-          {relationshipStatus === 'hired' && (
-            <div className="border-b border-border bg-card px-4 py-2">
-              <MatterStageStrip
-                stage={matter.stage}
-                details={matterDetails}
-                agingSummary={agingSummary}
-                stageSaving={stageSaving}
-                onStageChange={stage => void handleStageChange(stage)}
-              />
-            </div>
-          )}
+          <div className="border-b border-border bg-card px-4 py-2">
+            <MatterStageStrip
+              stage={matter.stage}
+              details={matterDetails}
+              agingSummary={agingSummary}
+              stageSaving={stageSaving}
+              onStageChange={stage => void handleStageChange(stage)}
+            />
+          </div>
 
           <MatterBlockerBanner
             matterId={matterId}
