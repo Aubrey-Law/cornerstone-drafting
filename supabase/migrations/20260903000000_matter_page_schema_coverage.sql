@@ -41,8 +41,15 @@ comment on column public.contacts.from_prior_relationship is
 -- ── billing_type becomes the enum ───────────────────────────────────────────
 --
 -- Map what is already stored. Historic values arrived from Lawmatics imports
--- and hand typing, so match case-insensitively on a substring and fall back to
--- the plan name recorded in legal_plan before giving up on flat_fee.
+-- and hand typing, so match case-insensitively on a substring.
+--
+-- What we cannot identify, we do not guess at. Roughly nineteen live rows carry
+-- an unresolved Lawmatics option ID in legal_plan ('570648' and friends) rather
+-- than a plan name: custom_field_613309 came back as the dropdown's ID instead
+-- of its label. Calling those 'other_legal_plan' would give each matter a claim
+-- block it may not have and hold its close-out behind claim gates that can
+-- never be satisfied. They keep a null billing_type and their raw legal_plan
+-- value, read as "Not set" in the Billing tab, and get classified by hand.
 
 update public.matter_details
 set billing_type = case
@@ -52,10 +59,13 @@ set billing_type = case
   when billing_type ilike '%hyatt%'        or legal_plan ilike '%hyatt%'        then 'hyatt'
   when billing_type ilike '%legalshield%'  or legal_plan ilike '%legalshield%'  then 'legalshield'
   when billing_type ilike '%legal shield%' or legal_plan ilike '%legal shield%' then 'legalshield'
-  -- Anything still naming a plan, or any matter carrying a legal_plan value we
-  -- do not recognise, is a plan matter we cannot name — not a flat fee.
-  when billing_type ilike '%plan%' or coalesce(trim(legal_plan), '') <> ''      then 'other_legal_plan'
-  else 'flat_fee'
+  -- Free text that says "plan" without naming one is still a plan matter.
+  when billing_type ilike '%plan%'                                              then 'other_legal_plan'
+  when billing_type ilike '%flat%'                                              then 'flat_fee'
+  -- Everything else — including the numeric IDs — stays unclassified. Note this
+  -- also clears any unrecognised free text out of billing_type, which the check
+  -- constraint below would otherwise reject.
+  else null
 end
 where billing_type is not null
    or coalesce(trim(legal_plan), '') <> '';
@@ -69,7 +79,9 @@ alter table public.matter_details
       'flat_fee', 'metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan'
     ));
 
--- legal_plan is now the display name of billing_type, not a parallel truth.
+-- legal_plan is now the display name of billing_type, not a parallel truth —
+-- but only where billing_type actually resolved. An unclassified row keeps the
+-- raw value it came in with, so the Lawmatics ID is still there to look up.
 update public.matter_details
 set legal_plan = case billing_type
   when 'metlife'          then 'MetLife'

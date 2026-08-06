@@ -134,6 +134,21 @@ describe('the migration', () => {
     expect(sql).toMatch(/update public\.matter_details[\s\S]*set billing_type = case/)
   })
 
+  it('leaves what it cannot identify unclassified rather than guessing', () => {
+    // Live rows carry unresolved Lawmatics option IDs in legal_plan. Calling
+    // those a legal plan would give each matter a claim block it may not have.
+    const backfill = sql.slice(sql.indexOf('set billing_type = case'), sql.indexOf('end\nwhere'))
+    expect(backfill).not.toMatch(/coalesce\(trim\(legal_plan\), ''\) <> ''\s+then 'other_legal_plan'/)
+    expect(backfill).toMatch(/else null/)
+    // A plan matter still has to be named to be classified as one.
+    expect(backfill).toMatch(/billing_type ilike '%plan%'\s+then 'other_legal_plan'/)
+  })
+
+  it('only rewrites legal_plan where billing_type actually resolved', () => {
+    const displayName = sql.slice(sql.indexOf('set legal_plan = case billing_type'))
+    expect(displayName).toMatch(/where billing_type is not null/)
+  })
+
   it('stores no derived value — balance due and last contact get no column', () => {
     expect(sql).not.toContain('balance_due')
     expect(sql).not.toContain('last_client_contact')
