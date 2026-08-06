@@ -68,8 +68,6 @@ async function storeSignedEngagement(
       name: displayName,
       size: buffer.length,
       content_type: 'application/pdf',
-      folder: 'signed',
-      folder_id: null,
       source: 'firm',
       shared_at: new Date().toISOString(),
       uploaded_by: null,

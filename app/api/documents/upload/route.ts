@@ -89,7 +89,6 @@ export async function POST(req: Request) {
       name: file.name,
       size: file.size,
       content_type: contentType,
-      folder: isAdmin ? 'draft' : 'client',
       source: isAdmin ? 'firm' : 'client',
       shared_at: null,
       uploaded_by: user.id,

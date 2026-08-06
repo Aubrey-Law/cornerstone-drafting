@@ -6,7 +6,7 @@ export interface GeneratedEstateDocumentMetadata {
   name: string
   size: number
   content_type: string
-  folder: 'draft'
+  source: 'firm'
   actor_id: string
   generation_id: string
   generation_engine: 'node'

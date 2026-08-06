@@ -302,7 +302,7 @@ describe('estate clause provenance persistence', () => {
       name: 'Will.docx',
       size: 1234,
       content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      folder: 'draft' as const,
+      source: 'firm' as const,
       actor_id: '44444444-4444-4444-8444-444444444444',
       generation_id: '55555555-5555-4555-8555-555555555555',
       generation_engine: 'node' as const,
@@ -337,7 +337,7 @@ describe('estate clause provenance persistence', () => {
     const document = {
       matter_id: '44444444-4444-4444-8444-444444444444', r2_key: 'draft/will.docx', name: 'Will.docx',
       size: 1, content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      folder: 'draft' as const, actor_id: '55555555-5555-4555-8555-555555555555',
+      source: 'firm' as const, actor_id: '55555555-5555-4555-8555-555555555555',
       generation_id: '66666666-6666-4666-8666-666666666666', generation_engine: 'node' as const,
       marker_count: 0, missing_count: 0, template_id: null, template_version_id: null,
     }
@@ -354,7 +354,7 @@ describe('estate clause provenance persistence', () => {
         name: 'Matter.docx',
         size: 1,
         content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        folder: 'draft' as const,
+        source: 'firm' as const,
         actor_id: '44444444-4444-4444-8444-444444444444',
         generation_id: '55555555-5555-4555-8555-555555555555',
         generation_engine: 'node' as const,

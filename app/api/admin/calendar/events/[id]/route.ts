@@ -67,7 +67,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     admin.from('matter_activity').select('title, created_at').eq('matter_id', matterId).order('created_at', { ascending: false }).limit(1),
     admin
       .from('matter_documents')
-      .select('id, name, folder, created_at, generation_id')
+      .select('id, name, source, created_at, generation_id')
       .eq('matter_id', matterId)
       .is('superseded_at', null)
       .order('created_at', { ascending: false })

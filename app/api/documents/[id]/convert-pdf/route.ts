@@ -88,8 +88,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         name: pdfName,
         size: pdfBytes.byteLength,
         content_type: PDF_CONTENT_TYPE,
-        folder: 'draft',
-        folder_id: null,
         source: 'firm',
         shared_at: null,
         uploaded_by: user.id,

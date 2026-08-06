@@ -63,7 +63,6 @@ export async function POST(req: Request) {
       name,
       size: size ?? 0,
       content_type: contentType ?? 'application/octet-stream',
-      folder: userIsAdmin ? 'draft' : 'client',
       source,
       shared_at: null,
       uploaded_by: user.id,

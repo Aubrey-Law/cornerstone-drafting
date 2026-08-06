@@ -16,8 +16,6 @@ function doc(overrides: Partial<MatterDocument>): MatterDocument {
     name: 'Trust.pdf',
     size: 1024,
     content_type: 'application/pdf',
-    folder: 'draft',
-    folder_id: null,
     shared_at: null,
     source: 'firm',
     uploaded_by: null,

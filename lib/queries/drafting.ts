@@ -29,7 +29,6 @@ export interface DraftingHubDocument {
   name: string
   size: number
   created_at: string
-  folder: MatterDocument['folder']
   generationId: string | null
   generationEngine: string | null
   markerCount: number | null
@@ -104,7 +103,6 @@ function mapHubDraftRow(doc: {
     name: doc.name,
     size: doc.size,
     created_at: doc.created_at,
-    folder: 'draft',
     generationId: doc.generationId ?? null,
     generationEngine: doc.generationEngine ?? null,
     markerCount: doc.markerCount ?? null,
@@ -448,7 +446,6 @@ export async function fetchDraftingHubMatter(matterId: string): Promise<{
     name: doc.name,
     size: doc.size,
     created_at: doc.created_at,
-    folder: 'draft' as const,
     generationId: doc.generation_id ?? null,
     generationEngine: doc.generation_engine ?? null,
     markerCount: doc.marker_count ?? null,

@@ -83,9 +83,6 @@ function DocumentRow({
 export default function PortalDocumentList({ documents }: { documents: MatterDocument[] }) {
   const [pending, setPending] = useState<{ id: string; action: DocumentAction } | null>(null)
 
-  const sharedDrafts = documents.filter(doc => doc.folder === 'review')
-  const signedDocuments = documents.filter(doc => doc.folder === 'signed' || doc.folder === 'final')
-
   const documentSummary = useMemo(() => {
     const count = documents.length
     const latest = documents[0]?.created_at
@@ -152,31 +149,24 @@ export default function PortalDocumentList({ documents }: { documents: MatterDoc
         </div>
       </div>
 
-      {[
-        { title: 'Documents for your review', docs: sharedDrafts, empty: 'No review PDFs have been shared yet.' },
-        { title: 'Signed documents', docs: signedDocuments, empty: 'No signed PDFs have been shared yet.' },
-      ].map(section => (
-        <section key={section.title} className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="border-b border-border bg-muted/40 px-4 py-3">
-            <p className="text-sm font-semibold text-foreground">{section.title}</p>
-            <p className="text-xs text-muted-foreground">
-              {section.docs.length} document{section.docs.length === 1 ? '' : 's'}
-            </p>
-          </div>
-          {section.docs.length === 0 ? (
-            <p className="px-4 py-5 text-sm text-muted-foreground">{section.empty}</p>
-          ) : section.docs.map((doc) => (
-            <DocumentRow
-              key={doc.id}
-              doc={doc}
-              anyPending={pending !== null}
-              viewPending={pending?.id === doc.id && pending.action === 'view'}
-              downloadPending={pending?.id === doc.id && pending.action === 'download'}
-              onAction={handleDocumentAction}
-            />
-          ))}
-        </section>
-      ))}
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="border-b border-border bg-muted/40 px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Shared documents</p>
+          <p className="text-xs text-muted-foreground">
+            {documents.length} document{documents.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        {documents.map((doc) => (
+          <DocumentRow
+            key={doc.id}
+            doc={doc}
+            anyPending={pending !== null}
+            viewPending={pending?.id === doc.id && pending.action === 'view'}
+            downloadPending={pending?.id === doc.id && pending.action === 'download'}
+            onAction={handleDocumentAction}
+          />
+        ))}
+      </section>
     </div>
   )
 }

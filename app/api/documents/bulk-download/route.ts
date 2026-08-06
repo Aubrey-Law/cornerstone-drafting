@@ -17,9 +17,9 @@ function safeFilename(name: string) {
   return name.replace(/[\/\\:*?"<>|]+/g, '_').replace(/^\.+/, '') || 'document'
 }
 
-function archiveEntryName(doc: Pick<MatterDocument, 'name' | 'folder'>, seen: Map<string, number>) {
+function archiveEntryName(doc: Pick<MatterDocument, 'name' | 'source'>, seen: Map<string, number>) {
   const base = safeFilename(doc.name)
-  const folder = safeFilename(doc.folder || 'documents')
+  const folder = safeFilename(doc.source || 'documents')
   const key = `${folder}/${base}`
   const count = seen.get(key) ?? 0
   seen.set(key, count + 1)

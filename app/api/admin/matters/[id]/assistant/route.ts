@@ -41,12 +41,12 @@ async function buildMatterContext(
       .eq('matter_id', matterId)
       .in('id', documentIds.slice(0, 12))
     docSummary = (docs ?? [])
-      .map(d => `- ${d.name} (${d.folder}, markers=${d.marker_count ?? '?'})`)
+      .map(d => `- ${d.name} (${d.shared_at ? 'shared' : 'internal'}, markers=${d.marker_count ?? '?'})`)
       .join('\n')
   } else {
     const { data: drafts } = await admin
       .from('matter_documents')
-      .select('name, folder, marker_count')
+      .select('name, source, shared_at, marker_count')
       .eq('matter_id', matterId)
       .eq('source', 'firm')
       .is('superseded_at', null)

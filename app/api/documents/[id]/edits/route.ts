@@ -135,7 +135,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       contentType: DOCX_CONTENT_TYPE,
       source: 'assistant_edit',
       createdBy: user.id,
-      folder: doc.folder || 'draft',
     })
     if ('error' in versionResult) {
       return NextResponse.json({ error: versionResult.error }, { status: 500 })

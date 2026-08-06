@@ -583,7 +583,7 @@ export async function POST(req: NextRequest, { params }: Params) {
               name: documentName,
               size: file.buffer.length,
               content_type: DOCX_CONTENT_TYPE,
-              folder: 'draft',
+              source: 'firm',
               actor_id: user.id,
               generation_id: generationId,
               generation_engine: 'node',

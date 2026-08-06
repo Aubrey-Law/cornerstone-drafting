@@ -26,8 +26,8 @@ const MATTER_CONTEXT = {
   spouseEmail: 'harold@example.com',
   alternateEmails: [{ label: 'Harold Whitfield', email: 'harold@example.com' }],
   documents: [
-    { id: 'd1', name: 'Trust draft.docx', size: 24_000, folder: 'drafts' },
-    { id: 'd2', name: 'Deed.pdf', size: 12_000, folder: 'client' },
+    { id: 'd1', name: 'Trust draft.docx', size: 24_000, source: 'firm' },
+    { id: 'd2', name: 'Deed.pdf', size: 12_000, source: 'client' },
   ],
 }
 
