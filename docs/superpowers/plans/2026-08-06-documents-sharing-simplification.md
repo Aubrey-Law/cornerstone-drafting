@@ -1353,6 +1353,15 @@ git commit -m "refactor(documents): documentWorkspace loses folder and eligibili
 **Files:**
 - Modify: `app/admin/matters/[id]/MatterDocumentsTab.tsx` (955 → ~350 lines)
 - Modify: `tests/matter-documents-tab.test.ts`
+- Modify: `tests/lead-assets-documents.test.ts:38`
+
+`tests/lead-assets-documents.test.ts:38` asserts the tab source contains
+`await uploadDocument(file, matterId, uploadFolder)`. Task 7 removed the folder argument,
+so that line is red now. Replace it with:
+
+```ts
+    expect(matterDocuments).toContain('await uploadDocument(file, matterId)')
+```
 
 - [ ] **Step 1: Rewrite the test**
 
