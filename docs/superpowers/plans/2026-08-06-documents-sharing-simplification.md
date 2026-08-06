@@ -2450,6 +2450,11 @@ Run: `grep -rn --include="*.ts" --include="*.tsx" "folder" app components lib`
 
 Delete the `folder:` line from each insert object it reports — the eight writers from Task 3 plus the two upload routes from Task 7. Every one of them now sets `source` and `shared_at`, which is sufficient. Also delete any surviving `folder: doc.folder` audit-metadata entries; the ones in `bulk-download` and `combine` went with their audit calls in Task 4.
 
+Two known sites that the earlier tasks deliberately left alone and that MUST be fixed here:
+
+- `app/api/admin/matters/[id]/assistant/route.ts:49` still does `.select('name, folder, marker_count')`, and line 44 interpolates `${d.folder}` into an LLM prompt string. Change the select to `'name, source, shared_at, marker_count'` and the prompt line to `` `- ${d.name} (${d.shared_at ? 'shared' : 'internal'}, markers=${d.marker_count ?? '?'})` `` — the prompt was telling the model which folder a draft sat in, and shared-vs-internal is the equivalent fact now.
+- `app/api/documents/route.ts` `POST` still speaks folder vocabulary in its `r2Key.startsWith(...)` check and its `shared_at: [...].includes(folder)` expression. Task 7 rewrites both; confirm they are gone rather than assuming.
+
 Expected after this step: the grep returns matches only for unrelated identifiers (R2 key path segments, `folderName`-style variables in non-document code). It must return nothing referencing `matter_documents`.
 
 - [ ] **Step 2: Update the two remaining tests that assert on `folder`**
