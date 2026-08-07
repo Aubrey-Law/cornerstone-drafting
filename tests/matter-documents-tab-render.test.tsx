@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { MatterDocument } from '@/types/database'
 
@@ -22,6 +22,7 @@ vi.mock('@/lib/documents', async importOriginal => ({
   uploadDocument: vi.fn(),
 }))
 
+import { deleteDocument } from '@/lib/documents'
 import { MatterDocumentsTab } from '@/app/admin/matters/[id]/MatterDocumentsTab'
 
 const MATTER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -46,6 +47,7 @@ const documents: MatterDocument[] = [
   doc({ id: 'd3', name: 'Deed from client.pdf', source: 'client', size: 8192 }),
   doc({ id: 'd4', name: 'Engagement letter.pdf', size: 512 }),
   doc({ id: 'd5', name: 'Meeting recap.docx', source: 'meeting-notes' }),
+  doc({ id: 'd6', name: 'Retainer notes.docx', size: 256 }),
 ]
 
 function renderTab(overrides: Partial<Parameters<typeof MatterDocumentsTab>[0]> = {}) {
@@ -61,20 +63,41 @@ function renderTab(overrides: Partial<Parameters<typeof MatterDocumentsTab>[0]> 
 }
 
 describe('documents tab file manager', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    // Call records only — the module mock keeps its implementations.
+    vi.clearAllMocks()
+  })
 
-  it('lists derived folders above every file at the root', () => {
+  it('lists the folders and only the files that are in none of them', () => {
     renderTab()
 
-    // Folder rows carry a unique select-all control; the label itself repeats
-    // on each file row as that file's folder chip.
-    for (const label of ['From client', 'Signed & executed', 'Generated drafts', 'Firm files']) {
+    // Folder rows carry a unique select-all control.
+    for (const label of ['From client', 'Signed & executed', 'Generated drafts']) {
       expect(screen.getByRole('checkbox', { name: `Select everything in ${label}` })).toBeTruthy()
     }
+    // Rows show the display title, which drops the extension. Only the loose
+    // firm files appear beside the folders — nothing is listed twice.
+    expect(screen.getByText('Engagement letter')).toBeTruthy()
+    expect(screen.getByText('Retainer notes')).toBeTruthy()
+    expect(screen.queryByText('Chen Trust — SIGNED')).toBeNull()
+    expect(screen.queryByText('Deed from client')).toBeNull()
     // Meeting notes have their own card and never appear here.
     expect(screen.queryByText(/Meeting recap/)).toBeNull()
-    // Rows show the display title, which drops the extension.
-    expect(screen.getByText('Engagement letter')).toBeTruthy()
+  })
+
+  it('flattens a search across the folders instead of hiding hits behind them', async () => {
+    const user = userEvent.setup()
+    renderTab()
+
+    await user.type(screen.getByLabelText('Search documents'), 'chen')
+
+    // The match inside a folder is a result in its own right, chipped with the
+    // folder it came from, and the tiles step aside.
+    expect(screen.getByText('Chen Trust — SIGNED')).toBeTruthy()
+    expect(screen.getByText('Signed & executed')).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: 'Select everything in From client' })).toBeNull()
+    expect(screen.queryByText('Engagement letter')).toBeNull()
   })
 
   it('narrows to one folder and back out through the breadcrumb', async () => {
@@ -100,6 +123,47 @@ describe('documents tab file manager', () => {
 
     expect(screen.getByText('1 selected')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Download selected/ })).toBeTruthy()
+  })
+
+  /** Select the two loose firm files at the root and open the delete dialog. */
+  async function confirmDeleteBothLooseFiles(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('checkbox', { name: 'Select Engagement letter.pdf' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Select Retainer notes.docx' }))
+    await user.click(screen.getByRole('button', { name: /Delete selected/ }))
+    return screen.findByRole('alertdialog')
+  }
+
+  it('deletes the whole selection behind one confirmation', async () => {
+    const user = userEvent.setup()
+    const onDocumentsChanged = vi.fn()
+    renderTab({ onDocumentsChanged })
+
+    const dialog = await confirmDeleteBothLooseFiles(user)
+    // Nothing here is recoverable, so the dialog names every file going.
+    expect(within(dialog).getByText('Delete 2 documents?')).toBeTruthy()
+    expect(within(dialog).getByText('Engagement letter.pdf')).toBeTruthy()
+    expect(within(dialog).getByText('Retainer notes.docx')).toBeTruthy()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 2 documents' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(deleteDocument).mock.calls.map(call => call[0])).toEqual(['d4', 'd6'])
+    })
+    expect(toast.success).toHaveBeenCalledWith('Deleted 2 documents')
+    expect(onDocumentsChanged).toHaveBeenCalled()
+  })
+
+  it('keeps deleting the rest of the batch when one file refuses', async () => {
+    const user = userEvent.setup()
+    vi.mocked(deleteDocument).mockRejectedValueOnce(new Error('Locked by a signature request'))
+    renderTab()
+
+    const dialog = await confirmDeleteBothLooseFiles(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 2 documents' }))
+
+    await waitFor(() => expect(deleteDocument).toHaveBeenCalledTimes(2))
+    expect(toast.error).toHaveBeenCalledWith('Engagement letter.pdf: Locked by a signature request')
+    expect(toast.success).toHaveBeenCalledWith('Document deleted')
   })
 
   it('reorders the list when the sort direction flips', async () => {

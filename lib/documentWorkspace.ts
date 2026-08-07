@@ -51,11 +51,6 @@ export const DOCUMENT_FOLDERS = [
     label: 'Generated drafts',
     description: 'Output of the drafting engine',
   },
-  {
-    key: 'firm-files',
-    label: 'Firm files',
-    description: 'Everything else filed by the firm',
-  },
 ] as const
 
 export type DocumentFolderKey = (typeof DOCUMENT_FOLDERS)[number]['key']
@@ -63,20 +58,22 @@ export type DocumentFolderKey = (typeof DOCUMENT_FOLDERS)[number]['key']
 const EXECUTED_NAME = /\b(signed|executed|notariz\w*|conformed)\b/i
 
 /**
- * The one folder a document belongs to. First match wins, so a signed client
- * upload files under the client rather than being double-counted.
+ * The one folder a document belongs to, or `null` when it belongs in none.
+ * Ordinary firm files are not a category worth a folder — they sit loose at
+ * the root the way a file manager leaves them. First match wins, so a signed
+ * client upload files under the client rather than being double-counted.
  */
 export function documentFolderKey(
   doc: Pick<MatterDocument, 'name' | 'source'> & { generation_id?: string | null },
-): DocumentFolderKey {
+): DocumentFolderKey | null {
   if (doc.source === 'client') return 'client-uploads'
   if (EXECUTED_NAME.test(doc.name)) return 'executed'
   if (doc.generation_id) return 'drafts'
-  return 'firm-files'
+  return null
 }
 
 export function documentFolderLabel(key: DocumentFolderKey): string {
-  return DOCUMENT_FOLDERS.find(folder => folder.key === key)?.label ?? 'Firm files'
+  return DOCUMENT_FOLDERS.find(folder => folder.key === key)?.label ?? 'Documents'
 }
 
 /** Byte counts as a file manager shows them. */
