@@ -21,6 +21,7 @@
     "prebuild:next": "npm run theme:generate",
     "validate-env": "node scripts/validateEnv.mjs",
     "check:db-rpcs": "node scripts/checkDbRpcs.mjs",
+    "check:migration-drift": "node scripts/checkMigrationDrift.mjs",
     "supabase": "supabase",
     "supabase:status": "supabase status",
     "supabase:db:push": "supabase db push"
