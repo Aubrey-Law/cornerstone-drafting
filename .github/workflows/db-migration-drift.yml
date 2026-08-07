@@ -1,0 +1,63 @@
+name: Database migration drift
+
+# Verifies the migration files in the repo and the history the database recorded
+# still describe the same thing.
+#
+# The scheduled run is the important one, and it is the reason this exists
+# separately from db-rpc-check. Nothing deploys migrations here — Vercel ships
+# code only — so a merged migration reaches the database only when someone runs
+# `supabase db push`. When that step is missed the code goes live against a
+# schema that never got its change, and nothing fails until a user hits it: the
+# lead opt-in index sat unapplied for weeks that way, failing every opt-in save.
+#
+# A pull_request run cannot enforce that, because a migration added in a branch
+# is *supposed* to be unapplied. So pending migrations are only an error on the
+# scheduled run (--strict); orphaned and out-of-order ones are an error
+# everywhere, since neither is ever correct.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 12:00 UTC on weekdays — early morning ET, before the workday starts.
+    - cron: '0 12 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migration-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-drift:
+    name: Repo migrations match the database history
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # No `npm ci`: the script imports only node builtins and global fetch.
+      - name: Flag missing credentials
+        if: env.SUPABASE_ACCESS_TOKEN == '' || env.NEXT_PUBLIC_SUPABASE_URL == ''
+        run: |
+          echo "::warning::Supabase credentials are not set, so the check will skip without verifying anything. Add the SUPABASE_URL and SUPABASE_ACCESS_TOKEN repository secrets to enable it."
+
+      # Pending migrations are normal on a branch, so only the scheduled and
+      # manual runs fail on them.
+      - name: Check migration drift
+        run: npm run check:migration-drift
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+
+      - name: Check migration drift (strict)
+        run: npm run check:migration-drift -- --strict
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
