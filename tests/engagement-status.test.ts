@@ -1,7 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { deriveEngagementStatus, engagementStatusLabel } from '@/lib/engagementStatus'
+import {
+  deriveEngagementStatus,
+  engagementPatchForSignedAt,
+  engagementStatusLabel,
+  normalizeEngagementSignedAt,
+} from '@/lib/engagementStatus'
 
 describe('deriveEngagementStatus', () => {
   it('returns not_sent for missing or empty details', () => {
@@ -41,6 +46,112 @@ describe('deriveEngagementStatus', () => {
   })
 })
 
+describe('normalizeEngagementSignedAt', () => {
+  it('stores a calendar day at midday so neither formatter rolls it back', () => {
+    // The facts panel reads the stamp back on the UTC calendar and the SLA
+    // views read it in the firm timezone; midday is the only hour both agree on.
+    expect(normalizeEngagementSignedAt('2026-08-06')).toEqual({
+      ok: true,
+      value: '2026-08-06T12:00:00.000Z',
+    })
+  })
+
+  it('treats an empty value as clearing the date', () => {
+    expect(normalizeEngagementSignedAt(null)).toEqual({ ok: true, value: null })
+    expect(normalizeEngagementSignedAt('')).toEqual({ ok: true, value: null })
+    expect(normalizeEngagementSignedAt('   ')).toEqual({ ok: true, value: null })
+  })
+
+  it('keeps a full timestamp from the e-sign path intact', () => {
+    expect(normalizeEngagementSignedAt('2026-08-06T15:30:00.000Z')).toEqual({
+      ok: true,
+      value: '2026-08-06T15:30:00.000Z',
+    })
+  })
+
+  it('rejects a day that does not exist rather than rolling it over', () => {
+    // Date.parse turns 2026-02-31 into March 3rd; a silent roll would date the
+    // engagement — and everything anchored to it — to the wrong day.
+    expect(normalizeEngagementSignedAt('2026-02-31')).toEqual({ ok: false })
+  })
+
+  it('rejects anything that is not a date', () => {
+    expect(normalizeEngagementSignedAt('last tuesday')).toEqual({ ok: false })
+    expect(normalizeEngagementSignedAt(42)).toEqual({ ok: false })
+    expect(normalizeEngagementSignedAt(true)).toEqual({ ok: false })
+  })
+})
+
+describe('engagementPatchForSignedAt', () => {
+  it('marks the engagement signed when a date is set', () => {
+    expect(engagementPatchForSignedAt('2026-08-06T12:00:00.000Z', null)).toEqual({
+      engagement_signed_at: '2026-08-06T12:00:00.000Z',
+      engagement_signed: true,
+      engagement_status: 'signed',
+    })
+  })
+
+  it('promotes a sent engagement to signed', () => {
+    expect(
+      engagementPatchForSignedAt('2026-08-06T12:00:00.000Z', {
+        engagement_status: 'sent',
+        engagement_sent_at: '2026-07-01T00:00:00Z',
+      }),
+    ).toMatchObject({ engagement_signed: true, engagement_status: 'signed' })
+  })
+
+  it('un-signs the engagement when the date is cleared', () => {
+    // Leaving the status at signed with nothing to show for it would keep
+    // deriveEngagementStatus reporting signed forever.
+    expect(
+      engagementPatchForSignedAt(null, {
+        engagement_status: 'signed',
+        engagement_sent_at: '2026-07-01T00:00:00Z',
+      }),
+    ).toEqual({
+      engagement_signed_at: null,
+      engagement_signed: false,
+      engagement_status: 'sent',
+    })
+  })
+
+  it('falls back to not sent when clearing a date on a row that was never sent', () => {
+    expect(engagementPatchForSignedAt(null, { engagement_status: 'signed' })).toEqual({
+      engagement_signed_at: null,
+      engagement_signed: false,
+      engagement_status: null,
+    })
+  })
+
+  it('keeps a prior draft or declined status when the date is cleared', () => {
+    expect(engagementPatchForSignedAt(null, { engagement_status: 'draft' })).toMatchObject({
+      engagement_status: 'draft',
+    })
+    expect(engagementPatchForSignedAt(null, { engagement_status: 'declined' })).toMatchObject({
+      engagement_status: 'declined',
+    })
+  })
+})
+
+describe('engagement signed date write path source shape', () => {
+  it('accepts the field the Dates panel writes', () => {
+    const route = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/matter-details/route.ts'),
+      'utf8',
+    )
+    expect(route).toContain("'engagement_signed_at'")
+    expect(route).toContain('normalizeEngagementSignedAt')
+  })
+
+  it('mirrors the signed date onto the originating lead', () => {
+    // The Leads pipeline reads its own copy; a matter-side edit that skipped
+    // the mirror would leave the two boards disagreeing.
+    const sync = fs.readFileSync(path.join(process.cwd(), 'lib/engagement/signedDate.ts'), 'utf8')
+    expect(sync).toContain('engagementPatchForSignedAt')
+    expect(sync).toContain('mirrorEngagementToLead')
+  })
+})
+
 describe('engagement status write path source shape', () => {
   const route = fs.readFileSync(
     path.join(process.cwd(), 'app/api/admin/matter-details/route.ts'),
@@ -60,8 +171,10 @@ describe('engagement status write path source shape', () => {
   })
 
   it('mirrors manual status changes onto the originating lead', () => {
-    expect(route).toContain('client_intake_id')
-    expect(route).toContain("from('client_intake')")
+    expect(route).toContain('mirrorEngagementToLead')
+    const sync = fs.readFileSync(path.join(process.cwd(), 'lib/engagement/signedDate.ts'), 'utf8')
+    expect(sync).toContain('client_intake_id')
+    expect(sync).toContain("from('client_intake')")
   })
 })
 

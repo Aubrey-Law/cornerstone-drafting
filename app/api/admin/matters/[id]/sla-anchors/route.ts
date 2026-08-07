@@ -4,6 +4,7 @@ import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey } from '@/lib/firmDate'
 import { applySlaAnchor } from '@/lib/slaTasks/generate'
+import { syncEngagementSignedDetails } from '@/lib/engagement/signedDate'
 import { isDateKey } from '@/lib/slaTasks/schedule'
 import type { SlaClockAnchor } from '@/lib/slaTasks/types'
 
@@ -100,6 +101,18 @@ export async function PATCH(req: Request, { params }: Params) {
 
     const { error: updateError } = await admin.from('matters').update(patch).eq('id', matterId)
     if (updateError) throw new Error(updateError.message)
+
+    // The engagement date is not only a clock: it is the matter's engagement
+    // status and the lead's copy of it. Syncing only the clock would leave the
+    // Dates panel blank after an attorney recorded the date here.
+    if (Object.prototype.hasOwnProperty.call(patch, 'engagement_signed_at')) {
+      const { error: detailsError } = await syncEngagementSignedDetails(
+        admin,
+        matterId,
+        patch.engagement_signed_at,
+      )
+      if (detailsError) throw new Error(detailsError)
+    }
 
     let rescheduled = 0
     for (const { anchor, date } of anchorsToApply) {
