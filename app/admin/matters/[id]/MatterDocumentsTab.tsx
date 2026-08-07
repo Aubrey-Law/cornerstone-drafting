@@ -155,7 +155,8 @@ export function MatterDocumentsTab({
   const [uploading, setUploading] = useState(false)
   const [renameTarget, setRenameTarget] = useState<MatterDocument | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<MatterDocument | null>(null)
+  /** One document from a row menu, or the whole selection from the toolbar. */
+  const [deleteTargets, setDeleteTargets] = useState<MatterDocument[]>([])
   const [previewTarget, setPreviewTarget] = useState<MatterDocument | null>(null)
   const [combineOpen, setCombineOpen] = useState(false)
   const [auditTarget, setAuditTarget] = useState<MatterDocument | null>(null)
@@ -169,7 +170,9 @@ export function MatterDocumentsTab({
     if (!target) return
     setScope('all')
     setQuery('')
-    setOpenFolder(null)
+    // Open the folder that holds the target, otherwise the row we are about to
+    // scroll to is not on screen — loose files sit at the root.
+    setOpenFolder(documentFolderKey(target))
     setHighlightedDocumentId(target.id)
     const scrollTimer = window.setTimeout(() => {
       window.document.getElementById(`document-row-${target.id}`)?.scrollIntoView({
@@ -228,15 +231,30 @@ export function MatterDocumentsTab({
     })
   }, [sortAscending, sortKey])
 
+  const searching = query.trim().length > 0
+
   /**
-   * At the root every file is listed under the folder tiles, so the flat view
-   * staff already rely on survives; opening a folder narrows to its contents.
+   * The root lists the folder tiles plus only the files that live in none of
+   * them, so nothing is shown twice; opening a folder narrows to its contents.
+   * A search is the exception — it flattens across folders the way a file
+   * manager does, so a match inside one is a result rather than a count.
    */
-  const listedDocuments = useMemo(() => sortDocuments(
-    openFolder === null
-      ? matchingDocuments
-      : matchingDocuments.filter(doc => documentFolderKey(doc) === openFolder),
-  ), [matchingDocuments, openFolder, sortDocuments])
+  const listedDocuments = useMemo(() => {
+    if (openFolder !== null) {
+      return sortDocuments(matchingDocuments.filter(doc => documentFolderKey(doc) === openFolder))
+    }
+    if (searching) return sortDocuments(matchingDocuments)
+    return sortDocuments(matchingDocuments.filter(doc => documentFolderKey(doc) === null))
+  }, [matchingDocuments, openFolder, searching, sortDocuments])
+
+  /** Folder tiles are root furniture; a flattened search replaces them. */
+  const showFolders = openFolder === null && !searching
+
+  /**
+   * At the root the master checkbox covers the folders on screen as well, not
+   * just the loose files sitting beside them.
+   */
+  const selectAllTargets = openFolder === null && !searching ? matchingDocuments : listedDocuments
 
   const selectedDocuments = useMemo(
     () => visibleDocuments.filter(doc => selectedIds.has(doc.id)),
@@ -250,7 +268,7 @@ export function MatterDocumentsTab({
   )
 
   const allVisibleSelected =
-    listedDocuments.length > 0 && listedDocuments.every(doc => selectedIds.has(doc.id))
+    selectAllTargets.length > 0 && selectAllTargets.every(doc => selectedIds.has(doc.id))
 
   const refresh = useCallback(async () => {
     await onDocumentsChanged()
@@ -373,23 +391,33 @@ export function MatterDocumentsTab({
   }
 
   const handleDelete = async () => {
-    const doc = deleteTarget
-    if (!doc) return
-    setBusy(`delete:${doc.id}`)
+    const targets = deleteTargets
+    if (targets.length === 0) return
+    setBusy('delete')
+    // Delete one at a time and count outcomes rather than abandoning the batch
+    // on the first refusal — the same rule the upload loop follows.
+    const deleted: string[] = []
     try {
-      await deleteDocument(doc.id)
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        next.delete(doc.id)
-        return next
-      })
-      toast.success('Document deleted')
-      setDeleteTarget(null)
-      await refresh()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not delete document')
+      for (const doc of targets) {
+        try {
+          await deleteDocument(doc.id)
+          deleted.push(doc.id)
+        } catch (error) {
+          toast.error(error instanceof Error ? `${doc.name}: ${error.message}` : `Could not delete ${doc.name}`)
+        }
+      }
+      if (deleted.length > 0) {
+        setSelectedIds(prev => {
+          const next = new Set(prev)
+          for (const id of deleted) next.delete(id)
+          return next
+        })
+        toast.success(deleted.length === 1 ? 'Document deleted' : `Deleted ${deleted.length} documents`)
+        await refresh()
+      }
     } finally {
       setBusy(null)
+      setDeleteTargets([])
     }
   }
 
@@ -502,7 +530,7 @@ export function MatterDocumentsTab({
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
           <Checkbox
             checked={allVisibleSelected}
-            onCheckedChange={checked => setSelection(listedDocuments, checked === true)}
+            onCheckedChange={checked => setSelection(selectAllTargets, checked === true)}
             aria-label="Select all listed documents"
           />
           <div className="relative min-w-[12rem] flex-1">
@@ -604,6 +632,17 @@ export function MatterDocumentsTab({
               <Combine className="h-3.5 w-3.5" />
               Combine Word documents
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-destructive hover:text-destructive"
+              disabled={busy === 'delete'}
+              onClick={() => setDeleteTargets(selectedDocuments)}
+            >
+              {busy === 'delete' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Delete selected
+            </Button>
           </div>
         )}
 
@@ -626,7 +665,7 @@ export function MatterDocumentsTab({
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {openFolder === null && folders.map(folder => (
+            {showFolders && folders.map(folder => (
               <li key={folder.key}>
                 <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30">
                   <Checkbox
@@ -660,6 +699,7 @@ export function MatterDocumentsTab({
 
             {listedDocuments.map(doc => {
               const issues = (doc.marker_count ?? 0) + (doc.missing_count ?? 0)
+              const folderKey = documentFolderKey(doc)
               return (
                 <li
                   key={doc.id}
@@ -685,9 +725,11 @@ export function MatterDocumentsTab({
                       {documentDisplayTitle(doc.name, clientName)}
                     </p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      {openFolder === null && (
+                      {/* Only a search puts foldered files in this list, and
+                          there the chip is what says where the hit lives. */}
+                      {openFolder === null && folderKey !== null && (
                         <span className="text-[11px] text-muted-foreground">
-                          {documentFolderLabel(documentFolderKey(doc))}
+                          {documentFolderLabel(folderKey)}
                         </span>
                       )}
                       <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
@@ -765,7 +807,7 @@ export function MatterDocumentsTab({
                           <History className="mr-2 h-4 w-4" />History
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(doc)}>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTargets([doc])}>
                           <Trash2 className="mr-2 h-4 w-4" />Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -775,7 +817,7 @@ export function MatterDocumentsTab({
               )
             })}
 
-            {listedDocuments.length === 0 && (
+            {listedDocuments.length === 0 && openFolder !== null && (
               <li className="px-6 py-10 text-center text-sm text-muted-foreground">
                 This folder is empty in the current view.
               </li>
@@ -803,17 +845,31 @@ export function MatterDocumentsTab({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleteTarget !== null} onOpenChange={open => !open && setDeleteTarget(null)}>
+      <AlertDialog open={deleteTargets.length > 0} onOpenChange={open => !open && setDeleteTargets([])}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteTargets.length > 1 ? `Delete ${deleteTargets.length} documents?` : 'Delete document?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              &ldquo;{deleteTarget?.name}&rdquo; will be permanently deleted. This cannot be undone.
+              {deleteTargets.length > 1
+                ? `All ${deleteTargets.length} selected documents will be permanently deleted. This cannot be undone.`
+                : `“${deleteTargets[0]?.name ?? ''}” will be permanently deleted. This cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {/* Nothing here is recoverable, so the list names every file going. */}
+          {deleteTargets.length > 1 && (
+            <ul className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+              {deleteTargets.map(doc => (
+                <li key={doc.id} className="truncate" title={doc.name}>{doc.name}</li>
+              ))}
+            </ul>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleDelete()}>Delete</AlertDialogAction>
+            <AlertDialogAction disabled={busy === 'delete'} onClick={() => void handleDelete()}>
+              {deleteTargets.length > 1 ? `Delete ${deleteTargets.length} documents` : 'Delete'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

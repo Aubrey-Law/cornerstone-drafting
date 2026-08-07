@@ -47,12 +47,13 @@ describe('document workspace helpers', () => {
       .toContainEqual({ label: 'Client upload', tone: 'info' })
   })
 
-  it('files every document into exactly one derived folder', () => {
+  it('files every document into at most one derived folder', () => {
     expect(documentFolderKey(doc({ source: 'client' }))).toBe('client-uploads')
     expect(documentFolderKey(doc({ name: 'Chen Trust — SIGNED.pdf' }))).toBe('executed')
     expect(documentFolderKey(doc({ name: 'Notarized deed.pdf' }))).toBe('executed')
     expect(documentFolderKey(doc({ generation_id: 'gen-1' }))).toBe('drafts')
-    expect(documentFolderKey(doc({}))).toBe('firm-files')
+    // An ordinary firm file belongs in no folder and sits loose at the root.
+    expect(documentFolderKey(doc({}))).toBeNull()
 
     // First match wins, so a signed client upload stays with the client.
     expect(documentFolderKey(doc({ source: 'client', name: 'signed.pdf' })))
