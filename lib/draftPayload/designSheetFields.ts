@@ -1,4 +1,5 @@
 import { decisionString, pick } from '@/lib/draftPayload/helpers'
+import { sheetIsMarried } from '@/lib/designSheet/maritalStatus'
 
 export type DesignSheetLike = {
   decisions?: Record<string, unknown> | null
@@ -28,6 +29,11 @@ export function designSheetMaritalStatus(designSheet: DesignSheetLike | null): s
   return designSheetString(designSheet, 'marital_status')
 }
 
+/**
+ * Same reading the design sheet uses, so what the attorney sees included is what
+ * gets generated. Equality with 'married' used to drop 'remarried' — the sheet
+ * showed the spouse's documents and the package quietly left them out.
+ */
 export function isDesignSheetMarried(designSheet: DesignSheetLike | null): boolean {
-  return designSheetMaritalStatus(designSheet)?.toLowerCase() === 'married'
+  return sheetIsMarried(designSheetMaritalStatus(designSheet))
 }

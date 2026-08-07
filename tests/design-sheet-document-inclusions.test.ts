@@ -29,6 +29,28 @@ describe('design sheet document inclusions', () => {
     vi.useRealTimers()
   })
 
+  // 'never married' contains 'married', so a bare substring test read it as a
+  // spouse and defaulted the spouse's documents into the plan.
+  it('defaults spouse documents off for a never-married client', () => {
+    const inclusions = (marital_status: string) =>
+      defaultDocumentInclusions({ plan_type: 'pour_over', marital_status }).spouse_docs
+
+    expect(inclusions('never married')).toBe(false)
+    expect(inclusions('Never Married')).toBe(false)
+    expect(inclusions('never_married')).toBe(false)
+    expect(inclusions('single')).toBe(false)
+    expect(inclusions('married')).toBe(true)
+    expect(inclusions('remarried')).toBe(true)
+  })
+
+  it('still lets an explicit spouse_docs choice win over the default', () => {
+    expect(getDocumentInclusions({
+      plan_type: 'pour_over',
+      marital_status: 'never married',
+      decisions: { document_inclusions: { spouse_docs: true } },
+    }).spouse_docs).toBe(true)
+  })
+
   it('defaults the young adult estate plan on for children age 17.5 through 25', () => {
     const eligible = { name: 'Alex Example', dob: '2008-12-07', relationship: 'biological' as const, is_minor: true }
     const tooYoung = { name: 'Blake Example', dob: '2009-01-01', relationship: 'biological' as const, is_minor: true }
