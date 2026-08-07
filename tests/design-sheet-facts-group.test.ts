@@ -4,6 +4,24 @@ import { describe, expect, it } from 'vitest'
 
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8')
 
+const SECTIONS_DIR = path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections')
+
+/**
+ * Every section file at once.
+ *
+ * Which section renders a given group is a layout decision that has already
+ * changed more than once — the child facts moved from FamilySection to
+ * PersonalSection, and the plan-structure lists to PlanStructureFactsSection.
+ * These assertions care that the group is still rendered, not where, so pinning
+ * a filename only produced failures that named no real regression.
+ */
+const readSections = () =>
+  fs
+    .readdirSync(SECTIONS_DIR)
+    .filter(name => name.endsWith('.tsx'))
+    .map(name => fs.readFileSync(path.join(SECTIONS_DIR, name), 'utf8'))
+    .join('\n')
+
 describe('single-page facts and attorney notes groups', () => {
   it('keeps intake-derived fields three-up with comparison-based override originals', () => {
     const personal = read('app/admin/drafting/[matterId]/design/sections/PersonalSection.tsx')
@@ -15,13 +33,17 @@ describe('single-page facts and attorney notes groups', () => {
   })
 
   it('renders compact child facts with computed ages and the guardian warning', () => {
-    const family = read('app/admin/drafting/[matterId]/design/sections/FamilySection.tsx')
+    const sections = readSections()
 
-    expect(family).toContain('formatAgeLabel(child.dob)')
-    expect(family).toContain('Minor — guardian required')
-    expect(family).toContain("onChange('children',")
-    expect(family).toContain('onAddContact')
-    expect(family).toContain('onUpdateContact')
+    expect(sections).toContain('formatAgeLabel(child.dob)')
+    // The static "Minor — guardian required" label was replaced in #203 by
+    // minor status derived from the date of birth, with an explicit override.
+    // Assert the mechanism that replaced it rather than the copy that went.
+    expect(sections).toContain('isMinorFromDob(child.dob)')
+    expect(sections).toContain('Treat as minor')
+    expect(sections).toContain("onChange('children',")
+    expect(sections).toContain('onAddContact')
+    expect(sections).toContain('onUpdateContact')
   })
 
   it('shows the gross estate total in the asset schedule footer', () => {

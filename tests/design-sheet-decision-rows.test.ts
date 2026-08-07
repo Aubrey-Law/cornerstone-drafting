@@ -5,6 +5,16 @@ import { describe, expect, it } from 'vitest'
 const designRoot = path.join(process.cwd(), 'app/admin/drafting/[matterId]/design')
 const read = (relativePath: string) => fs.readFileSync(path.join(designRoot, relativePath), 'utf8')
 
+/** Every section file at once, for assertions about presence rather than placement. */
+const readSections = () => {
+  const dir = path.join(designRoot, 'sections')
+  return fs
+    .readdirSync(dir)
+    .filter(name => name.endsWith('.tsx'))
+    .map(name => fs.readFileSync(path.join(dir, name), 'utf8'))
+    .join('\n')
+}
+
 describe('single-page design decision primitives', () => {
   it('provides controlled GroupCard and keyboard-operable DecisionRow primitives', () => {
     const shared = read('sections/shared.tsx')
@@ -24,19 +34,25 @@ describe('single-page design decision primitives', () => {
   })
 
   it('renders the requested exclusive choices as DecisionRows', () => {
-    const plan = read('sections/PlanDesignSection.tsx')
-    const trust = read('sections/TrustDetailsSection.tsx')
-    const dpoa = read('sections/DpoaProvisionsSection.tsx')
-    const healthcare = read('sections/HealthCareDesignSection.tsx')
+    // What matters is that each of these is a DecisionRow rather than a
+    // checkbox — `question=` is the prop only DecisionRow takes. Which section
+    // renders it is a layout decision that has already moved once ("Will title"
+    // from PlanDesignSection to FamilySection), so this searches every section
+    // rather than failing on a file move that changed nothing for the user.
+    const sections = readSections()
 
-    expect(plan).toContain('question="Plan type"')
-    expect(plan).toContain('question="Will title"')
-    expect(trust).toContain('question="Joint or separate trusts?"')
-    expect(trust).toContain('question="Residual Beneficiary Method"')
-    expect(trust).toContain('question="Include a trust protector?"')
-    expect(dpoa).toContain('question="Allow gifts?"')
-    expect(healthcare).toContain('question="HIPAA fiduciary scope"')
-    expect(healthcare).toContain('question="Life-support preference"')
+    for (const question of [
+      'Plan type',
+      'Will title',
+      'Joint or separate trusts?',
+      'Residual Beneficiary Method',
+      'Include a trust protector?',
+      'Allow gifts?',
+      'HIPAA fiduciary scope',
+      'Life-support preference',
+    ]) {
+      expect(sections, question).toContain(`question="${question}"`)
+    }
   })
 
   it('keeps true multi-select document and power lists as checkboxes', () => {
