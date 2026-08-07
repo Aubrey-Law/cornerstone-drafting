@@ -117,30 +117,19 @@ export function toggleFiduciaryGridContact(
     ])
   }
 
-  if (!roleConfig.allowCo) {
-    const nextOrder = firstAvailablePrincipalOrder(normalized)
-    return finalize([
-      ...normalized,
-      { ...createSlot(nextOrder), contact_id: contactId },
-    ])
-  }
-
-  const principalOrders = Array.from(new Set(normalized
-    .filter(slot => !slot.is_co && slot.contact_id)
-    .map(slot => slot.order),
-  )).sort((a, b) => a - b)
-
-  const openOrder = principalOrders.find(order => (
-    coSlotsForOrder(normalized, order).filter(slot => slot.contact_id).length < roleConfig.maxCo
-  ))
-
-  if (openOrder !== undefined) {
-    return finalize([
-      ...normalized,
-      { ...createSlot(openOrder, true), contact_id: contactId },
-    ])
-  }
-
+  // No co line was targeted, so this is a plain add: the next person named for
+  // a role is their successor, not someone serving alongside the first.
+  //
+  // This path used to fill open co slots first, which meant clicking a second
+  // contact silently produced a co-trustee — and for roles with maxCo 3, three
+  // co-fiduciaries before anyone became an alternate. It reached the drafted
+  // documents as `dpoa_co_agent` / `guardian_co` / `hcp_co` where the design
+  // sheet meant `_successor`, so a document named someone to serve jointly when
+  // the attorney intended them to serve only if the first could not.
+  //
+  // Serving jointly is a deliberate choice, and the grid already has explicit
+  // "Pair with <line>" controls for it — those pass targetOrder and are handled
+  // above. Clicking a contact never creates one.
   const nextOrder = firstAvailablePrincipalOrder(normalized)
   return finalize([
     ...normalized,

@@ -9,6 +9,7 @@ import {
   addAlternate,
   normalizeFiduciarySlots,
   setSlotContact,
+  ROLE_CONFIG,
 } from '@/app/admin/drafting/[matterId]/design/sections/fiduciary-helpers'
 import { buildFiduciaryRoleDetailsFromDesignSheet } from '@/lib/draftPayload/fiduciaryDetails'
 import { buildFiduciariesFromDesignSheet } from '@/lib/draftPayload/helpers'
@@ -23,10 +24,20 @@ function oldBlockSlots(primary: string, alternate: string): FiduciarySlot[] {
   return normalizeFiduciarySlots(setSlotContact(withAlternate, alternateSlot.id, alternate))
 }
 
+/**
+ * Naming two people for a role through the grid, the way a user does it:
+ * click one contact, then click another, without targeting a co line.
+ *
+ * `trustee` is the strictest case — it allows co-fiduciaries with the highest
+ * `maxCo`, so if any role were going to quietly turn the second person into a
+ * co-trustee instead of an alternate, this is the one.
+ */
 function gridSlots(primary: string, alternate: string): FiduciarySlot[] {
+  const role = ROLE_CONFIG.trustee
   return toggleFiduciaryGridContact(
-    toggleFiduciaryGridContact([], primary),
+    toggleFiduciaryGridContact([], primary, role),
     alternate,
+    role,
   )
 }
 
