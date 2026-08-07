@@ -3,8 +3,18 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hubNextActionKey } from '@/lib/drafting/hubUtils'
 import type { DraftingHubMatter } from '@/lib/queries/drafting'
+import type { PipelineMatter } from '@/types/database'
 
-function draftingQueueItem(overrides: Partial<DraftingHubMatter> = {}): DraftingHubMatter {
+/**
+ * `matter` is deliberately a stub: `hubNextActionKey` reads only `stage`, and
+ * spelling out all 27 PipelineMatter fields would say nothing about the
+ * behaviour under test. `Partial<DraftingHubMatter>` alone would still demand a
+ * complete PipelineMatter from callers overriding it, which is what made the
+ * override below a type error.
+ */
+function draftingQueueItem(
+  overrides: Partial<Omit<DraftingHubMatter, 'matter'>> & { matter?: Partial<PipelineMatter> } = {},
+): DraftingHubMatter {
   return {
     matter: { matter_id: 'matter-1', stage: 'drafting' },
     matterNumber: '2026-001',
