@@ -6,6 +6,12 @@ import { parsePracticeArea } from '@/lib/practiceArea'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
 import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
 import { reconcileEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
+import { normalizeEngagementSignedAt } from '@/lib/engagementStatus'
+import {
+  mirrorEngagementToLead,
+  syncEngagementSignedAnchor,
+  syncEngagementSignedDetails,
+} from '@/lib/engagement/signedDate'
 
 // PATCH /api/admin/matter-details
 // Body: { matterId: string; field: string; value: unknown }
@@ -47,7 +53,7 @@ const WRITABLE_FIELDS = new Set([
   'pb_bond_amount', 'pb_bond_waived_in_will',
   // V2 — Shared
   'conflict_check_completed', 'conflict_check_date',
-  'conflict_cleared', 'engagement_signed', 'engagement_status',
+  'conflict_cleared', 'engagement_signed', 'engagement_status', 'engagement_signed_at',
   'fee_collected', 'fee_collected_date',
   'fee_payment_status',
   // V2 — EP Document Tracking
@@ -202,25 +208,47 @@ export async function PATCH(req: Request) {
       console.error('matter-details engagement status update failed', { matterId, value, statusError })
       return NextResponse.json({ error: statusError.message }, { status: 500 })
     }
-    const { data: matterRow } = await admin
-      .from('matters')
-      .select('client_intake_id')
-      .eq('id', matterId)
-      .maybeSingle()
-    if (matterRow?.client_intake_id) {
-      const { error: leadError } = await admin
-        .from('client_intake')
-        .update({
-          engagement_status: patch.engagement_status,
-          engagement_sent_at: patch.engagement_sent_at,
-          engagement_signed_at: patch.engagement_signed_at,
-        })
-        .eq('id', matterRow.client_intake_id)
-      if (leadError) {
-        return NextResponse.json({ error: leadError.message }, { status: 500 })
-      }
+    const leadError = await mirrorEngagementToLead(admin, matterId, {
+      engagement_status: patch.engagement_status,
+      engagement_sent_at: patch.engagement_sent_at,
+      engagement_signed_at: patch.engagement_signed_at,
+    })
+    if (leadError) return NextResponse.json({ error: leadError }, { status: 500 })
+    // Marking the engagement signed starts the same clock the SLA tab anchors.
+    const { rescheduled, error: anchorError } = await syncEngagementSignedAnchor(
+      admin,
+      matterId,
+      patch.engagement_signed_at,
+    )
+    if (anchorError) return NextResponse.json({ error: anchorError }, { status: 500 })
+    return NextResponse.json({ row, rescheduled })
+  }
+
+  if (field === 'engagement_signed_at') {
+    // Engagements signed on paper, or in another system, never reach the e-sign
+    // webhook — the attorney records the date here instead. It is the same fact
+    // the status dropdown and the SLA tab's key dates write, so it lands in all
+    // three places and re-dates the tasks hanging off the engagement clock.
+    const normalized = normalizeEngagementSignedAt(normalizedValue)
+    if (!normalized.ok) {
+      return NextResponse.json(
+        { error: 'Engagement signed date must be a date (YYYY-MM-DD) or empty' },
+        { status: 400 },
+      )
     }
-    return NextResponse.json({ row })
+    const { row, error: detailsError } = await syncEngagementSignedDetails(
+      admin,
+      matterId,
+      normalized.value,
+    )
+    if (detailsError) return NextResponse.json({ error: detailsError }, { status: 500 })
+    const { rescheduled, error: anchorError } = await syncEngagementSignedAnchor(
+      admin,
+      matterId,
+      normalized.value,
+    )
+    if (anchorError) return NextResponse.json({ error: anchorError }, { status: 500 })
+    return NextResponse.json({ row, rescheduled })
   }
 
   if (field === 'billing_type') {

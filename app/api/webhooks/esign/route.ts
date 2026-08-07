@@ -5,6 +5,7 @@ import { putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
 import { resolveEsignProvider } from '@/lib/esign/firma'
 import { verifyFirmaWebhookSignature } from '@/lib/esign/verify'
 import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
+import { syncEngagementSignedAnchor } from '@/lib/engagement/signedDate'
 import type { EsignEnvelopeState } from '@/lib/esign/types'
 
 export const runtime = 'nodejs'
@@ -77,15 +78,22 @@ async function storeSignedEngagement(
 
   // Status flip last: a retry after a partial failure redoes the work above
   // (worst case one orphaned R2 object) and a retry after success no-ops.
+  const signedAt = state.signedAt ?? new Date().toISOString()
   const { error: updateError } = await admin
     .from('matter_details')
     .update({
       engagement_signed: true,
       engagement_status: 'signed',
-      engagement_signed_at: state.signedAt ?? new Date().toISOString(),
+      engagement_signed_at: signedAt,
     })
     .eq('client_id', matterId)
   if (updateError) throw new Error(updateError.message)
+
+  // Signing starts the post-engagement SLA clock, which is anchored on
+  // `matters`. Every signed-engagement branch reaches this function, so the
+  // clock moves whether the envelope was sent from a lead or a hired matter.
+  const { error: anchorError } = await syncEngagementSignedAnchor(admin, matterId, signedAt)
+  if (anchorError) throw new Error(anchorError)
 
   return { r2Key }
 }
