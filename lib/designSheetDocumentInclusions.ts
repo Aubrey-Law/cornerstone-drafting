@@ -1,4 +1,5 @@
 import { designPlanTypeIncludesRevocableTrust, normalizeDesignPlanType } from '@/lib/designPlanType'
+import { sheetIsMarried } from '@/lib/designSheet/maritalStatus'
 import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
 import type { DesignSheet } from '@/types/database'
 
@@ -84,7 +85,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'marital_status'> & Partial<Pick<DesignSheet, 'children'>>): DesignDocumentInclusions {
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
   const hasPlanType = normalizedPlanType !== null
-  const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
+  const isMarried = sheetIsMarried(sheet.marital_status)
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(sheet.children)
 
   return {

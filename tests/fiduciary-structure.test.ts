@@ -114,10 +114,110 @@ describe('review flags resolve against the design sheet', () => {
   })
 
   it('does not count a co-fiduciary as the principal choice', () => {
-    const sheet = { guardian_slots: [slot('c1', 0, true)] }
+    const sheet = {
+      children: [{ name: 'Kid', dob: '2018-01-01', relationship: 'biological', is_minor: true }],
+      guardian_slots: [slot('c1', 0, true)],
+    }
 
     expect(resolveIntakeReviewFlags([flag('guardian_missing')], sheet).map(f => f.key))
       .toEqual(['guardian_missing'])
+  })
+
+  // A guardian exists only for a minor child, so a family list with no minors on
+  // it answers the intake question — naming one is not the only way out.
+  it('clears the guardian flag when the sheet lists no minor children', () => {
+    const sheet = {
+      children: [
+        { name: 'Alex Example', dob: '1994-01-01', relationship: 'biological', is_minor: false },
+        { name: 'Blake Example', dob: '2004-01-01', relationship: 'biological', is_minor: false },
+      ],
+      guardian_slots: [],
+    }
+
+    expect(resolveIntakeReviewFlags([flag('guardian_missing')], sheet)).toEqual([])
+  })
+
+  it('keeps asking while the family list is still empty', () => {
+    const sheet = { children: [], guardian_slots: [] }
+
+    expect(resolveIntakeReviewFlags([flag('guardian_missing')], sheet).map(f => f.key))
+      .toEqual(['guardian_missing'])
+  })
+
+  it('keeps asking when a minor child is listed and no guardian is named', () => {
+    const sheet = {
+      children: [{ name: 'Kid', dob: '2018-01-01', relationship: 'biological', is_minor: true }],
+      guardian_slots: [],
+    }
+
+    expect(resolveIntakeReviewFlags([flag('guardian_missing')], sheet).map(f => f.key))
+      .toEqual(['guardian_missing'])
+  })
+
+  // The spouse's own will/POA/health care documents exist only if there is a
+  // spouse and the plan is preparing them for that spouse.
+  describe('spouse flags', () => {
+    const spouseFlags = [
+      flag('spouse_personal_rep_missing'),
+      flag('spouse_poa_missing'),
+      flag('spouse_hcp_missing'),
+    ]
+    const keys = (sheet: Record<string, unknown>) =>
+      resolveIntakeReviewFlags(spouseFlags, sheet).map(f => f.key)
+
+    it('clears them once the sheet says the client is not married', () => {
+      expect(keys({ marital_status: 'divorced' })).toEqual([])
+      expect(keys({ marital_status: 'widowed' })).toEqual([])
+      expect(keys({ marital_status: 'never married' })).toEqual([])
+    })
+
+    it('clears them when the plan is not preparing spouse documents', () => {
+      const sheet = {
+        marital_status: 'married',
+        decisions: { document_inclusions: { spouse_docs: false } },
+      }
+
+      expect(keys(sheet)).toEqual([])
+    })
+
+    it('keeps asking while marital status is still blank', () => {
+      expect(keys({})).toEqual(spouseFlags.map(f => f.key))
+      expect(keys({ marital_status: '  ' })).toEqual(spouseFlags.map(f => f.key))
+    })
+
+    it('keeps asking for a married client whose spouse documents are in the plan', () => {
+      expect(keys({ marital_status: 'married' })).toEqual(spouseFlags.map(f => f.key))
+    })
+
+    it('treats "remarried" as married so the ask stands', () => {
+      expect(keys({ marital_status: 'remarried' })).toEqual(spouseFlags.map(f => f.key))
+    })
+
+    it('still clears individually once each role is assigned', () => {
+      const sheet = {
+        marital_status: 'married',
+        spouse_executor_slots: [slot('c1')],
+        spouse_poa_slots: [slot('c2')],
+      }
+
+      expect(keys(sheet)).toEqual(['spouse_hcp_missing'])
+    })
+
+    // The spouse's date of birth still feeds the *client's* documents — naming
+    // the spouse as trustee, the marital share — so dropping the spouse's own
+    // documents does not make it moot. Only "there is no spouse" does.
+    it('drops the spouse DOB ask only when there is no spouse', () => {
+      const dob = [flag('spouse_dob_missing')]
+      const resolved = (sheet: Record<string, unknown>) =>
+        resolveIntakeReviewFlags(dob, sheet).map(f => f.key)
+
+      expect(resolved({ marital_status: 'divorced' })).toEqual([])
+      expect(resolved({
+        marital_status: 'married',
+        decisions: { document_inclusions: { spouse_docs: false } },
+      })).toEqual(['spouse_dob_missing'])
+      expect(resolved({ marital_status: 'married', spouse_dob: '1972-03-04' })).toEqual([])
+    })
   })
 
   it('clears non-fiduciary flags the sheet answers too', () => {

@@ -1,5 +1,9 @@
 import type { IntakeRow } from '@/lib/intakeSections'
 import { DESIGN_SECTION_IDS, type DesignSectionId } from '@/lib/designSheet/sectionIds'
+import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
+import { sheetIsMarried } from '@/lib/designSheet/maritalStatus'
+import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import type { DesignSheetChild } from '@/types/database'
 
 export type IntakeReadinessFlagSeverity = 'review'
 export type IntakeReadinessResolutionKind = 'needs_data' | 'attorney_judgment'
@@ -287,6 +291,40 @@ function slotIsNamed(slots: unknown): boolean {
       && Boolean((slot as { contact_id?: string | null }).contact_id))
 }
 
+/** The design sheet's family list, or an empty list when it carries none. */
+function designSheetChildren(sheet: Record<string, unknown>): DesignSheetChild[] {
+  return Array.isArray(sheet.children) ? sheet.children as DesignSheetChild[] : []
+}
+
+/** Has anybody been added to the family list? An empty list answers nothing. */
+function childrenListed(sheet: Record<string, unknown>): boolean {
+  return designSheetChildren(sheet).length > 0
+}
+
+/** Has the sheet said anything about marital status yet? Blank answers nothing. */
+function maritalStatusAnswered(sheet: Record<string, unknown>): boolean {
+  return sheetText(sheet, 'marital_status')
+}
+
+function sheetSaysUnmarried(sheet: Record<string, unknown>): boolean {
+  return maritalStatusAnswered(sheet)
+    && !sheetIsMarried(sheet.marital_status as string | null | undefined)
+}
+
+/**
+ * Is the spouse getting their own will / POA / health care documents?
+ *
+ * Same test designSheetReadiness uses to decide whether to ask for the spouse's
+ * fiduciaries at all, so the flags and the readiness rail stay in step.
+ */
+function spouseDocumentsDropped(sheet: Record<string, unknown>): boolean {
+  if (!maritalStatusAnswered(sheet)) return false
+  if (sheetSaysUnmarried(sheet)) return true
+  return !getDocumentInclusions(
+    sheet as unknown as Parameters<typeof getDocumentInclusions>[0],
+  ).spouse_docs
+}
+
 function sheetText(sheet: Record<string, unknown>, key: string): boolean {
   const value = sheet[key]
   return typeof value === 'string' ? value.trim().length > 0 : Boolean(value)
@@ -300,7 +338,10 @@ function sheetText(sheet: Record<string, unknown>, key: string): boolean {
  */
 const REVIEW_FLAG_SATISFIED_BY: Record<string, (sheet: Record<string, unknown>) => boolean> = {
   client_dob_missing: sheet => sheetText(sheet, 'client_dob'),
-  spouse_dob_missing: sheet => sheetText(sheet, 'spouse_dob'),
+  // Not gated on spouse documents: the spouse's date of birth still feeds the
+  // client's own instruments — naming the spouse as trustee, the marital share —
+  // so only "there is no spouse" makes it moot.
+  spouse_dob_missing: sheet => sheetText(sheet, 'spouse_dob') || sheetSaysUnmarried(sheet),
   county_missing: sheet => sheetText(sheet, 'county'),
 
   client_trustee_missing: sheet => slotIsNamed(sheet.trustee_slots),
@@ -313,13 +354,30 @@ const REVIEW_FLAG_SATISFIED_BY: Record<string, (sheet: Record<string, unknown>) 
     || (sheet.poa_same_as_trustee === true && slotIsNamed(sheet.trustee_slots)),
   client_hcp_missing: sheet => slotIsNamed(sheet.hcp_slots),
 
+  // These name fiduciaries inside the *spouse's* own documents, so the plan
+  // dropping those documents answers them as fully as naming somebody does —
+  // whether because the sheet says there is no spouse or because spouse docs
+  // were switched off. Left unanswerable otherwise: intake froze these when the
+  // client said "married", and a later divorce/widowhood correction on the sheet
+  // could never clear them. A blank marital status is not an answer yet;
+  // designSheetReadiness raises its own `marital status` blocker for that gap.
   spouse_personal_rep_missing: sheet =>
     slotIsNamed(sheet.spouse_executor_slots)
-    || (sheet.spouse_executor_same_as_trustee === true && slotIsNamed(sheet.spouse_trustee_slots)),
-  spouse_poa_missing: sheet => slotIsNamed(sheet.spouse_poa_slots),
-  spouse_hcp_missing: sheet => slotIsNamed(sheet.spouse_hcp_slots),
+    || (sheet.spouse_executor_same_as_trustee === true && slotIsNamed(sheet.spouse_trustee_slots))
+    || spouseDocumentsDropped(sheet),
+  spouse_poa_missing: sheet => slotIsNamed(sheet.spouse_poa_slots) || spouseDocumentsDropped(sheet),
+  spouse_hcp_missing: sheet => slotIsNamed(sheet.spouse_hcp_slots) || spouseDocumentsDropped(sheet),
 
-  guardian_missing: sheet => slotIsNamed(sheet.guardian_slots),
+  // A guardian is nominated for a minor child and nothing else, so "no minor
+  // children" answers this as fully as naming somebody does. Without that second
+  // path an intake that answered `has_minor_children: true` — a client slip, or
+  // a child who has since turned 18 — left the ask standing forever, and the
+  // only way to clear it was to nominate a guardian nobody needs. An empty
+  // family list is not an answer yet, so the ask stands until somebody is on it —
+  // designSheetReadiness raises its own `children` blocker for that gap.
+  guardian_missing: sheet =>
+    slotIsNamed(sheet.guardian_slots)
+    || (childrenListed(sheet) && !sheetHasMinorChildren(designSheetChildren(sheet))),
 }
 
 /**
