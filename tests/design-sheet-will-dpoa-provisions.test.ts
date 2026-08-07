@@ -3,6 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   coagentMannerFromServing,
+  effectiveDpoaTrustPowers,
   getDesignSheetDpoaProvisions,
   setDesignSheetDpoaProvisions,
 } from '@/lib/designSheetDpoaProvisions'
@@ -95,5 +96,44 @@ describe('financial power of attorney provisions', () => {
     expect(source).toContain('Trust Powers')
     expect(source).toContain('Attorney-in-Fact(s) Powers')
     expect(source).toContain('Clause Library')
+  })
+
+  it('hides the trust power checkboxes behind the include choice', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/DpoaProvisionsSection.tsx'),
+      'utf8',
+    )
+
+    expect(source).toContain('Include trust powers?')
+    expect(source).toContain('{provisions.include_trust_powers && (')
+    expect(source.indexOf('Miscellaneous Special Powers')).toBeGreaterThan(source.indexOf('Attorney-in-Fact(s) Powers'))
+  })
+
+  it('defaults trust powers to excluded and zeroes the switches when not included', () => {
+    const fresh = getDesignSheetDpoaProvisions({ decisions: null })
+    expect(fresh.include_trust_powers).toBe(false)
+
+    const decisions = setDesignSheetDpoaProvisions({}, {
+      include_trust_powers: true,
+      agent_may_create_trusts: true,
+      allow_agent_as_trustee: true,
+    })
+    const included = getDesignSheetDpoaProvisions({ decisions })
+    expect(effectiveDpoaTrustPowers(included).agent_may_create_trusts).toBe(true)
+
+    const excludedDecisions = setDesignSheetDpoaProvisions({ decisions }, { include_trust_powers: false })
+    const excluded = getDesignSheetDpoaProvisions({ decisions: excludedDecisions })
+    // Selections stay on the sheet so re-including restores them, but the document sees none of them.
+    expect(excluded.agent_may_create_trusts).toBe(true)
+    expect(Object.values(effectiveDpoaTrustPowers(excluded)).every(value => value === false)).toBe(true)
+  })
+
+  it('treats trust powers saved before the include choice as included', () => {
+    const legacy = getDesignSheetDpoaProvisions({
+      decisions: { dpoa_provisions: { agent_may_modify_joint_trusts: true } },
+    })
+
+    expect(legacy.include_trust_powers).toBe(true)
+    expect(effectiveDpoaTrustPowers(legacy).agent_may_modify_joint_trusts).toBe(true)
   })
 })

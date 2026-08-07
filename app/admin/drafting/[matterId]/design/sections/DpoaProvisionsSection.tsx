@@ -144,85 +144,57 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
         title="Trust Powers"
         subtitle="It is unusual to give the agent the power to do estate planning on behalf of the principal. These powers are typically granted with a specific purpose in mind (e.g. Medicaid planning)."
       >
-        <div className="space-y-3">
-          <DesignSheetCheckboxOption
-            label="Agent may create trusts"
-            description={"Select to allow the agent to create revocable and/or irrevocable trusts for the benefit of the principal on their behalf. All trusts so created must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
-            checked={provisions.agent_may_create_trusts}
-            onChange={checked => updateProvisions({ agent_may_create_trusts: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Agent may create trusts for dependents"
-            description={"Select to allow the agent to create trusts for the benefit of the principal's dependents on the principal's behalf. All trusts must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
-            checked={provisions.agent_may_create_trusts_for_dependents}
-            onChange={checked => updateProvisions({ agent_may_create_trusts_for_dependents: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Allow agent to be trustee"
-            description="Select to allow the agent to designate themselves as a trustee of a trust they create on the principal's behalf."
-            checked={provisions.allow_agent_as_trustee}
-            onChange={checked => updateProvisions({ allow_agent_as_trustee: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Agent may create Medicaid planning trusts"
-            description="Select to allow the agent to create irrevocable trusts specifically to qualify the principal for Medicaid or other public benefits. This may be redundant if the agent will be given the general power to create trusts."
-            checked={provisions.agent_may_create_medicaid_trusts}
-            onChange={checked => updateProvisions({ agent_may_create_medicaid_trusts: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Agent may modify sole-settlor trusts"
-            description={"Select to allow the agent to amend or revoke a trust of which the principal is the sole settlor. All modifications must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
-            checked={provisions.agent_may_modify_sole_settlor_trusts}
-            onChange={checked => updateProvisions({ agent_may_modify_sole_settlor_trusts: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Agent may modify joint trusts"
-            description={"Select to allow the agent to revoke or modify a joint trust of which they and the principal are co-settlors. Gives the principal's spouse or partner the ability to modify their joint trust if the principal is incapacitated. All modifications must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
-            checked={provisions.agent_may_modify_joint_trusts}
-            onChange={checked => updateProvisions({ agent_may_modify_joint_trusts: checked })}
-          />
-        </div>
-      </SectionBlock>
+        <DecisionRow
+          question="Include trust powers?"
+          help="Choose whether the POA grants the agent any trust powers."
+          value={provisions.include_trust_powers ? 'include' : 'exclude'}
+          options={[
+            { value: 'include', label: 'Include' },
+            { value: 'exclude', label: "Don't include" },
+          ]}
+          onChange={value => updateProvisions({ include_trust_powers: value === 'include' })}
+        />
 
-      <SectionBlock title="Miscellaneous Special Powers">
-        <div className="space-y-3">
-          <DesignSheetCheckboxOption
-            label="Allow delegation of authority"
-            description="Select to allow the agent(s) to delegate their authority to make discretionary decisions to professionals (e.g. financial advisors). Banks and institutions may not allow delegation of authority."
-            checked={provisions.allow_delegation}
-            onChange={checked => updateProvisions({ allow_delegation: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Prohibit arbitration"
-            description="Select to prohibit the agent(s) from submitting to arbitration on behalf of the principal."
-            checked={provisions.prohibit_arbitration}
-            onChange={checked => updateProvisions({ prohibit_arbitration: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Power to manage §529 educational savings plans"
-            description="Select to allow the agent to manage §529 educational savings plans."
-            checked={provisions.power_529_plans}
-            onChange={checked => updateProvisions({ power_529_plans: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Allow agent to access medical information"
-            description="If selected, the power of attorney will include a provision granting access to the principal's medical information. This will also explicitly include the power of attorney in the HIPAA Authorization, if this document package includes a HIPAA Authorization."
-            checked={provisions.allow_medical_information_access}
-            onChange={checked => updateProvisions({ allow_medical_information_access: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Power to control digital assets and devices"
-            description="Select to allow the agent to control digital assets, accounts, and devices."
-            checked={provisions.power_digital_assets}
-            onChange={checked => updateProvisions({ power_digital_assets: checked })}
-          />
-          <DesignSheetCheckboxOption
-            label="Allow self-designation for beneficiary designations"
-            description="Select to allow the agent(s) to use their authority over beneficiary designations to designate themselves as the beneficiary of an insurance policy, annuity, or other asset. Use with caution, as this power may be abused."
-            checked={provisions.allow_self_designation_beneficiary}
-            onChange={checked => updateProvisions({ allow_self_designation_beneficiary: checked })}
-          />
-        </div>
+        {provisions.include_trust_powers && (
+          <div className="mt-4 space-y-3">
+            <DesignSheetCheckboxOption
+              label="Agent may create trusts"
+              description={"Select to allow the agent to create revocable and/or irrevocable trusts for the benefit of the principal on their behalf. All trusts so created must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
+              checked={provisions.agent_may_create_trusts}
+              onChange={checked => updateProvisions({ agent_may_create_trusts: checked })}
+            />
+            <DesignSheetCheckboxOption
+              label="Agent may create trusts for dependents"
+              description={"Select to allow the agent to create trusts for the benefit of the principal's dependents on the principal's behalf. All trusts must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
+              checked={provisions.agent_may_create_trusts_for_dependents}
+              onChange={checked => updateProvisions({ agent_may_create_trusts_for_dependents: checked })}
+            />
+            <DesignSheetCheckboxOption
+              label="Allow agent to be trustee"
+              description="Select to allow the agent to designate themselves as a trustee of a trust they create on the principal's behalf."
+              checked={provisions.allow_agent_as_trustee}
+              onChange={checked => updateProvisions({ allow_agent_as_trustee: checked })}
+            />
+            <DesignSheetCheckboxOption
+              label="Agent may create Medicaid planning trusts"
+              description="Select to allow the agent to create irrevocable trusts specifically to qualify the principal for Medicaid or other public benefits. This may be redundant if the agent will be given the general power to create trusts."
+              checked={provisions.agent_may_create_medicaid_trusts}
+              onChange={checked => updateProvisions({ agent_may_create_medicaid_trusts: checked })}
+            />
+            <DesignSheetCheckboxOption
+              label="Agent may modify sole-settlor trusts"
+              description={"Select to allow the agent to amend or revoke a trust of which the principal is the sole settlor. All modifications must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
+              checked={provisions.agent_may_modify_sole_settlor_trusts}
+              onChange={checked => updateProvisions({ agent_may_modify_sole_settlor_trusts: checked })}
+            />
+            <DesignSheetCheckboxOption
+              label="Agent may modify joint trusts"
+              description={"Select to allow the agent to revoke or modify a joint trust of which they and the principal are co-settlors. Gives the principal's spouse or partner the ability to modify their joint trust if the principal is incapacitated. All modifications must be in accordance with the principal's intentions as expressed in existing estate planning documents."}
+              checked={provisions.agent_may_modify_joint_trusts}
+              onChange={checked => updateProvisions({ agent_may_modify_joint_trusts: checked })}
+            />
+          </div>
+        )}
       </SectionBlock>
 
       <SectionBlock
@@ -304,6 +276,47 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
               </Button>
             </div>
           </div>
+        </div>
+      </SectionBlock>
+
+      <SectionBlock title="Miscellaneous Special Powers">
+        <div className="space-y-3">
+          <DesignSheetCheckboxOption
+            label="Allow delegation of authority"
+            description="Select to allow the agent(s) to delegate their authority to make discretionary decisions to professionals (e.g. financial advisors). Banks and institutions may not allow delegation of authority."
+            checked={provisions.allow_delegation}
+            onChange={checked => updateProvisions({ allow_delegation: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Prohibit arbitration"
+            description="Select to prohibit the agent(s) from submitting to arbitration on behalf of the principal."
+            checked={provisions.prohibit_arbitration}
+            onChange={checked => updateProvisions({ prohibit_arbitration: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Power to manage §529 educational savings plans"
+            description="Select to allow the agent to manage §529 educational savings plans."
+            checked={provisions.power_529_plans}
+            onChange={checked => updateProvisions({ power_529_plans: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow agent to access medical information"
+            description="If selected, the power of attorney will include a provision granting access to the principal's medical information. This will also explicitly include the power of attorney in the HIPAA Authorization, if this document package includes a HIPAA Authorization."
+            checked={provisions.allow_medical_information_access}
+            onChange={checked => updateProvisions({ allow_medical_information_access: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Power to control digital assets and devices"
+            description="Select to allow the agent to control digital assets, accounts, and devices."
+            checked={provisions.power_digital_assets}
+            onChange={checked => updateProvisions({ power_digital_assets: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow self-designation for beneficiary designations"
+            description="Select to allow the agent(s) to use their authority over beneficiary designations to designate themselves as the beneficiary of an insurance policy, annuity, or other asset. Use with caution, as this power may be abused."
+            checked={provisions.allow_self_designation_beneficiary}
+            onChange={checked => updateProvisions({ allow_self_designation_beneficiary: checked })}
+          />
         </div>
       </SectionBlock>
     </div>

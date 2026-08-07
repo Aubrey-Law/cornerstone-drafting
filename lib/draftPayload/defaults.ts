@@ -1,5 +1,5 @@
 import { getFiduciaryDocumentInclusions } from '@/lib/designSheet/fiduciaryDocumentInclusions'
-import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
+import { effectiveDpoaTrustPowers, getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
 import { buildFiduciaryRoleDetailsFromDesignSheet } from '@/lib/draftPayload/fiduciaryDetails'
 import type { DesignSheetRow, DraftPayload } from '@/lib/draftPayload/types'
@@ -52,14 +52,8 @@ export function defaultDraftPayloadDpoaProvisions(): DraftPayload['dpoa_provisio
     agent_compensation: provisions.agent_compensation,
     coagent_serving: provisions.coagent_serving,
     allow_gifts: provisions.allow_gifts,
-    trust_powers: {
-      agent_may_create_trusts: provisions.agent_may_create_trusts,
-      agent_may_create_trusts_for_dependents: provisions.agent_may_create_trusts_for_dependents,
-      allow_agent_as_trustee: provisions.allow_agent_as_trustee,
-      agent_may_create_medicaid_trusts: provisions.agent_may_create_medicaid_trusts,
-      agent_may_modify_sole_settlor_trusts: provisions.agent_may_modify_sole_settlor_trusts,
-      agent_may_modify_joint_trusts: provisions.agent_may_modify_joint_trusts,
-    },
+    include_trust_powers: provisions.include_trust_powers,
+    trust_powers: effectiveDpoaTrustPowers(provisions),
     special_powers: {
       allow_delegation: provisions.allow_delegation,
       prohibit_arbitration: provisions.prohibit_arbitration,
