@@ -207,6 +207,7 @@ export interface DraftPayload {
     agent_compensation: 'prevailing_professional' | 'reasonable' | 'none' | null
     coagent_serving: 'jointly' | 'separately' | 'silent' | null
     allow_gifts: boolean
+    include_trust_powers: boolean
     trust_powers: {
       agent_may_create_trusts: boolean
       agent_may_create_trusts_for_dependents: boolean

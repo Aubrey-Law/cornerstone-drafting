@@ -25,6 +25,17 @@ export const DPOA_BASIC_POWER_KEYS = [
 
 export type DpoaBasicPowerKey = (typeof DPOA_BASIC_POWER_KEYS)[number]
 
+export const DPOA_TRUST_POWER_KEYS = [
+  'agent_may_create_trusts',
+  'agent_may_create_trusts_for_dependents',
+  'allow_agent_as_trustee',
+  'agent_may_create_medicaid_trusts',
+  'agent_may_modify_sole_settlor_trusts',
+  'agent_may_modify_joint_trusts',
+] as const
+
+export type DpoaTrustPowerKey = (typeof DPOA_TRUST_POWER_KEYS)[number]
+
 export const DPOA_BASIC_POWER_LABELS: Record<DpoaBasicPowerKey, string> = {
   real_property: 'Real property transactions',
   tangible_personal_property: 'Tangible personal property transactions',
@@ -48,6 +59,7 @@ export interface DesignSheetDpoaProvisions {
   agent_compensation: DpoaAgentCompensation | null
   coagent_serving: DpoaCoagentServing | null
   allow_gifts: boolean
+  include_trust_powers: boolean
   agent_may_create_trusts: boolean
   agent_may_create_trusts_for_dependents: boolean
   allow_agent_as_trustee: boolean
@@ -78,6 +90,7 @@ const DEFAULT_DPOA_PROVISIONS: DesignSheetDpoaProvisions = {
   agent_compensation: 'reasonable',
   coagent_serving: 'separately',
   allow_gifts: false,
+  include_trust_powers: false,
   agent_may_create_trusts: false,
   agent_may_create_trusts_for_dependents: false,
   allow_agent_as_trustee: false,
@@ -156,6 +169,9 @@ export function getDesignSheetDpoaProvisions(
   const raw = dpoaProvisionsRaw(sheet)
   const basicPowers = readBasicPowers(raw)
   const allBasicPowers = readBoolean(raw, 'all_basic_powers', DPOA_BASIC_POWER_KEYS.every(key => basicPowers[key]))
+  // Sheets saved before the include/don't-include choice existed only recorded the
+  // individual switches, so treat any checked trust power as an earlier "include".
+  const includeTrustPowers = readBoolean(raw, 'include_trust_powers', DPOA_TRUST_POWER_KEYS.some(key => raw[key] === true))
 
   return {
     include_entity_powers: readBoolean(raw, 'include_entity_powers', DEFAULT_DPOA_PROVISIONS.include_entity_powers),
@@ -164,6 +180,7 @@ export function getDesignSheetDpoaProvisions(
     agent_compensation: readCompensation(raw),
     coagent_serving: readCoagentServing(raw) ?? coagentServingFromLegacyManner(sheet.dpoa_coagent_manner),
     allow_gifts: readBoolean(raw, 'allow_gifts', DEFAULT_DPOA_PROVISIONS.allow_gifts),
+    include_trust_powers: includeTrustPowers,
     agent_may_create_trusts: readBoolean(raw, 'agent_may_create_trusts', DEFAULT_DPOA_PROVISIONS.agent_may_create_trusts),
     agent_may_create_trusts_for_dependents: readBoolean(raw, 'agent_may_create_trusts_for_dependents', DEFAULT_DPOA_PROVISIONS.agent_may_create_trusts_for_dependents),
     allow_agent_as_trustee: readBoolean(raw, 'allow_agent_as_trustee', DEFAULT_DPOA_PROVISIONS.allow_agent_as_trustee),
@@ -184,6 +201,20 @@ export function getDesignSheetDpoaProvisions(
     specific_businesses: readString(raw, 'specific_businesses'),
     additional_limitations: readString(raw, 'additional_limitations'),
   }
+}
+
+/**
+ * Trust powers as the drafted document should see them: every switch is off unless
+ * the attorney chose to include trust powers, so a later "do not include" wins over
+ * selections made earlier.
+ */
+export function effectiveDpoaTrustPowers(
+  provisions: DesignSheetDpoaProvisions,
+): Record<DpoaTrustPowerKey, boolean> {
+  return DPOA_TRUST_POWER_KEYS.reduce((acc, key) => {
+    acc[key] = provisions.include_trust_powers ? provisions[key] : false
+    return acc
+  }, {} as Record<DpoaTrustPowerKey, boolean>)
 }
 
 export function setDesignSheetDpoaProvisions(

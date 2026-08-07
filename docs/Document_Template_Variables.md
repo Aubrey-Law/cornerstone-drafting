@@ -324,7 +324,8 @@ fiduciary_display.show_relationship
 | `dpoa.additional_powers` | Saved additional powers. |
 | `dpoa.specific_businesses` | Saved business descriptions. |
 | `dpoa.additional_limitations` | Saved limitations text. |
-| `dpoa.trust_powers` | Saved trust-power selections. |
+| `dpoa.include_trust_powers` | boolean — false when the design sheet says not to include trust powers. |
+| `dpoa.trust_powers` | Saved trust-power selections; every switch is false when `include_trust_powers` is false. |
 | `dpoa.special_powers` | Saved special-power selections. |
 | `dpoa.self_dealing_reviewer` | person |
 | `dpoa.self_dealing_reviewer_alt` | person |

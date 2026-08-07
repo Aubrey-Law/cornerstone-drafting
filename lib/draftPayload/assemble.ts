@@ -26,7 +26,7 @@ import {
   pick,
   selectedAssetTransferDocsFromSheet,
 } from '@/lib/draftPayload/helpers'
-import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
+import { effectiveDpoaTrustPowers, getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getWillPersonalRepresentativePowers } from '@/lib/designSheetWillPowers'
 import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import {
@@ -412,14 +412,8 @@ export async function buildDraftPayload(
     agent_compensation: sheetDpoaProvisions.agent_compensation,
     coagent_serving: sheetDpoaProvisions.coagent_serving,
     allow_gifts: sheetDpoaProvisions.allow_gifts,
-    trust_powers: {
-      agent_may_create_trusts: sheetDpoaProvisions.agent_may_create_trusts,
-      agent_may_create_trusts_for_dependents: sheetDpoaProvisions.agent_may_create_trusts_for_dependents,
-      allow_agent_as_trustee: sheetDpoaProvisions.allow_agent_as_trustee,
-      agent_may_create_medicaid_trusts: sheetDpoaProvisions.agent_may_create_medicaid_trusts,
-      agent_may_modify_sole_settlor_trusts: sheetDpoaProvisions.agent_may_modify_sole_settlor_trusts,
-      agent_may_modify_joint_trusts: sheetDpoaProvisions.agent_may_modify_joint_trusts,
-    },
+    include_trust_powers: sheetDpoaProvisions.include_trust_powers,
+    trust_powers: effectiveDpoaTrustPowers(sheetDpoaProvisions),
     special_powers: {
       allow_delegation: sheetDpoaProvisions.allow_delegation,
       prohibit_arbitration: sheetDpoaProvisions.prohibit_arbitration,

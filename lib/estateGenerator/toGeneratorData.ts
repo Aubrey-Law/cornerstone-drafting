@@ -689,6 +689,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       additional_powers: payload.dpoa_provisions.additional_powers,
       specific_businesses: payload.dpoa_provisions.specific_businesses,
       additional_limitations: payload.dpoa_provisions.additional_limitations,
+      include_trust_powers: payload.dpoa_provisions.include_trust_powers,
       trust_powers: payload.dpoa_provisions.trust_powers,
       special_powers: payload.dpoa_provisions.special_powers,
       self_dealing_reviewer: person(payload.dpoa_provisions.self_dealing_reviewer),
