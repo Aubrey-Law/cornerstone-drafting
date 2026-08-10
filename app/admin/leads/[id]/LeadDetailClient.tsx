@@ -52,6 +52,7 @@ import {
   isMobileDetailViewport,
   ResponsiveDetailRail,
 } from '@/components/layout/ResponsiveDetailRail'
+import { intakeTrackLabel, type IntakeTrack } from '@/lib/intakeTrack'
 import { LeadIntakeCard } from './LeadIntakeCard'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
@@ -309,6 +310,20 @@ export function LeadDetailClient({
       setError(caught instanceof Error ? caught.message : 'Could not send intake')
     } finally {
       setSendingIntake(false)
+    }
+  }
+
+  async function changeIntakeTrack(track: IntakeTrack) {
+    setIntakeLinkBusy(true)
+    try {
+      await call('/api/admin/intake/track', { intakeId: lead.id, track })
+      setLead(current => ({ ...current, intake_track: track }))
+      toast.success(`Now using the ${intakeTrackLabel(track)} questionnaire`)
+      await refreshActivityBestEffort()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not change the questionnaire')
+    } finally {
+      setIntakeLinkBusy(false)
     }
   }
 
@@ -756,6 +771,7 @@ export function LeadDetailClient({
                 }}
                 onRotate={() => void rotateIntakeUrl()}
                 onRevoke={() => void revokeIntakeUrl()}
+                onTrackChange={(track) => void changeIntakeTrack(track)}
                 busy={sendingIntake || intakeLinkBusy}
               />
               <div className="mt-3 flex flex-wrap gap-2">

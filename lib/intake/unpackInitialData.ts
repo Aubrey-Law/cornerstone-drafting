@@ -1,3 +1,4 @@
+import { collegePrepFieldKey } from '@/lib/collegePrepFields'
 import { isFinancialDetailsRootKey } from '@/lib/intakeFinancialFields'
 import { unpackReferralDetailsFromFamilyDetails } from '@/lib/intakeReferralDetails'
 import { formatPhoneInput } from '@/lib/phone'
@@ -16,6 +17,14 @@ export function unpackInitialIntakeData(
     delete base.financial_details
     const legacyAssets = base.financial_asset_types
     if (!base.asset_types && Array.isArray(legacyAssets)) base.asset_types = legacyAssets
+  }
+
+  const collegePrepDetails = base.college_prep_details as Record<string, unknown> | undefined
+  if (collegePrepDetails && typeof collegePrepDetails === 'object') {
+    for (const [key, value] of Object.entries(collegePrepDetails)) {
+      base[collegePrepFieldKey(key)] = value
+    }
+    delete base.college_prep_details
   }
 
   if (base.review_choices && typeof base.review_choices === 'object') {

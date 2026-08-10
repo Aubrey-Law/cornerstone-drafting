@@ -1,4 +1,7 @@
 import type { IntakeRow } from '@/lib/intakeSections'
+import { namedHipaaRecipients } from '@/lib/collegePrepFields'
+import { getIntakeTrack } from '@/lib/intakeTrack'
+import { fractionalAgeFromDob } from '@/lib/youngAdultEstatePlan'
 import { DESIGN_SECTION_IDS, type DesignSectionId } from '@/lib/designSheet/sectionIds'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import { sheetIsMarried } from '@/lib/designSheet/maritalStatus'
@@ -83,7 +86,91 @@ const FIDUCIARY_FLAG_LABELS: Array<{
   },
 ]
 
+/**
+ * Attorney-facing gaps in a College Preparation Plan intake.
+ *
+ * Run instead of the estate rules, not alongside them: that track never asks
+ * about trustees, personal representatives, spouses, or assets, so scoring it
+ * on those questions would bury the real gaps under flags nobody can act on.
+ */
+function collegePrepReadinessFlags(data: IntakeRow): IntakeReadinessFlag[] {
+  const flags: IntakeReadinessFlag[] = []
+  const dob = text(data, 'date_of_birth')
+
+  if (!dob) {
+    flags.push(flag('client_dob_missing', 'Student date of birth', 'cp_student', 'Student date of birth was not provided.'))
+  } else {
+    const age = fractionalAgeFromDob(dob)
+    if (age !== null && age < 18) {
+      flags.push(flag(
+        'student_under_eighteen',
+        'Student is under 18',
+        'cp_student',
+        'The student is under 18 and cannot execute these documents until their eighteenth birthday. Confirm the signing date.',
+        'attorney_judgment',
+      ))
+    }
+  }
+
+  if (!text(data, 'county')) {
+    flags.push(flag('county_missing', 'County', 'cp_student', 'County was not provided.'))
+  }
+
+  for (const item of [
+    { key: 'client_poa_missing', entryKey: 'fid_poa_client', label: 'Financial agent (DPOA)' },
+    { key: 'client_hcp_missing', entryKey: 'fid_hcp_client', label: 'Health care agent' },
+  ]) {
+    if (hasNamedFiduciary(data, item.entryKey)) continue
+    const choice = reviewChoice(data, 'cp_agents')
+    flags.push(flag(
+      item.key,
+      item.label,
+      'cp_agents',
+      readinessMessage(`${item.label} was not provided.`, choice),
+      choice === 'discuss_with_attorney' ? 'attorney_judgment' : 'needs_data',
+    ))
+  }
+
+  if (collegeHipaaRecipients(data).length === 0) {
+    flags.push(flag(
+      'hipaa_recipients_missing',
+      'HIPAA recipients',
+      'cp_agents',
+      'Nobody was listed as permitted to receive medical information.',
+    ))
+  }
+
+  if (!collegeText(data, 'dpoa_effective')) {
+    flags.push(flag(
+      'dpoa_effective_missing',
+      'When the DPOA takes effect',
+      'cp_dpoa',
+      'The client did not choose whether the power of attorney is immediate or springing.',
+    ))
+  }
+
+  return flags
+}
+
+/** Read a college-prep answer from either the flat wizard shape or the stored blob. */
+function collegeText(data: IntakeRow, detailKey: string): string {
+  const flat = data[`college_${detailKey}`]
+  if (typeof flat === 'string') return flat.trim()
+  const nested = nestedRecord(data, 'college_prep_details')[detailKey]
+  return typeof nested === 'string' ? nested.trim() : ''
+}
+
+function collegeHipaaRecipients(data: IntakeRow): unknown[] {
+  const flat = data.college_hipaa_recipients
+  const source = Array.isArray(flat)
+    ? flat
+    : nestedRecord(data, 'college_prep_details').hipaa_recipients
+  return namedHipaaRecipients(source)
+}
+
 export function getIntakeReadinessFlags(data: IntakeRow): IntakeReadinessFlag[] {
+  if (getIntakeTrack(data) === 'college_prep') return collegePrepReadinessFlags(data)
+
   const flags: IntakeReadinessFlag[] = []
   const married = text(data, 'marital_status') === 'married'
   const minorChildren = data.has_minor_children === true

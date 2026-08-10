@@ -221,6 +221,10 @@ export async function POST(req: Request) {
       // attorney mode). Dormant for client-mode saves (clients never send them).
       plan_type:                body.plan_type,
       document_inclusions:      body.document_inclusions,
+      // College Preparation Plan answers, packed by useAutoSave. The track
+      // itself is attorney-set (see /api/admin/intake/track) and deliberately
+      // not writable here.
+      college_prep_details:     body.college_prep_details,
     }
 
     // On final submit, record completion timestamp and advance matter stage
@@ -484,6 +488,11 @@ export async function POST(req: Request) {
     // submit (see buildDesignSheetSeedPayload). Clients never send these.
     plan_type:                body.plan_type,
     document_inclusions:      body.document_inclusions,
+
+    // ── College Preparation Plan ─────────────────────────────────────────────
+    // All track-specific answers ride one JSONB column; the track itself is
+    // attorney-set (see /api/admin/intake/track) and not writable here.
+    college_prep_details:     body.college_prep_details,
   }
 
   // Strip undefined values — Supabase treats undefined keys as null which can

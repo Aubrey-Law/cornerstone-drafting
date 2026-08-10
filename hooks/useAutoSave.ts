@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { wizardStreetLine } from '@/lib/intakeContactAddress'
 import { FINANCIAL_DETAILS_ROOT_KEYS, isFinancialDetailsRootKey } from '@/lib/intakeFinancialFields'
+import { collegePrepDetailKey, isCollegePrepFieldKey } from '@/lib/collegePrepFields'
 import { isReferralDetailKey, packReferralDetailsIntoFamilyDetails } from '@/lib/intakeReferralDetails'
 import { intakeExcludedGuardianTextFromRequestBody } from '@/lib/intakeContactHydration'
 import { formatPhoneFieldsDeep } from '@/lib/phone'
@@ -27,6 +28,7 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
     ): Promise<boolean> => {
       const payload: Record<string, unknown> = {}
       const financialDetails: Record<string, unknown> = {}
+      const collegePrepDetails: Record<string, unknown> = {}
       // _fid_* keys are still the wizard/server wire format for contact_roles.
       // Children and additional contacts travel as top-level contact payloads.
       const fiduciaryEntries: Record<string, unknown> = {}
@@ -42,6 +44,8 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
         if (key === 'referral_source') continue
         if (key.startsWith('financial_')) {
           financialDetails[key.slice('financial_'.length)] = value
+        } else if (isCollegePrepFieldKey(key)) {
+          collegePrepDetails[collegePrepDetailKey(key)] = value
         } else {
           payload[key] = value
         }
@@ -116,6 +120,9 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
 
       if (Object.keys(financialDetails).length > 0) {
         payload.financial_details = financialDetails
+      }
+      if (Object.keys(collegePrepDetails).length > 0) {
+        payload.college_prep_details = collegePrepDetails
       }
       if (Object.keys(fiduciaryEntries).length > 0) {
         payload.fiduciary_entries = fiduciaryEntries

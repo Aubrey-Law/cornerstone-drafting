@@ -22,6 +22,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatPhoneInput } from '@/lib/phone'
+import { DEFAULT_INTAKE_TRACK, getIntakeTrack, type IntakeTrack } from '@/lib/intakeTrack'
 import { MA_COUNTY_OPTIONS, MARITAL_STATUS_OPTIONS, ESTATE_VALUE_OPTIONS } from '@/lib/sharedFields'
 import {
   adminFiduciaryFlatFromRoles,
@@ -138,6 +139,7 @@ export default function AdminIntakeSheet({
   )
   const [currentIntakeId, setCurrentIntakeId] = useState<string | null>(clientIntakeId)
   const [intakeStatus, setIntakeStatus] = useState<string | null>(null)
+  const [intakeTrack, setIntakeTrack] = useState<IntakeTrack>(DEFAULT_INTAKE_TRACK)
   const [intakeContacts, setIntakeContacts] = useState<ContactSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -151,8 +153,13 @@ export default function AdminIntakeSheet({
   const firstErrorRef = useRef<HTMLDivElement>(null)
   const checkboxId = useId()
 
-  const showEP = isEP(practiceArea)
-  const showProbate = isProbate(practiceArea)
+  // The College Preparation Plan track never asks about assets, a spouse, or a
+  // trust, so this attorney form must not present those fields as if it had.
+  // Its own answers (school, HIPAA scope, living will) live in the guided
+  // questionnaire — this sheet stays the shared client/fiduciary editor.
+  const isCollegePrep = intakeTrack === 'college_prep'
+  const showEP = isEP(practiceArea) && !isCollegePrep
+  const showProbate = isProbate(practiceArea) && !isCollegePrep
   const showSpouse = form.marital_status === 'married'
   const showGuardian = form.has_minor_children
   const clientLocked = intakeStatus === 'submitted' || intakeStatus === 'approved'
@@ -177,6 +184,7 @@ export default function AdminIntakeSheet({
         setCurrentIntakeId(idToLoad)
         onIntakeIdChange?.(idToLoad)
         setIntakeStatus(typeof raw.status === 'string' ? raw.status : null)
+        setIntakeTrack(getIntakeTrack(raw))
         setIntakeContacts(
           Array.isArray(raw['_intake_contacts'])
             ? (raw['_intake_contacts'] as ContactSuggestion[])
@@ -273,6 +281,7 @@ export default function AdminIntakeSheet({
     setInitialForm(blank)
     setCurrentIntakeId(null)
     setIntakeStatus(null)
+    setIntakeTrack(DEFAULT_INTAKE_TRACK)
     onClose()
   }
 
@@ -282,10 +291,15 @@ export default function AdminIntakeSheet({
     if (!form.first_name.trim()) e.first_name = 'Required'
     if (!form.last_name.trim()) e.last_name = 'Required'
     if (!form.email.trim()) e.email = 'Required'
-    if (!form.marital_status) e.marital_status = 'Required'
-    const hasAsset = form.has_real_property || form.has_retirement || form.has_investments ||
-      form.has_business || form.has_life_insurance || form.estate_value
-    if (!hasAsset) e.estate_value = 'At least one asset field is required'
+    // Marital status and assets are estate-track questions. The College
+    // Preparation Plan hides both, so requiring them here would leave the
+    // attorney with errors pointing at fields that are not on screen.
+    if (!isCollegePrep) {
+      if (!form.marital_status) e.marital_status = 'Required'
+      const hasAsset = form.has_real_property || form.has_retirement || form.has_investments ||
+        form.has_business || form.has_life_insurance || form.estate_value
+      if (!hasAsset) e.estate_value = 'At least one asset field is required'
+    }
     setErrors(e)
     if (Object.keys(e).length > 0) {
       setTimeout(() => firstErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
@@ -373,6 +387,14 @@ export default function AdminIntakeSheet({
             </div>
           ) : (
             <>
+              {isCollegePrep && (
+                <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+                  <span className="font-medium text-foreground">College Preparation Plan intake.</span>{' '}
+                  The student is the client. School, HIPAA, and living-will answers are captured in
+                  the guided questionnaire — this sheet edits the student&apos;s details and agents.
+                </div>
+              )}
+
               {/* ── Section: Client information ── */}
               <GroupLabel>Client Information</GroupLabel>
 
@@ -528,7 +550,7 @@ export default function AdminIntakeSheet({
               </div>
 
               {/* ── Section: Spouse ── */}
-              {showSpouse && (
+              {showSpouse && !isCollegePrep && (
                 <>
                   <GroupLabel>Spouse / Partner</GroupLabel>
                   <Row2>
@@ -570,173 +592,181 @@ export default function AdminIntakeSheet({
                 </>
               )}
 
-              {/* ── Section: Family ── */}
-              <GroupLabel>Family</GroupLabel>
-              <Row2>
-                <Field>
-                  <FieldLabel>Children?</FieldLabel>
-                  <div className="mt-1">
-                    <SegmentedYesNo value={bool('has_children')} onChange={v => { set('has_children', v); if (!v) { set('has_minor_children', false); set('children', []) } }} />
-                  </div>
-                </Field>
-                {form.has_children && (
-                  <Field>
-                    <FieldLabel>Minor children (under 18)?</FieldLabel>
-                    <div className="mt-1">
-                      <SegmentedYesNo value={bool('has_minor_children')} onChange={v => set('has_minor_children', v)} />
-                    </div>
-                  </Field>
-                )}
-              </Row2>
+              {/* ── Section: Family (not asked on the College Prep track) ── */}
+              {!isCollegePrep && (
+                <>
+                  <GroupLabel>Family</GroupLabel>
+                  <Row2>
+                    <Field>
+                      <FieldLabel>Children?</FieldLabel>
+                      <div className="mt-1">
+                        <SegmentedYesNo value={bool('has_children')} onChange={v => { set('has_children', v); if (!v) { set('has_minor_children', false); set('children', []) } }} />
+                      </div>
+                    </Field>
+                    {form.has_children && (
+                      <Field>
+                        <FieldLabel>Minor children (under 18)?</FieldLabel>
+                        <div className="mt-1">
+                          <SegmentedYesNo value={bool('has_minor_children')} onChange={v => set('has_minor_children', v)} />
+                        </div>
+                      </Field>
+                    )}
+                  </Row2>
 
-              {form.has_children && (
-                <div className="mt-3">
-                  <FieldLabel>Children</FieldLabel>
-                  {form.children.map((child, idx) => (
-                    <div key={child.id} className="mb-2 flex items-center gap-2">
-                      <Input
-                        className={cn(inputCls, 'flex-1')}
-                        placeholder="First name"
-                        value={child.first_name}
-                        onChange={e => updateChild(child.id, 'first_name', e.target.value)}
-                      />
-                      <Input
-                        className={cn(inputCls, 'flex-1')}
-                        placeholder="Middle name"
-                        value={child.middle_name}
-                        onChange={e => updateChild(child.id, 'middle_name', e.target.value)}
-                      />
-                      <Input
-                        className={cn(inputCls, 'flex-1')}
-                        placeholder="Last name"
-                        value={child.last_name}
-                        onChange={e => updateChild(child.id, 'last_name', e.target.value)}
-                      />
-                      <Input
-                        className={cn(inputCls, 'w-[130px] flex-none')}
-                        type="date"
-                        value={child.date_of_birth}
-                        onChange={e => updateChild(child.id, 'date_of_birth', e.target.value)}
-                        title={`Child ${idx + 1} date of birth`}
-                      />
+                  {form.has_children && (
+                    <div className="mt-3">
+                      <FieldLabel>Children</FieldLabel>
+                      {form.children.map((child, idx) => (
+                        <div key={child.id} className="mb-2 flex items-center gap-2">
+                          <Input
+                            className={cn(inputCls, 'flex-1')}
+                            placeholder="First name"
+                            value={child.first_name}
+                            onChange={e => updateChild(child.id, 'first_name', e.target.value)}
+                          />
+                          <Input
+                            className={cn(inputCls, 'flex-1')}
+                            placeholder="Middle name"
+                            value={child.middle_name}
+                            onChange={e => updateChild(child.id, 'middle_name', e.target.value)}
+                          />
+                          <Input
+                            className={cn(inputCls, 'flex-1')}
+                            placeholder="Last name"
+                            value={child.last_name}
+                            onChange={e => updateChild(child.id, 'last_name', e.target.value)}
+                          />
+                          <Input
+                            className={cn(inputCls, 'w-[130px] flex-none')}
+                            type="date"
+                            value={child.date_of_birth}
+                            onChange={e => updateChild(child.id, 'date_of_birth', e.target.value)}
+                            title={`Child ${idx + 1} date of birth`}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="shrink-0 text-muted-foreground"
+                            aria-label={`Remove child ${idx + 1}`}
+                            onClick={() => removeChild(child.id)}
+                          >
+                            <X className="size-3.5" />
+                          </Button>
+                        </div>
+                      ))}
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon-sm"
-                        className="shrink-0 text-muted-foreground"
-                        aria-label={`Remove child ${idx + 1}`}
-                        onClick={() => removeChild(child.id)}
+                        size="sm"
+                        className="mt-1 px-0 text-xs text-primary hover:bg-transparent hover:text-primary"
+                        onClick={addChild}
                       >
-                        <X className="size-3.5" />
+                        + Add child
                       </Button>
                     </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="mt-1 px-0 text-xs text-primary hover:bg-transparent hover:text-primary"
-                    onClick={addChild}
-                  >
-                    + Add child
-                  </Button>
-                </div>
+                  )}
+
+                  <div className="mt-3">
+                    <FieldLabel>Family notes</FieldLabel>
+                    <Textarea
+                      className={textareaCls}
+                      value={str('family_notes')}
+                      onChange={e => set('family_notes', e.target.value)}
+                      placeholder="Notes about dependents, blended family, or other family complexity…"
+                      rows={3}
+                    />
+                  </div>
+                </>
               )}
 
-              <div className="mt-3">
-                <FieldLabel>Family notes</FieldLabel>
-                <Textarea
-                  className={textareaCls}
-                  value={str('family_notes')}
-                  onChange={e => set('family_notes', e.target.value)}
-                  placeholder="Notes about dependents, blended family, or other family complexity…"
-                  rows={3}
-                />
-              </div>
-
-              {/* ── Section: Assets ── */}
-              <GroupLabel>Assets</GroupLabel>
-              <div className="mb-3">
-                {errors.estate_value && <div ref={firstErrorRef} />}
-                <FieldLabel>Approximate estate value</FieldLabel>
-                <select
-                  className={selectCls} aria-invalid={Boolean(errors.estate_value)}
-                  value={str('estate_value')}
-                  onChange={e => set('estate_value', e.target.value)}
-                >
-                  <option value="">Select range…</option>
-                  {ESTATE_VALUE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-                <FieldError message={errors.estate_value} />
-              </div>
-
-              <Row2>
-                <Field>
-                  <FieldLabel>Real property?</FieldLabel>
-                  <div className="mt-1">
-                    <SegmentedYesNo value={bool('has_real_property')} onChange={v => set('has_real_property', v)} />
+              {/* ── Section: Assets (not asked on the College Prep track) ── */}
+              {!isCollegePrep && (
+                <>
+                  <GroupLabel>Assets</GroupLabel>
+                  <div className="mb-3">
+                    {errors.estate_value && <div ref={firstErrorRef} />}
+                    <FieldLabel>Approximate estate value</FieldLabel>
+                    <select
+                      className={selectCls} aria-invalid={Boolean(errors.estate_value)}
+                      value={str('estate_value')}
+                      onChange={e => set('estate_value', e.target.value)}
+                    >
+                      <option value="">Select range…</option>
+                      {ESTATE_VALUE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <FieldError message={errors.estate_value} />
                   </div>
-                </Field>
-                {form.has_real_property && (
-                  <Field>
-                    <FieldLabel>Approx. property value</FieldLabel>
-                    <Input className={inputCls} value={str('real_property_value')} onChange={e => set('real_property_value', e.target.value)} placeholder="e.g. $650K" />
-                  </Field>
-                )}
-              </Row2>
-              {form.has_real_property && (
-                <div className="mt-2">
-                  <FieldLabel>Property address</FieldLabel>
-                  <Input className={inputCls} value={str('real_property_address')} onChange={e => set('real_property_address', e.target.value)} />
-                </div>
+
+                  <Row2>
+                    <Field>
+                      <FieldLabel>Real property?</FieldLabel>
+                      <div className="mt-1">
+                        <SegmentedYesNo value={bool('has_real_property')} onChange={v => set('has_real_property', v)} />
+                      </div>
+                    </Field>
+                    {form.has_real_property && (
+                      <Field>
+                        <FieldLabel>Approx. property value</FieldLabel>
+                        <Input className={inputCls} value={str('real_property_value')} onChange={e => set('real_property_value', e.target.value)} placeholder="e.g. $650K" />
+                      </Field>
+                    )}
+                  </Row2>
+                  {form.has_real_property && (
+                    <div className="mt-2">
+                      <FieldLabel>Property address</FieldLabel>
+                      <Input className={inputCls} value={str('real_property_address')} onChange={e => set('real_property_address', e.target.value)} />
+                    </div>
+                  )}
+
+                  <Row2 className="mt-3">
+                    <Field>
+                      <FieldLabel>Retirement accounts?</FieldLabel>
+                      <div className="mt-1">
+                        <SegmentedYesNo value={bool('has_retirement')} onChange={v => set('has_retirement', v)} />
+                      </div>
+                    </Field>
+                    {form.has_retirement && (
+                      <Field>
+                        <FieldLabel>Approx. value</FieldLabel>
+                        <Input className={inputCls} value={str('retirement_value')} onChange={e => set('retirement_value', e.target.value)} placeholder="e.g. $400K" />
+                      </Field>
+                    )}
+                    <Field>
+                      <FieldLabel>Life insurance?</FieldLabel>
+                      <div className="mt-1">
+                        <SegmentedYesNo value={bool('has_life_insurance')} onChange={v => set('has_life_insurance', v)} />
+                      </div>
+                    </Field>
+                    {form.has_life_insurance && (
+                      <Field>
+                        <FieldLabel>Death benefit</FieldLabel>
+                        <Input className={inputCls} value={str('life_insurance_value')} onChange={e => set('life_insurance_value', e.target.value)} placeholder="e.g. $500K" />
+                      </Field>
+                    )}
+                    <Field>
+                      <FieldLabel>Business interests?</FieldLabel>
+                      <div className="mt-1">
+                        <SegmentedYesNo value={bool('has_business')} onChange={v => set('has_business', v)} />
+                      </div>
+                    </Field>
+                    {form.has_business && (
+                      <Field>
+                        <FieldLabel>Description</FieldLabel>
+                        <Input className={inputCls} value={str('business_description')} onChange={e => set('business_description', e.target.value)} placeholder="e.g. 50% LLC, plumbing company" />
+                      </Field>
+                    )}
+                    <Field>
+                      <FieldLabel>Investment accounts?</FieldLabel>
+                      <div className="mt-1">
+                        <SegmentedYesNo value={bool('has_investments')} onChange={v => set('has_investments', v)} />
+                      </div>
+                    </Field>
+                  </Row2>
+                </>
               )}
-
-              <Row2 className="mt-3">
-                <Field>
-                  <FieldLabel>Retirement accounts?</FieldLabel>
-                  <div className="mt-1">
-                    <SegmentedYesNo value={bool('has_retirement')} onChange={v => set('has_retirement', v)} />
-                  </div>
-                </Field>
-                {form.has_retirement && (
-                  <Field>
-                    <FieldLabel>Approx. value</FieldLabel>
-                    <Input className={inputCls} value={str('retirement_value')} onChange={e => set('retirement_value', e.target.value)} placeholder="e.g. $400K" />
-                  </Field>
-                )}
-                <Field>
-                  <FieldLabel>Life insurance?</FieldLabel>
-                  <div className="mt-1">
-                    <SegmentedYesNo value={bool('has_life_insurance')} onChange={v => set('has_life_insurance', v)} />
-                  </div>
-                </Field>
-                {form.has_life_insurance && (
-                  <Field>
-                    <FieldLabel>Death benefit</FieldLabel>
-                    <Input className={inputCls} value={str('life_insurance_value')} onChange={e => set('life_insurance_value', e.target.value)} placeholder="e.g. $500K" />
-                  </Field>
-                )}
-                <Field>
-                  <FieldLabel>Business interests?</FieldLabel>
-                  <div className="mt-1">
-                    <SegmentedYesNo value={bool('has_business')} onChange={v => set('has_business', v)} />
-                  </div>
-                </Field>
-                {form.has_business && (
-                  <Field>
-                    <FieldLabel>Description</FieldLabel>
-                    <Input className={inputCls} value={str('business_description')} onChange={e => set('business_description', e.target.value)} placeholder="e.g. 50% LLC, plumbing company" />
-                  </Field>
-                )}
-                <Field>
-                  <FieldLabel>Investment accounts?</FieldLabel>
-                  <div className="mt-1">
-                    <SegmentedYesNo value={bool('has_investments')} onChange={v => set('has_investments', v)} />
-                  </div>
-                </Field>
-              </Row2>
 
               {/* ── Section: Estate Planning Goals (EP only) ── */}
               {showEP && (
@@ -799,16 +829,22 @@ export default function AdminIntakeSheet({
                 </>
               )}
 
-              {/* ── Section: Fiduciaries (EP only) ── */}
-              {showEP && (
+              {/* ── Section: Fiduciaries (EP + College Prep) ── */}
+              {(showEP || isCollegePrep) && (
                 <>
-                  <GroupLabel>Fiduciaries</GroupLabel>
-                  {[
-                    { label: 'Trustee', primary: 'trustee_primary' as const, alt: 'trustee_alternate' as const },
-                    { label: 'Personal Representative / Executor', primary: 'executor_primary' as const, alt: 'executor_alternate' as const },
-                    { label: 'DPOA Agent', primary: 'poa_primary' as const, alt: 'poa_alternate' as const },
-                    { label: 'Healthcare Proxy', primary: 'hcp_primary' as const, alt: 'hcp_alternate' as const },
-                  ].map(({ label, primary, alt }) => (
+                  <GroupLabel>{isCollegePrep ? 'Agents' : 'Fiduciaries'}</GroupLabel>
+                  {(isCollegePrep
+                    ? [
+                        { label: 'Financial agent (DPOA)', primary: 'poa_primary' as const, alt: 'poa_alternate' as const },
+                        { label: 'Health care agent', primary: 'hcp_primary' as const, alt: 'hcp_alternate' as const },
+                      ]
+                    : [
+                        { label: 'Trustee', primary: 'trustee_primary' as const, alt: 'trustee_alternate' as const },
+                        { label: 'Personal Representative / Executor', primary: 'executor_primary' as const, alt: 'executor_alternate' as const },
+                        { label: 'DPOA Agent', primary: 'poa_primary' as const, alt: 'poa_alternate' as const },
+                        { label: 'Healthcare Proxy', primary: 'hcp_primary' as const, alt: 'hcp_alternate' as const },
+                      ]
+                  ).map(({ label, primary, alt }) => (
                     <div key={label} className="mb-3">
                       <FieldLabel>{label}</FieldLabel>
                       <Row2>
@@ -832,7 +868,7 @@ export default function AdminIntakeSheet({
                     </div>
                   ))}
 
-                  {showGuardian && (
+                  {showGuardian && !isCollegePrep && (
                     <div className="mb-3">
                       <FieldLabel>Guardian for minor children</FieldLabel>
                       <Row2>

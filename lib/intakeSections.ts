@@ -1,6 +1,12 @@
 export type IntakeRow = Record<string, unknown>
 
 import { validateIntakeField } from '@/lib/sharedFields/intakeValidate'
+import {
+  COLLEGE_PREP_STEPS,
+  getCollegePrepStepIssues,
+  isCollegePrepStepId,
+} from '@/lib/collegePrepSections'
+import { getIntakeTrack } from '@/lib/intakeTrack'
 
 export interface IntakeStep {
   id: string
@@ -119,8 +125,17 @@ export const INTAKE_STEPS: IntakeStep[] = [
   },
 ]
 
+/**
+ * The step list for an intake's track. `intake_track` lives on the row, so
+ * every caller that already has the intake gets the right questionnaire
+ * without threading a track argument through the tree.
+ */
+function getTrackSteps(data: IntakeRow): IntakeStep[] {
+  return getIntakeTrack(data) === 'college_prep' ? COLLEGE_PREP_STEPS : INTAKE_STEPS
+}
+
 export function getActiveSteps(data: IntakeRow): IntakeStep[] {
-  return INTAKE_STEPS.filter((s) => !s.condition || s.condition(data))
+  return getTrackSteps(data).filter((s) => !s.condition || s.condition(data))
 }
 
 export type SectionStatus = 'not_started' | 'in_progress' | 'complete'
@@ -133,8 +148,13 @@ export function getSectionStatus(step: IntakeStep, data: IntakeRow): SectionStat
   return 'not_started'
 }
 
+/**
+ * Step ids are unique across tracks (the college-prep set is `cp_`-prefixed),
+ * so one flat lookup serves both. Callers that only hold a step id — the lead
+ * progress rail, issue construction — need this to work without a row.
+ */
 export function getStepById(id: string): IntakeStep | undefined {
-  return INTAKE_STEPS.find((s) => s.id === id)
+  return INTAKE_STEPS.find((s) => s.id === id) ?? COLLEGE_PREP_STEPS.find((s) => s.id === id)
 }
 
 export function nextIncompleteSection(data: IntakeRow): IntakeStep {
@@ -170,6 +190,8 @@ export function formatSubmissionIssueList(issues: IntakeSectionIssue[]): string 
 }
 
 export function getStepIssues(stepId: string, data: IntakeRow): IntakeSectionIssue[] {
+  if (isCollegePrepStepId(stepId)) return getCollegePrepStepIssues(stepId, data)
+
   const step = getStepById(stepId)
   if (!step) return []
   const issue = (message: string, severity: IntakeIssueSeverity = 'error'): IntakeSectionIssue => ({

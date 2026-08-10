@@ -1,7 +1,20 @@
 import { getStepById, type IntakeRow } from '@/lib/intakeSections'
+import { getIntakeTrack } from '@/lib/intakeTrack'
 
 export type LeadIntakeSegment = {
-  id: 'contact' | 'household' | 'assets' | 'real_estate' | 'fiduciaries' | 'wishes' | 'review'
+  id:
+    | 'contact'
+    | 'household'
+    | 'assets'
+    | 'real_estate'
+    | 'fiduciaries'
+    | 'wishes'
+    | 'review'
+    | 'student'
+    | 'school'
+    | 'parents'
+    | 'agents'
+    | 'documents'
   label: string
   complete: boolean
 }
@@ -100,7 +113,34 @@ function hasValue(value: unknown): boolean {
   return typeof value === 'number' ? Number.isFinite(value) : Boolean(text(value))
 }
 
+/**
+ * The estate rail asks about assets, a spouse, and guardians — none of which
+ * the College Preparation Plan questionnaire even shows. Report that track
+ * against its own steps instead of scoring it on questions it never asked.
+ */
+function collegePrepProgress(intake: IntakeRow): LeadIntakeSegment[] {
+  return [
+    { id: 'student', label: 'Student', complete: activeStepComplete(intake, 'cp_student') },
+    { id: 'school', label: 'School', complete: activeStepComplete(intake, 'cp_school') },
+    { id: 'parents', label: 'Parents', complete: activeStepComplete(intake, 'cp_parents') },
+    { id: 'agents', label: 'Agents', complete: activeStepComplete(intake, 'cp_agents') },
+    {
+      id: 'documents',
+      label: 'Documents',
+      complete: ['cp_dpoa', 'cp_hipaa', 'cp_living_will'].every((id) =>
+        activeStepComplete(intake, id)),
+    },
+    {
+      id: 'review',
+      label: 'Review',
+      complete: intake.status === 'submitted' || intake.status === 'approved',
+    },
+  ]
+}
+
 export function getLeadIntakeProgress(intake: IntakeRow): LeadIntakeSegment[] {
+  if (getIntakeTrack(intake) === 'college_prep') return collegePrepProgress(intake)
+
   return [
     { id: 'contact', label: 'Contact', complete: activeStepComplete(intake, 'personal') },
     {

@@ -19,6 +19,8 @@ import {
   getStepIssues,
   type IntakeRow,
 } from '@/lib/intakeSections'
+import { collegePrepReviewSections } from '@/lib/collegePrepReview'
+import { getIntakeTrack } from '@/lib/intakeTrack'
 import {
   INTAKE_DOCUMENT_KIND_LABELS,
   type IntakeDocumentKind,
@@ -434,6 +436,7 @@ export function IntakeQuestionnaireReview({
   intakeId,
   publicIntakeToken,
 }: IntakeQuestionnaireReviewProps) {
+  const isCollegePrep = getIntakeTrack(data) === 'college_prep'
   const reviewSteps = getActiveSteps(data as IntakeRow).filter((step) => step.id !== 'review')
   const checklist = reviewSteps.map((step) => {
     const issues = getStepIssues(step.id, data as IntakeRow)
@@ -500,8 +503,9 @@ export function IntakeQuestionnaireReview({
   return (
     <div className={cn('space-y-4', className)}>
       <p className="text-sm text-gray-600">
-        This is your estate plan organizer — a summary of everything you entered in the questionnaire.
-        Review each section and edit anything that needs updating before submitting.
+        {isCollegePrep
+          ? 'This is a summary of everything entered in the College Preparation Plan questionnaire. Review each section together and edit anything that needs updating before submitting.'
+          : 'This is your estate plan organizer — a summary of everything you entered in the questionnaire. Review each section and edit anything that needs updating before submitting.'}
       </p>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -557,14 +561,17 @@ export function IntakeQuestionnaireReview({
         </div>
       </div>
 
-      {referralSource && section('Getting Started', 'referral', reviewRows([
+      {!isCollegePrep && referralSource && section('Getting Started', 'referral', reviewRows([
         ['referral_source', referralSource],
         ['referral_name', data.referral_name],
         ['legal_insurance_plan', data.legal_insurance_plan],
         ['legal_insurance_member_id', data.legal_insurance_member_id],
       ]))}
 
-      {section('Personal Information', 'personal', reviewRows([
+      {section(
+        isCollegePrep ? 'Student Information' : 'Personal Information',
+        isCollegePrep ? 'cp_student' : 'personal',
+        reviewRows([
         ['client_name', `${data.first_name ?? ''} ${data.last_name ?? ''}`.trim()],
         ['preferred_name', data.preferred_name],
         ['date_of_birth', data.date_of_birth],
@@ -575,20 +582,20 @@ export function IntakeQuestionnaireReview({
         ['is_us_citizen', data.is_us_citizen],
       ]))}
 
-      {section('Family', 'family', reviewRows([
+      {!isCollegePrep && section('Family', 'family', reviewRows([
         ['marital_status', data.marital_status],
         ['has_children', data.has_children],
         ['has_minor_children', data.has_minor_children],
       ]))}
 
-      {spouse && section('Spouse', 'spouse', reviewRows([
+      {!isCollegePrep && spouse && section('Spouse', 'spouse', reviewRows([
         ['spouse_name', `${spouse.first_name ?? ''} ${spouse.last_name ?? ''}`.trim()],
         ['spouse_dob', spouse.date_of_birth],
         ['spouse_email', spouse.email],
         ['spouse_phone', spouse.phone],
       ]))}
 
-      {children && children.length > 0 && (
+      {!isCollegePrep && children && children.length > 0 && (
         <div className="rounded-lg border border-gray-200 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h4 className="text-sm font-semibold text-gray-900">Children</h4>
@@ -606,8 +613,13 @@ export function IntakeQuestionnaireReview({
       {additionalNominees.length > 0 && (
         <div className="rounded-lg border border-gray-200 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h4 className="text-sm font-semibold text-gray-900">Additional contacts</h4>
-            <EditControl sectionId="additional_contacts" onEditSection={onEditSection} />
+            <h4 className="text-sm font-semibold text-gray-900">
+              {isCollegePrep ? 'Parents & guardians' : 'Additional contacts'}
+            </h4>
+            <EditControl
+              sectionId={isCollegePrep ? 'cp_parents' : 'additional_contacts'}
+              onEditSection={onEditSection}
+            />
           </div>
           {additionalNominees.map((row, i) => {
             const line =
@@ -639,7 +651,24 @@ export function IntakeQuestionnaireReview({
         </div>
       )}
 
-      {section('Financial overview', 'estate', reviewRows([
+      {isCollegePrep && collegePrepReviewSections(data).map((cpSection) => (
+        <div key={cpSection.sectionId + cpSection.title} className="rounded-lg border border-gray-200 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h4 className="text-sm font-semibold text-gray-900">{cpSection.title}</h4>
+            <EditControl sectionId={cpSection.sectionId} onEditSection={onEditSection} />
+          </div>
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            {cpSection.rows.map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-gray-500">{label}</dt>
+                <dd className="font-medium text-gray-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+
+      {!isCollegePrep && section('Financial overview', 'estate', reviewRows([
         ['estate_value', data.estate_value],
         ['asset_types', data.asset_types],
         ['Real estate', summarizeRealEstate(data)],
@@ -651,7 +680,7 @@ export function IntakeQuestionnaireReview({
         ['Liabilities', summarizeItemList(data, 'liabilities', 'liability', 'liabilities')],
       ]))}
 
-      {section('Goals & wishes', 'goals', reviewRows([
+      {!isCollegePrep && section('Goals & wishes', 'goals', reviewRows([
         ['why_choose_firm', obj.why_choose_firm],
         ['why_now', obj.why_now],
         ['make_things_easy', obj.make_things_easy],
@@ -670,21 +699,30 @@ export function IntakeQuestionnaireReview({
         />
       )}
 
-      {fiduciarySection('_fid_trustee_client', 'fiduciaries')}
-      {fiduciarySection('_fid_personal_rep_client', 'fiduciaries')}
-      {fiduciarySection('_fid_poa_client', 'fiduciaries')}
-      {fiduciarySection('_fid_hcp_client', 'fiduciaries')}
-
-      {data.marital_status === 'married' && (
+      {isCollegePrep ? (
         <>
-          {fiduciarySection('_fid_personal_rep_spouse', 'spouse_fiduciaries')}
-          {fiduciarySection('_fid_poa_spouse', 'spouse_fiduciaries')}
-          {fiduciarySection('_fid_hcp_spouse', 'spouse_fiduciaries')}
+          {fiduciarySection('_fid_poa_client', 'cp_agents')}
+          {fiduciarySection('_fid_hcp_client', 'cp_agents')}
+        </>
+      ) : (
+        <>
+          {fiduciarySection('_fid_trustee_client', 'fiduciaries')}
+          {fiduciarySection('_fid_personal_rep_client', 'fiduciaries')}
+          {fiduciarySection('_fid_poa_client', 'fiduciaries')}
+          {fiduciarySection('_fid_hcp_client', 'fiduciaries')}
+
+          {data.marital_status === 'married' && (
+            <>
+              {fiduciarySection('_fid_personal_rep_spouse', 'spouse_fiduciaries')}
+              {fiduciarySection('_fid_poa_spouse', 'spouse_fiduciaries')}
+              {fiduciarySection('_fid_hcp_spouse', 'spouse_fiduciaries')}
+            </>
+          )}
+
+          {fiduciarySection('_fid_guardian_client', 'guardian')}
+          {fiduciarySection('_fid_excluded_guardian', 'guardian')}
         </>
       )}
-
-      {fiduciarySection('_fid_guardian_client', 'guardian')}
-      {fiduciarySection('_fid_excluded_guardian', 'guardian')}
     </div>
   )
 }
