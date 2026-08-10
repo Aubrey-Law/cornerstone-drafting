@@ -874,7 +874,7 @@ export function LeadDetailClient({
         recipientName={clientName}
         recipientEmail={lead.email ?? ''}
         recipientPhone={lead.phone ?? ''}
-        templateCategories={['manual', 'intake_invite']}
+        templateCategories={['manual', 'intake_invite', 'intake_invite_college_prep']}
         variableValues={{
           client_name: clientName,
           client_first_name: lead.preferred_name?.trim() || lead.first_name?.trim() || clientName,
