@@ -507,7 +507,9 @@ export default function GuidedInterview({
               <ProgressRing pct={pct} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h1 style={{ fontWeight: 500, fontSize: 25, lineHeight: 1.2, color: 'var(--gi-heading)', margin: 0 }}>
-                  Welcome{!isAttorney && clientName ? `, ${clientName.split(' ')[0]}` : ''}
+                  {isCollegePrep
+                    ? 'College Preparation Plan'
+                    : `Welcome${!isAttorney && clientName ? `, ${clientName.split(' ')[0]}` : ''}`}
                 </h1>
                 <p style={{ font: '400 14px/1.6 var(--gi-sans)', color: 'var(--gi-muted)', margin: '10px 0 0' }}>
                   {isCollegePrep

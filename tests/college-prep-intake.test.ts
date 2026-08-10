@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { COLLEGE_PREP_STEPS } from '@/lib/collegePrepSections'
 import { collegePrepReviewSections } from '@/lib/collegePrepReview'
+import { EMAIL_CATEGORIES, EMAIL_CATEGORY_META } from '@/lib/email/categories'
+import {
+  COLLEGE_PREP_INTAKE_INVITE,
+  ESTATE_INTAKE_INVITE,
+} from '@/lib/email/intakeInviteBodies'
 import {
   getActiveSteps,
   getRequiredSteps,
@@ -313,5 +318,29 @@ describe('college-prep review summary', () => {
     ])
     // Nothing was entered for the health care proxy limits or instructions.
     expect(byTitle['Health care proxy']).toBeUndefined()
+  })
+})
+
+describe('college-prep timing and invitation', () => {
+  it('estimates about 20 minutes for the whole questionnaire', () => {
+    const total = COLLEGE_PREP_STEPS.reduce((sum, step) => sum + step.timeEstimate, 0)
+    expect(total).toBe(20)
+  })
+
+  it('gives the parent-facing invitation its own editable category', () => {
+    // A variant subject line on `intake_invite` would have shared the estate
+    // stored template, which sendEmail prefers over the inline body.
+    expect(EMAIL_CATEGORIES).toContain('intake_invite_college_prep')
+    expect(EMAIL_CATEGORY_META.intake_invite_college_prep.recipient).toBe('client')
+  })
+
+  it('explains what changes at 18 and links the questionnaire', () => {
+    const { subject, html } = COLLEGE_PREP_INTAKE_INVITE
+    expect(subject).toBe('College Preparation Plan — intake form inside')
+    for (const marker of ['{{firstName}}', '{{intakeUrl}}', 'HIPAA', 'FERPA', 'about 20 minutes']) {
+      expect(html).toContain(marker)
+    }
+    // The estate invitation must not pick up the parent-facing copy.
+    expect(ESTATE_INTAKE_INVITE.html).not.toContain('FERPA')
   })
 })

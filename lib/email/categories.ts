@@ -4,6 +4,7 @@ export const EMAIL_CATEGORIES = [
   'document_shared_notice',
   'intake_complete_alert',
   'intake_invite',
+  'intake_invite_college_prep',
   'retell_call_alert',
   'daily_digest',
   'appointment_confirmation',
@@ -62,6 +63,12 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     category: 'intake_invite',
     label: 'Intake questionnaire invitation',
     description: 'Sent to a client with the secure link to complete their intake questionnaire.',
+    recipient: 'client',
+  },
+  intake_invite_college_prep: {
+    category: 'intake_invite_college_prep',
+    label: 'College Prep intake invitation',
+    description: 'Sent to a parent with the secure link to the College Preparation Plan questionnaire, and the context for why it matters at 18.',
     recipient: 'client',
   },
   retell_call_alert: {
