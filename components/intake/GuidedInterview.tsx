@@ -32,6 +32,7 @@ import {
   type DesignDocumentInclusions,
   type DesignDocumentKey,
 } from '@/lib/designSheetDocumentInclusions'
+import { getIntakeTrack } from '@/lib/intakeTrack'
 import { unpackInitialIntakeData } from '@/lib/intake/unpackInitialData'
 import { GuidedSection } from './GuidedSection'
 import { IntakeQuestionnaireReview } from './IntakeQuestionnaireReview'
@@ -82,6 +83,15 @@ const STEP_COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
   fiduciaries: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepFiduciaries), { loading: stepLoading }),
   spouse_fiduciaries: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepSpouseFiduciaries), { loading: stepLoading }),
   guardian: dynamic<StepProps>(() => import('./IntakeWizard').then((m) => m.StepGuardian), { loading: stepLoading }),
+  cp_student: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeStudent), { loading: stepLoading }),
+  cp_school: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeSchool), { loading: stepLoading }),
+  cp_parents: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeParents), { loading: stepLoading }),
+  cp_agents: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeAgents), { loading: stepLoading }),
+  cp_dpoa: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeDpoa), { loading: stepLoading }),
+  cp_healthcare: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeHealthcare), { loading: stepLoading }),
+  cp_hipaa: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeHipaa), { loading: stepLoading }),
+  cp_living_will: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeLivingWill), { loading: stepLoading }),
+  cp_other: dynamic<StepProps>(() => import('./collegePrep/CollegePrepSteps').then((m) => m.StepCollegeOther), { loading: stepLoading }),
 }
 
 const DOC_GROUPS = DEFAULT_DOC_GROUPS
@@ -122,6 +132,7 @@ export default function GuidedInterview({
   const [data, setData] = useState<Record<string, unknown>>(() => unpackInitialIntakeData(initialData))
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
+  const isCollegePrep = getIntakeTrack(data) === 'college_prep'
   const [reviewOpen, setReviewOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showValidation, setShowValidation] = useState(false)
@@ -171,7 +182,9 @@ export default function GuidedInterview({
       if (stepId === 'children' && current._children) {
         await saveChildren(current._children as ChildEntry[])
       }
-      if (stepId === 'additional_contacts') {
+      // College-prep parents ride the same additional-contacts pipeline, so they
+      // land in `contacts` and stay selectable in the agent pickers.
+      if (stepId === 'additional_contacts' || stepId === 'cp_parents') {
         await saveAdditionalContacts((current._additional_contacts as AdditionalContactEntry[]) ?? [])
       }
       const fiduciarySteps: Record<string, [string, 'client' | 'spouse'][]> = {
@@ -187,6 +200,10 @@ export default function GuidedInterview({
           ['hcp', 'spouse'],
         ],
         guardian: [['guardian', 'client']],
+        cp_agents: [
+          ['poa', 'client'],
+          ['hcp', 'client'],
+        ],
       }
       const roles = fiduciarySteps[stepId]
       if (roles) {
@@ -232,7 +249,10 @@ export default function GuidedInterview({
   )
 
   const sections = useMemo<SectionEntry[]>(() => {
-    const attorneySections: SectionEntry[] = isAttorney
+    // The plan-structure picker offers five *estate* structures and the
+    // document picker is keyed off them; neither describes a college-prep
+    // package, whose document set is fixed.
+    const attorneySections: SectionEntry[] = isAttorney && !isCollegePrep
       ? [
           {
             kind: 'attorney',
@@ -257,7 +277,7 @@ export default function GuidedInterview({
       complete: step.isComplete(data as IntakeRow),
     }))
     return [...attorneySections, ...steps]
-  }, [isAttorney, planType, selectedDocKeys.length, stepSections, data])
+  }, [isAttorney, isCollegePrep, planType, selectedDocKeys.length, stepSections, data])
 
   const [openId, setOpenId] = useState<string>(() => '')
   // Default the open section to the first incomplete one (once).
@@ -490,8 +510,9 @@ export default function GuidedInterview({
                   Welcome{!isAttorney && clientName ? `, ${clientName.split(' ')[0]}` : ''}
                 </h1>
                 <p style={{ font: '400 14px/1.6 var(--gi-sans)', color: 'var(--gi-muted)', margin: '10px 0 0' }}>
-                  Answer what you can before our meeting — rough answers are fine, and everything is
-                  strictly confidential. Your progress saves automatically.
+                  {isCollegePrep
+                    ? 'Every document here is voluntary. The student chooses who receives authority, how much, and for how long — and can revoke any of it at any time. Leave blank anything you would rather discuss at the meeting; your progress saves automatically.'
+                    : 'Answer what you can before our meeting — rough answers are fine, and everything is strictly confidential. Your progress saves automatically.'}
                 </p>
               </div>
               {!isAttorney && (
@@ -637,6 +658,7 @@ export default function GuidedInterview({
       {reviewOpen && (
         <ReviewModal
           data={data}
+          title={isCollegePrep ? 'Review your College Preparation Plan intake' : 'Review your estate plan organizer'}
           intakeId={intakeId}
           publicIntakeToken={publicIntakeToken}
           isAttorney={isAttorney}
@@ -668,6 +690,8 @@ function SectionIssues({ issues }: { issues: ReturnType<typeof getStepIssues> })
 
 export function ReviewModal(props: {
   data: Record<string, unknown>
+  /** Heading for the modal — the two intake tracks call their summary different things. */
+  title?: string
   intakeId: string
   publicIntakeToken?: string
   isAttorney: boolean
@@ -703,7 +727,8 @@ export function ReviewModal(props: {
       >
         <div style={{ background: 'var(--gi-navy)', padding: '22px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <DialogTitle style={{ fontWeight: 500, fontSize: 24, color: '#fff', margin: 0 }}>
-            Review your estate plan organizer{props.matterLabel ? ` · ${props.matterLabel}` : ''}
+            {props.title ?? 'Review your estate plan organizer'}
+            {props.matterLabel ? ` · ${props.matterLabel}` : ''}
           </DialogTitle>
           <button type="button" onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', color: 'rgba(232,237,245,.7)', cursor: 'pointer', padding: '4px 8px', fontSize: 24, lineHeight: 1 }}>×</button>
         </div>

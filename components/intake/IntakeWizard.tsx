@@ -57,7 +57,7 @@ const SUFFIXES = SUFFIX_OPTIONS.map((o) => o.value)
 const INTAKE_SUFFIX_SELECT_OPTIONS = SUFFIX_OPTIONS
 
 /** Client mailing address segments for fiduciary “household contact” stubs. */
-function intakeResidentialAddress(data: Record<string, unknown>): {
+export function intakeResidentialAddress(data: Record<string, unknown>): {
   line: string
   city: string
   state: string
@@ -84,7 +84,7 @@ function WhyWeAsk({ children }: { children: ReactNode }) {
   )
 }
 
-function ExpandableHelp({ title, children }: { title: string; children: ReactNode }) {
+export function ExpandableHelp({ title, children }: { title: string; children: ReactNode }) {
   return (
     <details className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
       <summary className="cursor-pointer text-sm font-medium text-gray-800">{title}</summary>
@@ -93,7 +93,7 @@ function ExpandableHelp({ title, children }: { title: string; children: ReactNod
   )
 }
 
-function ReviewChoiceControl({
+export function ReviewChoiceControl({
   data,
   update,
   choiceKey,
@@ -179,7 +179,7 @@ export interface FiduciaryEntry {
 //   Co-agents:   is_coagent=true,  priority=same as the principal they serve with
 // Each principal can optionally have one co-agent paired by matching priority.
 // HCP does not support co-agents (pass allowCoAgent={false}).
-function FiduciaryRole({
+export function FiduciaryRole({
   title,
   description,
   example,
@@ -1218,7 +1218,7 @@ export function StepAdditionalContacts({ data, update }: StepProps) {
   )
 }
 
-const DEFAULT_FIDUCIARY_ENTRY: FiduciaryEntry = {
+export const DEFAULT_FIDUCIARY_ENTRY: FiduciaryEntry = {
   first_name: '',
   middle_name: '',
   last_name: '',
