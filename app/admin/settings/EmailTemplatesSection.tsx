@@ -25,6 +25,10 @@ import {
   type EmailCategory,
 } from '@/lib/email/categories'
 import { isHtmlTemplateBody, sanitizeEmailHtml, textToEmailHtml } from '@/lib/email/templateShared'
+import {
+  emailTemplateToken,
+  emailTemplateVariables,
+} from '@/lib/email/templateVariables'
 
 interface EmailTemplateRow {
   id: string
@@ -56,6 +60,36 @@ const EMPTY_FORM: TemplateFormState = {
   body: '',
   isActive: true,
   isDefault: false,
+}
+
+function VariableInsertSelect({
+  ariaLabel,
+  options,
+  onInsert,
+}: {
+  ariaLabel: string
+  options: Array<{ key: string; label: string; hint: string }>
+  onInsert: (key: string) => void
+}) {
+  if (options.length === 0) return null
+  return (
+    <select
+      aria-label={ariaLabel}
+      defaultValue=""
+      onChange={event => {
+        if (event.target.value) onInsert(event.target.value)
+        event.target.value = ''
+      }}
+      className="h-6 rounded border border-input bg-background px-1 text-[10px] text-muted-foreground"
+    >
+      <option value="">Insert variable…</option>
+      {options.map(option => (
+        <option key={option.key} value={option.key} title={option.hint}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
 }
 
 /** Render text with {{placeholder}} tokens highlighted as accent chips. Plain text only — never injects HTML. */
@@ -92,6 +126,7 @@ function formatTemplateDate(iso: string | null): string {
 export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersInit }) {
   const [templates, setTemplates] = useState<EmailTemplateRow[]>([])
   const [form, setForm] = useState<TemplateFormState>(EMPTY_FORM)
+  const [subjectSelection, setSubjectSelection] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -100,6 +135,23 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
   const [signatureDefault, setSignatureDefault] = useState(true)
   const [signatureSaving, setSignatureSaving] = useState(false)
   const [showSignaturePreview, setShowSignaturePreview] = useState(false)
+
+  // Offered tags follow the category: a variable the send path never resolves
+  // would ship a literal {{…}} to a client's inbox.
+  const variableOptions = useMemo(
+    () => emailTemplateVariables(form.category),
+    [form.category],
+  )
+
+  /** Insert at the caret, or append when the field has not been focused yet. */
+  function insertIntoSubject(token: string) {
+    setForm(prev => {
+      const at = subjectSelection ?? prev.subject.length
+      const next = `${prev.subject.slice(0, at)}${token}${prev.subject.slice(at)}`
+      setSubjectSelection(at + token.length)
+      return { ...prev, subject: next }
+    })
+  }
 
   const groupedTemplates = useMemo(() => {
     const map = new Map<EmailCategory, EmailTemplateRow[]>()
@@ -324,11 +376,20 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="email-template-subject">Subject</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="email-template-subject">Subject</Label>
+              <VariableInsertSelect
+                ariaLabel="Insert subject variable"
+                options={variableOptions}
+                onInsert={key => insertIntoSubject(emailTemplateToken(key))}
+              />
+            </div>
             <Input
               id="email-template-subject"
               value={form.subject}
               onChange={event => setForm(prev => ({ ...prev, subject: event.target.value }))}
+              onSelect={event => setSubjectSelection(event.currentTarget.selectionStart)}
+              onBlur={event => setSubjectSelection(event.currentTarget.selectionStart)}
               placeholder="Your estate plan documents"
             />
           </div>
@@ -354,7 +415,12 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
               valueHtml={form.body}
               onChange={html => setForm(prev => ({ ...prev, body: html }))}
               placeholder="Hi {{first_name}},"
+              variableOptions={variableOptions}
             />
+            <p className="text-[11px] text-muted-foreground">
+              Variables are filled in when the email is sent.{' '}
+              {variableOptions.map(option => option.label).join(', ')} are available for this category.
+            </p>
           </div>
 
           {showPreview && (
@@ -375,9 +441,6 @@ export function EmailTemplatesSection({ authHeaders }: { authHeaders?: HeadersIn
               )}
               <p className="mt-2 text-[10px] text-muted-foreground">
                 Formatting is preserved — <span className="font-mono">{'{{placeholders}}'}</span> are filled in when the email is sent.
-                {' '}Intake invitations support <span className="font-mono">{'{{first_name}}'}</span>,{' '}
-                <span className="font-mono">{'{{client_name}}'}</span>, and{' '}
-                <span className="font-mono">{'{{intake_link}}'}</span>.
               </p>
             </div>
           )}

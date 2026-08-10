@@ -337,9 +337,15 @@ describe('college-prep timing and invitation', () => {
   it('explains what changes at 18 and links the questionnaire', () => {
     const { subject, html } = COLLEGE_PREP_INTAKE_INVITE
     expect(subject).toBe('College Preparation Plan — intake form inside')
-    for (const marker of ['{{firstName}}', '{{intakeUrl}}', 'HIPAA', 'FERPA', 'about 20 minutes']) {
+    // snake_case is the canonical tag form — the builder documents it, the
+    // variable picker offers it, and every send path resolves it.
+    for (const marker of ['{{first_name}}', '{{intake_link}}', 'HIPAA', 'FERPA', 'about 20 minutes']) {
       expect(html).toContain(marker)
     }
+    expect(html).not.toContain('{{firstName}}')
+    // The firm signature is appended at send time; repeating it here doubled it.
+    expect(html).not.toContain('{{attorneyShortName}}')
+    expect(html).not.toContain('{{firmName}}')
     // The estate invitation must not pick up the parent-facing copy.
     expect(ESTATE_INTAKE_INVITE.html).not.toContain('FERPA')
   })
