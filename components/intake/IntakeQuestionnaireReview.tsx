@@ -269,10 +269,10 @@ export function IntakeDocumentUpload({
   }
 
   return (
-    <div className="mt-3 space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+    <div className="mt-3 space-y-3 rounded-lg border border-info/20 bg-info/10 p-4">
       <div>
-        <p className="text-sm font-medium text-blue-900">Share copies of your {label}</p>
-        <p className="mt-1 text-xs leading-relaxed text-blue-800">
+        <p className="text-sm font-medium text-foreground">Share copies of your {label}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           Upload here, email to{' '}
           <a href={`mailto:${firmEmail}`} className="font-medium underline">{firmEmail}</a>
           , or bring printed copies to your meeting.
@@ -284,12 +284,12 @@ export function IntakeDocumentUpload({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading || loading}
-          className="inline-flex items-center gap-2 rounded-md border border-accent bg-white px-3 py-2 text-sm font-medium text-accent hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md border border-accent bg-card px-3 py-2 text-sm font-medium text-accent hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
         >
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           {uploading ? 'Uploading…' : 'Upload files'}
         </button>
-        <span className="text-xs text-blue-800">
+        <span className="text-xs text-muted-foreground">
           PDF, Word, Excel, images — {formatSize(MAX_UPLOAD_BYTES)} max per file
         </span>
         <input
@@ -304,15 +304,15 @@ export function IntakeDocumentUpload({
 
       {progress !== null && (
         <div>
-          <div className="h-1.5 w-full overflow-hidden rounded bg-blue-100">
+          <div className="h-1.5 w-full overflow-hidden rounded bg-info/20">
             <div className="h-full bg-accent transition-[width]" style={{ width: `${progress}%` }} />
           </div>
-          <p className="mt-1 text-xs text-blue-800">{progress}%</p>
+          <p className="mt-1 text-xs text-muted-foreground">{progress}%</p>
         </div>
       )}
 
       {loading && (
-        <p className="text-xs text-blue-800">Loading uploads…</p>
+        <p className="text-xs text-muted-foreground">Loading uploads…</p>
       )}
 
       {!loading && uploads.length > 0 && (
@@ -320,11 +320,11 @@ export function IntakeDocumentUpload({
           {uploads.map((doc) => (
             <li
               key={doc.id}
-              className="flex items-center gap-2 rounded border border-blue-200 bg-white px-3 py-1.5 text-xs text-gray-700"
+              className="flex items-center gap-2 rounded border border-info/20 bg-card px-3 py-1.5 text-xs text-foreground"
             >
-              <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
               <span className="flex-1 truncate">{doc.name}</span>
-              <span className="shrink-0 text-gray-400">{formatSize(doc.size)}</span>
+              <span className="shrink-0 text-muted-foreground/70">{formatSize(doc.size)}</span>
             </li>
           ))}
         </ul>
@@ -391,26 +391,26 @@ function IntakeReviewUploadSummary({
   }, {})
 
   return (
-    <div className="rounded-lg border border-gray-200 p-4">
+    <div className="rounded-lg border border-border p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold text-gray-900">Documents uploaded</h4>
+        <h4 className="text-sm font-semibold text-foreground">Documents uploaded</h4>
         <EditControl sectionId="goals" onEditSection={onEditSection} />
       </div>
       <div className="space-y-3">
         {(Object.entries(grouped) as [IntakeDocumentKind, IntakeDocumentRow[]][]).map(([kind, docs]) => (
           <div key={kind}>
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {INTAKE_DOCUMENT_KIND_LABELS[kind]}
             </p>
             <ul className="mt-1 space-y-1">
               {docs.map((doc) => (
                 <li
                   key={doc.id}
-                  className="flex items-center gap-2 text-sm text-gray-700"
+                  className="flex items-center gap-2 text-sm text-foreground"
                 >
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
                   <span className="min-w-0 truncate">{doc.name}</span>
-                  <span className="shrink-0 text-xs text-gray-400">{formatSize(doc.size)}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground/70">{formatSize(doc.size)}</span>
                 </li>
               ))}
             </ul>
@@ -458,16 +458,16 @@ export function IntakeQuestionnaireReview({
   const section = (title: string, sectionId: string, items: [string, string][]) => {
     if (items.length === 0) return null
     return (
-      <div className="rounded-lg border border-gray-200 p-4">
+      <div className="rounded-lg border border-border p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-gray-900">{title}</h4>
+          <h4 className="text-sm font-semibold text-foreground">{title}</h4>
           <EditControl sectionId={sectionId} onEditSection={onEditSection} />
         </div>
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           {items.map((row) => (
             <div key={row[0]}>
-              <dt className="text-gray-500">{row[0]}</dt>
-              <dd className="font-medium text-gray-900">{row[1]}</dd>
+              <dt className="text-muted-foreground">{row[0]}</dt>
+              <dd className="font-medium text-foreground">{row[1]}</dd>
             </div>
           ))}
         </dl>
@@ -481,16 +481,16 @@ export function IntakeQuestionnaireReview({
     const namedEntries = (entries ?? []).filter((entry) => entry.first_name?.trim() || entry.last_name?.trim())
     if (namedEntries.length === 0) return null
     return (
-      <div className="rounded-lg border border-gray-200 p-4">
+      <div className="rounded-lg border border-border p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-gray-900">{title}</h4>
+          <h4 className="text-sm font-semibold text-foreground">{title}</h4>
           <EditControl sectionId={sectionId} onEditSection={onEditSection} />
         </div>
         {namedEntries.map((e, i) => (
           <div key={i} className="mb-2 text-sm">
-            <span className="text-xs uppercase text-gray-500">{fiduciaryLabel(e)}:</span>{' '}
-            <span className="font-medium text-gray-900">{e.first_name} {e.last_name}</span>
-            {e.relationship && <span className="text-gray-500"> ({e.relationship})</span>}
+            <span className="text-xs uppercase text-muted-foreground">{fiduciaryLabel(e)}:</span>{' '}
+            <span className="font-medium text-foreground">{e.first_name} {e.last_name}</span>
+            {e.relationship && <span className="text-muted-foreground"> ({e.relationship})</span>}
           </div>
         ))}
       </div>
@@ -502,32 +502,32 @@ export function IntakeQuestionnaireReview({
 
   return (
     <div className={cn('space-y-4', className)}>
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-muted-foreground">
         {isCollegePrep
           ? 'This is a summary of everything entered in the College Preparation Plan questionnaire. Review each section together and edit anything that needs updating before submitting.'
           : 'This is your estate plan organizer — a summary of everything you entered in the questionnaire. Review each section and edit anything that needs updating before submitting.'}
       </p>
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h4 className="mb-3 text-sm font-semibold text-gray-900">Submission checklist</h4>
+      <div className="rounded-lg border border-border bg-muted/40 p-4">
+        <h4 className="mb-3 text-sm font-semibold text-foreground">Submission checklist</h4>
         <div className="space-y-2">
           {checklist.map(({ step, errors, warnings }) => {
             const hasErrors = errors.length > 0
             const hasWarnings = warnings.length > 0
             const optionalDone = step.optional && step.isComplete(data as IntakeRow)
             return (
-              <div key={step.id} className="rounded-md border border-gray-200 bg-white p-3">
+              <div key={step.id} className="rounded-md border border-border bg-card p-3">
                 <div className="flex items-center justify-between gap-3">
                   {onEditSection ? (
                     <button
                       type="button"
                       onClick={() => onEditSection(step.id)}
-                      className="text-left text-sm font-medium text-gray-900 hover:underline"
+                      className="text-left text-sm font-medium text-foreground hover:underline"
                     >
                       {step.title}
                     </button>
                   ) : (
-                    <Link href={`/intake/${step.id}`} className="text-sm font-medium text-gray-900 hover:underline">
+                    <Link href={`/intake/${step.id}`} className="text-sm font-medium text-foreground hover:underline">
                       {step.title}
                     </Link>
                   )}
@@ -539,9 +539,9 @@ export function IntakeQuestionnaireReview({
                           ? 'bg-accent/10 text-accent'
                           : 'bg-muted text-muted-foreground'
                         : hasErrors
-                          ? 'bg-red-50 text-red-700'
+                          ? 'bg-destructive/10 text-destructive'
                           : hasWarnings
-                            ? 'bg-amber-50 text-amber-700'
+                            ? 'bg-warning/10 text-warning'
                             : 'bg-accent/10 text-accent',
                     )}
                   >
@@ -549,7 +549,7 @@ export function IntakeQuestionnaireReview({
                   </span>
                 </div>
                 {(hasErrors || hasWarnings) && (
-                  <ul className="mt-2 space-y-1 text-xs text-gray-600">
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                     {[...errors, ...warnings].map((issue, index) => (
                       <li key={`${issue.message}-${index}`}>{issue.message}</li>
                     ))}
@@ -596,24 +596,24 @@ export function IntakeQuestionnaireReview({
       ]))}
 
       {!isCollegePrep && children && children.length > 0 && (
-        <div className="rounded-lg border border-gray-200 p-4">
+        <div className="rounded-lg border border-border p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h4 className="text-sm font-semibold text-gray-900">Children</h4>
+            <h4 className="text-sm font-semibold text-foreground">Children</h4>
             <EditControl sectionId="children" onEditSection={onEditSection} />
           </div>
           {children.map((child, i) => (
             <div key={child.id ?? i} className="mb-1 text-sm">
-              <span className="font-medium text-gray-900">{child.first_name} {child.last_name}</span>
-              {child.date_of_birth && <span className="text-gray-500"> (DOB: {child.date_of_birth})</span>}
+              <span className="font-medium text-foreground">{child.first_name} {child.last_name}</span>
+              {child.date_of_birth && <span className="text-muted-foreground"> (DOB: {child.date_of_birth})</span>}
             </div>
           ))}
         </div>
       )}
 
       {additionalNominees.length > 0 && (
-        <div className="rounded-lg border border-gray-200 p-4">
+        <div className="rounded-lg border border-border p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h4 className="text-sm font-semibold text-gray-900">
+            <h4 className="text-sm font-semibold text-foreground">
               {isCollegePrep ? 'Parents & guardians' : 'Additional contacts'}
             </h4>
             <EditControl
@@ -632,14 +632,14 @@ export function IntakeQuestionnaireReview({
               (typeof row.address === 'string' ? row.address.trim() : '')
             return (
               <div key={row.id ?? i} className="mb-2 text-sm">
-                <span className="font-medium text-gray-900">
+                <span className="font-medium text-foreground">
                   {row.first_name} {row.last_name}
                 </span>
                 {row.relationship?.trim() && (
-                  <span className="text-gray-500"> ({row.relationship.trim()})</span>
+                  <span className="text-muted-foreground"> ({row.relationship.trim()})</span>
                 )}
                 {(line || row.phone?.trim() || row.email?.trim()) && (
-                  <span className="mt-0.5 block text-xs text-gray-600">
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
                     {[line || null, formatPhoneDisplay(row.phone) || null, row.email?.trim() || null]
                       .filter(Boolean)
                       .join(' · ')}
@@ -652,16 +652,16 @@ export function IntakeQuestionnaireReview({
       )}
 
       {isCollegePrep && collegePrepReviewSections(data).map((cpSection) => (
-        <div key={cpSection.sectionId + cpSection.title} className="rounded-lg border border-gray-200 p-4">
+        <div key={cpSection.sectionId + cpSection.title} className="rounded-lg border border-border p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h4 className="text-sm font-semibold text-gray-900">{cpSection.title}</h4>
+            <h4 className="text-sm font-semibold text-foreground">{cpSection.title}</h4>
             <EditControl sectionId={cpSection.sectionId} onEditSection={onEditSection} />
           </div>
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             {cpSection.rows.map(([label, value]) => (
               <div key={label}>
-                <dt className="text-gray-500">{label}</dt>
-                <dd className="font-medium text-gray-900">{value}</dd>
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="font-medium text-foreground">{value}</dd>
               </div>
             ))}
           </dl>
