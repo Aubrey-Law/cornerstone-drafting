@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   const emailResult = await sendEmail({
     to: clientEmail,
     category: isCollegePrep ? 'intake_invite_college_prep' : 'intake_invite',
-    subject: invite.subject.replace('{{firmName}}', firm.firmName),
+    subject: invite.subject,
     html: invite.html,
     replyTo: firm.email,
     useStoredTemplate: true,
