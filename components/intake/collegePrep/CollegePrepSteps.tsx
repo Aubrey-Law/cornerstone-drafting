@@ -35,7 +35,6 @@ import {
   COLLEGE_LIFE_SUPPORT_OPTIONS,
   COLLEGE_LIVING_WILL_INCLUDE_OPTIONS,
   COLLEGE_ORGAN_DONATION_OPTIONS,
-  COLLEGE_SIGNING_PREFERENCE_OPTIONS,
   COLLEGE_TREATMENT_CHOICE_OPTIONS,
   DISCUSS_AT_MEETING,
   emptyHipaaRecipient,
@@ -853,21 +852,6 @@ export function StepCollegeLivingWill({ data, update }: StepProps) {
 export function StepCollegeOther({ data, update }: StepProps) {
   return (
     <div className="space-y-6">
-      <ChoiceCards
-        legend="How would you like to sign?"
-        options={COLLEGE_SIGNING_PREFERENCE_OPTIONS}
-        value={str(data, 'college_signing_preference')}
-        onChange={(v) => update('college_signing_preference', v)}
-      />
-
-      <NotesField
-        label="Who should receive copies of the signed documents?"
-        hint="We give the student the originals. Tell us who else should get a copy, and whether they want paper, digital, or both."
-        value={str(data, 'college_copy_recipients')}
-        onChange={(v) => update('college_copy_recipients', v)}
-        rows={2}
-      />
-
       <NotesField
         label="Anything worrying you that we have not asked about"
         value={str(data, 'college_concerns')}

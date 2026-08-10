@@ -128,14 +128,6 @@ export const COLLEGE_ORGAN_DONATION_OPTIONS = [
   { value: DISCUSS_AT_MEETING, label: 'Discuss at the meeting' },
 ] as const
 
-// ── Section: Other matters ───────────────────────────────────────────────────
-
-export const COLLEGE_SIGNING_PREFERENCE_OPTIONS = [
-  { value: 'in_office', label: 'In the office' },
-  { value: 'remote', label: 'Remotely (video signing with witnesses)' },
-  { value: DISCUSS_AT_MEETING, label: 'Discuss at the meeting' },
-] as const
-
 // ── Repeating entries ────────────────────────────────────────────────────────
 
 /** A person a provider may talk to under the HIPAA authorization. */
