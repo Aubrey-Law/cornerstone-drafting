@@ -39,7 +39,9 @@ describe('standing intake link integration', () => {
     const card = fs.readFileSync(path.join(process.cwd(), 'app/admin/leads/[id]/LeadIntakeCard.tsx'), 'utf8')
     // The lead-only dialog became the shared CommunicationDialog, so the
     // intake-invite templates and link variable now live at the call site.
-    expect(detail).toContain("['manual', 'intake_invite']")
+    // Both tracks' invitations are offered — the estate one and the
+    // parent-facing College Prep one.
+    expect(detail).toContain("'manual', 'intake_invite', 'intake_invite_college_prep'")
     expect(detail).toContain('intake_link: intakeUrl')
     expect(card).toContain('Email link')
     expect(card).toContain('Text link')

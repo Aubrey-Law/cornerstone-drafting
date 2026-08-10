@@ -3,6 +3,10 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { sendEmail } from '@/lib/email/send'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { ensureStandingIntakeLink } from '@/lib/intake/standingLinks'
+import {
+  COLLEGE_PREP_INTAKE_INVITE,
+  ESTATE_INTAKE_INVITE,
+} from '@/lib/email/intakeInviteBodies'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export async function POST(req: Request) {
@@ -38,7 +42,7 @@ export async function POST(req: Request) {
 
   const { data: intakeRow, error: intakeFetchError } = await admin
     .from('client_intake')
-    .select('id, email, first_name, last_name')
+    .select('id, email, first_name, last_name, intake_track')
     .eq('id', intakeId)
     .maybeSingle()
 
@@ -72,17 +76,18 @@ export async function POST(req: Request) {
   const firstName = (intakeRow.first_name as string | null) ?? 'there'
   const clientEmail = intakeRow.email as string
 
+  // The College Prep invitation is written to the parent who called, explains
+  // what changes at 18, and points at a different questionnaire — so it is its
+  // own category rather than a variant subject line. That also gives the firm a
+  // separately editable stored template and its own on/off setting.
+  const isCollegePrep = intakeRow.intake_track === 'college_prep'
+  const invite = isCollegePrep ? COLLEGE_PREP_INTAKE_INVITE : ESTATE_INTAKE_INVITE
+
   const emailResult = await sendEmail({
     to: clientEmail,
-    category: 'intake_invite',
-    subject: `${firm.firmName} — complete your estate planning intake`,
-    html: `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.6;color:#1f2937;">
-<p>Hi {{firstName}},</p>
-<p>Please use the secure link below to create your portal password and complete your intake questionnaire.</p>
-<p><a href="{{intakeUrl}}" style="color:#2a7d70;font-weight:600;">Start intake</a></p>
-<p style="font-size:13px;color:#6b7280;">You may return to this link until our office revokes or replaces it.</p>
-<p>— {{attorneyShortName}}<br/>{{firmName}}</p>
-</body></html>`,
+    category: isCollegePrep ? 'intake_invite_college_prep' : 'intake_invite',
+    subject: invite.subject.replace('{{firmName}}', firm.firmName),
+    html: invite.html,
     replyTo: firm.email,
     useStoredTemplate: true,
     templateVariables: {
