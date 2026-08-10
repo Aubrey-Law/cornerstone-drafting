@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { COLLEGE_PREP_STEPS } from '@/lib/collegePrepSections'
 import { collegePrepReviewSections } from '@/lib/collegePrepReview'
 import { EMAIL_CATEGORIES, EMAIL_CATEGORY_META } from '@/lib/email/categories'
+import { emailTemplateVariables } from '@/lib/email/templateVariables'
 import {
   COLLEGE_PREP_INTAKE_INVITE,
   ESTATE_INTAKE_INVITE,
@@ -337,10 +338,32 @@ describe('college-prep timing and invitation', () => {
   it('explains what changes at 18 and links the questionnaire', () => {
     const { subject, html } = COLLEGE_PREP_INTAKE_INVITE
     expect(subject).toBe('College Preparation Plan — intake form inside')
-    for (const marker of ['{{firstName}}', '{{intakeUrl}}', 'HIPAA', 'FERPA', 'about 20 minutes']) {
+    // snake_case is the canonical tag form — the builder documents it, the
+    // variable picker offers it, and every send path resolves it.
+    for (const marker of ['{{first_name}}', '{{intake_link}}', 'HIPAA', 'FERPA', 'about 20 minutes']) {
       expect(html).toContain(marker)
     }
+    expect(html).not.toContain('{{firstName}}')
+    // The firm signature is appended at send time; repeating it here doubled it.
+    expect(html).not.toContain('{{attorneyShortName}}')
+    expect(html).not.toContain('{{firmName}}')
     // The estate invitation must not pick up the parent-facing copy.
     expect(ESTATE_INTAKE_INVITE.html).not.toContain('FERPA')
+  })
+
+  it('spells every tag in both invitations with an offered variable', () => {
+    const offered = new Set(
+      emailTemplateVariables('intake_invite').map((option) => option.key),
+    )
+    for (const invite of [ESTATE_INTAKE_INVITE, COLLEGE_PREP_INTAKE_INVITE]) {
+      const tags = [...`${invite.subject} ${invite.html}`.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)]
+        .map((match) => match[1])
+      expect(tags.length).toBeGreaterThan(0)
+      for (const tag of tags) {
+        // A tag outside the picker is one an author cannot discover, and one
+        // nothing guarantees the send path resolves.
+        expect(offered.has(tag)).toBe(true)
+      }
+    }
   })
 })

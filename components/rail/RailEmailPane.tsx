@@ -15,6 +15,7 @@ import {
   renderEmailTemplateText,
   textToEmailHtml,
 } from '@/lib/email/templateShared'
+import { MANUAL_EMAIL_VARIABLES } from '@/lib/email/templateVariables'
 import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
 import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { railRecordForPath } from './RailActivityPane'
@@ -89,15 +90,7 @@ interface ScheduledEmailItem {
 /** Mirrors MAX_TOTAL_ATTACHMENT_BYTES on the server. */
 const MAX_TOTAL_BYTES = 10 * 1024 * 1024
 const ONE_OFF = 'none'
-const VARIABLE_OPTIONS = [
-  { key: 'first_name', label: 'First name' },
-  { key: 'client_name', label: 'Client name' },
-  { key: 'client_first_name', label: 'Client first name' },
-  { key: 'lead_name', label: 'Lead name' },
-  { key: 'spouse_name', label: 'Spouse name' },
-  { key: 'spouse_first_name', label: 'Spouse first name' },
-  { key: 'intake_link', label: 'Intake link' },
-]
+const VARIABLE_OPTIONS = MANUAL_EMAIL_VARIABLES
 const UNRESOLVED_RE = /\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/g
 
 function defaultScheduleInput(): string {
