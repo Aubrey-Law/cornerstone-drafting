@@ -720,9 +720,13 @@ export function ReviewModal(props: {
 
   return (
     <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) onClose() }}>
+      {/* `guided-interview` must be repeated here: Radix portals the dialog to
+          document.body, outside the shell that declares the --gi-* tokens. Without
+          it every var() below resolves to nothing — including this surface, which
+          left the whole modal transparent over the page behind it. */}
       <DialogContent
         showCloseButton={false}
-        className="gap-0 overflow-hidden border-0 p-0 sm:max-w-[920px]"
+        className="guided-interview gap-0 overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[920px]"
         style={{ background: 'var(--gi-surface)' }}
       >
         <div style={{ background: 'var(--gi-navy)', padding: '22px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

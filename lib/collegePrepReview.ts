@@ -8,7 +8,6 @@ import {
   COLLEGE_LIFE_SUPPORT_OPTIONS,
   COLLEGE_LIVING_WILL_INCLUDE_OPTIONS,
   COLLEGE_ORGAN_DONATION_OPTIONS,
-  COLLEGE_SIGNING_PREFERENCE_OPTIONS,
   COLLEGE_TREATMENT_CHOICE_OPTIONS,
   namedHipaaRecipients,
 } from '@/lib/collegePrepFields'
@@ -154,11 +153,7 @@ export function collegePrepReviewSections(
     {
       sectionId: 'cp_other',
       title: 'Other matters',
-      rows: rows([
-        ['Signing preference', labelFor(COLLEGE_SIGNING_PREFERENCE_OPTIONS, data.college_signing_preference)],
-        ['Copies to', text(data, 'college_copy_recipients')],
-        ['Concerns', text(data, 'college_concerns')],
-      ]),
+      rows: rows([['Concerns', text(data, 'college_concerns')]]),
     },
   ]
 

@@ -89,11 +89,10 @@ export const COLLEGE_PREP_STEPS: IntakeStep[] = [
   {
     id: 'cp_other',
     title: 'Other Matters',
-    subtitle: 'Signing logistics and anything else (optional)',
-    timeEstimate: 2,
+    subtitle: 'Anything else we should know (optional)',
+    timeEstimate: 1,
     optional: true,
-    isComplete: (r) =>
-      !!text(r, 'college_signing_preference') || !!text(r, 'college_concerns'),
+    isComplete: (r) => !!text(r, 'college_concerns'),
   },
   {
     id: 'review',
