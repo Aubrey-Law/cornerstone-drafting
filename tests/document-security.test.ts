@@ -164,6 +164,18 @@ describe('userCanAccessMatter', () => {
     })
     expect(await userCanAccessMatter(sb, user, 'matter-1')).toBe(false)
   })
+
+  it('grants firm staff access to a matter that is still a lead', async () => {
+    // Regression: the 'hired' eligibility filter used to run ahead of the
+    // admin check, so every document call on a lead 403'd for the firm too.
+    const sb = stubAdmin({
+      users: { data: { role: 'attorney' }, error: null },
+      matters: { data: null, error: null },
+      client_intake: { data: null, error: null },
+      v_matter_pipeline: { data: null, error: null },
+    })
+    expect(await userCanAccessMatter(sb, { ...user, email: 'attorney@example.com' }, 'matter-1')).toBe(true)
+  })
 })
 
 describe('userCanReadDocument', () => {
