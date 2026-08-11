@@ -30,6 +30,15 @@ export const MATTER_BILLING_TYPE_LABEL: Record<MatterBillingType, string> = {
 export const MATTER_BILLING_TYPE_OPTIONS: Array<{ value: MatterBillingType; label: string }> =
   MATTER_BILLING_TYPES.map(value => ({ value, label: MATTER_BILLING_TYPE_LABEL[value] }))
 
+/**
+ * Carriers only. The lead rail asks "which plan is this?", so offering "Flat
+ * fee" there would be answering a different question — a lead's flat fee is the
+ * Quoted fee field. The column still accepts the full enum, so a matter that
+ * came back as flat fee round-trips rather than failing validation.
+ */
+export const LEGAL_PLAN_OPTIONS: Array<{ value: MatterBillingType; label: string }> =
+  MATTER_BILLING_TYPE_OPTIONS.filter(option => option.value !== 'flat_fee')
+
 /** Matches the SQL backfill, so a row read before the migration lands still resolves. */
 export function normalizeMatterBillingType(value: unknown): MatterBillingType | null {
   if (typeof value !== 'string') return null

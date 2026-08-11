@@ -24,6 +24,12 @@ export async function userCanAccessMatter(
   user: AuthUser,
   matterId: string,
 ) {
+  // Firm staff work an opportunity across its whole lifecycle, so a lead's
+  // documents are as much theirs to manage as a hired matter's. This has to
+  // come first: the 'hired' gate below is a client-visibility rule, not a
+  // firm one, and checking it first locked the firm out of lead documents.
+  if (await isAdminUser(admin, user)) return true
+
   const { data: eligibleMatter } = await admin
     .from('matters')
     .select('id')
@@ -31,7 +37,6 @@ export async function userCanAccessMatter(
     .eq('relationship_status', 'hired')
     .maybeSingle()
   if (!eligibleMatter) return false
-  if (await isAdminUser(admin, user)) return true
 
   const [{ data: matter }, { data: intake }] = await Promise.all([
     admin

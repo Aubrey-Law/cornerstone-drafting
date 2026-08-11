@@ -12,6 +12,7 @@ import {
   isNameField,
   labelForLeadField,
   LEAD_FIELD_GROUPS,
+  leadFieldApplies,
   leadFieldDefinition,
   NAME_COMPONENTS,
   normalizedLeadFieldValue,
@@ -440,19 +441,25 @@ export function LeadFieldsRail({
       <LeadReadinessDial lead={lead} spouse={spouse} />
 
       <div className="mt-4 space-y-4">
-        {LEAD_FIELD_GROUPS.map(group => (
-          <section key={group.title}>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {group.title}
-            </h3>
-            <div className="mt-1 @2xl/rail:grid @2xl/rail:grid-cols-2 @2xl/rail:gap-x-6">
-              {group.keys
-                .map(key => leadFieldDefinition(key))
-                .filter((definition): definition is LeadFieldDefinition => Boolean(definition))
-                .map(renderRow)}
-            </div>
-          </section>
-        ))}
+        {LEAD_FIELD_GROUPS.map(group => {
+          const definitions = group.keys
+            .map(key => leadFieldDefinition(key))
+            .filter((definition): definition is LeadFieldDefinition => Boolean(definition))
+            .filter(definition => leadFieldApplies(definition, lead))
+          // Legal plan only applies to the LP track, so its whole section —
+          // heading included — stays off a plain EP or Probate lead.
+          if (definitions.length === 0) return null
+          return (
+            <section key={group.title}>
+              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.title}
+              </h3>
+              <div className="mt-1 @2xl/rail:grid @2xl/rail:grid-cols-2 @2xl/rail:gap-x-6">
+                {definitions.map(renderRow)}
+              </div>
+            </section>
+          )
+        })}
       </div>
 
       {statusLabel && (

@@ -4,7 +4,8 @@
  * here so scoring helpers can reuse the same `complete()` predicates instead of
  * restating them.
  */
-import { PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
+import { LEGAL_PLAN_OPTIONS, legalPlanDisplayName } from '@/lib/billing/billingType'
+import { parsePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
 import type { LeadEditableField } from '@/lib/leads/details'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 
@@ -19,7 +20,18 @@ export type LeadFieldDefinition = {
   display: (lead: LeadDetailRecord, spouse: LeadSpouseRecord | null) => string | null
   input: LeadFieldInput
   options?: readonly { value: string; label: string }[]
+  /**
+   * Whether the field is relevant to this lead at all. An inapplicable field is
+   * hidden from the rail and left out of readiness entirely — not counted as
+   * missing — so a plain EP lead is never scored against plan-only questions.
+   * Absent means always applicable.
+   */
+  applies?: (lead: LeadDetailRecord) => boolean
 }
+
+/** Plan billing only exists on the LP track. */
+const isLegalPlanLead = (lead: LeadDetailRecord) =>
+  parsePracticeArea(lead.practice_area) === 'EP-LP'
 
 export type LeadAddressDraft = {
   addressLine1: string
@@ -215,6 +227,43 @@ export const FIELD_DEFINITIONS: readonly LeadFieldDefinition[] = [
     display: lead => hasText(lead.qualification_notes) ? lead.qualification_notes : null,
     input: 'textarea',
   },
+  {
+    key: 'legalPlan',
+    label: 'Plan',
+    missingLabel: 'Plan',
+    complete: lead => legalPlanDisplayName(lead.billing_type) != null,
+    display: lead => legalPlanDisplayName(lead.billing_type),
+    input: 'select',
+    options: LEGAL_PLAN_OPTIONS,
+    applies: isLegalPlanLead,
+  },
+  {
+    key: 'legalPlanMemberId',
+    label: 'Member ID',
+    missingLabel: 'Member ID',
+    complete: lead => hasText(lead.legal_plan_member_id),
+    display: lead => hasText(lead.legal_plan_member_id) ? lead.legal_plan_member_id : null,
+    input: 'text',
+    applies: isLegalPlanLead,
+  },
+  {
+    key: 'legalPlanServiceStart',
+    label: 'Service start',
+    missingLabel: 'Service start',
+    complete: lead => hasText(lead.legal_plan_service_start),
+    display: lead => hasText(lead.legal_plan_service_start) ? lead.legal_plan_service_start : null,
+    input: 'date',
+    applies: isLegalPlanLead,
+  },
+  {
+    key: 'legalPlanServiceEnd',
+    label: 'Service end',
+    missingLabel: 'Service end',
+    complete: lead => hasText(lead.legal_plan_service_end),
+    display: lead => hasText(lead.legal_plan_service_end) ? lead.legal_plan_service_end : null,
+    input: 'date',
+    applies: isLegalPlanLead,
+  },
 ] as const
 
 /** Rail sections. Every definition appears in exactly one group. */
@@ -228,7 +277,16 @@ export const LEAD_FIELD_GROUPS: readonly {
     title: 'Qualification',
     keys: ['practiceArea', 'source', 'fee', 'urgency', 'estimatedEstateValue', 'qualificationNotes'],
   },
+  {
+    title: 'Legal plan',
+    keys: ['legalPlan', 'legalPlanMemberId', 'legalPlanServiceStart', 'legalPlanServiceEnd'],
+  },
 ]
+
+/** A group with nothing applicable to this lead is not rendered at all. */
+export function leadFieldApplies(definition: LeadFieldDefinition, lead: LeadDetailRecord) {
+  return definition.applies?.(lead) ?? true
+}
 
 /**
  * Fields the engagement agreement cannot be drafted without. Everything else is
@@ -291,6 +349,10 @@ export function valueForLeadField(
     case 'estimatedEstateValue': return lead.taxable_estate == null ? '' : String(lead.taxable_estate)
     case 'hasMinorChildren': return lead.has_minor_children == null ? '' : String(lead.has_minor_children)
     case 'qualificationNotes': return lead.qualification_notes ?? ''
+    case 'legalPlan': return lead.billing_type ?? ''
+    case 'legalPlanMemberId': return lead.legal_plan_member_id ?? ''
+    case 'legalPlanServiceStart': return lead.legal_plan_service_start ?? ''
+    case 'legalPlanServiceEnd': return lead.legal_plan_service_end ?? ''
     case 'spouse': return {
       firstName: spouse?.first_name ?? '',
       middleName: spouse?.middle_name ?? '',

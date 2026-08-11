@@ -72,6 +72,10 @@ export interface LeadDetailRecord {
   taxable_estate?: number | null
   has_minor_children?: boolean | null
   qualification_notes?: string | null
+  billing_type?: string | null
+  legal_plan_member_id?: string | null
+  legal_plan_service_start?: string | null
+  legal_plan_service_end?: string | null
   created_at?: string | null
   updated_at?: string | null
   intake_sent_at?: string | null
