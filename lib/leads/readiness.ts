@@ -8,6 +8,7 @@ import {
   ENGAGEMENT_REQUIRED_FIELDS,
   FIELD_DEFINITIONS,
   hasText,
+  leadFieldApplies,
   leadFieldDefinition,
 } from '@/lib/leads/fieldDefinitions'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
@@ -53,12 +54,14 @@ export function computeLeadReadiness(
   lead: LeadDetailRecord,
   spouse: LeadSpouseRecord | null,
 ): LeadReadiness {
-  const items: LeadReadinessItem[] = FIELD_DEFINITIONS.map(definition => ({
-    key: definition.key,
-    label: definition.missingLabel,
-    complete: definition.complete(lead, spouse),
-    required: ENGAGEMENT_REQUIRED_FIELDS.includes(definition.key),
-  }))
+  const items: LeadReadinessItem[] = FIELD_DEFINITIONS
+    .filter(definition => leadFieldApplies(definition, lead))
+    .map(definition => ({
+      key: definition.key,
+      label: definition.missingLabel,
+      complete: definition.complete(lead, spouse),
+      required: ENGAGEMENT_REQUIRED_FIELDS.includes(definition.key),
+    }))
 
   items.push(
     { key: 'intake', label: 'Intake', complete: intakeCompleted(lead), required: true },

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MATTER_BILLING_TYPES } from '@/lib/billing/billingType'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import type { LeadSnapshotRow, LeadSpouseSnapshot } from '@/types/database'
 
@@ -27,6 +28,13 @@ const optionalPracticeArea = z.preprocess(
     return normalized ?? blankToNull(value)
   },
   z.enum(['EP', 'EP-LP', 'Probate'], { message: 'Invalid practice area' }).nullable(),
+)
+
+// Accepts the whole billing enum, not just the carriers the rail offers, so a
+// lead carrying a flat-fee value still validates on a full-form save.
+const optionalLegalPlan = z.preprocess(
+  blankToNull,
+  z.enum(MATTER_BILLING_TYPES, { message: 'Invalid legal plan' }).nullable(),
 )
 
 const spouseSchema = z.object({
@@ -62,6 +70,10 @@ const leadDetailsSchema = z.object({
   estimatedEstateValue: optionalNumber,
   hasMinorChildren: z.preprocess(value => value ?? null, z.boolean().nullable()),
   qualificationNotes: optionalText,
+  legalPlan: optionalLegalPlan,
+  legalPlanMemberId: optionalText,
+  legalPlanServiceStart: optionalDate,
+  legalPlanServiceEnd: optionalDate,
   spouse: z.preprocess(value => value ?? null, spouseSchema.nullable()),
 })
 
@@ -72,7 +84,9 @@ export const leadEditableFields = [
   'firstName', 'middleName', 'lastName', 'preferredName',
   'email', 'phone', 'dateOfBirth', 'address',
   'maritalStatus', 'practiceArea', 'source', 'fee', 'urgency',
-  'estimatedEstateValue', 'hasMinorChildren', 'qualificationNotes', 'spouse',
+  'estimatedEstateValue', 'hasMinorChildren', 'qualificationNotes',
+  'legalPlan', 'legalPlanMemberId', 'legalPlanServiceStart', 'legalPlanServiceEnd',
+  'spouse',
 ] as const
 export type LeadEditableField = typeof leadEditableFields[number]
 export type ValidatedLeadFieldPatch = {
@@ -115,6 +129,10 @@ const scalarFieldPatchSchema = z.discriminatedUnion('field', [
   z.object({ field: z.literal('estimatedEstateValue'), value: optionalNumber }).strict(),
   z.object({ field: z.literal('hasMinorChildren'), value: z.preprocess(value => value ?? null, z.boolean().nullable()) }).strict(),
   z.object({ field: z.literal('qualificationNotes'), value: optionalText }).strict(),
+  z.object({ field: z.literal('legalPlan'), value: optionalLegalPlan }).strict(),
+  z.object({ field: z.literal('legalPlanMemberId'), value: optionalText }).strict(),
+  z.object({ field: z.literal('legalPlanServiceStart'), value: optionalDate }).strict(),
+  z.object({ field: z.literal('legalPlanServiceEnd'), value: optionalDate }).strict(),
 ])
 
 function snapshotToLeadDetailsInput(
@@ -144,6 +162,10 @@ function snapshotToLeadDetailsInput(
     estimatedEstateValue: lead.taxable_estate,
     hasMinorChildren: lead.has_minor_children,
     qualificationNotes: lead.qualification_notes,
+    legalPlan: lead.billing_type,
+    legalPlanMemberId: lead.legal_plan_member_id,
+    legalPlanServiceStart: lead.legal_plan_service_start,
+    legalPlanServiceEnd: lead.legal_plan_service_end,
     spouse: spouse ? {
       firstName: spouse.first_name,
       middleName: spouse.middle_name,
@@ -191,6 +213,10 @@ function assignScalarField(
     case 'estimatedEstateValue': complete.estimatedEstateValue = parsed.value; break
     case 'hasMinorChildren': complete.hasMinorChildren = parsed.value; break
     case 'qualificationNotes': complete.qualificationNotes = parsed.value; break
+    case 'legalPlan': complete.legalPlan = parsed.value; break
+    case 'legalPlanMemberId': complete.legalPlanMemberId = parsed.value; break
+    case 'legalPlanServiceStart': complete.legalPlanServiceStart = parsed.value; break
+    case 'legalPlanServiceEnd': complete.legalPlanServiceEnd = parsed.value; break
   }
 }
 

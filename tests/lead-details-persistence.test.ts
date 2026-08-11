@@ -71,6 +71,10 @@ const leadSnapshot = {
   taxable_estate: 2_500_000,
   has_minor_children: true,
   qualification_notes: 'Needs a trust review.',
+  billing_type: null,
+  legal_plan_member_id: null,
+  legal_plan_service_start: null,
+  legal_plan_service_end: null,
 }
 
 const spouseSnapshot = {
@@ -92,6 +96,8 @@ describe('lead details validation', () => {
       zip: '02108', county: null, maritalStatus: 'married', practiceArea: 'EP',
       source: 'Referral', status: 'lead', fee: 4500, urgency: null,
       estimatedEstateValue: null, hasMinorChildren: null, qualificationNotes: null,
+      legalPlan: null, legalPlanMemberId: null,
+      legalPlanServiceStart: null, legalPlanServiceEnd: null,
       spouse: { firstName: 'John', middleName: null, lastName: 'Doe', preferredName: null,
         email: 'john@example.com', phone: null, dateOfBirth: null },
     })
@@ -149,6 +155,8 @@ describe('lead details validation', () => {
       source: 'Referral', status: 'lead', fee: 4500, urgency: 'high',
       estimatedEstateValue: 2_500_000, hasMinorChildren: true,
       qualificationNotes: 'Needs a trust review.',
+      legalPlan: null, legalPlanMemberId: null,
+      legalPlanServiceStart: null, legalPlanServiceEnd: null,
       spouse: {
         firstName: 'John', middleName: 'R', lastName: 'Doe', preferredName: 'Jack',
         email: 'john@example.com', phone: '617-555-0199', dateOfBirth: '1981-05-04',
@@ -201,6 +209,68 @@ describe('lead details validation', () => {
         county: null,
       },
     })
+  })
+})
+
+describe('legal plan billing fields', () => {
+  it('accepts every plan carrier and rejects an unknown one', () => {
+    for (const plan of ['metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan']) {
+      expect(validateLeadFieldPatch({ field: 'legalPlan', value: plan })).toEqual({
+        field: 'legalPlan',
+        value: plan,
+      })
+    }
+    expect(() => validateLeadFieldPatch({ field: 'legalPlan', value: 'aetna' }))
+      .toThrow(/legal plan/i)
+  })
+
+  it('still accepts flat_fee so a matter that came back flat fee round-trips', () => {
+    expect(validateLeadFieldPatch({ field: 'legalPlan', value: 'flat_fee' }).value).toBe('flat_fee')
+  })
+
+  it('clears a plan and its member ID on blank input', () => {
+    expect(validateLeadFieldPatch({ field: 'legalPlan', value: '' }).value).toBeNull()
+    expect(validateLeadFieldPatch({ field: 'legalPlanMemberId', value: '  ' }).value).toBeNull()
+  })
+
+  it('trims a member ID and rejects a malformed service date', () => {
+    expect(validateLeadFieldPatch({ field: 'legalPlanMemberId', value: ' MET-90210 ' }).value)
+      .toBe('MET-90210')
+    expect(validateLeadFieldPatch({ field: 'legalPlanServiceStart', value: '2026-01-01' }).value)
+      .toBe('2026-01-01')
+    expect(() => validateLeadFieldPatch({ field: 'legalPlanServiceEnd', value: '01/31/2026' }))
+      .toThrow()
+  })
+
+  it('merges a plan patch without disturbing the rest of the lead', () => {
+    const merged = mergeLeadFieldPatch(
+      { ...leadSnapshot, practice_area: 'EP-LP' },
+      spouseSnapshot,
+      { field: 'legalPlanMemberId', value: 'MET-90210' },
+    )
+    expect(merged.legalPlanMemberId).toBe('MET-90210')
+    expect(merged.legalPlan).toBeNull()
+    expect(merged.email).toBe('jane@example.com')
+    expect(merged.fee).toBe(4500)
+  })
+
+  it('carries existing plan values through an unrelated field edit', () => {
+    const merged = mergeLeadFieldPatch(
+      {
+        ...leadSnapshot,
+        practice_area: 'EP-LP',
+        billing_type: 'metlife',
+        legal_plan_member_id: 'MET-90210',
+        legal_plan_service_start: '2026-01-01',
+        legal_plan_service_end: '2026-12-31',
+      },
+      spouseSnapshot,
+      { field: 'phone', value: '617-555-0111' },
+    )
+    expect(merged.legalPlan).toBe('metlife')
+    expect(merged.legalPlanMemberId).toBe('MET-90210')
+    expect(merged.legalPlanServiceStart).toBe('2026-01-01')
+    expect(merged.legalPlanServiceEnd).toBe('2026-12-31')
   })
 })
 
