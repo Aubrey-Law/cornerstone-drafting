@@ -159,6 +159,11 @@ export interface MatterDetailsRow {
   ep_anticipated_inheritance?: boolean | null
   ep_accounts_retitled?: boolean | null
   legal_plan_member_id?: string | null
+  /**
+   * @deprecated The plan claim's amount is the matter's `plan_claim` billing
+   * item. This column is no longer read or written; it is retained so historical
+   * rows survive, and it is absent from the matter-details writable allowlist.
+   */
   claim_amount?: number | null
   claim_submitted_date?: string | null
   reimbursement_received_date?: string | null

@@ -176,22 +176,10 @@ export function LegalPlanClaimCard({
 
         {isPlan && (
           <>
+            {/* The claim amount is the ledger's plan_claim row, shown on Money in.
+                It used to be hand-typed here too, which let a stale figure
+                outrank what the firm is actually claiming. */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="space-y-1.5">
-                <FieldLabel>Claim amount</FieldLabel>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="h-9 text-right tabular-nums"
-                  key={String(details?.claim_amount ?? '')}
-                  defaultValue={details?.claim_amount ?? ''}
-                  onBlur={event => void onSaveField(
-                    'claim_amount',
-                    event.target.value ? Number(event.target.value) : null,
-                  )}
-                />
-              </label>
               <DateField label="Claim submitted" field="claim_submitted_date" details={details} onSaveField={onSaveField} />
               <DateField label="Reimbursement received" field="reimbursement_received_date" details={details} onSaveField={onSaveField} />
             </div>
@@ -229,7 +217,10 @@ export function MoneyInCard({
   collected: number
 }) {
   const isPlan = isLegalPlanBilling(details?.billing_type)
-  const stated = isPlan ? details?.claim_amount : details?.flat_fee_amount
+  // A flat fee is quoted before the engagement seeds its ledger row, so the
+  // stated figure is the only answer until then. A plan claim has no such
+  // window — it exists once it is in the ledger, and the ledger is the answer.
+  const stated = isPlan ? null : details?.flat_fee_amount
   const expected = typeof stated === 'number' && Number.isFinite(stated) ? stated : billed
   const balance = expected - collected
   const percent = expected > 0 ? Math.max(0, Math.min(100, Math.round((collected / expected) * 100))) : 100
