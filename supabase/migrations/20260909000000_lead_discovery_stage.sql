@@ -33,3 +33,30 @@ update public.stage_sla set stage_order = 4
   where stage_key = 'intake_completed' and track = 'DEFAULT' and entity = 'lead';
 update public.stage_sla set stage_order = 5
   where stage_key = 'engagement_sent' and track = 'DEFAULT' and entity = 'lead';
+
+-- ── stage_entered_at stops overwriting a deliberate value ───────────────────
+--
+-- This trigger assigned NOW() on every stage change, which meant no caller
+-- could ever set the stage entry date itself. Two consequences: the date
+-- `ensure_lead_matter()` computes by coalescing the intake timestamps has never
+-- survived the UPDATE that carries it, and the discovery clock below could not
+-- be pinned to the call date. Stamp NOW() only when the caller stayed silent.
+--
+-- Existing callers are unaffected: app/api/intake/route.ts and
+-- lib/lawmatics/importMatter.ts already pass now(), so honouring their value
+-- instead of replacing it microseconds later changes nothing.
+create or replace function public.trg_matters_stage_entered_at()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.stage_entered_at is null then
+      new.stage_entered_at := now();
+    end if;
+  elsif new.stage is distinct from old.stage then
+    if new.stage_entered_at is not distinct from old.stage_entered_at then
+      new.stage_entered_at := now();
+    end if;
+  end if;
+  return new;
+end;
+$$;

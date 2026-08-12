@@ -47,14 +47,30 @@ describe('discovery_call lead stage', () => {
 
   it('does not overwrite sla_days on the stages an admin may have tuned', () => {
     const source = sql()
-    // The renumber must touch stage_order only. Re-seeding intake_sent with a
-    // literal sla_days would silently revert a value edited in Settings.
+    // The renumber must touch stage_order only. Re-seeding any of these stages
+    // with a literal VALUES row would silently revert a value edited in
+    // Settings. intake_sent and engagement_sent are owned by 'client';
+    // intake_completed is owned by 'attorney' — match the owner loosely so
+    // the check still catches a re-seed regardless of which owner is used.
     for (const key of ['intake_sent', 'intake_completed', 'engagement_sent']) {
       const renumber = new RegExp(
         `update public\\.stage_sla set stage_order = \\d+\\s+where stage_key = '${key}'`,
       )
       expect(source).toMatch(renumber)
+
+      const reseed = new RegExp(`'${key}',\\s*'DEFAULT',\\s*'lead',\\s*'[a-z]+',\\s*\\d+`)
+      expect(source).not.toMatch(reseed)
     }
-    expect(source).not.toMatch(/'intake_sent',\s*'DEFAULT',\s*'lead',\s*'client',\s*\d+/)
+  })
+
+  it('stamps stage_entered_at only when the caller did not supply one', () => {
+    const source = sql()
+    expect(source).toContain('create or replace function public.trg_matters_stage_entered_at()')
+    // The INSERT arm must not reference OLD: it is unassigned in a BEFORE
+    // INSERT trigger and referencing it raises.
+    expect(source).toMatch(/if tg_op = 'INSERT' then\s+if new\.stage_entered_at is null then/)
+    expect(source).toMatch(
+      /elsif new\.stage is distinct from old\.stage then[\s\S]*?if new\.stage_entered_at is not distinct from old\.stage_entered_at then/,
+    )
   })
 })
