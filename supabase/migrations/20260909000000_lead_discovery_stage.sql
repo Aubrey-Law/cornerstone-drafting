@@ -38,9 +38,10 @@ update public.stage_sla set stage_order = 5
 --
 -- This trigger assigned NOW() on every stage change, which meant no caller
 -- could ever set the stage entry date itself. Two consequences: the date
--- `ensure_lead_matter()` computes by coalescing the intake timestamps has never
--- survived the UPDATE that carries it, and the discovery clock below could not
--- be pinned to the call date. Stamp NOW() only when the caller stayed silent.
+-- `ensure_lead_matter()` computes by coalescing the intake timestamps has
+-- never survived, on either the insert or the update path, and the discovery
+-- clock below could not be pinned to the call date. Stamp NOW() only when the
+-- caller stayed silent.
 --
 -- Existing callers are unaffected: app/api/intake/route.ts and
 -- lib/lawmatics/importMatter.ts already pass now(), so honouring their value
@@ -60,3 +61,52 @@ begin
   return new;
 end;
 $$;
+
+-- ── Setting the anchor moves the stage ──────────────────────────────────────
+--
+-- Fires on discovery_call_at rather than on stage, which is what keeps the two
+-- triggers out of each other's way: `trg_matters_stage_entered_at` is
+-- BEFORE UPDATE OF stage, and that fires off the statement's SET list, which
+-- names only the anchor columns here. Should a future caller update both at
+-- once, both triggers run in name order — this one first — and the hardened
+-- guard above then sees a deliberate stage_entered_at and leaves it alone.
+create or replace function public.stamp_lead_discovery_stage()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.discovery_call_at is not distinct from old.discovery_call_at then
+    return new;
+  end if;
+
+  if new.relationship_status <> 'lead' then
+    return new;
+  end if;
+
+  -- Forward-only. A lead that already sent the organizer is past discovery, and
+  -- recording the call date late must not drag it backwards.
+  if new.stage is null or new.stage not in ('new_lead', 'discovery_call') then
+    return new;
+  end if;
+
+  if new.discovery_call_at is not null then
+    new.stage := 'discovery_call';
+    -- The call date, not now(): business_days_elapsed returns 0 for a future
+    -- start, so a lead booked ahead stays green until the day it happens.
+    new.stage_entered_at := new.discovery_call_at;
+  else
+    new.stage := 'new_lead';
+    new.stage_entered_at := coalesce(new.created_at, now());
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke execute on function public.stamp_lead_discovery_stage() from public, anon, authenticated;
+
+drop trigger if exists stamp_lead_discovery_stage on public.matters;
+create trigger stamp_lead_discovery_stage
+before update of discovery_call_at on public.matters
+for each row execute function public.stamp_lead_discovery_stage();

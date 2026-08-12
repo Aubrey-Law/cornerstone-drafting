@@ -73,4 +73,30 @@ describe('discovery_call lead stage', () => {
       /elsif new\.stage is distinct from old\.stage then[\s\S]*?if new\.stage_entered_at is not distinct from old\.stage_entered_at then/,
     )
   })
+
+  it('advances a lead to discovery_call and pins the clock to the call date', () => {
+    const source = sql()
+    expect(source).toContain('create or replace function public.stamp_lead_discovery_stage()')
+    expect(source).toContain("new.stage := 'discovery_call'")
+    expect(source).toContain('new.stage_entered_at := new.discovery_call_at')
+  })
+
+  it('guards the trigger to leads that have not moved past discovery', () => {
+    const source = sql()
+    expect(source).toContain("if new.relationship_status <> 'lead' then")
+    expect(source).toContain("not in ('new_lead', 'discovery_call')")
+  })
+
+  it('reverts to new_lead when the date is cleared', () => {
+    const source = sql()
+    expect(source).toMatch(/else\s+new\.stage := 'new_lead';\s+new\.stage_entered_at := coalesce\(new\.created_at, now\(\)\)/)
+  })
+
+  it('fires on discovery_call_at only, so the stage stamper stays out of it', () => {
+    const source = sql()
+    expect(source).toContain('before update of discovery_call_at on public.matters')
+    expect(source).toContain(
+      'revoke execute on function public.stamp_lead_discovery_stage() from public, anon, authenticated',
+    )
+  })
 })
