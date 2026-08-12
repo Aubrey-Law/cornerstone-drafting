@@ -99,4 +99,21 @@ describe('discovery_call lead stage', () => {
       'revoke execute on function public.stamp_lead_discovery_stage() from public, anon, authenticated',
     )
   })
+
+  it('slots discovery between intake_sent and new_lead in the cascade', () => {
+    const source = sql()
+    expect(source).toContain('create or replace function public.ensure_lead_matter()')
+    expect(source).toMatch(
+      /when new\.intake_sent_at is not null then 'intake_sent'\s+when v_discovery_call_at is not null then 'discovery_call'\s+else 'new_lead'/,
+    )
+  })
+
+  it('reads discovery_call_at off the matter, since the trigger is on client_intake', () => {
+    const source = sql()
+    expect(source).toContain('v_discovery_call_at timestamptz')
+    expect(source).toContain('select m.id, m.discovery_call_at')
+    expect(source).toMatch(
+      /v_stage_entered_at := coalesce\([^)]*v_discovery_call_at, new\.created_at, now\(\)\)/,
+    )
+  })
 })

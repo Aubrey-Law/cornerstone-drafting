@@ -110,3 +110,89 @@ drop trigger if exists stamp_lead_discovery_stage on public.matters;
 create trigger stamp_lead_discovery_stage
 before update of discovery_call_at on public.matters
 for each row execute function public.stamp_lead_discovery_stage();
+
+-- ── The intake cascade learns the discovery stage ───────────────────────────
+--
+-- This trigger recomputes the stage from the intake timestamps whenever
+-- lead_status or one of those timestamps changes. Without a discovery branch,
+-- reopening a lost lead would recompute straight past discovery back to
+-- new_lead, undoing the trigger above. discovery_call_at lives on matters, so
+-- it is read from the row the lookup already finds.
+create or replace function public.ensure_lead_matter()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_matter_id uuid;
+  v_discovery_call_at timestamptz;
+  v_relationship_status text;
+  v_stage text;
+  v_stage_entered_at timestamptz;
+begin
+  if new.lead_status is null then
+    return new;
+  end if;
+
+  select m.id, m.discovery_call_at into v_matter_id, v_discovery_call_at
+  from public.matters m
+  where m.client_intake_id = new.id
+  order by (m.id = new.matter_id) desc, m.created_at desc
+  limit 1;
+
+  v_relationship_status := case
+    when new.lead_status = 'lost' then 'lost'
+    when new.lead_status = 'declined' then 'declined'
+    else 'lead'
+  end;
+  v_stage := case
+    when new.engagement_sent_at is not null then 'engagement_sent'
+    when new.intake_completed_at is not null then 'intake_completed'
+    when new.intake_sent_at is not null then 'intake_sent'
+    when v_discovery_call_at is not null then 'discovery_call'
+    else 'new_lead'
+  end;
+  v_stage_entered_at := coalesce(new.engagement_sent_at, new.intake_completed_at, new.intake_sent_at, v_discovery_call_at, new.created_at, now());
+
+  if v_matter_id is null then
+    insert into public.matters (
+      client_intake_id, client_id, name, matter_number, stage, status,
+      stage_entered_at, track, relationship_status, lost_at, declined_at
+    ) values (
+      new.id, null,
+      coalesce(nullif(trim(new.full_name), ''), nullif(trim(concat_ws(' ', new.first_name, new.last_name)), ''), new.email, 'Prospective client'),
+      null, v_stage, 'active', v_stage_entered_at, 'DEFAULT',
+      v_relationship_status,
+      case when v_relationship_status = 'lost' then now() else null end,
+      case when v_relationship_status = 'declined' then now() else null end
+    ) returning id into v_matter_id;
+
+    insert into public.matter_details (
+      client_id, practice_area, plan_type, jurisdiction_state, jurisdiction_county,
+      flat_fee_amount, est_estate_value, referral_source, urgency, matter_status_notes
+    ) values (
+      v_matter_id, new.practice_area, 'TBD', coalesce(nullif(new.state, ''), 'MA'),
+      nullif(new.county, ''), new.engagement_fee_quoted, new.taxable_estate,
+      nullif(new.lead_source, ''), new.lead_urgency, nullif(new.qualification_notes, '')
+    ) on conflict (client_id) do nothing;
+
+    update public.client_intake set matter_id = v_matter_id where id = new.id;
+  elsif new.lead_status in ('lead', 'lost', 'declined') then
+    update public.matters
+    set relationship_status = v_relationship_status,
+        stage = case when relationship_status = 'hired' then stage else v_stage end,
+        stage_entered_at = case when relationship_status = 'hired' then stage_entered_at else v_stage_entered_at end,
+        updated_at = now()
+    where id = v_matter_id and relationship_status <> 'hired';
+
+    if new.matter_id is distinct from v_matter_id then
+      update public.client_intake set matter_id = v_matter_id where id = new.id;
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke execute on function public.ensure_lead_matter() from public, anon, authenticated;
