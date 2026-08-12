@@ -126,6 +126,66 @@ describe('CRM mirror sees the discovery stage', () => {
     expect(migration).toContain("notify pgrst, 'reload schema';")
   })
 
+  it('reads a booked planning session as intake_complete', () => {
+    const slug = functionBody(
+      read(MIGRATION),
+      'create or replace function public.crm_stage_slug_for_intake(',
+    )
+
+    expect(slug).toContain('p_pmps_at timestamptz default null')
+    // stamp_lead_pmps_stage moves the pipeline stage off the same column, so
+    // the CRM has to agree or a booked lead mirrors one rung low.
+    expect(slug).toMatch(/or p_pmps_at is not null then 'intake_complete'/)
+    // A floor, not a ceiling.
+    expect(slug.indexOf("then 'engagement'")).toBeLessThan(slug.indexOf("then 'intake_complete'"))
+  })
+
+  it('short-circuits on the anchors themselves, not only the derived stage', () => {
+    const body = functionBody(
+      read(MIGRATION),
+      'create or replace function public.sync_crm_opportunity_from_matter()',
+    )
+
+    // Both stampers decline to move a lead already further along, and
+    // stamp_lead_pmps_stage is absent from this branch entirely — in both cases
+    // the anchor moves while `stage` does not, and the slug still changes.
+    for (const column of ['discovery_call_at', 'pmps_at']) {
+      expect(body, `the short-circuit must compare ${column}`).toMatch(
+        new RegExp(`new\\.${column} is not distinct from old\\.${column}`),
+      )
+    }
+  })
+
+  it('redefines ensure_lead_matter with both stage ladders', () => {
+    const body = functionBody(
+      read(MIGRATION),
+      'create or replace function public.ensure_lead_matter()',
+    )
+
+    // Two migrations own this function and neither knows about the other. This
+    // one runs last, so it has to carry the discovery rung AND the PMPS floor
+    // or it silently reverts whichever it omits.
+    expect(body).toContain("when v_discovery_call_at is not null then 'discovery_call'")
+    expect(body).toMatch(/if v_pmps_at is not null/)
+    expect(body).toContain("v_stage := 'intake_completed'")
+    expect(body).toContain('m.discovery_call_at, m.pmps_at')
+
+    // The floor must not promote a lead that is already further along.
+    expect(body).toMatch(/v_stage in \('new_lead', 'discovery_call', 'intake_sent'\)/)
+
+    // pipeline_stage_rank() lives only in main's migration; referencing it here
+    // would resolve at run time and fail on this branch.
+    expect(body).not.toContain('pipeline_stage_rank')
+  })
+
+  it('backfills planning-session rows as well as discovery rows', () => {
+    const migration = read(MIGRATION)
+    const backfill = migration.slice(migration.indexOf('update public.cornerstone_crm_opportunities o'))
+
+    expect(backfill).toMatch(/\(m\.discovery_call_at is not null or m\.pmps_at is not null\)/)
+    expect(backfill).toContain('m.pmps_at')
+  })
+
   it('runs after the migration that creates the discovery stage', () => {
     const dir = path.join(process.cwd(), 'supabase/migrations')
     const names = fs.readdirSync(dir).filter((n) => n.endsWith('.sql')).sort()
