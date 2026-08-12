@@ -15,6 +15,9 @@ const state = vi.hoisted(() => ({
   busy: [] as Array<{ start: number; end: number }>,
   lead: null as { id: string; lead_status: string } | null,
   matterId: null as string | null,
+  // Backs the discovery-anchor matter lookup (admin.from('matters').select('id')...).
+  // Default matches most tests, which don't care about the matter's own id.
+  matterLookup: { id: 'matter-1' } as { id: string } | null,
   paused: false,
   dateOverrides: {} as Record<string, Array<{ start: string; end: string }>>,
   automationCalls: [] as Array<Record<string, unknown>>,
@@ -29,6 +32,7 @@ const state = vi.hoisted(() => ({
     this.busy = []
     this.lead = null
     this.matterId = null
+    this.matterLookup = { id: 'matter-1' }
     this.paused = false
     this.dateOverrides = {}
     this.automationCalls = []
@@ -54,6 +58,13 @@ vi.mock('@/lib/supabaseAdmin', () => {
         state.updates.push({ table, values })
         const chain = {
           eq: vi.fn(() => chain),
+          is: vi.fn(() => chain),
+          // markNoShow chains .select('id') straight off the update to check
+          // a row actually matched the status filter.
+          select: vi.fn(() => ({
+            then: (resolve: (v: unknown) => unknown) =>
+              resolve({ data: [{ id: `${table}-id-1` }], error: null }),
+          })),
           then: (resolve: (v: unknown) => unknown) => resolve({ error: null }),
         }
         return chain
@@ -61,6 +72,17 @@ vi.mock('@/lib/supabaseAdmin', () => {
       upsert: vi.fn((values: Record<string, unknown>) => {
         state.inserts.push({ table: `${table}:upsert`, values })
         return { then: (resolve: (v: unknown) => unknown) => resolve({ error: null }) }
+      }),
+      // Backs the discovery-anchor matter lookup: admin.from('matters').select('id')
+      // .eq('client_intake_id', leadId).order(...).limit(1).maybeSingle().
+      select: vi.fn(() => {
+        const chain = {
+          eq: vi.fn(() => chain),
+          order: vi.fn(() => chain),
+          limit: vi.fn(() => chain),
+          maybeSingle: vi.fn(async () => ({ data: state.matterLookup, error: null })),
+        }
+        return chain
       }),
     }
   }
@@ -397,6 +419,33 @@ describe('bookAppointment', () => {
     ).toBe(false)
     // Confirmation still sent
     expect(state.emails.some(e => e.category === 'appointment_confirmation')).toBe(true)
+  })
+
+  it('stamps the discovery call anchor on the lead’s matter', async () => {
+    // findMatterIdByEmail is hired-only, so state.matterId stays null: the stamp
+    // has to find the matter through the lead, not through that helper.
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+
+    await bookAppointment(bookingInput())
+
+    const stamped = state.updates.find(
+      u => u.table === 'matters' && 'discovery_call_at' in u.values,
+    )
+    expect(stamped).toBeDefined()
+    expect(stamped?.values.discovery_call_at).toBe(SLOT_ISO)
+  })
+
+  it('does not stamp the anchor for a non-discovery appointment type', async () => {
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+
+    await bookAppointment({
+      ...bookingInput(),
+      type: { ...TYPE, key: 'signing_appointment', slug: 'signing', label: 'Signing' },
+    })
+
+    expect(
+      state.updates.find(u => u.table === 'matters' && 'discovery_call_at' in u.values),
+    ).toBeUndefined()
   })
 })
 
