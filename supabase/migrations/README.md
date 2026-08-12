@@ -86,6 +86,25 @@ db reset --local`), and commit it. Reach for `supabase migration repair --status
 only when the version was stamped for something another file already describes; it discards
 the record of DDL that is genuinely applied.
 
+### The same work stamped twice
+
+Applying DDL by hand *around* the time its own migration lands records it twice: once under
+the file's version, once under the wall-clock version the manual apply stamped. The second
+row is an orphan, but the repo is not missing anything — writing it back would commit the
+same DDL again, numbered behind every migration merged since, which the out-of-order check
+then fails on.
+
+`npm run check:migration-drift` tells this apart by the recorded name: an orphan whose name
+matches a migration file sitting at a different version is reported as a restamp, with the
+repair command for it, and `--write-missing` skips it. Drop the stray row:
+
+```bash
+./node_modules/.bin/supabase migration repair --status reverted <wall-clock-version>
+```
+
+Then confirm the columns or objects the migration created are really in the catalog — a
+history row is not proof its SQL ran, in either direction.
+
 ## Storage
 
 Estate-plan template fallback uses a private Supabase Storage bucket named `templates`.
