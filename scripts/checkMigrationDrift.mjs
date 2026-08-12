@@ -21,6 +21,13 @@
 //     the second file's SQL never ran, and every check here stayed green because
 //     the version *was* recorded. Applying it by hand stamped 20260910000000 and
 //     turned a silent skip into an orphan.
+//   • contact_additional_channels was applied by hand minutes before the PR
+//     carrying 20260914000000 merged, so the history recorded the same work
+//     twice — once under the file's version, once under a wall-clock stamp with
+//     no file behind it. The orphan advice pointed at --write-missing, which
+//     would have committed the same DDL a second time, numbered behind 40
+//     applied migrations. That case is now told apart by name and sent to the
+//     repair it actually needs.
 //
 // Nothing deploys migrations automatically here — Vercel ships code only — so a
 // merged migration reaches the database only when someone remembers to run
@@ -32,7 +39,10 @@
 //
 // Flags:
 //   --strict         also fail on migrations that are merged but not applied
-//   --write-missing  materialize an orphan into a file from its recorded SQL
+//   --write-missing  materialize an orphan into a file from its recorded SQL.
+//                    Skips orphans that only restamp a file already in the repo
+//                    (see restampedOrphans) — those need a history repair, and
+//                    writing them back would duplicate DDL the repo already has.
 
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -105,6 +115,33 @@ export function nameMismatches(migrations, applied) {
       file: migration.file,
       recorded: recorded.get(migration.version),
     }))
+}
+
+/**
+ * Orphans that are a second stamp of work a file already describes.
+ *
+ * An orphan has two very different causes, and the remedies are opposites.
+ * Usually the repo is what is missing and the recorded SQL should be written
+ * back. But when DDL is applied by hand *around* the time its own migration
+ * lands, the hand-apply stamps a wall-clock version beside the file's own, and
+ * both end up in the history — one recorded under the file's version, one
+ * orphaned. Writing that orphan back would add a second file with the same DDL,
+ * numbered before every migration merged since, which the out-of-order check
+ * would then fail on. The history row is what is wrong there, not the repo.
+ *
+ * The recorded name is what tells them apart: `supabase db push` and a manual
+ * `migration new` both name the row after the migration, so an orphan whose
+ * name matches a file sitting at a different version is the same work twice.
+ */
+export function restampedOrphans(orphaned, applied, migrations) {
+  const recorded = new Map(applied.map(row => [row.version, row.name]))
+  const byName = new Map(migrations.map(migration => [migration.name, migration]))
+  return orphaned.flatMap(version => {
+    const name = recorded.get(version)
+    const match = name == null ? undefined : byName.get(name)
+    if (!match || match.version === version) return []
+    return [{ version, name, file: match.file, appliedAs: match.version }]
+  })
 }
 
 /**
@@ -321,32 +358,62 @@ async function main() {
       const name = applied.find(row => row.version === version)?.name
       console.error(`   • ${version}${name ? ` — ${name}` : ''}`)
     }
-    console.error(
-      '\nDDL applied out of band, stamped with its own version. `supabase db push`\n' +
-        'refuses to run while this is present, and it resolves in one of two\n' +
-        'directions — which one depends on whether the SQL it recorded is work the\n' +
-        'repo is missing.\n\n' +
-        'If it is (the usual case), bring it back into the repo:\n' +
-        '   npm run check:migration-drift -- --write-missing\n' +
-        'then review the generated file and commit it.\n\n' +
-        'Only if the version was stamped for something another file already\n' +
-        'describes, drop the history row instead:\n' +
-        '   supabase migration repair --status reverted <version>\n',
-    )
+
+    // Split them, because the two shapes take opposite remedies and naming the
+    // wrong one is how an orphan turns into a duplicate file.
+    const restamped = restampedOrphans(orphaned, applied, migrations)
+    const restampedVersions = new Set(restamped.map(row => row.version))
+    const unknown = orphaned.filter(version => !restampedVersions.has(version))
+
+    if (restamped.length > 0) {
+      console.error(
+        `\n${restamped.length === 1 ? 'One of these is' : `${restamped.length} of these are`} ` +
+          'already described by a file in the repo, under a different version —\n' +
+          'DDL applied by hand beside its own migration, stamping a wall-clock\n' +
+          'version alongside the one `db push` recorded:\n',
+      )
+      for (const { version, file, appliedAs } of restamped) {
+        console.error(`   • ${version} — same work as ${file} (recorded as ${appliedAs})`)
+      }
+      console.error(
+        '\nThe repo already has this SQL, so nothing here needs writing back.\n' +
+          'Drop the stray history row instead:\n' +
+          restamped.map(({ version }) => `   supabase migration repair --status reverted ${version}`).join('\n') +
+          '\n\nDo not use --write-missing on these: it would add a second file with the\n' +
+          'same DDL, numbered behind every migration merged since.\n',
+      )
+    }
+
+    if (unknown.length > 0) {
+      console.error(
+        '\nDDL applied out of band, stamped with its own version, with nothing in\n' +
+          'the repo describing it. `supabase db push` refuses to run while this is\n' +
+          'present. Bring it back into the repo:\n' +
+          '   npm run check:migration-drift -- --write-missing\n' +
+          'then review the generated file and commit it.\n',
+      )
+    }
 
     if (writeMissing) {
-      try {
-        const written = await writeMissingMigrations(ref, token, orphaned, MIGRATIONS_DIR)
-        if (written.length === 0) {
-          console.error('No file was written — every orphan already has one on disk.\n')
-        } else {
-          console.error(`Wrote ${written.length} migration${written.length === 1 ? '' : 's'} from the recorded history:\n`)
-          for (const file of written) console.error(`   • ${file}`)
-          console.error('\nReview each one, then commit it. This still exits non-zero:\n' +
-            'the drift is only closed once the file is on main.\n')
+      if (unknown.length === 0) {
+        console.error(
+          'Nothing to write: every orphan here is a second stamp of a file the repo\n' +
+            'already has. Use the repair command above.\n',
+        )
+      } else {
+        try {
+          const written = await writeMissingMigrations(ref, token, unknown, MIGRATIONS_DIR)
+          if (written.length === 0) {
+            console.error('No file was written — every orphan already has one on disk.\n')
+          } else {
+            console.error(`Wrote ${written.length} migration${written.length === 1 ? '' : 's'} from the recorded history:\n`)
+            for (const file of written) console.error(`   • ${file}`)
+            console.error('\nReview each one, then commit it. This still exits non-zero:\n' +
+              'the drift is only closed once the file is on main.\n')
+          }
+        } catch (error) {
+          console.error(`Could not recover the recorded SQL: ${error.message}\n`)
         }
-      } catch (error) {
-        console.error(`Could not recover the recorded SQL: ${error.message}\n`)
       }
     }
   }

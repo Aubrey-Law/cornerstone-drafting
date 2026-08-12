@@ -10,6 +10,7 @@ import {
   localVersions,
   nameMismatches,
   recoveredMigrationFile,
+  restampedOrphans,
 } from '@/scripts/checkMigrationDrift.mjs'
 
 describe('compareMigrations', () => {
@@ -116,6 +117,58 @@ describe('nameMismatches', () => {
       nameMismatches(
         [{ version: '20260912000000', name: 'brand_new', file: '20260912000000_brand_new.sql' }],
         [{ version: '20260911000000', name: 'crm_discovery_stage_sync' }],
+      ),
+    ).toEqual([])
+  })
+})
+
+describe('restampedOrphans', () => {
+  it('spots an orphan that only restamps a file the repo already has', () => {
+    // contact_additional_channels: applied by hand at 17:20, four minutes before
+    // the PR carrying 20260914000000 merged, so the history holds the same work
+    // twice. Writing the orphan back would commit that DDL a second time.
+    expect(
+      restampedOrphans(
+        ['20260812172025'],
+        [
+          { version: '20260812172025', name: 'contact_additional_channels' },
+          { version: '20260914000000', name: 'contact_additional_channels' },
+        ],
+        [{
+          version: '20260914000000',
+          name: 'contact_additional_channels',
+          file: '20260914000000_contact_additional_channels.sql',
+        }],
+      ),
+    ).toEqual([
+      {
+        version: '20260812172025',
+        name: 'contact_additional_channels',
+        file: '20260914000000_contact_additional_channels.sql',
+        appliedAs: '20260914000000',
+      },
+    ])
+  })
+
+  it('leaves a genuinely missing migration to --write-missing', () => {
+    // No file describes this one, so the repo is what is missing and recovering
+    // the recorded SQL is the right direction.
+    expect(
+      restampedOrphans(
+        ['20260807005457'],
+        [{ version: '20260807005457', name: 'hand_applied_index' }],
+        [{ version: '20260914000000', name: 'something_else', file: '20260914000000_something_else.sql' }],
+      ),
+    ).toEqual([])
+  })
+
+  it('does not match a history row with no name to go on', () => {
+    // Pre-CLI rows have no name; a nameless orphan cannot be tied to a file.
+    expect(
+      restampedOrphans(
+        ['20260807005457'],
+        [{ version: '20260807005457', name: null }],
+        [{ version: '20260914000000', name: 'x', file: '20260914000000_x.sql' }],
       ),
     ).toEqual([])
   })
