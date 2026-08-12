@@ -16,23 +16,33 @@
 //   • 20260806190324 was a `db pull` snapshot, committed but never repaired
 //     into the history. Being older than 30 applied migrations, replaying it
 //     would have reverted eight views and four functions to their August state.
+//   • 20260909000000 was used twice — by `pmps_booking_lead_stage` and then, a
+//     day later, by `lead_discovery_stage`. `db push` applies a version once, so
+//     the second file's SQL never ran, and every check here stayed green because
+//     the version *was* recorded. Applying it by hand stamped 20260910000000 and
+//     turned a silent skip into an orphan.
 //
 // Nothing deploys migrations automatically here — Vercel ships code only — so a
 // merged migration reaches the database only when someone remembers to run
 // `supabase db push`. The scheduled run is what catches the time they don't.
 //
 // Run: npm run check:migration-drift
-// Exits 1 on an orphaned or out-of-order migration always, and on a merely
-// pending one when --strict is passed (the scheduled run).
+// Exits 1 on a duplicate, colliding, orphaned or out-of-order migration always,
+// and on a merely pending one when --strict is passed (the scheduled run).
+//
+// Flags:
+//   --strict         also fail on migrations that are merged but not applied
+//   --write-missing  materialize an orphan into a file from its recorded SQL
 
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const MIGRATION_FILE = /^(\d{14})_.*\.sql$/
+const MIGRATION_FILE = /^(\d{14})_(.*)\.sql$/
+const MIGRATIONS_DIR = 'supabase/migrations'
 
-/** Versions of the migration files in `dir`, in the order they would apply. */
-export function localVersions(dir) {
+/** The migration files in `dir`, in the order they would apply. */
+export function localMigrations(dir) {
   let entries
   try {
     entries = readdirSync(dir)
@@ -40,13 +50,61 @@ export function localVersions(dir) {
     return []
   }
   // flatMap rather than map+filter so the result is genuinely a list of
-  // strings — `filter(Boolean)` leaves `undefined` in the inferred type.
+  // objects — `filter(Boolean)` leaves `undefined` in the inferred type.
   return entries
-    .flatMap(name => {
-      const match = name.match(MIGRATION_FILE)
-      return match ? [match[1]] : []
+    .flatMap(file => {
+      const match = file.match(MIGRATION_FILE)
+      return match ? [{ version: match[1], name: match[2], file }] : []
     })
-    .sort()
+    .sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0))
+}
+
+/** Versions of the migration files in `dir`, in the order they would apply. */
+export function localVersions(dir) {
+  return localMigrations(dir).map(migration => migration.version).sort()
+}
+
+/**
+ * Files that share a version with another file.
+ *
+ * `db push` applies a version once and records it once, so the loser's SQL
+ * never runs — and never will, because the version now reads as applied. That
+ * makes a collision invisible to every comparison against the history below,
+ * which is why it is checked locally and without credentials.
+ */
+export function duplicateVersions(migrations) {
+  const byVersion = new Map()
+  for (const migration of migrations) {
+    const files = byVersion.get(migration.version) ?? []
+    files.push(migration.file)
+    byVersion.set(migration.version, files)
+  }
+  return [...byVersion]
+    .filter(([, files]) => files.length > 1)
+    .map(([version, files]) => ({ version, files: [...files].sort() }))
+    .sort((a, b) => (a.version < b.version ? -1 : 1))
+}
+
+/**
+ * Files whose version is recorded under a different name.
+ *
+ * The same silent skip as a duplicate, across a merge boundary: the colliding
+ * file landed in an earlier PR and is already applied, so a new file reusing
+ * its version is recorded as done the moment it merges. It also catches an
+ * applied migration being renamed, which the history can no longer match.
+ */
+export function nameMismatches(migrations, applied) {
+  const recorded = new Map(applied.map(row => [row.version, row.name]))
+  return migrations
+    .filter(migration => {
+      const name = recorded.get(migration.version)
+      return name !== undefined && name !== migration.name
+    })
+    .map(migration => ({
+      version: migration.version,
+      file: migration.file,
+      recorded: recorded.get(migration.version),
+    }))
 }
 
 /**
@@ -60,7 +118,8 @@ export function localVersions(dir) {
 export function compareMigrations(local, remote) {
   const localSet = new Set(local)
   const remoteSet = new Set(remote)
-  const pending = local.filter(v => !remoteSet.has(v)).sort()
+  // Deduped: a version used by two files is one pending migration, not two.
+  const pending = [...new Set(local.filter(v => !remoteSet.has(v)))].sort()
   const orphaned = remote.filter(v => !localSet.has(v)).sort()
   const newestApplied = remote.length > 0 ? [...remote].sort().at(-1) : null
   const outOfOrder = newestApplied ? pending.filter(v => v < newestApplied) : []
@@ -88,20 +147,91 @@ export function projectRefFromUrl(url) {
 // The history lives in `supabase_migrations`, which PostgREST does not expose,
 // so this goes through the Management API rather than the service-role key the
 // RPC check uses.
-async function fetchAppliedVersions(ref, token) {
+async function query(ref, token, sql) {
   const response = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: 'select version from supabase_migrations.schema_migrations order by version;',
-    }),
+    body: JSON.stringify({ query: sql }),
   })
   if (!response.ok) {
     throw new Error(`Management API returned HTTP ${response.status}`)
   }
   const rows = await response.json()
   if (!Array.isArray(rows)) throw new Error('Management API returned an unexpected shape')
-  return rows.map(row => String(row.version))
+  return rows
+}
+
+async function fetchAppliedMigrations(ref, token) {
+  const rows = await query(
+    ref,
+    token,
+    'select version, name from supabase_migrations.schema_migrations order by version;',
+  )
+  return rows.map(row => ({
+    version: String(row.version),
+    // Pre-CLI rows predate the column; treat a missing name as "unnamed"
+    // rather than letting `undefined` masquerade as a mismatch.
+    name: row.name == null ? null : String(row.name),
+  }))
+}
+
+/**
+ * Write an orphan back into the repo from the SQL the history recorded.
+ *
+ * The stock advice for an orphan — `migration repair --status reverted` —
+ * discards the record of DDL that is genuinely in the database. That is right
+ * only when the version was stamped for something already described by another
+ * file. When the DDL is real and simply never had a file (applied out of band,
+ * or by an agent with direct database access), the repo is what is missing, and
+ * this closes the gap in the direction that keeps the work.
+ */
+async function writeMissingMigrations(ref, token, orphaned, dir) {
+  // Versions come from the history and are matched against /^\d{14}$/ below, so
+  // there is nothing here to quote.
+  const safe = orphaned.filter(version => /^\d{14}$/.test(version))
+  if (safe.length === 0) return []
+  const rows = await query(
+    ref,
+    token,
+    'select version, name, statements from supabase_migrations.schema_migrations ' +
+      `where version in (${safe.map(version => `'${version}'`).join(', ')}) order by version;`,
+  )
+
+  const written = []
+  for (const row of rows) {
+    const { name, contents } = recoveredMigrationFile(row)
+    const file = join(dir, `${row.version}_${name}.sql`)
+    if (existsSync(file)) continue
+    writeFileSync(file, contents, 'utf8')
+    written.push(file)
+  }
+  return written
+}
+
+/** The filename stem and contents for one recovered history row. */
+export function recoveredMigrationFile(row) {
+  const name = (row.name == null ? '' : String(row.name)).replace(/[^a-z0-9_]/gi, '_')
+    || 'recovered_from_history'
+  const statements = Array.isArray(row.statements) ? row.statements : []
+  const body = statements
+    .map(statement => String(statement).trim().replace(/;\s*$/, ''))
+    .filter(Boolean)
+    .map(statement => `${statement};`)
+    .join('\n\n')
+  return {
+    name,
+    contents:
+      `-- ${name}\n` +
+      '--\n' +
+      '-- Recovered from the migration history by `npm run check:migration-drift --\n' +
+      '-- --write-missing`. The database recorded this version as applied while no\n' +
+      '-- file in this repo described it, so the SQL below is what that version\n' +
+      '-- actually ran, in order, rather than a reconstruction.\n' +
+      '--\n' +
+      '-- Review it before committing: it has to be safe to replay against a fresh\n' +
+      '-- database, which is what `supabase db reset --local` will do with it.\n\n' +
+      `${body}\n`,
+  }
 }
 
 async function main() {
@@ -109,31 +239,77 @@ async function main() {
   loadEnvFile('.env')
 
   const strict = process.argv.includes('--strict')
-  const local = localVersions('supabase/migrations')
+  const writeMissing = process.argv.includes('--write-missing')
+  const migrations = localMigrations(MIGRATIONS_DIR)
+  const local = migrations.map(migration => migration.version).sort()
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const token = process.env.SUPABASE_ACCESS_TOKEN
   const ref = process.env.SUPABASE_PROJECT_REF || projectRefFromUrl(url)
 
+  let failed = false
+
+  // Checked first, and before the credential guard, because a collision is
+  // wrong on its own terms: two files cannot both be the same version, and
+  // every comparison against the history below reads the loser as applied.
+  const duplicates = duplicateVersions(migrations)
+  if (duplicates.length > 0) {
+    failed = true
+    console.error(
+      `\n❌ ${duplicates.length} migration version${duplicates.length === 1 ? ' is' : 's are'} ` +
+        'used by more than one file:\n',
+    )
+    for (const { version, files } of duplicates) {
+      console.error(`   • ${version}`)
+      for (const file of files) console.error(`       ${file}`)
+    }
+    console.error(
+      '\n`db push` applies a version once, so only the first of these ever runs\n' +
+        'and the rest are silently skipped — with nothing to notice afterwards,\n' +
+        'because the version is recorded. Renumber the file that has not been\n' +
+        'applied yet to an unused timestamp:\n' +
+        '   git mv supabase/migrations/<version>_<name>.sql \\\n' +
+        '          supabase/migrations/<new-version>_<name>.sql\n',
+    )
+  }
+
   if (!ref || !token) {
-    // Never fail a build just because credentials are absent — the check is only
-    // meaningful where the history is readable.
+    // Never fail a build just because credentials are absent — the comparison
+    // against the history is only meaningful where the history is readable.
+    // The local invariants above still stand.
     console.log(
       `⊘ Skipping migration drift check (found ${local.length} migration files; ` +
         'set SUPABASE_ACCESS_TOKEN and SUPABASE_URL to verify them against the database)',
     )
-    return 0
+    return failed ? 1 : 0
   }
 
-  let remote
+  let applied
   try {
-    remote = await fetchAppliedVersions(ref, token)
+    applied = await fetchAppliedMigrations(ref, token)
   } catch (error) {
     console.error(`\n❌ Could not read the migration history: ${error.message}\n`)
     return 1
   }
 
+  const remote = applied.map(row => row.version)
   const { pending, orphaned, outOfOrder } = compareMigrations(local, remote)
-  let failed = false
+
+  const mismatches = nameMismatches(migrations, applied)
+  if (mismatches.length > 0) {
+    failed = true
+    console.error(
+      `\n❌ ${mismatches.length} migration file${mismatches.length === 1 ? ' reuses' : 's reuse'} ` +
+        'a version the database recorded for something else:\n',
+    )
+    for (const { version, file, recorded } of mismatches) {
+      console.error(`   • ${file} — ${version} is recorded as "${recorded}"`)
+    }
+    console.error(
+      '\nThe version already reads as applied, so this file will never run and\n' +
+        'nothing downstream will report it as pending. Renumber it to an unused\n' +
+        'timestamp, then apply it with `supabase db push`.\n',
+    )
+  }
 
   if (orphaned.length > 0) {
     failed = true
@@ -141,12 +317,38 @@ async function main() {
       `\n❌ ${orphaned.length} migration${orphaned.length === 1 ? '' : 's'} recorded in the ` +
         'database with no file in supabase/migrations:\n',
     )
-    for (const version of orphaned) console.error(`   • ${version}`)
+    for (const version of orphaned) {
+      const name = applied.find(row => row.version === version)?.name
+      console.error(`   • ${version}${name ? ` — ${name}` : ''}`)
+    }
     console.error(
-      '\nUsually DDL applied out of band, stamped with its own version. `supabase db\n' +
-        'push` refuses to run while this is present. Clear each one with:\n' +
+      '\nDDL applied out of band, stamped with its own version. `supabase db push`\n' +
+        'refuses to run while this is present, and it resolves in one of two\n' +
+        'directions — which one depends on whether the SQL it recorded is work the\n' +
+        'repo is missing.\n\n' +
+        'If it is (the usual case), bring it back into the repo:\n' +
+        '   npm run check:migration-drift -- --write-missing\n' +
+        'then review the generated file and commit it.\n\n' +
+        'Only if the version was stamped for something another file already\n' +
+        'describes, drop the history row instead:\n' +
         '   supabase migration repair --status reverted <version>\n',
     )
+
+    if (writeMissing) {
+      try {
+        const written = await writeMissingMigrations(ref, token, orphaned, MIGRATIONS_DIR)
+        if (written.length === 0) {
+          console.error('No file was written — every orphan already has one on disk.\n')
+        } else {
+          console.error(`Wrote ${written.length} migration${written.length === 1 ? '' : 's'} from the recorded history:\n`)
+          for (const file of written) console.error(`   • ${file}`)
+          console.error('\nReview each one, then commit it. This still exits non-zero:\n' +
+            'the drift is only closed once the file is on main.\n')
+        }
+      } catch (error) {
+        console.error(`Could not recover the recorded SQL: ${error.message}\n`)
+      }
+    }
   }
 
   if (outOfOrder.length > 0) {
