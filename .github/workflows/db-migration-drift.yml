@@ -12,8 +12,13 @@ name: Database migration drift
 #
 # A pull_request run cannot enforce that, because a migration added in a branch
 # is *supposed* to be unapplied. So pending migrations are only an error on the
-# scheduled run (--strict); orphaned and out-of-order ones are an error
-# everywhere, since neither is ever correct.
+# scheduled run (--strict); duplicate, colliding, orphaned and out-of-order ones
+# are an error everywhere, since none of those is ever correct.
+#
+# The pull_request run is what stops the collision this repo has already paid
+# for twice: two files sharing a version, where `db push` applies one and
+# silently skips the other. That needs no database to detect, so it fails even
+# when the Supabase secrets are absent and the rest of the check skips.
 
 on:
   pull_request:

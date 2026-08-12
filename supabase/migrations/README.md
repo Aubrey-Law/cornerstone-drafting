@@ -55,6 +55,37 @@ A migration-history row is not proof that its SQL executed. Missing relations, c
 RPCs require catalog verification and reconciliation, not manual insertion into migration
 history.
 
+## Version collisions
+
+Two files must never share a timestamp. `db push` applies a version once and records it
+once, so the second file's SQL never runs — and nothing reports it as pending afterwards,
+because the version reads as applied. `npm run check:migration-drift` fails on this, on
+every pull request, with no database access needed. Fix it by renumbering the file that has
+not been applied yet:
+
+```bash
+git mv supabase/migrations/<version>_<name>.sql supabase/migrations/<new-version>_<name>.sql
+```
+
+Always create migrations with `supabase migration new`, which stamps the current time, rather
+than hand-typing a timestamp — two branches picking the same round number is how this
+happens.
+
+## Recovering DDL applied out of band
+
+When the history records a version no file describes — DDL applied through the dashboard, the
+SQL editor, or an agent with direct database access — the repo is what is missing, not the
+database. Write the file back from the SQL the history recorded:
+
+```bash
+npm run check:migration-drift -- --write-missing
+```
+
+Review the generated file, confirm it is safe to replay against a fresh database (`supabase
+db reset --local`), and commit it. Reach for `supabase migration repair --status reverted`
+only when the version was stamped for something another file already describes; it discards
+the record of DDL that is genuinely applied.
+
 ## Storage
 
 Estate-plan template fallback uses a private Supabase Storage bucket named `templates`.
