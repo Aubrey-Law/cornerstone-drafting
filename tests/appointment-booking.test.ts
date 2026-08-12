@@ -15,13 +15,14 @@ const state = vi.hoisted(() => ({
   busy: [] as Array<{ start: number; end: number }>,
   lead: null as { id: string; lead_status: string } | null,
   matterId: null as string | null,
-  // Backs the discovery-anchor matter lookup (admin.from('matters').select('id')...).
-  // Default matches most tests, which don't care about the matter's own id.
+  // Backs any single-row select the booking path makes. Default matches most
+  // tests, which don't care about the row's own id.
   matterLookup: { id: 'matter-1' } as { id: string } | null,
   paused: false,
   dateOverrides: {} as Record<string, Array<{ start: string; end: string }>>,
   automationCalls: [] as Array<Record<string, unknown>>,
   pmpsAnchors: [] as Array<Record<string, unknown>>,
+  discoveryAnchors: [] as Array<Record<string, unknown>>,
   reset() {
     this.inserts = []
     this.updates = []
@@ -37,6 +38,7 @@ const state = vi.hoisted(() => ({
     this.dateOverrides = {}
     this.automationCalls = []
     this.pmpsAnchors = []
+    this.discoveryAnchors = []
   },
 }))
 
@@ -73,8 +75,6 @@ vi.mock('@/lib/supabaseAdmin', () => {
         state.inserts.push({ table: `${table}:upsert`, values })
         return { then: (resolve: (v: unknown) => unknown) => resolve({ error: null }) }
       }),
-      // Backs the discovery-anchor matter lookup: admin.from('matters').select('id')
-      // .eq('client_intake_id', leadId).order(...).limit(1).maybeSingle().
       select: vi.fn(() => {
         const chain = {
           eq: vi.fn(() => chain),
@@ -164,6 +164,16 @@ vi.mock('@/lib/appointments/automation', () => ({
 vi.mock('@/lib/bookings/pmpsAnchor', () => ({
   recordPmpsAnchor: vi.fn(async (_admin: unknown, input: Record<string, unknown>) => {
     state.pmpsAnchors.push(input)
+  }),
+}))
+
+// Same treatment as the pmps anchor: what belongs here is which bookings reach
+// the anchor and with what, not how it writes. The write itself — write-once vs
+// reschedule, the read-back, the task dating — is pinned in
+// tests/discovery-booking-anchor.test.ts against a mock that models it.
+vi.mock('@/lib/bookings/discoveryAnchor', () => ({
+  recordDiscoveryAnchor: vi.fn(async (_admin: unknown, input: Record<string, unknown>) => {
+    state.discoveryAnchors.push(input)
   }),
 }))
 
@@ -428,11 +438,15 @@ describe('bookAppointment', () => {
 
     await bookAppointment(bookingInput())
 
-    const stamped = state.updates.find(
-      u => u.table === 'matters' && 'discovery_call_at' in u.values,
-    )
-    expect(stamped).toBeDefined()
-    expect(stamped?.values.discovery_call_at).toBe(SLOT_ISO)
+    expect(state.discoveryAnchors).toEqual([
+      { leadId: 'lead-9', matterId: null, startIso: SLOT_ISO, overwrite: false },
+    ])
+  })
+
+  it('books write-once, so it cannot clobber a date an attorney corrected', async () => {
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+    await bookAppointment(bookingInput())
+    expect(state.discoveryAnchors[0]?.overwrite).toBe(false)
   })
 
   it('does not stamp the anchor for a non-discovery appointment type', async () => {
@@ -443,9 +457,7 @@ describe('bookAppointment', () => {
       type: { ...TYPE, key: 'signing_appointment', slug: 'signing', label: 'Signing' },
     })
 
-    expect(
-      state.updates.find(u => u.table === 'matters' && 'discovery_call_at' in u.values),
-    ).toBeUndefined()
+    expect(state.discoveryAnchors).toHaveLength(0)
   })
 })
 

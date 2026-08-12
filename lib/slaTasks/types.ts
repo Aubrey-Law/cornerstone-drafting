@@ -25,8 +25,12 @@ export const SLA_PHASES = [
   'drafting',
   'review', // legacy v1
   'client_review',
-  'drafts_approved',
+  // Revision then approval — see types/database.ts STAGES and
+  // 20260913000000_revision_before_drafts_approved.sql. Invisible to the phase
+  // views either way: `drafts_approved` is a review checkpoint carrying no
+  // tasks, so it is filtered out before anything groups or sorts by phase.
   'revision',
+  'drafts_approved',
   'signing_scheduled',
   'signing', // legacy v1
   'signing_complete',

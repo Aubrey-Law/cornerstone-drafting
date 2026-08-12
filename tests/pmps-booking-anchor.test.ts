@@ -203,12 +203,17 @@ describe('20260909000000 pmps booking lead stage', () => {
     'utf8',
   )
 
-  it('ranks every stage the app knows, in the same order', () => {
+  it('ranks every stage the app knows, strictly ascending', () => {
     const ranked = [...sql.matchAll(/when '([a-z_]+)'\s+then (\d+)/g)].map(match => ({
       stage: match[1],
       rank: Number(match[2]),
     }))
-    expect(ranked.map(entry => entry.stage)).toEqual([...SLA_PHASES])
+    // Set, not sequence. This file is no longer where the order lives:
+    // 20260911000000 added discovery_call and 20260913000000 put revision ahead
+    // of drafts_approved, so the *current* ladder is asserted against
+    // SLA_PHASES in tests/discovery-booking-anchor.test.ts. What still has to
+    // hold here is that this copy named every phase the app knew at the time.
+    expect(ranked.map(entry => entry.stage).sort()).toEqual([...SLA_PHASES].sort())
     // Strictly ascending, or "forward-only" would let a stage move backwards.
     expect(ranked.every((entry, i) => i === 0 || entry.rank > ranked[i - 1].rank)).toBe(true)
   })

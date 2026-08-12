@@ -1,5 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { MeetingTypeKey } from '@/lib/scheduling'
+import { recordDiscoveryAnchor } from '@/lib/bookings/discoveryAnchor'
 import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import {
   findLeadByEmail,
@@ -306,6 +307,30 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
       await recordPmpsAnchor(admin, { leadId: lead?.id ?? null, matterId, startIso: startTime })
     } catch (err) {
       console.error(`[${provider}] pmps anchor error for`, lead?.id ?? matterId, err)
+    }
+  }
+
+  // The discovery call is the earlier anchor of the same pre-engagement clock,
+  // and it reaches us through exactly this webhook whenever the client books
+  // from cal.com rather than from the firm's own scheduling page. Stamping it
+  // only on the scheduling page left the provider path writing an appointment
+  // row and nothing else: no anchor, so the four `relative_to='discovery_call'`
+  // tasks stayed undated, and no stage move, so the lead sat in `new_lead` on a
+  // 1-day attorney SLA reporting a breach nobody was late on.
+  //
+  // `cancelled` and `superseded` are excluded for the reason the scheduling page
+  // excludes a no-show: the tasks due at discovery_call+0 assume the
+  // conversation happened.
+  if (eventKey === 'discovery_call' && startTime && (action === 'created' || action === 'rescheduled')) {
+    try {
+      await recordDiscoveryAnchor(admin, {
+        leadId: lead?.id ?? null,
+        matterId,
+        startIso: startTime,
+        overwrite: action === 'rescheduled',
+      })
+    } catch (err) {
+      console.error(`[${provider}] discovery anchor error for`, lead?.id ?? matterId, err)
     }
   }
 }
