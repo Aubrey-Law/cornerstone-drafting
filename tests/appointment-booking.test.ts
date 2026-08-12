@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   paused: false,
   dateOverrides: {} as Record<string, Array<{ start: string; end: string }>>,
   automationCalls: [] as Array<Record<string, unknown>>,
+  pmpsAnchors: [] as Array<Record<string, unknown>>,
   reset() {
     this.inserts = []
     this.updates = []
@@ -31,6 +32,7 @@ const state = vi.hoisted(() => ({
     this.paused = false
     this.dateOverrides = {}
     this.automationCalls = []
+    this.pmpsAnchors = []
   },
 }))
 
@@ -134,6 +136,12 @@ vi.mock('@/lib/appointments/settings', () => ({
 vi.mock('@/lib/appointments/automation', () => ({
   runPostBookingAutomation: vi.fn(async (input: Record<string, unknown>) => {
     state.automationCalls.push(input)
+  }),
+}))
+
+vi.mock('@/lib/bookings/pmpsAnchor', () => ({
+  recordPmpsAnchor: vi.fn(async (_admin: unknown, input: Record<string, unknown>) => {
+    state.pmpsAnchors.push(input)
   }),
 }))
 
@@ -339,15 +347,41 @@ describe('bookAppointment', () => {
     await expect(bookAppointment(bookingInput())).rejects.toThrow(SlotTakenError)
   })
 
-  it('upserts matter_details design meeting date for pmps bookings with a matter', async () => {
+  it('records the pmps anchor for a hired matter and writes no design meeting date', async () => {
     state.matterId = 'matter-7'
     await bookAppointment({
       ...bookingInput(),
       type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
     })
+    expect(state.pmpsAnchors).toEqual([
+      { leadId: null, matterId: 'matter-7', startIso: SLOT_ISO },
+    ])
+    // v3 moved the planning session out of the design phase; stamping it as the
+    // design meeting date put a pre-engagement sales call on the matter's
+    // post-engagement timeline.
     const upsert = state.inserts.find(i => i.table === 'matter_details:upsert')
-    expect(upsert?.values.design_meeting_date).toBe('2026-08-10')
+    expect(upsert?.values.design_meeting_date).toBeUndefined()
     expect(state.inserts.some(i => i.table === 'matter_notes')).toBe(true)
+  })
+
+  it('records the pmps anchor for a lead with no hired matter', async () => {
+    // The case the old code could not reach: findMatterIdByEmail is hired-only,
+    // and under v3 the planning session happens before anyone is hired.
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+    state.matterId = null
+    await bookAppointment({
+      ...bookingInput(),
+      type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
+    })
+    expect(state.pmpsAnchors).toEqual([
+      { leadId: 'lead-9', matterId: null, startIso: SLOT_ISO },
+    ])
+  })
+
+  it('leaves the pmps anchor alone for other appointment types', async () => {
+    state.matterId = 'matter-7'
+    await bookAppointment(bookingInput())
+    expect(state.pmpsAnchors).toHaveLength(0)
   })
 
   it('still books when the Graph event creation fails', async () => {
