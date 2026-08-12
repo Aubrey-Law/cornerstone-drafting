@@ -8,8 +8,10 @@
 --
 -- The clock is pinned to the call date rather than to the moment the booking is
 -- recorded. `business_days_elapsed` generates an empty series for a future
--- start and returns 0, so a lead booked ahead reads green until the day of the
--- call and only then starts counting toward the post-discovery email.
+-- start and returns 0, so with sla_days 1 the row reads amber as soon as it
+-- enters the stage — even while the call is still ahead — but `is_overdue`
+-- stays false until the call date has passed, matching how `new_lead` already
+-- behaves with the same 1/1 values. It goes red one business day after the call.
 
 -- ── The stage ───────────────────────────────────────────────────────────────
 
