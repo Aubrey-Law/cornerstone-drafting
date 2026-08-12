@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const MIGRATION = path.join(
   process.cwd(),
-  'supabase/migrations/20260909000000_lead_discovery_stage.sql',
+  'supabase/migrations/20260910000000_lead_discovery_stage.sql',
 )
 
 const sql = () => fs.readFileSync(MIGRATION, 'utf8')
