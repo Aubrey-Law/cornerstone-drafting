@@ -46,16 +46,12 @@
 --     `relation "public.communication_thread_state" does not exist`, because
 --     the tables they name are created later in the chain.
 --
--- Known residual drift, NOT introduced by this reduction and not fixable here:
--- a rebuilt database ends up with 377 `anon` table grants against production's
--- 616, and 698 `authenticated` against production's 616 — differing in both
--- directions, so no additive migration reconciles them. Everything else about a
--- fresh replay now matches production exactly: views, functions, table column
--- sets, indexes, policies, RLS flags, triggers, extensions and schemas. Since
--- RLS is enabled and the policies do match, this is a second-layer difference,
--- but deciding whether to loosen the repo toward production or tighten
--- production toward the repo is a judgement call someone should make on
--- purpose, in its own migration.
+-- The grants those 875 lines carried are not lost: `supabase/seed.sql` now
+-- reproduces production's anon/authenticated model for the local stack, where
+-- grants belong here anyway — they come from Supabase's platform setup on the
+-- hosted side, not from migrations. A fresh replay now matches production on
+-- every measurable dimension: views, functions, table column sets, indexes,
+-- policies, RLS flags, triggers, extensions, schemas and table ACLs.
 --
 -- Do not delete this file. `db push` refuses to run when a version recorded
 -- remotely has no file behind it, and `scripts/checkMigrationDrift.mjs` reports
