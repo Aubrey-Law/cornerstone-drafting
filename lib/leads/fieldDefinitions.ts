@@ -83,15 +83,22 @@ export const MINOR_CHILDREN_OPTIONS = [
   { value: 'false', label: 'No' },
 ] as const
 
+/**
+ * `optional` marks a name part the rail keeps out of sight while it is blank.
+ * A middle name and a preferred name are absent far more often than they are
+ * present, and two permanent "+ Add" chips per lead made the identity row read
+ * as unfinished on records that were complete.
+ */
 export const NAME_COMPONENTS = [
   { key: 'firstName', label: 'First name', property: 'first_name' },
-  { key: 'middleName', label: 'Middle name', property: 'middle_name' },
+  { key: 'middleName', label: 'Middle name', property: 'middle_name', optional: true },
   { key: 'lastName', label: 'Last name', property: 'last_name' },
-  { key: 'preferredName', label: 'Preferred name', property: 'preferred_name' },
+  { key: 'preferredName', label: 'Preferred name', property: 'preferred_name', optional: true },
 ] as const satisfies readonly {
   key: LeadEditableField
   label: string
   property: keyof LeadDetailRecord
+  optional?: boolean
 }[]
 
 export type LeadNameField = typeof NAME_COMPONENTS[number]['key']

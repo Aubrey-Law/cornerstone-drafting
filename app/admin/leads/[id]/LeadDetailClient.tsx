@@ -39,7 +39,11 @@ import type { RecordTaskCounts } from '@/lib/tasks/types'
 import {
   LeadFieldsRail,
   LEAD_DETAIL_RAIL_WIDTH,
+  type LeadChannelField,
+  type LeadChannelTarget,
+  type LeadKeyDates,
 } from '@/components/leads/LeadFieldsRail'
+import type { ContactChannel } from '@/lib/contacts/additionalChannels'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
@@ -91,6 +95,8 @@ type LeadDetailClientProps = {
   actorError?: string | null
   currentUser?: { id: string; role: string }
   activeAgreement?: { id: string } | null
+  /** Null when the opportunity has no matter row to hang the SLA clock on. */
+  initialKeyDates?: LeadKeyDates | null
   peopleMatter?: PipelineMatter | null
   initialPeopleContacts?: MatterContact[]
   initialTaskCounts?: RecordTaskCounts
@@ -161,6 +167,7 @@ export function LeadDetailClient({
   actorError = null,
   currentUser = { id: '', role: '' },
   activeAgreement = null,
+  initialKeyDates = null,
   peopleMatter = null,
   initialPeopleContacts = [],
   initialTaskCounts = { open: 0, overdue: 0 },
@@ -191,6 +198,8 @@ export function LeadDetailClient({
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeLinkBusy, setIntakeLinkBusy] = useState(false)
   const [communicationInitialMessage, setCommunicationInitialMessage] = useState<string | undefined>()
+  const [keyDates, setKeyDates] = useState<LeadKeyDates | null>(initialKeyDates)
+  const [keyDatesSaving, setKeyDatesSaving] = useState(false)
 
   useEffect(() => {
     if (!isMobileDetailViewport()) setRailOpen(true)
@@ -422,6 +431,63 @@ export function LeadDetailClient({
       setError(caught instanceof Error ? caught.message : 'Could not save')
     } finally {
       setBusy(false)
+    }
+  }
+
+  /**
+   * Secondary emails and phone numbers for the client or the spouse. They are
+   * contact detail rather than lead qualification, so they take the channels
+   * route instead of the audited field RPC.
+   */
+  async function saveChannels(
+    target: LeadChannelTarget,
+    field: LeadChannelField,
+    channels: ContactChannel[],
+  ) {
+    try {
+      const json = await call<{ value?: ContactChannel[] }>(
+        `/api/admin/leads/${lead.id}/channels`,
+        { target, field, value: channels },
+        'PATCH',
+      )
+      const saved = json.value ?? channels
+      if (target === 'client') setLead(current => ({ ...current, [field]: saved }))
+      else setSpouse(current => (current ? { ...current, [field]: saved } : current))
+      toast.success('Saved')
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Could not save')
+    }
+  }
+
+  /**
+   * Discovery and PMPS dates belong to the opportunity's matter row, and
+   * setting one also re-dates every SLA task waiting on that anchor — which is
+   * what the sla-anchors route does in a single request. The rail edits them,
+   * so the same write is available here without opening the SLA tab.
+   */
+  async function saveKeyDate(field: keyof LeadKeyDates, value: string | null) {
+    if (!lead.matter_id) return
+    setKeyDatesSaving(true)
+    try {
+      const json = await call<{ anchors?: LeadKeyDates; rescheduled?: number }>(
+        `/api/admin/matters/${lead.matter_id}/sla-anchors`,
+        { [field]: value },
+        'PATCH',
+      )
+      setKeyDates({
+        discoveryCallAt: json.anchors?.discoveryCallAt ?? null,
+        pmpsAt: json.anchors?.pmpsAt ?? null,
+      })
+      toast.success(
+        json.rescheduled
+          ? `Saved — ${json.rescheduled} task${json.rescheduled === 1 ? '' : 's'} scheduled`
+          : 'Saved',
+      )
+      await refreshActivityBestEffort()
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'Could not save the key date')
+    } finally {
+      setKeyDatesSaving(false)
     }
   }
 
@@ -699,6 +765,10 @@ export function LeadDetailClient({
           <LeadFieldsRail
             lead={lead}
             spouse={spouse}
+            onSaveChannels={saveChannels}
+            keyDates={keyDates}
+            onSaveKeyDate={saveKeyDate}
+            keyDatesSaving={keyDatesSaving}
             activeField={activeField}
             onActiveFieldChange={changeActiveField}
             onSaveField={saveField}

@@ -73,6 +73,9 @@ export function emailHtmlIsEmpty(html: string): boolean {
   return emailHtmlToText(html).length === 0
 }
 
+/** Floor for a dragged body height, in px — a drag can shrink but not erase it. */
+const MIN_BODY_HEIGHT = 96
+
 interface RichTextEmailEditorProps {
   /** Current HTML value (controlled). Set to '' to clear. */
   valueHtml: string
@@ -101,7 +104,11 @@ export function RichTextEmailEditor({
   const editorRef = useRef<HTMLDivElement | null>(null)
   const selectedRangeRef = useRef<Range | null>(null)
   const editedAnchorRef = useRef<HTMLAnchorElement | null>(null)
+  const dragRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const [expanded, setExpanded] = useState(false)
+  // Set once the operator drags the resize handle. Until then the body has no
+  // height of its own and simply grows with the message.
+  const [draggedHeight, setDraggedHeight] = useState<number | null>(null)
   const [linkEditorOpen, setLinkEditorOpen] = useState(false)
   const [editingLink, setEditingLink] = useState(false)
   const [linkText, setLinkText] = useState('')
@@ -121,6 +128,37 @@ export function RichTextEmailEditor({
     const el = editorRef.current
     if (!el) return
     onChange(sanitize(el.innerHTML))
+  }
+
+  /**
+   * Drag the bottom edge to pick a height. Pointer capture keeps the moves
+   * coming while the cursor is over the message text, and the floor stops a
+   * stray drag from collapsing the body to nothing.
+   */
+  function startResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (disabled) return
+    const el = editorRef.current
+    if (!el) return
+    event.preventDefault()
+    dragRef.current = {
+      startY: event.clientY,
+      startHeight: draggedHeight ?? el.getBoundingClientRect().height,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  function onResizeMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    if (!drag) return
+    setDraggedHeight(Math.max(MIN_BODY_HEIGHT, drag.startHeight + (event.clientY - drag.startY)))
+  }
+
+  function endResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return
+    dragRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   function exec(command: string, value?: string) {
@@ -271,7 +309,12 @@ export function RichTextEmailEditor({
         )}
         <div className="ml-auto">
           <ToolbarButton
-            onClick={() => setExpanded(prev => !prev)}
+            onClick={() => {
+              // A dragged height outranks both presets, so the toggle drops it —
+              // otherwise the button would look broken after a resize.
+              setDraggedHeight(null)
+              setExpanded(prev => !prev)
+            }}
             disabled={disabled}
             title={expanded ? 'Collapse message area' : 'Expand message area'}
           >
@@ -297,14 +340,37 @@ export function RichTextEmailEditor({
           event.preventDefault()
           openLinkEditor(anchor)
         }}
+        // Without a dragged height the body has no cap: a long message shows in
+        // full and the surrounding pane scrolls, rather than the last
+        // paragraphs hiding inside a nested scroll area.
+        style={draggedHeight === null ? undefined : { height: draggedHeight }}
         className={cn(
-          'overflow-y-auto px-3 py-2 text-sm leading-relaxed outline-none',
-          expanded ? 'min-h-[20rem] max-h-[60dvh]' : 'min-h-[9rem] max-h-[40dvh]',
+          'px-3 py-2 text-sm leading-relaxed outline-none',
+          draggedHeight === null
+            ? cn('overflow-y-visible', expanded ? 'min-h-[20rem]' : 'min-h-[9rem]')
+            : 'overflow-y-auto',
           '[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-primary [&_a]:underline',
           'empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]',
           disabled && 'opacity-60',
         )}
       />
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize message area"
+        title="Drag to resize the message area"
+        onPointerDown={startResize}
+        onPointerMove={onResizeMove}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        onDoubleClick={() => setDraggedHeight(null)}
+        className={cn(
+          'flex h-3 cursor-ns-resize items-center justify-center border-t border-border/60 bg-muted/30 hover:bg-muted',
+          disabled && 'pointer-events-none opacity-60',
+        )}
+      >
+        <span aria-hidden className="h-0.5 w-8 rounded-full bg-border" />
+      </div>
       <Dialog open={linkEditorOpen} onOpenChange={setLinkEditorOpen}>
         <DialogContent>
           <DialogHeader>

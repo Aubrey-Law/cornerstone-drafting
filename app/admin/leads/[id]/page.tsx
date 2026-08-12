@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { firmDateKey } from '@/lib/firmDate'
 import { createServerSupabase, getCachedUserRole } from '@/lib/supabaseServer'
 import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
@@ -152,6 +153,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         fetchMatterContacts(lead.matter_id),
       ])
     : [null, []]
+  // The pre-engagement clock's anchors live on the opportunity's matter row.
+  // The rail edits them, so they load with the page rather than behind the SLA
+  // tab's fetch.
+  const { data: anchorRow } = lead.matter_id
+    ? await admin.from('matters').select('discovery_call_at, pmps_at').eq('id', lead.matter_id).maybeSingle()
+    : { data: null }
+  const initialKeyDates = lead.matter_id
+    ? {
+        discoveryCallAt: anchorRow?.discovery_call_at ? firmDateKey(anchorRow.discovery_call_at) : null,
+        pmpsAt: anchorRow?.pmps_at ? firmDateKey(anchorRow.pmps_at) : null,
+      }
+    : null
   const { data: agreement } = lead.matter_id
     ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
@@ -172,6 +185,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       lastTouchAt={lastTouchAt}
       actorError={actorResult.error?.message ?? null}
       activeAgreement={agreement}
+      initialKeyDates={initialKeyDates}
       peopleMatter={peopleMatter}
       initialPeopleContacts={initialPeopleContacts}
       currentUser={{

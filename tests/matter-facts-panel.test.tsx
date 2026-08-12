@@ -31,6 +31,8 @@ const CONTACTS_PAYLOAD = {
     date_of_birth: '1958-04-12',
     marital_status: 'married',
     has_minor_children: false,
+    additional_emails: [{ label: 'Work', value: 'm.chen@firm.example.com' }],
+    additional_phones: [],
   },
   contacts: [
     {
@@ -206,7 +208,7 @@ describe('MatterFactsPanel', () => {
     const user = userEvent.setup()
     renderPanel()
     await screen.findByText('margaret.chen@example.com')
-    for (const label of ['Email', 'Phone', 'Address', 'Date of birth', 'County', 'Minor children', 'Consent']) {
+    for (const label of ['Email', 'Phone', 'Address', 'Date of birth', 'Minor children', 'Consent']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     for (const label of ['Practice area', 'Plan', 'Lead source', 'Flat fee']) {
@@ -214,12 +216,70 @@ describe('MatterFactsPanel', () => {
     }
     // Dates ships collapsed by default, so open it before asserting its rows.
     await user.click(screen.getByRole('button', { name: /^dates/i }))
-    for (const label of [
-      'Engagement signed', 'Target signing', 'Design meeting',
-      'Drafts due', 'Drafts review', 'Revisions', 'Plan signed',
-    ]) {
+    for (const label of ['Engagement signed', 'Target signing', 'Design meeting']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
+  })
+
+  it('hides rows with no value until empty fields are shown', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('margaret.chen@example.com')
+    // County is unset on this matter, so it starts out of the rail entirely.
+    expect(screen.queryByText('County')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Show empty fields' }))
+    expect(screen.getAllByText('County').length).toBeGreaterThan(0)
+    // Dates the matter has not reached come back with it.
+    await user.click(screen.getByRole('button', { name: /^dates/i }))
+    for (const label of ['Drafts due', 'Drafts review', 'Revisions', 'Plan signed']) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+    }
+
+    await user.click(screen.getByRole('button', { name: 'Hide empty fields' }))
+    expect(screen.queryByText('County')).toBeNull()
+  })
+
+  it('lists the extra emails a client carries and saves an added one', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    // The recorded second address reads in the Contact section…
+    expect(await screen.findByText('Work · m.chen@firm.example.com')).toBeTruthy()
+
+    await user.click(screen.getAllByRole('button', { name: 'Edit Other emails' })[0])
+    await user.click(screen.getByRole('button', { name: 'Add another' }))
+    await user.type(screen.getByLabelText('Other emails 2'), 'margaret@personal.example.com')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(patchCalls().length).toBeGreaterThan(0))
+    const [, init] = patchCalls()[patchCalls().length - 1]
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      target: 'client',
+      patch: {
+        additional_emails: [
+          { label: 'Work', value: 'm.chen@firm.example.com' },
+          { label: '', value: 'margaret@personal.example.com' },
+        ],
+      },
+    })
+  })
+
+  it('refuses to save an additional email that is not an address', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await user.click((await screen.findAllByRole('button', { name: 'Edit Other emails' }))[0])
+    await user.click(screen.getByRole('button', { name: 'Add another' }))
+    await user.type(screen.getByLabelText('Other emails 2'), 'not-an-address')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(patchCalls()).toHaveLength(0)
+  })
+
+  it('keeps rows that carry a value while empty ones are hidden', async () => {
+    renderPanel({ details: { ...DETAILS, jurisdiction_county: 'Middlesex' } })
+    expect(await screen.findByText('Middlesex')).toBeTruthy()
+    expect(screen.getAllByText('County').length).toBeGreaterThan(0)
   })
 
   it('hides the Spouse section when the client is not married', async () => {
@@ -270,6 +330,7 @@ describe('MatterFactsPanel', () => {
   it('saves a matter details field through onSaveField', async () => {
     const user = userEvent.setup()
     const { onSaveField } = renderPanel()
+    await user.click(await screen.findByRole('button', { name: 'Show empty fields' }))
     await user.click(await screen.findByRole('button', { name: /County/ }))
     const input = screen.getByLabelText('County')
     await user.clear(input)

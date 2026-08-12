@@ -91,6 +91,9 @@ export interface LeadDetailRecord {
 }
 
 export interface LeadSpouseRecord {
+  /** Secondary emails/phones, as stored on the contact row. */
+  additional_emails?: unknown
+  additional_phones?: unknown
   first_name?: string | null
   middle_name?: string | null
   last_name?: string | null

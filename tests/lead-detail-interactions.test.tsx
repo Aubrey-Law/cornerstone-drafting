@@ -785,10 +785,13 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={sparseLead} spouse={null} initialActivity={[]} />)
 
     const rail = screen.getByRole('complementary', { name: 'Lead details' })
+    // Middle and preferred name are optional, so their pills wait behind "+ More"
+    // rather than reading as two unfinished fields on every lead.
     expect(within(rail).getAllByRole('button', { name: /^Add / })
       .map(button => button.getAttribute('aria-label'))).toEqual([
-      'Add Middle name',
-      'Add Preferred name',
+      // Secondary addresses sit above the field groups, empty until asked for.
+      'Add Client emails',
+      'Add Client phones',
       'Add Phone',
       'Add Date of birth',
       'Add Spouse',
@@ -905,6 +908,7 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     expect(within(screen.getByRole('complementary', { name: 'Lead details' })).queryByText('—')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Show middle and preferred name' }))
     await user.click(screen.getByRole('button', { name: 'Add Middle name' }))
     await user.type(screen.getByRole('textbox', { name: 'Middle name' }), 'Quincy{Enter}')
 
@@ -926,6 +930,7 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
 
     expect(within(screen.getByRole('complementary', { name: 'Lead details' })).queryByText('—')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Show middle and preferred name' }))
     await user.click(screen.getByRole('button', { name: 'Add Preferred name' }))
     await user.type(screen.getByRole('textbox', { name: 'Preferred name' }), 'Janie{Enter}')
 

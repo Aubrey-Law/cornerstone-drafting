@@ -7,7 +7,15 @@ import {
   sanitizeLeadFiduciaryContacts,
 } from '@/lib/leadFiduciaries'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
+import {
+  ContactChannelError,
+  normalizeContactChannels,
+  parseContactChannels,
+} from '@/lib/contacts/additionalChannels'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+
+/** Secondary emails/phones, editable on both the client and any contact. */
+const ADDITIONAL_CHANNEL_FIELDS = ['additional_emails', 'additional_phones'] as const
 
 const ROLE_LABELS: Record<string, string> = {
   trustee: 'Trustee',
@@ -24,12 +32,14 @@ const CLIENT_FIELDS = new Set([
   'suffix', 'preferred_name', 'preferred_pronoun', 'date_of_birth',
   // Edited inline from the matter facts panel's identity header and Contact section.
   'full_name', 'marital_status', 'has_minor_children',
+  ...ADDITIONAL_CHANNEL_FIELDS,
 ])
 
 const CONTACT_FIELDS = new Set([
   'first_name', 'middle_name', 'last_name', 'email', 'phone',
   'address_line1', 'date_of_birth', 'relationship_label',
   'suffix', 'preferred_name', 'preferred_pronoun',
+  ...ADDITIONAL_CHANNEL_FIELDS,
 ])
 
 type Params = { params: Promise<{ id: string }> }
@@ -51,6 +61,8 @@ interface ContactRow {
   preferred_pronoun: string | null
   email: string | null
   phone: string | null
+  additional_emails: unknown
+  additional_phones: unknown
   address_line1: string | null
   date_of_birth: string | null
   relationship_type: string | null
@@ -80,13 +92,14 @@ export async function GET(req: NextRequest, { params }: Params) {
   const [intakeRes, contactsRes] = await Promise.all([
     admin
       .from('client_intake')
-      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, date_of_birth, email, phone, address_line1, city, state, zip, full_name, marital_status, has_minor_children')
+      .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, date_of_birth, email, phone, additional_emails, additional_phones, address_line1, city, state, zip, full_name, marital_status, has_minor_children')
       .eq('id', intakeId)
       .single(),
     admin
       .from('contacts')
       .select(`
-        id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, email, phone, address_line1, date_of_birth,
+        id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, email, phone,
+        additional_emails, additional_phones, address_line1, date_of_birth,
         relationship_type, relationship_label,
         contact_roles ( role, for_party, priority, is_coagent )
       `)
@@ -102,6 +115,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   const contacts = (contactsRes.data ?? []).map(c => ({
     ...c,
     phone: formatPhoneDisplay(c.phone),
+    additional_emails: parseContactChannels(c.additional_emails),
+    additional_phones: parseContactChannels(c.additional_phones),
     role_labels: (c.contact_roles ?? []).map(r => {
       const label = ROLE_LABELS[r.role] ?? r.role
       const party = r.for_party === 'spouse' ? ' (spouse)' : ''
@@ -115,6 +130,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     client: {
       ...intakeRes.data,
       phone: formatPhoneDisplay(intakeRes.data.phone),
+      additional_emails: parseContactChannels(intakeRes.data.additional_emails),
+      additional_phones: parseContactChannels(intakeRes.data.additional_phones),
     },
     contacts,
   })
@@ -201,6 +218,51 @@ export async function POST(req: NextRequest, { params }: Params) {
   return NextResponse.json({ ok: true, insertedContactCount: result.insertedContactCount })
 }
 
+/**
+ * Whitelist an incoming patch and canonicalize what it carries.
+ *
+ * The additional email/phone lists are deduplicated against the primary
+ * address, which may itself be in this same patch — so the row is only read
+ * when the request does not already say what the primary will be.
+ *
+ * @throws ContactChannelError when an additional entry is unusable.
+ */
+async function buildContactPatch(
+  admin: ReturnType<typeof getAdminClient>,
+  incoming: Record<string, unknown>,
+  allowed: Set<string>,
+  row: { table: 'client_intake' | 'contacts'; match: Record<string, string> },
+): Promise<Record<string, unknown>> {
+  const patch: Record<string, unknown> = {}
+  const touchesChannels = ADDITIONAL_CHANNEL_FIELDS.some(field => field in incoming)
+  let stored: { email: string | null; phone: string | null } | null = null
+  if (touchesChannels) {
+    let query = admin.from(row.table).select('email, phone')
+    for (const [column, value] of Object.entries(row.match)) query = query.eq(column, value)
+    const { data } = await query.maybeSingle()
+    stored = {
+      email: (data?.email as string | null) ?? null,
+      phone: (data?.phone as string | null) ?? null,
+    }
+  }
+  const primaryEmail = typeof incoming.email === 'string' ? incoming.email : stored?.email ?? null
+  const primaryPhone = typeof incoming.phone === 'string' ? incoming.phone : stored?.phone ?? null
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (!allowed.has(key)) continue
+    if (key === 'additional_emails') {
+      patch[key] = normalizeContactChannels(value, 'email', primaryEmail)
+    } else if (key === 'additional_phones') {
+      patch[key] = normalizeContactChannels(value, 'phone', primaryPhone)
+    } else if (key === 'phone') {
+      patch[key] = formatPhoneForStorage(typeof value === 'string' ? value : '')
+    } else {
+      patch[key] = value === '' ? null : value
+    }
+  }
+  return patch
+}
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { err } = await requireAdmin(req)
   if (err) return err
@@ -230,9 +292,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const intakeId = matter.client_intake_id as string
 
   if (body.target === 'client') {
-    const patch: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(body.patch)) {
-      if (CLIENT_FIELDS.has(k)) patch[k] = k === 'phone' ? formatPhoneForStorage(typeof v === 'string' ? v : '') : v === '' ? null : v
+    let patch: Record<string, unknown>
+    try {
+      patch = await buildContactPatch(admin, body.patch, CLIENT_FIELDS, {
+        table: 'client_intake',
+        match: { id: intakeId },
+      })
+    } catch (error) {
+      if (error instanceof ContactChannelError) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+      throw error
     }
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: true })
@@ -246,9 +316,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!body.contactId) {
       return NextResponse.json({ error: 'contactId required' }, { status: 400 })
     }
-    const patch: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(body.patch)) {
-      if (CONTACT_FIELDS.has(k)) patch[k] = k === 'phone' ? formatPhoneForStorage(typeof v === 'string' ? v : '') : v === '' ? null : v
+    let patch: Record<string, unknown>
+    try {
+      patch = await buildContactPatch(admin, body.patch, CONTACT_FIELDS, {
+        table: 'contacts',
+        match: { id: body.contactId, client_intake_id: intakeId },
+      })
+    } catch (error) {
+      if (error instanceof ContactChannelError) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+      throw error
     }
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: true })

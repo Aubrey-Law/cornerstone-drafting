@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { formatPhoneInput } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import { LeadReadinessDial } from '@/components/leads/LeadReadinessDial'
+import { ChannelListField } from '@/components/contacts/ChannelListField'
+import { parseContactChannels, type ContactChannel } from '@/lib/contacts/additionalChannels'
 import type { LeadEditableField } from '@/lib/leads/details'
 import {
   isNameField,
@@ -35,9 +37,43 @@ type FieldErrorState = {
 
 export const LEAD_DETAIL_RAIL_WIDTH = 'w-[340px]'
 
+/**
+ * The pre-engagement clock's anchors, as `YYYY-MM-DD` or null. They live on the
+ * opportunity's matter row, not on the intake, so they save through the
+ * sla-anchors route rather than `onSaveField` — setting one also re-dates every
+ * task waiting on it.
+ */
+export type LeadKeyDates = {
+  discoveryCallAt: string | null
+  pmpsAt: string | null
+}
+
+export const LEAD_KEY_DATE_FIELDS: {
+  key: keyof LeadKeyDates
+  label: string
+  hint: string
+}[] = [
+  { key: 'discoveryCallAt', label: 'Discovery date', hint: 'Starts the pre-engagement clock' },
+  { key: 'pmpsAt', label: 'PMPS date', hint: 'Dates the organizer and prep tasks' },
+]
+
+/** Which person's secondary addresses an edit is for. */
+export type LeadChannelTarget = 'client' | 'spouse'
+export type LeadChannelField = 'additional_emails' | 'additional_phones'
+
 export type LeadFieldsRailProps = {
   lead: LeadRecord
   spouse: LeadSpouse | null
+  /** Absent on surfaces that do not edit the extra emails and phones. */
+  onSaveChannels?: (
+    target: LeadChannelTarget,
+    field: LeadChannelField,
+    channels: ContactChannel[],
+  ) => Promise<void>
+  /** Absent when the opportunity has no matter record to hang the clock on. */
+  keyDates?: LeadKeyDates | null
+  onSaveKeyDate?: (field: keyof LeadKeyDates, value: string | null) => Promise<void>
+  keyDatesSaving?: boolean
   activeField: LeadEditableField | null
   onActiveFieldChange: (field: LeadEditableField | null) => void
   onSaveField: (field: LeadEditableField, value: unknown) => Promise<void>
@@ -73,6 +109,10 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export function LeadFieldsRail({
   lead,
   spouse,
+  onSaveChannels,
+  keyDates = null,
+  onSaveKeyDate,
+  keyDatesSaving = false,
   activeField,
   onActiveFieldChange,
   onSaveField,
@@ -85,6 +125,7 @@ export function LeadFieldsRail({
   const [savingField, setSavingField] = useState<LeadEditableField | null>(null)
   const [savedField, setSavedField] = useState<LeadEditableField | null>(null)
   const [fieldError, setFieldError] = useState<FieldErrorState | null>(null)
+  const [showOptionalNames, setShowOptionalNames] = useState(false)
   const lastPersistedRef = useRef<unknown>(null)
   const savingRef = useRef(false)
   const suppressSpouseBlurRef = useRef(false)
@@ -291,6 +332,30 @@ export function LeadFieldsRail({
       )
     }
 
+    if (field.input === 'date') {
+      // A date input reports every segment edit, and reads back as "" until all
+      // three are filled. Saving on any change therefore closed the row the
+      // moment a month was typed — the whole date never got in. Only a complete
+      // date commits here; clearing one still works, through blur or Enter.
+      return (
+        <div {...sharedContainerProps}>
+          <Input
+            autoFocus
+            aria-label={field.label}
+            className="h-8"
+            disabled={disabled}
+            type="date"
+            value={String(draft ?? '')}
+            onChange={event => {
+              const next = event.target.value
+              setDraft(next)
+              if (next) void commitField(field.key, next)
+            }}
+          />
+        </div>
+      )
+    }
+
     return (
       <div {...sharedContainerProps}>
         <Input
@@ -311,9 +376,16 @@ export function LeadFieldsRail({
 
   /** The name row splits into one trigger per populated component. */
   function renderNameValue() {
+    // A blank middle or preferred name stays out of the row until asked for.
+    const components = NAME_COMPONENTS.filter(component =>
+      showOptionalNames
+      || !('optional' in component && component.optional)
+      || hasText(lead[component.property]),
+    )
+    const hiddenCount = NAME_COMPONENTS.length - components.length
     return (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {NAME_COMPONENTS.map(component => {
+        {components.map(component => {
           const value = lead[component.property]
           const populated = hasText(value)
           return (
@@ -334,6 +406,17 @@ export function LeadFieldsRail({
             </button>
           )
         })}
+        {hiddenCount > 0 && (
+          <button
+            aria-label="Show middle and preferred name"
+            className="rounded-full border border-dashed border-border px-2 text-left text-xs font-medium text-muted-foreground outline-none hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+            disabled={activeField !== null}
+            type="button"
+            onClick={() => setShowOptionalNames(true)}
+          >
+            + More
+          </button>
+        )}
       </div>
     )
   }
@@ -439,6 +522,83 @@ export function LeadFieldsRail({
       }}
     >
       <LeadReadinessDial lead={lead} spouse={spouse} />
+
+      {onSaveChannels && (
+        <section className="mt-4">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Other ways to reach them
+          </h3>
+          <div className="mt-1 space-y-1">
+            <ChannelListField
+              label="Client emails"
+              kind="email"
+              channels={parseContactChannels(lead.additional_emails)}
+              onSave={channels => onSaveChannels('client', 'additional_emails', channels)}
+            />
+            <ChannelListField
+              label="Client phones"
+              kind="phone"
+              channels={parseContactChannels(lead.additional_phones)}
+              onSave={channels => onSaveChannels('client', 'additional_phones', channels)}
+            />
+            {spouse && (
+              <>
+                <ChannelListField
+                  label="Spouse emails"
+                  kind="email"
+                  channels={parseContactChannels(spouse.additional_emails)}
+                  onSave={channels => onSaveChannels('spouse', 'additional_emails', channels)}
+                />
+                <ChannelListField
+                  label="Spouse phones"
+                  kind="phone"
+                  channels={parseContactChannels(spouse.additional_phones)}
+                  onSave={channels => onSaveChannels('spouse', 'additional_phones', channels)}
+                />
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {keyDates && onSaveKeyDate && (
+        <section className="mt-4">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Key dates
+          </h3>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Setting a date schedules the SLA tasks waiting on it.
+          </p>
+          <div className="mt-1 space-y-2">
+            {LEAD_KEY_DATE_FIELDS.map(field => (
+              <label className="block space-y-1" key={field.key}>
+                <FieldLabel>{field.label}</FieldLabel>
+                <Input
+                  aria-label={field.label}
+                  className="h-8"
+                  disabled={keyDatesSaving}
+                  type="date"
+                  // Uncontrolled and keyed on the saved value: a date input
+                  // reads back as "" until every segment is filled, so echoing
+                  // that back mid-entry would wipe what was typed. Only a
+                  // complete date — or an explicit clear on blur — saves.
+                  defaultValue={keyDates[field.key] ?? ''}
+                  key={`${field.key}-${keyDates[field.key] ?? ''}`}
+                  onChange={event => {
+                    const next = event.target.value
+                    if (next && next !== keyDates[field.key]) void onSaveKeyDate(field.key, next)
+                  }}
+                  onBlur={event => {
+                    const next = event.target.value
+                    if (!next && keyDates[field.key]) void onSaveKeyDate(field.key, null)
+                  }}
+                />
+                <span className="block text-[10px] text-muted-foreground">{field.hint}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="mt-4 space-y-4">
         {LEAD_FIELD_GROUPS.map(group => {
