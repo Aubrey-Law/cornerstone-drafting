@@ -10,6 +10,7 @@ import { assemblePmpsData } from '@/lib/pmps/assemble'
 import { generatePmpsArtifacts } from '@/lib/pmps/generate'
 import type { PmpsRunInput } from '@/lib/pmps/types'
 import { artifactClientShape, storeRunArtifacts } from '@/lib/works/artifacts'
+import { runMetlifeClaim } from '@/lib/metlife/run'
 
 async function loadMatterSnapshot(matterId: string | null) {
   if (!matterId) return null
@@ -69,6 +70,9 @@ export async function POST(req: Request) {
   if (runError || !run) return NextResponse.json({ error: runError?.message ?? 'Unable to create run' }, { status: 500 })
 
   try {
+    if (skill.slug === 'prepare-metlife-claim') {
+      return await runMetlifeClaim({ db, runId: run.id, matterId, requestedInput, inputSnapshot })
+    }
     if (skill.slug === 'prepare-pmps-package') {
       if (!matterId) throw new Error('A matter is required to prepare a PMPS package.')
       const payload = await buildDraftPayload(matterId)

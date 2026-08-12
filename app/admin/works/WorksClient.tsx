@@ -70,8 +70,10 @@ export default function WorksClient() {
     const normalized = query.trim().toLowerCase()
     return skills
       .filter(skill => !practice || (skill.practice ?? 'General') === practice)
+      // Slug is searchable so a deep link can name a skill exactly — the billing
+      // dashboard's "claim not prepared" nudge links to ?search=metlife-claim.
       .filter(skill => !normalized ||
-        `${skill.name} ${skill.description} ${skill.practice ?? ''}`.toLowerCase().includes(normalized))
+        `${skill.name} ${skill.description} ${skill.practice ?? ''} ${skill.slug ?? ''}`.toLowerCase().includes(normalized))
   }, [query, practice, skills])
 
   const selected = useMemo(

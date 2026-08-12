@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { worksDb } from '@/lib/works/data'
 import { promoteRunArtifacts } from '@/lib/works/artifacts'
+import { ensureMetlifeClaimItem } from '@/lib/metlife/ledger'
 
 export async function POST(req: Request, { params }: { params: Promise<{ runId: string }> }) {
   const auth = await requireAdmin(req)
@@ -28,15 +29,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
     review = result.data
   }
   let promoted: Array<{ artifactId: string; documentId: string }> = []
-  if (skillSlug === 'prepare-pmps-package') {
-    if (!run.matter_id) return NextResponse.json({ error: 'PMPS run is missing its matter.' }, { status: 409 })
+  const generatesDocuments = skillSlug === 'prepare-pmps-package' || skillSlug === 'prepare-metlife-claim'
+  if (generatesDocuments) {
+    if (!run.matter_id) return NextResponse.json({ error: 'This run is missing its matter.' }, { status: 409 })
     try {
       promoted = await promoteRunArtifacts({ runId, matterId: run.matter_id, userId: auth.userId })
     } catch (error) {
-      return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to promote PMPS documents' }, { status: 500 })
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to promote the generated documents' }, { status: 500 })
+    }
+  }
+
+  // Confirming a MetLife claim is what files it: until the attorney reviews the
+  // document, the ledger should not show money the firm has not decided to claim.
+  let claim: { itemId: string; created: boolean; amountCents: number } | null = null
+  if (skillSlug === 'prepare-metlife-claim' && run.matter_id) {
+    const amountCents = Number(run.input_snapshot?.metlife?.grandTotalCents)
+    if (!Number.isInteger(amountCents) || amountCents <= 0) {
+      return NextResponse.json({ error: 'This MetLife run has no computed claim total to file.' }, { status: 409 })
+    }
+    try {
+      claim = await ensureMetlifeClaimItem({ matterId: run.matter_id, amountCents, userId: auth.userId })
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to file the MetLife claim' }, { status: 500 })
     }
   }
   const { data, error } = await db.from('work_runs').update({ status: 'confirmed', confirmation_state: 'confirmed', confirmed_by: auth.userId, confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', runId).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ run: data, review, promoted })
+  return NextResponse.json({ run: data, review, promoted, claim })
 }
