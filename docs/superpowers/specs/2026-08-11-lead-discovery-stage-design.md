@@ -141,7 +141,7 @@ Lawmatics importer it makes importing a historical stage date possible.
 
 #### E. Stamp the anchor when a discovery call is booked
 
-In `recordBookingSideEffects` (`lib/appointments/book.ts`), add a branch for
+In `recordActivity` (`lib/appointments/book.ts:121`), add a branch for
 `type.key === 'discovery_call'` that sets `matters.discovery_call_at = startIso`
 when it is not already set, skipped when `action === 'Cancelled'` — consistent
 with how `scheduled_signing_date` and `design_meeting_date` are already handled.
@@ -201,8 +201,8 @@ logic to exercise.
 - Clearing `discovery_call_at` returns the lead to `new_lead`.
 - `business_days_elapsed` returns `0` for a future `stage_entered_at`, so a lead
   booked ahead reports `health = 'green'`.
-- `recordBookingSideEffects` resolves the lead's matter by `client_intake_id` and
-  does not stamp on cancellation.
+- `recordActivity` resolves the lead's matter by `client_intake_id` and does not
+  stamp on cancellation.
 
 ---
 
