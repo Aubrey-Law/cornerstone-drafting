@@ -27,11 +27,13 @@ import { MARKETING_CONSENT_LABEL, type MarketingConsentStatus } from '@/lib/crm/
 import type { MatterEstateSnapshot } from '@/lib/assets/matterEstateSnapshot'
 import type { MatterActivity, PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import { parseContactChannels, type ContactChannel } from '@/lib/contacts/additionalChannels'
+import { ChannelListField } from '@/components/contacts/ChannelListField'
 import { MatterReadinessDial, type MatterReadinessItem } from '../MatterReadinessDial'
 import { InlineDate, InlineSelect, InlineText, ReadOnlyRow } from './InlineField'
 import { PanelActivity } from './PanelActivity'
 import { PanelSection } from './PanelSection'
-import { useSectionState } from './useSectionState'
+import { useSectionState, useShowEmptyFields } from './useSectionState'
 
 interface ClientRecord {
   id: string
@@ -40,6 +42,8 @@ interface ClientRecord {
   last_name: string | null
   email: string | null
   phone: string | null
+  additional_emails?: ContactChannel[] | null
+  additional_phones?: ContactChannel[] | null
   address_line1: string | null
   city: string | null
   state: string | null
@@ -56,6 +60,8 @@ interface ContactRecord {
   last_name: string | null
   email: string | null
   phone: string | null
+  additional_emails?: ContactChannel[] | null
+  additional_phones?: ContactChannel[] | null
   date_of_birth: string | null
 }
 
@@ -174,6 +180,11 @@ export function MatterFactsPanel({
 }: MatterFactsPanelProps) {
   const token = useAccessToken()
   const { open, toggle, collapseAll, restored } = useSectionState()
+  const { showEmpty, toggleShowEmpty } = useShowEmptyFields()
+  // Passed to every optional row: an empty one disappears until the operator
+  // asks to see it. Rows the rail is built around (address, target signing)
+  // stay put so the panel never loses its shape.
+  const hideWhenEmpty = !showEmpty
   const [client, setClient] = useState<ClientRecord | null>(null)
   const [contacts, setContacts] = useState<ContactRecord[]>([])
   const [loadingContacts, setLoadingContacts] = useState(true)
@@ -241,6 +252,14 @@ export function MatterFactsPanel({
     [patchContacts],
   )
 
+  const saveClientChannels = useCallback(
+    (field: 'additional_emails' | 'additional_phones', channels: ContactChannel[]) =>
+      patchContacts({ target: 'client', patch: { [field]: channels } }, () =>
+        setClient(current => (current ? { ...current, [field]: channels } : current)),
+      ),
+    [patchContacts],
+  )
+
   const saveSpouseField = useCallback(
     (field: keyof ContactRecord, value: string | null) => {
       if (!spouse) return Promise.resolve()
@@ -250,6 +269,22 @@ export function MatterFactsPanel({
           setContacts(current =>
             current.map(contact =>
               contact.id === spouse.id ? { ...contact, [field]: value } : contact,
+            ),
+          ),
+      )
+    },
+    [patchContacts, spouse],
+  )
+
+  const saveSpouseChannels = useCallback(
+    (field: 'additional_emails' | 'additional_phones', channels: ContactChannel[]) => {
+      if (!spouse) return Promise.resolve()
+      return patchContacts(
+        { target: 'contact', contactId: spouse.id, patch: { [field]: channels } },
+        () =>
+          setContacts(current =>
+            current.map(contact =>
+              contact.id === spouse.id ? { ...contact, [field]: channels } : contact,
             ),
           ),
       )
@@ -398,13 +433,23 @@ export function MatterFactsPanel({
 
         <div className="mt-2 flex items-center justify-between gap-2.5 text-[10.5px] text-muted-foreground">
           <span>{restored ? 'Sections restored' : 'Sections remember their state'}</span>
-          <button
-            type="button"
-            onClick={collapseAll}
-            className="font-semibold text-primary hover:underline"
-          >
-            Collapse all
-          </button>
+          <span className="flex items-center gap-2.5">
+            <button
+              type="button"
+              aria-pressed={showEmpty}
+              onClick={toggleShowEmpty}
+              className="font-semibold text-primary hover:underline"
+            >
+              {showEmpty ? 'Hide empty fields' : 'Show empty fields'}
+            </button>
+            <button
+              type="button"
+              onClick={collapseAll}
+              className="font-semibold text-primary hover:underline"
+            >
+              Collapse all
+            </button>
+          </span>
         </div>
       </div>
 
@@ -436,15 +481,32 @@ export function MatterFactsPanel({
           <>
             <InlineText
               label="Email"
+              hideWhenEmpty={hideWhenEmpty}
               value={client?.email ?? matter.client_email ?? ''}
               onSave={next => saveClientField('email', next || null)}
+            />
+            <ChannelListField
+              label="Other emails"
+              kind="email"
+              hideWhenEmpty={hideWhenEmpty}
+              channels={parseContactChannels(client?.additional_emails)}
+              onSave={next => saveClientChannels('additional_emails', next)}
             />
             <InlineText
               label="Phone"
               tabular
+              hideWhenEmpty={hideWhenEmpty}
               value={client?.phone ?? matter.client_phone ?? ''}
               onSave={next => saveClientField('phone', next || null)}
             />
+            <ChannelListField
+              label="Other phones"
+              kind="phone"
+              hideWhenEmpty={hideWhenEmpty}
+              channels={parseContactChannels(client?.additional_phones)}
+              onSave={next => saveClientChannels('additional_phones', next)}
+            />
+            {(showEmpty || Boolean(addressValue)) && (
             <div className="flex items-start justify-between gap-2.5 rounded-md px-1.5 py-1">
               <span className="pt-1.5 text-[11.5px] text-muted-foreground">Address</span>
               <div className="w-52">
@@ -470,8 +532,10 @@ export function MatterFactsPanel({
                 />
               </div>
             </div>
+            )}
             <InlineDate
               label="Date of birth"
+              hideWhenEmpty={hideWhenEmpty}
               value={toDateInputValue(dob)}
               onSave={next => saveClientField('date_of_birth', next || null)}
             />
@@ -482,10 +546,16 @@ export function MatterFactsPanel({
             )}
             <InlineText
               label="County"
+              hideWhenEmpty={hideWhenEmpty}
               value={county}
               onSave={next => onSaveField('jurisdiction_county', next)}
             />
-            <ReadOnlyRow label="Minor children" onClick={() => onOpenTab('people')}>
+            <ReadOnlyRow
+              label="Minor children"
+              empty={minorChildrenLabel(children, client?.has_minor_children ?? matter.has_minor_children) === '—'}
+              hideWhenEmpty={hideWhenEmpty}
+              onClick={() => onOpenTab('people')}
+            >
               {minorChildrenLabel(children, client?.has_minor_children ?? matter.has_minor_children)}
             </ReadOnlyRow>
             {/* Consent belongs to the CRM profile; the Communications tab edits it. */}
@@ -532,17 +602,34 @@ export function MatterFactsPanel({
               />
               <InlineText
                 label="Email"
+                hideWhenEmpty={hideWhenEmpty}
                 value={spouse.email ?? matter.spouse_email ?? ''}
                 onSave={next => saveSpouseField('email', next || null)}
+              />
+              <ChannelListField
+                label="Other emails"
+                kind="email"
+                hideWhenEmpty={hideWhenEmpty}
+                channels={parseContactChannels(spouse.additional_emails)}
+                onSave={next => saveSpouseChannels('additional_emails', next)}
               />
               <InlineText
                 label="Phone"
                 tabular
+                hideWhenEmpty={hideWhenEmpty}
                 value={spouse.phone ?? matter.spouse_phone ?? ''}
                 onSave={next => saveSpouseField('phone', next || null)}
               />
+              <ChannelListField
+                label="Other phones"
+                kind="phone"
+                hideWhenEmpty={hideWhenEmpty}
+                channels={parseContactChannels(spouse.additional_phones)}
+                onSave={next => saveSpouseChannels('additional_phones', next)}
+              />
               <InlineDate
                 label="Date of birth"
+                hideWhenEmpty={hideWhenEmpty}
                 value={toDateInputValue(spouseDob)}
                 onSave={next => saveSpouseField('date_of_birth', next || null)}
               />
@@ -641,6 +728,7 @@ export function MatterFactsPanel({
           <InlineText
             label="Flat fee"
             tabular
+            hideWhenEmpty={hideWhenEmpty}
             value={
               details?.flat_fee_amount == null
                 ? matter.fee_amount == null ? '' : String(matter.fee_amount)
@@ -690,7 +778,7 @@ export function MatterFactsPanel({
             )
           })}
         </div>
-        <ReadOnlyRow label="Trust name">
+        <ReadOnlyRow label="Trust name" empty={!planMirror.trustName} hideWhenEmpty={hideWhenEmpty}>
           {planMirror.trustName ? (
             <Link href={designHref} className="font-semibold text-primary hover:underline">
               {planMirror.trustName}
@@ -706,7 +794,9 @@ export function MatterFactsPanel({
           options={MATTER_TYPE_OPTIONS}
           onSave={next => onSaveField('matter_type', next)}
         />
-        <ReadOnlyRow label="County">{county || '—'}</ReadOnlyRow>
+        <ReadOnlyRow label="County" empty={!county} hideWhenEmpty={hideWhenEmpty}>
+          {county || '—'}
+        </ReadOnlyRow>
         <p className="px-1.5 pt-1 text-[11px] leading-snug text-muted-foreground">
           Matter type — not marital status — decides whether the spouse section and
           second-death provisions appear. Trust name, plan and credit shelter are
@@ -728,6 +818,7 @@ export function MatterFactsPanel({
       >
         <InlineDate
           label="Engagement signed"
+          hideWhenEmpty={hideWhenEmpty}
           value={toDateInputValue(details?.engagement_signed_at ?? null)}
           onSave={next => onSaveField('engagement_signed_at', next || null)}
         />
@@ -742,11 +833,12 @@ export function MatterFactsPanel({
         />
         <InlineDate
           label="Design meeting"
+          hideWhenEmpty={hideWhenEmpty}
           value={toDateInputValue(details?.design_meeting_date ?? null)}
           onSave={next => onSaveField('design_meeting_date', next || null)}
         />
         {/* Drafts due has no column — it is derived from target signing or nothing. */}
-        <ReadOnlyRow label="Drafts due">
+        <ReadOnlyRow label="Drafts due" empty={!draftsDue.value} hideWhenEmpty={hideWhenEmpty}>
           <span className="tabular-nums">
             {draftsDue.value ? formatDate(draftsDue.value) : '—'}
           </span>
@@ -759,17 +851,20 @@ export function MatterFactsPanel({
         <InlineDate
           label="Drafts review"
           derived={draftsReview.derived}
+          hideWhenEmpty={hideWhenEmpty}
           value={draftsReview.value}
           onSave={next => onSaveField(DRAFTING_DATE_COLUMNS.drafts_review!, next || null)}
         />
         <InlineDate
           label="Revisions"
           derived={revisions.derived}
+          hideWhenEmpty={hideWhenEmpty}
           value={revisions.value}
           onSave={next => onSaveField(DRAFTING_DATE_COLUMNS.revisions!, next || null)}
         />
         <InlineDate
           label="Plan signed"
+          hideWhenEmpty={hideWhenEmpty}
           value={toDateInputValue(details?.signing_date ?? matter.signing_date ?? null)}
           onSave={next => onSaveField('signing_date', next || null)}
         />

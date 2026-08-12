@@ -99,3 +99,54 @@ describe('RichTextEmailEditor links', () => {
     expect(onChange).toHaveBeenLastCalledWith('<p>Open the client portal.</p>')
   })
 })
+
+describe('RichTextEmailEditor message area', () => {
+  it('grows with the message instead of capping it inside a nested scroll area', () => {
+    render(<RichTextEmailEditor ariaLabel="Message" valueHtml="<p>A long note</p>" onChange={vi.fn()} />)
+
+    const body = screen.getByLabelText('Message')
+    // No max height and no inner scrollbar: a long message shows in full and the
+    // surrounding pane is what scrolls.
+    expect(body.className).not.toMatch(/max-h-/)
+    expect(body.className).not.toContain('overflow-y-auto')
+    expect(body.className).toContain('min-h-[9rem]')
+  })
+
+  it('takes a dragged height and hands it back on a double-click', () => {
+    render(<RichTextEmailEditor ariaLabel="Message" valueHtml="<p>Note</p>" onChange={vi.fn()} />)
+
+    const handle = screen.getByRole('separator', { name: 'Resize message area' })
+    const body = screen.getByLabelText('Message')
+    handle.setPointerCapture = vi.fn()
+    handle.hasPointerCapture = vi.fn(() => true)
+    handle.releasePointerCapture = vi.fn()
+    body.getBoundingClientRect = () => ({ height: 200 }) as DOMRect
+
+    fireEvent.pointerDown(handle, { clientY: 400, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientY: 520, pointerId: 1 })
+    fireEvent.pointerUp(handle, { clientY: 520, pointerId: 1 })
+
+    expect(body.style.height).toBe('320px')
+    // Once it has a height of its own, overflow is its own business again.
+    expect(body.className).toContain('overflow-y-auto')
+
+    fireEvent.doubleClick(handle)
+    expect(body.style.height).toBe('')
+  })
+
+  it('never lets a drag collapse the body away entirely', () => {
+    render(<RichTextEmailEditor ariaLabel="Message" valueHtml="<p>Note</p>" onChange={vi.fn()} />)
+
+    const handle = screen.getByRole('separator', { name: 'Resize message area' })
+    const body = screen.getByLabelText('Message')
+    handle.setPointerCapture = vi.fn()
+    handle.hasPointerCapture = vi.fn(() => true)
+    handle.releasePointerCapture = vi.fn()
+    body.getBoundingClientRect = () => ({ height: 200 }) as DOMRect
+
+    fireEvent.pointerDown(handle, { clientY: 400, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientY: 0, pointerId: 1 })
+
+    expect(body.style.height).toBe('96px')
+  })
+})

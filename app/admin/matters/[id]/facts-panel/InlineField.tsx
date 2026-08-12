@@ -13,13 +13,19 @@ export function ReadOnlyRow({
   children,
   tabular = false,
   onClick,
+  empty = false,
+  hideWhenEmpty = false,
 }: {
   label: string
   children: React.ReactNode
   tabular?: boolean
   /** Present when the value belongs to another surface (e.g. the People tab). */
   onClick?: () => void
+  /** The row has nothing to show — the caller knows, the children do not. */
+  empty?: boolean
+  hideWhenEmpty?: boolean
 }) {
+  if (empty && hideWhenEmpty) return null
   const value = (
     <span className={cn(VALUE, 'flex items-center gap-1.5', tabular && 'tabular-nums')}>
       {children}
@@ -50,12 +56,15 @@ export function InlineText({
   value,
   placeholder = '—',
   tabular = false,
+  hideWhenEmpty = false,
   onSave,
 }: {
   label: string
   value: string
   placeholder?: string
   tabular?: boolean
+  /** Skip the row entirely while it has no value (the rail's "hide empty" mode). */
+  hideWhenEmpty?: boolean
   onSave: (next: string) => void | Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
@@ -84,6 +93,8 @@ export function InlineText({
     setDraft(value)
     setEditing(false)
   }
+
+  if (hideWhenEmpty && !value && !editing) return null
 
   if (!editing) {
     return (
@@ -176,6 +187,7 @@ export function InlineDate({
   value,
   emphasized = false,
   derived = false,
+  hideWhenEmpty = false,
   onSave,
 }: {
   label: string
@@ -184,8 +196,11 @@ export function InlineDate({
   emphasized?: boolean
   /** The shown value came from another date, not from a stored column. */
   derived?: boolean
+  /** Skip the row entirely while it has no value (the rail's "hide empty" mode). */
+  hideWhenEmpty?: boolean
   onSave: (next: string) => void | Promise<void>
 }) {
+  if (hideWhenEmpty && !value) return null
   return (
     <div className={cn(ROW, 'hover:bg-muted')}>
       <span className={cn(LABEL, emphasized && 'font-semibold text-foreground')}>
@@ -202,6 +217,13 @@ export function InlineDate({
         // Keyed on the value so a derived date re-renders when its anchor moves.
         key={value}
         defaultValue={value}
+        // A date input only reports a change once the whole date is there (or
+        // it has been cleared), so saving here — rather than waiting for the
+        // field to lose focus — records a picked date immediately without ever
+        // persisting a half-typed one.
+        onChange={event => {
+          if (event.target.value !== value) void onSave(event.target.value)
+        }}
         onBlur={event => {
           if (event.target.value !== value) void onSave(event.target.value)
         }}

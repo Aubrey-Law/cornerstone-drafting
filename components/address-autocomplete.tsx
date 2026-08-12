@@ -60,9 +60,17 @@ export function AddressAutocomplete({
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * What the operator has typed since the field last settled, or null when the
+   * value came from anywhere else — a saved record rendering, a picked
+   * suggestion, a re-mount. Suggestions follow typing only: keying the search
+   * off `value` made the list reopen every time the stored address flowed back
+   * in, so the panel sat there offering options nobody asked for.
+   */
+  const [query, setQuery] = useState<string | null>(null)
 
   useEffect(() => {
-    if (disabled || value.trim().length < 5) {
+    if (disabled || query === null || query.trim().length < 5) {
       setResults([])
       setOpen(false)
       setError(null)
@@ -74,7 +82,7 @@ export function AddressAutocomplete({
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(`/api/places?action=autocomplete&input=${encodeURIComponent(value.trim())}`)
+        const response = await fetch(`/api/places?action=autocomplete&input=${encodeURIComponent(query.trim())}`)
         if (!response.ok) throw new Error('Address search unavailable')
         const data: unknown = await response.json()
         const predictions = Array.isArray(data) ? (data as PlaceAutocompleteResult[]) : []
@@ -92,11 +100,12 @@ export function AddressAutocomplete({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [disabled, value])
+  }, [disabled, query])
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setQuery(null)
         setOpen(false)
       }
     }
@@ -126,6 +135,10 @@ export function AddressAutocomplete({
       setError('Address details unavailable. Enter manually.')
     } finally {
       setLoading(false)
+      // A picked address is an answer, not a new search — leave the list shut
+      // until the operator types again.
+      setQuery(null)
+      setResults([])
       setOpen(false)
     }
   }
@@ -137,7 +150,22 @@ export function AddressAutocomplete({
           id={id}
           type="text"
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value)
+            setQuery(event.target.value)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || !open) return
+            event.preventDefault()
+            event.stopPropagation()
+            setQuery(null)
+            setOpen(false)
+          }}
+          onBlur={() => {
+            // Selection runs on mousedown, so a blur means focus really left.
+            setQuery(null)
+            setOpen(false)
+          }}
           placeholder={placeholder}
           disabled={disabled}
           autoComplete="off"

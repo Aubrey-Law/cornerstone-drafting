@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 export const FACTS_PANEL_SECTION_STORAGE_KEY = 'al.matterRail.openSections.v1'
+export const FACTS_PANEL_EMPTY_FIELDS_STORAGE_KEY = 'al.matterRail.showEmptyFields.v1'
 
 export type FactsPanelSection =
   | 'contact' | 'spouse' | 'matter' | 'flags' | 'dates' | 'notes' | 'activity'
@@ -80,4 +81,38 @@ export function useSectionState() {
   }, [])
 
   return { open, toggle, collapseAll, hydrated, restored }
+}
+
+/**
+ * Whether the rail renders rows that have no value yet, remembered per browser.
+ *
+ * A matter carries far more fields than any one matter fills in, and a column
+ * of em-dashes buries the handful that are actually set. Empty rows are hidden
+ * by default and one toggle brings them all back so nothing becomes unreachable.
+ */
+export function useShowEmptyFields() {
+  const [showEmpty, setShowEmpty] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    try {
+      setShowEmpty(window.localStorage.getItem(FACTS_PANEL_EMPTY_FIELDS_STORAGE_KEY) === 'true')
+    } catch {
+      /* a blocked store just means the default */
+    }
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      window.localStorage.setItem(FACTS_PANEL_EMPTY_FIELDS_STORAGE_KEY, String(showEmpty))
+    } catch {
+      /* ignore */
+    }
+  }, [hydrated, showEmpty])
+
+  const toggleShowEmpty = useCallback(() => setShowEmpty(current => !current), [])
+
+  return { showEmpty, toggleShowEmpty }
 }

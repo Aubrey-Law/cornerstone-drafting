@@ -21,6 +21,13 @@ import {
 import { QUIET_DAYS } from '@/lib/drafting/hubUtils'
 import { STAGE_GROUP_LABELS, STAGE_GROUP_ORDER } from '@/lib/matter/stageGroups'
 import { MatterStageBoard, type StageBoardCard } from '@/components/matter/MatterStageBoard'
+import {
+  MatterPipelineInsights,
+  isOpenMatter,
+  matterNeedsAttention,
+  signingSoon,
+  type MatterCardFilter,
+} from '@/components/matter/MatterPipelineInsights'
 import { isMobileDetailViewport } from '@/components/layout/ResponsiveDetailRail'
 import type { MatterListRow } from '@/lib/queries/matters'
 import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel, mergeUnreviewedCounts } from '@/lib/matter/unreviewedUploads'
@@ -115,6 +122,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   // `router.refresh()` re-seeds it through the effect below.
   const [matters, setMatters] = useState(initialMatters)
   const [filters, setFilters] = useState<MatterTableFilters>(EMPTY_MATTER_TABLE_FILTERS)
+  const [cardFilter, setCardFilter] = useState<MatterCardFilter | null>(null)
   const [sortKey, setSortKey] = useState<MatterSortKey>('last_activity')
   const [view, setView] = useState<MatterListView>('table')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -169,14 +177,34 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
     return Boolean(
       filters.search.trim()
       || filters.practice !== 'all'
-      || filters.stageGroup !== 'all',
+      || filters.stageGroup !== 'all'
+      || cardFilter,
     )
-  }, [filters])
+  }, [cardFilter, filters])
+
+  // The overview cards narrow the same list the chips and the search box do,
+  // so a card is a filter on top of the current view rather than a view of its
+  // own — one table, one set of rows, whatever is selected above it.
+  const carded = useMemo(() => {
+    if (cardFilter === 'attention') return matters.filter(m => isOpenMatter(m) && matterNeedsAttention(m))
+    if (cardFilter === 'signing') return matters.filter(m => isOpenMatter(m) && signingSoon(m))
+    return matters
+  }, [cardFilter, matters])
 
   const filtered = useMemo(
-    () => filterAndSortMatters(matters, filters, sortKey),
-    [filters, matters, sortKey],
+    () => filterAndSortMatters(carded, filters, sortKey),
+    [carded, filters, sortKey],
   )
+
+  /** "Open matters" is the unfiltered list, so it clears rather than narrows. */
+  const toggleCardFilter = (next: MatterCardFilter) => {
+    setSelected({})
+    if (next === 'open') {
+      setCardFilter(null)
+      return
+    }
+    setCardFilter(current => (current === next ? null : next))
+  }
 
   const boardCards = useMemo<StageBoardCard[]>(() => filtered.map(m => {
     const unreviewed = mergeUnreviewedCounts(
@@ -395,6 +423,11 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
             </Button>
           </div>
         </div>
+        <MatterPipelineInsights
+          matters={matters}
+          activeFilter={cardFilter}
+          onToggleFilter={toggleCardFilter}
+        />
         <div className="flex flex-wrap items-center gap-1.5">
           <FilterChip
             onClick={() => updateFilter('stageGroup', 'all')}
