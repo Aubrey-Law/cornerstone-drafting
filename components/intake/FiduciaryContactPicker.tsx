@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
 import { dedupePickerContacts } from '@/lib/intakeContactPickerRows'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+import { PRONOUN_OPTIONS, pronounLabel } from '@/lib/sharedFields'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -19,6 +20,7 @@ export interface FiduciaryPickerEntry {
   last_name: string
   suffix: string
   relationship: string
+  preferred_pronoun: string
   phone: string
   email: string
   address: string
@@ -38,6 +40,7 @@ interface ContactRecord {
   last_name: string
   middle_name?: string | null
   suffix?: string | null
+  preferred_pronoun?: string | null
   email?: string | null
   phone?: string | null
   relationship_type?: string | null
@@ -58,6 +61,7 @@ const EMPTY_SLOT: Omit<FiduciaryPickerEntry, 'priority' | 'is_coagent'> = {
   last_name: '',
   suffix: '',
   relationship: '',
+  preferred_pronoun: '',
   phone: '',
   email: '',
   address: '',
@@ -113,6 +117,7 @@ function fiduciaryEntryFromContact(contact: ContactRecord, template: FiduciaryPi
     last_name: contact.last_name ?? '',
     middle_name: (contact.middle_name ?? template.middle_name ?? '').trim(),
     suffix: (contact.suffix ?? template.suffix ?? '').trim(),
+    preferred_pronoun: (contact.preferred_pronoun ?? template.preferred_pronoun ?? '').trim(),
     email: (contact.email ?? '') || '',
     phone: (contact.phone ?? '') || '',
     street,
@@ -170,6 +175,7 @@ async function fetchMergedContacts(
         last_name: c.last_name,
         middle_name: c.middle_name || null,
         suffix: c.suffix || null,
+        preferred_pronoun: c.preferred_pronoun || null,
         email: c.email || null,
         phone: formatPhoneDisplay(c.phone) || null,
         relationship_type: isBuiltinEntry ? c.relationship : 'other',
@@ -317,6 +323,7 @@ export function ContactPickerField({
           phone: formatPhoneForStorage(value.phone),
           address,
           relationship: value.relationship || null,
+          preferred_pronoun: value.preferred_pronoun || null,
         }),
       })
       if (!res.ok) {
@@ -382,6 +389,7 @@ export function ContactPickerField({
                 const checked = contactMatchesEntry(c, value)
                 const detail = [
                   c.relationship_label ?? c.relationship_type,
+                  pronounLabel(c.preferred_pronoun),
                   c.email,
                   formatPhoneDisplay(c.phone),
                 ].filter(Boolean).join(' · ')
@@ -475,6 +483,14 @@ export function ContactPickerField({
                   value={value.relationship}
                   onChange={(v) => updateField('relationship', v)}
                   placeholder="e.g., Sister, Friend"
+                />
+              </FormField>
+              <FormField label="Pronouns">
+                <SelectInput
+                  value={value.preferred_pronoun ?? ''}
+                  onChange={(v) => updateField('preferred_pronoun', v)}
+                  placeholder="Select pronouns"
+                  options={PRONOUN_OPTIONS}
                 />
               </FormField>
             </Row2>

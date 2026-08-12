@@ -19,14 +19,15 @@ Output ONLY a single JSON object that matches the schema below. Use empty string
 Schema:
 {
   "first_name": string, "middle_name": string, "last_name": string, "suffix": string,
-  "date_of_birth": string, "is_us_citizen": boolean,
+  "date_of_birth": string, "is_us_citizen": boolean, "preferred_pronoun": "" | "he/him" | "she/her" | "they/them" | "ze/zir" | "other",
   "phone": string, "email": string,
   "address_line1": string, "address_line2": string, "city": string, "state": string, "zip": string, "county": string,
   "marital_status": "" | "single" | "married" | "divorced" | "widowed",
   "has_children": boolean, "has_minor_children": boolean,
-  "children": [ { "first_name": string, "last_name": string, "date_of_birth": string } ],
+  "children": [ { "first_name": string, "last_name": string, "date_of_birth": string, "preferred_pronoun": string } ],
   "family_notes": string,
   "spouse_first_name": string, "spouse_last_name": string, "spouse_date_of_birth": string,
+  "spouse_is_us_citizen": boolean, "spouse_preferred_pronoun": string,
   "spouse_phone": string, "spouse_email": string, "date_of_marriage": string,
   "estate_value": string, "has_real_property": boolean, "real_property_address": string, "real_property_value": string,
   "has_retirement": boolean, "retirement_value": string,
@@ -78,6 +79,7 @@ export function coerceLeadIntakeImport(parsed: unknown): AdminIntakeFormData {
             first_name: typeof c.first_name === 'string' ? c.first_name : '',
             last_name: typeof c.last_name === 'string' ? c.last_name : '',
             date_of_birth: typeof c.date_of_birth === 'string' ? c.date_of_birth : '',
+            preferred_pronoun: typeof c.preferred_pronoun === 'string' ? c.preferred_pronoun : '',
           }))
       } else if (Array.isArray(v)) {
         out[key] = v.filter(x => typeof x === 'string')

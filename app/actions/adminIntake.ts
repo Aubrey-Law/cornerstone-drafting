@@ -92,6 +92,8 @@ async function persistAdminSpouse(
     last_name: last,
     middle_name: data.spouse_middle_name || null,
     date_of_birth: data.spouse_date_of_birth || null,
+    is_us_citizen: data.spouse_is_us_citizen,
+    preferred_pronoun: data.spouse_preferred_pronoun || null,
     phone: data.spouse_phone || null,
     email: data.spouse_email || null,
     source: 'attorney_intake',
@@ -99,10 +101,11 @@ async function persistAdminSpouse(
 }
 
 /** Write children from the admin intake form through saveHouseholdChildren.
- *  Maps AdminIntakeChild (structured first/middle/last + date_of_birth) to
- *  HouseholdChildInput. The admin form does not capture relationship/parentage/
- *  is_minor, so existing values are preserved ("fill, don't wipe"); new children
- *  default to 'biological'/null/undefined so is_minor derives from DOB. */
+ *  Maps AdminIntakeChild (structured first/middle/last + date_of_birth +
+ *  pronouns) to HouseholdChildInput. The admin form does not capture
+ *  relationship/parentage/is_minor, so existing values are preserved ("fill,
+ *  don't wipe"); new children default to 'biological'/null/undefined so
+ *  is_minor derives from DOB. */
 async function persistAdminChildren(
   admin: ReturnType<typeof getAdminClient>,
   intakeId: string,
@@ -120,6 +123,7 @@ async function persistAdminChildren(
       middle_name: c.middle_name || null,
       last_name: c.last_name ?? '',
       dob: c.date_of_birth || null,
+      preferred_pronoun: c.preferred_pronoun || existing?.preferred_pronoun || null,
       // Admin form does not capture these — preserve whatever is already stored
       // (set via the design sheet / contacts editor); default only for new children.
       relationship: existing?.child_relationship ?? 'biological',
@@ -161,6 +165,7 @@ function buildPayload(data: AdminIntakeFormData, status: string) {
     full_name: [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(' ') || null,
     date_of_birth: data.date_of_birth || null,
     is_us_citizen: data.is_us_citizen,
+    preferred_pronoun: data.preferred_pronoun || null,
     phone: formatPhoneForStorage(data.phone),
     email: data.email || null,
     address_line1: data.address_line1 || null,
@@ -221,6 +226,7 @@ async function persistAdminFiduciaries(
     is_coagent: false,
     first_name: e.first_name,
     last_name: e.last_name,
+    preferred_pronoun: e.preferred_pronoun,
   }))
   await persistFiduciaryRoles(admin, intakeId, entries)
 }
@@ -250,7 +256,7 @@ export async function getAdminIntakeData(
   const [{ data: roleRows }, { data: contactRows }] = await Promise.all([
     admin
       .from('contact_roles')
-      .select('role, for_party, priority, is_coagent, contacts(first_name, last_name)')
+      .select('role, for_party, priority, is_coagent, contacts(first_name, last_name, preferred_pronoun)')
       .eq('client_intake_id', clientIntakeId)
       .eq('for_party', 'client'),
     admin
@@ -262,7 +268,11 @@ export async function getAdminIntakeData(
   ])
 
   const fiduciaryRoles = ((roleRows ?? []) as Array<Record<string, unknown>>).map((r) => {
-    const contact = (r.contacts ?? null) as { first_name?: string | null; last_name?: string | null } | null
+    const contact = (r.contacts ?? null) as {
+      first_name?: string | null
+      last_name?: string | null
+      preferred_pronoun?: string | null
+    } | null
     return {
       role: r.role,
       for_party: r.for_party,
@@ -270,6 +280,7 @@ export async function getAdminIntakeData(
       is_coagent: r.is_coagent,
       first_name: contact?.first_name ?? null,
       last_name: contact?.last_name ?? null,
+      preferred_pronoun: contact?.preferred_pronoun ?? null,
     }
   })
 

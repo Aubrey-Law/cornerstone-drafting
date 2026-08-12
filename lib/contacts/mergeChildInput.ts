@@ -22,6 +22,12 @@ export function mergeChildInput(
     typeof raw.relationship === 'string'
       ? (raw.relationship as 'biological' | 'adopted' | 'stepchild')
       : undefined
+  // The wizard names the field `pronouns`; contacts store it as
+  // `preferred_pronoun`. Accept either, and fall back to the stored value so a
+  // payload that omits the field never wipes a pronoun already on file.
+  const suppliedPronoun = [raw.preferred_pronoun, raw.pronouns].find(
+    (v): v is string => typeof v === 'string' && v.trim().length > 0,
+  )
   const suppliedParentage = raw.parentage as
     | 'joint'
     | 'client'
@@ -42,6 +48,7 @@ export function mergeChildInput(
     middle_name: (raw.middle_name as string) ?? null,
     dob: (raw.date_of_birth as string) || null,
     relationship: suppliedRel ?? existing?.child_relationship ?? 'biological',
+    preferred_pronoun: suppliedPronoun ?? existing?.preferred_pronoun ?? null,
     parentage:
       parentageFromWizard !== undefined ? parentageFromWizard : (existing?.parentage ?? null),
     is_minor:

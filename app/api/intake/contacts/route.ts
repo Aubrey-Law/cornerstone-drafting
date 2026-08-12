@@ -30,9 +30,16 @@ function contactPayloadFromEntry(entry: Record<string, unknown>) {
   const zip =
     typeof entry.zip === 'string' ? (entry.zip.trim() || null) : null
 
+  // Pronouns are also editable on the design sheet's contact editor, so an
+  // entry that carries no pronoun leaves the stored one alone rather than
+  // clearing it.
+  const pronounRaw = entry.preferred_pronoun ?? entry.pronouns
+  const pronoun = typeof pronounRaw === 'string' ? pronounRaw.trim() : ''
+
   return {
     middle_name:
       typeof entry.middle_name === 'string' ? entry.middle_name.trim() || null : null,
+    ...(pronoun ? { preferred_pronoun: pronoun } : {}),
     phone: formatPhoneForStorage(typeof entry.phone === 'string' ? entry.phone : ''),
     email: (entry.email as string | undefined)?.trim() || null,
     address_line1: line,
@@ -81,7 +88,17 @@ export async function POST(req: Request) {
 
   try {
     if (action === 'upsert_contact') {
-      const { first_name, middle_name, last_name, email, phone, address, relationship, relationship_type } = body
+      const {
+        first_name,
+        middle_name,
+        last_name,
+        email,
+        phone,
+        address,
+        relationship,
+        relationship_type,
+        preferred_pronoun,
+      } = body
       const normalized = normalizeContactRelationshipType(relationship_type ?? relationship)
       // For non-singletons, preserve the existing name-match lookup so an edit
       // updates the right row instead of inserting a duplicate.
@@ -103,6 +120,7 @@ export async function POST(req: Request) {
         first_name,
         middle_name: middle_name ?? null,
         last_name,
+        preferred_pronoun: typeof preferred_pronoun === 'string' ? preferred_pronoun : null,
         email: email ?? null,
         phone: typeof phone === 'string' ? phone : null,
         address_line1: address ?? null,

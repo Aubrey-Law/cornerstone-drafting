@@ -17,9 +17,12 @@ function contactPayloadFromEntry(entry: Record<string, unknown>) {
     }) ??
     (typeof entry.address === 'string' && entry.address.trim() ? entry.address.trim() : null)
 
+  const pronoun = entry.preferred_pronoun ?? entry.pronouns
+
   return {
     middle_name:
       typeof entry.middle_name === 'string' ? entry.middle_name.trim() || null : null,
+    preferred_pronoun: typeof pronoun === 'string' ? pronoun.trim() || null : null,
     phone: formatPhoneForStorage(typeof entry.phone === 'string' ? entry.phone : ''),
     email: (entry.email as string | undefined)?.trim() || null,
     address_line1: line,
