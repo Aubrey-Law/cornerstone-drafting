@@ -196,3 +196,17 @@ end;
 $$;
 
 revoke execute on function public.ensure_lead_matter() from public, anon, authenticated;
+
+-- ── Backfill ────────────────────────────────────────────────────────────────
+--
+-- Leads whose discovery call was recorded by hand before this shipped are
+-- sitting in new_lead against an expired 1-day clock. This UPDATE names `stage`,
+-- so it relies on the hardened stamper above to keep the pinned date.
+update public.matters
+set stage = 'discovery_call',
+    stage_entered_at = discovery_call_at
+where relationship_status = 'lead'
+  and stage = 'new_lead'
+  and discovery_call_at is not null;
+
+notify pgrst, 'reload schema';

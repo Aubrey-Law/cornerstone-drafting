@@ -116,4 +116,23 @@ describe('discovery_call lead stage', () => {
       /v_stage_entered_at := coalesce\([^)]*v_discovery_call_at, new\.created_at, now\(\)\)/,
     )
   })
+
+  it('backfills leads stuck in new_lead with a call date already recorded', () => {
+    const source = sql()
+    expect(source).toMatch(
+      /update public\.matters\s+set stage = 'discovery_call',\s+stage_entered_at = discovery_call_at\s+where relationship_status = 'lead'\s+and stage = 'new_lead'\s+and discovery_call_at is not null/,
+    )
+  })
+
+  it('backfills after the stage stamper is hardened, or the pin is lost', () => {
+    const source = sql()
+    const hardened = source.indexOf('create or replace function public.trg_matters_stage_entered_at()')
+    const backfill = source.indexOf("set stage = 'discovery_call',")
+    expect(hardened).toBeGreaterThan(-1)
+    expect(backfill).toBeGreaterThan(hardened)
+  })
+
+  it('reloads the API schema cache', () => {
+    expect(sql()).toContain("notify pgrst, 'reload schema'")
+  })
 })
