@@ -49,5 +49,7 @@ export async function listWorkSkillsForUser(
     .filter((row: WorkSkillRow, index: number, all: WorkSkillRow[]) => all.findIndex(candidate => candidate.id === row.id) === index)
     .filter((row: WorkSkillRow) => scope === 'inactive' ? !row.is_active : scope === 'system' ? row.is_system && row.is_active : scope === 'mine' ? row.is_owner && !row.is_system && row.is_active : scope === 'shared' ? row.is_shared && row.is_active : row.is_active)
     .filter((row: WorkSkillRow) => !type || row.skill_type === type)
-    .filter((row: WorkSkillRow) => !query || `${row.name} ${row.description} ${row.practice ?? ''}`.toLowerCase().includes(query))
+    // Slug is searchable so a deep link can name a skill exactly — the billing
+    // dashboard's "claim not prepared" nudge links to ?search=metlife-claim.
+    .filter((row: WorkSkillRow) => !query || `${row.name} ${row.description} ${row.practice ?? ''} ${row.slug ?? ''}`.toLowerCase().includes(query))
 }

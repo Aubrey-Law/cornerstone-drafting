@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
 import { ensureInitialVersion } from '@/lib/documentVersions'
 import { deleteR2Key } from '@/lib/r2Delete'
-import type { PmpsArtifact } from '@/lib/pmps/types'
 import { worksDb } from '@/lib/works/data'
 
 export interface WorkRunArtifactRow {
@@ -20,6 +19,18 @@ export interface WorkRunArtifactRow {
   promoted_at: string | null
 }
 
+/**
+ * A generated file on its way into a run. Skills own their own artifact kinds
+ * (`artifact_kind` is free text), so this stays structural rather than naming
+ * any one skill's union.
+ */
+export interface WorkRunArtifactInput {
+  kind: string
+  filename: string
+  contentType: string
+  bytes: Buffer
+}
+
 export function artifactR2Key(runId: string, filename: string) {
   return `work-runs/${runId}/${safeUploadFilename(filename)}`
 }
@@ -33,7 +44,7 @@ export function artifactClientShape(row: WorkRunArtifactRow) {
   }
 }
 
-export async function storeRunArtifacts(runId: string, artifacts: PmpsArtifact[]) {
+export async function storeRunArtifacts(runId: string, artifacts: WorkRunArtifactInput[]) {
   const db = worksDb()
   const stored: WorkRunArtifactRow[] = []
   const uploadedKeys: string[] = []

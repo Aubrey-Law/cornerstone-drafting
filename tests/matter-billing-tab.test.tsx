@@ -271,6 +271,31 @@ describe('MatterBillingTab', () => {
     expect(screen.getAllByText('Claim submitted').length).toBeGreaterThan(0)
   })
 
+  it('takes the claim amount from the ledger, not a hand-typed figure', async () => {
+    respondWith({
+      rows: [
+        row({
+          kind: 'plan_claim',
+          plan: 'metlife',
+          label: 'MetLife claim',
+          amountBilled: 140_000,
+          status: 'to_invoice',
+          collected: 0,
+          balance: 140_000,
+        }),
+      ],
+      hasClaim: true,
+    })
+    // A stale figure left on the matter must not outrank the ledger.
+    renderTab(true, { details: { billing_type: 'metlife', claim_amount: 999_999 } })
+
+    await screen.findByText('MetLife claim')
+    expect(screen.queryByLabelText('Claim amount')).toBeNull()
+    const moneyIn = screen.getByText('Money in').closest('div[data-slot="card"]') as HTMLElement
+    expect(within(moneyIn).getAllByText('$1,400').length).toBeGreaterThan(0)
+    expect(within(moneyIn).queryByText(/9,999/)).toBeNull()
+  })
+
   it('renders no claim block at all for a flat-fee matter', async () => {
     respondWith({ rows: [row()] })
     renderTab()

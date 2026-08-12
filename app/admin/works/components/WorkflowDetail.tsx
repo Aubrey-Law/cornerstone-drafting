@@ -46,6 +46,12 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
   const [pmpsLegalPlanName, setPmpsLegalPlanName] = useState('')
   const [pmpsFlatFee, setPmpsFlatFee] = useState('')
   const [pmpsPlanStructure, setPmpsPlanStructure] = useState('')
+  const [metlifePlanType, setMetlifePlanType] = useState('')
+  const [metlifeMemberId, setMetlifeMemberId] = useState('')
+  const [metlifeServiceStart, setMetlifeServiceStart] = useState('')
+  const [metlifeServiceEnd, setMetlifeServiceEnd] = useState('')
+  const [metlifeRealtyCount, setMetlifeRealtyCount] = useState('')
+  const [metlifeMinorGuardian, setMetlifeMinorGuardian] = useState('')
 
   if (!skill) {
     return (
@@ -105,6 +111,14 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
           ...(pmpsLegalPlanName.trim() ? { legalPlanName: pmpsLegalPlanName.trim() } : {}),
           ...(pmpsFlatFee ? { flatFee: Number(pmpsFlatFee) } : {}),
           ...(pmpsPlanStructure ? { planStructure: pmpsPlanStructure } : {}),
+        } } : {}),
+        ...(skill.slug === 'prepare-metlife-claim' ? { input: {
+          ...(metlifePlanType ? { planType: metlifePlanType } : {}),
+          ...(metlifeMemberId.trim() ? { memberId: metlifeMemberId.trim() } : {}),
+          ...(metlifeServiceStart ? { serviceStart: metlifeServiceStart } : {}),
+          ...(metlifeServiceEnd ? { serviceEnd: metlifeServiceEnd } : {}),
+          ...(metlifeRealtyCount ? { realtyTrustCount: Number(metlifeRealtyCount) } : {}),
+          ...(metlifeMinorGuardian ? { includeMinorGuardian: metlifeMinorGuardian === 'yes' } : {}),
         } } : {}),
       }),
     })
@@ -253,6 +267,39 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
               </label>
             </div>
           )}
+          {skill.slug === 'prepare-metlife-claim' && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium">Plan composition
+                <select className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={metlifePlanType} onChange={event => setMetlifePlanType(event.target.value)}>
+                  <option value="">Derive from the design sheet</option>
+                  <option value="separate_trust">Separate trusts — married</option>
+                  <option value="joint_trust">Joint trust — married</option>
+                  <option value="will_couple">Will-based — married</option>
+                  <option value="will_individual">Will-based — individual</option>
+                  <option value="individual_trust">Individual trust</option>
+                </select>
+              </label>
+              <label className="text-xs font-medium">Member ID
+                <Input className="mt-1" value={metlifeMemberId} onChange={event => setMetlifeMemberId(event.target.value)} placeholder="Use the approved matter value" />
+              </label>
+              <label className="text-xs font-medium">Work started
+                <Input className="mt-1" type="date" value={metlifeServiceStart} onChange={event => setMetlifeServiceStart(event.target.value)} />
+              </label>
+              <label className="text-xs font-medium">Work finished
+                <Input className="mt-1" type="date" value={metlifeServiceEnd} onChange={event => setMetlifeServiceEnd(event.target.value)} />
+              </label>
+              <label className="text-xs font-medium">Realty trust properties
+                <Input className="mt-1" type="number" min="0" step="1" value={metlifeRealtyCount} onChange={event => setMetlifeRealtyCount(event.target.value)} placeholder="Derive from the design sheet" />
+              </label>
+              <label className="text-xs font-medium">Temporary guardian affidavit
+                <select className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={metlifeMinorGuardian} onChange={event => setMetlifeMinorGuardian(event.target.value)}>
+                  <option value="">Derive from the design sheet</option>
+                  <option value="yes">Include</option>
+                  <option value="no">Omit</option>
+                </select>
+              </label>
+            </div>
+          )}
           <Button type="button" size="sm" className="mt-3" disabled={runLoading} onClick={() => void launchRun()}>
             {runLoading ? 'Running…' : 'Run skill'}
           </Button>
@@ -274,7 +321,17 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
           )}
           {runArtifacts.length > 0 && (
             <div className="mt-3 space-y-2">
-              <div className="flex items-center justify-between"><p className="text-xs font-semibold">Generated drafts</p><Button asChild type="button" size="sm" variant="outline"><a href={`/api/admin/works/runs/${runOutput.id}/artifacts`}><Download className="h-3.5 w-3.5" /> Download ZIP</a></Button></div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold">Generated drafts</p>
+                <div className="flex gap-2">
+                  {skill.slug === 'prepare-metlife-claim' && (
+                    <Button asChild type="button" size="sm" variant="outline">
+                      <a href={`/api/admin/works/runs/${runOutput.id}/submission?format=csv`}><Download className="h-3.5 w-3.5" /> Submission table</a>
+                    </Button>
+                  )}
+                  <Button asChild type="button" size="sm" variant="outline"><a href={`/api/admin/works/runs/${runOutput.id}/artifacts`}><Download className="h-3.5 w-3.5" /> Download ZIP</a></Button>
+                </div>
+              </div>
               {runArtifacts.map(artifact => <div key={artifact.id} className="flex items-center justify-between rounded border p-2 text-xs"><span>{artifact.filename} · {(artifact.size / 1024).toFixed(1)} KB</span><Button asChild type="button" size="sm" variant="ghost"><a href={artifact.downloadUrl}><Download className="h-3.5 w-3.5" /> Download</a></Button></div>)}
             </div>
           )}

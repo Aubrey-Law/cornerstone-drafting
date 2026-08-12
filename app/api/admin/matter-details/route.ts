@@ -75,7 +75,7 @@ const WRITABLE_FIELDS = new Set([
   // V3 — matter page schema coverage
   'referral_source_other',
   'ep_has_real_estate', 'ep_has_pets', 'ep_anticipated_inheritance', 'ep_accounts_retitled',
-  'legal_plan_member_id', 'claim_amount', 'claim_submitted_date',
+  'legal_plan_member_id', 'claim_submitted_date',
   'reimbursement_received_date', 'payment_link_sent_at',
   'work_started_date', 'work_finished_date', 'closing_package_sent_date',
   'next_action_date',
