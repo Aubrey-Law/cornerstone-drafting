@@ -170,20 +170,34 @@ describe('CRM mirror sees the discovery stage', () => {
     expect(body).toContain("v_stage := 'intake_completed'")
     expect(body).toContain('m.discovery_call_at, m.pmps_at')
 
-    // The floor must not promote a lead that is already further along.
-    expect(body).toMatch(/v_stage in \('new_lead', 'discovery_call', 'intake_sent'\)/)
+    // The floor is main's expression verbatim. It only reaches the right answer
+    // for a discovery lead because pipeline_stage_rank now has a row for that
+    // stage — without it the comparison is NULL, the floor is skipped, and this
+    // function contradicts main's stamp_lead_pmps_stage, which promotes the same
+    // lead to intake_completed (its guard reads a null rank as "no opinion").
+    expect(body).toMatch(
+      /public\.pipeline_stage_rank\(v_stage\) < public\.pipeline_stage_rank\('intake_completed'\)/,
+    )
+  })
 
-    // Not pipeline_stage_rank(). Two reasons, and the second is the load-bearing
-    // one. It lives only in main's migration, so referencing it here resolves at
-    // run time and fails on this branch. And its table has no 'discovery_call'
-    // row, so `rank(v_stage) < rank('intake_completed')` yields NULL for a
-    // discovery lead and skips the floor — while main's own
-    // stamp_lead_pmps_stage promotes that same lead to intake_completed, because
-    // its guard reads a null rank as "no opinion" and proceeds. Porting the rank
-    // expression literally would make this function fight that trigger: the
-    // booking sets intake_completed, then the next client_intake touch drops it
-    // back to discovery_call. The explicit list keeps the two in agreement.
-    expect(body).not.toContain('pipeline_stage_rank')
+  it('gives discovery_call a rank between new_lead and intake_sent', () => {
+    const rank = functionBody(
+      read(MIGRATION),
+      'create or replace function public.pipeline_stage_rank(',
+    )
+
+    expect(rank).toMatch(/when 'discovery_call'\s+then 15/)
+    // The ordering the floor and every future guard depend on.
+    const at = (stage: string) => rank.indexOf(`when '${stage}'`)
+    expect(at('new_lead')).toBeLessThan(at('discovery_call'))
+    expect(at('discovery_call')).toBeLessThan(at('intake_sent'))
+
+    // A null rank reads as "no opinion" to every caller, which is how the stage
+    // went unnoticed in the first place. Keep main's full table intact: this
+    // redefinition sorts last, so anything dropped here is dropped outright.
+    for (const stage of ['engagement_sent', 'drafts_approved', 'revision', 'closed']) {
+      expect(rank, `pipeline_stage_rank must keep ${stage}`).toContain(`when '${stage}'`)
+    }
   })
 
   it('backfills planning-session rows as well as discovery rows', () => {

@@ -320,6 +320,57 @@ create trigger sync_crm_opportunity_from_matter
   after insert or update on public.matters
   for each row execute function public.sync_crm_opportunity_from_matter();
 
+-- ── The stage vocabulary learns discovery_call ──────────────────────────────
+--
+-- `pipeline_stage_rank()` is main's "one ordered vocabulary" for lead and
+-- matter stages, written before the discovery stage existed — so it has no row
+-- for it and returns null, which its own comment defines as "no opinion".
+-- Every guard that consults it therefore has no opinion about a discovery
+-- lead, silently, and the next guard someone adds will inherit that.
+--
+-- Slotted at 15, between new_lead (10) and intake_sent (20); the table is
+-- spaced by ten for exactly this, and the order matches stage_sla.stage_order
+-- and the CRM stage's sort_order.
+--
+-- This redefinition is main's table verbatim plus that row. It sorts after
+-- main's migration, so from the merge onward this file is where the vocabulary
+-- lives: a stage added to main's copy has to be added here too, or this one
+-- will drop it.
+create or replace function public.pipeline_stage_rank(p_stage text)
+returns integer
+language sql
+immutable
+set search_path = pg_catalog, public
+as $$
+  select case p_stage
+    -- Lead stages
+    when 'new_lead'          then 10
+    when 'discovery_call'    then 15
+    when 'intake_sent'       then 20
+    when 'intake_completed'  then 30
+    when 'engagement_sent'   then 40
+    -- Matter stages
+    when 'intake'            then 50
+    when 'intake_review'     then 60
+    when 'onboarding'        then 70  -- legacy v1
+    when 'design'            then 80
+    when 'drafting'          then 90
+    when 'review'            then 100 -- legacy v1
+    when 'client_review'     then 110
+    when 'drafts_approved'   then 120
+    when 'revision'          then 130
+    when 'signing_scheduled' then 140
+    when 'signing'           then 150 -- legacy v1
+    when 'signing_complete'  then 160
+    when 'post_execution'    then 170
+    when 'post_signing'      then 180 -- legacy v1
+    when 'funding'           then 190
+    when 'closed'            then 200
+  end
+$$;
+comment on function public.pipeline_stage_rank(text) is
+  'Ordinal of a lead or matter stage in the unified pipeline order. Null for an unrecognised stage.';
+
 -- ── ensure_lead_matter carries both ladders ─────────────────────────────────
 --
 -- Two migrations redefine this function and neither knows about the other:
@@ -331,10 +382,10 @@ create trigger sync_crm_opportunity_from_matter
 -- discovery now sorts later and would drop the PMPS floor, letting a re-sent
 -- organizer knock a booked lead back out of Planning Session.
 --
--- Defining it once more here, last, with the union of both. The floor is
--- expressed as an explicit stage list rather than through
--- `pipeline_stage_rank()`, which lives in main's migration and does not exist
--- on this branch — the ranks it would compare are exactly this list.
+-- Defining it once more here, last, with the union of both — main's floor
+-- verbatim, including its `pipeline_stage_rank()` comparison, which the
+-- redefinition above both supplies on this branch and teaches about
+-- discovery_call.
 create or replace function public.ensure_lead_matter()
 returns trigger
 language plpgsql
@@ -374,10 +425,12 @@ begin
   end;
   v_stage_entered_at := coalesce(new.engagement_sent_at, new.intake_completed_at, new.intake_sent_at, v_discovery_call_at, new.created_at, now());
 
-  -- A booked planning session is a floor, not a ceiling: `engagement_sent` and
-  -- `intake_completed` still win, because both are further along.
+  -- A booked planning session is a floor, not a ceiling: `engagement_sent` still
+  -- wins, because that is further along. Main's expression, unchanged — it now
+  -- reaches the right answer for a discovery lead too, because the rank above
+  -- gives that stage a number instead of a null.
   if v_pmps_at is not null
-     and v_stage in ('new_lead', 'discovery_call', 'intake_sent') then
+     and public.pipeline_stage_rank(v_stage) < public.pipeline_stage_rank('intake_completed') then
     v_stage := 'intake_completed';
     v_stage_entered_at := v_pmps_at;
   end if;
