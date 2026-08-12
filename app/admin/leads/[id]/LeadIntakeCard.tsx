@@ -9,6 +9,8 @@ import { getLeadIntakeProgress } from '@/lib/leads/intakeProgress'
 interface LeadIntakeCardProps {
   intake: IntakeRow
   intakeUrl: string | null
+  /** The standing link was deliberately revoked — copying must not revive it. */
+  linkRevoked?: boolean
   onOpen: () => void
   onCopy: () => void
   onEmail?: () => void
@@ -27,7 +29,8 @@ function stateLine(intake: IntakeRow, completed: number, total: number): string 
 }
 
 export function LeadIntakeCard({
-  intake, intakeUrl, onOpen, onCopy, onEmail, onText, onRotate, onRevoke, onTrackChange, busy = false,
+  intake, intakeUrl, linkRevoked = false, onOpen, onCopy, onEmail, onText, onRotate, onRevoke,
+  onTrackChange, busy = false,
 }: LeadIntakeCardProps) {
   const segments = getLeadIntakeProgress(intake)
   const completed = segments.filter((segment) => segment.complete).length
@@ -49,13 +52,16 @@ export function LeadIntakeCard({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" onClick={onOpen}>Open intake</Button>
+          {/* A lead that has never had a link prepared — every lead created
+              from a booking — still copies: the handler issues one first. Only
+              a revoked link is a dead end, and that one was deliberate. */}
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={onCopy}
-            disabled={!intakeUrl || busy}
-            aria-describedby={!intakeUrl ? 'intake-link-unavailable' : undefined}
+            disabled={linkRevoked || busy}
+            aria-describedby={linkRevoked ? 'intake-link-unavailable' : undefined}
           >
             <Copy className="h-3.5 w-3.5" />
             Copy link
@@ -82,7 +88,11 @@ export function LeadIntakeCard({
           )}
         </div>
       </div>
-      {!intakeUrl && <p id="intake-link-unavailable" className="sr-only">An intake link is not available to copy yet.</p>}
+      {linkRevoked && (
+        <p id="intake-link-unavailable" className="mt-2 text-xs text-muted-foreground">
+          This intake link was revoked. Use <span className="font-medium">Prepare link</span> to issue a new one.
+        </p>
+      )}
       {onTrackChange && (
         <div className="mt-3 rounded-md border border-border p-3">
           <p className="text-xs font-medium text-foreground">Questionnaire</p>
