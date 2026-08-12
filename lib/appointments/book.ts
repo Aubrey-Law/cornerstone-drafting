@@ -3,6 +3,7 @@ import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
 import { findLeadByEmail, findMatterIdByEmail } from '@/lib/calcom/link'
 import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
+import { recordDiscoveryAnchor } from '@/lib/bookings/discoveryAnchor'
 import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 import { portalUrl, appUrl } from '@/lib/urls'
@@ -150,45 +151,25 @@ async function recordActivity(input: {
     }
   }
 
-  // The discovery call is the pre-engagement clock's first anchor, and nothing
-  // else records it. It hangs off leadId, not matterId: findMatterIdByEmail
-  // filters to relationship_status = 'hired', so a lead resolves to no matter
-  // and the block below never runs for one. Only Booked/Rescheduled stamp —
-  // a no-show means the two tasks due at discovery_call+0 ("Send post-discovery
-  // email", "Determine fit") assume the conversation happened, so starting
-  // their 1-day clock here would breach on work nobody could have done yet.
+  // The discovery call is the pre-engagement clock's first anchor. It hangs off
+  // leadId, not matterId: findMatterIdByEmail filters to
+  // relationship_status = 'hired', so a lead resolves to no matter and the block
+  // below never runs for one. Only Booked/Rescheduled stamp — a no-show means
+  // the two tasks due at discovery_call+0 ("Send post-discovery email",
+  // "Determine fit") assume the conversation happened, so starting their 1-day
+  // clock here would breach on work nobody could have done yet.
+  //
+  // Shared with the Cal.com/Calendly webhook rather than inlined, so a call
+  // booked through the scheduling page and the same call booked through the
+  // provider land identically. See lib/bookings/discoveryAnchor.ts.
   if (leadId && startIso && type.key === 'discovery_call' && (action === 'Booked' || action === 'Rescheduled')) {
     try {
-      // client_intake_id is a non-unique index on matters — findMatterIdByEmail
-      // and the ensure_lead_matter trigger both defensively pick a single row
-      // rather than assume one — so resolve the target matter id first.
-      // Updating straight off client_intake_id would stamp every matter row
-      // for this lead and fire the stage trigger on each. Most-recent wins,
-      // the same tie-break findMatterIdByEmail already uses above.
-      const { data: matterRow, error: lookupError } = await admin
-        .from('matters')
-        .select('id')
-        .eq('client_intake_id', leadId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (lookupError) {
-        console.error('[appointments] discovery anchor matter lookup failed', lookupError)
-      } else if (matterRow) {
-        const targetMatterId = (matterRow as { id: string }).id
-        const query = admin
-          .from('matters')
-          .update({ discovery_call_at: new Date(startIso).toISOString() })
-          .eq('id', targetMatterId)
-        // Booking is write-once, so it never clobbers a date an attorney
-        // corrected by hand. A reschedule is the calendar's actual truth and
-        // must overwrite unconditionally — stage_entered_at downstream is
-        // pinned to this column, so leaving the stale date would show a false
-        // SLA breach for a call that has not happened yet.
-        const { error } =
-          action === 'Booked' ? await query.is('discovery_call_at', null) : await query
-        if (error) console.error('[appointments] discovery anchor failed', error)
-      }
+      await recordDiscoveryAnchor(admin, {
+        leadId,
+        matterId,
+        startIso,
+        overwrite: action === 'Rescheduled',
+      })
     } catch (err) {
       console.error('[appointments] discovery anchor failed', err)
     }

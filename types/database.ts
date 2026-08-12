@@ -153,8 +153,13 @@ export const STAGES: StageInfo[] = [
   { key: 'design', label: 'Design', group: 'active' },
   { key: 'drafting', label: 'Drafting', group: 'active' },
   { key: 'client_review', label: 'Client Review', group: 'work' },
-  { key: 'drafts_approved', label: 'Drafts Approved', group: 'work' },
+  // Revision precedes approval: the client reviews, asks for changes, and then
+  // approves — approval is the gate into signing. `stage_sla` has always
+  // ordered the engine keys this way (revisions before approved); this list and
+  // `pipeline_stage_rank()` were the two that disagreed, and both moved onto it
+  // in 20260913000000_revision_before_drafts_approved.sql.
   { key: 'revision', label: 'Revision', group: 'work' },
+  { key: 'drafts_approved', label: 'Drafts Approved', group: 'work' },
   { key: 'signing_scheduled', label: 'Signing Scheduled', group: 'done' },
   { key: 'signing_complete', label: 'Signing Complete', group: 'done' },
   { key: 'post_execution', label: 'Post-Execution', group: 'closed' },
