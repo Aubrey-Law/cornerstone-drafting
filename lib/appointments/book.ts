@@ -144,6 +144,23 @@ async function recordActivity(input: {
     }
   }
 
+  // The discovery call is the pre-engagement clock's first anchor, and nothing
+  // else records it. It hangs off leadId, not matterId: findMatterIdByEmail
+  // filters to relationship_status = 'hired', so a lead resolves to no matter
+  // and the block below never runs for one.
+  if (leadId && action !== 'Cancelled' && startIso && type.key === 'discovery_call') {
+    try {
+      await admin
+        .from('matters')
+        .update({ discovery_call_at: new Date(startIso).toISOString() })
+        .eq('client_intake_id', leadId)
+        // Never overwrite a date an attorney corrected by hand.
+        .is('discovery_call_at', null)
+    } catch (err) {
+      console.error('[appointments] discovery anchor failed', err)
+    }
+  }
+
   if (matterId) {
     try {
       const body =

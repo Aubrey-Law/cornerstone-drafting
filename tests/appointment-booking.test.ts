@@ -52,6 +52,7 @@ vi.mock('@/lib/supabaseAdmin', () => {
         state.updates.push({ table, values })
         const chain = {
           eq: vi.fn(() => chain),
+          is: vi.fn(() => chain),
           then: (resolve: (v: unknown) => unknown) => resolve({ error: null }),
         }
         return chain
@@ -363,6 +364,33 @@ describe('bookAppointment', () => {
     // Confirmation still sent
     expect(state.emails.some(e => e.category === 'appointment_confirmation')).toBe(true)
   })
+
+  it('stamps the discovery call anchor on the lead’s matter', async () => {
+    // findMatterIdByEmail is hired-only, so state.matterId stays null: the stamp
+    // has to find the matter through the lead, not through that helper.
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+
+    await bookAppointment(bookingInput())
+
+    const stamped = state.updates.find(
+      u => u.table === 'matters' && 'discovery_call_at' in u.values,
+    )
+    expect(stamped).toBeDefined()
+    expect(stamped?.values.discovery_call_at).toBe(SLOT_ISO)
+  })
+
+  it('does not stamp the anchor for a non-discovery appointment type', async () => {
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+
+    await bookAppointment({
+      ...bookingInput(),
+      type: { ...TYPE, key: 'signing_appointment', slug: 'signing', label: 'Signing' },
+    })
+
+    expect(
+      state.updates.find(u => u.table === 'matters' && 'discovery_call_at' in u.values),
+    ).toBeUndefined()
+  })
 })
 
 describe('cancelAppointment', () => {
@@ -400,5 +428,15 @@ describe('cancelAppointment', () => {
     expect(state.cancelledEvents).toEqual(['graph-event-1'])
     expect(state.inserts.some(i => i.table === 'lead_activity')).toBe(true)
     expect(state.emails.some(e => e.category === 'appointment_booked_alert')).toBe(true)
+  })
+
+  it('does not stamp the discovery anchor on cancellation', async () => {
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+
+    await cancelAppointment({ appointment: ROW, type: TYPE })
+
+    expect(
+      state.updates.find(u => u.table === 'matters' && 'discovery_call_at' in u.values),
+    ).toBeUndefined()
   })
 })
