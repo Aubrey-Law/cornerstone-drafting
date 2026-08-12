@@ -153,6 +153,10 @@ describe('runPostBookingAutomation', () => {
     expect(state.emails).toHaveLength(0)
   })
 
+  // The v1 path: back then the PMPS *was* the design meeting, held by a hired
+  // matter in `intake`. Under v3 the session is pre-engagement and a lead's
+  // stage is never one of these, so this branch cannot fire for one — that move
+  // is the stamp_lead_pmps_stage trigger (tests/pmps-booking-anchor.test.ts).
   it('advances a matter to design when a PMPS is booked from intake', async () => {
     state.matterUpdateResult = [{ id: 'matter-1' }]
     await runPostBookingAutomation({

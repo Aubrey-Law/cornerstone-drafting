@@ -110,10 +110,22 @@ async function maybeSendIntakeInvite(intakeId: string): Promise<void> {
 }
 
 /**
- * Guarded, forward-only stage bumps driven by what was just scheduled:
- * PMPS booked → design (from intake/intake_review); signing appointment
- * booked → signing_scheduled (from drafts_approved). Any other current
- * stage is left alone.
+ * Guarded, forward-only stage bumps driven by what was just scheduled. Any
+ * current stage outside `from` is left alone.
+ *
+ * The `pmps` entry is the v1 path and only that. Under v1 the Peace of Mind
+ * Planning Session was the design meeting — held after the engagement was
+ * signed, to a hired matter sitting in `intake` — which is why the appointment
+ * type still carries the slug `design-meeting`. A matter generated on that
+ * template can still be in `intake` today, and booking its design meeting
+ * should still move it on.
+ *
+ * v3 moved the session to the pre-engagement stretch, where a lead's stage is
+ * `new_lead` or `intake_sent` and never one of these, so this branch cannot
+ * fire for one. The v3 move is `stamp_lead_pmps_stage` (20260909000000), which
+ * keys off `matters.pmps_at` rather than the booking so the key-dates panel and
+ * the webhook path get it too, and it refuses to touch a hired matter — the two
+ * cannot both act on the same record.
  */
 const STAGE_ADVANCES: Record<string, { from: string[]; to: string } | undefined> = {
   pmps: { from: ['intake', 'intake_review'], to: 'design' },
