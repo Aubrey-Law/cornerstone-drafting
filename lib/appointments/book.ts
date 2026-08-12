@@ -3,7 +3,7 @@ import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
 import { findLeadByEmail, findMatterIdByEmail } from '@/lib/calcom/link'
 import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
-import { firmDateKey } from '@/lib/firmDate'
+import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import { portalUrl, appUrl } from '@/lib/urls'
 import { isSlotAvailable } from './availability'
 import { fetchAllBusy, AvailabilityUnavailableError } from './graphBusy'
@@ -202,35 +202,33 @@ async function recordActivity(input: {
       })
 
       // Mirror the Cal.com sync: key dates land on matter_details.
-      if (action !== 'Cancelled' && startIso) {
-        if (type.key === 'signing_appointment') {
-          // scheduled_signing_date is timestamptz (20260725023005). Truncating to
-          // a UTC calendar day here reported the wrong signing day for any
-          // evening appointment: 8pm ET is already the next day in UTC, and the
-          // bare YYYY-MM-DD then parsed as midnight UTC, rendering as the
-          // previous evening in ET. Store the full timestamp, as calcom/sync does.
-          await admin
-            .from('matter_details')
-            .upsert(
-              { client_id: matterId, scheduled_signing_date: new Date(startIso).toISOString() },
-              { onConflict: 'client_id' },
-            )
-        } else if (type.key === 'pmps') {
-          // design_meeting_date is a plain `date`, so derive the calendar day in
-          // the firm's timezone rather than UTC.
-          const meetingDay = firmDateKey(startIso)
-          if (meetingDay) {
-            await admin
-              .from('matter_details')
-              .upsert(
-                { client_id: matterId, design_meeting_date: meetingDay },
-                { onConflict: 'client_id' },
-              )
-          }
-        }
+      if (action !== 'Cancelled' && startIso && type.key === 'signing_appointment') {
+        // scheduled_signing_date is timestamptz (20260725023005). Truncating to
+        // a UTC calendar day here reported the wrong signing day for any
+        // evening appointment: 8pm ET is already the next day in UTC, and the
+        // bare YYYY-MM-DD then parsed as midnight UTC, rendering as the
+        // previous evening in ET. Store the full timestamp, as calcom/sync does.
+        await admin
+          .from('matter_details')
+          .upsert(
+            { client_id: matterId, scheduled_signing_date: new Date(startIso).toISOString() },
+            { onConflict: 'client_id' },
+          )
       }
     } catch (err) {
       console.error('[appointments] matter note failed', err)
+    }
+  }
+
+  // The PMPS anchor sits outside the `matterId` branch on purpose: that id is
+  // hired-only, and under the v3 SLA the planning session happens while the
+  // record is still a lead. Keyed off the lead, it reaches the matter row a lead
+  // has owned since it was created.
+  if (action !== 'Cancelled' && startIso && type.key === 'pmps') {
+    try {
+      await recordPmpsAnchor(admin, { leadId, matterId, startIso })
+    } catch (err) {
+      console.error('[appointments] pmps anchor failed', err)
     }
   }
 }

@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   paused: false,
   dateOverrides: {} as Record<string, Array<{ start: string; end: string }>>,
   automationCalls: [] as Array<Record<string, unknown>>,
+  pmpsAnchors: [] as Array<Record<string, unknown>>,
   reset() {
     this.inserts = []
     this.updates = []
@@ -35,6 +36,7 @@ const state = vi.hoisted(() => ({
     this.paused = false
     this.dateOverrides = {}
     this.automationCalls = []
+    this.pmpsAnchors = []
   },
 }))
 
@@ -159,11 +161,16 @@ vi.mock('@/lib/appointments/automation', () => ({
   }),
 }))
 
+vi.mock('@/lib/bookings/pmpsAnchor', () => ({
+  recordPmpsAnchor: vi.fn(async (_admin: unknown, input: Record<string, unknown>) => {
+    state.pmpsAnchors.push(input)
+  }),
+}))
+
 import {
   bookAppointment,
   BookingPausedError,
   cancelAppointment,
-  markNoShow,
   rescheduleAppointment,
   SlotTakenError,
 } from '@/lib/appointments/book'
@@ -363,15 +370,41 @@ describe('bookAppointment', () => {
     await expect(bookAppointment(bookingInput())).rejects.toThrow(SlotTakenError)
   })
 
-  it('upserts matter_details design meeting date for pmps bookings with a matter', async () => {
+  it('records the pmps anchor for a hired matter and writes no design meeting date', async () => {
     state.matterId = 'matter-7'
     await bookAppointment({
       ...bookingInput(),
       type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
     })
+    expect(state.pmpsAnchors).toEqual([
+      { leadId: null, matterId: 'matter-7', startIso: SLOT_ISO },
+    ])
+    // v3 moved the planning session out of the design phase; stamping it as the
+    // design meeting date put a pre-engagement sales call on the matter's
+    // post-engagement timeline.
     const upsert = state.inserts.find(i => i.table === 'matter_details:upsert')
-    expect(upsert?.values.design_meeting_date).toBe('2026-08-10')
+    expect(upsert?.values.design_meeting_date).toBeUndefined()
     expect(state.inserts.some(i => i.table === 'matter_notes')).toBe(true)
+  })
+
+  it('records the pmps anchor for a lead with no hired matter', async () => {
+    // The case the old code could not reach: findMatterIdByEmail is hired-only,
+    // and under v3 the planning session happens before anyone is hired.
+    state.lead = { id: 'lead-9', lead_status: 'lead' }
+    state.matterId = null
+    await bookAppointment({
+      ...bookingInput(),
+      type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
+    })
+    expect(state.pmpsAnchors).toEqual([
+      { leadId: 'lead-9', matterId: null, startIso: SLOT_ISO },
+    ])
+  })
+
+  it('leaves the pmps anchor alone for other appointment types', async () => {
+    state.matterId = 'matter-7'
+    await bookAppointment(bookingInput())
+    expect(state.pmpsAnchors).toHaveLength(0)
   })
 
   it('still books when the Graph event creation fails', async () => {
@@ -453,50 +486,54 @@ describe('cancelAppointment', () => {
     expect(state.emails.some(e => e.category === 'appointment_booked_alert')).toBe(true)
   })
 
-})
+  // ── a cancel does not roll back the key dates ─────────────────────────────
+  //
+  // Decided, not overlooked. `pmps_at` is the firm's commitment date, keyed off
+  // the column precisely so the native scheduler, the Cal.com/Calendly webhook
+  // and the attorney's key-dates panel all mean the same thing by it. Reverting
+  // it on one appointment's cancellation would re-couple it to that
+  // appointment's lifecycle, and the rollback could only ever be partial:
+  // `stamp_lead_pmps_stage` is forward-only, so the lead stays at
+  // `intake_completed` either way. The cancellation is recorded as activity
+  // instead, and the common next step — a rebook — re-stamps the date.
 
-describe('rescheduleAppointment', () => {
-  const ROW: AppointmentRow = {
-    id: 'appt-2',
-    appointment_type_id: 'type-1',
-    start_time: SLOT_ISO,
-    end_time: '2026-08-10T14:30:00.000Z',
-    status: 'scheduled',
-    location_type: 'phone',
-    attendee_name: 'Pat Client',
-    attendee_email: 'pat@example.com',
-    attendee_phone: null,
-    second_attendee_name: null,
-    second_attendee_email: null,
-    notes: null,
-    linked_lead_id: 'lead-9',
-    linked_matter_id: null,
-    booked_by_user_id: null,
-    microsoft_event_id: 'graph-event-1',
-    manage_token_hash: 'hash',
-    manage_token_expires_at: '2026-10-01T00:00:00Z',
-    reminder_sent_at: null,
-    online_meeting_url: null,
-    source: 'public',
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-01T00:00:00Z',
-  }
+  const PMPS_TYPE: AppointmentType = { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' }
+  const HIRED = { ...ROW, linked_matter_id: 'matter-7' }
 
-  it('moves the discovery anchor to the new date, overwriting the write-once guard', async () => {
-    // Wednesday 2026-08-12 10:00 ET — inside weekly hours, distinct from SLOT_ISO.
-    const newStartIso = '2026-08-12T14:00:00.000Z'
+  it('leaves pmps_at standing when the planning session is cancelled', async () => {
+    await cancelAppointment({ appointment: HIRED, type: PMPS_TYPE })
+    expect(state.pmpsAnchors).toHaveLength(0)
+    expect(state.updates.some(u => u.table === 'matters')).toBe(false)
+  })
 
-    await rescheduleAppointment({ appointment: ROW, type: TYPE, newStartIso })
+  it('leaves the target signing date standing when a signing is cancelled', async () => {
+    // Same call, and the harder case: an attorney types this target by hand in
+    // the Dates panel, so a cancelled slot must not clobber it.
+    await cancelAppointment({
+      appointment: HIRED,
+      type: { ...TYPE, key: 'signing_appointment', slug: 'signing', label: 'Signing' },
+    })
+    expect(
+      state.inserts.some(
+        i => i.table === 'matter_details:upsert' && 'scheduled_signing_date' in i.values,
+      ),
+    ).toBe(false)
+  })
 
-    const stamped = state.updates.find(
-      u => u.table === 'matters' && 'discovery_call_at' in u.values,
-    )
-    expect(stamped).toBeDefined()
-    expect(stamped?.values.discovery_call_at).toBe(newStartIso)
+  it('records the cancellation, so a standing date is not silently stale', async () => {
+    // What makes keeping the date defensible: the reason it looks wrong is on
+    // the timeline and in the matter's notes.
+    await cancelAppointment({ appointment: HIRED, type: PMPS_TYPE })
+    expect(state.inserts.some(i => i.table === 'lead_activity')).toBe(true)
+    expect(state.inserts.some(i => i.table === 'matter_notes')).toBe(true)
   })
 })
 
-describe('markNoShow', () => {
+describe('rescheduleAppointment', () => {
+  // The other half of the cancel decision: nothing is stranded, because moving
+  // a session re-stamps the anchor and re-dates the plan off the new day.
+  // Reschedule does not route through cancelAppointment — it updates the row in
+  // place — so keeping the date on cancel costs this path nothing.
   const ROW: AppointmentRow = {
     id: 'appt-1',
     appointment_type_id: 'type-1',
@@ -511,7 +548,7 @@ describe('markNoShow', () => {
     second_attendee_email: null,
     notes: null,
     linked_lead_id: 'lead-9',
-    linked_matter_id: null,
+    linked_matter_id: 'matter-7',
     booked_by_user_id: null,
     microsoft_event_id: 'graph-event-1',
     manage_token_hash: 'hash',
@@ -523,13 +560,17 @@ describe('markNoShow', () => {
     updated_at: '2026-08-01T00:00:00Z',
   }
 
-  it('does not stamp the discovery anchor on a no-show', async () => {
-    state.lead = { id: 'lead-9', lead_status: 'lead' }
+  // Tue 2026-08-11 10:00 ET = 14:00 UTC — inside tue 09:00–17:00.
+  const MOVED_ISO = '2026-08-11T14:00:00.000Z'
 
-    await markNoShow({ appointment: ROW, type: TYPE, sendFollowUp: false })
-
-    expect(
-      state.updates.find(u => u.table === 'matters' && 'discovery_call_at' in u.values),
-    ).toBeUndefined()
+  it('re-stamps the pmps anchor at the new day', async () => {
+    await rescheduleAppointment({
+      appointment: ROW,
+      type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
+      newStartIso: MOVED_ISO,
+    })
+    expect(state.pmpsAnchors).toEqual([
+      { leadId: 'lead-9', matterId: 'matter-7', startIso: MOVED_ISO },
+    ])
   })
 })

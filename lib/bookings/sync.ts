@@ -1,6 +1,6 @@
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { firmDateKey } from '@/lib/firmDate'
 import type { MeetingTypeKey } from '@/lib/scheduling'
+import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import {
   findLeadByEmail,
   findLeadById,
@@ -158,21 +158,11 @@ async function syncMatterBooking(input: {
 
   if ((action === 'created' || action === 'rescheduled') && startTime) {
     const startTimestamp = new Date(startTime).toISOString()
-    // design_meeting_date is a plain `date`; derive the day in the firm's
-    // timezone, not UTC, or evening bookings land on the following day.
-    const dateOnly = firmDateKey(startTimestamp)
     if (eventKey === 'signing_appointment') {
       await admin
         .from('matter_details')
         .upsert(
           { client_id: matterId, scheduled_signing_date: startTimestamp },
-          { onConflict: 'client_id' },
-        )
-    } else if (eventKey === 'pmps' && dateOnly) {
-      await admin
-        .from('matter_details')
-        .upsert(
-          { client_id: matterId, design_meeting_date: dateOnly },
           { onConflict: 'client_id' },
         )
     }
@@ -305,6 +295,17 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
       })
     } catch (err) {
       console.error(`[${provider}] matter sync error for`, matterId, err)
+    }
+  }
+
+  // Outside the `matterId` branch: that id is hired-only, and under the v3 SLA
+  // the planning session is booked while the record is still a lead. See
+  // lib/bookings/pmpsAnchor.ts.
+  if (eventKey === 'pmps' && startTime && (action === 'created' || action === 'rescheduled')) {
+    try {
+      await recordPmpsAnchor(admin, { leadId: lead?.id ?? null, matterId, startIso: startTime })
+    } catch (err) {
+      console.error(`[${provider}] pmps anchor error for`, lead?.id ?? matterId, err)
     }
   }
 }
