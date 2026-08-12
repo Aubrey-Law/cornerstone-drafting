@@ -64,6 +64,7 @@ vi.mock('@/lib/slaTasks/generate', () => ({
 
 import { findMatterIdByLeadId } from '@/lib/bookings/link'
 import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
+import { rescheduleForAnchor } from '@/lib/slaTasks/schedule'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 const admin = () => getAdminClient()
@@ -148,6 +149,51 @@ describe('recordPmpsAnchor', () => {
     state.anchorResult = { ok: false, updated: 0, error: 'boom' }
     await recordPmpsAnchor(admin(), { leadId: null, matterId: 'm1', startIso: EVENING_ET })
     expect(state.matterUpdates).toHaveLength(1)
+  })
+})
+
+/**
+ * Cancelling a session deliberately leaves `pmps_at` — and the target signing
+ * date — where they are. The behavioural half of this lives in
+ * tests/appointment-booking.test.ts; what is pinned here is why the shape of the
+ * surrounding code makes that the right call, so a later reader does not read
+ * the omission as a gap.
+ */
+describe('a cancelled session keeps its anchor', () => {
+  const book = fs.readFileSync('lib/appointments/book.ts', 'utf8')
+  const route = fs.readFileSync('app/api/admin/matters/[id]/sla-anchors/route.ts', 'utf8')
+
+  it('guards both key-date writes on the action, so a cancel writes neither', () => {
+    expect(book).toContain("if (action !== 'Cancelled' && startIso && type.key === 'pmps')")
+    expect(book).toContain(
+      "if (action !== 'Cancelled' && startIso && type.key === 'signing_appointment')",
+    )
+  })
+
+  it('agrees with the key-dates panel, where clearing a date does not undate the plan', () => {
+    // The panel already answers "the anchor is gone": null the column and move
+    // on, leaving the task dates alone. Undating them on cancel would make the
+    // scheduler harsher than the attorney's own clear button.
+    expect(route).toMatch(/patch\[config\.column\] = null\s*\n\s*continue/)
+    expect(route).toContain('if (config.anchor) anchorsToApply.push')
+  })
+
+  it('has no undate mode to reuse: a non-date anchor reschedules nothing', () => {
+    // Full rollback is not a flag on the existing path — `applySlaAnchor` can
+    // only move dates to a real day, so nulling them would be new machinery.
+    const task: Parameters<typeof rescheduleForAnchor>[0][number] = {
+      id: 'task-1',
+      status: 'pending',
+      relative_to: 'pmps',
+      due_offset_days: -1,
+      nudge_offset_days: -2,
+      escalation_offset_days: 0,
+      due_date: '2026-08-11',
+      nudge_date: '2026-08-10',
+      escalation_date: '2026-08-12',
+    }
+    expect(rescheduleForAnchor([task], 'pmps', '2026-08-20')).toHaveLength(1)
+    expect(rescheduleForAnchor([task], 'pmps', '')).toEqual([])
   })
 })
 

@@ -149,6 +149,7 @@ import {
   bookAppointment,
   BookingPausedError,
   cancelAppointment,
+  rescheduleAppointment,
   SlotTakenError,
 } from '@/lib/appointments/book'
 
@@ -434,5 +435,93 @@ describe('cancelAppointment', () => {
     expect(state.cancelledEvents).toEqual(['graph-event-1'])
     expect(state.inserts.some(i => i.table === 'lead_activity')).toBe(true)
     expect(state.emails.some(e => e.category === 'appointment_booked_alert')).toBe(true)
+  })
+
+  // ── a cancel does not roll back the key dates ─────────────────────────────
+  //
+  // Decided, not overlooked. `pmps_at` is the firm's commitment date, keyed off
+  // the column precisely so the native scheduler, the Cal.com/Calendly webhook
+  // and the attorney's key-dates panel all mean the same thing by it. Reverting
+  // it on one appointment's cancellation would re-couple it to that
+  // appointment's lifecycle, and the rollback could only ever be partial:
+  // `stamp_lead_pmps_stage` is forward-only, so the lead stays at
+  // `intake_completed` either way. The cancellation is recorded as activity
+  // instead, and the common next step — a rebook — re-stamps the date.
+
+  const PMPS_TYPE: AppointmentType = { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' }
+  const HIRED = { ...ROW, linked_matter_id: 'matter-7' }
+
+  it('leaves pmps_at standing when the planning session is cancelled', async () => {
+    await cancelAppointment({ appointment: HIRED, type: PMPS_TYPE })
+    expect(state.pmpsAnchors).toHaveLength(0)
+    expect(state.updates.some(u => u.table === 'matters')).toBe(false)
+  })
+
+  it('leaves the target signing date standing when a signing is cancelled', async () => {
+    // Same call, and the harder case: an attorney types this target by hand in
+    // the Dates panel, so a cancelled slot must not clobber it.
+    await cancelAppointment({
+      appointment: HIRED,
+      type: { ...TYPE, key: 'signing_appointment', slug: 'signing', label: 'Signing' },
+    })
+    expect(
+      state.inserts.some(
+        i => i.table === 'matter_details:upsert' && 'scheduled_signing_date' in i.values,
+      ),
+    ).toBe(false)
+  })
+
+  it('records the cancellation, so a standing date is not silently stale', async () => {
+    // What makes keeping the date defensible: the reason it looks wrong is on
+    // the timeline and in the matter's notes.
+    await cancelAppointment({ appointment: HIRED, type: PMPS_TYPE })
+    expect(state.inserts.some(i => i.table === 'lead_activity')).toBe(true)
+    expect(state.inserts.some(i => i.table === 'matter_notes')).toBe(true)
+  })
+})
+
+describe('rescheduleAppointment', () => {
+  // The other half of the cancel decision: nothing is stranded, because moving
+  // a session re-stamps the anchor and re-dates the plan off the new day.
+  // Reschedule does not route through cancelAppointment — it updates the row in
+  // place — so keeping the date on cancel costs this path nothing.
+  const ROW: AppointmentRow = {
+    id: 'appt-1',
+    appointment_type_id: 'type-1',
+    start_time: SLOT_ISO,
+    end_time: '2026-08-10T14:30:00.000Z',
+    status: 'scheduled',
+    location_type: 'teams',
+    attendee_name: 'Pat Client',
+    attendee_email: 'pat@example.com',
+    attendee_phone: null,
+    second_attendee_name: null,
+    second_attendee_email: null,
+    notes: null,
+    linked_lead_id: 'lead-9',
+    linked_matter_id: 'matter-7',
+    booked_by_user_id: null,
+    microsoft_event_id: 'graph-event-1',
+    manage_token_hash: 'hash',
+    manage_token_expires_at: '2026-10-01T00:00:00Z',
+    reminder_sent_at: null,
+    online_meeting_url: 'https://teams.example.test/meeting',
+    source: 'public',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  }
+
+  // Tue 2026-08-11 10:00 ET = 14:00 UTC — inside tue 09:00–17:00.
+  const MOVED_ISO = '2026-08-11T14:00:00.000Z'
+
+  it('re-stamps the pmps anchor at the new day', async () => {
+    await rescheduleAppointment({
+      appointment: ROW,
+      type: { ...TYPE, key: 'pmps', slug: 'design-meeting', label: 'PMPS' },
+      newStartIso: MOVED_ISO,
+    })
+    expect(state.pmpsAnchors).toEqual([
+      { leadId: 'lead-9', matterId: 'matter-7', startIso: MOVED_ISO },
+    ])
   })
 })
