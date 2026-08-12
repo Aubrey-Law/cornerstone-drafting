@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const read = (relativePath: string) => fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8')
 
-const MIGRATION = 'supabase/migrations/20260910000000_crm_discovery_stage_sync.sql'
+const MIGRATION = 'supabase/migrations/20260911000000_crm_discovery_stage_sync.sql'
 
 /** The body of a `create or replace function` block, so an assertion about one
  *  function cannot be satisfied by text that lives in another. */
@@ -126,14 +126,30 @@ describe('CRM mirror sees the discovery stage', () => {
     expect(migration).toContain("notify pgrst, 'reload schema';")
   })
 
-  it('sorts after both migrations that already claim 20260909000000', () => {
+  it('runs after the migration that creates the discovery stage', () => {
     const dir = path.join(process.cwd(), 'supabase/migrations')
-    const names = fs.readdirSync(dir).filter((n) => n.endsWith('.sql'))
+    const names = fs.readdirSync(dir).filter((n) => n.endsWith('.sql')).sort()
     const fixName = path.basename(MIGRATION)
+    const discovery = names.find((n) => n.endsWith('_lead_discovery_stage.sql'))
 
     expect(names).toContain(fixName)
-    for (const earlier of names.filter((n) => n.startsWith('20260909'))) {
-      expect(fixName > earlier).toBe(true)
-    }
+    expect(discovery).toBeDefined()
+    // This migration reads matters.discovery_call_at and renumbers nothing on
+    // its own; applied first it would seed a CRM stage for a pipeline stage
+    // that does not exist yet.
+    expect(fixName > discovery!).toBe(true)
+  })
+
+  it('leaves no two migrations sharing a timestamp', () => {
+    // Both discovery migrations were renumbered off 20260909000000, which main
+    // had already claimed for the PMPS booking stage. Duplicate timestamps
+    // order non-deterministically, so guard the whole directory, not this pair.
+    const dir = path.join(process.cwd(), 'supabase/migrations')
+    const stamps = fs
+      .readdirSync(dir)
+      .filter((n) => n.endsWith('.sql'))
+      .map((n) => n.split('_')[0])
+
+    expect(stamps).toHaveLength(new Set(stamps).size)
   })
 })
