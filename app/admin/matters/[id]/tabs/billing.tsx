@@ -1,11 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Plus, ReceiptText } from 'lucide-react'
+import { AlertTriangle, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmptyState } from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -20,6 +21,7 @@ import { TabsContent } from '@/components/ui/tabs'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import { AddChargeDialog, type AddChargeInput } from '@/components/billing/AddChargeDialog'
+import { DeleteChargesDialog } from '@/components/billing/DeleteChargesDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { billingMoney } from '@/lib/billing/metrics'
 import type {
@@ -62,20 +64,46 @@ function dayOf(iso: string | null): string {
 /** Fees, plan claims and costs billed on this matter. */
 function FeesChargesCard({
   rows,
+  selected,
   onAddCharge,
+  onToggleRow,
+  onToggleAll,
+  onDelete,
 }: {
   rows: BillingLedgerRow[]
+  selected: Record<string, boolean>
   onAddCharge: () => void
+  onToggleRow: (id: string, checked: boolean) => void
+  onToggleAll: (checked: boolean) => void
+  /** Charges to confirm deleting — one row, or the whole selection. */
+  onDelete: (rows: BillingLedgerRow[]) => void
 }) {
   const billed = rows.reduce((sum, row) => sum + row.amountBilled, 0)
   const collected = rows.reduce((sum, row) => sum + row.collected, 0)
   const balance = rows.reduce((sum, row) => sum + row.balance, 0)
+  const selectedRows = rows.filter(row => selected[row.id])
+  const allSelected = rows.length > 0 && selectedRows.length === rows.length
 
   return (
     <Card>
       <CardHeader className="border-b [.border-b]:pb-4">
         <CardTitle className="text-sm">Fees &amp; charges</CardTitle>
-        <div className="col-start-2 row-span-2 row-start-1 self-start justify-self-end">
+        <div className="col-start-2 row-span-2 row-start-1 flex flex-wrap items-center gap-2 self-start justify-self-end">
+          {selectedRows.length > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {selectedRows.length} selected
+              </span>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onDelete(selectedRows)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                Delete selected
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm" onClick={onAddCharge}>
             <Plus className="size-4" aria-hidden />
             Add charge
@@ -97,19 +125,36 @@ function FeesChargesCard({
           />
         ) : (
           <div className="overflow-x-auto">
-            <Table className="min-w-[520px]">
+            <Table className="min-w-[560px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Item</TableHead>
+                  <TableHead className="w-10 pl-4">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={checked => onToggleAll(checked === true)}
+                      aria-label="Select all charges"
+                    />
+                  </TableHead>
+                  <TableHead>Item</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Collected</TableHead>
-                  <TableHead className="pr-4">Status</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-10 pr-4">
+                    <span className="sr-only">Delete</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map(row => (
                   <TableRow key={row.id}>
-                    <TableCell className="max-w-52 whitespace-normal pl-4">
+                    <TableCell className="pl-4">
+                      <Checkbox
+                        checked={Boolean(selected[row.id])}
+                        onCheckedChange={checked => onToggleRow(row.id, checked === true)}
+                        aria-label={`Select ${row.label}`}
+                      />
+                    </TableCell>
+                    <TableCell className="max-w-52 whitespace-normal">
                       <span className="font-medium">{row.label}</span>
                       <span className="block text-xs text-muted-foreground">
                         {row.invoicedAt
@@ -124,15 +169,26 @@ function FeesChargesCard({
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {billingMoney(row.collected)}
                     </TableCell>
-                    <TableCell className="pr-4">
+                    <TableCell>
                       <BillingStatusBadge row={row} />
+                    </TableCell>
+                    <TableCell className="pr-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-destructive"
+                        aria-label={`Delete ${row.label}`}
+                        onClick={() => onDelete([row])}
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell className="pl-4">
+                  <TableCell className="pl-4" colSpan={2}>
                     Total
                     <span className="block text-xs font-normal text-muted-foreground">
                       Balance {billingMoney(balance)}
@@ -142,7 +198,7 @@ function FeesChargesCard({
                   <TableCell className="text-right tabular-nums text-green">
                     {billingMoney(collected)}
                   </TableCell>
-                  <TableCell className="pr-4" />
+                  <TableCell colSpan={2} className="pr-4" />
                 </TableRow>
               </TableFooter>
             </Table>
@@ -239,8 +295,12 @@ export function MatterBillingTab({
   const [saving, setSaving] = useState(false)
   const [chargeOpen, setChargeOpen] = useState(false)
   const [chargeSaving, setChargeSaving] = useState(false)
+  const [selectedCharges, setSelectedCharges] = useState<Record<string, boolean>>({})
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
+  const [deleting, setDeleting] = useState(false)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const chargeOpenerRef = useRef<HTMLElement | null>(null)
+  const deleteOpenerRef = useRef<HTMLElement | null>(null)
 
   const authHeaders = useMemo(
     () => ({
@@ -288,14 +348,18 @@ export function MatterBillingTab({
     setPaymentOpen(true)
   }
 
-  async function post(path: string, body?: unknown) {
+  async function send(path: string, method: 'POST' | 'DELETE', body?: unknown) {
     const response = await fetch(path, {
-      method: 'POST',
+      method,
       headers: authHeaders,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
     const json = (await response.json().catch(() => ({}))) as { error?: string }
     if (!response.ok) throw new Error(json.error ?? 'Billing update failed')
+  }
+
+  async function post(path: string, body?: unknown) {
+    await send(path, 'POST', body)
   }
 
   function openCharge() {
@@ -315,6 +379,37 @@ export function MatterBillingTab({
       toast.error(saveError instanceof Error ? saveError.message : 'Could not add charge')
     } finally {
       setChargeSaving(false)
+    }
+  }
+
+  function askDelete(targets: BillingLedgerRow[]) {
+    if (targets.length === 0) return
+    deleteOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setPendingDeleteIds(targets.map(target => target.id))
+  }
+
+  async function deleteCharges() {
+    const ids = pendingDeleteIds
+    if (ids.length === 0) return
+    setDeleting(true)
+    try {
+      // The REST delete carries a single charge; the bulk route removes a whole
+      // selection in one statement rather than a request per row.
+      if (ids.length === 1) await send(`/api/admin/billing/items/${ids[0]}`, 'DELETE')
+      else await post('/api/admin/billing/items/bulk-delete', { ids })
+      setPendingDeleteIds([])
+      setSelectedCharges(current => {
+        const next = { ...current }
+        for (const id of ids) delete next[id]
+        return next
+      })
+      toast.success(ids.length === 1 ? 'Charge deleted' : `${ids.length} charges deleted`)
+      await load()
+    } catch (deleteError) {
+      toast.error(deleteError instanceof Error ? deleteError.message : 'Could not delete charges')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -392,7 +487,18 @@ export function MatterBillingTab({
               hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
               onStartClaim={openCharge}
             />
-            <FeesChargesCard rows={rows} onAddCharge={openCharge} />
+            <FeesChargesCard
+              rows={rows}
+              selected={selectedCharges}
+              onAddCharge={openCharge}
+              onToggleRow={(id, checked) =>
+                setSelectedCharges(current => ({ ...current, [id]: checked }))}
+              onToggleAll={checked =>
+                setSelectedCharges(
+                  checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {},
+                )}
+              onDelete={askDelete}
+            />
             <PaymentsCard rows={rows} onLogPayment={() => openPayment()} />
           </div>
 
@@ -459,6 +565,15 @@ export function MatterBillingTab({
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}
+      />
+
+      <DeleteChargesDialog
+        open={pendingDeleteIds.length > 0}
+        onOpenChange={open => !open && setPendingDeleteIds([])}
+        rows={rows.filter(row => pendingDeleteIds.includes(row.id))}
+        deleting={deleting}
+        returnFocusRef={deleteOpenerRef}
+        onConfirm={() => void deleteCharges()}
       />
 
       <LogPaymentDialog

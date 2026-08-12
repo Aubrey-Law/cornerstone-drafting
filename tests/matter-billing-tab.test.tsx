@@ -514,4 +514,77 @@ describe('MatterBillingTab', () => {
     await user.click(await screen.findByRole('option', { name: 'Cost' }))
     expect(within(dialog).queryByRole('status')).toBeNull()
   })
+  const SECOND_ID = '22222222-2222-4222-8222-222222222222'
+
+  it('deletes one charge through the REST delete, after confirming', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Flat fee — Joint trust package' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 1 charge' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(
+        call => call[1]?.method === 'DELETE'
+          && call[0] === `/api/admin/billing/items/${row().id}`,
+      )).toBe(true)
+    })
+    expect(toast.success).toHaveBeenCalledWith('Charge deleted')
+  })
+
+  it('leaves the charge alone when the confirmation is cancelled', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Flat fee — Joint trust package' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    expect(fetchMock.mock.calls.some(call => call[1]?.method === 'DELETE')).toBe(false)
+  })
+
+  it('deletes a whole selection in one bulk call', async () => {
+    const user = userEvent.setup()
+    respondWith({
+      rows: [row(), row({ id: SECOND_ID, label: 'Deed recording fee', kind: 'cost' })],
+    })
+    renderTab()
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Select all charges' }))
+    await user.click(screen.getByRole('button', { name: 'Delete selected' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 2 charges?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 2 charges' }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        call => call[0] === '/api/admin/billing/items/bulk-delete',
+      )
+      expect(JSON.parse(post![1].body)).toEqual({ ids: [row().id, SECOND_ID] })
+    })
+    expect(toast.success).toHaveBeenCalledWith('2 charges deleted')
+  })
+
+  it('says what a deletion costs in collected payments before it happens', async () => {
+    const user = userEvent.setup()
+    respondWith({
+      rows: [row({
+        payments: [{
+          id: '55555555-5555-4555-8555-555555555555',
+          billingItemId: row().id,
+          amount: 150_000,
+          method: 'check',
+          note: null,
+          receivedAt: '2026-07-18T16:00:00.000Z',
+        }],
+      })],
+    })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Flat fee — Joint trust package' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
+    expect(within(dialog).getByRole('status').textContent).toContain('$1,500 already collected')
+  })
 })

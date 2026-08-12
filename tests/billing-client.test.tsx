@@ -276,4 +276,95 @@ describe('billing workspace', () => {
     await user.click(await screen.findByRole('option', { name: /Nguyen/ }))
     expect(within(dialog).queryByRole('status')).toBeNull()
   })
+
+  it('deletes one ledger charge through the REST delete', async () => {
+    const user = userEvent.setup()
+    const request = vi.fn().mockResolvedValue(Response.json({ deleted: 1, items: [] }))
+    vi.stubGlobal('fetch', request)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
+
+    await user.click(screen.getByRole('button', {
+      name: 'Delete Flat fee — Joint trust package for Chen, Marcus & Lily',
+    }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 1 charge' }))
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        `/api/admin/billing/items/${snapshot.rows[0].id}`,
+        expect.objectContaining({
+          method: 'DELETE',
+          headers: expect.objectContaining({ Authorization: 'Bearer access-token' }),
+        }),
+      )
+    })
+    expect(toast.success).toHaveBeenCalledWith('Charge deleted')
+    expect(navigation.refresh).toHaveBeenCalled()
+  })
+
+  it('bulk deletes only the rows the current filter shows', async () => {
+    const user = userEvent.setup()
+    const request = vi.fn().mockResolvedValue(Response.json({ ok: true, deleted: 2, requested: 2 }))
+    vi.stubGlobal('fetch', request)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
+
+    // The default Open filter hides the paid O'Brien row, so selecting every
+    // visible row must not reach it.
+    await user.click(screen.getByRole('checkbox', { name: 'Select all billing items in view' }))
+    expect(screen.getByText('1 selected')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Delete selected' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 1 charge' }))
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        `/api/admin/billing/items/${snapshot.rows[0].id}`,
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+    })
+    expect(request.mock.calls.some(call => call[0] === '/api/admin/billing/items/bulk-delete')).toBe(false)
+  })
+
+  it('sends a multi-row selection to the bulk delete route in one call', async () => {
+    navigation.params = new URLSearchParams('filter=all')
+    const user = userEvent.setup()
+    const request = vi.fn().mockResolvedValue(Response.json({ ok: true, deleted: 2, requested: 2 }))
+    vi.stubGlobal('fetch', request)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all billing items in view' }))
+    await user.click(screen.getByRole('button', { name: 'Delete selected' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 2 charges?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 2 charges' }))
+
+    await waitFor(() => {
+      const call = request.mock.calls.find(entry => entry[0] === '/api/admin/billing/items/bulk-delete')
+      expect(JSON.parse(call![1].body)).toEqual({
+        ids: [snapshot.rows[0].id, snapshot.rows[1].id],
+      })
+    })
+    expect(toast.success).toHaveBeenCalledWith('2 charges deleted')
+  })
+
+  it('keeps a failed deletion visible instead of reporting success', async () => {
+    const user = userEvent.setup()
+    const request = vi.fn().mockResolvedValue(
+      Response.json({ error: 'Attorney or admin access required' }, { status: 403 }),
+    )
+    vi.stubGlobal('fetch', request)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
+
+    await user.click(screen.getByRole('button', {
+      name: 'Delete Flat fee — Joint trust package for Chen, Marcus & Lily',
+    }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Delete 1 charge' }))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Attorney or admin access required')
+    })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Delete 1 charge?' })).toBeTruthy()
+  })
 })

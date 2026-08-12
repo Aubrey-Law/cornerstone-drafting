@@ -158,6 +158,14 @@ export const createBillingItemSchema = z
     path: ['plan'],
   })
 
+/**
+ * Charges to delete in one call. Bounded so a runaway selection cannot ask the
+ * database to lock the whole ledger in a single statement.
+ */
+export const deleteBillingItemsSchema = z.object({
+  ids: z.array(billingItemIdSchema).min(1).max(100),
+})
+
 export const dismissBillingNudgeSchema = z.object({
   nudgeKey: z.string().trim().min(1).max(250),
   weekStart: z.string().date(),
