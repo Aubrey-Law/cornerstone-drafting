@@ -39,6 +39,7 @@ export interface FiduciaryRoleEntry {
   middle_name?: string | null
   email?: string | null
   phone?: string | null
+  preferred_pronoun?: string | null
   relationship_label?: string | null
 }
 
@@ -88,6 +89,7 @@ export function fiduciaryEntriesToRoles(input: unknown): FiduciaryRoleEntry[] {
         middle_name: nullableString(raw.middle_name),
         email: nullableString(raw.email),
         phone: nullableString(raw.phone),
+        preferred_pronoun: nullableString(raw.preferred_pronoun ?? raw.pronouns),
         relationship_label: nullableString(raw.relationship_label ?? raw.relationship),
       })
     })

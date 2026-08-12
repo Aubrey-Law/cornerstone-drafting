@@ -17,19 +17,20 @@ type FlatField = keyof AdminIntakeFormData
 
 export const ADMIN_FIDUCIARY_FIELD_MAP: Array<{
   field: FlatField
+  pronounField: FlatField
   role: string
   priority: number
 }> = [
-  { field: 'trustee_primary', role: 'trustee', priority: 1 },
-  { field: 'trustee_alternate', role: 'trustee', priority: 2 },
-  { field: 'executor_primary', role: 'personal_rep', priority: 1 },
-  { field: 'executor_alternate', role: 'personal_rep', priority: 2 },
-  { field: 'poa_primary', role: 'poa', priority: 1 },
-  { field: 'poa_alternate', role: 'poa', priority: 2 },
-  { field: 'hcp_primary', role: 'hcp', priority: 1 },
-  { field: 'hcp_alternate', role: 'hcp', priority: 2 },
-  { field: 'guardian_primary', role: 'guardian', priority: 1 },
-  { field: 'guardian_alternate', role: 'guardian', priority: 2 },
+  { field: 'trustee_primary', pronounField: 'trustee_primary_pronouns', role: 'trustee', priority: 1 },
+  { field: 'trustee_alternate', pronounField: 'trustee_alternate_pronouns', role: 'trustee', priority: 2 },
+  { field: 'executor_primary', pronounField: 'executor_primary_pronouns', role: 'personal_rep', priority: 1 },
+  { field: 'executor_alternate', pronounField: 'executor_alternate_pronouns', role: 'personal_rep', priority: 2 },
+  { field: 'poa_primary', pronounField: 'poa_primary_pronouns', role: 'poa', priority: 1 },
+  { field: 'poa_alternate', pronounField: 'poa_alternate_pronouns', role: 'poa', priority: 2 },
+  { field: 'hcp_primary', pronounField: 'hcp_primary_pronouns', role: 'hcp', priority: 1 },
+  { field: 'hcp_alternate', pronounField: 'hcp_alternate_pronouns', role: 'hcp', priority: 2 },
+  { field: 'guardian_primary', pronounField: 'guardian_primary_pronouns', role: 'guardian', priority: 1 },
+  { field: 'guardian_alternate', pronounField: 'guardian_alternate_pronouns', role: 'guardian', priority: 2 },
 ]
 
 /** The roles the admin sheet manages, at priorities 1 (primary) and 2 (alt). */
@@ -56,17 +57,27 @@ export interface AdminFiduciaryEntry {
   priority: number
   first_name: string
   last_name: string
+  preferred_pronoun: string | null
 }
 
 /** Non-empty fiduciary fields from the form, as contact_roles-ready entries. */
 export function adminFiduciaryEntriesFromForm(data: AdminIntakeFormData): AdminFiduciaryEntry[] {
   const entries: AdminFiduciaryEntry[] = []
-  for (const { field, role, priority } of ADMIN_FIDUCIARY_FIELD_MAP) {
+  for (const { field, pronounField, role, priority } of ADMIN_FIDUCIARY_FIELD_MAP) {
     const raw = data[field]
     const name = typeof raw === 'string' ? raw.trim() : ''
     if (!name) continue
+    const rawPronoun = data[pronounField]
+    const pronoun = typeof rawPronoun === 'string' ? rawPronoun.trim() : ''
     const { first_name, last_name } = splitFiduciaryName(name)
-    entries.push({ role, for_party: 'client', priority, first_name, last_name })
+    entries.push({
+      role,
+      for_party: 'client',
+      priority,
+      first_name,
+      last_name,
+      preferred_pronoun: pronoun || null,
+    })
   }
   return entries
 }
@@ -78,6 +89,7 @@ export interface AdminFiduciaryRoleRow {
   is_coagent?: boolean | null
   first_name: string | null
   last_name: string | null
+  preferred_pronoun?: string | null
 }
 
 /** Rebuild the flat fiduciary fields from contact_roles joined to contacts,
@@ -87,7 +99,7 @@ export function adminFiduciaryFlatFromRoles(
   rows: AdminFiduciaryRoleRow[],
 ): Partial<Record<FlatField, string>> {
   const out: Partial<Record<FlatField, string>> = {}
-  for (const { field, role, priority } of ADMIN_FIDUCIARY_FIELD_MAP) {
+  for (const { field, pronounField, role, priority } of ADMIN_FIDUCIARY_FIELD_MAP) {
     const match = rows.find(
       (r) =>
         r.role === role &&
@@ -95,7 +107,10 @@ export function adminFiduciaryFlatFromRoles(
         !r.is_coagent &&
         (r.priority ?? 1) === priority,
     )
-    if (match) out[field] = joinFiduciaryName(match.first_name, match.last_name)
+    if (match) {
+      out[field] = joinFiduciaryName(match.first_name, match.last_name)
+      out[pronounField] = (match.preferred_pronoun ?? '').trim()
+    }
   }
   return out
 }

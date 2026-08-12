@@ -42,7 +42,7 @@ import {
 } from '@/lib/collegePrepFields'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
 import { formatPhoneInput } from '@/lib/phone'
-import { SUFFIX_OPTIONS } from '@/lib/sharedFields'
+import { PRONOUN_OPTIONS, SUFFIX_OPTIONS } from '@/lib/sharedFields'
 
 import { CheckboxGrid, ChoiceCards, DocumentPrimer, NotesField } from './CollegePrepPrimitives'
 
@@ -290,6 +290,7 @@ export function StepCollegeParents({ data, update }: StepProps) {
         middle_name: '',
         last_name: '',
         suffix: '',
+        preferred_pronoun: '',
         email: '',
         phone: '',
         relationship: parents.length === 0 ? 'Parent' : '',
@@ -376,7 +377,14 @@ export function StepCollegeParents({ data, update }: StepProps) {
               <FormField label="Email">
                 <TextInput value={row.email} onChange={(v) => patchParent(index, { email: v })} type="email" />
               </FormField>
-              <div />
+              <FormField label="Pronouns">
+                <SelectInput
+                  value={row.preferred_pronoun ?? ''}
+                  onChange={(v) => patchParent(index, { preferred_pronoun: v })}
+                  placeholder="Select pronouns"
+                  options={PRONOUN_OPTIONS}
+                />
+              </FormField>
             </Row2>
             <ContactAddressFields
               street={row.street}

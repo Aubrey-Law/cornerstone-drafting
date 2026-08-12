@@ -40,6 +40,7 @@ import {
   INTAKE_ASSET_TYPE_OPTIONS,
   INTAKE_ASSET_TYPE_VALUES,
   PLANNING_GOAL_OPTIONS,
+  PRONOUN_OPTIONS,
   SPECIAL_CIRCUMSTANCE_OPTIONS,
   SUFFIX_OPTIONS,
   assetTypeLabel,
@@ -160,6 +161,7 @@ export interface FiduciaryEntry {
   last_name: string
   suffix: string
   relationship: string
+  preferred_pronoun: string
   phone: string
   email: string
   address: string
@@ -336,6 +338,7 @@ export interface AdditionalContactEntry {
   middle_name: string
   last_name: string
   suffix: string
+  preferred_pronoun: string
   email: string
   phone: string
   relationship: string
@@ -1107,6 +1110,7 @@ export function StepAdditionalContacts({ data, update }: StepProps) {
         middle_name: '',
         last_name: '',
         suffix: '',
+        preferred_pronoun: '',
         email: '',
         phone: '',
         relationship: '',
@@ -1188,6 +1192,14 @@ export function StepAdditionalContacts({ data, update }: StepProps) {
               <FormField label="Phone">
                 <PhoneInput value={row.phone} onChange={(v) => patchRow(idx, { phone: v })} />
               </FormField>
+              <FormField label="Pronouns">
+                <SelectInput
+                  value={row.preferred_pronoun ?? ''}
+                  onChange={(v) => patchRow(idx, { preferred_pronoun: v })}
+                  placeholder="Select pronouns"
+                  options={PRONOUN_OPTIONS}
+                />
+              </FormField>
             </Row2>
             <ContactAddressFields
               street={row.street ?? ''}
@@ -1224,6 +1236,7 @@ export const DEFAULT_FIDUCIARY_ENTRY: FiduciaryEntry = {
   last_name: '',
   suffix: '',
   relationship: '',
+  preferred_pronoun: '',
   phone: '',
   email: '',
   address: '',
@@ -1244,6 +1257,7 @@ function nomineeEntriesForPicker(data: Record<string, unknown>): FiduciaryEntry[
       middle_name: (n.middle_name ?? '').trim(),
       last_name: n.last_name.trim(),
       suffix: (n.suffix ?? '').trim(),
+      preferred_pronoun: (n.preferred_pronoun ?? '').trim(),
       relationship: (n.relationship?.trim() || 'Contact'),
       phone: formatPhoneInput(n.phone ?? ''),
       email: n.email ?? '',
@@ -1280,6 +1294,7 @@ export function StepFiduciaries({ data, update, intakeId }: StepProps) {
     zip: home.zip,
     address: home.composed,
     relationship: 'client',
+    preferred_pronoun: (data.preferred_pronoun as string) || '',
   }
   const spouseFirstName = ((data._spouse as Record<string, string> | undefined)?.first_name ?? (data.spouse_first_name as string | undefined)) || ''
   const spouseLastName  = ((data._spouse as Record<string, string> | undefined)?.last_name  ?? (data.spouse_last_name  as string | undefined)) || ''
@@ -1294,6 +1309,7 @@ export function StepFiduciaries({ data, update, intakeId }: StepProps) {
     zip: home.zip,
     address: home.composed,
     relationship: 'spouse',
+    preferred_pronoun: ((data._spouse as Record<string, string> | undefined)?.preferred_pronoun) || '',
   }
 
   const trusteeEntries = (data._fid_trustee_client as FiduciaryEntry[])     ?? [{ ...DEFAULT_FIDUCIARY_ENTRY, priority: 1 }]
@@ -1312,6 +1328,7 @@ export function StepFiduciaries({ data, update, intakeId }: StepProps) {
         email: c.email || '',
         phone: formatPhoneInput(c.phone || ''),
         relationship: 'child',
+        preferred_pronoun: c.pronouns || '',
       }
       if (c.same_address) {
         return {
@@ -1442,6 +1459,7 @@ export function StepSpouseFiduciaries({ data, update, intakeId }: StepProps) {
     zip: home.zip,
     address: home.composed,
     relationship: 'client',
+    preferred_pronoun: (data.preferred_pronoun as string) || '',
   }
 
   const poaEntries = (data._fid_poa_spouse as FiduciaryEntry[]) ?? [{ ...DEFAULT_FIDUCIARY_ENTRY, priority: 1 }]
@@ -1458,6 +1476,7 @@ export function StepSpouseFiduciaries({ data, update, intakeId }: StepProps) {
         email: c.email || '',
         phone: formatPhoneInput(c.phone || ''),
         relationship: 'child',
+        preferred_pronoun: c.pronouns || '',
       }
       if (c.same_address) {
         return {
@@ -1555,6 +1574,7 @@ export function StepGuardian({ data, update, intakeId }: StepProps) {
     zip: home.zip,
     address: home.composed,
     relationship: 'client',
+    preferred_pronoun: (data.preferred_pronoun as string) || '',
   }
   const spouseFirstName = ((data._spouse as Record<string, string> | undefined)?.first_name ?? (data.spouse_first_name as string | undefined)) || ''
   const spouseLastName  = ((data._spouse as Record<string, string> | undefined)?.last_name  ?? (data.spouse_last_name  as string | undefined)) || ''
@@ -1569,6 +1589,7 @@ export function StepGuardian({ data, update, intakeId }: StepProps) {
     zip: home.zip,
     address: home.composed,
     relationship: 'spouse',
+    preferred_pronoun: ((data._spouse as Record<string, string> | undefined)?.preferred_pronoun) || '',
   }
 
   const childEntries: FiduciaryEntry[] = ((data._children as ChildEntry[]) ?? [])
@@ -1581,6 +1602,7 @@ export function StepGuardian({ data, update, intakeId }: StepProps) {
         email: c.email || '',
         phone: formatPhoneInput(c.phone || ''),
         relationship: 'child',
+        preferred_pronoun: c.pronouns || '',
       }
       if (c.same_address) {
         return {

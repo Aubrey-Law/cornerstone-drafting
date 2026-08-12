@@ -16,6 +16,7 @@ export interface HouseholdChildInput {
   parentage?: DesignSheetChild['parentage']
   /** Effective minor flag from the caller; writer decides override vs derived. */
   is_minor?: boolean
+  preferred_pronoun?: string | null
   gender?: DesignSheetChild['gender']
   deceased?: boolean
   email?: string | null
@@ -58,6 +59,7 @@ export function childInputToContactPayload(input: HouseholdChildInput, intake: I
     last_name: (last ?? '').trim(),
     date_of_birth: nullable(input.dob),
     child_relationship: input.relationship && VALID_REL.has(input.relationship) ? input.relationship : null,
+    preferred_pronoun: nullable(input.preferred_pronoun),
     parentage: input.parentage ?? null,
     is_minor: resolveIsMinor(input.is_minor, input.dob),
     email: nullable(input.email),

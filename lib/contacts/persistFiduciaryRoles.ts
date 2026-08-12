@@ -54,18 +54,27 @@ export async function persistFiduciaryRoles(
   // Step 2: read existing contacts so we can reuse by (first, last).
   const { data: existing } = await admin
     .from('contacts')
-    .select('id, first_name, last_name, email, phone')
+    .select('id, first_name, last_name, email, phone, preferred_pronoun')
     .eq('client_intake_id', intakeId)
 
-  const byName = new Map<string, { id: string; email: string | null; phone: string | null }>()
+  const byName = new Map<
+    string,
+    { id: string; email: string | null; phone: string | null; preferred_pronoun: string | null }
+  >()
   for (const c of (existing ?? []) as Array<{
     id: string
     first_name: string | null
     last_name: string | null
     email: string | null
     phone: string | null
+    preferred_pronoun: string | null
   }>) {
-    byName.set(nameKey(c.first_name, c.last_name), { id: c.id, email: c.email, phone: c.phone })
+    byName.set(nameKey(c.first_name, c.last_name), {
+      id: c.id,
+      email: c.email,
+      phone: c.phone,
+      preferred_pronoun: c.preferred_pronoun,
+    })
   }
 
   // Step 3: for each entry — find or create the contact, fill-mode-update
@@ -80,6 +89,11 @@ export async function persistFiduciaryRoles(
       const patch: Record<string, unknown> = {}
       if (!found.email && e.email) patch.email = e.email
       if (!found.phone && e.phone) patch.phone = e.phone
+      // Pronouns are editable on the intake forms, so a supplied value wins
+      // over what is stored — but an omitted one never clears the record.
+      if (e.preferred_pronoun && e.preferred_pronoun !== found.preferred_pronoun) {
+        patch.preferred_pronoun = e.preferred_pronoun
+      }
       if (Object.keys(patch).length > 0) {
         const { error: updateError } = await admin
           .from('contacts')
@@ -98,6 +112,7 @@ export async function persistFiduciaryRoles(
       if (e.middle_name) insertPayload.middle_name = e.middle_name
       if (e.email) insertPayload.email = e.email
       if (e.phone) insertPayload.phone = e.phone
+      if (e.preferred_pronoun) insertPayload.preferred_pronoun = e.preferred_pronoun
       if (e.relationship_label) insertPayload.relationship_label = e.relationship_label
       const { data: created, error: insertError } = await admin
         .from('contacts')
@@ -107,7 +122,12 @@ export async function persistFiduciaryRoles(
       if (insertError) throw new Error(`${insertError.code ?? 'error'}: ${insertError.message}`)
       if ((created as { id?: string })?.id) {
         contactIds.set(key, (created as { id: string }).id)
-        byName.set(key, { id: (created as { id: string }).id, email: e.email ?? null, phone: e.phone ?? null })
+        byName.set(key, {
+          id: (created as { id: string }).id,
+          email: e.email ?? null,
+          phone: e.phone ?? null,
+          preferred_pronoun: e.preferred_pronoun ?? null,
+        })
       }
     }
   }

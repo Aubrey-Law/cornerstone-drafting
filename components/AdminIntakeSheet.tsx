@@ -23,7 +23,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatPhoneInput } from '@/lib/phone'
 import { DEFAULT_INTAKE_TRACK, getIntakeTrack, type IntakeTrack } from '@/lib/intakeTrack'
-import { MA_COUNTY_OPTIONS, MARITAL_STATUS_OPTIONS, ESTATE_VALUE_OPTIONS } from '@/lib/sharedFields'
+import {
+  MA_COUNTY_OPTIONS,
+  MARITAL_STATUS_OPTIONS,
+  ESTATE_VALUE_OPTIONS,
+  PRONOUN_OPTIONS,
+} from '@/lib/sharedFields'
 import {
   adminFiduciaryFlatFromRoles,
   probateFlatFromDetails,
@@ -100,6 +105,31 @@ function SegmentedYesNo({
       <button type="button" aria-pressed={value} className={buttonCls(value)} onClick={() => onChange(true)}>Yes</button>
       <button type="button" aria-pressed={!value} className={buttonCls(!value)} onClick={() => onChange(false)}>No</button>
     </div>
+  )
+}
+
+/** Pronoun picker. Documents are generated with these, so every person the
+ *  sheet captures — client, spouse, children, fiduciaries — gets one. */
+function PronounSelect({
+  value, onChange, title,
+}: {
+  value: string
+  onChange: (v: string) => void
+  title?: string
+}) {
+  return (
+    <select
+      className={selectCls}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      title={title}
+      aria-label={title}
+    >
+      <option value="">Pronouns…</option>
+      {PRONOUN_OPTIONS.map(o => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
   )
 }
 
@@ -347,7 +377,10 @@ export default function AdminIntakeSheet({
 
   // ── Children list helpers ──────────────────────────────────────────────────
   function addChild() {
-    set('children', [...form.children, { id: uid(), first_name: '', middle_name: '', last_name: '', date_of_birth: '' }])
+    set('children', [
+      ...form.children,
+      { id: uid(), first_name: '', middle_name: '', last_name: '', date_of_birth: '', preferred_pronoun: '' },
+    ])
   }
 
   function removeChild(id: string) {
@@ -440,6 +473,14 @@ export default function AdminIntakeSheet({
                   <div className="mt-1">
                     <SegmentedYesNo value={bool('is_us_citizen')} onChange={v => set('is_us_citizen', v)} />
                   </div>
+                </Field>
+                <Field>
+                  <FieldLabel>Pronouns</FieldLabel>
+                  <PronounSelect
+                    value={str('preferred_pronoun')}
+                    onChange={v => set('preferred_pronoun', v)}
+                    title="Client pronouns"
+                  />
                 </Field>
                 <Field>
                   <FieldLabel required>Email</FieldLabel>
@@ -571,6 +612,23 @@ export default function AdminIntakeSheet({
                       <Input className={inputCls} type="date" value={str('spouse_date_of_birth')} onChange={e => set('spouse_date_of_birth', e.target.value)} />
                     </Field>
                     <Field>
+                      <FieldLabel>US Citizen</FieldLabel>
+                      <div className="mt-1">
+                        <SegmentedYesNo
+                          value={bool('spouse_is_us_citizen')}
+                          onChange={v => set('spouse_is_us_citizen', v)}
+                        />
+                      </div>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Pronouns</FieldLabel>
+                      <PronounSelect
+                        value={str('spouse_preferred_pronoun')}
+                        onChange={v => set('spouse_preferred_pronoun', v)}
+                        title="Spouse pronouns"
+                      />
+                    </Field>
+                    <Field>
                       <FieldLabel>Date of Marriage</FieldLabel>
                       <Input className={inputCls} type="date" value={str('date_of_marriage')} onChange={e => set('date_of_marriage', e.target.value)} />
                     </Field>
@@ -643,6 +701,13 @@ export default function AdminIntakeSheet({
                             onChange={e => updateChild(child.id, 'date_of_birth', e.target.value)}
                             title={`Child ${idx + 1} date of birth`}
                           />
+                          <div className="w-[120px] flex-none">
+                            <PronounSelect
+                              value={child.preferred_pronoun ?? ''}
+                              onChange={v => updateChild(child.id, 'preferred_pronoun', v)}
+                              title={`Child ${idx + 1} pronouns`}
+                            />
+                          </div>
                           <Button
                             type="button"
                             variant="ghost"
@@ -835,16 +900,16 @@ export default function AdminIntakeSheet({
                   <GroupLabel>{isCollegePrep ? 'Agents' : 'Fiduciaries'}</GroupLabel>
                   {(isCollegePrep
                     ? [
-                        { label: 'Financial agent (DPOA)', primary: 'poa_primary' as const, alt: 'poa_alternate' as const },
-                        { label: 'Health care agent', primary: 'hcp_primary' as const, alt: 'hcp_alternate' as const },
+                        { label: 'Financial agent (DPOA)', primary: 'poa_primary' as const, primaryPronouns: 'poa_primary_pronouns' as const, alt: 'poa_alternate' as const, altPronouns: 'poa_alternate_pronouns' as const },
+                        { label: 'Health care agent', primary: 'hcp_primary' as const, primaryPronouns: 'hcp_primary_pronouns' as const, alt: 'hcp_alternate' as const, altPronouns: 'hcp_alternate_pronouns' as const },
                       ]
                     : [
-                        { label: 'Trustee', primary: 'trustee_primary' as const, alt: 'trustee_alternate' as const },
-                        { label: 'Personal Representative / Executor', primary: 'executor_primary' as const, alt: 'executor_alternate' as const },
-                        { label: 'DPOA Agent', primary: 'poa_primary' as const, alt: 'poa_alternate' as const },
-                        { label: 'Healthcare Proxy', primary: 'hcp_primary' as const, alt: 'hcp_alternate' as const },
+                        { label: 'Trustee', primary: 'trustee_primary' as const, primaryPronouns: 'trustee_primary_pronouns' as const, alt: 'trustee_alternate' as const, altPronouns: 'trustee_alternate_pronouns' as const },
+                        { label: 'Personal Representative / Executor', primary: 'executor_primary' as const, primaryPronouns: 'executor_primary_pronouns' as const, alt: 'executor_alternate' as const, altPronouns: 'executor_alternate_pronouns' as const },
+                        { label: 'DPOA Agent', primary: 'poa_primary' as const, primaryPronouns: 'poa_primary_pronouns' as const, alt: 'poa_alternate' as const, altPronouns: 'poa_alternate_pronouns' as const },
+                        { label: 'Healthcare Proxy', primary: 'hcp_primary' as const, primaryPronouns: 'hcp_primary_pronouns' as const, alt: 'hcp_alternate' as const, altPronouns: 'hcp_alternate_pronouns' as const },
                       ]
-                  ).map(({ label, primary, alt }) => (
+                  ).map(({ label, primary, primaryPronouns, alt, altPronouns }) => (
                     <div key={label} className="mb-3">
                       <FieldLabel>{label}</FieldLabel>
                       <Row2>
@@ -855,6 +920,13 @@ export default function AdminIntakeSheet({
                             suggestions={intakeContacts}
                             placeholder="Primary (name)"
                           />
+                          <div className="mt-1.5">
+                            <PronounSelect
+                              value={str(primaryPronouns)}
+                              onChange={(v) => set(primaryPronouns, v)}
+                              title={`${label} — primary pronouns`}
+                            />
+                          </div>
                         </Field>
                         <Field>
                           <ContactCombobox
@@ -863,6 +935,13 @@ export default function AdminIntakeSheet({
                             suggestions={intakeContacts}
                             placeholder="Successor / alternate"
                           />
+                          <div className="mt-1.5">
+                            <PronounSelect
+                              value={str(altPronouns)}
+                              onChange={(v) => set(altPronouns, v)}
+                              title={`${label} — alternate pronouns`}
+                            />
+                          </div>
                         </Field>
                       </Row2>
                     </div>
@@ -879,6 +958,13 @@ export default function AdminIntakeSheet({
                             suggestions={intakeContacts}
                             placeholder="Primary (name)"
                           />
+                          <div className="mt-1.5">
+                            <PronounSelect
+                              value={str('guardian_primary_pronouns')}
+                              onChange={(v) => set('guardian_primary_pronouns', v)}
+                              title="Guardian — primary pronouns"
+                            />
+                          </div>
                         </Field>
                         <Field>
                           <ContactCombobox
@@ -887,6 +973,13 @@ export default function AdminIntakeSheet({
                             suggestions={intakeContacts}
                             placeholder="Successor / alternate"
                           />
+                          <div className="mt-1.5">
+                            <PronounSelect
+                              value={str('guardian_alternate_pronouns')}
+                              onChange={(v) => set('guardian_alternate_pronouns', v)}
+                              title="Guardian — alternate pronouns"
+                            />
+                          </div>
                         </Field>
                       </Row2>
                     </div>
@@ -1023,6 +1116,11 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
       middle_name: typeof c.middle_name === 'string' ? c.middle_name : '',
       last_name: typeof c.last_name === 'string' ? c.last_name : '',
       date_of_birth: typeof c.date_of_birth === 'string' ? c.date_of_birth : (typeof c.dob === 'string' ? c.dob : ''),
+      // The hydrated child entry exposes the contacts column as `pronouns`.
+      preferred_pronoun:
+        typeof c.preferred_pronoun === 'string'
+          ? c.preferred_pronoun
+          : (typeof c.pronouns === 'string' ? c.pronouns : ''),
     }))
   })()
 
@@ -1043,6 +1141,7 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
     suffix: str('suffix'),
     date_of_birth: str('date_of_birth'),
     is_us_citizen: bool('is_us_citizen'),
+    preferred_pronoun: str('preferred_pronoun'),
     phone: formatPhoneInput(str('phone')),
     email: str('email'),
     address_line1: str('address_line1'),
@@ -1060,6 +1159,11 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
     spouse_middle_name: typeof spouseData.middle_name === 'string' ? spouseData.middle_name : str('spouse_middle_name'),
     spouse_last_name: typeof spouseData.last_name === 'string' ? spouseData.last_name : str('spouse_last_name'),
     spouse_date_of_birth: typeof spouseData.date_of_birth === 'string' ? spouseData.date_of_birth : str('spouse_date_of_birth'),
+    // Spouse citizenship defaults to yes, matching the client's own field and
+    // the design sheet's "US Citizen" default.
+    spouse_is_us_citizen: typeof spouseData.is_us_citizen === 'boolean' ? spouseData.is_us_citizen : true,
+    spouse_preferred_pronoun:
+      typeof spouseData.preferred_pronoun === 'string' ? spouseData.preferred_pronoun : '',
     spouse_phone: formatPhoneInput(typeof spouseData.phone === 'string' ? spouseData.phone : str('spouse_phone')),
     spouse_email: typeof spouseData.email === 'string' ? spouseData.email : str('spouse_email'),
     date_of_marriage: str('date_of_marriage'),
@@ -1082,15 +1186,25 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
     has_hcp: false,
     special_circumstances: [],
     trustee_primary: fid.trustee_primary ?? '',
+    trustee_primary_pronouns: fid.trustee_primary_pronouns ?? '',
     trustee_alternate: fid.trustee_alternate ?? '',
+    trustee_alternate_pronouns: fid.trustee_alternate_pronouns ?? '',
     executor_primary: fid.executor_primary ?? '',
+    executor_primary_pronouns: fid.executor_primary_pronouns ?? '',
     executor_alternate: fid.executor_alternate ?? '',
+    executor_alternate_pronouns: fid.executor_alternate_pronouns ?? '',
     poa_primary: fid.poa_primary ?? '',
+    poa_primary_pronouns: fid.poa_primary_pronouns ?? '',
     poa_alternate: fid.poa_alternate ?? '',
+    poa_alternate_pronouns: fid.poa_alternate_pronouns ?? '',
     hcp_primary: fid.hcp_primary ?? '',
+    hcp_primary_pronouns: fid.hcp_primary_pronouns ?? '',
     hcp_alternate: fid.hcp_alternate ?? '',
+    hcp_alternate_pronouns: fid.hcp_alternate_pronouns ?? '',
     guardian_primary: fid.guardian_primary ?? '',
+    guardian_primary_pronouns: fid.guardian_primary_pronouns ?? '',
     guardian_alternate: fid.guardian_alternate ?? '',
+    guardian_alternate_pronouns: fid.guardian_alternate_pronouns ?? '',
     pb_decedent_name: probate.pb_decedent_name ?? '',
     pb_date_of_death: probate.pb_date_of_death ?? '',
     pb_domicile: probate.pb_domicile ?? '',
