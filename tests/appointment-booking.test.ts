@@ -15,6 +15,9 @@ const state = vi.hoisted(() => ({
   busy: [] as Array<{ start: number; end: number }>,
   lead: null as { id: string; lead_status: string } | null,
   matterId: null as string | null,
+  // Backs the discovery-anchor matter lookup (admin.from('matters').select('id')...).
+  // Default matches most tests, which don't care about the matter's own id.
+  matterLookup: { id: 'matter-1' } as { id: string } | null,
   paused: false,
   dateOverrides: {} as Record<string, Array<{ start: string; end: string }>>,
   automationCalls: [] as Array<Record<string, unknown>>,
@@ -28,6 +31,7 @@ const state = vi.hoisted(() => ({
     this.busy = []
     this.lead = null
     this.matterId = null
+    this.matterLookup = { id: 'matter-1' }
     this.paused = false
     this.dateOverrides = {}
     this.automationCalls = []
@@ -53,6 +57,12 @@ vi.mock('@/lib/supabaseAdmin', () => {
         const chain = {
           eq: vi.fn(() => chain),
           is: vi.fn(() => chain),
+          // markNoShow chains .select('id') straight off the update to check
+          // a row actually matched the status filter.
+          select: vi.fn(() => ({
+            then: (resolve: (v: unknown) => unknown) =>
+              resolve({ data: [{ id: `${table}-id-1` }], error: null }),
+          })),
           then: (resolve: (v: unknown) => unknown) => resolve({ error: null }),
         }
         return chain
@@ -60,6 +70,17 @@ vi.mock('@/lib/supabaseAdmin', () => {
       upsert: vi.fn((values: Record<string, unknown>) => {
         state.inserts.push({ table: `${table}:upsert`, values })
         return { then: (resolve: (v: unknown) => unknown) => resolve({ error: null }) }
+      }),
+      // Backs the discovery-anchor matter lookup: admin.from('matters').select('id')
+      // .eq('client_intake_id', leadId).order(...).limit(1).maybeSingle().
+      select: vi.fn(() => {
+        const chain = {
+          eq: vi.fn(() => chain),
+          order: vi.fn(() => chain),
+          limit: vi.fn(() => chain),
+          maybeSingle: vi.fn(async () => ({ data: state.matterLookup, error: null })),
+        }
+        return chain
       }),
     }
   }
@@ -142,6 +163,8 @@ import {
   bookAppointment,
   BookingPausedError,
   cancelAppointment,
+  markNoShow,
+  rescheduleAppointment,
   SlotTakenError,
 } from '@/lib/appointments/book'
 
@@ -430,10 +453,80 @@ describe('cancelAppointment', () => {
     expect(state.emails.some(e => e.category === 'appointment_booked_alert')).toBe(true)
   })
 
-  it('does not stamp the discovery anchor on cancellation', async () => {
+})
+
+describe('rescheduleAppointment', () => {
+  const ROW: AppointmentRow = {
+    id: 'appt-2',
+    appointment_type_id: 'type-1',
+    start_time: SLOT_ISO,
+    end_time: '2026-08-10T14:30:00.000Z',
+    status: 'scheduled',
+    location_type: 'phone',
+    attendee_name: 'Pat Client',
+    attendee_email: 'pat@example.com',
+    attendee_phone: null,
+    second_attendee_name: null,
+    second_attendee_email: null,
+    notes: null,
+    linked_lead_id: 'lead-9',
+    linked_matter_id: null,
+    booked_by_user_id: null,
+    microsoft_event_id: 'graph-event-1',
+    manage_token_hash: 'hash',
+    manage_token_expires_at: '2026-10-01T00:00:00Z',
+    reminder_sent_at: null,
+    online_meeting_url: null,
+    source: 'public',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  }
+
+  it('moves the discovery anchor to the new date, overwriting the write-once guard', async () => {
+    // Wednesday 2026-08-12 10:00 ET — inside weekly hours, distinct from SLOT_ISO.
+    const newStartIso = '2026-08-12T14:00:00.000Z'
+
+    await rescheduleAppointment({ appointment: ROW, type: TYPE, newStartIso })
+
+    const stamped = state.updates.find(
+      u => u.table === 'matters' && 'discovery_call_at' in u.values,
+    )
+    expect(stamped).toBeDefined()
+    expect(stamped?.values.discovery_call_at).toBe(newStartIso)
+  })
+})
+
+describe('markNoShow', () => {
+  const ROW: AppointmentRow = {
+    id: 'appt-1',
+    appointment_type_id: 'type-1',
+    start_time: SLOT_ISO,
+    end_time: '2026-08-10T14:30:00.000Z',
+    status: 'scheduled',
+    location_type: 'teams',
+    attendee_name: 'Pat Client',
+    attendee_email: 'pat@example.com',
+    attendee_phone: null,
+    second_attendee_name: null,
+    second_attendee_email: null,
+    notes: null,
+    linked_lead_id: 'lead-9',
+    linked_matter_id: null,
+    booked_by_user_id: null,
+    microsoft_event_id: 'graph-event-1',
+    manage_token_hash: 'hash',
+    manage_token_expires_at: '2026-10-01T00:00:00Z',
+    reminder_sent_at: null,
+    online_meeting_url: 'https://teams.example.test/meeting',
+    source: 'public',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  }
+
+  it('does not stamp the discovery anchor on a no-show', async () => {
     state.lead = { id: 'lead-9', lead_status: 'lead' }
 
-    await cancelAppointment({ appointment: ROW, type: TYPE })
+    await markNoShow({ appointment: ROW, type: TYPE, sendFollowUp: false })
 
     expect(
       state.updates.find(u => u.table === 'matters' && 'discovery_call_at' in u.values),
