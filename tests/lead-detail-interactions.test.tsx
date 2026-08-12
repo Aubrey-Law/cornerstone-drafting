@@ -7,13 +7,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }))
 const searchParams = vi.hoisted(() => ({ current: new URLSearchParams() }))
 const toastError = vi.hoisted(() => vi.fn())
+const toastSuccess = vi.hoisted(() => vi.fn())
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
   usePathname: () => '/admin/leads/l1',
   useSearchParams: () => searchParams.current,
 }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token' }))
-vi.mock('sonner', () => ({ toast: { error: toastError } }))
+vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess } }))
 vi.mock('@/components/crm/MarketingProfileCard', () => ({ MarketingProfileCard: () => null }))
 
 import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
@@ -22,7 +23,7 @@ import { LeadIntakeCard } from '@/app/admin/leads/[id]/LeadIntakeCard'
 const lead = { id:'l1', first_name:'Jane', middle_name:null, last_name:'Doe', preferred_name:null, full_name:'Jane Doe', email:'jane@example.com', phone:'617', date_of_birth:null, address_line1:'1 Main', address_line2:null, city:'Boston', state:'MA', zip:'02108', county:'Suffolk', marital_status:'married', practice_area:'EP', lead_source:'Referral', lead_status:'lead', engagement_fee_quoted:4500, created_at:'2026-07-21T12:00:00Z', updated_at:'2026-07-25T10:00:00Z', intake_sent_at:null, intake_completed_at:null, lead_next_action_snoozed_until:null }
 const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred_name:null, email:'john@example.com', phone:null, date_of_birth:null }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset(); toastSuccess.mockReset() })
 
 /** The workspace is tabbed; most assertions need their tab on screen first. */
 function showTab(name: 'Plan' | 'SLA plan' | 'Timeline' | 'Intake' | 'Documents' | 'Notes') {
@@ -45,8 +46,9 @@ describe('lead detail page', () => {
 
     expect(screen.getByText('Never sent · nothing submitted · 0 of 7 sections')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open intake' })).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Copy link' }).getAttribute('aria-describedby')).toBe('intake-link-unavailable')
+    // No link prepared yet is not a dead end — copying issues one.
+    expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('button', { name: 'Copy link' }).getAttribute('aria-describedby')).toBeNull()
     expect(screen.getAllByLabelText(/incomplete$/i)).toHaveLength(7)
     for (const duplicate of ['Send intake', 'Resend intake', 'Import intake', 'Summarize intake', 'Analyze MA estate tax']) {
       expect(screen.queryByRole('button', { name: duplicate })).toBeNull()
@@ -76,7 +78,54 @@ describe('lead detail page', () => {
     showTab('Intake')
     expect(screen.getByRole('region', { name: 'Lead intake' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open intake' })).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('issues a standing link on demand when a booked lead never had one', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      if (String(input).includes('/api/admin/intake/link')) {
+        return { ok: true, json: async () => ({ url: 'https://portal.test/intake/auth?invite=si1.x' }) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    // `userEvent.setup()` installs its own clipboard stub, so replace it after.
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    render(
+      <LeadDetailClient
+        lead={{ ...lead, intake_track: 'college_prep' }}
+        spouse={spouse}
+        initialActivity={[]}
+      />,
+    )
+    showTab('Intake')
+    await user.click(screen.getByRole('button', { name: 'Copy link' }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://portal.test/intake/auth?invite=si1.x'))
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/intake/link?intakeId=l1',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(toastSuccess).toHaveBeenCalledWith('Intake link copied')
+  })
+
+  it('refuses to revive a revoked link behind the copy button', () => {
+    render(
+      <LeadDetailClient
+        lead={lead}
+        spouse={spouse}
+        initialActivity={[]}
+        initialIntakeLinkRevoked
+      />,
+    )
+    showTab('Intake')
+
+    const copy = screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement
+    expect(copy.disabled).toBe(true)
+    expect(copy.getAttribute('aria-describedby')).toBe('intake-link-unavailable')
+    expect(screen.getByText(/This intake link was revoked/)).toBeTruthy()
   })
 
   it('refreshes intake progress when the server supplies a newer intake record', () => {

@@ -9,6 +9,7 @@ import {
   type LeadLookupRow,
 } from '@/lib/bookings/link'
 import { formatAppointmentDate, splitAttendeeName } from '@/lib/bookings/normalize'
+import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 
 type AdminClient = ReturnType<typeof getAdminClient>
 
@@ -89,6 +90,11 @@ async function createLeadFromBooking(input: {
       status: 'in_progress',
       lead_status: 'lead',
       lead_source: leadSource,
+      // Same standing link every hand-created lead gets, so the intake card can
+      // copy, email, or text it the moment the booking lands.
+      intake_link_version: createStandingIntakeVersion(),
+      intake_link_created_at: new Date().toISOString(),
+      intake_link_revoked_at: null,
     })
     .select('id, lead_status')
     .single()

@@ -8,6 +8,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { copyToClipboard } from '@/lib/clipboard'
 import { phoneTelHref } from '@/lib/phone'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
@@ -94,6 +95,7 @@ type LeadDetailClientProps = {
   initialPeopleContacts?: MatterContact[]
   initialTaskCounts?: RecordTaskCounts
   initialIntakeUrl?: string | null
+  initialIntakeLinkRevoked?: boolean
   smsEnabled?: boolean
 }
 
@@ -163,6 +165,7 @@ export function LeadDetailClient({
   initialPeopleContacts = [],
   initialTaskCounts = { open: 0, overdue: 0 },
   initialIntakeUrl = null,
+  initialIntakeLinkRevoked = false,
   smsEnabled = true,
 }: LeadDetailClientProps) {
   const token = useAccessToken()
@@ -184,6 +187,7 @@ export function LeadDetailClient({
   const [communicationChannel, setCommunicationChannel] = useState<'email' | 'sms' | null>(null)
   const [liveIntakeId, setLiveIntakeId] = useState<string | null>(initialLead.id)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(initialIntakeUrl)
+  const [intakeLinkRevoked, setIntakeLinkRevoked] = useState(initialIntakeLinkRevoked)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeLinkBusy, setIntakeLinkBusy] = useState(false)
   const [communicationInitialMessage, setCommunicationInitialMessage] = useState<string | undefined>()
@@ -327,23 +331,57 @@ export function LeadDetailClient({
     }
   }
 
+  /**
+   * Leads created from a booking never had a standing link written, so the
+   * copy button used to sit greyed out with no way forward. The GET issues one
+   * on demand and — unlike the rotate POST — refuses to revive a link the firm
+   * revoked on purpose.
+   */
+  async function ensureIntakeUrl(): Promise<string> {
+    const json = await call<{ url: string | null }>(
+      `/api/admin/intake/link?intakeId=${encodeURIComponent(lead.id)}`,
+      undefined,
+      'GET',
+    )
+    if (!json.url) {
+      setIntakeLinkRevoked(true)
+      throw new Error('This intake link was revoked. Prepare a new one before sharing it.')
+    }
+    setIntakeUrl(json.url)
+    setIntakeLinkRevoked(false)
+    return json.url
+  }
+
   async function copyIntakeUrl() {
-    if (!intakeUrl) return
+    if (intakeLinkRevoked || intakeLinkBusy) return
+    setIntakeLinkBusy(true)
     try {
-      await navigator.clipboard.writeText(intakeUrl)
+      // The pending value goes to the clipboard helper unawaited so the click's
+      // user activation survives the round trip when a link has to be issued.
+      const copied = await copyToClipboard(intakeUrl ?? ensureIntakeUrl())
+      if (!copied) throw new Error('Could not copy intake link')
       setError(null)
-    } catch {
-      setError('Could not copy intake link')
+      toast.success('Intake link copied')
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Could not copy intake link'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setIntakeLinkBusy(false)
     }
   }
 
   async function rotateIntakeUrl() {
-    if (!window.confirm('Replace this intake link? The previous link will stop working immediately.')) return
+    const replacing = Boolean(intakeUrl)
+    if (replacing && !window.confirm('Replace this intake link? The previous link will stop working immediately.')) {
+      return
+    }
     setIntakeLinkBusy(true)
     try {
       const json = await call<{ url: string }>('/api/admin/intake/link', { intakeId: lead.id })
       setIntakeUrl(json.url)
-      toast.success('Intake link replaced')
+      setIntakeLinkRevoked(false)
+      toast.success(replacing ? 'Intake link replaced' : 'Intake link ready')
       await refreshActivityBestEffort()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not replace intake link')
@@ -358,6 +396,7 @@ export function LeadDetailClient({
     try {
       await call('/api/admin/intake/link', { intakeId: lead.id }, 'DELETE')
       setIntakeUrl(null)
+      setIntakeLinkRevoked(true)
       toast.success('Intake link revoked')
       await refreshActivityBestEffort()
     } catch (caught) {
@@ -762,6 +801,7 @@ export function LeadDetailClient({
               <LeadIntakeCard
                 intake={lead}
                 intakeUrl={intakeUrl}
+                linkRevoked={intakeLinkRevoked}
                 onOpen={() => setIntakeSheetOpen(true)}
                 onCopy={() => void copyIntakeUrl()}
                 onEmail={() => void sendIntake()}

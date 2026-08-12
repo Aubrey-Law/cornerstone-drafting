@@ -161,6 +161,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       lead={hydratedLead}
       initialTaskCounts={initialTaskCounts}
       initialIntakeUrl={initialIntakeUrl}
+      initialIntakeLinkRevoked={Boolean(lead.intake_link_revoked_at)}
       spouse={spouse}
       initialActivity={activityRows}
       initialNotes={noteRows.map(mapNote)}

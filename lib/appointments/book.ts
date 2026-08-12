@@ -4,6 +4,7 @@ import { findLeadByEmail, findMatterIdByEmail } from '@/lib/calcom/link'
 import { sendEmail } from '@/lib/email/send'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
+import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 import { portalUrl, appUrl } from '@/lib/urls'
 import { isSlotAvailable } from './availability'
 import { fetchAllBusy, AvailabilityUnavailableError } from './graphBusy'
@@ -99,6 +100,11 @@ async function createLeadFromAppointment(input: {
       status: 'in_progress',
       lead_status: 'lead',
       lead_source: 'scheduler',
+      // Same standing link every hand-created lead gets, so the intake card can
+      // copy, email, or text it the moment the booking lands.
+      intake_link_version: createStandingIntakeVersion(),
+      intake_link_created_at: new Date().toISOString(),
+      intake_link_revoked_at: null,
     })
     .select('id, lead_status')
     .single()
