@@ -27,7 +27,7 @@ Run the whole suite with `npm test`. Run one file with `npx vitest run <path>`.
 ## File Structure
 
 **Created:**
-- `supabase/migrations/20260909000000_lead_discovery_stage.sql` — the whole Part 1 schema change: stage row, both triggers, the `ensure_lead_matter()` replacement, and the backfill. One file because these are a single atomic change; splitting them risks a half-applied stage.
+- `supabase/migrations/20260910000000_lead_discovery_stage.sql` — the whole Part 1 schema change: stage row, both triggers, the `ensure_lead_matter()` replacement, and the backfill. One file because these are a single atomic change; splitting them risks a half-applied stage.
 - `tests/lead-discovery-stage.test.ts` — migration source assertions for Part 1.
 - `tests/matter-stage-order.test.ts` — Part 2 ordering assertions.
 
@@ -44,7 +44,7 @@ Run the whole suite with `npm test`. Run one file with `npx vitest run <path>`.
 ## Task 1: The `discovery_call` stage row
 
 **Files:**
-- Create: `supabase/migrations/20260909000000_lead_discovery_stage.sql`
+- Create: `supabase/migrations/20260910000000_lead_discovery_stage.sql`
 - Create: `tests/lead-discovery-stage.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -58,7 +58,7 @@ import { describe, expect, it } from 'vitest'
 
 const MIGRATION = path.join(
   process.cwd(),
-  'supabase/migrations/20260909000000_lead_discovery_stage.sql',
+  'supabase/migrations/20260910000000_lead_discovery_stage.sql',
 )
 
 const sql = () => fs.readFileSync(MIGRATION, 'utf8')
@@ -121,7 +121,7 @@ Expected: FAIL — `ENOENT: no such file or directory` for the migration.
 
 - [ ] **Step 3: Create the migration with the stage row**
 
-Create `supabase/migrations/20260909000000_lead_discovery_stage.sql`:
+Create `supabase/migrations/20260910000000_lead_discovery_stage.sql`:
 
 ```sql
 -- Cornerstone — a `discovery_call` lead stage.
@@ -169,7 +169,7 @@ Expected: PASS, 3 tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260909000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
+git add supabase/migrations/20260910000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
 git commit -m "Add a discovery_call lead stage to stage_sla"
 ```
 
@@ -180,7 +180,7 @@ git commit -m "Add a discovery_call lead stage to stage_sla"
 `trg_matters_stage_entered_at` unconditionally assigns `NEW.stage_entered_at := NOW()` on any stage change. That makes `ensure_lead_matter()`'s computed `v_stage_entered_at` dead code today, and would defeat both the backfill and the discovery pin.
 
 **Files:**
-- Modify: `supabase/migrations/20260909000000_lead_discovery_stage.sql`
+- Modify: `supabase/migrations/20260910000000_lead_discovery_stage.sql`
 - Modify: `tests/lead-discovery-stage.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -207,7 +207,7 @@ Expected: FAIL — `expected '…' to contain 'create or replace function public
 
 - [ ] **Step 3: Append the hardened function to the migration**
 
-Append to `supabase/migrations/20260909000000_lead_discovery_stage.sql`:
+Append to `supabase/migrations/20260910000000_lead_discovery_stage.sql`:
 
 ```sql
 -- ── stage_entered_at stops overwriting a deliberate value ───────────────────
@@ -249,7 +249,7 @@ Expected: PASS, 4 tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260909000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
+git add supabase/migrations/20260910000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
 git commit -m "Honour a caller-supplied stage_entered_at instead of overwriting it"
 ```
 
@@ -258,7 +258,7 @@ git commit -m "Honour a caller-supplied stage_entered_at instead of overwriting 
 ## Task 3: The `stamp_lead_discovery_stage` trigger
 
 **Files:**
-- Modify: `supabase/migrations/20260909000000_lead_discovery_stage.sql`
+- Modify: `supabase/migrations/20260910000000_lead_discovery_stage.sql`
 - Modify: `tests/lead-discovery-stage.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -300,7 +300,7 @@ Expected: FAIL — 4 new failures, first on `stamp_lead_discovery_stage()` not f
 
 - [ ] **Step 3: Append the trigger to the migration**
 
-Append to `supabase/migrations/20260909000000_lead_discovery_stage.sql`:
+Append to `supabase/migrations/20260910000000_lead_discovery_stage.sql`:
 
 ```sql
 -- ── Setting the anchor moves the stage ──────────────────────────────────────
@@ -361,7 +361,7 @@ Expected: PASS, 8 tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260909000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
+git add supabase/migrations/20260910000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
 git commit -m "Move a lead to discovery_call when the call date is recorded"
 ```
 
@@ -372,7 +372,7 @@ git commit -m "Move a lead to discovery_call when the call date is recorded"
 Without this, any update to `lead_status` — marking a lead lost and reopening it — recomputes the cascade, finds no discovery branch, and knocks the lead back to `new_lead`.
 
 **Files:**
-- Modify: `supabase/migrations/20260909000000_lead_discovery_stage.sql`
+- Modify: `supabase/migrations/20260910000000_lead_discovery_stage.sql`
 - Modify: `tests/lead-discovery-stage.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -405,7 +405,7 @@ Expected: FAIL — 2 new failures, first on `ensure_lead_matter()` not found.
 
 - [ ] **Step 3: Append the replacement function**
 
-Append to `supabase/migrations/20260909000000_lead_discovery_stage.sql`. This is the
+Append to `supabase/migrations/20260910000000_lead_discovery_stage.sql`. This is the
 20260824000000 body with three changes: a new `v_discovery_call_at` local, the
 matter lookup now selecting it, and the two cascades extended.
 
@@ -505,7 +505,7 @@ Expected: PASS, 10 tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260909000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
+git add supabase/migrations/20260910000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
 git commit -m "Keep the discovery stage through a lead_status change"
 ```
 
@@ -514,7 +514,7 @@ git commit -m "Keep the discovery stage through a lead_status change"
 ## Task 5: Backfill leads already holding a call date
 
 **Files:**
-- Modify: `supabase/migrations/20260909000000_lead_discovery_stage.sql`
+- Modify: `supabase/migrations/20260910000000_lead_discovery_stage.sql`
 - Modify: `tests/lead-discovery-stage.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -549,7 +549,7 @@ Expected: FAIL — 3 new failures on the backfill and the notify.
 
 - [ ] **Step 3: Append the backfill**
 
-Append to `supabase/migrations/20260909000000_lead_discovery_stage.sql`:
+Append to `supabase/migrations/20260910000000_lead_discovery_stage.sql`:
 
 ```sql
 -- ── Backfill ────────────────────────────────────────────────────────────────
@@ -580,7 +580,7 @@ Expected: PASS. If `tests/rls-security-policies.test.ts` or a migration-inventor
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260909000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
+git add supabase/migrations/20260910000000_lead_discovery_stage.sql tests/lead-discovery-stage.test.ts
 git commit -m "Backfill leads already holding a discovery call date"
 ```
 
