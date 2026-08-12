@@ -587,4 +587,84 @@ describe('MatterBillingTab', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Delete 1 charge?' })
     expect(within(dialog).getByRole('status').textContent).toContain('$1,500 already collected')
   })
+  it('edits a charge in place, seeded from the row and sent as a PATCH', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row({ kind: 'cost', label: 'Deed recording fee', amountBilled: 15_500 })] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Deed recording fee' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit charge' })
+    // Seeded from the row, in dollars, and the matter is not up for grabs.
+    expect((within(dialog).getByLabelText('Description') as HTMLInputElement).value)
+      .toBe('Deed recording fee')
+    expect((within(dialog).getByLabelText('Amount') as HTMLInputElement).value).toBe('155.00')
+    expect(within(dialog).queryByLabelText('Matter')).toBeNull()
+
+    const amount = within(dialog).getByLabelText('Amount')
+    await user.clear(amount)
+    await user.type(amount, '175.25')
+    await user.click(within(dialog).getByRole('button', { name: 'Save charge' }))
+
+    await waitFor(() => {
+      const patch = fetchMock.mock.calls.find(call => call[1]?.method === 'PATCH')
+      expect(patch![0]).toBe(`/api/admin/billing/items/${row().id}`)
+      expect(JSON.parse(patch![1].body)).toEqual({
+        kind: 'cost',
+        label: 'Deed recording fee',
+        amountBilled: 17_525,
+        plan: null,
+      })
+    })
+    expect(toast.success).toHaveBeenCalledWith('Deed recording fee updated')
+  })
+
+  it('does not warn about a duplicate legal fee when editing the fee itself', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Flat fee — Joint trust package' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit charge' })
+    expect(within(dialog).queryByRole('status')).toBeNull()
+  })
+
+  it('surfaces a rejected edit and keeps the dialog open', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        return Promise.resolve(new Response(
+          JSON.stringify({ error: 'Amount is below the 1500.00 already collected' }),
+          { status: 409 },
+        ))
+      }
+      return Promise.resolve(new Response(
+        JSON.stringify({ rows: [row()], legalPlan: null, hasClaim: false }),
+        { status: 200 },
+      ))
+    })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Flat fee — Joint trust package' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit charge' })
+    await user.click(within(dialog).getByRole('button', { name: 'Save charge' }))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Amount is below the 1500.00 already collected')
+    })
+    expect(screen.getByRole('dialog', { name: 'Edit charge' })).toBeTruthy()
+  })
+
+  it('returns to adding a charge after an edit is cancelled', async () => {
+    const user = userEvent.setup()
+    respondWith({ rows: [row()] })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Flat fee — Joint trust package' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Edit charge' }))
+      .getByRole('button', { name: 'Cancel' }))
+
+    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add charge' })
+    expect((within(dialog).getByLabelText('Description') as HTMLInputElement).value).toBe('')
+  })
 })

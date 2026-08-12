@@ -14,7 +14,7 @@ import {
 import { billingMoney } from '@/lib/billing/metrics'
 import type { BillingLedgerRow } from '@/lib/billing/types'
 import { cn } from '@/lib/utils'
-import { ReceiptText, Trash2 } from 'lucide-react'
+import { Pencil, ReceiptText, Trash2 } from 'lucide-react'
 
 export function LedgerTable({
   rows,
@@ -23,6 +23,7 @@ export function LedgerTable({
   onInvoice,
   onToggleRow,
   onToggleAll,
+  onEdit,
   onDelete,
 }: {
   rows: BillingLedgerRow[]
@@ -33,6 +34,7 @@ export function LedgerTable({
   onToggleRow: (id: string, checked: boolean) => void
   /** Selects or clears every row currently in view, not the whole ledger. */
   onToggleAll: (checked: boolean) => void
+  onEdit: (row: BillingLedgerRow) => void
   onDelete: (rows: BillingLedgerRow[]) => void
 }) {
   if (rows.length === 0) {
@@ -65,7 +67,7 @@ export function LedgerTable({
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Age</TableHead>
             <TableHead className="text-right"><span className="sr-only">Action</span></TableHead>
-            <TableHead className="w-10 pr-4"><span className="sr-only">Delete</span></TableHead>
+            <TableHead className="w-20 pr-4"><span className="sr-only">Edit or delete</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -135,7 +137,17 @@ export function LedgerTable({
                     </Button>
                   ) : null}
                 </TableCell>
-                <TableCell className="pr-4 text-right">
+                <TableCell className="whitespace-nowrap pr-4 text-right">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-foreground"
+                    aria-label={`Edit ${row.label} for ${row.clientName}`}
+                    onClick={() => onEdit(row)}
+                  >
+                    <Pencil className="size-4" aria-hidden />
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"

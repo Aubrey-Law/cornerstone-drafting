@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { AlertTriangle, Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmptyState } from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,11 @@ import {
 import { TabsContent } from '@/components/ui/tabs'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
-import { AddChargeDialog, type AddChargeInput } from '@/components/billing/AddChargeDialog'
+import {
+  AddChargeDialog,
+  editableCharge,
+  type AddChargeInput,
+} from '@/components/billing/AddChargeDialog'
 import { DeleteChargesDialog } from '@/components/billing/DeleteChargesDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { billingMoney } from '@/lib/billing/metrics'
@@ -68,6 +72,7 @@ function FeesChargesCard({
   onAddCharge,
   onToggleRow,
   onToggleAll,
+  onEdit,
   onDelete,
 }: {
   rows: BillingLedgerRow[]
@@ -75,6 +80,7 @@ function FeesChargesCard({
   onAddCharge: () => void
   onToggleRow: (id: string, checked: boolean) => void
   onToggleAll: (checked: boolean) => void
+  onEdit: (row: BillingLedgerRow) => void
   /** Charges to confirm deleting — one row, or the whole selection. */
   onDelete: (rows: BillingLedgerRow[]) => void
 }) {
@@ -139,8 +145,8 @@ function FeesChargesCard({
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Collected</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-10 pr-4">
-                    <span className="sr-only">Delete</span>
+                  <TableHead className="w-20 pr-4">
+                    <span className="sr-only">Edit or delete</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -172,7 +178,16 @@ function FeesChargesCard({
                     <TableCell>
                       <BillingStatusBadge row={row} />
                     </TableCell>
-                    <TableCell className="pr-4 text-right">
+                    <TableCell className="pr-4 text-right whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-foreground"
+                        aria-label={`Edit ${row.label}`}
+                        onClick={() => onEdit(row)}
+                      >
+                        <Pencil className="size-4" aria-hidden />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -295,6 +310,7 @@ export function MatterBillingTab({
   const [saving, setSaving] = useState(false)
   const [chargeOpen, setChargeOpen] = useState(false)
   const [chargeSaving, setChargeSaving] = useState(false)
+  const [editingCharge, setEditingCharge] = useState<BillingLedgerRow | null>(null)
   const [selectedCharges, setSelectedCharges] = useState<Record<string, boolean>>({})
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
   const [deleting, setDeleting] = useState(false)
@@ -340,6 +356,10 @@ export function MatterBillingTab({
   }, [enabled, load])
 
   const rows = view?.rows ?? []
+  const editingInput = useMemo(
+    () => (editingCharge ? editableCharge(editingCharge) : undefined),
+    [editingCharge],
+  )
 
   function openPayment(row?: BillingLedgerRow) {
     paymentOpenerRef.current =
@@ -348,7 +368,7 @@ export function MatterBillingTab({
     setPaymentOpen(true)
   }
 
-  async function send(path: string, method: 'POST' | 'DELETE', body?: unknown) {
+  async function send(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown) {
     const response = await fetch(path, {
       method,
       headers: authHeaders,
@@ -365,18 +385,41 @@ export function MatterBillingTab({
   function openCharge() {
     chargeOpenerRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setEditingCharge(null)
+    setChargeOpen(true)
+  }
+
+  function openEdit(row: BillingLedgerRow) {
+    chargeOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setEditingCharge(row)
     setChargeOpen(true)
   }
 
   async function saveCharge(input: AddChargeInput) {
+    const editing = editingCharge
     setChargeSaving(true)
     try {
-      await post('/api/admin/billing/items', input)
+      if (editing) {
+        await send(`/api/admin/billing/items/${editing.id}`, 'PATCH', {
+          kind: input.kind,
+          label: input.label,
+          amountBilled: input.amountBilled,
+          plan: input.plan,
+        })
+      } else {
+        await post('/api/admin/billing/items', input)
+      }
       setChargeOpen(false)
-      toast.success(`${input.label} added`)
+      setEditingCharge(null)
+      toast.success(editing ? `${input.label} updated` : `${input.label} added`)
       await load()
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : 'Could not add charge')
+      toast.error(
+        saveError instanceof Error
+          ? saveError.message
+          : editing ? 'Could not update charge' : 'Could not add charge',
+      )
     } finally {
       setChargeSaving(false)
     }
@@ -497,6 +540,7 @@ export function MatterBillingTab({
                 setSelectedCharges(
                   checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {},
                 )}
+              onEdit={openEdit}
               onDelete={askDelete}
             />
             <PaymentsCard rows={rows} onLogPayment={() => openPayment()} />
@@ -557,11 +601,15 @@ export function MatterBillingTab({
 
       <AddChargeDialog
         open={chargeOpen}
-        onOpenChange={setChargeOpen}
+        onOpenChange={open => {
+          setChargeOpen(open)
+          if (!open) setEditingCharge(null)
+        }}
         matterId={matterId}
         matterIdsWithLegalFee={
           rows.some(row => row.kind === 'flat_fee') ? [matterId] : []
         }
+        editing={editingInput}
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}

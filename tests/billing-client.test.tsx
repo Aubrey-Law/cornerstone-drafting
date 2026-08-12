@@ -367,4 +367,50 @@ describe('billing workspace', () => {
     expect(toast.success).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog', { name: 'Delete 1 charge?' })).toBeTruthy()
   })
+  it('edits a ledger charge through the PATCH route, on its own matter', async () => {
+    const user = userEvent.setup()
+    const request = vi.fn().mockResolvedValue(Response.json({ item: {} }))
+    vi.stubGlobal('fetch', request)
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={twoMatterOptions} />)
+
+    await user.click(screen.getByRole('button', {
+      name: 'Edit Flat fee — Joint trust package for Chen, Marcus & Lily',
+    }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit charge' })
+    // The matter picker gives way: an edit stays where its payments are.
+    expect(within(dialog).queryByLabelText('Matter')).toBeNull()
+    expect((within(dialog).getByLabelText('Amount') as HTMLInputElement).value).toBe('4800.00')
+
+    const label = within(dialog).getByLabelText('Description')
+    await user.clear(label)
+    await user.type(label, 'Flat fee — Joint trust package (revised)')
+    await user.click(within(dialog).getByRole('button', { name: 'Save charge' }))
+
+    await waitFor(() => {
+      const call = request.mock.calls.find(entry => entry[1]?.method === 'PATCH')
+      expect(call![0]).toBe(`/api/admin/billing/items/${snapshot.rows[0].id}`)
+      expect(JSON.parse(call![1].body)).toEqual({
+        kind: 'flat_fee',
+        label: 'Flat fee — Joint trust package (revised)',
+        amountBilled: 480_000,
+        plan: null,
+      })
+    })
+    expect(navigation.refresh).toHaveBeenCalled()
+  })
+
+  it('restores the matter picker for the next added charge', async () => {
+    const user = userEvent.setup()
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={twoMatterOptions} />)
+
+    await user.click(screen.getByRole('button', {
+      name: 'Edit Flat fee — Joint trust package for Chen, Marcus & Lily',
+    }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Edit charge' }))
+      .getByRole('button', { name: 'Cancel' }))
+
+    await user.click(screen.getByRole('button', { name: 'Add charge' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add charge' })
+    expect(within(dialog).getByLabelText('Matter')).toBeTruthy()
+  })
 })

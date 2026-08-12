@@ -31,6 +31,7 @@ import { RevenueSourcesCard } from './RevenueSourcesCard'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import {
   AddChargeDialog,
+  editableCharge,
   type AddChargeInput,
   type BillingMatterOption,
 } from '@/components/billing/AddChargeDialog'
@@ -81,6 +82,7 @@ export default function BillingClient({
   const [saving, setSaving] = useState(false)
   const [chargeOpen, setChargeOpen] = useState(false)
   const [chargeSaving, setChargeSaving] = useState(false)
+  const [editingCharge, setEditingCharge] = useState<BillingLedgerRow | null>(null)
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
   const [deleting, setDeleting] = useState(false)
@@ -97,6 +99,10 @@ export default function BillingClient({
   const selection = useMemo(
     () => rows.filter(row => selectedRows[row.id]),
     [rows, selectedRows],
+  )
+  const editingInput = useMemo(
+    () => (editingCharge ? editableCharge(editingCharge) : undefined),
+    [editingCharge],
   )
   const matterIdsWithLegalFee = useMemo(
     () => initialSnapshot.rows
@@ -133,7 +139,7 @@ export default function BillingClient({
     }
   }
 
-  async function send(path: string, method: 'POST' | 'DELETE', body?: unknown) {
+  async function send(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown) {
     const response = await fetch(path, {
       method,
       headers: headers(),
@@ -224,18 +230,42 @@ export default function BillingClient({
     chargeOpenerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
+    setEditingCharge(null)
+    setChargeOpen(true)
+  }
+
+  function openEdit(row: BillingLedgerRow) {
+    chargeOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setEditingCharge(row)
     setChargeOpen(true)
   }
 
   async function saveCharge(input: AddChargeInput) {
+    const editing = editingCharge
     setChargeSaving(true)
     try {
-      await request('/api/admin/billing/items', input)
+      if (editing) {
+        await send(`/api/admin/billing/items/${editing.id}`, 'PATCH', {
+          kind: input.kind,
+          label: input.label,
+          amountBilled: input.amountBilled,
+          plan: input.plan,
+        })
+      } else {
+        await request('/api/admin/billing/items', input)
+      }
       setChargeOpen(false)
-      toast.success(`${input.label} added`)
+      setEditingCharge(null)
+      toast.success(editing ? `${input.label} updated` : `${input.label} added`)
       router.refresh()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not add charge')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : editing ? 'Could not update charge' : 'Could not add charge',
+      )
     } finally {
       setChargeSaving(false)
     }
@@ -388,6 +418,7 @@ export default function BillingClient({
                 setSelectedRows(current => ({ ...current, [id]: checked }))}
               onToggleAll={checked =>
                 setSelectedRows(checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {})}
+              onEdit={openEdit}
               onDelete={askDelete}
             />
           </CardContent>
@@ -405,9 +436,15 @@ export default function BillingClient({
 
       <AddChargeDialog
         open={chargeOpen}
-        onOpenChange={setChargeOpen}
-        matters={matterOptions}
+        onOpenChange={open => {
+          setChargeOpen(open)
+          if (!open) setEditingCharge(null)
+        }}
+        // An edit stays on its own matter, so the picker gives way to it.
+        matterId={editingCharge?.matterId}
+        matters={editingCharge ? undefined : matterOptions}
         matterIdsWithLegalFee={matterIdsWithLegalFee}
+        editing={editingInput}
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}

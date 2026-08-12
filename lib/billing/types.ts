@@ -159,6 +159,23 @@ export const createBillingItemSchema = z
   })
 
 /**
+ * The editable face of a charge. Same fields the Add charge dialog collects,
+ * minus the matter — a charge moves to another matter by being deleted and
+ * re-entered there, not by having its owner swapped underneath its payments.
+ */
+export const updateBillingItemSchema = z
+  .object({
+    kind: z.enum(addableBillingKinds),
+    label: z.string().trim().min(1).max(200),
+    amountBilled: z.number().int().positive(),
+    plan: z.enum(billingPlans).nullable().optional(),
+  })
+  .refine(value => (value.kind === 'plan_claim') === Boolean(value.plan), {
+    message: 'A plan claim requires a legal plan, and only a plan claim carries one',
+    path: ['plan'],
+  })
+
+/**
  * Charges to delete in one call. Bounded so a runaway selection cannot ask the
  * database to lock the whole ledger in a single statement.
  */
