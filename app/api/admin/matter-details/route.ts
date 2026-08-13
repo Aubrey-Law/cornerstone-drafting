@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
 import { parsePracticeArea } from '@/lib/practiceArea'
+import { reconcileDesignSheetPlanTrack } from '@/lib/designSheet/reconcilePlanTrack'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
 import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
 import { reconcileEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
@@ -309,6 +310,13 @@ export async function PATCH(req: Request) {
   }
 
   if (PLAN_GATE_FIELDS.has(field)) await reconcilePlanGates(admin, matterId)
+
+  // The design sheet's plan track follows the practice area, so a College
+  // Preparation Plan drafts the student package and an estate matter drafts the
+  // estate one — without the attorney having to find a second switch.
+  if (field === 'practice_area') {
+    await reconcileDesignSheetPlanTrack(admin, matterId, normalizedValue)
+  }
 
   return NextResponse.json({ row: data })
 }

@@ -3,8 +3,8 @@
 **Section ID:** `college-plan`
 **Group:** `college-plan` (its own tab; estate sheets never show it)
 **UI:** `CollegePrepSection`
-**Visibility:** `decisions.plan_track === 'college_prep'`
-**Source files:** `lib/collegePrepDesign.ts`, `lib/designSheet/seedCollegePrep.ts`, `lib/collegePrepFields.ts`
+**Visibility:** matters whose practice area is `CP` (mirrored to `decisions.plan_track === 'college_prep'`)
+**Source files:** `lib/collegePrepDesign.ts`, `lib/designSheet/seedCollegePrep.ts`, `lib/designSheet/reconcilePlanTrack.ts`, `lib/practiceArea.ts`, `lib/collegePrepFields.ts`
 
 ## What this plan is
 
@@ -17,9 +17,30 @@ The client side of this plan is the `college_prep` intake track
 (`client_intake.intake_track`, `client_intake.college_prep_details`). This
 section is the drafting side of the same plan.
 
-## Track marker
+## Practice area, and the track marker
 
-`decisions.plan_track` (`estate` | `college_prep`) selects everything downstream:
+**The practice area is the switch.** `CP` (College Preparation Plan) is its own
+practice area alongside `EP`, `EP-LP`, and `Probate`. It is set on the matter —
+Matter detail → Practice area — and everything about the plan follows from it.
+
+`decisions.plan_track` (`estate` | `college_prep`) is the sheet-level marker the
+pure readers use, because document inclusions, readiness, the section lists, and
+the FERPA payload all take a sheet and have no matter in hand.
+`lib/designSheet/reconcilePlanTrack.ts` is the join: it moves the marker to match
+the practice area, and runs in two places —
+
+- **`PATCH /api/admin/matter-details`** when the practice area is written, so the
+  next reader of the sheet is correct whether or not anyone opens the workspace.
+- **`loadDraftingMatterContext`** on every drafting load, catching rows changed
+  by the backfill, an import, or SQL.
+
+A lead converting from the college-prep questionnaire opens as a `CP` matter
+(`lib/matters/createFromIntake.ts`), so the common path never needs a correction.
+
+Missing or unrecognized practice areas normalize to `EP`, so every existing
+matter is unaffected.
+
+### What the marker drives
 
 | Consumer | Effect on `college_prep` |
 | --- | --- |
@@ -28,26 +49,25 @@ section is the drafting side of the same plan.
 | `getAllDesignSectionNavItems` | student section list; no trust, will, asset, or deed sections |
 | `buildDesignSheetGroups` | six tabs: Intake, College Prep, Fiduciaries, POA, Health care, Notes |
 | `computeDesignSheetReadiness` | no plan-type blocker; college-prep blockers instead |
+| `isEstatePlanningPracticeArea` | **true** for CP — leaving it out would zero every `include_*` flag and generate an empty package |
 
-Missing or unrecognized values read as `estate`, so every existing sheet is
-unaffected.
+### What moves when the practice area changes
 
-### Switching an existing sheet
-
-Seeding runs once, against a blank sheet, so a matter whose questionnaire was
-chosen after drafting opened — or chosen wrong — would otherwise be stuck on the
-wrong track. `switchDesignPlanTrack` moves it, and the **Plan track** control
-does it from the UI: on an estate sheet it sits at the top of Estate Plan
-Details, on a college-prep sheet at the top of the College Preparation Plan
-section. It confirms first, because the document set moves with the track.
+The document set has to move with the track, or a College Preparation Plan would
+quietly keep drafting the trust and will stored from its estate days.
 
 | On switch | Behavior |
 | --- | --- |
 | `decisions.document_inclusions` | cleared, so the new track's defaults apply — a stored `trust: true` would otherwise keep drafting a trust for a student |
 | `estate_plan_design.ancillary_documents`, `.will_title` | cleared for the same reason |
-| `decisions.college_prep` | adopted from the matter's intake when it is on the college track; otherwise kept as-is (never cleared, so a switch back is not re-entry) |
+| `decisions.college_prep` | adopted from the matter's intake when it is on the college track; otherwise kept as-is (never cleared, so a correction back is not re-entry) |
 | `plan_type`, `estate_plan_design.signing_type` | preserved — plan type is inert on the college track and restores on the way back |
 | Client facts, fiduciary slots, DPOA and health care provisions | untouched |
+| Matter number | untouched — numbers are allocated at creation and never rewritten, so a matter reclassified to CP keeps the number it was opened under |
+
+The design sheet shows the track read-only (**Plan track**, top of Estate Plan
+Details or of the College Preparation Plan section) with a link to the matter,
+rather than offering a second place to change it.
 
 ## Design sheet fields
 

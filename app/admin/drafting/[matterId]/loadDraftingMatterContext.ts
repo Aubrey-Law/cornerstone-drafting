@@ -11,6 +11,7 @@ import { buildDesignSheetPersistencePayload } from '@/lib/designSheetPersistence
 import { computeDesignSheetDefaults } from '@/lib/designSheetDefaults'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
+import { reconcilePlanTrackDecisions } from '@/lib/designSheet/reconcilePlanTrack'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 
@@ -67,6 +68,28 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
   const normalizedPracticeArea = normalizePracticeArea(practiceArea)
   if (normalizedPracticeArea === 'Probate') {
     notFound()
+  }
+
+  // The sheet's plan track follows the matter's practice area. Normally the
+  // matter-details write already reconciled it; this catches sheets changed by a
+  // backfill, an import, or SQL, so the workspace never renders the wrong plan.
+  if (sheet?.id) {
+    const { decisions } = reconcilePlanTrackDecisions({
+      sheet,
+      practiceArea: normalizedPracticeArea,
+      intake: intakeSnapshot,
+    })
+    if (decisions) {
+      const { error } = await admin
+        .from('design_sheets')
+        .update({ decisions, updated_at: new Date().toISOString() })
+        .eq('id', sheet.id)
+      if (error) {
+        console.error('plan track reconcile failed:', error.message)
+      } else {
+        sheet = await fetchDesignSheet(matterId)
+      }
+    }
   }
 
   const matterType = (matterRow?.matter_type as 'individual' | 'couple' | null | undefined) ?? null

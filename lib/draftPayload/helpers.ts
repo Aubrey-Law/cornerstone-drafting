@@ -512,15 +512,20 @@ export function buildFiduciariesFromDesignSheet(
 }
 
 /**
- * Estate-planning practice areas drive draft packages. Missing/blank practice
- * area normalizes to EP (see normalizePracticeArea) so a matter that is already
- * in the design/draft flow still gets trust/will/DPOA/HCP packages — previously
- * a null practice_area made isEP false and preflight only listed parental
+ * Practice areas that drive draft packages. Missing/blank practice area
+ * normalizes to EP (see normalizePracticeArea) so a matter that is already in
+ * the design/draft flow still gets trust/will/DPOA/HCP packages — previously a
+ * null practice_area made isEP false and preflight only listed parental
  * appointment (ungated) + estate-plan-summary.
+ *
+ * `CP` belongs here too. It is a different document set, but the set is chosen
+ * by the design sheet's inclusions, not by this gate — leaving CP out would zero
+ * every `include_*` flag and generate an empty package for a plan that has four
+ * documents. Probate is the only practice area this drafting flow does not serve.
  */
 export function isEstatePlanningPracticeArea(practiceArea: string | null | undefined): boolean {
   const normalized = normalizePracticeArea(practiceArea)
-  return normalized === 'EP' || normalized === 'EP-LP'
+  return normalized === 'EP' || normalized === 'EP-LP' || normalized === 'CP'
 }
 
 export function deriveDocuments(

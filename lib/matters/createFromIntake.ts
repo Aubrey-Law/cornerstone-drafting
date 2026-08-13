@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
+import { isCollegePrepIntake } from '@/lib/intakeTrack'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { applySlaAnchor, ensureEstatePlanningSlaTasks } from '@/lib/slaTasks/generate'
@@ -25,6 +26,7 @@ export async function createMatterFromIntake(
     last_name: string | null
     full_name: string | null
     practice_area: string | null
+    intake_track: string | null
     user_id: string | null
     client_user_id: string | null
     engagement_provider: string | null
@@ -38,7 +40,7 @@ export async function createMatterFromIntake(
   const { data: intakeData, error: intakeError } = await admin
     .from('client_intake')
     .select(
-      'id, email, first_name, last_name, full_name, practice_area, user_id, client_user_id, engagement_provider, engagement_envelope_id, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_status',
+      'id, email, first_name, last_name, full_name, practice_area, intake_track, user_id, client_user_id, engagement_provider, engagement_envelope_id, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_status',
     )
     .eq('id', intakeId)
     .maybeSingle()
@@ -51,7 +53,13 @@ export async function createMatterFromIntake(
     [intake.first_name, intake.last_name].filter(Boolean).join(' ').trim() ||
     intake.email ||
     'Client'
-  const practiceArea = normalizePracticeArea(intake.practice_area)
+  // A lead that answered the College Preparation Plan questionnaire converts
+  // into a CP matter, whatever practice area the lead record carried — the
+  // questionnaire is the more specific statement of what was sold, and the
+  // design sheet's plan track follows the practice area from here on.
+  const practiceArea = isCollegePrepIntake({ intake_track: intake.intake_track })
+    ? ('CP' as const)
+    : normalizePracticeArea(intake.practice_area)
   const practiceAreaName = practiceAreaLabel(practiceArea)
 
   const matterNumber = await generateUniqueMatterNumber(admin, {
