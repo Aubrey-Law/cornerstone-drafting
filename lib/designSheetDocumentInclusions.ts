@@ -1,4 +1,5 @@
 import { designPlanTypeIncludesRevocableTrust, normalizeDesignPlanType } from '@/lib/designPlanType'
+import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
 import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
 import type { DesignSheet } from '@/types/database'
 
@@ -65,11 +66,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'marital_status' | 'matter_type'> & Partial<Pick<DesignSheet, 'children'>>): DesignDocumentInclusions {
+export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'marital_status' | 'matter_type'> & Partial<Pick<DesignSheet, 'children' | 'decisions'>>): DesignDocumentInclusions {
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
   const hasPlanType = normalizedPlanType !== null
   const isMarried = sheet.matter_type === 'couple'
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(sheet.children)
+
+  // A College Preparation Plan is exactly four documents for one student: the
+  // durable power of attorney, health care proxy, HIPAA authorization, and
+  // living will. Nothing on the estate side of this list applies.
+  if (isCollegePrepDesignSheet(sheet)) {
+    return {
+      trust: false,
+      will: false,
+      dpoa: true,
+      healthcare: true,
+      deed: false,
+      young_adult_estate_plan: false,
+      spouse_docs: false,
+    }
+  }
 
   return {
     trust: hasPlanType ? designPlanTypeIncludesRevocableTrust(normalizedPlanType) : true,
@@ -172,6 +188,13 @@ function defaultWillTitle(inclusions: Pick<DesignDocumentInclusions, 'trust'>): 
 function normalizeAncillaryDocuments(
   raw: Record<string, unknown>,
   trustIncluded: boolean,
+  /**
+   * Whether the client-facing extras (summary, signing guide, role guide) are on
+   * by default. They ride along with every estate plan, but a College
+   * Preparation Plan is four documents and a signing appointment — an estate
+   * plan summary for it would describe a plan that does not exist.
+   */
+  planWideExtras = true,
 ): Record<EstatePlanAncillaryDocumentKey, boolean> {
   return {
     certificate_of_trust: typeof raw.certificate_of_trust === 'boolean' ? raw.certificate_of_trust : trustIncluded,
@@ -180,10 +203,10 @@ function normalizeAncillaryDocuments(
     funding_recommendation: typeof raw.funding_recommendation === 'boolean' ? raw.funding_recommendation : trustIncluded,
     homestead_trustee: typeof raw.homestead_trustee === 'boolean' ? raw.homestead_trustee : trustIncluded,
     trust_summary: typeof raw.trust_summary === 'boolean' ? raw.trust_summary : trustIncluded,
-    estate_plan_summary: typeof raw.estate_plan_summary === 'boolean' ? raw.estate_plan_summary : true,
-    estate_plan_signing_guide: typeof raw.estate_plan_signing_guide === 'boolean' ? raw.estate_plan_signing_guide : true,
+    estate_plan_summary: typeof raw.estate_plan_summary === 'boolean' ? raw.estate_plan_summary : planWideExtras,
+    estate_plan_signing_guide: typeof raw.estate_plan_signing_guide === 'boolean' ? raw.estate_plan_signing_guide : planWideExtras,
     successor_trustee_checklist: typeof raw.successor_trustee_checklist === 'boolean' ? raw.successor_trustee_checklist : trustIncluded,
-    fiduciary_role_guide: typeof raw.fiduciary_role_guide === 'boolean' ? raw.fiduciary_role_guide : true,
+    fiduciary_role_guide: typeof raw.fiduciary_role_guide === 'boolean' ? raw.fiduciary_role_guide : planWideExtras,
     flowchart: typeof raw.flowchart === 'boolean' ? raw.flowchart : false,
     include_asset_spreadsheet: typeof raw.include_asset_spreadsheet === 'boolean' ? raw.include_asset_spreadsheet : false,
   }
@@ -212,6 +235,7 @@ export function getEstatePlanDesignSetup(
     ancillary_documents: normalizeAncillaryDocuments(
       isRecord(raw.ancillary_documents) ? raw.ancillary_documents : {},
       inclusions.trust,
+      !isCollegePrepDesignSheet(sheet),
     ),
   }
 }

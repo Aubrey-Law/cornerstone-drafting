@@ -2,6 +2,7 @@
 export const DESIGN_SECTION_IDS = {
   intakeReview: 'intake-review',
   clientInformation: 'client-information',
+  collegePlan: 'college-plan',
   familyInformation: 'family-information',
   contactsFiduciaries: 'contacts-fiduciaries',
   fiduciaries: 'fiduciaries',
@@ -19,6 +20,7 @@ export type DesignSectionId = typeof DESIGN_SECTION_IDS[keyof typeof DESIGN_SECT
 
 export const DESIGN_SHEET_GROUP_IDS = {
   facts: 'facts',
+  collegePlan: 'college-plan',
   family: 'family',
   fiduciaries: 'fiduciaries',
   plan: 'plan',
@@ -48,6 +50,7 @@ export function resolveDesignSheetGroupId(token: string | null | undefined): Des
 const DESIGN_SECTION_GROUPS: Record<DesignSectionId, DesignSheetGroupId> = {
   [DESIGN_SECTION_IDS.intakeReview]: DESIGN_SHEET_GROUP_IDS.facts,
   [DESIGN_SECTION_IDS.clientInformation]: DESIGN_SHEET_GROUP_IDS.facts,
+  [DESIGN_SECTION_IDS.collegePlan]: DESIGN_SHEET_GROUP_IDS.collegePlan,
   [DESIGN_SECTION_IDS.familyInformation]: DESIGN_SHEET_GROUP_IDS.family,
   [DESIGN_SECTION_IDS.assetSchedules]: DESIGN_SHEET_GROUP_IDS.plan,
   [DESIGN_SECTION_IDS.willDetails]: DESIGN_SHEET_GROUP_IDS.family,

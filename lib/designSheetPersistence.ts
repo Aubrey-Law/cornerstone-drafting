@@ -13,6 +13,7 @@ const RETIRED_DESIGN_SHEET_KEYS = new Set(['inheritance_structure'])
  * be re-persisted when the UI updates only `decisions` (e.g. trust checkbox).
  */
 const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
+  'college_prep',
   'contact_profiles',
   'deed',
   // Dropped column. Listed here so a value still present on an old inflated row is
@@ -30,6 +31,7 @@ const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
   'fiduciary_document_inclusions',
   'funding_plan',
   'healthcare_provisions',
+  'plan_track',
   'provisions',
   'real_estate_transfer',
   'staggered_ages',

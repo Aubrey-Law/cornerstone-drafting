@@ -4,6 +4,7 @@ import {
   planTypeDisallowsRevocableTrustDocument,
 } from '@/lib/designPlanType'
 import type { IntakeSnapshot } from '@/lib/queries'
+import type { DesignPlanTrack } from '@/lib/collegePrepDesign'
 import {
   DESIGN_SECTION_IDS,
   normalizeDesignSectionId,
@@ -15,26 +16,43 @@ export interface DesignSectionNavItem {
   applicable: boolean
 }
 
-export function getDesignSectionNavItems(args: {
+export interface DesignSectionNavArgs {
   intakeSnapshot: IntakeSnapshot | null
   documentInclusions: DesignDocumentInclusions
   maritalStatus?: string | null
   spouseName?: string | null
   isJointTrust?: boolean | null
   planType?: string | null
-}): DesignSectionNavItem[] {
+  /** Which plan the sheet drafts; `college_prep` swaps the whole section list. */
+  planTrack?: DesignPlanTrack | null
+}
+
+export function getDesignSectionNavItems(args: DesignSectionNavArgs): DesignSectionNavItem[] {
   return getAllDesignSectionNavItems(args).filter(item => item.applicable)
 }
 
-export function getAllDesignSectionNavItems(args: {
-  intakeSnapshot: IntakeSnapshot | null
-  documentInclusions: DesignDocumentInclusions
-  maritalStatus?: string | null
-  spouseName?: string | null
-  isJointTrust?: boolean | null
-  planType?: string | null
-}): DesignSectionNavItem[] {
+/**
+ * The College Preparation Plan drafts four documents for one student. Trust,
+ * will, asset, and deed sections are not merely inapplicable here — they have no
+ * counterpart in the plan at all, so they are left out of the list rather than
+ * greyed out in it.
+ */
+function collegePrepNavItems(args: DesignSectionNavArgs): DesignSectionNavItem[] {
+  const { intakeSnapshot, documentInclusions } = args
+  return [
+    { id: DESIGN_SECTION_IDS.intakeReview, label: 'Intake Review', applicable: Boolean(intakeSnapshot) },
+    { id: DESIGN_SECTION_IDS.clientInformation, label: 'Student Information', applicable: true },
+    { id: DESIGN_SECTION_IDS.fiduciaries, label: 'Agent Designations', applicable: true },
+    { id: DESIGN_SECTION_IDS.collegePlan, label: 'College Preparation Plan', applicable: true },
+    { id: DESIGN_SECTION_IDS.financialPoa, label: 'Financial Power of Attorney', applicable: documentInclusions.dpoa },
+    { id: DESIGN_SECTION_IDS.healthcareDirectives, label: 'Health Care & Directives', applicable: documentInclusions.healthcare },
+    { id: DESIGN_SECTION_IDS.attorneyNotes, label: 'Attorney Notes', applicable: true },
+  ]
+}
+
+export function getAllDesignSectionNavItems(args: DesignSectionNavArgs): DesignSectionNavItem[] {
   const { intakeSnapshot, documentInclusions, planType } = args
+  if (args.planTrack === 'college_prep') return collegePrepNavItems(args)
   const revocableTrustPlan = designPlanTypeIncludesRevocableTrust(planType)
   const disallowsRevocableTrust = planTypeDisallowsRevocableTrustDocument(planType)
   const revocableTrustApplicable = planType == null || planType === ''

@@ -5,6 +5,7 @@ import { namedPrincipalSlots } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
+import { collegePrepDraftingBlockers, isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
 import { DESIGN_SECTION_IDS, normalizeDesignSectionId } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
@@ -56,6 +57,7 @@ export interface DesignSheetReadiness {
 export const DESIGN_SECTION_LABELS: Record<string, string> = {
   [DESIGN_SECTION_IDS.intakeReview]: 'Intake Review',
   [DESIGN_SECTION_IDS.clientInformation]: 'Client Information',
+  [DESIGN_SECTION_IDS.collegePlan]: 'College Preparation Plan',
   [DESIGN_SECTION_IDS.familyInformation]: 'Last Will and Testament',
   [DESIGN_SECTION_IDS.contactsFiduciaries]: 'Contacts & Fiduciaries',
   [DESIGN_SECTION_IDS.fiduciaries]: 'Fiduciary Role Assignment',
@@ -197,6 +199,7 @@ export function computeDesignSheetReadiness({
 }: ComputeDesignSheetReadinessArgs): DesignSheetReadiness {
   const documentInclusions = getDocumentInclusions(sheet)
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
+  const collegePrep = isCollegePrepDesignSheet(sheet)
   const married = isMarried(sheet)
   const spouseFiduciariesNeeded = married && documentInclusions.spouse_docs
 
@@ -234,7 +237,9 @@ export function computeDesignSheetReadiness({
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const planBlockers = [
-    !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
+    // A College Preparation Plan has no trust-or-will structure to choose, so
+    // plan type stays null there by design and must not read as missing.
+    !collegePrep && !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
     documentInclusions.trust && married && sheet.is_joint == null &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'joint or separate trusts', 'is_joint'),
     Object.entries(documentInclusions).filter(([key, value]) => key !== 'spouse_docs' && value).length === 0 &&
@@ -340,6 +345,11 @@ export function computeDesignSheetReadiness({
       blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse advance health directive', 'healthcare_provisions.spouse_advance_directive', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
+  const collegePrepBlockers = collegePrep
+    ? collegePrepDraftingBlockers(sheet).map(item =>
+        blocker(DESIGN_SECTION_IDS.collegePlan, item.label, item.field))
+    : []
+
   const fiduciaryBlockers = [
     ...clientTrustBlockers,
     ...willBlockers,
@@ -405,9 +415,20 @@ export function computeDesignSheetReadiness({
       ? { status: 'none', detail: 'not included' }
       : summaryFromBlockers(provisionBlockers(healthcareBlockers), 'ready'),
     [DESIGN_SECTION_IDS.assetSchedules]: optionalSummary(assetsFilled, `${assetList.length} asset${assetList.length === 1 ? '' : 's'}`),
+    [DESIGN_SECTION_IDS.collegePlan]: summaryFromBlockers(collegePrepBlockers, 'ready'),
   }
 
-  const requiredIds = [
+  // The college-prep sheet is scored against the sections it actually shows;
+  // estate plan design, the will, and the trust are not part of that plan.
+  const requiredIds = collegePrep
+    ? [
+        DESIGN_SECTION_IDS.clientInformation,
+        DESIGN_SECTION_IDS.fiduciaries,
+        DESIGN_SECTION_IDS.collegePlan,
+        ...(documentInclusions.dpoa ? [DESIGN_SECTION_IDS.financialPoa] : []),
+        ...(documentInclusions.healthcare ? [DESIGN_SECTION_IDS.healthcareDirectives] : []),
+      ]
+    : [
     DESIGN_SECTION_IDS.estatePlanDesign,
     DESIGN_SECTION_IDS.clientInformation,
     DESIGN_SECTION_IDS.familyInformation,

@@ -13,12 +13,14 @@ const pageSource = fs.readFileSync(
 )
 
 describe('sectioned design sheet anchors', () => {
-  it('maps legacy section navigation onto the ten stable group anchors', () => {
-    expect(Object.keys(DESIGN_SHEET_GROUP_IDS)).toHaveLength(10)
+  it('maps legacy section navigation onto the stable group anchors', () => {
+    // Ten estate groups plus the college-prep group.
+    expect(Object.keys(DESIGN_SHEET_GROUP_IDS)).toHaveLength(11)
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.trustDetails)).toBe('trust')
     expect(designSectionAnchorId('trust')).toBe('trust')
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.clientInformation)).toBe('facts')
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.financialPoa)).toBe('powers-of-attorney')
+    expect(designSectionAnchorId(DESIGN_SECTION_IDS.collegePlan)).toBe('college-plan')
   })
 
   it('renders one section at a time instead of a single scroll page', () => {
