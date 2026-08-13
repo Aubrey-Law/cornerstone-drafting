@@ -270,6 +270,96 @@ export async function ensureLeadSlaTasks(
   }
 }
 
+export type SlaTemplateResync =
+  /** The practice area has no template of its own (Probate). */
+  | 'skipped'
+  /** Nothing generated yet. This never creates a checklist — see below. */
+  | 'no_checklist'
+  | 'unchanged'
+  | 'swapped'
+  /** On the wrong template, but someone has already worked it. */
+  | 'work_started'
+  | 'failed'
+
+/**
+ * Move a matter already carrying a checklist onto the one its practice area
+ * calls for. Safe to call on every load: it does nothing in the common case.
+ *
+ * This exists because the checklist is otherwise chosen once, at creation or at
+ * lead conversion, from whatever the practice area was *then*. A matter
+ * reclassified afterwards keeps the old checklist for life — the College
+ * Preparation Plan matters that predate `college_prep_sla_v1` were all running
+ * the estate checklist, asking for a trust and deeds they will never produce.
+ * `decisions.plan_track` already self-corrects this way; this is the same idea
+ * for the task list.
+ *
+ * It never *creates* a checklist, only replaces a mismatched one. A matter with
+ * no tasks has none for a reason — it predates the SLA engine, or its checklist
+ * was deliberately cleared — and generating 40-odd tasks under someone who only
+ * opened the drafting workspace would be a surprise, most of them already
+ * overdue against a Day 0 in the past.
+ *
+ * Replacing is refused the moment any of the work is real; see
+ * `templateSwapVerdict`.
+ */
+export async function resyncMatterSlaTemplate(
+  admin: SupabaseClient,
+  matterId: string,
+  practiceArea: unknown,
+): Promise<SlaTemplateResync> {
+  try {
+    const templateName = slaTemplateForPracticeArea(practiceArea)
+    if (!templateName) return 'skipped'
+
+    const { data: taskRows, error: tasksError } = await admin
+      .from('matter_tasks')
+      .select('template_id, status, notes, completed_at, skipped_at, paused_at')
+      .eq('matter_id', matterId)
+    if (tasksError) throw new Error(tasksError.message)
+
+    const tasks = (taskRows ?? []) as unknown as Parameters<typeof templateSwapVerdict>[0]
+    if (tasks.length === 0) return 'no_checklist'
+
+    const { data: templateRow, error: templateError } = await admin
+      .from('sla_task_templates')
+      .select('id')
+      .eq('template_name', templateName)
+      .maybeSingle<{ id: string }>()
+    if (templateError) throw new Error(templateError.message)
+    // No such template yet — its migration has not been applied to this
+    // database. Leaving the checklist alone beats deleting it for nothing.
+    if (!templateRow) return 'skipped'
+
+    const verdict = templateSwapVerdict(tasks, templateRow.id)
+    if (verdict === 'same_template') return 'unchanged'
+    if (verdict === 'work_started') {
+      console.warn(
+        '[sla-tasks] matter',
+        matterId,
+        `belongs on "${templateName}" but its checklist has been worked; leaving it alone`,
+      )
+      return 'work_started'
+    }
+
+    const result = await generateMatterTasks(admin, {
+      matterId,
+      templateName,
+      startDate: firmTodayKey(),
+      replace: true,
+    })
+    if (!result.ok) {
+      console.warn('[sla-tasks] resync failed for matter', matterId, result.error)
+      return 'failed'
+    }
+    console.info('[sla-tasks] matter', matterId, `moved onto "${templateName}"`)
+    return 'swapped'
+  } catch (e) {
+    // Never take down the caller: this runs on a page load.
+    console.warn('[sla-tasks] resync failed for matter', matterId, e)
+    return 'failed'
+  }
+}
+
 export interface ApplyAnchorResult {
   ok: boolean
   updated: number

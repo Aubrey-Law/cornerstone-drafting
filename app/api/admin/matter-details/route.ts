@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import { reconcileDesignSheetPlanTrack } from '@/lib/designSheet/reconcilePlanTrack'
+import { resyncMatterSlaTemplate } from '@/lib/slaTasks/generate'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
 import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
 import { reconcileEngineStageTask } from '@/lib/stage-engine/fireStageTasks'
@@ -316,6 +317,9 @@ export async function PATCH(req: Request) {
   // estate one — without the attorney having to find a second switch.
   if (field === 'practice_area') {
     await reconcileDesignSheetPlanTrack(admin, matterId, normalizedValue)
+    // And the checklist with it, so the reclassification lands everywhere at
+    // once rather than waiting for someone to open the drafting workspace.
+    await resyncMatterSlaTemplate(admin, matterId, normalizedValue)
   }
 
   return NextResponse.json({ row: data })
