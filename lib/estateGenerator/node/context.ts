@@ -102,6 +102,9 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   healthcare.anatomical_specified ??= ''
   const hipaa = { ...recordValue(data.hipaa) }
   hipaa.psychotherapy_notes ??= null
+  const ferpa = { ...recordValue(data.ferpa) }
+  const ferpaRecords = arrayValue(ferpa.records)
+  ferpa.records = ferpaRecords
 
   const execution = { ...recordValue(data.execution) }
   const signingScheduled = Boolean(execution.signing_scheduled)
@@ -167,6 +170,7 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     dpoa,
     healthcare,
     hipaa,
+    ferpa,
     execution,
     state: { code: stateCode, ...stateRules },
     has_spouse: hasSpouse,
@@ -196,6 +200,12 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     hipaa_include_trustees: Boolean(hipaa.include_trustees),
     hipaa_list_fiduciaries_by_name: hipaa.list_fiduciaries_by_name === 'by_name',
     hipaa_list_fiduciaries_general: hipaa.list_fiduciaries_by_name === 'general_language',
+    has_ferpa_records: ferpaRecords.length > 0,
+    ferpa_all_records: Boolean(ferpa.all_records),
+    // Campus treatment records are excluded from FERPA's education-records
+    // definition (34 CFR 99.3), so the release names the limit rather than
+    // leaving the student to assume it covers the health center.
+    ferpa_includes_health_center: ferpaRecords.some(record => record.key === 'health_center'),
     uses_revocable_trust: Boolean(planning.uses_revocable_trust),
     includes_pour_over_will: Boolean(planning.include_pour_over_will),
     includes_simple_will: Boolean(planning.include_simple_will),

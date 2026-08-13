@@ -580,6 +580,9 @@ export function deriveDocuments(
     include_parental_appointment:   isEP && (hasMinorChildren || ancillaryDocs.includes('parental_appointment')),
     include_temp_delegation:        isEP && hasMinorChildren,
     include_young_adult_estate_plan: isEP && hasYoungAdultChild && inclusions.young_adult_estate_plan,
+    // Not gated on a child's age: on the College Preparation Plan the student is
+    // the client, so the release stands on the inclusion alone.
+    include_ferpa_release:          isEP && inclusions.ferpa_release,
     include_deed:                   isEP && selectedAssetDocs.has('deed'),
     include_trustees_certificate:   isEP && selectedAssetDocs.has('trustees_certificate'),
     include_real_estate_trust:      isEP && selectedAssetDocs.has('real_estate_trust'),

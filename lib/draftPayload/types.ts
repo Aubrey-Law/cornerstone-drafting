@@ -11,6 +11,7 @@ import type {
   DraftPayloadHcpProvisions,
   DraftPayloadHipaaProvisions,
 } from '@/lib/draftPayload/healthcare'
+import type { DraftPayloadFerpaRelease } from '@/lib/draftPayload/ferpa'
 import type { DraftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import type { DraftPayloadTrustProvisions } from '@/lib/draftPayload/trustProvisions'
 
@@ -154,6 +155,7 @@ export interface DraftPayload {
     include_parental_appointment: boolean
     include_temp_delegation: boolean
     include_young_adult_estate_plan?: boolean
+    include_ferpa_release?: boolean
     /** Asset-transfer package (design-sheet Transfers & Assignments). */
     include_deed?: boolean
     include_trustees_certificate?: boolean
@@ -238,6 +240,8 @@ export interface DraftPayload {
   hcp_provisions: DraftPayloadHcpProvisions
   hipaa_provisions: DraftPayloadHipaaProvisions
   healthcare_provisions?: DraftPayloadHealthcareProvisions
+  /** College Preparation Plan only; null on every estate matter. */
+  ferpa_release?: DraftPayloadFerpaRelease | null
   fiduciary_display?: FiduciaryDocumentInclusions
   fiduciary_details?: DraftPayloadFiduciaryRoleDetails
   excluded_guardians?: DraftPayloadExcludedGuardian[]

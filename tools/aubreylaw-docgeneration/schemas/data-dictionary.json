@@ -890,6 +890,56 @@
     "required": false,
     "description": "Whether the HIPAA authorization also releases information to the trustee and successor trustee."
   },
+  "ferpa.school_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "College, university, or program whose education records the FERPA release covers."
+  },
+  "ferpa.school_city": {
+    "type": "string",
+    "required": false,
+    "description": "Campus city, printed where the institution is identified in parts."
+  },
+  "ferpa.school_state": {
+    "type": "string",
+    "required": false,
+    "description": "Campus state, printed where the institution is identified in parts."
+  },
+  "ferpa.school_location": {
+    "type": "string",
+    "required": false,
+    "description": "Campus city and state joined for the institution line, e.g. Boston, MA."
+  },
+  "ferpa.records": {
+    "type": "array",
+    "required": "conditional",
+    "description": "Education record categories the release covers. Reference the container directly in {% for %} and {% if %}; see ferpa.records[].label for member fields."
+  },
+  "ferpa.records[]": {
+    "type": "array",
+    "required": false,
+    "description": "A single education record category selected on the College Preparation Plan questionnaire."
+  },
+  "ferpa.records[].key": {
+    "type": "string",
+    "required": false,
+    "description": "Stable key for an education record category, e.g. grades or billing."
+  },
+  "ferpa.records[].label": {
+    "type": "string",
+    "required": false,
+    "description": "Display label for an education record category, e.g. Grades and transcripts."
+  },
+  "ferpa.all_records": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether every education record category the questionnaire offers was selected."
+  },
+  "ferpa.recipients": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Who may receive the education records, in the student's own words, e.g. both parents."
+  },
   "dpoa.include_advanced_trust_gifting": {
     "type": "boolean",
     "required": false,

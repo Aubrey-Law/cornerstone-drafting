@@ -59,6 +59,16 @@ Client-facing estate plan summary for individual and married-couple draft packag
 
 Required fields: `client.full_name`
 
+## ferpa-release
+
+FERPA release authorizing a college or university to disclose a student's education records. Drafted for the College Preparation Plan; education records fall outside HIPAA, so this is a separate document from the HIPAA authorization.
+
+| Document | Template | Output |
+|---|---|---|
+| FERPA Release — Education Records | `templates/ferpa-release.docx` | `05-ferpa-release.docx` |
+
+Required fields: `client.full_name`, `ferpa.school_name`, `ferpa.recipients`
+
 ## funding-instructions
 
 Trust funding instructions and checklist for revocable living trust clients.
@@ -274,6 +284,7 @@ How `deriveEstateGeneratorPackages()` (lib/estateGenerator/toGeneratorData.ts) t
 | `include_funding_recommendation` | `trust-funding-plan` | always when included |
 | `include_homestead_trustee` | `homestead-trustee` | always when included |
 | `include_young_adult_estate_plan` | `young-adult-estate-plan` | one package per qualifying child (DOB age 17.5–25) |
+| `include_ferpa_release` | `ferpa-release` | College Preparation Plan sheets, when the student asked for a FERPA release |
 | `include_estate_plan_summary` | `estate-plan-summary` | appended whenever any other package generates, unless explicitly `false` |
 
 Manifests never selected by `deriveEstateGeneratorPackages()`: `core-estate`, `design-summary` (`design-summary` is generated from its own design-sheet action; `core-estate` is legacy and not in `NODE_SUPPORTED_PACKAGES`).

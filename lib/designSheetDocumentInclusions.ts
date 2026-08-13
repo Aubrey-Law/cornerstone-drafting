@@ -1,9 +1,9 @@
 import { designPlanTypeIncludesRevocableTrust, normalizeDesignPlanType } from '@/lib/designPlanType'
-import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
+import { getCollegePrepDesign, isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
 import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
 import type { DesignSheet } from '@/types/database'
 
-export type DesignDocumentKey = 'trust' | 'will' | 'dpoa' | 'healthcare' | 'deed' | 'young_adult_estate_plan'
+export type DesignDocumentKey = 'trust' | 'will' | 'dpoa' | 'healthcare' | 'deed' | 'young_adult_estate_plan' | 'ferpa_release'
 
 export type DesignDocumentInclusions = Record<DesignDocumentKey, boolean> & {
   spouse_docs: boolean
@@ -45,6 +45,7 @@ export const DESIGN_DOCUMENT_LABELS: Record<DesignDocumentKey, string> = {
   healthcare: 'Health Care Documents',
   deed: 'Deed',
   young_adult_estate_plan: 'Young Adult Estate Plan',
+  ferpa_release: 'FERPA Release',
 }
 
 export const ESTATE_PLAN_ANCILLARY_LABELS: Record<EstatePlanAncillaryDocumentKey, string> = {
@@ -83,6 +84,9 @@ export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' |
       healthcare: true,
       deed: false,
       young_adult_estate_plan: false,
+      // Education records sit outside HIPAA, so the release is a separate
+      // document — and only when the student asked for one.
+      ferpa_release: getCollegePrepDesign(sheet).ferpa_release === true,
       spouse_docs: false,
     }
   }
@@ -94,6 +98,9 @@ export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' |
     healthcare: true,
     deed: false,
     young_adult_estate_plan: hasYoungAdultChild,
+    // A FERPA release belongs to the College Preparation Plan; an estate client
+    // has no education records to authorize.
+    ferpa_release: false,
     spouse_docs: isMarried,
   }
 }
@@ -112,6 +119,7 @@ export function getDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'ma
     young_adult_estate_plan: typeof raw.young_adult_estate_plan === 'boolean'
       ? raw.young_adult_estate_plan
       : defaults.young_adult_estate_plan,
+    ferpa_release: typeof raw.ferpa_release === 'boolean' ? raw.ferpa_release : defaults.ferpa_release,
     spouse_docs: typeof raw.spouse_docs === 'boolean' ? raw.spouse_docs : defaults.spouse_docs,
   }
 }
