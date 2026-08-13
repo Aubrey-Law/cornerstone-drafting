@@ -515,6 +515,9 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     client: {
       ...compactObject({
         full_name: payload.client.full_name,
+        // Summary documents address the client by first name and fall back to
+        // the full name when it is blank; compactObject drops the empty string.
+        first_name: payload.client.first_name,
         aka: payload.client.aka,
         street_address: payload.client.address,
         city: payload.client.city,
@@ -534,6 +537,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       ? compactObject({
           exists: true,
           full_name: payload.spouse.full_name,
+          first_name: payload.spouse.first_name,
           aka: payload.spouse.aka,
           date_of_birth: formatLongDate(payload.spouse.dob) ?? payload.spouse.dob,
           pronoun_subject: spousePronouns.subject,

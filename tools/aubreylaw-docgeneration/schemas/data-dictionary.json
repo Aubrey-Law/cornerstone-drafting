@@ -548,5 +548,561 @@
     "type": "string",
     "required": "conditional",
     "description": "Identification evidence used in the notarial acknowledgment."
+  },
+  "client.city": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Client's city or town, used in addresses and acknowledgment blocks."
+  },
+  "client.zip": {
+    "type": "string",
+    "required": false,
+    "description": "Client's ZIP code, used on summary worksheets."
+  },
+  "spouse.aka": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse alternate or also-known-as name."
+  },
+  "spouse.date_of_birth": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's date of birth, already formatted for display."
+  },
+  "marriage.date": {
+    "type": "string",
+    "required": false,
+    "description": "Date of marriage, already formatted for display."
+  },
+  "children": {
+    "type": "array",
+    "required": "conditional",
+    "description": "All children, filtered to those with a name. Reference the container directly in {% for %} and {% if %}; see children[].full_name for member fields."
+  },
+  "children[].date_of_birth": {
+    "type": "string",
+    "required": false,
+    "description": "Child's date of birth, already formatted for display."
+  },
+  "children[].relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Child's relationship label, e.g. Child or Stepchild."
+  },
+  "minor_children": {
+    "type": "array",
+    "required": "conditional",
+    "description": "Children flagged as minors, computed from the children list. Used by the parental-powers delegation to list the children covered."
+  },
+  "planning.include_trust": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a revocable trust. Drives summary and worksheet sections."
+  },
+  "planning.include_pour_over_will": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a pour-over will."
+  },
+  "planning.include_simple_will": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes an outright (non-trust) will."
+  },
+  "planning.include_testamentary_trust_will": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a will containing a testamentary trust."
+  },
+  "planning.include_dpoa": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a durable power of attorney."
+  },
+  "planning.include_hcp": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a health care proxy."
+  },
+  "planning.include_hipaa": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a HIPAA authorization."
+  },
+  "planning.include_ahd": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes an advance health directive / living will."
+  },
+  "planning.include_ppm": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a personal property memorandum."
+  },
+  "planning.spouse_docs": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a matching set of documents is being drafted for the spouse."
+  },
+  "summary.show_spouse": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: show the spouse column. True when a spouse is on the matter."
+  },
+  "summary.show_trustee": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: show the trustee row."
+  },
+  "summary.show_personal_representative": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: show the personal representative row."
+  },
+  "summary.show_dpoa_agent": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: show the financial agent (POA) row."
+  },
+  "summary.show_healthcare_agent": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: show the health care agent row."
+  },
+  "summary.show_guardian": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: show the guardian row."
+  },
+  "summary.show_key_people": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: show the \"Key People at a Glance\" section. True when any individual summary.show_* row is on."
+  },
+  "summary.has_completion_items": {
+    "type": "boolean",
+    "required": false,
+    "description": "Estate plan summary: whether any outstanding to-do items remain for the client."
+  },
+  "fiduciaries.executor.successor": {
+    "type": "string",
+    "required": false,
+    "description": "Successor personal representative as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.executor.co_successor": {
+    "type": "string",
+    "required": false,
+    "description": "Co-successor personal representative as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.executor.second_successor": {
+    "type": "string",
+    "required": false,
+    "description": "Second successor personal representative as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.executor.co_second_successor": {
+    "type": "string",
+    "required": false,
+    "description": "Co-second-successor personal representative as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.executor.co_primary": {
+    "type": "string",
+    "required": false,
+    "description": "Co-personal representative as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.trustee.co_primary": {
+    "type": "string",
+    "required": false,
+    "description": "Co-trustee as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.trustee.co_successor": {
+    "type": "string",
+    "required": false,
+    "description": "Co-successor trustee as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.trustee.co_second_successor": {
+    "type": "string",
+    "required": false,
+    "description": "Co-second-successor trustee as an object. Test the object for existence, then print its .full_name."
+  },
+  "fiduciaries.trustee.co_primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Co-trustee serving alongside the primary trustee."
+  },
+  "fiduciaries.trustee.co_primary.pronoun_subject": {
+    "type": "string",
+    "required": false,
+    "populated": false,
+    "description": "Co-trustee subject pronoun for notary blocks. NOT POPULATED — the pipeline carries no pronouns for fiduciaries, so certificate-of-trust.docx falls back with `| default(client.pronoun_subject)`."
+  },
+  "fiduciaries.trustee.co_successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-successor trustee, serving alongside the successor trustee."
+  },
+  "fiduciaries.trustee.co_second_successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-second-successor trustee, serving alongside the second successor trustee."
+  },
+  "fiduciaries.trustee.successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Successor trustee's relationship to the client, e.g. Daughter."
+  },
+  "fiduciaries.trustee.second_successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Second successor trustee's relationship to the client."
+  },
+  "fiduciaries.agent.successor.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Successor financial agent under the power of attorney."
+  },
+  "fiduciaries.spouse_agent.primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Financial agent named in the spouse's power of attorney (the spouse's own appointment, not the client's)."
+  },
+  "fiduciaries.spouse_agent.co_primary.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-agent named in the spouse's power of attorney."
+  },
+  "fiduciaries.spouse_agent.successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Successor agent named in the spouse's power of attorney."
+  },
+  "fiduciaries.spouse_executor.primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Personal representative named in the spouse's will."
+  },
+  "fiduciaries.spouse_executor.co_primary.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Co-personal representative named in the spouse's will."
+  },
+  "fiduciaries.spouse_executor.successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Successor personal representative named in the spouse's will."
+  },
+  "guardians.excluded": {
+    "type": "array",
+    "required": false,
+    "description": "Individuals excluded from serving as guardian. Reference the container directly in {% for %} and {% if %}; each member carries .full_name and .reason."
+  },
+  "guardians.primary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Primary guardian's relationship to the children."
+  },
+  "guardians.successor.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Successor guardian for minor children."
+  },
+  "guardians.successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Successor guardian's relationship to the children."
+  },
+  "guardians.second_successor.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Second successor guardian for minor children."
+  },
+  "guardians.second_successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Second successor guardian's relationship to the children."
+  },
+  "guardians.temporary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Temporary guardian's relationship to the children."
+  },
+  "guardians.temporary_successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Successor temporary guardian's relationship to the children."
+  },
+  "healthcare.agent.primary.city": {
+    "type": "string",
+    "required": false,
+    "description": "Primary health care agent's city, used where the address is printed in parts."
+  },
+  "healthcare.agent.primary.state": {
+    "type": "string",
+    "required": false,
+    "description": "Primary health care agent's state, used where the address is printed in parts."
+  },
+  "healthcare.agent.alternate.address": {
+    "type": "string",
+    "required": false,
+    "description": "Alternate health care agent's street address."
+  },
+  "healthcare.agent.alternate.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Alternate health care agent's phone number."
+  },
+  "healthcare.agent.alternate.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Alternate health care agent's relationship to the client."
+  },
+  "healthcare.agent.second_alternate.address": {
+    "type": "string",
+    "required": false,
+    "description": "Second alternate health care agent's street address."
+  },
+  "healthcare.agent.second_alternate.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Second alternate health care agent's phone number."
+  },
+  "healthcare.agent.second_alternate.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Second alternate health care agent's relationship to the client."
+  },
+  "healthcare.spouse_agent.primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Health care agent named in the spouse's proxy (the spouse's own appointment, not the client's)."
+  },
+  "healthcare.spouse_agent.primary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the spouse's health care agent to the spouse."
+  },
+  "healthcare.spouse_agent.alternate.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Alternate health care agent named in the spouse's proxy."
+  },
+  "hipaa.include_trustees": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the HIPAA authorization also releases information to the trustee and successor trustee."
+  },
+  "dpoa.include_advanced_trust_gifting": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney includes advanced trust and gifting powers."
+  },
+  "dpoa.include_entity_powers": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney includes powers over business entities."
+  },
+  "dpoa.include_extended_personal_care": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney includes extended personal care powers."
+  },
+  "pour_over.alternate_disposition_text": {
+    "type": "string",
+    "required": false,
+    "description": "Pour-over will: the paragraph disposing of the estate if the trust is not in effect. Defaults to standard language when unset."
+  },
+  "family.additional_disinheritance_language": {
+    "type": "string",
+    "required": false,
+    "description": "Extra attorney-drafted disinheritance language appended to the standard clause."
+  },
+  "state": {
+    "type": "string",
+    "required": false,
+    "description": "State rules block for the governing jurisdiction. Use state.code for the code itself."
+  },
+  "state.code": {
+    "type": "string",
+    "required": true,
+    "description": "Two-letter code of the governing state, e.g. MA. Pass this as the second argument to include_clause() for state-specific clauses."
+  },
+  "specific_gifts": {
+    "type": "array",
+    "required": false,
+    "description": "Specific gifts of property or cash. Reference the container directly in {% for %} and {% if %}; see specific_gifts[] for member fields."
+  },
+  "charitable_gifts": {
+    "type": "array",
+    "required": false,
+    "description": "Charitable gifts. Reference the container directly in {% for %} and {% if %}; see charitable_gifts[] for member fields."
+  },
+  "trust.display_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Trust name formatted for display in the document body, e.g. \"JANE EXAMPLE REVOCABLE TRUST, U/A dated May 21, 2026\". Prefer this over trust.name in running text."
+  },
+  "trust.residual_beneficiary": {
+    "type": "string",
+    "required": false,
+    "description": "Residual beneficiary designation in words, e.g. \"Descendants, per stirpes\"."
+  },
+  "trust.include_common_trust_for_children": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust holds children's shares in a single common trust before splitting them."
+  },
+  "trust.special_distributions_age": {
+    "type": "number",
+    "required": false,
+    "description": "Age at which the common trust for children ends and shares are split out."
+  },
+  "trust.disinherited": {
+    "type": "array",
+    "required": false,
+    "description": "Persons specifically disinherited by the trust. Reference the container directly in {% for %} and {% if %}; see trust.disinherited[] for member fields."
+  },
+  "trust.blended_family": {
+    "type": "string",
+    "required": false,
+    "description": "Blended-family block for a joint trust. Test it for existence, then read .client_children and .spouse_children."
+  },
+  "trust.blended_family.client_children": {
+    "type": "array",
+    "required": false,
+    "description": "Children of the client grantor in a blended family. Reference the container directly in {% for %} and {% if %}; see trust.blended_family.client_children[] for member fields."
+  },
+  "trust.blended_family.spouse_children": {
+    "type": "array",
+    "required": false,
+    "description": "Children of the spouse grantor in a blended family. Reference the container directly in {% for %} and {% if %}; see trust.blended_family.spouse_children[] for member fields."
+  },
+  "trust.remote_beneficiaries.individuals": {
+    "type": "array",
+    "required": false,
+    "description": "Remote beneficiaries taking if no descendants survive. Reference the container directly in {% for %} and {% if %}; see trust.remote_beneficiaries.individuals[] for member fields."
+  },
+  "trust.tangible_personal_property.beneficiaries": {
+    "type": "array",
+    "required": false,
+    "description": "Beneficiaries of tangible personal property. Reference the container directly in {% for %} and {% if %}; see trust.tangible_personal_property.beneficiaries[] for member fields."
+  },
+  "trust.tangible_personal_property.priority_beneficiaries": {
+    "type": "array",
+    "required": false,
+    "description": "Beneficiaries with first choice of tangible personal property. Reference the container directly in {% for %} and {% if %}; see trust.tangible_personal_property.priority_beneficiaries[] for member fields."
+  },
+  "assets": {
+    "type": "string",
+    "required": false,
+    "description": "Asset schedule block. Iterate assets[\"items\"]; each item carries .description, .institution, .owner, .category_label, .estimated_value, .gross_value, and .net_value."
+  },
+  "assets.total_gross_value": {
+    "type": "string",
+    "required": false,
+    "description": "Total gross value of the asset schedule, already formatted as currency."
+  },
+  "assets.total_net_value": {
+    "type": "string",
+    "required": false,
+    "description": "Total net value of the asset schedule, already formatted as currency."
+  },
+  "funding_plan.narrative": {
+    "type": "string",
+    "required": false,
+    "description": "Trust funding plan prose, section by section. Contains markup — render it with the `| safe` filter."
+  },
+  "funding_plan.checklist_items": {
+    "type": "array",
+    "required": false,
+    "description": "Ordered trust funding steps. Each item carries .number and .action."
+  },
+  "homestead.property_address_line": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Address of the homestead property, on one line."
+  },
+  "homestead.beneficiary_names": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Beneficial owners of the homestead, joined for display, e.g. \"Jane Example and John Example\"."
+  },
+  "homestead.primary_beneficiary_name": {
+    "type": "string",
+    "required": false,
+    "description": "First beneficial owner of the homestead, where the form needs a single name."
+  },
+  "homestead.beneficiary_pronoun_possessive": {
+    "type": "string",
+    "required": false,
+    "description": "Possessive pronoun matching the homestead beneficiaries, e.g. \"their\"."
+  },
+  "homestead.trustee_pronoun_possessive": {
+    "type": "string",
+    "required": false,
+    "description": "Possessive pronoun matching the declaring trustee."
+  },
+  "homestead.servicemember_names": {
+    "type": "string",
+    "required": false,
+    "description": "Names of any beneficiaries claiming the servicemember homestead exemption. Blank when none."
+  },
+  "homestead.deed_registry_district": {
+    "type": "string",
+    "required": false,
+    "description": "Registry of deeds district where the property deed is recorded, e.g. Suffolk."
+  },
+  "homestead.deed_book": {
+    "type": "string",
+    "required": false,
+    "description": "Book number of the recorded property deed."
+  },
+  "homestead.deed_page": {
+    "type": "string",
+    "required": false,
+    "description": "Page number of the recorded property deed."
+  },
+  "homestead.trust_deed_book": {
+    "type": "string",
+    "required": false,
+    "description": "Book number of the deed transferring the property into the trust."
+  },
+  "homestead.trust_deed_page": {
+    "type": "string",
+    "required": false,
+    "description": "Page number of the deed transferring the property into the trust."
+  },
+  "homestead.certificate_number": {
+    "type": "string",
+    "required": false,
+    "description": "Land court certificate of title number, for registered land. Blank for recorded land."
+  },
+  "homestead.land_court_document_number": {
+    "type": "string",
+    "required": false,
+    "description": "Land court document number, for registered land. Blank for recorded land."
+  },
+  "young_adult.parent1.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Young-adult plan: first parent, taking the residue and serving as personal representative. Built from the client's own record."
+  },
+  "young_adult.parent2.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Young-adult plan: second parent, taking the residue and serving as personal representative. Built from the spouse's record."
+  },
+  "client.first_name": {
+    "type": "string",
+    "required": false,
+    "description": "Client's first name, split from the full legal name. Used where a summary addresses the client informally; falls back to client.full_name when blank."
+  },
+  "spouse.first_name": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's first name, split from the full legal name. Used where a summary addresses the spouse informally; falls back to spouse.full_name when blank."
+  },
+  "children[]": {
+    "type": "string",
+    "required": false,
+    "description": "A single child by position, e.g. children[0]. Used by fixed-row worksheets that print a set number of children; prefer iterating the children container instead."
   }
 }
