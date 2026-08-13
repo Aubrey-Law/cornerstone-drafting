@@ -950,6 +950,16 @@
     "required": "conditional",
     "description": "Who may receive the education records, in the student's own words, e.g. both parents."
   },
+  "will_cp.parent1.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "College Preparation Plan will: first parent taking the residue of the student's estate. One parent is enough — the template drops to a single-parent residue clause."
+  },
+  "will_cp.parent2.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "College Preparation Plan will: second parent taking the residue, divided equally with the first or to the survivor of them."
+  },
   "dpoa.include_advanced_trust_gifting": {
     "type": "boolean",
     "required": false,

@@ -24,6 +24,7 @@ export const NODE_SUPPORTED_PACKAGES = new Set<NodeEstatePackageName>([
   'testamentary-trust-will',
   'young-adult-estate-plan',
   'ferpa-release',
+  'will-cp',
 ])
 
 export function isNodeEstatePackageSupported(packageName: string): packageName is NodeEstatePackageName {

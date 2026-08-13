@@ -245,6 +245,16 @@ Massachusetts individual single revocable trust package based on the provided fi
 
 Required fields: `client.full_name`, `client.state`, `client.county`, `client.pronoun_subject`, `client.pronoun_possessive`, `trust.name`, `trust.contingent_beneficiary.full_name`, `trust.tangible_personal_property.distribution_method`, `trust.descendants_distribution.method`, `trust.remote_beneficiaries.individuals`, `fiduciaries.trustee.primary.full_name`, `fiduciaries.trustee.successor.full_name`, `fiduciaries.trustee.second_successor.full_name`, `fiduciaries.trustee.co_trustees_action`, `execution.signing_county`, `execution.notary_commission`, `execution.id_type`
 
+## will-cp
+
+College Preparation Plan simple will: tangible personal property by memorandum and the residue to the student's parents (or the survivor of them), with the standard Massachusetts fiduciary powers and administrative provisions. Converted from the firm's will_cp_v1 source form.
+
+| Document | Template | Output |
+|---|---|---|
+| Last Will and Testament | `templates/will-cp.docx` | `06-last-will-and-testament.docx` |
+
+Required fields: `client.full_name`, `client.city`, `client.county`, `fiduciaries.executor.primary.full_name`, `will_cp.parent1.full_name`
+
 ## young-adult-estate-plan
 
 Massachusetts young adult estate plan package for children age 17.5 through 25.
@@ -285,6 +295,7 @@ How `deriveEstateGeneratorPackages()` (lib/estateGenerator/toGeneratorData.ts) t
 | `include_homestead_trustee` | `homestead-trustee` | always when included |
 | `include_young_adult_estate_plan` | `young-adult-estate-plan` | one package per qualifying child (DOB age 17.5–25) |
 | `include_ferpa_release` | `ferpa-release` | College Preparation Plan sheets, when the student asked for a FERPA release |
+| `include_will_cp` | `will-cp` | College Preparation Plan sheets, when the simple will is elected (`college_prep.will_include`); the estate will packages never select on this track |
 | `include_estate_plan_summary` | `estate-plan-summary` | appended whenever any other package generates, unless explicitly `false` |
 
 Manifests never selected by `deriveEstateGeneratorPackages()`: `core-estate`, `design-summary` (`design-summary` is generated from its own design-sheet action; `core-estate` is legacy and not in `NODE_SUPPORTED_PACKAGES`).

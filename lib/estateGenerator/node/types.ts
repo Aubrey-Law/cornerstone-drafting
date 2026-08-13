@@ -26,6 +26,7 @@ export type NodeEstatePackageName =
   | 'homestead-trustee'
   | 'young-adult-estate-plan'
   | 'ferpa-release'
+  | 'will-cp'
 
 export interface NodeEstatePackageDocument {
   id: string

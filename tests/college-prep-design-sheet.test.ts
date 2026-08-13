@@ -20,6 +20,8 @@ import {
   defaultDocumentInclusions,
   getDocumentInclusions,
   getEstatePlanDesignSetup,
+  mergeDecisionUpdates,
+  setDocumentInclusion,
 } from '@/lib/designSheetDocumentInclusions'
 import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
@@ -28,6 +30,7 @@ import { buildDesignSheetGroups } from '@/app/admin/drafting/[matterId]/design/d
 import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import { computeDesignSheetReadiness } from '@/lib/designSheetReadiness'
 import { deriveDocuments } from '@/lib/draftPayload/helpers'
+import { buildCollegePrepWill } from '@/lib/draftPayload/willCp'
 import { deriveEstateGeneratorPackages } from '@/lib/estateGenerator/toGeneratorData'
 import type { DraftPayload } from '@/lib/buildDraftPayload'
 import type { IntakeSnapshot } from '@/lib/queries'
@@ -661,5 +664,92 @@ describe('college prep design sheet — switching an existing sheet between trac
     expect(ids).not.toContain(DESIGN_SECTION_IDS.trustDetails)
     expect(buildDesignSheetGroups([], 'college_prep').map(group => group.id))
       .not.toContain('trust')
+  })
+})
+
+describe('college prep design sheet — the simple will (will-cp)', () => {
+  it('stays out of the package until the attorney elects it', () => {
+    const sheet = seededSheet()
+
+    expect(getDocumentInclusions(sheet).will).toBe(false)
+    expect(buildCollegePrepWill(sheet)).toBeNull()
+  })
+
+  it('selects will-cp — and never an estate will — once elected, even with an inert plan_type', () => {
+    const sheet = seededSheet()
+    // A matter reclassified from the estate track keeps its plan_type; the
+    // college-prep will must not resurrect the pour-over will through it.
+    // The seed stores `document_inclusions.will: false`, so the design section
+    // writes the answer and the inclusion together — mirror that here.
+    const elected = {
+      ...sheet,
+      plan_type: 'pour_over',
+      decisions: mergeDecisionUpdates(
+        sheet,
+        prev => setCollegePrepDesign(prev, {
+          will_include: true,
+          will_parent1_name: 'Alma Delgado',
+          will_parent2_name: 'Marcus Delgado',
+        }),
+        prev => setDocumentInclusion(prev, 'will', true),
+      ),
+    } as DesignSheet
+
+    expect(getDocumentInclusions(elected).will).toBe(true)
+    expect(buildCollegePrepWill(elected)).toEqual({
+      parent1_name: 'Alma Delgado',
+      parent2_name: 'Marcus Delgado',
+    })
+
+    const documents = deriveDocuments(
+      'EP', [], false, false, false, elected.plan_type,
+      getDocumentInclusions(elected), 'outright_to_spouse',
+      getEstatePlanDesignSetup(elected), [], 'college_prep',
+    )
+
+    expect(documents).toMatchObject({
+      include_will_cp: true,
+      include_trust: false,
+      include_pour_over_will: false,
+      include_simple_will: false,
+      include_testamentary_trust_will: false,
+      // The will's tangible-property clause disposes by memorandum, so the
+      // Personal Property Memorandum rides along with the will.
+      include_ppm: true,
+    })
+
+    const packages = deriveEstateGeneratorPackages({
+      matter: { type: 'individual' }, trust: null, documents,
+    } as unknown as DraftPayload)
+
+    expect(packages).toContain('will-cp')
+    expect(packages).toContain('personal-property-memorandum')
+    expect(packages).not.toContain('pourover-will')
+    expect(packages).not.toContain('simple-will')
+  })
+
+  it('blocks drafting until a parent takes the residue', () => {
+    const sheet = seededSheet()
+    const noParent = {
+      ...sheet,
+      decisions: setCollegePrepDesign(sheet, { will_include: true }),
+    } as DesignSheet
+
+    expect(collegePrepDraftingBlockers(noParent).map(blocker => blocker.field))
+      .toContain('college_prep.will_parent1_name')
+
+    const named = {
+      ...noParent,
+      decisions: setCollegePrepDesign(noParent, { will_parent1_name: 'Alma Delgado' }),
+    } as DesignSheet
+
+    expect(collegePrepDraftingBlockers(named).map(blocker => blocker.field))
+      .not.toContain('college_prep.will_parent1_name')
+  })
+
+  it('never builds a will payload for an estate sheet', () => {
+    const estate = { decisions: { document_inclusions: { will: true } } } as unknown as DesignSheet
+
+    expect(buildCollegePrepWill(estate)).toBeNull()
   })
 })

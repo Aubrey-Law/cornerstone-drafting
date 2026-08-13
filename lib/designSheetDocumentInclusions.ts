@@ -73,20 +73,24 @@ export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' |
   const isMarried = sheet.matter_type === 'couple'
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(sheet.children)
 
-  // A College Preparation Plan is exactly four documents for one student: the
-  // durable power of attorney, health care proxy, HIPAA authorization, and
-  // living will. Nothing on the estate side of this list applies.
+  // A College Preparation Plan is four documents for one student — the durable
+  // power of attorney, health care proxy, HIPAA authorization, and living will
+  // — plus an optional simple will (residue to the parents) when the family
+  // asks for one. Nothing else on the estate side of this list applies.
   if (isCollegePrepDesignSheet(sheet)) {
+    const collegePrep = getCollegePrepDesign(sheet)
     return {
       trust: false,
-      will: false,
+      // The will-cp simple will, on only when elected in the College
+      // Preparation Plan section — same pattern as the FERPA release.
+      will: collegePrep.will_include === true,
       dpoa: true,
       healthcare: true,
       deed: false,
       young_adult_estate_plan: false,
       // Education records sit outside HIPAA, so the release is a separate
       // document — and only when the student asked for one.
-      ferpa_release: getCollegePrepDesign(sheet).ferpa_release === true,
+      ferpa_release: collegePrep.ferpa_release === true,
       spouse_docs: false,
     }
   }

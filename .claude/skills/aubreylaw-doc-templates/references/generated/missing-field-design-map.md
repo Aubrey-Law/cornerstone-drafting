@@ -220,6 +220,8 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.tangible_personal_property.distribution_method` | Tangible property distribution | Estate Plan Design | `tangible_property_distribution` |
 | `trust.tangible_personal_property.priority_beneficiaries` | Priority Beneficiaries | Trust Details | (section) |
 | `trust.tangible_personal_property.priority_beneficiaries[]` | Priority Beneficiaries | Trust Details | (section) |
+| `will_cp.parent1.full_name` | Parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent1_name` |
+| `will_cp.parent2.full_name` | Second parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent2_name` |
 | `will.bond` | Bond | Will Details | (section) |
 | `will.include_disclaimer_article` | Include Disclaimer Article | Will Details | (section) |
 | `will.include_self_proving_affidavit` | Include Self Proving Affidavit | Will Details | (section) |

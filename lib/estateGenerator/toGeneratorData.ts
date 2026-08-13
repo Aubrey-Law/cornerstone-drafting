@@ -47,6 +47,7 @@ export type EstateGeneratorPackage =
   | 'homestead-trustee'
   | 'young-adult-estate-plan'
   | 'ferpa-release'
+  | 'will-cp'
 
 export interface EstateGeneratorData {
   client: Record<string, unknown>
@@ -66,6 +67,7 @@ export interface EstateGeneratorData {
   healthcare: Record<string, unknown>
   hipaa: Record<string, unknown>
   ferpa: Record<string, unknown>
+  will_cp: Record<string, unknown>
   execution: Record<string, unknown>
   specific_gifts: unknown[]
   charitable_gifts: unknown[]
@@ -402,6 +404,10 @@ export function deriveEstateGeneratorPackages(payload: DraftPayload): EstateGene
     packages.push('ferpa-release')
   }
 
+  if (docs.include_will_cp) {
+    packages.push('will-cp')
+  }
+
   if (packages.length > 0 && docs.include_estate_plan_summary !== false) {
     packages.push('estate-plan-summary')
   }
@@ -439,6 +445,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   const includesWill = docs.include_pour_over_will
     || docs.include_simple_will
     || docs.include_testamentary_trust_will
+    || docs.include_will_cp === true
   const showTrustee = Boolean(docs.include_trust && payload.fiduciaries.trustee_initial)
   const showPersonalRepresentative = Boolean(includesWill && payload.fiduciaries.pr_primary)
   const showDpoaAgent = Boolean(docs.include_dpoa && payload.fiduciaries.dpoa_primary)
@@ -855,6 +862,10 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       spouse_anatomical_restrictions: hcpProvisions.spouse_anatomical_restrictions,
       client_advance_directive: hcpProvisions.client_advance_directive,
       spouse_advance_directive: hcpProvisions.spouse_advance_directive,
+    },
+    will_cp: {
+      parent1: person(payload.will_cp?.parent1_name),
+      parent2: person(payload.will_cp?.parent2_name),
     },
     ferpa: {
       school_name: ferpa?.school_name ?? '',
