@@ -536,6 +536,8 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     client: {
       ...compactObject({
         full_name: payload.client.full_name,
+        // Summary documents address the client by first name and fall back to
+        // the full name when it is blank; compactObject drops the empty string.
         first_name: payload.client.first_name,
         last_name: payload.client.last_name,
         aka: payload.client.aka,

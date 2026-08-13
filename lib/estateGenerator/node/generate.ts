@@ -43,7 +43,8 @@ export interface GenerateNodeEstatePackageArgs {
   root?: string
   allowDraft?: boolean
   clauseSnapshot?: EstateClauseSnapshot
-  templateResolver?: (bundledPath: string) => Promise<ResolvedDocumentTemplate>
+  // Return null to force the bundled template (the same behavior tests get).
+  templateResolver?: (bundledPath: string) => Promise<ResolvedDocumentTemplate | null>
 }
 
 export interface GenerateEstatePlanDocumentsNodeOptions {

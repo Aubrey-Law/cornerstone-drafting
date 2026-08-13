@@ -433,6 +433,35 @@ describe('draft payload generator gap wiring', () => {
     expect(payload.goals_notes).toBe('Update deed')
   })
 
+  it('carries client and spouse first names into generator data', () => {
+    // estate-plan-summary.docx addresses each person by first name; the payload
+    // has always split them, but toEstateGeneratorData used to drop them, so
+    // every summary silently fell through to `or client.full_name`.
+    const data = toEstateGeneratorData(basePayload({
+      spouse: {
+        first_name: 'Riley',
+        last_name: 'Coupleton',
+        full_name: 'Riley Coupleton',
+        aka: null,
+        preferred_pronoun: null,
+        citizenship: null,
+        dob: null,
+      } as DraftPayload['spouse'],
+    }))
+
+    expect(data.client.first_name).toBe('Jane')
+    expect(data.spouse?.first_name).toBe('Riley')
+  })
+
+  it('omits a blank first name so the template falls back to the full name', () => {
+    const data = toEstateGeneratorData(basePayload({
+      client: { ...basePayload().client, first_name: '', full_name: 'Cher' },
+    }))
+
+    expect(data.client).not.toHaveProperty('first_name')
+    expect(data.client.full_name).toBe('Cher')
+  })
+
   it('maps legacy excluded guardian name when structured entries are absent', () => {
     const excluded = draftPayloadExcludedGuardians({
       excluded_guardian_flag: true,
