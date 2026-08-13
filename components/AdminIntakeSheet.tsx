@@ -22,6 +22,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatPhoneInput } from '@/lib/phone'
+import { parsePlanningObjectives, PLANNING_OBJECTIVES_NOTES_KEY } from '@/lib/intakePlanningObjectives'
 import { DEFAULT_INTAKE_TRACK, getIntakeTrack, type IntakeTrack } from '@/lib/intakeTrack'
 import {
   MA_COUNTY_OPTIONS,
@@ -1178,7 +1179,9 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
     has_business: bool('has_business'),
     business_description: typeof financial.business_description === 'string' ? financial.business_description : '',
     has_investments: bool('has_investments'),
-    planning_objectives: str('planning_objectives'),
+    // Portal answers live in the object shape; the admin textarea edits only
+    // the free-text `notes` key so a save never stomps the client's answers.
+    planning_objectives: parsePlanningObjectives(raw['planning_objectives'])?.[PLANNING_OBJECTIVES_NOTES_KEY] ?? '',
     has_existing_plan: bool('has_existing_plan'),
     has_will: false,
     has_trust: false,

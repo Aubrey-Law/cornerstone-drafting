@@ -6,6 +6,7 @@ import { requireAdminServerAction } from '@/lib/serverActionAuth'
 import { revalidatePath } from 'next/cache'
 import type { AdminIntakeFormData } from '@/types/adminIntake'
 import { formatPhoneForStorage } from '@/lib/phone'
+import { parsePlanningObjectives, PLANNING_OBJECTIVES_NOTES_KEY } from '@/lib/intakePlanningObjectives'
 import { syncLeadFromIntake } from '@/lib/syncLeadFromIntake'
 import { seedDesignSheetAndJobs } from '@/lib/intakeSeed'
 import { getIntakeReadinessFlags, type IntakeReadinessFlag } from '@/lib/intakeReadiness'
@@ -204,6 +205,59 @@ function buildPayload(data: AdminIntakeFormData, status: string) {
   }
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** Overlay the admin sheet's few JSONB keys onto what the portal already
+ *  stored, instead of replacing the whole column. The portal packs far more
+ *  into these objects than the admin sheet edits — `financial_details` carries
+ *  `asset_types`, per-asset `financial_*` answers and the `real_estate` array;
+ *  `family_details` carries the `referral` block — and a wholesale replace
+ *  silently erased all of it on every admin save. */
+async function mergeJsonbDetails(
+  admin: ReturnType<typeof getAdminClient>,
+  intakeId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const { data: existing } = await admin
+    .from('client_intake')
+    .select('financial_details, family_details, planning_objectives')
+    .eq('id', intakeId)
+    .maybeSingle()
+  if (!existing) return
+
+  if (isPlainRecord(existing.financial_details)) {
+    const adminFinancial = isPlainRecord(payload.financial_details) ? payload.financial_details : {}
+    payload.financial_details = { ...existing.financial_details, ...adminFinancial }
+  }
+
+  if (isPlainRecord(existing.family_details)) {
+    const merged: Record<string, unknown> = { ...existing.family_details }
+    const adminFamily = payload.family_details
+    if (isPlainRecord(adminFamily) && typeof adminFamily.notes === 'string') {
+      merged.notes = adminFamily.notes
+    } else {
+      delete merged.notes
+    }
+    payload.family_details = Object.keys(merged).length > 0 ? merged : null
+  }
+
+  // The portal stores an object of client answers here; the admin textarea
+  // edits only its free-text `notes` key. Merge so neither writer erases the
+  // other's shape.
+  {
+    const existingObjectives = parsePlanningObjectives(existing.planning_objectives) ?? {}
+    const adminText = typeof payload.planning_objectives === 'string'
+      ? payload.planning_objectives.trim()
+      : ''
+    const merged = { ...existingObjectives }
+    if (adminText) merged[PLANNING_OBJECTIVES_NOTES_KEY] = adminText
+    else delete merged[PLANNING_OBJECTIVES_NOTES_KEY]
+    payload.planning_objectives = Object.keys(merged).length > 0 ? merged : null
+  }
+}
+
 function fiduciaryNameKey(first: unknown, last: unknown): string {
   return `${String(first ?? '').trim().toLowerCase()}|${String(last ?? '').trim().toLowerCase()}`
 }
@@ -228,7 +282,10 @@ async function persistAdminFiduciaries(
     last_name: e.last_name,
     preferred_pronoun: e.preferred_pronoun,
   }))
-  await persistFiduciaryRoles(admin, intakeId, entries)
+  // The admin sheet only captures client-party fiduciaries
+  // (ADMIN_FIDUCIARY_FIELD_MAP), so scope the wipe to the client party —
+  // otherwise every admin save deletes spouse rows the portal wrote.
+  await persistFiduciaryRoles(admin, intakeId, entries, { parties: ['client'] })
 }
 
 // ── Fetch existing intake data (for pre-population) ───────────────────────────
@@ -401,6 +458,7 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
     ? currentStatus
     : 'draft'
   const payload: Record<string, unknown> = buildPayload(args.data, saveStatus)
+  await mergeJsonbDetails(admin, intakeId, payload)
 
   const { error } = await admin.from('client_intake').update(payload).eq('id', intakeId)
   if (error) throw new Error(error.message)
@@ -470,8 +528,9 @@ function buildExtendedDataNote(data: AdminIntakeFormData) {
 export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: string }> {
   await requireAdminServerAction()
   const admin = getAdminClient()
-  const payload = buildPayload(args.data, 'submitted')
+  const payload: Record<string, unknown> = buildPayload(args.data, 'submitted')
   const intakeId = await findOrCreateIntake(args, payload)
+  await mergeJsonbDetails(admin, intakeId, payload)
 
   const { error } = await admin
     .from('client_intake')
