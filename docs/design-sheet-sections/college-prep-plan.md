@@ -241,7 +241,25 @@ converts as `CP` whenever the College Preparation Plan questionnaire was the one
 answered — and it is already carrying the estate checklist by then, because
 generation is a one-shot snapshot.
 
-Conversion passes `retemplate: true`, and `templateSwapVerdict` decides:
+The checklist therefore self-corrects in the same two places the plan track
+does, through `resyncMatterSlaTemplate`:
+
+- **`PATCH /api/admin/matter-details`** when the practice area is written, so a
+  reclassification lands everywhere at once.
+- **`loadDraftingMatterContext`** on every drafting load, catching matters
+  changed by a backfill, an import, or SQL — and the CP matters that predate
+  `college_prep_sla_v1` and were still being asked for a trust and deeds.
+
+It never *creates* a checklist, only replaces a mismatched one. A matter with no
+tasks has none for a reason — it predates the SLA engine, or its checklist was
+cleared deliberately — and generating forty-odd tasks under someone who only
+opened the workspace would be a surprise, most of them already overdue against a
+Day 0 in the past. It also stops rather than deleting anything when the target
+template is not in the database yet, which is what an unapplied migration looks
+like from inside the app.
+
+Conversion passes `retemplate: true` for the same swap at hire time.
+`templateSwapVerdict` is what decides, in every case:
 
 | Existing checklist | Verdict |
 | --- | --- |
@@ -254,6 +272,10 @@ The refusal is deliberate: a checklist of the wrong shape is a smaller problem
 than losing the firm's record of what was done. When it happens the matter keeps
 the estate checklist and the warning names the matter, so it can be fixed by
 hand.
+
+A swap regenerates from the matter's own anchors, so the new dates are real
+rather than carried over: post-engagement tasks count from the signature date,
+and anything waiting on a discovery call that never happened stays undated.
 
 ## Known gaps
 

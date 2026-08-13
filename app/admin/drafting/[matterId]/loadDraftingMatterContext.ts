@@ -12,6 +12,7 @@ import { computeDesignSheetDefaults } from '@/lib/designSheetDefaults'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
 import { reconcilePlanTrackDecisions } from '@/lib/designSheet/reconcilePlanTrack'
+import { resyncMatterSlaTemplate } from '@/lib/slaTasks/generate'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { IntakeSnapshot } from '@/lib/queries'
 
@@ -91,6 +92,12 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
       }
     }
   }
+
+  // The checklist follows the practice area for the same reason the plan track
+  // does. Chosen once at creation, it would otherwise outlive a reclassification
+  // — a College Preparation Plan still being asked for a trust and deeds. A
+  // no-op unless the matter is on the wrong template with none of it worked.
+  await resyncMatterSlaTemplate(admin, matterId, normalizedPracticeArea)
 
   const matterType = (matterRow?.matter_type as 'individual' | 'couple' | null | undefined) ?? null
   const matterWithPracticeArea = { ...matter, practice_area: practiceArea }
