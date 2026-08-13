@@ -37,6 +37,7 @@ the student regardless of age or who pays tuition.
 | Date of birth | `{{ client.date_of_birth }}` |
 | Institution | `{{ ferpa.school_name }}` |
 | Campus (conditional line) | `{{ ferpa.school_location }}` |
+| Student ID (conditional line) | `{{ ferpa.student_id }}` |
 | Authorized Recipients | `{{ ferpa.recipients }}` |
 | Record category bullets | `{{ record.label }}` inside `{% for record in ferpa.records %}` |
 | Execution date | `{{ execution.display_doc_date }}` |
@@ -47,7 +48,8 @@ the student regardless of age or who pays tuition.
 | --- | --- |
 | `ferpa.all_records` | Section 2 authorizes all education records in one sentence instead of iterating the category list |
 | `ferpa.school_location` | Prints the "Campus:" line; omitted when neither city nor state is known |
-| `ferpa_includes_health_center` | Adds the campus-treatment-records paragraph to section 2, stating that health and counseling records fall outside FERPA's "education records" definition (34 C.F.R. § 99.3) and are covered by the separate HIPAA authorization |
+| `ferpa.student_id` | Prints the "Student ID:" line; omitted when the student has no campus ID yet |
+| `ferpa.includes_health_center` | Adds the campus-treatment-records paragraph to section 2, stating that health and counseling records fall outside FERPA's "education records" definition (34 C.F.R. § 99.3) and are covered by the separate HIPAA authorization |
 
 The campus-treatment paragraph deliberately rides inside section 2 rather than
 taking a number of its own, so sections 3–7 keep static numbering whether or not

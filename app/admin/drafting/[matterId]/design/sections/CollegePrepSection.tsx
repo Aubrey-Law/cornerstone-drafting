@@ -164,6 +164,13 @@ export function CollegePrepSection({ sheet, onChange, matterId, practiceArea }: 
             onChange={value => update({ school_state: value.trim() || null })}
             fieldName="college_prep.school_state"
           />
+          <AttorneyInput
+            label="Student ID"
+            value={design.student_id ?? ''}
+            placeholder="campus ID number, if known"
+            onChange={value => update({ student_id: value.trim() || null })}
+            fieldName="college_prep.student_id"
+          />
         </div>
 
         <div className="mt-4">

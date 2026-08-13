@@ -910,6 +910,11 @@
     "required": false,
     "description": "Campus city and state joined for the institution line, e.g. Boston, MA."
   },
+  "ferpa.student_id": {
+    "type": "string",
+    "required": false,
+    "description": "Student's campus ID number, printed under the student's name when the firm has it."
+  },
   "ferpa.records": {
     "type": "array",
     "required": "conditional",
@@ -934,6 +939,11 @@
     "type": "boolean",
     "required": false,
     "description": "Whether every education record category the questionnaire offers was selected."
+  },
+  "ferpa.includes_health_center": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether campus health or counseling records are among the categories selected, which the release names as excluded from FERPA's education-records definition."
   },
   "ferpa.recipients": {
     "type": "string",

@@ -105,6 +105,13 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   const ferpa = { ...recordValue(data.ferpa) }
   const ferpaRecords = arrayValue(ferpa.records)
   ferpa.records = ferpaRecords
+  // Recomputed from the record list rather than trusted from the payload: the
+  // flag only summarizes that list, and a stored value that had fallen out of
+  // step with it would put a limit in the release the categories contradict.
+  // (`all_records` cannot be recomputed here — whether every category was
+  // selected is a fact about the questionnaire, not about this list.)
+  const ferpaIncludesHealthCenter = ferpaRecords.some(record => record.key === 'health_center')
+  ferpa.includes_health_center = ferpaIncludesHealthCenter
 
   const execution = { ...recordValue(data.execution) }
   const signingScheduled = Boolean(execution.signing_scheduled)
@@ -204,8 +211,10 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     ferpa_all_records: Boolean(ferpa.all_records),
     // Campus treatment records are excluded from FERPA's education-records
     // definition (34 CFR 99.3), so the release names the limit rather than
-    // leaving the student to assume it covers the health center.
-    ferpa_includes_health_center: ferpaRecords.some(record => record.key === 'health_center'),
+    // leaving the student to assume it covers the health center. The FERPA
+    // template reads `ferpa.includes_health_center`; this is its flat sibling,
+    // alongside the other conditional flags, off the same derivation.
+    ferpa_includes_health_center: ferpaIncludesHealthCenter,
     uses_revocable_trust: Boolean(planning.uses_revocable_trust),
     includes_pour_over_will: Boolean(planning.include_pour_over_will),
     includes_simple_will: Boolean(planning.include_simple_will),

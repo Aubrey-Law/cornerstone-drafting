@@ -30,7 +30,9 @@
     "school_city": "Boston",
     "school_state": "MA",
     "school_location": "Boston, MA",
+    "student_id": "001234567",
     "all_records": false,
+    "includes_health_center": true,
     "recipients": "Alma Delgado and Marcus Delgado, my parents",
     "records": [
       { "key": "grades", "label": "Grades and transcripts" },

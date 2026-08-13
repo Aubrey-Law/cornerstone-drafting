@@ -128,6 +128,12 @@ const doc = new Document({
         control('{% if ferpa.school_location %}'),
         labelled('Campus', '{{ ferpa.school_location }}'),
         control('{% endif %}'),
+        // Registrars index by student ID, and a release naming the wrong student
+        // does nothing. Conditional because an incoming student often has no ID
+        // number yet when the plan is drafted.
+        control('{% if ferpa.student_id %}'),
+        labelled('Student ID', '{{ ferpa.student_id }}'),
+        control('{% endif %}'),
 
         // ── Statement of intent ────────────────────────────────────────────
         paragraph(
@@ -178,7 +184,7 @@ const doc = new Document({
         // Campus treatment records ride inside section 2 rather than taking a
         // number of their own, so sections 3–7 keep static numbering whether or
         // not the student selected the health center.
-        control('{% if ferpa_includes_health_center %}'),
+        control('{% if ferpa.includes_health_center %}'),
         paragraph(
           [
             { text: 'Campus health and counseling records.', bold: true },

@@ -861,8 +861,10 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       school_city: ferpa?.school_city ?? '',
       school_state: ferpa?.school_state ?? '',
       school_location: ferpa?.school_location ?? '',
+      student_id: ferpa?.student_id ?? '',
       records: (ferpa?.records ?? []).map(record => ({ key: record.key, label: record.label })),
       all_records: ferpa?.all_records ?? false,
+      includes_health_center: ferpa?.includes_health_center ?? false,
       recipients: ferpa?.recipients ?? '',
     },
     hipaa: {

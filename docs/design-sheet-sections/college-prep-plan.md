@@ -93,7 +93,7 @@ dropped on read (`getCollegePrepDesign`) rather than carried into a document.
 
 | Group | Fields |
 | --- | --- |
-| School | `school_name`, `school_city`, `school_state`, `move_in_date`, `studying_abroad`, `abroad_country` |
+| School | `school_name`, `school_city`, `school_state`, `student_id`, `move_in_date`, `studying_abroad`, `abroad_country` |
 | FERPA | `ferpa_release`, `ferpa_records[]`, `ferpa_recipients` |
 | DPOA | `dpoa_effective`, `dpoa_powers[]`, `dpoa_withheld`, `dpoa_notes` |
 | Health care proxy | `hcp_limits`, `hcp_instructions` |
@@ -179,10 +179,40 @@ release is its own package, selected by its own inclusion key.
 | `document_inclusions.ferpa_release` (defaults to the student's answer) | `ferpa-release` |
 | everything else | *(none — no summary, no ancillaries)* |
 
-The FERPA release carries its own `ferpa.*` fields off `decisions.college_prep`
-— see [the placeholder map](../../tools/aubreylaw-docgeneration/docs/ferpa-release-placeholder-map.md)
-for the field and conditional tables. Its legal language was drafted from the
-statute rather than a firm source form, so it needs attorney review before
+The FERPA release carries its own `ferpa.*` fields, built off
+`decisions.college_prep` by `buildFerpaRelease`:
+
+| Field | Where it's used |
+| --- | --- |
+| `ferpa.recipients` | printed recipient list |
+| `ferpa.school_name` | printed school name |
+| `ferpa.student_id` | inside a conditional |
+| `ferpa.school_location` | inside a conditional |
+| `ferpa.records` | `{% for %}` loop over records |
+| `ferpa.all_records` | conditional flag |
+| `ferpa.includes_health_center` | conditional flag |
+
+Where each comes from:
+
+| Field | Source |
+| --- | --- |
+| `recipients` | `ferpa_recipients` |
+| `school_name` | `school_name` |
+| `student_id` | `student_id` — attorney-entered; the questionnaire does not ask, because an incoming student often has no campus ID yet |
+| `school_location` | `school_city` and `school_state` joined, e.g. `Boston, MA`; null when neither is known |
+| `records` | `ferpa_records`, each as `{ key, label }` |
+| `all_records` | derived — every category the questionnaire offers was selected |
+| `includes_health_center` | derived — `health_center` is among the selected records |
+
+The two derived flags are computed, never stored, so they cannot disagree with
+the record list they summarize. `all_records` swaps section 2 for a single
+all-records sentence instead of iterating the bullets; `includes_health_center`
+adds the paragraph saying campus treatment records fall outside FERPA's
+"education records" definition (34 C.F.R. § 99.3) and are covered by the
+separate HIPAA authorization. See
+[the placeholder map](../../tools/aubreylaw-docgeneration/docs/ferpa-release-placeholder-map.md)
+for the full document-line table. The release's legal language was drafted from
+the statute rather than a firm source form, so it needs attorney review before
 production use.
 
 ## The checklist behind the plan
