@@ -1,4 +1,4 @@
-import { getDocumentInclusions, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import { getDocumentInclusions, getEstatePlanDesignSetup, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
 import { namedPrincipalSlots } from '@/lib/designSheet/fiduciarySlotOrdering'
@@ -221,10 +221,9 @@ export function computeDesignSheetReadiness({
   const spouseExecutorAlternate = alternateContactId(sheet.spouse_executor_slots)
   const spousePoaAlternate = alternateContactId(sheet.spouse_poa_slots)
   const spouseHcpAlternate = alternateContactId(sheet.spouse_hcp_slots)
-  const estatePlanSetup = sheet.decisions?.estate_plan_setup
-  const signingType = estatePlanSetup && typeof estatePlanSetup === 'object' && !Array.isArray(estatePlanSetup)
-    ? (estatePlanSetup as Record<string, unknown>).signing_type
-    : null
+  // The setter and UI store this under decisions.estate_plan_design — read it
+  // through the shared getter so the blocker can actually clear.
+  const signingType = getEstatePlanDesignSetup(sheet).signing_type
   const dpoaProvisions = getDesignSheetDpoaProvisions(sheet)
   const healthcareProvisions = getDesignSheetHealthcareProvisions(sheet)
   const hasDpoaBasicPowers = dpoaProvisions.all_basic_powers
@@ -248,7 +247,7 @@ export function computeDesignSheetReadiness({
     Object.entries(documentInclusions).filter(([key, value]) => key !== 'spouse_docs' && value).length === 0 &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'at least one document', null),
     (!hasText(signingType) || signingType === 'undecided') &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing type', 'estate_plan_setup.signing_type', 'client-decision', false),
+      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing type', 'signing_type', 'client-decision', false),
     !hasText(sheet.signing_date) &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing date', 'signing_date', 'client-decision', false),
     !hasText(sheet.signing_county) &&

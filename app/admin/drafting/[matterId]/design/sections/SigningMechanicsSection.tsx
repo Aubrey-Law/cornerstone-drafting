@@ -66,17 +66,19 @@ export function SigningMechanicsSection({ sheet, onChange }: SectionProps) {
       </button>
       <div id="signing-mechanics-content" className={open ? 'border-t border-border p-5' : 'hidden'}>
         <div className={sectionFieldGrid3}>
-          <DecisionRow
-            question="Signing type"
-            help="Completed at the signing meeting; this never blocks drafting."
-            value={setup.signing_type}
-            options={[
-              { value: 'undecided', label: 'Undecided' },
-              { value: 'attorney_supervised', label: 'Attorney Supervised' },
-              { value: 'independent_client', label: 'Independent Client' },
-            ]}
-            onChange={value => updateSetup({ signing_type: value })}
-          />
+          <div id="design-field-signing_type" tabIndex={-1}>
+            <DecisionRow
+              question="Signing type"
+              help="Completed at the signing meeting; this never blocks drafting."
+              value={setup.signing_type}
+              options={[
+                { value: 'undecided', label: 'Undecided' },
+                { value: 'attorney_supervised', label: 'Attorney Supervised' },
+                { value: 'independent_client', label: 'Independent Client' },
+              ]}
+              onChange={value => updateSetup({ signing_type: value })}
+            />
+          </div>
           <div id="design-field-signing_date" tabIndex={-1}>
             <FieldLabel>Signing Date</FieldLabel>
             <Input

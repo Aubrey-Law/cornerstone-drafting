@@ -2,6 +2,7 @@ import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
 import { buildDesignSheetPersistencePayload } from '@/lib/designSheetPersistence'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
+  buildIntakeSeedDecisions,
   buildIntakeSeedPayload,
   isDesignSheetUnseeded,
 } from '@/lib/designSheet/seedFromIntake'
@@ -88,9 +89,11 @@ export async function ensureDesignSheetSeededFromIntake(
   if (sheet?.id) {
     if (!isDesignSheetUnseeded(sheet)) return false
 
+    const seedDecisions = buildIntakeSeedDecisions(intake, sheet.decisions)
     const mergedSeedPayload = buildDesignSheetPersistencePayload({
       ...sheet,
       ...buildIntakeSeedPayload(intake),
+      ...(seedDecisions ? { decisions: seedDecisions } : {}),
     })
 
     const { error } = await admin
@@ -118,7 +121,11 @@ export async function ensureDesignSheetSeededFromIntake(
   if (matterError) throw new Error(matterError.message)
   if (!matter?.client_intake_id) return false
 
-  const insertSeedPayload = buildDesignSheetPersistencePayload(buildIntakeSeedPayload(intake))
+  const insertSeedDecisions = buildIntakeSeedDecisions(intake, null)
+  const insertSeedPayload = buildDesignSheetPersistencePayload({
+    ...buildIntakeSeedPayload(intake),
+    ...(insertSeedDecisions ? { decisions: insertSeedDecisions } : {}),
+  })
 
   const { error: insertError } = await admin
     .from('design_sheets')

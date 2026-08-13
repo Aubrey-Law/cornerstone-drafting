@@ -484,8 +484,9 @@ export async function POST(req: Request) {
     financial_details:        body.financial_details,
 
     // ── Plan structure + documents (Guided Interview, attorney mode) ──────────
-    // Attorney-set on the client's intake; seeded into the design sheet on
-    // submit (see buildDesignSheetSeedPayload). Clients never send these.
+    // Attorney-set on the client's intake; seeded into the design sheet by
+    // buildIntakeSeedPayload / buildIntakeSeedDecisions
+    // (lib/designSheet/seedFromIntake.ts). Clients never send these.
     plan_type:                body.plan_type,
     document_inclusions:      body.document_inclusions,
 
