@@ -15,6 +15,7 @@ const WORD_PARAGRAPH_RE = /<w:p\b[\s\S]*?<\/w:p>/g
 const DOCUMENT_TYPES_BY_ID: Readonly<Record<string, readonly EstateDocumentType[]>> = {
   'will': ['will', 'ancillary'],
   'simple-will': ['will', 'ancillary'],
+  'will-cp': ['will', 'ancillary'],
   'pourover-will': ['will', 'ancillary'],
   'spouse-pourover-will': ['will', 'ancillary'],
   'testamentary-trust-will': ['will', 'ancillary'],

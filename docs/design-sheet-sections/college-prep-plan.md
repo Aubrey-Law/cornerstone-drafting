@@ -9,9 +9,11 @@
 ## What this plan is
 
 A student turning 18 signs four documents: a durable power of attorney, a health
-care proxy, a HIPAA authorization, and a living will. There is no trust, no will,
-and no deed. The student is the client — parents are contacts and nominees, not
-co-clients — so the core `client_*` columns hold the student's own identity.
+care proxy, a HIPAA authorization, and a living will — plus, when the family
+asks for one, a simple will leaving everything to the parents (the `will-cp`
+package). There is no trust and no deed. The student is the client — parents are
+contacts and nominees, not co-clients — so the core `client_*` columns hold the
+student's own identity.
 
 The client side of this plan is the `college_prep` intake track
 (`client_intake.intake_track`, `client_intake.college_prep_details`). This
@@ -44,7 +46,7 @@ matter is unaffected.
 
 | Consumer | Effect on `college_prep` |
 | --- | --- |
-| `defaultDocumentInclusions` | trust / will / deed / young-adult off; DPOA + health care on |
+| `defaultDocumentInclusions` | trust / deed / young-adult off; DPOA + health care on; will follows `college_prep.will_include` (off until elected) |
 | `getEstatePlanDesignSetup` | plan-wide extras (summary, signing guide, role guide) default off |
 | `getAllDesignSectionNavItems` | student section list; no trust, will, asset, or deed sections |
 | `buildDesignSheetGroups` | six tabs: Intake, College Prep, Fiduciaries, POA, Health care, Notes |
@@ -95,6 +97,7 @@ dropped on read (`getCollegePrepDesign`) rather than carried into a document.
 | --- | --- |
 | School | `school_name`, `school_city`, `school_state`, `student_id`, `move_in_date`, `studying_abroad`, `abroad_country` |
 | FERPA | `ferpa_release`, `ferpa_records[]`, `ferpa_recipients` |
+| Simple will | `will_include`, `will_parent1_name`, `will_parent2_name` — attorney-entered; the questionnaire does not ask |
 | DPOA | `dpoa_effective`, `dpoa_powers[]`, `dpoa_withheld`, `dpoa_notes` |
 | Health care proxy | `hcp_limits`, `hcp_instructions` |
 | HIPAA | `hipaa_scope`, `hipaa_excluded_categories[]`, `hipaa_different_scope`, `hipaa_expiration`, `hipaa_expiration_date`, `hipaa_recipients[]`, `excluded_people` |
@@ -163,6 +166,7 @@ resolved one, so it blocks:
 | HIPAA release scope | `hipaa_scope` resolved |
 | HIPAA withheld categories | a category selected when scope is `all_except` |
 | HIPAA expiration / expiration date | HIPAA requires the authorization to state one — never deferrable |
+| parent taking the residue of the will | `will_parent1_name` entered when the simple will is included |
 | living will decision | `living_will_include` resolved |
 | life-sustaining treatment instruction | `life_support` resolved when a living will is included |
 
@@ -177,7 +181,17 @@ release is its own package, selected by its own inclusion key.
 | --- | --- |
 | DPOA + HCP + HIPAA + living will | `incapacity-documents` |
 | `document_inclusions.ferpa_release` (defaults to the student's answer) | `ferpa-release` |
+| `document_inclusions.will` (defaults to `college_prep.will_include`) | `will-cp` — the college-prep track never selects the estate will packages, even when a converted matter still carries an inert `plan_type` |
 | everything else | *(none — no summary, no ancillaries)* |
+
+The `will-cp` simple will (converted from the firm's `will_cp_v1` source form)
+distributes tangible personal property by memorandum and the residue to the
+student's parents — `will_cp.parent1`/`parent2`, from the attorney-entered
+`college_prep.will_parent1_name`/`will_parent2_name`, with a single-parent
+clause when only one is named. The personal representative comes from the
+executor slots, whose column appears in Agent Designations once the will
+inclusion is on. See
+[the placeholder map](../../tools/aubreylaw-docgeneration/docs/will-cp-placeholder-map.md).
 
 The FERPA release carries its own `ferpa.*` fields, built off
 `decisions.college_prep` by `buildFerpaRelease`:

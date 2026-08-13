@@ -11,9 +11,10 @@
  * `decisions.plan_track` marks the sheet as a college-prep plan. It is what
  * gates the section list, the document inclusions, and the generator package
  * selection: the student signs a durable power of attorney, health care proxy,
- * HIPAA authorization, and living will, and nothing else. There is no trust, no
- * will, and no deed on this track, so those sections would be dead weight (and
- * their readiness blockers would never clear).
+ * HIPAA authorization, and living will — plus, when the family asks for one, a
+ * simple will leaving everything to the student's parents (`will-cp`). There is
+ * no trust and no deed on this track, so those sections would be dead weight
+ * (and their readiness blockers would never clear).
  */
 
 import {
@@ -113,6 +114,12 @@ export interface CollegePrepDesign {
   hipaa_recipients: CollegeHipaaRecipient[]
   excluded_people: string | null
 
+  // Simple will (the will-cp package: residue to the student's parents)
+  will_include: boolean | null
+  /** First parent taking the residue. One parent is enough — the template drops to a single-parent clause. */
+  will_parent1_name: string | null
+  will_parent2_name: string | null
+
   // Living will
   living_will_include: CollegeLivingWillInclude | null
   life_support: CollegeLifeSupport | null
@@ -153,6 +160,9 @@ export const EMPTY_COLLEGE_PREP_DESIGN: CollegePrepDesign = {
   hipaa_expiration_date: null,
   hipaa_recipients: [],
   excluded_people: null,
+  will_include: null,
+  will_parent1_name: null,
+  will_parent2_name: null,
   living_will_include: null,
   life_support: null,
   cpr: null,
@@ -232,6 +242,9 @@ export function getCollegePrepDesign(sheet: CollegePrepSheet | null | undefined)
     hipaa_expiration_date: readString(raw, 'hipaa_expiration_date'),
     hipaa_recipients: namedHipaaRecipients(raw.hipaa_recipients),
     excluded_people: readString(raw, 'excluded_people'),
+    will_include: readBoolean(raw, 'will_include'),
+    will_parent1_name: readString(raw, 'will_parent1_name'),
+    will_parent2_name: readString(raw, 'will_parent2_name'),
     living_will_include: readOption(raw, 'living_will_include', COLLEGE_LIVING_WILL_INCLUDE_OPTIONS),
     life_support: readOption(raw, 'life_support', COLLEGE_LIFE_SUPPORT_OPTIONS),
     cpr: readOption(raw, 'cpr', COLLEGE_TREATMENT_CHOICE_OPTIONS),
@@ -363,6 +376,11 @@ export function collegePrepDraftingBlockers(sheet: CollegePrepSheet): CollegePre
     blockers.push({ label: 'HIPAA expiration', field: 'college_prep.hipaa_expiration' })
   } else if (design.hipaa_expiration === 'date' && !design.hipaa_expiration_date) {
     blockers.push({ label: 'HIPAA expiration date', field: 'college_prep.hipaa_expiration_date' })
+  }
+
+  // The will's residue names the parents; a will with no taker cannot draft.
+  if (design.will_include === true && !design.will_parent1_name) {
+    blockers.push({ label: 'parent taking the residue of the will', field: 'college_prep.will_parent1_name' })
   }
 
   if (unresolved(design.living_will_include)) {

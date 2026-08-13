@@ -776,6 +776,32 @@
       "clauses": [],
       "localVariables": []
     },
+    "will-cp.docx": {
+      "variables": [
+        "client.city",
+        "client.county",
+        "client.full_name",
+        "client.pronoun_object",
+        "client.pronoun_possessive",
+        "client.pronoun_subject",
+        "execution.display_notary_commission",
+        "execution.display_ordinal_doc_date",
+        "execution.display_signing_county",
+        "fiduciaries.executor.co_primary",
+        "fiduciaries.executor.co_primary.full_name",
+        "fiduciaries.executor.co_successor",
+        "fiduciaries.executor.co_successor.full_name",
+        "fiduciaries.executor.primary.full_name",
+        "fiduciaries.executor.second_successor",
+        "fiduciaries.executor.second_successor.full_name",
+        "fiduciaries.executor.successor",
+        "fiduciaries.executor.successor.full_name",
+        "will_cp.parent1.full_name",
+        "will_cp.parent2.full_name"
+      ],
+      "clauses": [],
+      "localVariables": []
+    },
     "will.docx": {
       "variables": [
         "client.full_name",

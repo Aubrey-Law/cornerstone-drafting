@@ -220,6 +220,8 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `trust.tangible_personal_property.distribution_method` | string | conditional | Tangible personal property method, such as equal_shares or priority_order. |
 | `trust.tangible_personal_property.priority_beneficiaries` | array | no | Beneficiaries with first choice of tangible personal property. Reference the container directly in {% for %} and {% if %}; see trust.tangible_personal_property.priority_beneficiaries[] for member fields. |
 | `trust.tangible_personal_property.priority_beneficiaries[]` | array | conditional | Priority-order beneficiaries for tangible personal property distribution. |
+| `will_cp.parent1.full_name` | string | conditional | College Preparation Plan will: first parent taking the residue of the student's estate. One parent is enough — the template drops to a single-parent residue clause. |
+| `will_cp.parent2.full_name` | string | no | College Preparation Plan will: second parent taking the residue, divided equally with the first or to the survivor of them. |
 | `will.bond` | string | no | Bond election for Will administration: no_bond or required. |
 | `will.include_disclaimer_article` | boolean | no | Whether to include the Will disclaimer article. |
 | `will.include_self_proving_affidavit` | boolean | no | Whether to include the state self-proving affidavit after the Will execution block. |
@@ -373,6 +375,10 @@ Variables: `children`, `client.full_name`, `client.pronoun_possessive`, `client.
 ## trustees-certificate.docx
 
 No merge fields (static document).
+
+## will-cp.docx
+
+Variables: `client.city`, `client.county`, `client.full_name`, `client.pronoun_object`, `client.pronoun_possessive`, `client.pronoun_subject`, `execution.display_notary_commission`, `execution.display_ordinal_doc_date`, `execution.display_signing_county`, `fiduciaries.executor.co_primary`, `fiduciaries.executor.co_primary.full_name`, `fiduciaries.executor.co_successor`, `fiduciaries.executor.co_successor.full_name`, `fiduciaries.executor.primary.full_name`, `fiduciaries.executor.second_successor`, `fiduciaries.executor.second_successor.full_name`, `fiduciaries.executor.successor`, `fiduciaries.executor.successor.full_name`, `will_cp.parent1.full_name`, `will_cp.parent2.full_name`
 
 ## will.docx
 

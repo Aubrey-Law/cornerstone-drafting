@@ -25,6 +25,7 @@ import {
   type CollegePrepDesign,
 } from '@/lib/collegePrepDesign'
 import { formatPhoneDisplay } from '@/lib/phone'
+import { mergeDecisionUpdates, setDocumentInclusion } from '@/lib/designSheetDocumentInclusions'
 import { PlanTrackNotice } from './PlanTrackNotice'
 import {
   AttorneyDateInput,
@@ -516,6 +517,45 @@ export function CollegePrepSection({ sheet, onChange, matterId, practiceArea }: 
             onCommit={value => update({ other_medical_notes: value })}
           />
         </div>
+      </SectionBlock>
+
+      <SectionBlock
+        title="Last Will & Testament"
+        subtitle="A simple will leaving everything to the student's parents. Optional — most students have little to pass, but a will settles who takes it."
+      >
+        <DecisionRow
+          question="Include a simple will"
+          help="Tangible personal property by memorandum; the residue to the parents, or the survivor of them. Turning it on adds the Personal representative column to Agent Designations."
+          value={yesNoValue(design.will_include)}
+          options={YES_NO_UNANSWERED}
+          onChange={value => {
+            const include = value === 'yes'
+            // The seed stores `document_inclusions.will: false` explicitly, so
+            // the answer alone would never turn the document on — write both.
+            onChange('decisions', previous => mergeDecisionUpdates(
+              previous,
+              prev => setCollegePrepDesign(prev, { will_include: include }),
+              prev => setDocumentInclusion(prev, 'will', include),
+            ))
+          }}
+          fieldName="college_prep.will_include"
+        />
+        {design.will_include ? (
+          <div className={sectionFieldGrid2}>
+            <AttorneyInput
+              label="Parent taking the residue"
+              value={design.will_parent1_name ?? ''}
+              onChange={value => update({ will_parent1_name: value.trim() || null })}
+              fieldName="college_prep.will_parent1_name"
+            />
+            <AttorneyInput
+              label="Second parent (optional)"
+              value={design.will_parent2_name ?? ''}
+              onChange={value => update({ will_parent2_name: value.trim() || null })}
+              fieldName="college_prep.will_parent2_name"
+            />
+          </div>
+        ) : null}
       </SectionBlock>
     </DesignSectionContent>
   )

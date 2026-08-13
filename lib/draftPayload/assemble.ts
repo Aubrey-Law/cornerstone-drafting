@@ -37,6 +37,8 @@ import { draftPayloadFundingPlan } from '@/lib/draftPayload/fundingPlan'
 import { draftPayloadHomestead } from '@/lib/draftPayload/homestead'
 import { draftPayloadExcludedGuardians } from '@/lib/draftPayload/excludedGuardians'
 import { buildFerpaRelease } from '@/lib/draftPayload/ferpa'
+import { buildCollegePrepWill } from '@/lib/draftPayload/willCp'
+import { getDesignPlanTrack } from '@/lib/collegePrepDesign'
 import {
   buildFiduciaryRoleDetailsFromDesignSheet,
   getDraftPayloadFiduciaryDisplay,
@@ -345,6 +347,7 @@ export async function buildDraftPayload(
     trustPlanningType,
     estatePlanSetupFromSheet(designSheetForDocumentInclusions(designSheet, participantType)),
     selectedAssetTransferDocsFromSheet(designSheet),
+    getDesignPlanTrack(designSheet),
   )
 
   // ── Will / DPOA / HCP / HIPAA provisions ──────────────────────────────────
@@ -430,6 +433,7 @@ export async function buildDraftPayload(
   const hcp_provisions = healthcareBundle.hcp_provisions
   const hipaa_provisions = healthcareBundle.hipaa_provisions
   const ferpa_release = buildFerpaRelease(designSheet)
+  const will_cp = buildCollegePrepWill(designSheet)
 
   const execution: DraftPayload['execution'] = {
     signing_date: designSheet.signing_date ?? null,
@@ -500,6 +504,7 @@ export async function buildDraftPayload(
     hipaa_provisions,
     healthcare_provisions: healthcareBundle.healthcare_provisions,
     ferpa_release,
+    will_cp,
     fiduciary_display: fiduciaryDisplay,
     fiduciary_details: fiduciaryDetails,
     excluded_guardians: excludedGuardians,

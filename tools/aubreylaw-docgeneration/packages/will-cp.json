@@ -1,0 +1,19 @@
+{
+  "name": "will-cp",
+  "description": "College Preparation Plan simple will: tangible personal property by memorandum and the residue to the student's parents (or the survivor of them), with the standard Massachusetts fiduciary powers and administrative provisions. Converted from the firm's will_cp_v1 source form.",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "client.county",
+    "fiduciaries.executor.primary.full_name",
+    "will_cp.parent1.full_name"
+  ],
+  "documents": [
+    {
+      "id": "will-cp",
+      "title": "Last Will and Testament",
+      "template": "templates/will-cp.docx",
+      "output": "06-last-will-and-testament.docx"
+    }
+  ]
+}

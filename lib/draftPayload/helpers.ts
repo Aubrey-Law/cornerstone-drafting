@@ -9,6 +9,7 @@ import { getContactProfiles } from '@/lib/designSheet/fiduciaryDocumentInclusion
 import { principalOrderByPriority } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { getRelationshipLabel, structuredFromContactProfile } from '@/lib/kinship/relationshipLabels'
 import { normalizePracticeArea } from '@/lib/practiceArea'
+import type { DesignPlanTrack } from '@/lib/collegePrepDesign'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import type { ContactRow, DesignSheetRow, FiduciarySlotRow } from '@/lib/draftPayload/types'
 
@@ -539,8 +540,17 @@ export function deriveDocuments(
   trustPlanningType: TrustPlanningType,
   estatePlanSetup?: EstatePlanDesignSetup,
   assetTransferDocs?: ReadonlyArray<'deed' | 'trustees_certificate' | 'real_estate_trust'>,
+  /**
+   * `college_prep` swaps the will: the track keeps its own simple will
+   * (`will-cp`, residue to the parents) and never the estate will packages.
+   * Without the gate, a CP matter converted from an estate sheet — which keeps
+   * its inert `plan_type` — would fire the pour-over will the moment the CP
+   * will inclusion turns `setup.will` on.
+   */
+  planTrack?: DesignPlanTrack | null,
 ): DraftPayload['documents'] {
   const isEP = isEstatePlanningPracticeArea(practiceArea)
+  const isCollegePrep = planTrack === 'college_prep'
   const setup = estatePlanSetup ?? {
     trust: inclusions.trust,
     will: inclusions.will,
@@ -573,10 +583,11 @@ export function deriveDocuments(
   const selectedAssetDocs = new Set(assetTransferDocs ?? [])
 
   return {
-    include_trust:                  isEP && includeTrust,
-    include_pour_over_will:         isEP && setup.will && isPourOver,
-    include_simple_will:            isEP && setup.will && isOutright,
-    include_testamentary_trust_will: isEP && setup.will && isTestamentary,
+    include_trust:                  isEP && includeTrust && !isCollegePrep,
+    include_pour_over_will:         isEP && setup.will && isPourOver && !isCollegePrep,
+    include_simple_will:            isEP && setup.will && isOutright && !isCollegePrep,
+    include_testamentary_trust_will: isEP && setup.will && isTestamentary && !isCollegePrep,
+    include_will_cp:                isEP && setup.will && isCollegePrep,
     include_dpoa:                   isEP && setup.power_of_attorney,
     include_hcp:                    isEP && setup.health_care_proxy,
     include_hipaa:                  isEP && setup.hipaa_authorization,

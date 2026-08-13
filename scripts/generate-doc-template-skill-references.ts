@@ -76,6 +76,7 @@ const SELECTION_RULES: SelectionRule[] = [
   { inclusionKey: 'include_homestead_trustee', packages: ['homestead-trustee'], condition: 'always when included' },
   { inclusionKey: 'include_young_adult_estate_plan', packages: ['young-adult-estate-plan'], condition: 'one package per qualifying child (DOB age 17.5–25)' },
   { inclusionKey: 'include_ferpa_release', packages: ['ferpa-release'], condition: 'College Preparation Plan sheets, when the student asked for a FERPA release' },
+  { inclusionKey: 'include_will_cp', packages: ['will-cp'], condition: 'College Preparation Plan sheets, when the simple will is elected (`college_prep.will_include`); the estate will packages never select on this track' },
   { inclusionKey: 'include_estate_plan_summary', packages: ['estate-plan-summary'], condition: 'appended whenever any other package generates, unless explicitly `false`' },
 ]
 
