@@ -185,6 +185,46 @@ for the field and conditional tables. Its legal language was drafted from the
 statute rather than a firm source form, so it needs attorney review before
 production use.
 
+## The checklist behind the plan
+
+A CP matter runs `college_prep_sla_v1`
+(`supabase/migrations/20260922000000_college_prep_sla_v1.sql`), not the estate
+checklist. `slaTemplateForPracticeArea` is the switch, and the practice area is
+its only input.
+
+|  | Estate (`estate_planning_sla_v3`) | College prep (`college_prep_sla_v1`) |
+| --- | --- | --- |
+| Soft clock | ~14 days, anchored to the discovery call **and** the PMPS | ~10 days, anchored to the intro call only — a student has no estate to model, so there is no planning session |
+| Firm clock | 28 days from the engagement signature | 14 days: five documents, one design conversation, one signing |
+| Gate | post-discovery work waits on `fit_confirmed` | ungated — the next step after the call is a questionnaire |
+| Trust, deeds, funding, Certification of Trust | yes | none, and a test asserts none appear |
+| Its own questions | — | whether the student turns 18 before signing, the move-in date, the school's own FERPA form, copies to the student and to the named agents |
+
+Probate is unchanged: still no template of its own, still skipped at matter
+creation, still given the estate checklist at the lead stage so an unqualified
+lead is not left with no next action.
+
+### When the checklist has to move
+
+A lead is opened before anyone knows what it is. One opened as an estate matter
+converts as `CP` whenever the College Preparation Plan questionnaire was the one
+answered — and it is already carrying the estate checklist by then, because
+generation is a one-shot snapshot.
+
+Conversion passes `retemplate: true`, and `templateSwapVerdict` decides:
+
+| Existing checklist | Verdict |
+| --- | --- |
+| Already the CP template, or no tasks at all | `same_template` — nothing to do |
+| Another template, every task still pending with no notes | `swap` — regenerated from the CP template |
+| Another template, but something is completed, skipped, noted, or paused | `work_started` — left alone and logged |
+| Any task added by hand (no `template_id`) | `work_started` — swapping would delete it |
+
+The refusal is deliberate: a checklist of the wrong shape is a smaller problem
+than losing the firm's record of what was done. When it happens the matter keeps
+the estate checklist and the warning names the matter, so it can be fixed by
+hand.
+
 ## Known gaps
 
 One answer this section records still has no generator support, and the seed

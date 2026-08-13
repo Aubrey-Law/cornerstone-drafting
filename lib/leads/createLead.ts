@@ -71,7 +71,7 @@ export async function createLead(input: CreateLeadInput): Promise<CreatedLead> {
     .select('id')
     .eq('client_intake_id', lead.id)
     .maybeSingle()
-  if (opportunity?.id) await ensureLeadSlaTasks(opportunity.id)
+  if (opportunity?.id) await ensureLeadSlaTasks(opportunity.id, { practiceArea })
 
   return {
     leadId: lead.id,

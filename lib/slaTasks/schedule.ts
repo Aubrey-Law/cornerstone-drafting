@@ -229,6 +229,61 @@ export function buildMatterTaskInserts(
     })
 }
 
+// ── Swapping one template for another ───────────────────────────────────────
+
+/**
+ * A generated task nobody has touched: still pending, never started, paused,
+ * completed, or skipped, and carrying no notes. Regenerating over one of these
+ * loses nothing, because there is nothing on it but the template's own text.
+ */
+export function isUntouchedTask(
+  task: Pick<MatterTaskRow, 'status' | 'notes' | 'completed_at' | 'skipped_at' | 'paused_at'>,
+): boolean {
+  return (
+    task.status === 'pending' &&
+    !task.completed_at &&
+    !task.skipped_at &&
+    !task.paused_at &&
+    !task.notes?.trim()
+  )
+}
+
+export type TemplateSwapVerdict =
+  /** Already running the template asked for — nothing to swap. */
+  | 'same_template'
+  /** A different template, and no work would be lost by regenerating. */
+  | 'swap'
+  /** A different template, but someone has started working the checklist. */
+  | 'work_started'
+
+/**
+ * Whether a matter's checklist can be replaced with `templateId`'s.
+ *
+ * The case this exists for: a lead is created as an estate matter and picks up
+ * the estate checklist, then converts as a College Preparation Plan because the
+ * questionnaire said so. Generation is otherwise a one-shot snapshot, so without
+ * this the CP matter would run the estate plan's checklist — asking for a trust,
+ * deeds, and funding it will never produce — for the life of the matter.
+ *
+ * Swapping is refused the moment any of the work is real: a completed or skipped
+ * task, a note, a pause. Those are the firm's record of what happened, and a
+ * checklist of the wrong shape is a smaller problem than losing them. It is also
+ * refused when any task came from no template at all, since a hand-added task
+ * would be deleted along with the rest.
+ */
+export function templateSwapVerdict(
+  tasks: Pick<
+    MatterTaskRow,
+    'template_id' | 'status' | 'notes' | 'completed_at' | 'skipped_at' | 'paused_at'
+  >[],
+  templateId: string,
+): TemplateSwapVerdict {
+  if (tasks.length === 0) return 'same_template'
+  if (tasks.some(task => task.template_id === null)) return 'work_started'
+  if (tasks.every(task => task.template_id === templateId)) return 'same_template'
+  return tasks.every(isUntouchedTask) ? 'swap' : 'work_started'
+}
+
 export interface RescheduledTaskDates {
   id: string
   due_date: string | null

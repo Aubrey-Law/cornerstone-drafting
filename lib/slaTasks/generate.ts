@@ -4,7 +4,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { normalizePracticeArea } from '@/lib/practiceArea'
-import { buildMatterTaskInserts, isDateKey, parseTemplateTasks, rescheduleForAnchor } from './schedule'
+import {
+  buildMatterTaskInserts,
+  isDateKey,
+  parseTemplateTasks,
+  rescheduleForAnchor,
+  templateSwapVerdict,
+} from './schedule'
 import {
   MATTER_TASK_COLUMNS,
   type MatterTaskRow,
@@ -17,6 +23,25 @@ import {
 
 export const ESTATE_PLANNING_SLA = 'estate_planning_sla'
 export const ESTATE_PLANNING_SLA_V3 = 'estate_planning_sla_v3'
+export const COLLEGE_PREP_SLA_V1 = 'college_prep_sla_v1'
+
+/**
+ * The checklist a practice area runs, or null when it has none.
+ *
+ * The College Preparation Plan gets its own rather than a trimmed estate one:
+ * the estate checklist asks for a trust, deeds, funding, and a Certification of
+ * Trust this plan never produces, and never asks the two questions that govern a
+ * college plan — whether the student has turned 18, and when move-in is.
+ *
+ * Probate still has no template. It returns null and is skipped rather than
+ * handed a checklist for work it does not do.
+ */
+export function slaTemplateForPracticeArea(practiceArea: unknown): string | null {
+  const area = normalizePracticeArea(practiceArea)
+  if (area === 'Probate') return null
+  if (area === 'CP') return COLLEGE_PREP_SLA_V1
+  return ESTATE_PLANNING_SLA_V3
+}
 
 /** Columns on `matters` that anchor an SLA clock. */
 const MATTER_ANCHOR_COLUMNS = 'id, discovery_call_at, pmps_at, engagement_signed_at, fit_decision'
@@ -44,7 +69,12 @@ function gatesFromMatter(matter: MatterAnchorRow): SlaGate[] {
 
 export type GenerateResult =
   | { ok: true; created: true; tasks: MatterTaskRow[]; templateId: string }
-  | { ok: true; created: false; reason: 'already_generated'; tasks: MatterTaskRow[] }
+  | {
+      ok: true
+      created: false
+      reason: 'already_generated' | 'template_in_progress'
+      tasks: MatterTaskRow[]
+    }
   | { ok: false; error: string; status: number }
 
 interface GenerateOptions {
@@ -53,6 +83,12 @@ interface GenerateOptions {
   startDate?: string
   /** Discard any tasks already generated for this matter and start over. */
   replace?: boolean
+  /**
+   * Replace a checklist generated from a *different* template, but only while
+   * every task is still untouched. Used when a matter's practice area turns out
+   * to be something other than what its lead was opened as.
+   */
+  retemplate?: boolean
   /** Alternative branches to include, e.g. the remote-signing path. */
   variants?: SlaVariant[]
 }
@@ -123,8 +159,14 @@ export async function generateMatterTasks(
 
   const existingTasks = (existing ?? []) as unknown as MatterTaskRow[]
   if (existingTasks.length > 0) {
-    if (!replace) {
-      return { ok: true, created: false, reason: 'already_generated', tasks: existingTasks }
+    const verdict = options.retemplate ? templateSwapVerdict(existingTasks, template.id) : 'same_template'
+    if (!replace && verdict !== 'swap') {
+      return {
+        ok: true,
+        created: false,
+        reason: verdict === 'work_started' ? 'template_in_progress' : 'already_generated',
+        tasks: existingTasks,
+      }
     }
     const { error: deleteError } = await admin.from('matter_tasks').delete().eq('matter_id', matterId)
     if (deleteError) return { ok: false, error: deleteError.message, status: 500 }
@@ -152,23 +194,39 @@ export async function generateMatterTasks(
 }
 
 /**
- * Kick off the estate planning SLA for a freshly created matter. Best-effort by
+ * Kick off the SLA for a freshly created or freshly hired matter. Best-effort by
  * design: a matter must never fail to be created because its checklist could not
  * be written. Probate matters are skipped until a probate template exists.
+ *
+ * Idempotent, with one exception. A lead already carries the checklist it was
+ * opened with, and a lead opened as an estate matter can convert as a College
+ * Preparation Plan — the questionnaire, not the lead form, says what was sold.
+ * `retemplate` lets that conversion swap the checklist for the right one while
+ * nothing on it has been worked; see `templateSwapVerdict`.
  */
-export async function ensureEstatePlanningSlaTasks(
+export async function ensureMatterSlaTasks(
   matterId: string,
-  options: { practiceArea?: unknown; startDate?: string } = {},
+  options: { practiceArea?: unknown; startDate?: string; retemplate?: boolean } = {},
 ): Promise<void> {
   try {
-    if (normalizePracticeArea(options.practiceArea) === 'Probate') return
+    const templateName = slaTemplateForPracticeArea(options.practiceArea)
+    if (!templateName) return
     const result = await generateMatterTasks(getAdminClient(), {
       matterId,
-      templateName: ESTATE_PLANNING_SLA_V3,
+      templateName,
       startDate: options.startDate ?? firmTodayKey(),
+      retemplate: options.retemplate === true,
     })
     if (!result.ok) {
       console.warn('[sla-tasks] generation skipped for matter', matterId, result.error)
+    } else if (!result.created && result.reason === 'template_in_progress') {
+      // Worth saying out loud: the matter is running a checklist of the wrong
+      // shape, and it stays that way because someone has already worked it.
+      console.warn(
+        '[sla-tasks] matter',
+        matterId,
+        `is not on "${templateName}" and has tasks already worked; leaving its checklist alone`,
+      )
     }
   } catch (e) {
     console.warn('[sla-tasks] generation failed for matter', matterId, e)
@@ -184,12 +242,24 @@ export async function ensureEstatePlanningSlaTasks(
  * the PMPS date, and the Day-0 ones wait on the engagement signature. They still
  * belong on the plan, because the firm's next action is visible from the
  * checklist long before any of those dates exist.
+ *
+ * The practice area on the lead form picks the checklist. It is a statement of
+ * intent rather than a decision — a lead can be opened as an estate matter and
+ * convert as a College Preparation Plan — so conversion re-checks it.
  */
-export async function ensureLeadSlaTasks(matterId: string): Promise<void> {
+export async function ensureLeadSlaTasks(
+  matterId: string,
+  options: { practiceArea?: unknown } = {},
+): Promise<void> {
   try {
+    // A probate lead keeps the estate checklist it has always been given: there
+    // is still no probate template, and an unqualified lead with no next action
+    // on it is worse than one carrying a checklist of roughly the right shape.
+    // A probate *matter* is still skipped, exactly as before.
+    const templateName = slaTemplateForPracticeArea(options.practiceArea) ?? ESTATE_PLANNING_SLA_V3
     const result = await generateMatterTasks(getAdminClient(), {
       matterId,
-      templateName: ESTATE_PLANNING_SLA_V3,
+      templateName,
       startDate: firmTodayKey(),
     })
     if (!result.ok) {
