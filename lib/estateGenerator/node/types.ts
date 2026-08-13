@@ -27,6 +27,10 @@ export type NodeEstatePackageName =
   | 'young-adult-estate-plan'
   | 'ferpa-release'
   | 'will-cp'
+  | 'college-financial-poa'
+  | 'college-education-poa'
+  | 'college-health-care-documents'
+  | 'college-advance-directive'
 
 export interface NodeEstatePackageDocument {
   id: string
@@ -124,6 +128,39 @@ export type NodeEstateContext = NodeEstateData & {
   hipaa_include_trustees: boolean
   hipaa_list_fiduciaries_by_name: boolean
   hipaa_list_fiduciaries_general: boolean
+  college_dpoa_springing: boolean
+  college_dpoa_all_powers: boolean
+  has_college_dpoa_powers: boolean
+  college_power_banking: boolean
+  college_power_bills: boolean
+  college_power_tuition: boolean
+  college_power_financial_aid: boolean
+  college_power_student_loans: boolean
+  college_power_credit_cards: boolean
+  college_power_taxes: boolean
+  college_power_housing: boolean
+  college_power_auto: boolean
+  college_power_insurance_claims: boolean
+  college_power_retain_attorney: boolean
+  college_power_citations: boolean
+  college_power_investments: boolean
+  college_power_digital: boolean
+  college_power_employment: boolean
+  college_power_contracts: boolean
+  has_college_dpoa_withheld: boolean
+  has_college_hcp_limits: boolean
+  has_college_hcp_instructions: boolean
+  college_hipaa_all_except: boolean
+  college_hipaa_expires_on_date: boolean
+  has_college_hipaa_recipients: boolean
+  has_college_excluded_people: boolean
+  college_living_will_included: boolean
+  college_life_support_all_measures: boolean
+  college_life_support_comfort_only: boolean
+  college_life_support_trust_agent: boolean
+  college_organ_donation_any: boolean
+  college_organ_donation_specific: boolean
+  college_organ_donation_none: boolean
   uses_revocable_trust: boolean
   includes_pour_over_will: boolean
   includes_simple_will: boolean
@@ -158,6 +195,7 @@ export type NodeEstateContext = NodeEstateData & {
   dpoa: Record<string, unknown>
   healthcare: Record<string, unknown>
   hipaa: Record<string, unknown>
+  college: Record<string, unknown>
   execution: Record<string, unknown>
   young_adult?: Record<string, unknown>
 }

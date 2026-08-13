@@ -30,6 +30,36 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `client.state` | string | yes | State code used for state-specific clauses and execution rules. |
 | `client.street_address` | string | conditional | Client's street address for incapacity documents. |
 | `client.zip` | string | no | Client's ZIP code, used on summary worksheets. |
+| `college.artificial_nutrition` | string | no | Artificial nutrition and hydration preference: yes, no, or agent_decides. |
+| `college.comfort_always` | boolean | no | Whether the directive adds the always-provide-comfort-care sentence. |
+| `college.cpr` | string | no | CPR preference: yes, no, or agent_decides. |
+| `college.dpoa_all_powers` | boolean | no | Whether every power category the questionnaire offers was granted. |
+| `college.dpoa_effective` | string | conditional | How the college financial power of attorney takes effect: immediately or springing (on incapacity). |
+| `college.dpoa_powers` | array | conditional | Powers the student granted the financial agent. Reference the container directly in {% for %} and {% if %}; see college.dpoa_powers[].label for member fields. |
+| `college.dpoa_powers[]` | array | no | A single power category selected on the College Preparation Plan questionnaire. |
+| `college.dpoa_powers[].key` | string | no | Stable key for a granted power category, e.g. banking or tuition. |
+| `college.dpoa_powers[].label` | string | no | Display label for a granted power category, e.g. Banking and bank accounts. |
+| `college.dpoa_withheld` | string | no | Powers the student expressly withheld from the financial agent, in the student's own words. |
+| `college.excluded_people` | string | no | People the student expressly does not want to receive health information. |
+| `college.hcp_instructions` | string | no | Guidance the student wants the health care agent to follow. |
+| `college.hcp_limits` | string | no | Limits the student placed on the health care agent's authority. |
+| `college.hipaa_excluded_categories` | array | conditional | Sensitive categories withheld from the HIPAA release. Reference the container directly in {% for %} and {% if %}; see college.hipaa_excluded_categories[].label for member fields. |
+| `college.hipaa_excluded_categories[]` | array | no | A single withheld sensitive-information category. |
+| `college.hipaa_excluded_categories[].key` | string | no | Stable key for a withheld category, e.g. mental_health or substance_use. |
+| `college.hipaa_excluded_categories[].label` | string | no | Display label for a withheld category, e.g. Mental health / psychotherapy notes. |
+| `college.hipaa_expiration` | string | conditional | When the HIPAA authorization expires: none (until revoked) or date. |
+| `college.hipaa_expiration_date` | string | conditional | Expiration date printed in the HIPAA authorization when the student chose a dated release. |
+| `college.hipaa_recipients` | array | conditional | People authorized to receive the student's health information. Reference the container directly in {% for %} and {% if %}; see college.hipaa_recipients[].name for member fields. |
+| `college.hipaa_recipients[]` | array | no | A single authorized recipient named on the College Preparation Plan questionnaire. |
+| `college.hipaa_recipients[].name` | string | no | Authorized recipient's full name. |
+| `college.hipaa_recipients[].phone` | string | no | Authorized recipient's phone number. |
+| `college.hipaa_recipients[].relationship` | string | no | Authorized recipient's relationship to the student, e.g. Parent. |
+| `college.hipaa_scope` | string | conditional | HIPAA release scope: all, or all_except the withheld categories. |
+| `college.life_support` | string | conditional | Life-sustaining treatment instruction: all_measures, comfort_only, or trust_agent. |
+| `college.living_will_include` | string | conditional | Whether the plan includes written treatment instructions (the advance directive): yes or no. |
+| `college.organ_donation` | string | no | Organ donation election: any, specific, or no. |
+| `college.organ_donation_notes` | string | no | Organs or purposes named when the donation election is specific. |
+| `college.ventilation` | string | no | Mechanical ventilation preference: yes, no, or agent_decides. |
 | `dpoa.include_advanced_trust_gifting` | boolean | no | Whether the power of attorney includes advanced trust and gifting powers. |
 | `dpoa.include_entity_powers` | boolean | no | Whether the power of attorney includes powers over business entities. |
 | `dpoa.include_extended_personal_care` | boolean | no | Whether the power of attorney includes extended personal care powers. |
@@ -259,6 +289,26 @@ Variables: `client.city`, `client.full_name`, `client.pronoun_subject`, `client.
 ## certificate-of-trust.docx
 
 Variables: `client.city`, `client.full_name`, `client.pronoun_subject`, `client.state`, `client.street_address`, `execution.notary_commission`, `execution.ordinal_doc_date`, `execution.signing_county`, `fiduciaries.trustee.co_primary.full_name`, `fiduciaries.trustee.co_primary.pronoun_subject`, `fiduciaries.trustee.primary.full_name`, `trust.date`, `trust.display_name`
+
+## college-advance-directive.docx
+
+Variables: `client.city`, `client.full_name`, `client.pronoun_subject`, `college.artificial_nutrition`, `college.cpr`, `college.organ_donation_notes`, `college.ventilation`, `college_life_support_all_measures`, `college_life_support_comfort_only`, `college_life_support_trust_agent`, `college_organ_donation_any`, `college_organ_donation_none`, `college_organ_donation_specific`, `execution.display_doc_date`, `execution.display_notary_commission`, `execution.display_ordinal_doc_date`, `execution.display_signing_county`
+
+## college-education-poa.docx
+
+Variables: `client.city`, `client.full_name`, `client.pronoun_subject`, `co_poa_joint`, `co_poa_majority`, `college_dpoa_springing`, `execution.display_doc_date`, `execution.display_notary_commission`, `execution.display_ordinal_doc_date`, `execution.display_signing_county`, `fiduciaries.agent.co_primary.full_name`, `fiduciaries.agent.primary.full_name`, `fiduciaries.agent.successor.full_name`, `has_co_poa`
+
+## college-financial-poa.docx
+
+Variables: `client.city`, `client.full_name`, `client.pronoun_subject`, `college.dpoa_withheld`, `college_dpoa_all_powers`, `college_dpoa_springing`, `college_power_auto`, `college_power_banking`, `college_power_bills`, `college_power_citations`, `college_power_contracts`, `college_power_credit_cards`, `college_power_digital`, `college_power_employment`, `college_power_financial_aid`, `college_power_housing`, `college_power_insurance_claims`, `college_power_investments`, `college_power_retain_attorney`, `college_power_student_loans`, `college_power_taxes`, `college_power_tuition`, `execution.display_doc_date`, `execution.display_notary_commission`, `execution.display_ordinal_doc_date`, `execution.display_signing_county`, `fiduciaries.agent.primary.full_name`, `fiduciaries.agent.successor.full_name`, `has_college_dpoa_withheld`
+
+## college-health-care-proxy.docx
+
+Variables: `client.city`, `client.county`, `client.full_name`, `client.pronoun_subject`, `college.hcp_instructions`, `college.hcp_limits`, `college.hipaa_excluded_categories`, `college_hipaa_all_except`, `execution.display_doc_date`, `execution.display_notary_commission`, `execution.display_ordinal_doc_date`, `execution.display_signing_county`, `has_college_hcp_instructions`, `has_college_hcp_limits`, `healthcare.agent.alternate.address`, `healthcare.agent.alternate.full_name`, `healthcare.agent.alternate.phone`, `healthcare.agent.alternate.relationship`, `healthcare.agent.primary.address`, `healthcare.agent.primary.full_name`, `healthcare.agent.primary.phone`, `healthcare.agent.primary.relationship`
+
+## college-hipaa-authorization.docx
+
+Variables: `client.date_of_birth`, `client.full_name`, `client.pronoun_subject`, `college.excluded_people`, `college.hipaa_excluded_categories`, `college.hipaa_expiration_date`, `college.hipaa_recipients`, `college_hipaa_all_except`, `college_hipaa_expires_on_date`, `execution.display_doc_date`, `execution.display_notary_commission`, `execution.display_ordinal_doc_date`, `execution.display_signing_county`, `has_college_excluded_people`, `has_college_hipaa_recipients`, `healthcare.agent.alternate.full_name`, `healthcare.agent.primary.full_name`
 
 ## deed-landcourt.docx
 

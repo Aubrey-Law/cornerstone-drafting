@@ -22,6 +22,10 @@ const EXAMPLE_ALIASES: Record<string, string> = {
   'indv-disclaimer-trust': 'client-ma-disclaimer-trust.json',
   'assignment-of-personal-property': 'client-ma-assignment-pp.json',
   'temporary-delegation-parental-powers': 'client-ma-temp-delegation.json',
+  'college-financial-poa': 'client-ma-college-prep.json',
+  'college-education-poa': 'client-ma-college-prep.json',
+  'college-health-care-documents': 'client-ma-college-prep.json',
+  'college-advance-directive': 'client-ma-college-prep.json',
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

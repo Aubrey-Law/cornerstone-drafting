@@ -39,6 +39,7 @@ import { draftPayloadExcludedGuardians } from '@/lib/draftPayload/excludedGuardi
 import { buildFerpaRelease } from '@/lib/draftPayload/ferpa'
 import { buildCollegePrepWill } from '@/lib/draftPayload/willCp'
 import { getDesignPlanTrack } from '@/lib/collegePrepDesign'
+import { buildCollegePrep } from '@/lib/draftPayload/collegePrep'
 import {
   buildFiduciaryRoleDetailsFromDesignSheet,
   getDraftPayloadFiduciaryDisplay,
@@ -434,6 +435,7 @@ export async function buildDraftPayload(
   const hipaa_provisions = healthcareBundle.hipaa_provisions
   const ferpa_release = buildFerpaRelease(designSheet)
   const will_cp = buildCollegePrepWill(designSheet)
+  const college_prep = buildCollegePrep(designSheet)
 
   const execution: DraftPayload['execution'] = {
     signing_date: designSheet.signing_date ?? null,
@@ -505,6 +507,7 @@ export async function buildDraftPayload(
     healthcare_provisions: healthcareBundle.healthcare_provisions,
     ferpa_release,
     will_cp,
+    college_prep,
     fiduciary_display: fiduciaryDisplay,
     fiduciary_details: fiduciaryDetails,
     excluded_guardians: excludedGuardians,

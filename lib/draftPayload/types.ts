@@ -13,6 +13,7 @@ import type {
 } from '@/lib/draftPayload/healthcare'
 import type { DraftPayloadFerpaRelease } from '@/lib/draftPayload/ferpa'
 import type { DraftPayloadCollegePrepWill } from '@/lib/draftPayload/willCp'
+import type { DraftPayloadCollegePrep } from '@/lib/draftPayload/collegePrep'
 import type { DraftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import type { DraftPayloadTrustProvisions } from '@/lib/draftPayload/trustProvisions'
 
@@ -159,6 +160,8 @@ export interface DraftPayload {
     include_ferpa_release?: boolean
     /** College Preparation Plan simple will (the will-cp package). */
     include_will_cp?: boolean
+    /** College Preparation Plan: the education power of attorney rider. */
+    include_education_poa?: boolean
     /** Asset-transfer package (design-sheet Transfers & Assignments). */
     include_deed?: boolean
     include_trustees_certificate?: boolean
@@ -247,6 +250,8 @@ export interface DraftPayload {
   ferpa_release?: DraftPayloadFerpaRelease | null
   /** College Preparation Plan only; null on every estate matter. */
   will_cp?: DraftPayloadCollegePrepWill | null
+  /** College Preparation Plan drafted answers; null on every estate matter. */
+  college_prep?: DraftPayloadCollegePrep | null
   fiduciary_display?: FiduciaryDocumentInclusions
   fiduciary_details?: DraftPayloadFiduciaryRoleDetails
   excluded_guardians?: DraftPayloadExcludedGuardian[]

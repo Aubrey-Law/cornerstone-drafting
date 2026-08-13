@@ -112,6 +112,16 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
   // selected is a fact about the questionnaire, not about this list.)
   const ferpaIncludesHealthCenter = ferpaRecords.some(record => record.key === 'health_center')
   ferpa.includes_health_center = ferpaIncludesHealthCenter
+  const college = { ...recordValue(data.college) }
+  const collegeDpoaPowers = arrayValue(college.dpoa_powers)
+  college.dpoa_powers = collegeDpoaPowers
+  const collegePowerKeys = new Set(collegeDpoaPowers.map(power => String(power.key)))
+  const collegeAllPowers = Boolean(college.dpoa_all_powers)
+  const collegePower = (key: string) => collegeAllPowers || collegePowerKeys.has(key)
+  const collegeHipaaExcluded = arrayValue(college.hipaa_excluded_categories)
+  college.hipaa_excluded_categories = collegeHipaaExcluded
+  const collegeHipaaRecipients = arrayValue(college.hipaa_recipients)
+  college.hipaa_recipients = collegeHipaaRecipients
 
   const execution = { ...recordValue(data.execution) }
   const signingScheduled = Boolean(execution.signing_scheduled)
@@ -178,6 +188,7 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     healthcare,
     hipaa,
     ferpa,
+    college,
     execution,
     state: { code: stateCode, ...stateRules },
     has_spouse: hasSpouse,
@@ -209,6 +220,44 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     hipaa_list_fiduciaries_general: hipaa.list_fiduciaries_by_name === 'general_language',
     has_ferpa_records: ferpaRecords.length > 0,
     ferpa_all_records: Boolean(ferpa.all_records),
+    // College Preparation Plan branches. The drafting blockers guarantee a
+    // real answer before generation, so an unset value only appears in ad-hoc
+    // renders — every flag defaults to the document's most conservative shape.
+    college_dpoa_springing: college.dpoa_effective === 'springing',
+    college_dpoa_all_powers: collegeAllPowers,
+    has_college_dpoa_powers: collegeDpoaPowers.length > 0,
+    // One flag per selectable power so each power paragraph is a plain
+    // {% if %}. Granting all powers turns every flag on.
+    college_power_banking: collegePower('banking'),
+    college_power_bills: collegePower('bills'),
+    college_power_tuition: collegePower('tuition'),
+    college_power_financial_aid: collegePower('financial_aid'),
+    college_power_student_loans: collegePower('student_loans'),
+    college_power_credit_cards: collegePower('credit_cards'),
+    college_power_taxes: collegePower('taxes'),
+    college_power_housing: collegePower('housing'),
+    college_power_auto: collegePower('auto'),
+    college_power_insurance_claims: collegePower('insurance_claims'),
+    college_power_retain_attorney: collegePower('retain_attorney'),
+    college_power_citations: collegePower('citations'),
+    college_power_investments: collegePower('investments'),
+    college_power_digital: collegePower('digital'),
+    college_power_employment: collegePower('employment'),
+    college_power_contracts: collegePower('contracts'),
+    has_college_dpoa_withheld: isPresent(college.dpoa_withheld),
+    has_college_hcp_limits: isPresent(college.hcp_limits),
+    has_college_hcp_instructions: isPresent(college.hcp_instructions),
+    college_hipaa_all_except: college.hipaa_scope === 'all_except' && collegeHipaaExcluded.length > 0,
+    college_hipaa_expires_on_date: college.hipaa_expiration === 'date' && isPresent(college.hipaa_expiration_date),
+    has_college_hipaa_recipients: collegeHipaaRecipients.length > 0,
+    has_college_excluded_people: isPresent(college.excluded_people),
+    college_living_will_included: college.living_will_include === 'yes',
+    college_life_support_all_measures: college.life_support === 'all_measures',
+    college_life_support_comfort_only: college.life_support === 'comfort_only',
+    college_life_support_trust_agent: college.life_support === 'trust_agent',
+    college_organ_donation_any: college.organ_donation === 'any',
+    college_organ_donation_specific: college.organ_donation === 'specific' && isPresent(college.organ_donation_notes),
+    college_organ_donation_none: college.organ_donation === 'no',
     // Campus treatment records are excluded from FERPA's education-records
     // definition (34 CFR 99.3), so the release names the limit rather than
     // leaving the student to assume it covers the health center. The FERPA

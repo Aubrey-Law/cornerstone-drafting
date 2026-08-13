@@ -30,6 +30,36 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `client.state` | State | Client Information | `state` |
 | `client.street_address` | Street address | Client Information | `street` |
 | `client.zip` | Zip | Client Information | (section) |
+| `college.artificial_nutrition` | Artificial Nutrition | College Preparation Plan | (section) |
+| `college.comfort_always` | Comfort Always | College Preparation Plan | (section) |
+| `college.cpr` | Cpr | College Preparation Plan | (section) |
+| `college.dpoa_all_powers` | Dpoa All Powers | College Preparation Plan | (section) |
+| `college.dpoa_effective` | Power of attorney effective date | College Preparation Plan | `college_prep.dpoa_effective` |
+| `college.dpoa_powers` | Powers granted to the financial agent | College Preparation Plan | `college_prep.dpoa_powers` |
+| `college.dpoa_powers[]` | Dpoa Powers | College Preparation Plan | (section) |
+| `college.dpoa_powers[].key` | Key | College Preparation Plan | (section) |
+| `college.dpoa_powers[].label` | Label | College Preparation Plan | (section) |
+| `college.dpoa_withheld` | Dpoa Withheld | College Preparation Plan | (section) |
+| `college.excluded_people` | Excluded People | College Preparation Plan | (section) |
+| `college.hcp_instructions` | Hcp Instructions | College Preparation Plan | (section) |
+| `college.hcp_limits` | Hcp Limits | College Preparation Plan | (section) |
+| `college.hipaa_excluded_categories` | HIPAA withheld categories | College Preparation Plan | `college_prep.hipaa_excluded_categories` |
+| `college.hipaa_excluded_categories[]` | Hipaa Excluded Categories | College Preparation Plan | (section) |
+| `college.hipaa_excluded_categories[].key` | Key | College Preparation Plan | (section) |
+| `college.hipaa_excluded_categories[].label` | Label | College Preparation Plan | (section) |
+| `college.hipaa_expiration` | HIPAA expiration | College Preparation Plan | `college_prep.hipaa_expiration` |
+| `college.hipaa_expiration_date` | HIPAA expiration date | College Preparation Plan | `college_prep.hipaa_expiration_date` |
+| `college.hipaa_recipients` | HIPAA authorized recipients | College Preparation Plan | (section) |
+| `college.hipaa_recipients[]` | Hipaa Recipients | College Preparation Plan | (section) |
+| `college.hipaa_recipients[].name` | Name | College Preparation Plan | (section) |
+| `college.hipaa_recipients[].phone` | Phone | College Preparation Plan | (section) |
+| `college.hipaa_recipients[].relationship` | Relationship | College Preparation Plan | (section) |
+| `college.hipaa_scope` | HIPAA release scope | College Preparation Plan | `college_prep.hipaa_scope` |
+| `college.life_support` | Life-sustaining treatment instruction | College Preparation Plan | `college_prep.life_support` |
+| `college.living_will_include` | Living will decision | College Preparation Plan | `college_prep.living_will_include` |
+| `college.organ_donation` | Organ Donation | College Preparation Plan | (section) |
+| `college.organ_donation_notes` | Organ Donation Notes | College Preparation Plan | (section) |
+| `college.ventilation` | Ventilation | College Preparation Plan | (section) |
 | `dpoa.include_advanced_trust_gifting` | Include Advanced Trust Gifting | Estate Plan Design | (section) |
 | `dpoa.include_entity_powers` | Include Entity Powers | Estate Plan Design | (section) |
 | `dpoa.include_extended_personal_care` | Include Extended Personal Care | Estate Plan Design | (section) |

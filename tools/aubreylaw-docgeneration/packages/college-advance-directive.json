@@ -1,0 +1,16 @@
+{
+  "name": "college-advance-directive",
+  "description": "College Preparation Plan advance directive (living will). Selected only when the student elected written treatment instructions; the operative articles branch on the life-support, CPR, nutrition, ventilation, and organ-donation answers.",
+  "required_fields": [
+    "client.full_name",
+    "client.city"
+  ],
+  "documents": [
+    {
+      "id": "college-advance-directive",
+      "title": "Advance Directive (Living Will)",
+      "template": "templates/college-advance-directive.docx",
+      "output": "03-advance-directive.docx"
+    }
+  ]
+}

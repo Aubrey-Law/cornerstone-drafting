@@ -10,6 +10,33 @@ These names are available in templates *in addition to* the data-dictionary fiel
 | `co_poa_joint` | `false` |  |
 | `co_poa_majority` | `false` |  |
 | `co_poa_separate` | `false` |  |
+| `college_dpoa_all_powers` | `false` |  |
+| `college_dpoa_springing` | `false` |  |
+| `college_hipaa_all_except` | `false` |  |
+| `college_hipaa_expires_on_date` | `false` |  |
+| `college_life_support_all_measures` | `false` |  |
+| `college_life_support_comfort_only` | `false` |  |
+| `college_life_support_trust_agent` | `false` |  |
+| `college_living_will_included` | `false` |  |
+| `college_organ_donation_any` | `false` |  |
+| `college_organ_donation_none` | `false` |  |
+| `college_organ_donation_specific` | `false` |  |
+| `college_power_auto` | `false` |  |
+| `college_power_banking` | `false` |  |
+| `college_power_bills` | `false` |  |
+| `college_power_citations` | `false` |  |
+| `college_power_contracts` | `false` |  |
+| `college_power_credit_cards` | `false` |  |
+| `college_power_digital` | `false` |  |
+| `college_power_employment` | `false` |  |
+| `college_power_financial_aid` | `false` |  |
+| `college_power_housing` | `false` |  |
+| `college_power_insurance_claims` | `false` |  |
+| `college_power_investments` | `false` |  |
+| `college_power_retain_attorney` | `false` |  |
+| `college_power_student_loans` | `false` |  |
+| `college_power_taxes` | `false` |  |
+| `college_power_tuition` | `false` |  |
 | `disinherit_issue` | `false` |  |
 | `distributes_to_descendants` | `false` |  |
 | `dpoa_gifting_authorized` | `false` |  |
@@ -20,6 +47,12 @@ These names are available in templates *in addition to* the data-dictionary fiel
 | `has_charitable_gifts` | `false` |  |
 | `has_children` | `false` | True when any child record has a `full_name`. |
 | `has_co_poa` | `false` | True when the POA has a co-primary agent — pairs with `co_poa_joint` / `co_poa_majority` / `co_poa_separate` (from `poa.co_agents_action`). |
+| `has_college_dpoa_powers` | `false` |  |
+| `has_college_dpoa_withheld` | `false` |  |
+| `has_college_excluded_people` | `false` |  |
+| `has_college_hcp_instructions` | `false` |  |
+| `has_college_hcp_limits` | `false` |  |
+| `has_college_hipaa_recipients` | `false` |  |
 | `has_disinherited` | `false` |  |
 | `has_dpoa_self_dealing_reviewer` | `false` |  |
 | `has_dpoa_self_dealing_reviewer_alt` | `false` |  |
@@ -66,7 +99,7 @@ These names are available in templates *in addition to* the data-dictionary fiel
 
 ## Data roots also present in the context
 
-`children`, `client`, `dpoa`, `execution`, `family`, `ferpa`, `healthcare`, `hipaa`, `minor_children`, `outright_will`, `pour_over`, `state`, `trust`, `will` — see fields.md for their fields. Note the context defaults several nested values (e.g. `will.pr_structure` → `single`, `will.bond` → `no_bond`, `will.utma_age` → `21`), and aliases display fields:
+`children`, `client`, `college`, `dpoa`, `execution`, `family`, `ferpa`, `healthcare`, `hipaa`, `minor_children`, `outright_will`, `pour_over`, `state`, `trust`, `will` — see fields.md for their fields. Note the context defaults several nested values (e.g. `will.pr_structure` → `single`, `will.bond` → `no_bond`, `will.utma_age` → `21`), and aliases display fields:
 
 | Execution field | Empty-payload default |
 |---|---|
