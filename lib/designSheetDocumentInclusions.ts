@@ -1,5 +1,4 @@
 import { designPlanTypeIncludesRevocableTrust, normalizeDesignPlanType } from '@/lib/designPlanType'
-import { sheetIsMarried } from '@/lib/designSheet/maritalStatus'
 import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
 import type { DesignSheet } from '@/types/database'
 
@@ -66,10 +65,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'marital_status'> & Partial<Pick<DesignSheet, 'children'>>): DesignDocumentInclusions {
+export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'marital_status' | 'matter_type'> & Partial<Pick<DesignSheet, 'children'>>): DesignDocumentInclusions {
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
   const hasPlanType = normalizedPlanType !== null
-  const isMarried = sheetIsMarried(sheet.marital_status)
+  const isMarried = sheet.matter_type === 'couple'
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(sheet.children)
 
   return {

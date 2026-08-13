@@ -8,10 +8,14 @@ import {
   SectionDivider,
   SelectInput,
   TextInput,
-  ToggleSwitch,
 } from '@/components/intake/IntakeFormPrimitives'
 import { IntakeField } from '@/components/sharedFields/IntakeField'
-import { SUFFIX_OPTIONS } from '@/lib/sharedFields'
+import {
+  CITIZENSHIP_STATUS_OPTIONS,
+  SUFFIX_OPTIONS,
+  citizenshipStatusToLegacyBoolean,
+  normalizeCitizenshipStatus,
+} from '@/lib/sharedFields'
 import { cn } from '@/lib/utils'
 
 import type { StepProps } from './IntakeWizard'
@@ -94,6 +98,12 @@ export function StepFamily({ data, update }: StepProps) {
 
 export function StepSpouse({ data, update }: StepProps) {
   const spouse = (data._spouse as Record<string, string>) ?? {}
+  const spouseCitizenshipStatus = normalizeCitizenshipStatus(
+    spouse.citizenship_status,
+    typeof (spouse as Record<string, unknown>).is_us_citizen === 'boolean'
+      ? (spouse as Record<string, unknown>).is_us_citizen as boolean
+      : null,
+  )
 
   function updateSpouse(field: string, value: string | boolean) {
     update('_spouse', { ...spouse, [field]: value })
@@ -151,11 +161,20 @@ export function StepSpouse({ data, update }: StepProps) {
         </FormField>
         <div />
       </Row2>
-      <ToggleSwitch
-        checked={(spouse.is_us_citizen as unknown as boolean) ?? true}
-        onChange={(value) => update('_spouse', { ...spouse, is_us_citizen: value })}
-        label="U.S. Citizen"
-      />
+      <FormField label="Citizenship / immigration status">
+        <SelectInput
+          value={spouseCitizenshipStatus}
+          onChange={(value) => {
+            const status = normalizeCitizenshipStatus(value)
+            update('_spouse', {
+              ...spouse,
+              citizenship_status: status,
+              is_us_citizen: citizenshipStatusToLegacyBoolean(status),
+            })
+          }}
+          options={[...CITIZENSHIP_STATUS_OPTIONS]}
+        />
+      </FormField>
       <SectionDivider title="Contact" />
       <Row2>
         <FormField label="Email">

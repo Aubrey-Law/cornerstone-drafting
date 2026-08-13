@@ -99,7 +99,7 @@ export function PlanDesignSection({
   const inclusions = getDocumentInclusions(sheet)
   const estatePlanSetup = getEstatePlanDesignSetup(sheet)
   const needsDistributionMethod = resolveResidualBeneficiaryMethod(sheet) == null
-  const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
+  const isMarried = sheet.matter_type === 'couple'
   const fundingDocKeys: FundingDocumentKey[] = [
     'certificate_of_trust',
     'assignment_of_personal_property',

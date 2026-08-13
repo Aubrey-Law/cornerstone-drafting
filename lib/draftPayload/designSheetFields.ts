@@ -3,6 +3,8 @@ import { sheetIsMarried } from '@/lib/designSheet/maritalStatus'
 
 export type DesignSheetLike = {
   decisions?: Record<string, unknown> | null
+  matter_type?: 'individual' | 'couple' | null
+  marital_status?: string | null
 }
 
 /** Split a full name into first token + remainder (best-effort for drafting). */
@@ -35,5 +37,7 @@ export function designSheetMaritalStatus(designSheet: DesignSheetLike | null): s
  * showed the spouse's documents and the package quietly left them out.
  */
 export function isDesignSheetMarried(designSheet: DesignSheetLike | null): boolean {
+  if (designSheet?.matter_type === 'couple') return true
+  if (designSheet?.matter_type === 'individual') return false
   return sheetIsMarried(designSheetMaritalStatus(designSheet))
 }

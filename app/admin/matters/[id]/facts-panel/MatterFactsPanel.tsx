@@ -14,7 +14,7 @@ import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea
 import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { resolveDraftingDate, DRAFTING_DATE_COLUMNS } from '@/lib/matter/draftingDates'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
-import { isCoupleMatter, MATTER_TYPE_OPTIONS, normalizeMatterType } from '@/lib/matter/matterType'
+import { isCoupleMatter, MATTER_TYPE_OPTIONS, normalizeMatterType, type MatterType } from '@/lib/matter/matterType'
 import { MARITAL_STATUS_OPTIONS } from '@/lib/sharedFields'
 import {
   REFERRAL_SOURCE_OPTIONS,
@@ -69,6 +69,8 @@ interface ContactRecord {
 export interface MatterFactsPanelProps {
   matter: PipelineMatter
   matterId: string
+  matterType: MatterType | null
+  matterTypeSaving?: boolean
   details: MatterDetailsRow | null
   designSheetPlanType: string | null
   /** Design-sheet-owned plan facts, resolved server-side and read-only here. */
@@ -88,6 +90,7 @@ export interface MatterFactsPanelProps {
   noteCount: number
   latestNoteAt: string | null
   onSaveField: (field: keyof MatterDetailsRow, value: unknown) => Promise<void>
+  onSaveMatterType: (matterType: MatterType) => Promise<void>
   savingField: keyof MatterDetailsRow | null
   lastSavedAt: string | null
   error: string | null
@@ -160,6 +163,8 @@ function minorChildrenLabel(children: ContactRecord[], flag: boolean | null | un
 export function MatterFactsPanel({
   matter,
   matterId,
+  matterType,
+  matterTypeSaving = false,
   details,
   designSheetPlanType,
   planMirror = EMPTY_PLAN_MIRROR,
@@ -175,6 +180,7 @@ export function MatterFactsPanel({
   noteCount,
   latestNoteAt,
   onSaveField,
+  onSaveMatterType,
   savingField,
   lastSavedAt,
   error,
@@ -312,7 +318,7 @@ export function MatterFactsPanel({
     || ''
   const spouseDob = spouse?.date_of_birth ?? matter.spouse_dob ?? null
   // Matter type, not marital status, decides whether the spouse surfaces show.
-  const isCouple = isCoupleMatter(details, maritalStatus)
+  const isCouple = isCoupleMatter(matterType)
   const planLabel = designSheetPlanType || planMirror.planType
     ? designPlanTypeLabel(designSheetPlanType ?? planMirror.planType)
     : '—'
@@ -792,9 +798,13 @@ export function MatterFactsPanel({
         <InlineSelect
           label="Matter type"
           accent
-          value={normalizeMatterType(details?.matter_type) ?? (isCouple ? 'couple' : 'individual')}
-          options={MATTER_TYPE_OPTIONS}
-          onSave={next => onSaveField('matter_type', next)}
+          value={normalizeMatterType(matterType) ?? ''}
+          options={[
+            { value: '', label: 'Confirm…' },
+            ...MATTER_TYPE_OPTIONS,
+          ]}
+          disabled={matterTypeSaving}
+          onSave={next => next ? onSaveMatterType(next as MatterType) : undefined}
         />
         <ReadOnlyRow label="County" empty={!county} hideWhenEmpty={hideWhenEmpty}>
           {county || '—'}

@@ -81,10 +81,14 @@ function getDesignSlots(designSheet: DesignSheetRow | null, key: keyof Pick<
   return isFiduciarySlotArray(fromDecisions) ? fromDecisions : []
 }
 
-export function designSheetForDocumentInclusions(designSheet: DesignSheetRow | null) {
+export function designSheetForDocumentInclusions(
+  designSheet: DesignSheetRow | null,
+  matterType?: 'individual' | 'couple' | null,
+) {
   return {
     plan_type: designSheet?.plan_type ?? null,
     marital_status: designSheet?.marital_status ?? null,
+    matter_type: matterType ?? null,
     decisions: designSheet?.decisions ?? null,
     children: designSheet?.children ?? null,
   }

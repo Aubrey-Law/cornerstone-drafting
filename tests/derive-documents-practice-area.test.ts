@@ -22,14 +22,19 @@ describe('drafting reads marital status the way the design sheet does', () => {
     expect(isDesignSheetMarried(null)).toBe(false)
   })
 
-  it('keeps the spouse documents in the package for a remarried client', () => {
-    const sheet = { plan_type: 'pour_over', marital_status: 'remarried', children: null }
+  it('prefers explicit participant composition when it is available', () => {
+    expect(isDesignSheetMarried({ matter_type: 'individual', marital_status: 'married' })).toBe(false)
+    expect(isDesignSheetMarried({ matter_type: 'couple', marital_status: 'single' })).toBe(true)
+  })
+
+  it('keeps spouse documents based on couple matter type, independent of marital wording', () => {
+    const sheet = { plan_type: 'pour_over', matter_type: 'couple' as const, marital_status: 'remarried', children: null }
     const docs = deriveDocuments(
       'EP',
       [],
       false,
       false,
-      isDesignSheetMarried(sheet as never),
+      sheet.matter_type === 'couple',
       'pour_over',
       defaultDocumentInclusions(sheet),
       'outright_to_spouse',

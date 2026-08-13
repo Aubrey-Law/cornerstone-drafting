@@ -336,6 +336,7 @@ describe('draft payload generator gap wiring', () => {
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
+            matter_type: 'individual',
           },
           error: null,
         },

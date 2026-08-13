@@ -405,8 +405,8 @@ function sheetSaysUnmarried(sheet: Record<string, unknown>): boolean {
  * fiduciaries at all, so the flags and the readiness rail stay in step.
  */
 function spouseDocumentsDropped(sheet: Record<string, unknown>): boolean {
-  if (!maritalStatusAnswered(sheet)) return false
-  if (sheetSaysUnmarried(sheet)) return true
+  if (sheet.matter_type !== 'individual' && sheet.matter_type !== 'couple') return false
+  if (sheet.matter_type === 'individual') return true
   return !getDocumentInclusions(
     sheet as unknown as Parameters<typeof getDocumentInclusions>[0],
   ).spouse_docs

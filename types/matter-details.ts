@@ -15,7 +15,6 @@ export interface MatterDetailsRow {
 
   // ── Core / shared ──
   matter_number?: string | null
-  matter_type?: string | null
   open_date?: string | null
   target_close_date?: string | null
   closed_date?: string | null

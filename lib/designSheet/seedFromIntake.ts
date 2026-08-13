@@ -5,6 +5,8 @@ import { intakePlanTypeMapping } from '@/lib/intakePlanType'
 import { normalizeOverrideValue } from '@/lib/designSheet/buildInitialSheet'
 import { formatDesignSheetImportValue } from '@/lib/designSheetImport/shared'
 import {
+  citizenshipDesignLabel,
+  normalizeCitizenshipStatus,
   syncConcernsFromIntake,
   syncFieldToDesign,
   syncGoalsNotesFromIntake,
@@ -142,7 +144,10 @@ export function buildIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayloa
     client_email: intake.email,
     client_pronouns: intake.preferred_pronoun,
     client_aka: trimOrNull(intake.prior_names),
-    client_citizenship: syncFieldToDesign('client_citizenship', intake.is_us_citizen),
+    client_citizenship: citizenshipDesignLabel(normalizeCitizenshipStatus(
+      intake.citizenship_status,
+      intake.is_us_citizen,
+    )),
     client_domicile: syncFieldToDesign('client_domicile', intake.state),
     marital_status: syncFieldToDesign('marital_status', intake.marital_status),
     street: intake.address_line1,
@@ -156,7 +161,10 @@ export function buildIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayloa
     spouse_email: intake.spouse_email,
     spouse_pronouns: intake.spouse_preferred_pronoun,
     spouse_aka: trimOrNull(intake.spouse_prior_names),
-    spouse_citizenship: syncFieldToDesign('spouse_citizenship', intake.spouse_is_us_citizen),
+    spouse_citizenship: citizenshipDesignLabel(normalizeCitizenshipStatus(
+      intake.spouse_citizenship_status,
+      intake.spouse_is_us_citizen,
+    )),
     marriage_date: intake.date_of_marriage,
     children: intakeChildren(intake),
     goals_notes: syncGoalsNotesFromIntake(record) ?? null,

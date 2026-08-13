@@ -266,6 +266,8 @@ export interface DesignSheet {
   matter_id: string
   version: number
   status: 'draft' | 'ready' | 'generated' | 'signed'
+  /** Transient matter-owned participant composition; never persisted on design_sheets. */
+  matter_type?: 'individual' | 'couple' | null
 
   // Client
   client_name: string | null

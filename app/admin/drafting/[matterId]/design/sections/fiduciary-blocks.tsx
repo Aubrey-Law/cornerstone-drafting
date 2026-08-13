@@ -84,8 +84,7 @@ export function spouseSlotFields(
 }
 
 export function isMarriedSheet(sheet: DesignSheet) {
-  const marital = (sheet.marital_status ?? '').toLowerCase()
-  return marital.includes('married') && !marital.includes('never')
+  return sheet.matter_type === 'couple'
 }
 
 /** Full display name for party tabs / section labels (sheet first, then matter). */

@@ -31,6 +31,7 @@ export const CITIZENSHIP_OPTIONS: FieldOption[] = [
   { value: 'US Citizen', label: 'US Citizen' },
   { value: 'Permanent Resident', label: 'Permanent Resident' },
   { value: 'Non-Resident Alien', label: 'Non-Resident Alien' },
+  { value: 'Non-US — status unconfirmed', label: 'Non-US — status unconfirmed' },
 ]
 
 export const CHILD_RELATIONSHIP_OPTIONS: FieldOption[] = [

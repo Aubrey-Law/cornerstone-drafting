@@ -1,36 +1,43 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- permissive until generated types are checked in */
 /**
- * Supabase `Database` generic for `@supabase/supabase-js` clients.
+ * Compatibility adapter while existing queries are migrated to the checked-in
+ * generated schema in `types/supabase.generated.ts`.
  *
- * Uses a permissive table map so query builders stay usable without checking
- * in full generated types. App-specific row shapes live in `types/database.ts`.
+ * New or materially changed database code should use `GeneratedDatabase`
+ * directly. Removing this adapter is tracked by `check:db-types`; its presence
+ * is intentional until the generated-type backlog is resolved table by table.
  */
+export type { Database as GeneratedDatabase, Json } from './supabase.generated'
 
-type AnyRow = { [column: string]: any }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CompatibilityRow = { [column: string]: any }
 
-type AnyTable = {
+type CompatibilityTable = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Row: any
-  Insert: AnyRow
-  Update: AnyRow
+  Insert: CompatibilityRow
+  Update: CompatibilityRow
   Relationships: []
 }
 
-type AnyView = {
+type CompatibilityView = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Row: any
   Relationships: []
 }
 
-type AnyFunction = {
+type CompatibilityFunction = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Args: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Returns: any
 }
 
 export type Database = {
   public: {
-    Tables: Record<string, AnyTable>
-    Views: Record<string, AnyView>
-    Functions: Record<string, AnyFunction>
+    Tables: Record<string, CompatibilityTable>
+    Views: Record<string, CompatibilityView>
+    Functions: Record<string, CompatibilityFunction>
     Enums: Record<string, never>
-    CompositeTypes: Record<string, Record<string, any>>
+    CompositeTypes: Record<string, Record<string, never>>
   }
 }

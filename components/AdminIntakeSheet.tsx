@@ -29,6 +29,9 @@ import {
   MARITAL_STATUS_OPTIONS,
   ESTATE_VALUE_OPTIONS,
   PRONOUN_OPTIONS,
+  CITIZENSHIP_STATUS_OPTIONS,
+  citizenshipStatusToLegacyBoolean,
+  normalizeCitizenshipStatus,
 } from '@/lib/sharedFields'
 import {
   adminFiduciaryFlatFromRoles,
@@ -470,10 +473,14 @@ export default function AdminIntakeSheet({
                   <Input className={inputCls} type="date" value={str('date_of_birth')} onChange={e => set('date_of_birth', e.target.value)} />
                 </Field>
                 <Field>
-                  <FieldLabel>US Citizen</FieldLabel>
-                  <div className="mt-1">
-                    <SegmentedYesNo value={bool('is_us_citizen')} onChange={v => set('is_us_citizen', v)} />
-                  </div>
+                  <FieldLabel>Citizenship / immigration status</FieldLabel>
+                  <select className={selectCls} value={form.citizenship_status} onChange={e => {
+                    const status = normalizeCitizenshipStatus(e.target.value)
+                    set('citizenship_status', status)
+                    set('is_us_citizen', citizenshipStatusToLegacyBoolean(status))
+                  }}>
+                    {CITIZENSHIP_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
                 </Field>
                 <Field>
                   <FieldLabel>Pronouns</FieldLabel>
@@ -613,13 +620,14 @@ export default function AdminIntakeSheet({
                       <Input className={inputCls} type="date" value={str('spouse_date_of_birth')} onChange={e => set('spouse_date_of_birth', e.target.value)} />
                     </Field>
                     <Field>
-                      <FieldLabel>US Citizen</FieldLabel>
-                      <div className="mt-1">
-                        <SegmentedYesNo
-                          value={bool('spouse_is_us_citizen')}
-                          onChange={v => set('spouse_is_us_citizen', v)}
-                        />
-                      </div>
+                      <FieldLabel>Citizenship / immigration status</FieldLabel>
+                      <select className={selectCls} value={form.spouse_citizenship_status} onChange={e => {
+                        const status = normalizeCitizenshipStatus(e.target.value)
+                        set('spouse_citizenship_status', status)
+                        set('spouse_is_us_citizen', citizenshipStatusToLegacyBoolean(status))
+                      }}>
+                        {CITIZENSHIP_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
                     </Field>
                     <Field>
                       <FieldLabel>Pronouns</FieldLabel>
@@ -1142,6 +1150,7 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
     suffix: str('suffix'),
     date_of_birth: str('date_of_birth'),
     is_us_citizen: bool('is_us_citizen'),
+    citizenship_status: normalizeCitizenshipStatus(raw['citizenship_status'], bool('is_us_citizen')),
     preferred_pronoun: str('preferred_pronoun'),
     phone: formatPhoneInput(str('phone')),
     email: str('email'),
@@ -1160,9 +1169,11 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
     spouse_middle_name: typeof spouseData.middle_name === 'string' ? spouseData.middle_name : str('spouse_middle_name'),
     spouse_last_name: typeof spouseData.last_name === 'string' ? spouseData.last_name : str('spouse_last_name'),
     spouse_date_of_birth: typeof spouseData.date_of_birth === 'string' ? spouseData.date_of_birth : str('spouse_date_of_birth'),
-    // Spouse citizenship defaults to yes, matching the client's own field and
-    // the design sheet's "US Citizen" default.
-    spouse_is_us_citizen: typeof spouseData.is_us_citizen === 'boolean' ? spouseData.is_us_citizen : true,
+    spouse_is_us_citizen: typeof spouseData.is_us_citizen === 'boolean' ? spouseData.is_us_citizen : null,
+    spouse_citizenship_status: normalizeCitizenshipStatus(
+      spouseData.citizenship_status,
+      typeof spouseData.is_us_citizen === 'boolean' ? spouseData.is_us_citizen : null,
+    ),
     spouse_preferred_pronoun:
       typeof spouseData.preferred_pronoun === 'string' ? spouseData.preferred_pronoun : '',
     spouse_phone: formatPhoneInput(typeof spouseData.phone === 'string' ? spouseData.phone : str('spouse_phone')),

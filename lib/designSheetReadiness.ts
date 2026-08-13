@@ -3,7 +3,6 @@ import { dpoaCoagentServingDecided, dpoaCompensationDecided, getDesignSheetDpoaP
 import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
 import { namedPrincipalSlots } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
-import { sheetIsMarried } from '@/lib/designSheet/maritalStatus'
 import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { DESIGN_SECTION_IDS, normalizeDesignSectionId } from '@/lib/designSheet/sectionIds'
@@ -131,7 +130,7 @@ function alternateContactId(slots: FiduciarySlotSeries | null | undefined) {
 }
 
 function isMarried(sheet: DesignSheet) {
-  return sheetIsMarried(sheet.marital_status)
+  return sheet.matter_type === 'couple'
 }
 
 function blocker(

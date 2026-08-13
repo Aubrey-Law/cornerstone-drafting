@@ -11,6 +11,7 @@ import { formatUnreviewedUploadDetail, formatUnreviewedUploadLabel } from '@/lib
 import type { PipelineMatter } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
 import { isCoupleMatter } from '@/lib/matter/matterType'
+import type { MatterType } from '@/lib/matter/matterType'
 import {
   resolveIntakeReviewTarget,
   type IntakeReadinessFlag,
@@ -19,6 +20,7 @@ import {
 
 interface MatterOverviewHeroProps {
   matter: PipelineMatter
+  matterType?: MatterType | null
   details?: MatterDetailsRow | null
   nextAction: MatterNextAction
   unreadPortalCount: number
@@ -50,7 +52,8 @@ function ContactLine({ label, name, email, phone }: { label: string; name: strin
 
 export function MatterOverviewHero({
   matter,
-  details = null,
+  matterType = null,
+  details: _details = null,
   nextAction,
   unreadPortalCount,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
@@ -67,7 +70,7 @@ export function MatterOverviewHero({
   const isEngagementAction = nextAction.kind === 'send-engagement' || nextAction.kind === 'waiting-engagement'
   const uploadLabel = formatUnreviewedUploadLabel(unreviewedUploadCounts)
   const uploadDetail = formatUnreviewedUploadDetail(unreviewedUploadCounts)
-  const showSpouse = isCoupleMatter(details, matter.marital_status)
+  const showSpouse = isCoupleMatter(matterType)
   const groupedFlags = reviewFlags.reduce<Record<IntakeReadinessResolutionKind, IntakeReadinessFlag[]>>(
     (groups, flag) => {
       const kind = flag.resolutionKind

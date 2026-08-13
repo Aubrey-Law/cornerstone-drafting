@@ -3,7 +3,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { DesignSheet, MatterContact, RemoteCharity, SpecificBequest } from '@/types/database'
+import type { MatterContact, RemoteCharity, SpecificBequest } from '@/types/database'
 import ContactPicker, { type Contact } from './ContactPicker'
 import {
   AttorneyInput,
@@ -32,7 +32,7 @@ export function TrustBeneficiariesSection({
   specificBequestsOnly = false,
   remoteBeneficiariesOnly = false,
 }: TrustBeneficiariesSectionProps) {
-  const isMarried = (sheet.marital_status ?? '').toLowerCase().includes('married')
+  const isMarried = sheet.matter_type === 'couple'
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || ''
   const spouseFirst = (sheet.spouse_name ?? '').trim().split(/\s+/)[0] || ''
   const documentOptions = [

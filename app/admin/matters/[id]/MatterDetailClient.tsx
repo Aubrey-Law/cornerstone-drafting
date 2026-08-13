@@ -18,6 +18,7 @@ import {
   type PipelineMatter,
 } from '@/types/database'
 import type { MatterDetailsRow } from '@/types/matter-details'
+import type { MatterType } from '@/lib/matter/matterType'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
 import type { MarketingConsentStatus } from '@/lib/crm/consent'
 import { Button } from '@/components/ui/button'
@@ -121,6 +122,7 @@ interface MatterDetailClientProps {
   } | null
   matterNumber?: string | null
   matterNumberManual?: boolean
+  initialMatterType?: MatterType | null
   matterDetails?: MatterDetailsRow | null
   designSheetPlanType?: string | null
   planMirror?: MatterPlanMirror
@@ -172,6 +174,7 @@ function MatterDetailClientInner({
   clientIntakeRow = null,
   matterNumber: initialMatterNumber = null,
   matterNumberManual = false,
+  initialMatterType = null,
   matterDetails: initialMatterDetails = null,
   designSheetPlanType = null,
   planMirror = EMPTY_PLAN_MIRROR,
@@ -213,6 +216,8 @@ function MatterDetailClientInner({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
+  const [matterType, setMatterType] = useState<MatterType | null>(initialMatterType)
+  const [matterTypeSaving, setMatterTypeSaving] = useState(false)
   const [unlocking, setUnlocking] = useState(false)
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
@@ -289,6 +294,29 @@ function MatterDetailClientInner({
     },
     [saveMatterDetailField],
   )
+
+  const handleSaveMatterType = useCallback(async (next: MatterType) => {
+    setMatterTypeSaving(true)
+    try {
+      const response = await fetch(`/api/admin/matters/${matterId}/matter-type`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ matterType: next }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? 'Could not save matter type')
+      setMatterType(next)
+      toast.success('Matter type saved', { id: 'matter-type-save', duration: 1200 })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save matter type')
+      throw error
+    } finally {
+      setMatterTypeSaving(false)
+    }
+  }, [matterId, token])
 
   const practiceArea = normalizePracticeArea(matterDetails?.practice_area ?? matter.practice_area)
   const showProbate = practiceArea === 'Probate'
@@ -545,7 +573,7 @@ function MatterDetailClientInner({
     } finally {
       setStageSaving(false)
     }
-  }, [matter.stage, router, token])
+  }, [matter.matter_id, matter.stage, router, token])
 
   const [closingMatter, setClosingMatter] = useState(false)
   /**
@@ -789,6 +817,8 @@ function MatterDetailClientInner({
           <MatterFactsPanel
             matter={matter}
             matterId={matterId}
+            matterType={matterType}
+            matterTypeSaving={matterTypeSaving}
             details={matterDetails}
             designSheetPlanType={designSheetPlanType}
             planMirror={planMirror}
@@ -804,6 +834,7 @@ function MatterDetailClientInner({
             noteCount={linkedNotes.length}
             latestNoteAt={linkedNotes[0]?.created_at ?? null}
             onSaveField={handleSaveMatterDetailField}
+            onSaveMatterType={handleSaveMatterType}
             savingField={savingField}
             lastSavedAt={lastSavedAt}
             error={matterDetailsError}
@@ -902,6 +933,7 @@ function MatterDetailClientInner({
                 />
                 <MatterOverviewHero
                   matter={matter}
+                  matterType={matterType}
                   details={matterDetails}
                   nextAction={nextAction}
                   unreadPortalCount={unreadPortalCount}

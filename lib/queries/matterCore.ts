@@ -220,6 +220,7 @@ export interface IntakeSnapshot {
   preferred_pronoun: string | null
   prior_names: string | null
   is_us_citizen: boolean | null
+  citizenship_status: import('@/lib/sharedFields').CitizenshipStatus | null
   spouse_first_name: string | null
   spouse_middle_name: string | null
   spouse_last_name: string | null
@@ -229,6 +230,7 @@ export interface IntakeSnapshot {
   spouse_preferred_pronoun: string | null
   spouse_prior_names: string | null
   spouse_is_us_citizen: boolean | null
+  spouse_citizenship_status: import('@/lib/sharedFields').CitizenshipStatus | null
   date_of_marriage: string | null
   children: DesignSheetChild[] | null
   has_minor_children: boolean | null
@@ -365,6 +367,7 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     preferred_pronoun: (ai.preferred_pronoun as string) || null,
     prior_names: (ai.prior_names as string) || null,
     is_us_citizen: (ai.is_us_citizen as boolean) ?? null,
+    citizenship_status: (ai.citizenship_status as import('@/lib/sharedFields').CitizenshipStatus) ?? null,
     spouse_first_name: spouse?.first_name || null,
     spouse_middle_name: spouse?.middle_name || null,
     spouse_last_name: spouse?.last_name || null,
@@ -374,6 +377,7 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     spouse_preferred_pronoun: spouse?.preferred_pronoun || null,
     spouse_prior_names: spouse?.prior_names || null,
     spouse_is_us_citizen: spouse?.is_us_citizen ?? null,
+    spouse_citizenship_status: spouse?.citizenship_status ?? null,
     date_of_marriage: (ai.date_of_marriage as string) || null,
     children,
     has_minor_children: (ai.has_minor_children as boolean) ?? null,

@@ -100,6 +100,7 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
             if (spousePreferredPronoun !== undefined) payload.spouse_preferred_pronoun = spousePreferredPronoun
             if (s.date_of_birth  !== undefined) payload.spouse_date_of_birth  = (s.date_of_birth as string) || null
             if (s.is_us_citizen  !== undefined) payload.spouse_is_us_citizen  = s.is_us_citizen
+            if (s.citizenship_status !== undefined) payload.spouse_citizenship_status = s.citizenship_status
             if (s.phone          !== undefined) payload.spouse_phone          = s.phone
             if (s.email          !== undefined) payload.spouse_email          = s.email
           }

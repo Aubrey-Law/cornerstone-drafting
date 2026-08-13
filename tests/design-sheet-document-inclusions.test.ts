@@ -16,7 +16,7 @@ import {
 
 /** Minimal sheet for inclusion getters when only `decisions` matters to the test. */
 function sheetWithDecisions(decisions: Record<string, unknown>) {
-  return { marital_status: null, plan_type: null, decisions }
+  return { marital_status: null, matter_type: null, plan_type: null, decisions }
 }
 
 describe('design sheet document inclusions', () => {
@@ -29,18 +29,12 @@ describe('design sheet document inclusions', () => {
     vi.useRealTimers()
   })
 
-  // 'never married' contains 'married', so a bare substring test read it as a
-  // spouse and defaulted the spouse's documents into the plan.
-  it('defaults spouse documents off for a never-married client', () => {
-    const inclusions = (marital_status: string) =>
-      defaultDocumentInclusions({ plan_type: 'pour_over', marital_status }).spouse_docs
+  it('defaults spouse documents from matter type rather than marital status', () => {
+    const inclusions = (matter_type: 'individual' | 'couple', marital_status: string) =>
+      defaultDocumentInclusions({ plan_type: 'pour_over', matter_type, marital_status }).spouse_docs
 
-    expect(inclusions('never married')).toBe(false)
-    expect(inclusions('Never Married')).toBe(false)
-    expect(inclusions('never_married')).toBe(false)
-    expect(inclusions('single')).toBe(false)
-    expect(inclusions('married')).toBe(true)
-    expect(inclusions('remarried')).toBe(true)
+    expect(inclusions('individual', 'married')).toBe(false)
+    expect(inclusions('couple', 'single')).toBe(true)
   })
 
   it('still lets an explicit spouse_docs choice win over the default', () => {

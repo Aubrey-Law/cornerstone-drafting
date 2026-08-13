@@ -13,12 +13,12 @@ export const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wor
 
 export const LEAD_INTAKE_IMPORT_SYSTEM_PROMPT = `You extract structured Massachusetts estate planning intake data from unstructured text the attorney provides (emails, Lawmatics exports, prior questionnaires, meeting notes, or Word documents).
 
-Output ONLY a single JSON object that matches the schema below. Use empty strings for unknown text fields, false for unknown booleans, [] for unknown arrays. Never invent data - if a field is not stated, leave it empty/false. Dates must be ISO YYYY-MM-DD. Phones can be any format. State defaults to "MA" only if the text clearly indicates a Massachusetts client.
+Output ONLY a single JSON object that matches the schema below. Use empty strings for unknown text fields, false for ordinary unknown booleans, and [] for unknown arrays. Citizenship status must be "unknown" when unstated; never infer it. Never invent data. Dates must be ISO YYYY-MM-DD. Phones can be any format. State defaults to "MA" only if the text clearly indicates a Massachusetts client.
 
 Schema:
 {
   "first_name": string, "middle_name": string, "last_name": string, "suffix": string,
-  "date_of_birth": string, "is_us_citizen": boolean, "preferred_pronoun": "" | "he/him" | "she/her" | "they/them" | "ze/zir" | "other",
+  "date_of_birth": string, "citizenship_status": "unknown" | "us_citizen" | "permanent_resident" | "nonresident_alien" | "non_us_unspecified" | "other", "preferred_pronoun": "" | "he/him" | "she/her" | "they/them" | "ze/zir" | "other",
   "phone": string, "email": string,
   "address_line1": string, "address_line2": string, "city": string, "state": string, "zip": string, "county": string,
   "marital_status": "" | "single" | "married" | "divorced" | "widowed" | "separated" | "domestic_partner",
@@ -26,7 +26,7 @@ Schema:
   "children": [ { "first_name": string, "last_name": string, "date_of_birth": string, "preferred_pronoun": string } ],
   "family_notes": string,
   "spouse_first_name": string, "spouse_last_name": string, "spouse_date_of_birth": string,
-  "spouse_is_us_citizen": boolean, "spouse_preferred_pronoun": string,
+  "spouse_citizenship_status": "unknown" | "us_citizen" | "permanent_resident" | "nonresident_alien" | "non_us_unspecified" | "other", "spouse_preferred_pronoun": string,
   "spouse_phone": string, "spouse_email": string, "date_of_marriage": string,
   "estate_value": string, "has_real_property": boolean, "real_property_address": string, "real_property_value": string,
   "has_retirement": boolean, "retirement_value": string,
@@ -69,7 +69,9 @@ export function coerceLeadIntakeImport(parsed: unknown): AdminIntakeFormData {
     const v = p[key]
     const def = empty[key]
 
-    if (Array.isArray(def)) {
+    if (key === 'is_us_citizen' || key === 'spouse_is_us_citizen') {
+      out[key] = typeof v === 'boolean' ? v : null
+    } else if (Array.isArray(def)) {
       if (key === 'children' && Array.isArray(v)) {
         out[key] = v
           .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object' && !Array.isArray(c))

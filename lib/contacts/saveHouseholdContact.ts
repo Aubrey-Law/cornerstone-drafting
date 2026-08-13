@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { formatPhoneForStorage } from '@/lib/phone'
+import type { CitizenshipStatus } from '@/lib/sharedFields'
 
 type AdminClient = SupabaseClient<Database>
 
@@ -19,6 +20,7 @@ export interface HouseholdContactInput {
   prior_names?: string | null
   date_of_birth?: string | null
   is_us_citizen?: boolean | null
+  citizenship_status?: CitizenshipStatus | null
   email?: string | null
   phone?: string | null
   address_line1?: string | null
@@ -33,7 +35,7 @@ export interface HouseholdContactInput {
 
 const FILL_SUPPLEMENTAL_FIELDS = [
   'middle_name', 'suffix', 'preferred_name', 'preferred_pronoun', 'prior_names',
-  'date_of_birth', 'is_us_citizen', 'email', 'phone',
+  'date_of_birth', 'is_us_citizen', 'citizenship_status', 'email', 'phone',
   'address_line1', 'address_line2', 'city', 'state', 'zip', 'county',
 ] as const
 
@@ -81,6 +83,7 @@ function buildPayload(input: HouseholdContactInput): Record<string, unknown> {
     prior_names: nullable(input.prior_names),
     date_of_birth: nullable(input.date_of_birth),
     is_us_citizen: typeof input.is_us_citizen === 'boolean' ? input.is_us_citizen : null,
+    citizenship_status: input.citizenship_status ?? null,
     email: nullable(input.email),
     phone: formatPhoneForStorage(typeof input.phone === 'string' ? input.phone : ''),
     address_line1: nullable(input.address_line1),

@@ -18,7 +18,8 @@ export interface AdminIntakeFormData {
   last_name: string
   suffix: string
   date_of_birth: string
-  is_us_citizen: boolean
+  is_us_citizen: boolean | null
+  citizenship_status: import('@/lib/sharedFields').CitizenshipStatus
   preferred_pronoun: string
   phone: string
   email: string
@@ -41,7 +42,8 @@ export interface AdminIntakeFormData {
   spouse_middle_name: string
   spouse_last_name: string
   spouse_date_of_birth: string
-  spouse_is_us_citizen: boolean
+  spouse_is_us_citizen: boolean | null
+  spouse_citizenship_status: import('@/lib/sharedFields').CitizenshipStatus
   spouse_preferred_pronoun: string
   spouse_phone: string
   spouse_email: string
@@ -109,12 +111,12 @@ export interface AdminIntakeFormData {
 export function emptyAdminIntakeFormData(): AdminIntakeFormData {
   return {
     first_name: '', middle_name: '', last_name: '', suffix: '',
-    date_of_birth: '', is_us_citizen: true, preferred_pronoun: '', phone: '', email: '',
+    date_of_birth: '', is_us_citizen: null, citizenship_status: 'unknown', preferred_pronoun: '', phone: '', email: '',
     address_line1: '', address_line2: '', city: '', state: 'MA', zip: '', county: '',
     marital_status: '', has_children: false, has_minor_children: false,
     children: [], family_notes: '',
     spouse_first_name: '', spouse_middle_name: '', spouse_last_name: '', spouse_date_of_birth: '',
-    spouse_is_us_citizen: true, spouse_preferred_pronoun: '',
+    spouse_is_us_citizen: null, spouse_citizenship_status: 'unknown', spouse_preferred_pronoun: '',
     spouse_phone: '', spouse_email: '', date_of_marriage: '',
     estate_value: '', has_real_property: false, real_property_address: '',
     real_property_value: '', has_retirement: false, retirement_value: '',
