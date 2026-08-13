@@ -13,6 +13,8 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 }))
 
 import { POST as createItem } from '@/app/api/admin/billing/items/route'
+import { DELETE as deleteItem, PATCH as updateItem } from '@/app/api/admin/billing/items/[id]/route'
+import { POST as bulkDelete } from '@/app/api/admin/billing/items/bulk-delete/route'
 import { POST as invoice } from '@/app/api/admin/billing/items/[id]/invoice/route'
 import { POST as payment } from '@/app/api/admin/billing/items/[id]/payments/route'
 import { POST as reminder } from '@/app/api/admin/billing/items/[id]/reminder/route'
@@ -273,5 +275,208 @@ describe('billing mutation routes', () => {
     )
 
     expect(response.status).toBe(409)
+  })
+
+  const SECOND_ITEM_ID = '44444444-4444-4444-8444-444444444444'
+
+  function bulkDeleteRequest(body: unknown) {
+    return new Request('http://app.test/api/admin/billing/items/bulk-delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('rejects an unauthenticated deletion before touching billing data', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      err: Response.json({ error: 'Unauthorized' }, { status: 401 }),
+      userId: null,
+      user: null,
+    })
+
+    const single = await deleteItem(new Request('http://app.test/api/admin/billing'), context)
+    const bulk = await bulkDelete(bulkDeleteRequest({ ids: [ITEM_ID] }))
+
+    expect(single.status).toBe(401)
+    expect(bulk.status).toBe(401)
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('deletes one charge through the audited RPC with the actor', async () => {
+    mocks.rpc.mockResolvedValue({ data: [{ id: ITEM_ID }], error: null })
+
+    const response = await deleteItem(new Request('http://app.test/api/admin/billing'), context)
+
+    expect(response.status).toBe(200)
+    expect(mocks.rpc).toHaveBeenCalledWith('delete_billing_items', {
+      p_item_ids: [ITEM_ID],
+      p_actor_id: USER_ID,
+    })
+    await expect(response.json()).resolves.toEqual({ deleted: 1, items: [{ id: ITEM_ID }] })
+  })
+
+  it('reports a charge that no longer exists as gone, not as a success', async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null })
+
+    const response = await deleteItem(new Request('http://app.test/api/admin/billing'), context)
+
+    expect(response.status).toBe(404)
+  })
+
+  it('maps a non-staff deletion to a forbidden response', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { code: '42501', message: 'Attorney or admin access required' },
+    })
+
+    const response = await deleteItem(new Request('http://app.test/api/admin/billing'), context)
+
+    expect(response.status).toBe(403)
+  })
+
+  it('rejects an empty, oversized or malformed bulk selection', async () => {
+    const empty = await bulkDelete(bulkDeleteRequest({ ids: [] }))
+    const notIds = await bulkDelete(bulkDeleteRequest({ ids: ['not-a-uuid'] }))
+    const tooMany = await bulkDelete(
+      bulkDeleteRequest({ ids: Array.from({ length: 101 }, () => ITEM_ID) }),
+    )
+
+    expect(empty.status).toBe(400)
+    expect(notIds.status).toBe(400)
+    expect(tooMany.status).toBe(400)
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('deletes a whole selection in one call, deduplicating the ids', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ id: ITEM_ID }, { id: SECOND_ITEM_ID }],
+      error: null,
+    })
+
+    const response = await bulkDelete(
+      bulkDeleteRequest({ ids: [ITEM_ID, SECOND_ITEM_ID, ITEM_ID] }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(mocks.rpc).toHaveBeenCalledWith('delete_billing_items', {
+      p_item_ids: [ITEM_ID, SECOND_ITEM_ID],
+      p_actor_id: USER_ID,
+    })
+    await expect(response.json()).resolves.toMatchObject({ ok: true, deleted: 2, requested: 2 })
+  })
+
+  it('flags a partial bulk delete rather than claiming every id was removed', async () => {
+    mocks.rpc.mockResolvedValue({ data: [{ id: ITEM_ID }], error: null })
+
+    const response = await bulkDelete(bulkDeleteRequest({ ids: [ITEM_ID, SECOND_ITEM_ID] }))
+
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      deleted: 1,
+      requested: 2,
+    })
+  })
+  function patchRequest(body: unknown) {
+    return new Request('http://app.test/api/admin/billing/items/id', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  it('rejects an unauthenticated edit before touching billing data', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      err: Response.json({ error: 'Unauthorized' }, { status: 401 }),
+      userId: null,
+      user: null,
+    })
+
+    const response = await updateItem(
+      patchRequest({ kind: 'cost', label: 'Recording fee', amountBilled: 15_500 }),
+      context,
+    )
+
+    expect(response.status).toBe(401)
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('edits a charge through the audited RPC with the actor', async () => {
+    const response = await updateItem(
+      patchRequest({ kind: 'cost', label: '  Deed recording fee  ', amountBilled: 15_500 }),
+      context,
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.rpc).toHaveBeenCalledWith('update_billing_item', {
+      p_item_id: ITEM_ID,
+      p_kind: 'cost',
+      p_label: 'Deed recording fee',
+      p_plan: null,
+      p_amount_billed: 15_500,
+      p_actor_id: USER_ID,
+    })
+  })
+
+  it('carries the plan when a charge is edited into a plan claim', async () => {
+    const response = await updateItem(
+      patchRequest({
+        kind: 'plan_claim', label: 'MetLife claim', amountBilled: 127_500, plan: 'legalease',
+      }),
+      context,
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.rpc).toHaveBeenCalledWith('update_billing_item', expect.objectContaining({
+      p_kind: 'plan_claim',
+      p_plan: 'legalease',
+    }))
+  })
+
+  it('applies the same field rules to an edit as to a new charge', async () => {
+    const noLabel = await updateItem(patchRequest({ kind: 'cost', label: '   ', amountBilled: 100 }), context)
+    const fractional = await updateItem(patchRequest({ kind: 'cost', label: 'Fee', amountBilled: 10.5 }), context)
+    const claimNoPlan = await updateItem(patchRequest({ kind: 'plan_claim', label: 'Claim', amountBilled: 100 }), context)
+    const costWithPlan = await updateItem(
+      patchRequest({ kind: 'cost', label: 'Fee', amountBilled: 100, plan: 'metlife' }),
+      context,
+    )
+    const unknownKind = await updateItem(patchRequest({ kind: 'retainer', label: 'Fee', amountBilled: 100 }), context)
+
+    for (const response of [noLabel, fractional, claimNoPlan, costWithPlan, unknownKind]) {
+      expect(response.status).toBe(400)
+    }
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('maps an amount below what was collected to a conflict', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { code: '22003', message: 'Amount is below the 1500.00 already collected' },
+    })
+
+    const response = await updateItem(
+      patchRequest({ kind: 'flat_fee', label: 'Trust package', amountBilled: 100_000 }),
+      context,
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Amount is below the 1500.00 already collected',
+    })
+  })
+
+  it('reports an edit to a charge that no longer exists as gone', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { code: 'P0002', message: 'Billing item not found' },
+    })
+
+    const response = await updateItem(
+      patchRequest({ kind: 'cost', label: 'Recording fee', amountBilled: 100 }),
+      context,
+    )
+
+    expect(response.status).toBe(404)
   })
 })

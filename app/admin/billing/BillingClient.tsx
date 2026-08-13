@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Trash2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
@@ -31,9 +31,11 @@ import { RevenueSourcesCard } from './RevenueSourcesCard'
 import { LogPaymentDialog } from '@/components/billing/LogPaymentDialog'
 import {
   AddChargeDialog,
+  editableCharge,
   type AddChargeInput,
   type BillingMatterOption,
 } from '@/components/billing/AddChargeDialog'
+import { DeleteChargesDialog } from '@/components/billing/DeleteChargesDialog'
 
 const filterLabels: { value: BillingFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -80,12 +82,27 @@ export default function BillingClient({
   const [saving, setSaving] = useState(false)
   const [chargeOpen, setChargeOpen] = useState(false)
   const [chargeSaving, setChargeSaving] = useState(false)
+  const [editingCharge, setEditingCharge] = useState<BillingLedgerRow | null>(null)
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
+  const [deleting, setDeleting] = useState(false)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const chargeOpenerRef = useRef<HTMLElement | null>(null)
+  const deleteOpenerRef = useRef<HTMLElement | null>(null)
 
   const rows = useMemo(
     () => filterBillingRows(initialSnapshot.rows, filter, search, month),
     [filter, initialSnapshot.rows, month, search],
+  )
+  // Only what the current filter shows can be acted on, so a selection left
+  // behind by another filter never quietly widens a delete.
+  const selection = useMemo(
+    () => rows.filter(row => selectedRows[row.id]),
+    [rows, selectedRows],
+  )
+  const editingInput = useMemo(
+    () => (editingCharge ? editableCharge(editingCharge) : undefined),
+    [editingCharge],
   )
   const matterIdsWithLegalFee = useMemo(
     () => initialSnapshot.rows
@@ -122,14 +139,18 @@ export default function BillingClient({
     }
   }
 
-  async function request(path: string, body?: unknown) {
+  async function send(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown) {
     const response = await fetch(path, {
-      method: 'POST',
+      method,
       headers: headers(),
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
     const json = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) throw new Error(json.error ?? 'Billing update failed')
+  }
+
+  async function request(path: string, body?: unknown) {
+    await send(path, 'POST', body)
   }
 
   function openPayment(row?: BillingLedgerRow) {
@@ -173,22 +194,78 @@ export default function BillingClient({
     }
   }
 
+  function askDelete(targets: BillingLedgerRow[]) {
+    if (targets.length === 0) return
+    deleteOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setPendingDeleteIds(targets.map(target => target.id))
+  }
+
+  async function deleteCharges() {
+    const ids = pendingDeleteIds
+    if (ids.length === 0) return
+    setDeleting(true)
+    try {
+      // The REST delete carries a single charge; the bulk route removes a whole
+      // selection in one statement rather than a request per row.
+      if (ids.length === 1) await send(`/api/admin/billing/items/${ids[0]}`, 'DELETE')
+      else await request('/api/admin/billing/items/bulk-delete', { ids })
+      setPendingDeleteIds([])
+      setSelectedRows(current => {
+        const next = { ...current }
+        for (const id of ids) delete next[id]
+        return next
+      })
+      toast.success(ids.length === 1 ? 'Charge deleted' : `${ids.length} charges deleted`)
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete charges')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   function openCharge() {
     chargeOpenerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
+    setEditingCharge(null)
+    setChargeOpen(true)
+  }
+
+  function openEdit(row: BillingLedgerRow) {
+    chargeOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setEditingCharge(row)
     setChargeOpen(true)
   }
 
   async function saveCharge(input: AddChargeInput) {
+    const editing = editingCharge
     setChargeSaving(true)
     try {
-      await request('/api/admin/billing/items', input)
+      if (editing) {
+        await send(`/api/admin/billing/items/${editing.id}`, 'PATCH', {
+          kind: input.kind,
+          label: input.label,
+          amountBilled: input.amountBilled,
+          plan: input.plan,
+        })
+      } else {
+        await request('/api/admin/billing/items', input)
+      }
       setChargeOpen(false)
-      toast.success(`${input.label} added`)
+      setEditingCharge(null)
+      toast.success(editing ? `${input.label} updated` : `${input.label} added`)
       router.refresh()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not add charge')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : editing ? 'Could not update charge' : 'Could not add charge',
+      )
     } finally {
       setChargeSaving(false)
     }
@@ -305,9 +382,45 @@ export default function BillingClient({
                 </FilterChip>
               ))}
             </div>
+            {selection.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {selection.length} selected
+                </span>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => askDelete(selection)}
+                  disabled={deleting}
+                >
+                  <Trash2 className="size-4" aria-hidden />
+                  Delete selected
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedRows({})}
+                >
+                  Clear selection
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="px-0">
-            <LedgerTable rows={rows} onLogPayment={openPayment} onInvoice={row => void markInvoice(row)} />
+            <LedgerTable
+              rows={rows}
+              selected={selectedRows}
+              onLogPayment={openPayment}
+              onInvoice={row => void markInvoice(row)}
+              onToggleRow={(id, checked) =>
+                setSelectedRows(current => ({ ...current, [id]: checked }))}
+              onToggleAll={checked =>
+                setSelectedRows(checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {})}
+              onEdit={openEdit}
+              onDelete={askDelete}
+            />
           </CardContent>
         </Card>
         <div className="space-y-3">
@@ -323,12 +436,27 @@ export default function BillingClient({
 
       <AddChargeDialog
         open={chargeOpen}
-        onOpenChange={setChargeOpen}
-        matters={matterOptions}
+        onOpenChange={open => {
+          setChargeOpen(open)
+          if (!open) setEditingCharge(null)
+        }}
+        // An edit stays on its own matter, so the picker gives way to it.
+        matterId={editingCharge?.matterId}
+        matters={editingCharge ? undefined : matterOptions}
         matterIdsWithLegalFee={matterIdsWithLegalFee}
+        editing={editingInput}
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}
+      />
+
+      <DeleteChargesDialog
+        open={pendingDeleteIds.length > 0}
+        onOpenChange={open => !open && setPendingDeleteIds([])}
+        rows={initialSnapshot.rows.filter(row => pendingDeleteIds.includes(row.id))}
+        deleting={deleting}
+        returnFocusRef={deleteOpenerRef}
+        onConfirm={() => void deleteCharges()}
       />
 
       <LogPaymentDialog

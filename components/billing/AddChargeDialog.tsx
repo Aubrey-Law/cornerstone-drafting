@@ -56,12 +56,47 @@ const planLabels: Record<BillingPlan, string> = {
   legalease: 'LegalEASE',
 }
 
+/** An existing charge being corrected, rather than a new one being added. */
+export interface EditableCharge {
+  id: string
+  kind: AddableBillingKind
+  label: string
+  amountBilled: number
+  plan: BillingPlan | null
+}
+
 /**
- * Adds a cost or legal plan claim to a matter. Shared by the matter Billing tab
- * (matter fixed, no picker) and the firm billing workspace (picks a matter).
+ * Narrows a ledger row to the fields the form edits. Wrap the call in a memo
+ * keyed on the row: the dialog reseeds whenever this value changes, so a fresh
+ * object every render would wipe the form as it is typed into.
+ */
+export function editableCharge(row: {
+  id: string
+  kind: AddableBillingKind
+  label: string
+  amountBilled: number
+  plan: BillingPlan | null
+}): EditableCharge {
+  return {
+    id: row.id,
+    kind: row.kind,
+    label: row.label,
+    amountBilled: row.amountBilled,
+    plan: row.plan,
+  }
+}
+
+/**
+ * Adds a cost or legal plan claim to a matter, or corrects one already billed.
+ * Shared by the matter Billing tab (matter fixed, no picker) and the firm
+ * billing workspace (picks a matter).
  *
  * A legal fee may be added here even though a signed engagement seeds one too:
  * the seeded row is source='engagement' and this one is source='manual'.
+ *
+ * Editing reuses the same form because the fields and the rules behind them are
+ * the same; only the matter is off limits, since payments already hang off the
+ * charge where it is.
  */
 export function AddChargeDialog({
   open,
@@ -69,6 +104,7 @@ export function AddChargeDialog({
   matterId,
   matters,
   matterIdsWithLegalFee,
+  editing,
   saving,
   returnFocusRef,
   onSave,
@@ -81,11 +117,13 @@ export function AddChargeDialog({
   matters?: BillingMatterOption[]
   /** Matters that already carry a legal fee, so a second one can be warned about. */
   matterIdsWithLegalFee?: readonly string[]
+  /** Seeds the form from an existing charge and switches to editing it. */
+  editing?: EditableCharge
   saving: boolean
   returnFocusRef: RefObject<HTMLElement | null>
   onSave: (input: AddChargeInput) => Promise<void>
 }) {
-  const picking = matterId === undefined
+  const picking = matterId === undefined && !editing
   const [selectedMatter, setSelectedMatter] = useState('')
   const [kind, setKind] = useState<AddableBillingKind>('flat_fee')
   const [label, setLabel] = useState('')
@@ -96,8 +134,10 @@ export function AddChargeDialog({
   const targetMatter = matterId ?? selectedMatter
   // Advisory only: a matter may legitimately carry a second fee for additional
   // work, and the seeded engagement fee is a separate source='engagement' row.
+  // An edit never warns — the fee it would be duplicating is itself.
   const duplicateLegalFee =
-    kind === 'flat_fee'
+    !editing
+    && kind === 'flat_fee'
     && targetMatter !== ''
     && (matterIdsWithLegalFee ?? []).includes(targetMatter)
 
@@ -105,12 +145,12 @@ export function AddChargeDialog({
   useEffect(() => {
     if (!open) return
     setSelectedMatter(matterId ?? matters?.[0]?.id ?? '')
-    setKind('flat_fee')
-    setLabel('')
-    setAmount('')
-    setPlan('metlife')
+    setKind(editing?.kind ?? 'flat_fee')
+    setLabel(editing?.label ?? '')
+    setAmount(editing ? (editing.amountBilled / 100).toFixed(2) : '')
+    setPlan(editing?.plan ?? 'metlife')
     setError(null)
-  }, [open, matterId, matters])
+  }, [open, matterId, matters, editing])
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -150,10 +190,11 @@ export function AddChargeDialog({
       >
         <form onSubmit={event => void submit(event)}>
           <DialogHeader>
-            <DialogTitle>Add charge</DialogTitle>
+            <DialogTitle>{editing ? 'Edit charge' : 'Add charge'}</DialogTitle>
             <DialogDescription>
-              Add a legal fee, a legal plan claim, or a pass-through cost. It starts
-              awaiting invoice.
+              {editing
+                ? 'Correct the type, description or amount. Payments already logged stay with the charge, and the amount cannot fall below them.'
+                : 'Add a legal fee, a legal plan claim, or a pass-through cost. It starts awaiting invoice.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-5">
@@ -252,7 +293,7 @@ export function AddChargeDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={saving || (picking && (matters ?? []).length === 0)}>
-              {saving ? 'Saving…' : 'Add charge'}
+              {saving ? 'Saving…' : editing ? 'Save charge' : 'Add charge'}
             </Button>
           </DialogFooter>
         </form>

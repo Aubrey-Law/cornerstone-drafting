@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { EmptyState } from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { BillingStatusBadge } from '@/components/billing/BillingStatusBadge'
 import {
   Table,
@@ -13,16 +14,28 @@ import {
 import { billingMoney } from '@/lib/billing/metrics'
 import type { BillingLedgerRow } from '@/lib/billing/types'
 import { cn } from '@/lib/utils'
-import { ReceiptText } from 'lucide-react'
+import { Pencil, ReceiptText, Trash2 } from 'lucide-react'
 
 export function LedgerTable({
   rows,
+  selected,
   onLogPayment,
   onInvoice,
+  onToggleRow,
+  onToggleAll,
+  onEdit,
+  onDelete,
 }: {
   rows: BillingLedgerRow[]
+  /** Ids ticked for bulk delete, keyed by billing item id. */
+  selected: Record<string, boolean>
   onLogPayment: (row: BillingLedgerRow) => void
   onInvoice: (row: BillingLedgerRow) => void
+  onToggleRow: (id: string, checked: boolean) => void
+  /** Selects or clears every row currently in view, not the whole ledger. */
+  onToggleAll: (checked: boolean) => void
+  onEdit: (row: BillingLedgerRow) => void
+  onDelete: (rows: BillingLedgerRow[]) => void
 }) {
   if (rows.length === 0) {
     return (
@@ -36,9 +49,16 @@ export function LedgerTable({
 
   return (
     <div className="overflow-x-auto">
-      <Table className="min-w-[760px]">
+      <Table className="min-w-[820px]">
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10 pl-4">
+              <Checkbox
+                checked={rows.every(row => selected[row.id])}
+                onCheckedChange={checked => onToggleAll(checked === true)}
+                aria-label="Select all billing items in view"
+              />
+            </TableHead>
             <TableHead>Client / matter</TableHead>
             <TableHead>Item</TableHead>
             <TableHead className="text-right">Billed</TableHead>
@@ -47,12 +67,20 @@ export function LedgerTable({
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Age</TableHead>
             <TableHead className="text-right"><span className="sr-only">Action</span></TableHead>
+            <TableHead className="w-20 pr-4"><span className="sr-only">Edit or delete</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map(row => {
             return (
               <TableRow key={row.id}>
+                <TableCell className="pl-4">
+                  <Checkbox
+                    checked={Boolean(selected[row.id])}
+                    onCheckedChange={checked => onToggleRow(row.id, checked === true)}
+                    aria-label={`Select ${row.clientName} — ${row.label}`}
+                  />
+                </TableCell>
                 <TableCell>
                   <Link
                     href={`/admin/matters/${row.matterId}`}
@@ -108,6 +136,28 @@ export function LedgerTable({
                       Log payment
                     </Button>
                   ) : null}
+                </TableCell>
+                <TableCell className="whitespace-nowrap pr-4 text-right">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-foreground"
+                    aria-label={`Edit ${row.label} for ${row.clientName}`}
+                    onClick={() => onEdit(row)}
+                  >
+                    <Pencil className="size-4" aria-hidden />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete ${row.label} for ${row.clientName}`}
+                    onClick={() => onDelete([row])}
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </Button>
                 </TableCell>
               </TableRow>
             )
