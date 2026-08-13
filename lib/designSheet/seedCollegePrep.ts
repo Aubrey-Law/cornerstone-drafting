@@ -88,18 +88,31 @@ export function psychotherapyNotesFromCollegePrep(
  * contains it, as a starting position the attorney reviews in the Financial
  * Power of Attorney section — it is a seed, not a final grant.
  *
- * Two answers have no statutory bucket and are handled separately: digital
- * account access is its own switch on the template, and "signing contracts"
- * spans every category, so it is raised in the drafting notes instead of being
- * assigned to one.
+ * Mapped only where the statutory category genuinely contains the answer. An
+ * approximate fit is worse than none here, because the seed is lossy in both
+ * directions and neither loss is visible in the drafted document: collapsing
+ * several answers into one broad category grants *more* than the student asked
+ * for, and forcing an answer into the nearest category grants *less*. So these
+ * are deliberately left unmapped and raised in the drafting notes instead:
+ *
+ *   - financial aid — federal Title IV aid is arguably a government benefit,
+ *     but institutional and private scholarships are not
+ *   - student loans, credit cards — servicers as "financial institutions" would
+ *     grant the whole banking category to reach consumer debt
+ *   - employment paperwork — the statutory list has no employment category
+ *   - signing contracts — spans every category, so assigning it to one
+ *     understates it
+ *
+ * Digital account access is the one unmapped answer that is not deferred: it
+ * has its own switch on the template.
  */
 const COLLEGE_DPOA_POWER_MAP: Record<CollegeDpoaPower, DpoaBasicPowerKey | null> = {
   banking: 'banking',
   bills: 'personal_family_maintenance',
   tuition: 'personal_family_maintenance',
-  financial_aid: 'government_benefits',
-  student_loans: 'banking',
-  credit_cards: 'banking',
+  financial_aid: null,
+  student_loans: null,
+  credit_cards: null,
   taxes: 'tax_matters',
   housing: 'real_property',
   auto: 'tangible_personal_property',
@@ -108,7 +121,7 @@ const COLLEGE_DPOA_POWER_MAP: Record<CollegeDpoaPower, DpoaBasicPowerKey | null>
   citations: 'claims_litigation',
   investments: 'stocks_bonds',
   digital: null,
-  employment: 'personal_family_maintenance',
+  employment: null,
   contracts: null,
 }
 

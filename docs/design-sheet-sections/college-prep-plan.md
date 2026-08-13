@@ -109,22 +109,37 @@ so the attorney reviews and adjusts them in place.
 
 `decisions.dpoa_provisions`:
 
+Mapped **only where the statutory category genuinely contains the answer**. An
+approximate fit is worse than none: the seed is lossy in both directions and
+neither loss shows in the drafted document — collapsing several answers into one
+broad category grants *more* than the student asked for, and forcing an answer
+into the nearest category grants *less*.
+
 | Student answer | Statutory power (`DPOA_BASIC_POWER_KEYS`) |
 | --- | --- |
-| Banking, student loans, credit cards | `banking` |
-| Paying bills, tuition/bursar, employment paperwork | `personal_family_maintenance` |
-| Financial aid | `government_benefits` |
+| Banking and bank accounts | `banking` |
+| Paying bills, tuition/bursar | `personal_family_maintenance` |
 | Taxes | `tax_matters` |
 | Leases and housing | `real_property` |
 | Auto | `tangible_personal_property` |
 | Insurance claims | `insurance_annuity` |
 | Retaining an attorney, citations and conduct charges | `claims_litigation` |
 | Investments | `stocks_bonds` |
-| Digital accounts | *(no statutory bucket — sets `power_digital_assets`)* |
-| Signing contracts | *(no statutory bucket — raised in `goals_notes`)* |
 
-Tuition or financial aid also sets `power_529_plans`. Gifting and trust powers are
-seeded off: this plan buys account access, not estate planning.
+Left unmapped on purpose, and listed in `goals_notes` for the attorney to grant
+deliberately:
+
+| Student answer | Why not mapped |
+| --- | --- |
+| Financial aid and scholarships | Federal Title IV aid is arguably a government benefit; institutional and private scholarships are not |
+| Student loans, credit cards | Reaching consumer debt through `banking` would grant the whole banking category |
+| Employment paperwork and payroll | The statutory list has no employment category |
+| Signing contracts | Spans every category, so assigning it to one understates it |
+| Digital accounts | *Not deferred* — sets `power_digital_assets`, its own template switch |
+
+Tuition or financial aid still sets `power_529_plans`, which is a narrow switch
+rather than a statutory category. Gifting and trust powers are seeded off: this
+plan buys account access, not estate planning.
 
 `decisions.healthcare_provisions`:
 

@@ -199,6 +199,47 @@ describe('college prep design sheet — provision seeds', () => {
     expect(seed.unmapped).toEqual(['contracts'])
   })
 
+  it('defers the powers no statutory category cleanly holds', () => {
+    const design = collegePrepDesignFromIntake(
+      collegePrepIntake({
+        college_prep_details: {
+          ...COLLEGE_PREP_DETAILS,
+          dpoa_powers: ['financial_aid', 'student_loans', 'credit_cards', 'employment'],
+        },
+      }),
+    )
+    const seed = collegePrepDpoaSeed(design)
+
+    // None of these grants a statutory power on its own — an approximate fit
+    // would silently grant more (the whole banking category) or less than asked.
+    expect(Object.values(seed.basic_powers).some(Boolean)).toBe(false)
+    expect(seed.unmapped).toEqual([
+      'financial_aid',
+      'student_loans',
+      'credit_cards',
+      'employment',
+    ])
+    // Financial aid still drives the narrow §529 switch, which is not a
+    // statutory category and does not over-grant.
+    expect(seed.power_529_plans).toBe(true)
+  })
+
+  it('names every deferred power in the drafting notes', () => {
+    const notes = buildIntakeSeedPayload(
+      collegePrepIntake({
+        college_prep_details: {
+          ...COLLEGE_PREP_DETAILS,
+          dpoa_powers: ['banking', 'financial_aid', 'employment'],
+        },
+      }),
+    ).goals_notes ?? ''
+
+    expect(notes).toContain('Financial aid')
+    expect(notes).toContain('Employment')
+    // Mapped powers are granted, not raised as gaps.
+    expect(notes).not.toContain('Banking and bank accounts')
+  })
+
   it('writes those powers into the DPOA provisions the section already edits', () => {
     const provisions = getDesignSheetDpoaProvisions(seededSheet())
 
