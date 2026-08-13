@@ -62,7 +62,9 @@ export const PLAN_STRUCTURE_FIELDS = [
  * fiduciary mappings) are deliberately NOT copied.
  */
 const PLAN_STRUCTURE_DECISION_KEYS = [
-  'plan_type',
+  // plan_type is a real column (copied via PLAN_STRUCTURE_FIELDS above);
+  // persistence strips writable-column names out of `decisions` on every
+  // save, so listing it here only copied a key that immediately vanished.
   'document_inclusions',
   'estate_plan_design',
   'trust_planning_type',

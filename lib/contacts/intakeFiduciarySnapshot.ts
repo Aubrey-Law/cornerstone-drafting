@@ -12,6 +12,7 @@ export type IntakeFiduciarySlotKey =
   | 'poa_slots'
   | 'hcp_slots'
   | 'guardian_slots'
+  | 'spouse_trustee_slots'
   | 'spouse_executor_slots'
   | 'spouse_poa_slots'
   | 'spouse_hcp_slots'
@@ -35,6 +36,7 @@ export interface IntakeFiduciarySnapshot extends IntakeFiduciaryFlatFields {
   poa_slots: FiduciarySlot[] | null
   hcp_slots: FiduciarySlot[] | null
   guardian_slots: FiduciarySlot[] | null
+  spouse_trustee_slots: FiduciarySlot[] | null
   spouse_executor_slots: FiduciarySlot[] | null
   spouse_poa_slots: FiduciarySlot[] | null
   spouse_hcp_slots: FiduciarySlot[] | null
@@ -73,6 +75,7 @@ const SLOT_KEYS: IntakeFiduciarySlotKey[] = [
   'poa_slots',
   'hcp_slots',
   'guardian_slots',
+  'spouse_trustee_slots',
   'spouse_executor_slots',
   'spouse_poa_slots',
   'spouse_hcp_slots',
@@ -219,6 +222,7 @@ export async function loadIntakeFiduciarySnapshot(
     poa_slots: slots.poa_slots ?? null,
     hcp_slots: slots.hcp_slots ?? null,
     guardian_slots: slots.guardian_slots ?? null,
+    spouse_trustee_slots: slots.spouse_trustee_slots ?? null,
     spouse_executor_slots: slots.spouse_executor_slots ?? null,
     spouse_poa_slots: slots.spouse_poa_slots ?? null,
     spouse_hcp_slots: slots.spouse_hcp_slots ?? null,

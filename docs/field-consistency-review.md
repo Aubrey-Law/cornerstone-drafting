@@ -11,16 +11,28 @@ destructive saves. **High**: a feature that silently cannot work. **Medium**:
 inconsistency with a plausible bad outcome. **Low**: drift/dead code worth
 cleaning while nearby.
 
-> **Status update.** The following are fixed on this branch: §1.1 (plan
-> structure now seeds via `buildIntakeSeedPayload`/`buildIntakeSeedDecisions`),
-> §1.2, §2.1–§2.6 (current_step item and submit-gate item still open),
-> §4.1 (marital vocabulary unified; spouse-gating on `'married'` unchanged),
-> §4.2 (referral normalization + `referral_source` writers), §5.1, §5.3, §5.4,
-> parts of §5.5 (client/spouse names + spouse contact in the generator
-> context), §7.1–§7.5. Still open: §5.2 (the trust tangible-property article
-> needs new fallback disposition language — an attorney drafting decision),
-> the remaining §5.5 template-variable gaps, §5.6–§5.10, §3 registry
-> internals, §4.3–§4.8, and the §8 dead-surface cleanup.
+> **Status update.** Fixed on this branch: §1.1–§1.2, §2.1–§2.6 (admin
+> submit-gate enforcement deliberately unchanged — the admin sheet is allowed
+> to save partial data), §3.1–§3.3 (first-wins intakeKey map, registry-derived
+> prefilled set, `fid_trustee_spouse` slot + spouse-trustee seeding), the
+> §3.5 estate-value legacy-values gap, §4.1–§4.2, §4.6 (marital vocabulary in
+> the AI import schema), §4.7, §5.1, §5.3–§5.4, most of §5.5 (names, spouse
+> contact, design-summary gift fields, third health-care agent), the §5.9
+> blocker-section and unreachable-DPOA items (now advisory prompts), §7.1–§7.6
+> (the phantom `types/leads.ts` and its dead lead-creation path removed), and
+> the §8 items for the clone's dead decisions key and the citizenship
+> normalizer.
+>
+> Still open, needing an attorney or product decision: §5.2 (trust
+> tangible-property fallback disposition language), §5.5's
+> `remote_beneficiaries` heirs-at-law rendering and funding-plan/asset-owner
+> gaps (no UI captures the data), §5.6 co-trustee vocabulary fallback (which
+> default clause applies is a drafting call), §5.10 (whether to surface the
+> fiduciary document-inclusion checkboxes), §6.1 (whether intake edits should
+> sync to the leads CRM), §7.7 (`proposal_ea_out` stage seeding), §4.3–§4.5
+> asset/citizenship/plan-type vocabulary consolidations (each changes stored
+> data semantics), and the remaining §8 dead-export pruning inside
+> `packages/estate-fields`.
 
 ---
 

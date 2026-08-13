@@ -12,6 +12,7 @@ export function validateSharedField(id: SharedFieldId, raw: unknown): string | n
 
   if (def.control === 'select' && value && def.options?.length) {
     const allowed = new Set(def.options.map((o) => o.value))
+    for (const legacy of def.legacyValues ?? []) allowed.add(legacy)
     if (!allowed.has(value)) {
       return `Select a valid ${def.label.toLowerCase()}.`
     }

@@ -615,12 +615,12 @@ describe('estate generator mapping', () => {
       },
     })
     expect(data.specific_gifts).toEqual([
-      { item: 'the sum of $10,000', recipient: 'Blake Beneficiary' },
-      { item: 'my grandfather clock', recipient: 'Quinn Recipient' },
-      { item: 'the sum of $2,500', recipient: 'Boston Animal Rescue' },
+      { item: 'the sum of $10,000', recipient: 'Blake Beneficiary', beneficiary_name: 'Blake Beneficiary', description: 'the sum of $10,000' },
+      { item: 'my grandfather clock', recipient: 'Quinn Recipient', beneficiary_name: 'Quinn Recipient', description: 'my grandfather clock' },
+      { item: 'the sum of $2,500', recipient: 'Boston Animal Rescue', beneficiary_name: 'Boston Animal Rescue', description: 'the sum of $2,500' },
     ])
     expect(data.charitable_gifts).toEqual([
-      { item: 'the sum of $2,500', recipient: 'Boston Animal Rescue' },
+      { item: 'the sum of $2,500', recipient: 'Boston Animal Rescue', beneficiary_name: 'Boston Animal Rescue', description: 'the sum of $2,500' },
     ])
   })
 

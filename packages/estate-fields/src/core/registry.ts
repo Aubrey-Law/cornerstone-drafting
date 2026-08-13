@@ -10,6 +10,7 @@ import { GOALS_TEXTAREA_MAX_LENGTH } from './goals'
 import {
   ESTATE_VALUE_OPTIONS,
   INTAKE_ASSET_TYPE_OPTIONS,
+  LEGACY_ESTATE_VALUE_OPTIONS,
 } from './assets'
 import { normalizeCitizenship, normalizeCounty, normalizeMaritalStatus, trimString } from './normalize'
 import type { SharedFieldDef, SharedFieldId } from './types'
@@ -290,6 +291,9 @@ const defs: Record<SharedFieldId, SharedFieldDef> = {
     control: 'select',
     intakeKey: 'estate_value',
     options: ESTATE_VALUE_OPTIONS,
+    // estateValueLabel already renders these retired values; validation must
+    // accept them too or a legacy row blocks submission behind a blank select.
+    legacyValues: LEGACY_ESTATE_VALUE_OPTIONS.map((o) => o.value),
     normalize: trimString,
   },
   asset_types: {

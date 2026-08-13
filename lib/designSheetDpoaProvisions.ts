@@ -153,6 +153,23 @@ function coagentServingFromLegacyManner(
   return 'silent'
 }
 
+/**
+ * Whether the client actually recorded these decisions. The getters above
+ * supply working defaults ('reasonable', legacy-manner fallback) so documents
+ * can render, which means readiness cannot use them to ask "was this decided?"
+ * — the defaulted value is always truthy and the blocker would never fire.
+ */
+export function dpoaCompensationDecided(sheet: Pick<DesignSheet, 'decisions'>): boolean {
+  const value = dpoaProvisionsRaw(sheet).agent_compensation
+  return value === 'prevailing_professional' || value === 'reasonable' || value === 'none'
+}
+
+export function dpoaCoagentServingDecided(sheet: DpoaProvisionsSheet): boolean {
+  const value = dpoaProvisionsRaw(sheet).coagent_serving
+  if (value === 'jointly' || value === 'separately' || value === 'silent') return true
+  return sheet.dpoa_coagent_manner === 'jointly' || sheet.dpoa_coagent_manner === 'independently'
+}
+
 export function coagentMannerFromServing(serving: DpoaCoagentServing | null): DesignSheet['dpoa_coagent_manner'] {
   if (serving === 'jointly') return 'jointly'
   if (serving === 'separately') return 'independently'

@@ -55,6 +55,8 @@ export interface DraftPayloadFiduciaryRoleDetails {
     co_primary: DraftPayloadContactDetail | null
     alternate: DraftPayloadContactDetail | null
     co_alternate: DraftPayloadContactDetail | null
+    /** Slot 2 — the HCP form's third agent line; the sheet allows unlimited alternates. */
+    second_alternate?: DraftPayloadContactDetail | null
   }
   spouse_healthcare_agent: {
     primary: DraftPayloadContactDetail | null
@@ -203,6 +205,7 @@ function emptyRoleDetails(): DraftPayloadFiduciaryRoleDetails {
       co_primary: emptyPerson,
       alternate: emptyPerson,
       co_alternate: emptyPerson,
+      second_alternate: emptyPerson,
     },
     spouse_healthcare_agent: {
       primary: emptyPerson,
@@ -288,6 +291,7 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
   details.healthcare_agent.co_primary = slotDetail(hcp, 0, true)
   details.healthcare_agent.alternate = slotDetail(hcp, 1)
   details.healthcare_agent.co_alternate = slotDetail(hcp, 1, true)
+  details.healthcare_agent.second_alternate = slotDetail(hcp, 2)
 
   const guardian = getDesignSlots(designSheet, 'guardian_slots')
   details.guardians.primary = slotDetail(guardian, 0)

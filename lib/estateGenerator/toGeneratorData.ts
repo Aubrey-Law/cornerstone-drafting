@@ -181,7 +181,18 @@ function normalizeSpecificBequests(raw: unknown[]): {
       ? bequest.document
       : undefined
     const timing = textValue(bequest.timing)
-    const gift = compactObject({ item, recipient, document: documentRoute, timing: timing || undefined })
+    const gift = compactObject({
+      item,
+      recipient,
+      document: documentRoute,
+      timing: timing || undefined,
+      // Field names the design-summary templates loop over; without them every
+      // gift row in the client-facing summary rendered blank.
+      beneficiary_name: recipient,
+      description: item,
+      trigger: timing || undefined,
+      notes: textValue(bequest.notes) || undefined,
+    })
     specificGifts.push(gift)
     if (kind === 'charitable') charitableGifts.push(gift)
   }
@@ -802,7 +813,8 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
           relationship: payload.fiduciaries.hcp_successor_co_relationship ?? null,
           address: payload.fiduciaries.hcp_successor_co_address ?? '',
         }),
-        second_alternate: person(null),
+        // Third agent line on the HCP/HIPAA forms — hcp_slots order 2.
+        second_alternate: fiduciaryPerson(fiduciaryDetails?.healthcare_agent.second_alternate, null),
       },
       spouse_agent: {
         primary: fiduciaryPerson(fiduciaryDetails?.spouse_healthcare_agent.primary, payload.fiduciaries.spouse_hcp_primary, {

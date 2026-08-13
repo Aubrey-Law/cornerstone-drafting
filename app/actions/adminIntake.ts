@@ -158,7 +158,11 @@ async function resolveUserId(clientUserId: string | null): Promise<string> {
 function buildPayload(data: AdminIntakeFormData, status: string) {
   return {
     status,
-    current_step: 9,
+    // The column stores GuidedInterview step-id strings ('personal', 'review',
+    // …) — the portal normalizes legacy numbers to ids for exactly this
+    // reason. The admin sheet covers the whole questionnaire, so land the
+    // client on the review step.
+    current_step: 'review',
     first_name: data.first_name || null,
     middle_name: data.middle_name || null,
     last_name: data.last_name || null,

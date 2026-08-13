@@ -92,6 +92,7 @@ function intake(overrides: Partial<IntakeSnapshot> = {}): IntakeSnapshot {
     hcp_slots: null,
     guardian_slots: null,
     spouse_executor_slots: null,
+    spouse_trustee_slots: null,
     spouse_poa_slots: null,
     spouse_hcp_slots: null,
     goals_extended: null,

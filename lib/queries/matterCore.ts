@@ -267,6 +267,7 @@ export interface IntakeSnapshot {
   poa_slots: FiduciarySlot[] | null
   hcp_slots: FiduciarySlot[] | null
   guardian_slots: FiduciarySlot[] | null
+  spouse_trustee_slots: FiduciarySlot[] | null
   spouse_executor_slots: FiduciarySlot[] | null
   spouse_poa_slots: FiduciarySlot[] | null
   spouse_hcp_slots: FiduciarySlot[] | null
@@ -309,6 +310,7 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     poa_slots: null as FiduciarySlot[] | null,
     hcp_slots: null as FiduciarySlot[] | null,
     guardian_slots: null as FiduciarySlot[] | null,
+    spouse_trustee_slots: null as FiduciarySlot[] | null,
     spouse_executor_slots: null as FiduciarySlot[] | null,
     spouse_poa_slots: null as FiduciarySlot[] | null,
     spouse_hcp_slots: null as FiduciarySlot[] | null,
@@ -410,6 +412,7 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     poa_slots: fiduciary.poa_slots,
     hcp_slots: fiduciary.hcp_slots,
     guardian_slots: fiduciary.guardian_slots,
+    spouse_trustee_slots: fiduciary.spouse_trustee_slots,
     spouse_executor_slots: fiduciary.spouse_executor_slots,
     spouse_poa_slots: fiduciary.spouse_poa_slots,
     spouse_hcp_slots: fiduciary.spouse_hcp_slots,
