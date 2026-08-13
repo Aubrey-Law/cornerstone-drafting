@@ -136,6 +136,10 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
   const [planType, setPlanType] = useState<PracticeAreaCode>('EP')
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Hired matters and matters with a signed engagement need the deletion
+  // acknowledged; without this the route reports them back as failures and
+  // leaves them standing.
+  const [deleteHired, setDeleteHired] = useState(false)
   const [sendIntakeOnCreate, setSendIntakeOnCreate] = useState(true)
   const [createdMatterId, setCreatedMatterId] = useState<string | null>(null)
   const [createdIntakeUrl, setCreatedIntakeUrl] = useState<string | null>(null)
@@ -356,6 +360,11 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
     }
   }
 
+  const closeBulkDelete = () => {
+    setBulkDeleteOpen(false)
+    setDeleteHired(false)
+  }
+
   const handleBulkDelete = async () => {
     if (!token || selectedIds.length === 0) return
     setDeleting(true)
@@ -366,7 +375,7 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ids: selectedIds }),
+        body: JSON.stringify({ ids: selectedIds, confirm: deleteHired }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Could not delete matters')
@@ -376,13 +385,23 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
         ? body.results.filter((result: { ok?: boolean }) => !result.ok).length
         : 0
 
+      if (body.requiresConfirmation) {
+        // Client matters were skipped rather than lost. Leave the dialog up so
+        // the acknowledgement is one click away.
+        toast.error(
+          `Deleted ${deleted} matter${deleted === 1 ? '' : 's'}; ${failed} hold client records. Confirm below to delete those too.`,
+        )
+        router.refresh()
+        return
+      }
+
       if (failed > 0) {
         toast.error(`Deleted ${deleted} matter${deleted === 1 ? '' : 's'}; ${failed} failed`)
       } else {
         toast.success(`Deleted ${deleted} matter${deleted === 1 ? '' : 's'}`)
       }
 
-      setBulkDeleteOpen(false)
+      closeBulkDelete()
       setSelected({})
       router.refresh()
     } catch (e) {
@@ -792,17 +811,29 @@ function MattersClientInner({ matters: initialMatters, loadError = null }: Matte
         </DialogContent>
       </Dialog>
 
-      <Dialog open={bulkDeleteOpen} onOpenChange={open => !open && setBulkDeleteOpen(false)}>
+      <Dialog open={bulkDeleteOpen} onOpenChange={open => !open && closeBulkDelete()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete {selectedIds.length} matter{selectedIds.length === 1 ? '' : 's'}?</DialogTitle>
             <DialogDescription>
               This permanently deletes the selected matters, including intake, documents, design sheets, and messages.
-              This cannot be undone.
+              This cannot be undone. Closing or archiving a matter keeps all of it.
             </DialogDescription>
           </DialogHeader>
+          <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm">
+            <Checkbox
+              checked={deleteHired}
+              onCheckedChange={checked => setDeleteHired(checked === true)}
+              aria-label="Include hired matters and matters with a signed engagement"
+              className="mt-0.5"
+            />
+            <span className="text-muted-foreground">
+              Also delete hired matters and matters with a signed engagement. Without this they are
+              skipped.
+            </span>
+          </label>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setBulkDeleteOpen(false)} disabled={deleting}>
+            <Button type="button" variant="outline" onClick={closeBulkDelete} disabled={deleting}>
               Cancel
             </Button>
             <Button type="button" variant="destructive" onClick={() => void handleBulkDelete()} disabled={deleting}>
