@@ -33,7 +33,7 @@ Asset transfer docs (deed, trustee's certificate, real estate trust) use a **sep
 | Asset Schedules | [asset-schedules.md](./asset-schedules.md) | Partial — `assets.real_property` flag only |
 | Transfers & Assignments | [transfers-assignments.md](./transfers-assignments.md) | Yes — separate real-estate transfer renderer |
 | Attorney Notes | [attorney-notes.md](./attorney-notes.md) | Partial — `drafting_notes` only |
-| College Preparation Plan | [college-prep-plan.md](./college-prep-plan.md) | Partial — seeds `dpoa_provisions` / `healthcare_provisions`; selects `incapacity-documents` |
+| College Preparation Plan | [college-prep-plan.md](./college-prep-plan.md) | Yes — `ferpa.*`; seeds `dpoa_provisions` / `healthcare_provisions`; selects `incapacity-documents` + `ferpa-release` |
 
 The College Preparation Plan is a second plan track rather than another section
 of the estate plan: `decisions.plan_track === 'college_prep'` replaces the

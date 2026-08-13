@@ -47,6 +47,16 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `execution.signing_county` | string | conditional | Signing county when signing is scheduled; falls back to client.signing_county when present. |
 | `execution.signing_scheduled` | boolean | no | Whether a signing date, signing county, and notary commission expiration are known. |
 | `family.additional_disinheritance_language` | string | no | Extra attorney-drafted disinheritance language appended to the standard clause. |
+| `ferpa.all_records` | boolean | no | Whether every education record category the questionnaire offers was selected. |
+| `ferpa.recipients` | string | conditional | Who may receive the education records, in the student's own words, e.g. both parents. |
+| `ferpa.records` | array | conditional | Education record categories the release covers. Reference the container directly in {% for %} and {% if %}; see ferpa.records[].label for member fields. |
+| `ferpa.records[]` | array | no | A single education record category selected on the College Preparation Plan questionnaire. |
+| `ferpa.records[].key` | string | no | Stable key for an education record category, e.g. grades or billing. |
+| `ferpa.records[].label` | string | no | Display label for an education record category, e.g. Grades and transcripts. |
+| `ferpa.school_city` | string | no | Campus city, printed where the institution is identified in parts. |
+| `ferpa.school_location` | string | no | Campus city and state joined for the institution line, e.g. Boston, MA. |
+| `ferpa.school_name` | string | conditional | College, university, or program whose education records the FERPA release covers. |
+| `ferpa.school_state` | string | no | Campus state, printed where the institution is identified in parts. |
 | `fiduciaries.agent.co_agents_action` | string | no | How co-agents act under the durable power of attorney: separate, joint, or majority. |
 | `fiduciaries.agent.co_primary.full_name` | string | no | Co-agent under durable power of attorney. |
 | `fiduciaries.agent.primary.full_name` | string | yes | Primary agent under durable power of attorney. |
@@ -269,6 +279,10 @@ Variables: `client.city`, `client.full_name`, `client.pronoun_possessive`, `clie
 ## estate-plan-summary.docx
 
 Variables: `children`, `client.first_name`, `client.full_name`, `execution.display_doc_date`, `fiduciaries.agent.co_primary.full_name`, `fiduciaries.agent.primary.full_name`, `fiduciaries.agent.successor.full_name`, `fiduciaries.executor.co_primary.full_name`, `fiduciaries.executor.primary.full_name`, `fiduciaries.executor.second_successor.full_name`, `fiduciaries.executor.successor.full_name`, `fiduciaries.spouse_agent.co_primary.full_name`, `fiduciaries.spouse_agent.primary.full_name`, `fiduciaries.spouse_agent.successor.full_name`, `fiduciaries.spouse_executor.co_primary.full_name`, `fiduciaries.spouse_executor.primary.full_name`, `fiduciaries.trustee.co_primary.full_name`, `fiduciaries.trustee.primary.full_name`, `fiduciaries.trustee.second_successor.full_name`, `fiduciaries.trustee.successor.full_name`, `guardians.primary.full_name`, `guardians.second_successor.full_name`, `guardians.successor.full_name`, `guardians.temporary.full_name`, `guardians.temporary_successor.full_name`, `has_children`, `has_minor_children`, `has_spouse`, `hcp_anatomical_all`, `hcp_anatomical_defer`, `hcp_anatomical_none`, `hcp_anatomical_specified`, `healthcare.agent.alternate.full_name`, `healthcare.agent.primary.full_name`, `healthcare.agent.primary.relationship`, `healthcare.anatomical_specified`, `healthcare.spouse_agent.alternate.full_name`, `healthcare.spouse_agent.primary.full_name`, `healthcare.spouse_agent.primary.relationship`, `loop.index`, `loop.length`, `planning.include_ahd`, `planning.include_dpoa`, `planning.include_hcp`, `planning.include_hipaa`, `planning.include_pour_over_will`, `planning.include_simple_will`, `planning.include_testamentary_trust_will`, `planning.include_trust`, `planning.spouse_docs`, `requires_guardian_clause`, `spouse.first_name`, `spouse.full_name`, `summary.has_completion_items`, `summary.show_dpoa_agent`, `summary.show_guardian`, `summary.show_healthcare_agent`, `summary.show_key_people`, `summary.show_personal_representative`, `summary.show_spouse`, `summary.show_trustee`, `trust.descendants_distribution.distribution_age`, `trust.descendants_distribution.method`, `trust.descendants_distribution.stage_1_age`, `trust.descendants_distribution.stage_2_age`, `trust.descendants_distribution.stage_3_age`, `trust.display_date`, `trust.include_common_trust_for_children`, `trust.name`, `trust.special_distributions_age`
+
+## ferpa-release.docx
+
+Variables: `client.date_of_birth`, `client.full_name`, `execution.display_doc_date`, `ferpa.all_records`, `ferpa.recipients`, `ferpa.records`, `ferpa.school_location`, `ferpa.school_name`, `ferpa_includes_health_center`
 
 ## funding-instructions.docx
 

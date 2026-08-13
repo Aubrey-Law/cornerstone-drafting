@@ -47,6 +47,16 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `execution.signing_county` | Signing county | Estate Plan Design | `signing_county` |
 | `execution.signing_scheduled` | Signing Scheduled | Estate Plan Design | (section) |
 | `family.additional_disinheritance_language` | Additional Disinheritance Language | Estate Plan Design | (section) |
+| `ferpa.all_records` | All Records | College Preparation Plan | (section) |
+| `ferpa.recipients` | Who may receive school records | College Preparation Plan | `college_prep.ferpa_recipients` |
+| `ferpa.records` | Education records covered | College Preparation Plan | (section) |
+| `ferpa.records[]` | Records | College Preparation Plan | (section) |
+| `ferpa.records[].key` | Key | College Preparation Plan | (section) |
+| `ferpa.records[].label` | Label | College Preparation Plan | (section) |
+| `ferpa.school_city` | School City | College Preparation Plan | (section) |
+| `ferpa.school_location` | School Location | College Preparation Plan | (section) |
+| `ferpa.school_name` | School or program | College Preparation Plan | `college_prep.school_name` |
+| `ferpa.school_state` | School State | College Preparation Plan | (section) |
 | `fiduciaries.agent.co_agents_action` | Co Agents Action | Fiduciary Role Assignment | (section) |
 | `fiduciaries.agent.co_primary.full_name` | Co-agent (POA) | Fiduciary Role Assignment | (section) |
 | `fiduciaries.agent.primary.full_name` | Financial agent (POA) | Fiduciary Role Assignment | (section) |

@@ -13,6 +13,8 @@ These names are available in templates *in addition to* the data-dictionary fiel
 | `disinherit_issue` | `false` |  |
 | `distributes_to_descendants` | `false` |  |
 | `dpoa_gifting_authorized` | `false` |  |
+| `ferpa_all_records` | `false` |  |
+| `ferpa_includes_health_center` | `false` |  |
 | `has_assets` | `false` |  |
 | `has_blended_family` | `false` |  |
 | `has_charitable_gifts` | `false` |  |
@@ -22,6 +24,7 @@ These names are available in templates *in addition to* the data-dictionary fiel
 | `has_dpoa_self_dealing_reviewer` | `false` |  |
 | `has_dpoa_self_dealing_reviewer_alt` | `false` |  |
 | `has_excluded_guardians` | `false` |  |
+| `has_ferpa_records` | `false` |  |
 | `has_minor_children` | `false` | Drives guardian nomination clauses. |
 | `has_pet_care` | `false` | True when `will.pet_care.option` is not `omit`; gates `include_clause("will.pet_care")`. |
 | `has_simultaneous_death` | `false` |  |
@@ -63,7 +66,7 @@ These names are available in templates *in addition to* the data-dictionary fiel
 
 ## Data roots also present in the context
 
-`children`, `client`, `dpoa`, `execution`, `family`, `healthcare`, `hipaa`, `minor_children`, `outright_will`, `pour_over`, `state`, `trust`, `will` — see fields.md for their fields. Note the context defaults several nested values (e.g. `will.pr_structure` → `single`, `will.bond` → `no_bond`, `will.utma_age` → `21`), and aliases display fields:
+`children`, `client`, `dpoa`, `execution`, `family`, `ferpa`, `healthcare`, `hipaa`, `minor_children`, `outright_will`, `pour_over`, `state`, `trust`, `will` — see fields.md for their fields. Note the context defaults several nested values (e.g. `will.pr_structure` → `single`, `will.bond` → `no_bond`, `will.utma_age` → `21`), and aliases display fields:
 
 | Execution field | Empty-payload default |
 |---|---|

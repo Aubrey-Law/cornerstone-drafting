@@ -1,0 +1,17 @@
+{
+  "name": "ferpa-release",
+  "description": "FERPA release authorizing a college or university to disclose a student's education records. Drafted for the College Preparation Plan; education records fall outside HIPAA, so this is a separate document from the HIPAA authorization.",
+  "required_fields": [
+    "client.full_name",
+    "ferpa.school_name",
+    "ferpa.recipients"
+  ],
+  "documents": [
+    {
+      "id": "ferpa-release",
+      "title": "FERPA Release — Education Records",
+      "template": "templates/ferpa-release.docx",
+      "output": "05-ferpa-release.docx"
+    }
+  ]
+}

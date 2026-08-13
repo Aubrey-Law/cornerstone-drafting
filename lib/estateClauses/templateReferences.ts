@@ -41,6 +41,9 @@ const DOCUMENT_TYPES_BY_ID: Readonly<Record<string, readonly EstateDocumentType[
   'estate-plan-design-summary': ['ancillary'],
   'estate-plan-design-worksheet': ['ancillary'],
   'estate-plan-summary': ['ancillary'],
+  // Education records, not health information — the release shares no clause
+  // language with the HIPAA authorization.
+  'ferpa-release': ['ancillary'],
   'funding-instructions': ['ancillary'],
   'homestead-trustee': ['ancillary'],
   'parental-guardian-appointment': ['ancillary'],

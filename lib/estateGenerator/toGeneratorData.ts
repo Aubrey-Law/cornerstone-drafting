@@ -46,6 +46,7 @@ export type EstateGeneratorPackage =
   | 'trust-funding-plan'
   | 'homestead-trustee'
   | 'young-adult-estate-plan'
+  | 'ferpa-release'
 
 export interface EstateGeneratorData {
   client: Record<string, unknown>
@@ -64,6 +65,7 @@ export interface EstateGeneratorData {
   fiduciary_display: Record<string, unknown>
   healthcare: Record<string, unknown>
   hipaa: Record<string, unknown>
+  ferpa: Record<string, unknown>
   execution: Record<string, unknown>
   specific_gifts: unknown[]
   charitable_gifts: unknown[]
@@ -396,6 +398,10 @@ export function deriveEstateGeneratorPackages(payload: DraftPayload): EstateGene
     packages.push('young-adult-estate-plan')
   }
 
+  if (docs.include_ferpa_release) {
+    packages.push('ferpa-release')
+  }
+
   if (packages.length > 0 && docs.include_estate_plan_summary !== false) {
     packages.push('estate-plan-summary')
   }
@@ -520,6 +526,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       : []
   const hcpProvisions = payload.hcp_provisions
   const hipaaProvisions = payload.hipaa_provisions
+  const ferpa = payload.ferpa_release ?? null
   const hipaaClientAgents = hipaaProvisions.client_additional_agents ?? []
   const hipaaSpouseAgents = hipaaProvisions.spouse_additional_agents ?? []
 
@@ -602,6 +609,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       include_ppm: docs.include_ppm,
       include_parental_appointment: docs.include_parental_appointment,
       include_young_adult_estate_plan: docs.include_young_adult_estate_plan,
+      include_ferpa_release: docs.include_ferpa_release,
       spouse_docs: docs.spouse_docs,
       client_goals: payload.goals_notes ?? null,
       client_concerns: payload.concerns ?? null,
@@ -847,6 +855,15 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       spouse_anatomical_restrictions: hcpProvisions.spouse_anatomical_restrictions,
       client_advance_directive: hcpProvisions.client_advance_directive,
       spouse_advance_directive: hcpProvisions.spouse_advance_directive,
+    },
+    ferpa: {
+      school_name: ferpa?.school_name ?? '',
+      school_city: ferpa?.school_city ?? '',
+      school_state: ferpa?.school_state ?? '',
+      school_location: ferpa?.school_location ?? '',
+      records: (ferpa?.records ?? []).map(record => ({ key: record.key, label: record.label })),
+      all_records: ferpa?.all_records ?? false,
+      recipients: ferpa?.recipients ?? '',
     },
     hipaa: {
       psychotherapy_notes: hipaaProvisions.psychotherapy_notes,

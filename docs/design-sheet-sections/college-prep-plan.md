@@ -116,24 +116,29 @@ resolved one, so it blocks:
 
 ## Generator mapping
 
-Package selection needs no college-prep branch: with trust and will inclusions
-off and DPOA/health care on, `deriveEstateGeneratorPackages` already resolves to
-a single package.
+The four incapacity documents need no college-prep branch in package selection:
+with trust and will inclusions off and DPOA/health care on,
+`deriveEstateGeneratorPackages` already resolves to a single package. The FERPA
+release is its own package, selected by its own inclusion key.
 
 | Design sheet | Package |
 | --- | --- |
 | DPOA + HCP + HIPAA + living will | `incapacity-documents` |
+| `document_inclusions.ferpa_release` (defaults to the student's answer) | `ferpa-release` |
 | everything else | *(none — no summary, no ancillaries)* |
+
+The FERPA release carries its own `ferpa.*` fields off `decisions.college_prep`
+— see [the placeholder map](../../tools/aubreylaw-docgeneration/docs/ferpa-release-placeholder-map.md)
+for the field and conditional tables. Its legal language was drafted from the
+statute rather than a firm source form, so it needs attorney review before
+production use.
 
 ## Known gaps
 
-Two answers this section records have no generator support yet. Both are written
-into `goals_notes` at seed time so they cannot be missed at the drafting desk:
+One answer this section records still has no generator support, and the seed
+writes it into `goals_notes` so it cannot be missed at the drafting desk:
 
-1. **FERPA release** — no template or package exists. Education records sit
-   outside HIPAA, so the HIPAA authorization does not cover them. Draft from the
-   firm form, plus the school's own portal form where it insists on one.
-2. **Springing power of attorney** — `templates/durable-power-of-attorney.docx`
-   drafts an immediately effective power and the data dictionary has no
-   effective-date field. A springing election has to be drafted by hand until the
-   template carries the incapacity-determination language.
+- **Springing power of attorney** — `templates/durable-power-of-attorney.docx`
+  drafts an immediately effective power and the data dictionary has no
+  effective-date field. A springing election has to be drafted by hand until the
+  template carries the incapacity-determination language.

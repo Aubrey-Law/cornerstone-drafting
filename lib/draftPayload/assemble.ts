@@ -36,6 +36,7 @@ import { draftPayloadAssets } from '@/lib/draftPayload/assets'
 import { draftPayloadFundingPlan } from '@/lib/draftPayload/fundingPlan'
 import { draftPayloadHomestead } from '@/lib/draftPayload/homestead'
 import { draftPayloadExcludedGuardians } from '@/lib/draftPayload/excludedGuardians'
+import { buildFerpaRelease } from '@/lib/draftPayload/ferpa'
 import {
   buildFiduciaryRoleDetailsFromDesignSheet,
   getDraftPayloadFiduciaryDisplay,
@@ -428,6 +429,7 @@ export async function buildDraftPayload(
 
   const hcp_provisions = healthcareBundle.hcp_provisions
   const hipaa_provisions = healthcareBundle.hipaa_provisions
+  const ferpa_release = buildFerpaRelease(designSheet)
 
   const execution: DraftPayload['execution'] = {
     signing_date: designSheet.signing_date ?? null,
@@ -497,6 +499,7 @@ export async function buildDraftPayload(
     hcp_provisions,
     hipaa_provisions,
     healthcare_provisions: healthcareBundle.healthcare_provisions,
+    ferpa_release,
     fiduciary_display: fiduciaryDisplay,
     fiduciary_details: fiduciaryDetails,
     excluded_guardians: excludedGuardians,

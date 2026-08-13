@@ -75,5 +75,12 @@ export function conditionalMissingFieldsForPackage(
     requiredFields.push('guardians.temporary.full_name')
   }
 
+  // A release that names no records authorizes nothing. Only required when the
+  // student did not ask for an unlimited release — that branch prints its own
+  // sentence and never iterates the list.
+  if (packageName === 'ferpa-release' && !context.ferpa_all_records) {
+    requiredFields.push('ferpa.records')
+  }
+
   return missingRequiredFields(context, requiredFields)
 }

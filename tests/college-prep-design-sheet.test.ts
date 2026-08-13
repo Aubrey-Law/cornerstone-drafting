@@ -165,7 +165,7 @@ describe('college prep design sheet — seeding from intake', () => {
     expect(payload.hcp_anatomical_gift).toBeNull()
   })
 
-  it('records the FERPA gap and the unmapped powers in the drafting notes', () => {
+  it('records the school, the FERPA request, and the unmapped powers in the drafting notes', () => {
     const notes = buildIntakeSeedPayload(collegePrepIntake()).goals_notes ?? ''
 
     expect(notes).toContain('Northeastern University')
@@ -305,7 +305,7 @@ describe('college prep design sheet — document set', () => {
     expect(getEstatePlanDesignSetup(declined).living_will).toBe(false)
   })
 
-  it('routes the plan to the incapacity package and no estate packages', () => {
+  it('routes the plan to the student packages and no estate packages', () => {
     const sheet = seededSheet()
     const documents = deriveDocuments(
       'EP',
@@ -340,7 +340,30 @@ describe('college prep design sheet — document set', () => {
       documents,
     } as unknown as DraftPayload)
 
-    expect(packages).toEqual(['incapacity-documents'])
+    // The student asked for a FERPA release, so that package rides along; no
+    // trust, will, or estate-plan-summary package is ever selected here.
+    expect(packages).toEqual(['incapacity-documents', 'ferpa-release'])
+  })
+
+  it('drops the FERPA package when the student declined a release', () => {
+    const declined = seededSheet({
+      decisions: buildCollegePrepSeedDecisions(
+        collegePrepIntake({
+          college_prep_details: { ...COLLEGE_PREP_DETAILS, ferpa_release: false },
+        }),
+        null,
+      ),
+    })
+    const documents = deriveDocuments(
+      'EP', [], false, false, false, declined.plan_type,
+      getDocumentInclusions(declined), 'outright_to_spouse',
+      getEstatePlanDesignSetup(declined), [],
+    )
+
+    expect(documents.include_ferpa_release).toBe(false)
+    expect(deriveEstateGeneratorPackages({
+      matter: { type: 'individual' }, trust: null, documents,
+    } as unknown as DraftPayload)).toEqual(['incapacity-documents'])
   })
 })
 

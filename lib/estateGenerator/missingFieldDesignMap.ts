@@ -102,6 +102,10 @@ const EXACT: Record<string, Entry> = {
   'healthcare.agent.co_alternate.relationship': { label: 'Co alternate health care agent relationship', sectionId: S.contactsFiduciaries, targetField: null },
   'healthcare.agent.alternate.full_name': { label: 'Alternate health care agent', sectionId: S.fiduciaries, targetField: null },
 
+  'ferpa.school_name': { label: 'School or program', sectionId: S.collegePlan, targetField: 'college_prep.school_name' },
+  'ferpa.records': { label: 'Education records covered', sectionId: S.collegePlan, targetField: null },
+  'ferpa.recipients': { label: 'Who may receive school records', sectionId: S.collegePlan, targetField: 'college_prep.ferpa_recipients' },
+
   'assets.items': { label: 'Asset schedule', sectionId: S.assetSchedules, targetField: null },
   'homestead.beneficiary_names': { label: 'Homestead beneficiaries', sectionId: S.transfersAssignments, targetField: null },
   'homestead.property_address_line': { label: 'Homestead property address', sectionId: S.transfersAssignments, targetField: null },
@@ -116,6 +120,7 @@ const PREFIXES: Array<[string, string]> = [
   ['guardians.', S.fiduciaries],
   ['healthcare.agent.', S.fiduciaries],
   ['healthcare.', S.healthcareDirectives],
+  ['ferpa.', S.collegePlan],
   ['pour_over.', S.willDetails],
   ['outright_will.', S.willDetails],
   ['testamentary_trust.', S.willDetails],

@@ -279,7 +279,8 @@ export function collegePrepSeedNotes(design: CollegePrepDesign): string | null {
     const records = design.ferpa_records.length
     lines.push(
       `FERPA release requested${records > 0 ? ` (${records} record type${records === 1 ? '' : 's'})` : ''}` +
-        ' — no generator package covers it; draft from the firm form and the school portal.',
+        ' — the release generates with the package; check whether the school also' +
+        ' requires its own form or portal authorization.',
     )
   }
   if (design.dpoa_effective === DISCUSS_AT_MEETING) {
