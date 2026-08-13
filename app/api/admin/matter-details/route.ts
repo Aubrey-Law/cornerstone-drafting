@@ -24,7 +24,6 @@ const WRITABLE_FIELDS = new Set([
   'practice_area', 'matter_number', 'open_date', 'target_close_date', 'closed_date',
   'scheduled_signing_date', 'signing_date', 'documents_filed_date',
   'flat_fee_amount', 'billing_type', 'est_estate_value', 'tax_exposure',
-  'matter_type',
   'referral_source', 'lawmatics_id', 'clio_matter_number', 'matter_status_notes',
   'iolta_required', 'internal_notes',
   'intake_date', 'hired_date', 'design_meeting_date', 'draft_sent_date',

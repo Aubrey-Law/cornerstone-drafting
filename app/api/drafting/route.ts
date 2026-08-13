@@ -75,13 +75,16 @@ export async function POST(req: NextRequest) {
   }
   const llm = llmResolved.config
 
-  const { data: designSheet } = await admin
-    .from('design_sheets')
-    .select('*')
-    .eq('matter_id', resolvedMatterId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const [{ data: designSheet }, { data: matter }] = await Promise.all([
+    admin
+      .from('design_sheets')
+      .select('*')
+      .eq('matter_id', resolvedMatterId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin.from('matters').select('matter_type').eq('id', resolvedMatterId).maybeSingle(),
+  ])
 
   if (!designSheet) {
     return NextResponse.json({ error: 'Missing design sheet data' }, { status: 404 })
@@ -92,7 +95,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Unknown doc_type: ${doc_type}` }, { status: 400 })
   }
 
-  const ctx = buildDraftContext(designSheet as Record<string, unknown>)
+  const ctx = buildDraftContext({
+    ...(designSheet as Record<string, unknown>),
+    matter_type: matter?.matter_type ?? null,
+  })
 
   // Both representation gates evaluate false when this is null, so the document
   // would draft with no descendant-distribution provision at all. Refuse instead:

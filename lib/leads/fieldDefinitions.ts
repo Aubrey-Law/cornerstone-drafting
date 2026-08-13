@@ -8,6 +8,7 @@ import { LEGAL_PLAN_OPTIONS, legalPlanDisplayName } from '@/lib/billing/billingT
 import { parsePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
 import type { LeadEditableField } from '@/lib/leads/details'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import { MARITAL_STATUS_OPTIONS } from '@/lib/sharedFields'
 
 export type LeadFieldInput =
   | 'text' | 'email' | 'date' | 'number' | 'select' | 'textarea' | 'address' | 'spouse'
@@ -65,12 +66,7 @@ export const joined = (values: unknown[], separator = ' ') => {
   return text || null
 }
 
-export const MARITAL_OPTIONS = [
-  { value: 'single', label: 'Single' },
-  { value: 'married', label: 'Married' },
-  { value: 'divorced', label: 'Divorced' },
-  { value: 'widowed', label: 'Widowed' },
-] as const
+export const MARITAL_OPTIONS = MARITAL_STATUS_OPTIONS
 
 export const URGENCY_OPTIONS = [
   { value: 'low', label: 'Low' },

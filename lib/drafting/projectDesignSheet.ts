@@ -301,8 +301,8 @@ function baseFlatFieldsFromDesignSheet(sheet: DesignSheetRow): FlatSheet {
   return {
     client_name: clientFull,
     spouse_name: spouseFull,
-    client_pronouns: str(sheet.client_pronouns || 'he/him'),
-    spouse_pronouns: str(sheet.spouse_pronouns || 'she/her'),
+    client_pronouns: str(sheet.client_pronouns),
+    spouse_pronouns: str(sheet.spouse_pronouns),
     client_aka: str(sheet.client_aka),
     spouse_aka: str(sheet.spouse_aka),
     children_names: childNames,
@@ -407,8 +407,8 @@ export function projectDraftPayloadToFlatSheet(payload: DraftPayload): FlatSheet
   return {
     client_name: clientFull,
     spouse_name: spouseFull,
-    client_pronouns: client.preferred_pronoun ?? 'he/him',
-    spouse_pronouns: spouse?.preferred_pronoun ?? 'she/her',
+    client_pronouns: client.preferred_pronoun ?? '',
+    spouse_pronouns: spouse?.preferred_pronoun ?? '',
     client_aka: client.aka ?? '',
     spouse_aka: spouse?.aka ?? '',
     children_names: childNames,

@@ -166,8 +166,8 @@ export function applyTrusteeNominationsFromSheet(
   clientContact: MatterContact | null,
   spouseContact: MatterContact | null,
 ): Pick<DesignSheet, 'trustee_slots' | 'spouse_trustee_slots'> {
-  const married = Boolean((sheet.marital_status ?? '').toLowerCase().includes('married'))
-  const separate = married && sheet.is_joint === false
+  const isCouple = sheet.matter_type === 'couple'
+  const separate = isCouple && sheet.is_joint === false
 
   const trustee_slots = applyInitialTrusteeNomination(
     sheet.trustee_slots,

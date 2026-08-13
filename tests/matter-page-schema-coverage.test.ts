@@ -42,13 +42,12 @@ describe('matter type', () => {
   })
 
   it('gates the spouse surfaces on matter type, not marital status', () => {
-    expect(isCoupleMatter({ matter_type: 'couple' }, 'single')).toBe(true)
-    expect(isCoupleMatter({ matter_type: 'individual' }, 'married')).toBe(false)
+    expect(isCoupleMatter('couple')).toBe(true)
+    expect(isCoupleMatter('individual')).toBe(false)
   })
 
-  it('falls back to married only when matter type is unset', () => {
-    expect(isCoupleMatter({ matter_type: null }, 'married')).toBe(true)
-    expect(isCoupleMatter(null, 'single')).toBe(false)
+  it('keeps participant composition unresolved when matter type is unset', () => {
+    expect(isCoupleMatter(null)).toBe(false)
   })
 })
 

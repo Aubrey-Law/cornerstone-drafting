@@ -144,11 +144,13 @@ type PanelProps = React.ComponentProps<typeof MatterFactsPanel>
 
 function renderPanel(props: Partial<PanelProps> = {}) {
   const onSaveField = props.onSaveField ?? vi.fn().mockResolvedValue(undefined)
+  const onSaveMatterType = props.onSaveMatterType ?? vi.fn().mockResolvedValue(undefined)
   const onOpenTab = props.onOpenTab ?? vi.fn()
   render(
     <MatterFactsPanel
       matter={matter()}
       matterId="m-1"
+      matterType={props.matterType ?? 'couple'}
       details={DETAILS}
       designSheetPlanType={null}
       estate={ESTATE}
@@ -165,6 +167,7 @@ function renderPanel(props: Partial<PanelProps> = {}) {
       error={null}
       {...props}
       onSaveField={onSaveField}
+      onSaveMatterType={onSaveMatterType}
       onOpenTab={onOpenTab}
     />,
   )

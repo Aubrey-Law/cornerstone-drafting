@@ -43,6 +43,7 @@ type LeadActivityLoaderRow = {
 type MatterShellRow = {
   client_intake_id: string | null
   matter_number?: string | null
+  matter_type?: 'individual' | 'couple' | null
   matter_number_manual?: boolean | null
   portal_uploads_reviewed_at?: string | null
 }
@@ -62,7 +63,7 @@ type ClientIntakeShellRow = {
 
 const MATTER_NOTE_COLUMNS_WITH_PROVENANCE = 'id, matter_id, note_type, body, author, created_at, source_lead_note_id'
 const MATTER_NOTE_COLUMNS_BASE = 'id, matter_id, note_type, body, author, created_at'
-const MATTER_SHELL_COLUMNS_FULL = 'client_intake_id, matter_number, matter_number_manual, portal_uploads_reviewed_at'
+const MATTER_SHELL_COLUMNS_FULL = 'client_intake_id, matter_number, matter_type, matter_number_manual, portal_uploads_reviewed_at'
 const MATTER_SHELL_COLUMNS_BASE = 'client_intake_id, matter_number'
 const CLIENT_INTAKE_COLUMNS_FULL = 'id, intake_sent_at, intake_completed_at, uploads_reviewed_at, email, first_name, status, user_id, client_user_id, unlock_requested_at, unlock_request_note'
 const CLIENT_INTAKE_COLUMNS_BASE = 'id, intake_sent_at, email, first_name, status, user_id, client_user_id'
@@ -331,6 +332,7 @@ export default async function MatterDetailPage({ params }: Params) {
       clientIntakeRow={clientIntakeRow}
       matterNumber={matterNumber}
       matterNumberManual={matterNumberManual}
+      initialMatterType={(matterRow?.matter_type as 'individual' | 'couple' | null | undefined) ?? null}
       matterDetails={(detailsRow ?? null) as MatterDetailsRow | null}
       designSheetPlanType={(designSheet?.plan_type as string | null | undefined) ?? null}
       planMirror={planMirror}

@@ -152,12 +152,14 @@ export function InlineSelect({
   value,
   options,
   accent = false,
+  disabled = false,
   onSave,
 }: {
   label: string
   value: string
   options: Array<{ value: string; label: string }>
   accent?: boolean
+  disabled?: boolean
   onSave: (next: string) => void | Promise<void>
 }) {
   return (
@@ -166,6 +168,7 @@ export function InlineSelect({
       <select
         aria-label={label}
         value={value}
+        disabled={disabled}
         onChange={event => void onSave(event.target.value)}
         className={cn(
           'h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] hover:border-input hover:bg-background focus:border-ring focus:outline-none',

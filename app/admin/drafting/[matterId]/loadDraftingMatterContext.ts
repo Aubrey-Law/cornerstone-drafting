@@ -52,7 +52,7 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
   const [{ data: matterRow }, { data: detailsRow }] = await Promise.all([
     admin
       .from('matters')
-      .select('li_plan_coverage, li_design_sheet_data, li_design_sheet_approved')
+      .select('li_plan_coverage, li_design_sheet_data, li_design_sheet_approved, matter_type')
       .eq('id', matterId)
       .maybeSingle(),
     admin
@@ -69,6 +69,7 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
     notFound()
   }
 
+  const matterType = (matterRow?.matter_type as 'individual' | 'couple' | null | undefined) ?? null
   const matterWithPracticeArea = { ...matter, practice_area: practiceArea }
   const isLP = normalizedPracticeArea === 'EP-LP'
   const lpData = isLP
@@ -98,6 +99,8 @@ export async function loadDraftingMatterContext(matterId: string): Promise<Draft
       sheet = await fetchDesignSheet(matterId)
     }
   }
+
+  if (sheet) sheet = { ...sheet, matter_type: matterType }
 
   return {
     matterId,

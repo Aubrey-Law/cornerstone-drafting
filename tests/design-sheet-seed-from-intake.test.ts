@@ -27,6 +27,7 @@ function intake(overrides: Partial<IntakeSnapshot> = {}): IntakeSnapshot {
     preferred_pronoun: 'she/her',
     prior_names: 'Jane Maiden',
     is_us_citizen: true,
+    citizenship_status: 'us_citizen',
     spouse_first_name: 'John',
     spouse_middle_name: null,
     spouse_last_name: 'Example',
@@ -36,6 +37,7 @@ function intake(overrides: Partial<IntakeSnapshot> = {}): IntakeSnapshot {
     spouse_preferred_pronoun: 'he/him',
     spouse_prior_names: 'John Former',
     spouse_is_us_citizen: true,
+    spouse_citizenship_status: 'us_citizen',
     date_of_marriage: '2000-03-03',
     children: [{
       name: 'Alex Example',

@@ -8,16 +8,24 @@ import {
   SectionDivider,
   SelectInput,
   TextInput,
-  ToggleSwitch,
 } from '@/components/intake/IntakeFormPrimitives'
 import { IntakeField } from '@/components/sharedFields/IntakeField'
-import { SUFFIX_OPTIONS } from '@/lib/sharedFields'
+import {
+  CITIZENSHIP_STATUS_OPTIONS,
+  SUFFIX_OPTIONS,
+  citizenshipStatusToLegacyBoolean,
+  normalizeCitizenshipStatus,
+} from '@/lib/sharedFields'
 
 import type { StepProps } from './IntakeWizard'
 
 const SUFFIXES = SUFFIX_OPTIONS.map((option) => option.value)
 
 export function StepPersonal({ data, update }: StepProps) {
+  const citizenshipStatus = normalizeCitizenshipStatus(
+    data.citizenship_status,
+    typeof data.is_us_citizen === 'boolean' ? data.is_us_citizen : null,
+  )
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -60,11 +68,17 @@ export function StepPersonal({ data, update }: StepProps) {
           />
         </FormField>
       </Row2>
-      <ToggleSwitch
-        checked={(data.is_us_citizen as boolean) ?? true}
-        onChange={(value) => update('is_us_citizen', value)}
-        label="U.S. Citizen"
-      />
+      <FormField label="Citizenship / immigration status">
+        <SelectInput
+          value={citizenshipStatus}
+          onChange={(value) => {
+            const status = normalizeCitizenshipStatus(value)
+            update('citizenship_status', status)
+            update('is_us_citizen', citizenshipStatusToLegacyBoolean(status))
+          }}
+          options={[...CITIZENSHIP_STATUS_OPTIONS]}
+        />
+      </FormField>
       <SectionDivider title="Contact Information" />
       <Row2>
         <FormField label="Email">

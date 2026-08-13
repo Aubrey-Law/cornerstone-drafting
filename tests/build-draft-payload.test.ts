@@ -52,6 +52,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-1',
             client_intake_id: 'intake-1',
             matter_number: 'EP-100',
+            matter_type: 'individual',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -222,6 +223,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-2',
             client_intake_id: 'intake-2',
             matter_number: 'EP-200',
+            matter_type: 'individual',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -324,6 +326,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-3',
             client_intake_id: 'intake-3',
             matter_number: 'EP-300',
+            matter_type: 'individual',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -404,7 +407,7 @@ describe('buildDraftPayload', () => {
     mocks.getAdminClient.mockReturnValue(adminStub({
       matters: [
         { data: { id: 'matter-2' }, error: null },
-        { data: { id: 'matter-2', client_intake_id: 'intake-2', matter_number: 'EP-200', relationship_status: 'hired', status: 'active', stage: 'drafting' }, error: null },
+        { data: { id: 'matter-2', client_intake_id: 'intake-2', matter_number: 'EP-200', matter_type: 'couple', relationship_status: 'hired', status: 'active', stage: 'drafting' }, error: null },
       ],
       matter_details: [{ data: { id: 'details-2', client_id: 'matter-2', practice_area: 'Estate Planning', ep_trust_type: 'revocable_living' }, error: null }],
       design_sheets: [{
@@ -444,6 +447,7 @@ describe('buildDraftPayload', () => {
     expect(payload.spouse?.first_name).toBe('Robin')
     expect(payload.spouse?.dob).toBe('1979-03-03')
     expect(payload.spouse?.preferred_pronoun).toBe('she/her')
+    expect(payload.documents.spouse_docs).toBe(true)
   })
 
   it('overlays the computed trust-name default when the sheet leaves it blank', async () => {
@@ -458,6 +462,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-4',
             client_intake_id: 'intake-4',
             matter_number: 'EP-400',
+            matter_type: 'couple',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -534,6 +539,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-5',
             client_intake_id: 'intake-5',
             matter_number: 'EP-500',
+            matter_type: 'individual',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -568,7 +574,7 @@ describe('buildDraftPayload', () => {
           client_name: 'Design Sheet Name',
           client_pronouns: 'they/them',
           client_email: 'design@example.com',
-          marital_status: 'single',
+          marital_status: 'married',
         },
         error: null,
       }],
@@ -593,6 +599,8 @@ describe('buildDraftPayload', () => {
     expect(payload.client.full_name).toBe('Design Sheet Name')
     expect(payload.client.preferred_pronoun).toBe('they/them')
     expect(payload.client.email).toBe('design@example.com')
+    // Participant count belongs to the matter. Marital status is a personal
+    // fact and must not add a spouse to an individually retained plan.
     expect(payload.matter.type).toBe('individual')
   })
 
@@ -605,6 +613,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-trust',
             client_intake_id: 'intake-trust',
             matter_number: 'EP-TRUST',
+            matter_type: 'couple',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -682,6 +691,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-nosheet',
             client_intake_id: null,
             matter_number: 'EP-200',
+            matter_type: 'individual',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -704,6 +714,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-nosheet',
             client_intake_id: null,
             matter_number: 'EP-200',
+            matter_type: 'individual',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',
@@ -729,6 +740,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-lead',
             client_intake_id: null,
             matter_number: 'EP-201',
+            matter_type: 'individual',
             relationship_status: 'lead',
             status: 'active',
             stage: 'intake',
@@ -766,6 +778,7 @@ describe('buildDraftPayload', () => {
             id: 'matter-extras',
             client_intake_id: null,
             matter_number: 'EP-202',
+            matter_type: 'individual',
             relationship_status: 'hired',
             status: 'active',
             stage: 'drafting',

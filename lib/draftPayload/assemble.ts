@@ -13,7 +13,6 @@ import type { DraftPayload } from '@/lib/draftPayload/types'
 import type { ContactRow, DesignSheetRow, MatterDetailsRow, MatterRow } from '@/lib/draftPayload/types'
 import {
   designSheetString,
-  isDesignSheetMarried,
   splitFullName,
 } from '@/lib/draftPayload/designSheetFields'
 import {
@@ -43,6 +42,7 @@ import {
 } from '@/lib/draftPayload/fiduciaryDetails'
 import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
+import { resolveDraftComposition } from '@/lib/matter/matterType'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
 
@@ -80,7 +80,7 @@ export async function buildDraftPayload(
   ] = await Promise.all([
     admin
       .from('matters')
-      .select('id, client_intake_id, matter_number, relationship_status, status, stage')
+      .select('id, client_intake_id, matter_number, matter_type, relationship_status, status, stage')
       .eq('id', resolvedMatterId)
       .maybeSingle(),
 
@@ -189,24 +189,19 @@ export async function buildDraftPayload(
 
   const normalizedPlanType = normalizeDesignPlanType(designSheet.plan_type)
   const isJoint = designSheet.is_joint === true
-  const isMarried = isDesignSheetMarried(designSheet)
+  const matterType = resolveDraftComposition(matter.matter_type, isJoint)
+  const isCouple = matterType !== 'individual'
 
   // ── Derive shared values ────────────────────────────────────────────────────
 
   const designChildren = draftPayloadChildren(designSheet)
   const hasMinorChildren = designChildren.some(child => child.minor)
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(designSheet.children)
-  const documentInclusions = getDocumentInclusions(designSheetForDocumentInclusions(designSheet))
+  const participantType = matter.matter_type === 'couple' ? 'couple' : 'individual'
+  const documentInclusions = getDocumentInclusions(
+    designSheetForDocumentInclusions(designSheet, participantType),
+  )
   const trustPlanningType = getTrustPlanningType({ decisions: designSheet.decisions ?? null })
-
-  let matterType: DraftPayload['matter']['type']
-  if (!isMarried) {
-    matterType = 'individual'
-  } else if (isJoint) {
-    matterType = 'married_joint'
-  } else {
-    matterType = 'married_individual'
-  }
 
   const effectivePracticeArea = details?.practice_area ?? null
   const isEP = isEstatePlanningPracticeArea(effectivePracticeArea)
@@ -240,7 +235,7 @@ export async function buildDraftPayload(
   const spouseFullName = designSheetString(designSheet, 'spouse_name')
   const { first_name: spouseFirst, last_name: spouseLast } = splitFullName(spouseFullName)
 
-  const spouse: DraftPayload['spouse'] = isMarried && spouseFullName
+  const spouse: DraftPayload['spouse'] = isCouple && spouseFullName
     ? {
         first_name: spouseFirst,
         last_name: spouseLast,
@@ -341,11 +336,11 @@ export async function buildDraftPayload(
     ancillaryDocs,
     hasMinorChildren,
     hasYoungAdultChild,
-    isMarried,
+    isCouple,
     normalizedPlanType,
     documentInclusions,
     trustPlanningType,
-    estatePlanSetupFromSheet(designSheetForDocumentInclusions(designSheet)),
+    estatePlanSetupFromSheet(designSheetForDocumentInclusions(designSheet, participantType)),
     selectedAssetTransferDocsFromSheet(designSheet),
   )
 

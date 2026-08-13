@@ -25,6 +25,7 @@ function householdPerson(patch: Partial<HouseholdPerson>): HouseholdPerson {
     prior_names: null,
     date_of_birth: '2010-01-01',
     is_us_citizen: null,
+    citizenship_status: null,
     email: null,
     phone: null,
     address_line1: null,
@@ -164,7 +165,7 @@ describe('spouse citizenship reaches the design sheet', () => {
     } as unknown as IntakeSnapshot
 
     const seed = buildIntakeSeedPayload(intake)
-    expect(seed.spouse_citizenship).toBe('Non-Resident Alien')
+    expect(seed.spouse_citizenship).toBe('Non-US — status unconfirmed')
     expect(seed.spouse_pronouns).toBe('they/them')
   })
 })

@@ -198,6 +198,19 @@ function payload(overrides: {
 }
 
 describe('projectDraftPayloadToFlatSheet', () => {
+  it('keeps unknown pronouns empty instead of fabricating gendered values', () => {
+    const flat = projectDraftPayloadToFlatSheet(payload({
+      spouse: { preferred_pronoun: null },
+    }))
+    const clientUnknown = projectDraftPayloadToFlatSheet({
+      ...payload(),
+      client: { ...payload().client, preferred_pronoun: null },
+    })
+
+    expect(flat.spouse_pronouns).toBe('')
+    expect(clientUnknown.client_pronouns).toBe('')
+  })
+
   it('maps slot-resolved fiduciaries to legacy flat placeholder keys', () => {
     const flat = projectDraftPayloadToFlatSheet(payload())
 
@@ -235,6 +248,21 @@ describe('projectDraftPayloadToFlatSheet', () => {
 })
 
 describe('projectDesignSheetToFlatSheet', () => {
+  it('keeps missing design-sheet pronouns empty', () => {
+    const flat = projectDesignSheetToFlatSheet({
+      designSheet: {
+        client_name: 'Alex Example',
+        spouse_name: 'Robin Example',
+        marital_status: 'married',
+        client_pronouns: null,
+        spouse_pronouns: null,
+      },
+    })
+
+    expect(flat.client_pronouns).toBe('')
+    expect(flat.spouse_pronouns).toBe('')
+  })
+
   it('uses legacy columns when fiduciaries are not supplied', () => {
     const flat = projectDesignSheetToFlatSheet({
       designSheet: {

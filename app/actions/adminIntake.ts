@@ -23,6 +23,7 @@ import { linkIntakeToMatter } from '@/lib/intake/linkIntakeToMatter'
 import { resolveMatterIntakeIdForMatter } from '@/lib/intake/resolveMatterIntakeId'
 import { MATTER_INTAKE_LINK_COLUMNS } from '@/lib/matters/matterIntakeLink'
 import { markIntakeUploadsReviewed as persistIntakeUploadsReviewed, markPortalUploadsReviewed as persistPortalUploadsReviewed } from '@/lib/matter/unreviewedUploads'
+import { citizenshipStatusToLegacyBoolean } from '@/lib/sharedFields'
 
 /**
  * Recompute and persist the attorney review flags for an intake.
@@ -92,7 +93,8 @@ async function persistAdminSpouse(
     last_name: last,
     middle_name: data.spouse_middle_name || null,
     date_of_birth: data.spouse_date_of_birth || null,
-    is_us_citizen: data.spouse_is_us_citizen,
+    is_us_citizen: citizenshipStatusToLegacyBoolean(data.spouse_citizenship_status),
+    citizenship_status: data.spouse_citizenship_status,
     preferred_pronoun: data.spouse_preferred_pronoun || null,
     phone: data.spouse_phone || null,
     email: data.spouse_email || null,
@@ -164,7 +166,8 @@ function buildPayload(data: AdminIntakeFormData, status: string) {
     suffix: data.suffix || null,
     full_name: [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(' ') || null,
     date_of_birth: data.date_of_birth || null,
-    is_us_citizen: data.is_us_citizen,
+    is_us_citizen: citizenshipStatusToLegacyBoolean(data.citizenship_status),
+    citizenship_status: data.citizenship_status,
     preferred_pronoun: data.preferred_pronoun || null,
     phone: formatPhoneForStorage(data.phone),
     email: data.email || null,

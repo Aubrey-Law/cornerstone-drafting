@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { isMinorFromDob } from '@/lib/contacts/childMinor'
+import type { CitizenshipStatus } from '@/lib/sharedFields'
 
 type AdminClient = SupabaseClient<Database>
 
@@ -24,6 +25,7 @@ export interface HouseholdPerson {
   prior_names: string | null
   date_of_birth: string | null
   is_us_citizen: boolean | null
+  citizenship_status: CitizenshipStatus | null
   email: string | null
   phone: string | null
   address_line1: string | null
@@ -48,7 +50,7 @@ export interface Household {
 
 const PERSON_FIELDS = [
   'first_name', 'middle_name', 'last_name', 'suffix', 'preferred_name', 'preferred_pronoun',
-  'prior_names', 'date_of_birth', 'is_us_citizen', 'email', 'phone',
+  'prior_names', 'date_of_birth', 'is_us_citizen', 'citizenship_status', 'email', 'phone',
   'address_line1', 'address_line2', 'city', 'state', 'zip', 'county',
   'child_relationship', 'parentage',
 ] as const

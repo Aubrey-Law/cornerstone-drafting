@@ -53,7 +53,8 @@ export function unpackInitialIntakeData(
       preferred_name: base.spouse_preferred_name ?? '',
       preferred_pronoun: base.spouse_preferred_pronoun ?? '',
       date_of_birth: base.spouse_date_of_birth ?? '',
-      is_us_citizen: base.spouse_is_us_citizen ?? true,
+      is_us_citizen: base.spouse_is_us_citizen ?? null,
+      citizenship_status: base.spouse_citizenship_status ?? 'unknown',
       phone: formatPhoneInput(typeof base.spouse_phone === 'string' ? base.spouse_phone : ''),
       email: base.spouse_email ?? '',
     }

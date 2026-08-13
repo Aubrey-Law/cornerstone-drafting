@@ -43,7 +43,7 @@ function newChild(): DesignSheetChild {
 
 export function ClientInformationSection({ sheet, onChange }: SectionProps) {
   const marital = (sheet.marital_status ?? '').toLowerCase()
-  const isMarried = marital.includes('married') && !marital.includes('never')
+  const isMarried = sheet.matter_type === 'couple'
   const isDivorced = marital.includes('divorced')
   const isWidowed = marital.includes('widow')
   const original = (field: string) => sheet.overrides?.[field]?.original
@@ -53,9 +53,9 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
   const spouseLabel = (sheet.spouse_name ?? '').trim() || 'Spouse / Partner'
 
   const citizenshipDisplay =
-    normalizeCitizenship(sheet.client_citizenship) ?? 'US Citizen'
+    normalizeCitizenship(sheet.client_citizenship) ?? ''
   const spouseCitizenshipDisplay =
-    normalizeCitizenship(sheet.spouse_citizenship) ?? 'US Citizen'
+    normalizeCitizenship(sheet.spouse_citizenship) ?? ''
 
   function updateChild(idx: number, patch: Partial<DesignSheetChild>) {
     const next = children.map((child, i) => {

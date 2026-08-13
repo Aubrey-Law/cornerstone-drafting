@@ -3,7 +3,6 @@ import { callAnthropic } from '@/lib/anthropic'
 import { resolveFirmModel } from '@/lib/firmModels'
 import { emptyAdminIntakeFormData, type AdminIntakeFormData } from '@/types/adminIntake'
 import { formatPhoneForStorage } from '@/lib/phone'
-import type { Lead } from '@/types/leads'
 import { linkIntakeToMatter } from '@/lib/intake/linkIntakeToMatter'
 import { MATTER_INTAKE_LINK_COLUMNS } from '@/lib/matters/matterIntakeLink'
 
@@ -14,20 +13,20 @@ export const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wor
 
 export const LEAD_INTAKE_IMPORT_SYSTEM_PROMPT = `You extract structured Massachusetts estate planning intake data from unstructured text the attorney provides (emails, Lawmatics exports, prior questionnaires, meeting notes, or Word documents).
 
-Output ONLY a single JSON object that matches the schema below. Use empty strings for unknown text fields, false for unknown booleans, [] for unknown arrays. Never invent data - if a field is not stated, leave it empty/false. Dates must be ISO YYYY-MM-DD. Phones can be any format. State defaults to "MA" only if the text clearly indicates a Massachusetts client.
+Output ONLY a single JSON object that matches the schema below. Use empty strings for unknown text fields, false for ordinary unknown booleans, and [] for unknown arrays. Citizenship status must be "unknown" when unstated; never infer it. Never invent data. Dates must be ISO YYYY-MM-DD. Phones can be any format. State defaults to "MA" only if the text clearly indicates a Massachusetts client.
 
 Schema:
 {
   "first_name": string, "middle_name": string, "last_name": string, "suffix": string,
-  "date_of_birth": string, "is_us_citizen": boolean, "preferred_pronoun": "" | "he/him" | "she/her" | "they/them" | "ze/zir" | "other",
+  "date_of_birth": string, "citizenship_status": "unknown" | "us_citizen" | "permanent_resident" | "nonresident_alien" | "non_us_unspecified" | "other", "preferred_pronoun": "" | "he/him" | "she/her" | "they/them" | "ze/zir" | "other",
   "phone": string, "email": string,
   "address_line1": string, "address_line2": string, "city": string, "state": string, "zip": string, "county": string,
-  "marital_status": "" | "single" | "married" | "divorced" | "widowed",
+  "marital_status": "" | "single" | "married" | "divorced" | "widowed" | "separated" | "domestic_partner",
   "has_children": boolean, "has_minor_children": boolean,
   "children": [ { "first_name": string, "last_name": string, "date_of_birth": string, "preferred_pronoun": string } ],
   "family_notes": string,
   "spouse_first_name": string, "spouse_last_name": string, "spouse_date_of_birth": string,
-  "spouse_is_us_citizen": boolean, "spouse_preferred_pronoun": string,
+  "spouse_citizenship_status": "unknown" | "us_citizen" | "permanent_resident" | "nonresident_alien" | "non_us_unspecified" | "other", "spouse_preferred_pronoun": string,
   "spouse_phone": string, "spouse_email": string, "date_of_marriage": string,
   "estate_value": string, "has_real_property": boolean, "real_property_address": string, "real_property_value": string,
   "has_retirement": boolean, "retirement_value": string,
@@ -70,7 +69,9 @@ export function coerceLeadIntakeImport(parsed: unknown): AdminIntakeFormData {
     const v = p[key]
     const def = empty[key]
 
-    if (Array.isArray(def)) {
+    if (key === 'is_us_citizen' || key === 'spouse_is_us_citizen') {
+      out[key] = typeof v === 'boolean' ? v : null
+    } else if (Array.isArray(def)) {
       if (key === 'children' && Array.isArray(v)) {
         out[key] = v
           .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object' && !Array.isArray(c))
@@ -163,150 +164,6 @@ export async function parseLeadIntakeText(args: {
   }
 
   return applyImportFallbacks(coerceLeadIntakeImport(parsed), args.fallbacks)
-}
-
-function trimOrNull(value: string): string | null {
-  const trimmed = value.trim()
-  return trimmed ? trimmed : null
-}
-
-function parseImportedEstateValue(value: string): number | null {
-  const raw = value.trim()
-  if (!raw) return null
-
-  const ranges: Record<string, number> = {
-    under_500k: 400_000,
-    '500k_to_1m': 750_000,
-    '1m_to_2m': 1_500_000,
-    '2m_to_5m': 3_500_000,
-    over_5m: 6_000_000,
-  }
-  if (raw in ranges) return ranges[raw]
-
-  const normalized = raw.toLowerCase().replace(/[$,\s]/g, '')
-  const match = normalized.match(/(\d+(?:\.\d+)?)(m|million|k|thousand)?/)
-  if (!match) return null
-  const amount = Number(match[1])
-  if (!Number.isFinite(amount) || amount <= 0) return null
-
-  const suffix = match[2] ?? ''
-  if (suffix === 'm' || suffix === 'million') return Math.round(amount * 1_000_000)
-  if (suffix === 'k' || suffix === 'thousand') return Math.round(amount * 1_000)
-  return Math.round(amount)
-}
-
-function joinImportNotes(lines: Array<[string, string | string[] | null | undefined]>): string | null {
-  const out: string[] = []
-  for (const [label, value] of lines) {
-    if (Array.isArray(value)) {
-      if (value.length > 0) out.push(`${label}: ${value.join('; ')}`)
-      continue
-    }
-    const trimmed = value?.trim()
-    if (trimmed) out.push(`${label}: ${trimmed}`)
-  }
-  return out.length ? out.join('\n') : null
-}
-
-export function buildLeadCreateFieldsFromIntake(data: AdminIntakeFormData): Record<string, unknown> {
-  const qualificationNotes = joinImportNotes([
-    ['Planning objectives', data.planning_objectives],
-    ['Family notes', data.family_notes],
-    ['Special circumstances', data.special_circumstances],
-    ['Existing plan', data.has_existing_plan ? 'Yes' : null],
-    ['Primary trustee', data.trustee_primary],
-    ['Primary executor', data.executor_primary],
-    ['Primary POA', data.poa_primary],
-    ['Primary health care proxy', data.hcp_primary],
-    ['Guardian', data.guardian_primary],
-  ])
-
-  const internalNotes = joinImportNotes([
-    ['Created from imported intake', 'Yes'],
-    ['Import notes', data.special_notes],
-  ])
-
-  const row: Record<string, unknown> = {
-    first_name: data.first_name.trim(),
-    last_name: data.last_name.trim(),
-    source_channel: 'manual',
-    practice_area_interest: 'Estate Planning',
-    urgency: 'normal',
-  }
-
-  const optional: Record<string, unknown> = {
-    email: trimOrNull(data.email),
-    phone: formatPhoneForStorage(data.phone),
-    spouse_first_name: trimOrNull(data.spouse_first_name),
-    spouse_last_name: trimOrNull(data.spouse_last_name),
-    spouse_email: trimOrNull(data.spouse_email),
-    spouse_phone: formatPhoneForStorage(data.spouse_phone),
-    street: trimOrNull(data.address_line1),
-    city: trimOrNull(data.city),
-    state: trimOrNull(data.state),
-    zip: trimOrNull(data.zip),
-    marital_status: trimOrNull(data.marital_status),
-    has_minor_children: data.has_minor_children,
-    estimated_estate_value: parseImportedEstateValue(data.estate_value),
-    qualification_notes: qualificationNotes,
-    internal_notes: internalNotes,
-  }
-
-  for (const [key, value] of Object.entries(optional)) {
-    if (value !== null && value !== undefined && value !== '') row[key] = value
-  }
-
-  return row
-}
-
-export async function createLeadFromImportedIntake(args: {
-  text: string
-}): Promise<{ lead: Lead; intakeId: string; data: AdminIntakeFormData }> {
-  const data = await parseLeadIntakeText({ text: args.text })
-  if (!data.first_name.trim() || !data.last_name.trim()) {
-    throw new Error('Imported intake must include a client first and last name before a lead can be created')
-  }
-
-  const [{ getAdminClient }, { saveAdminIntakeDraft }, { insertCrmActivity }] = await Promise.all([
-    import('@/lib/supabaseAdmin'),
-    import('@/app/actions/adminIntake'),
-    import('@/lib/queries/leads'),
-  ])
-  const admin = getAdminClient()
-  const { data: created, error: insertError } = await admin
-    .from('leads')
-    .insert(buildLeadCreateFieldsFromIntake(data))
-    .select('*')
-    .single()
-
-  if (insertError) throw new Error(insertError.message)
-
-  await insertCrmActivity({
-    lead_id: created.id,
-    type: 'created',
-    payload: { source: 'intake_import' },
-    actor_user_id: null,
-  })
-
-  const { id: intakeId } = await saveAdminIntakeDraft({
-    leadId: created.id,
-    matterId: null,
-    clientIntakeId: null,
-    clientUserId: null,
-    data,
-  })
-
-  const { data: refreshed } = await admin
-    .from('leads')
-    .select('*')
-    .eq('id', created.id)
-    .maybeSingle()
-
-  return {
-    lead: ((refreshed ?? created) as Lead),
-    intakeId,
-    data,
-  }
 }
 
 export async function parseAndSaveLeadIntakeDraft(args: {

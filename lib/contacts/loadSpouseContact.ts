@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import type { CitizenshipStatus } from '@/lib/sharedFields'
 
 type AdminClient = SupabaseClient<Database>
 
@@ -14,13 +15,14 @@ export interface SpouseContact {
   prior_names: string | null
   date_of_birth: string | null
   is_us_citizen: boolean | null
+  citizenship_status: CitizenshipStatus | null
   email: string | null
   phone: string | null
 }
 
 const SPOUSE_FIELDS =
   'first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, ' +
-  'prior_names, date_of_birth, is_us_citizen, email, phone'
+  'prior_names, date_of_birth, is_us_citizen, citizenship_status, email, phone'
 
 /**
  * Single read surface for the spouse from the authoritative `contacts` table

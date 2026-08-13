@@ -165,14 +165,13 @@ describe('review flags resolve against the design sheet', () => {
     const keys = (sheet: Record<string, unknown>) =>
       resolveIntakeReviewFlags(spouseFlags, sheet).map(f => f.key)
 
-    it('clears them once the sheet says the client is not married', () => {
-      expect(keys({ marital_status: 'divorced' })).toEqual([])
-      expect(keys({ marital_status: 'widowed' })).toEqual([])
-      expect(keys({ marital_status: 'never married' })).toEqual([])
+    it('clears them once the matter is confirmed as individual', () => {
+      expect(keys({ matter_type: 'individual', marital_status: 'married' })).toEqual([])
     })
 
     it('clears them when the plan is not preparing spouse documents', () => {
       const sheet = {
+        matter_type: 'couple',
         marital_status: 'married',
         decisions: { document_inclusions: { spouse_docs: false } },
       }
@@ -185,16 +184,17 @@ describe('review flags resolve against the design sheet', () => {
       expect(keys({ marital_status: '  ' })).toEqual(spouseFlags.map(f => f.key))
     })
 
-    it('keeps asking for a married client whose spouse documents are in the plan', () => {
-      expect(keys({ marital_status: 'married' })).toEqual(spouseFlags.map(f => f.key))
+    it('keeps asking for a couple matter whose spouse documents are in the plan', () => {
+      expect(keys({ matter_type: 'couple', marital_status: 'single' })).toEqual(spouseFlags.map(f => f.key))
     })
 
-    it('treats "remarried" as married so the ask stands', () => {
+    it('does not let marital status substitute for an explicit matter type', () => {
       expect(keys({ marital_status: 'remarried' })).toEqual(spouseFlags.map(f => f.key))
     })
 
     it('still clears individually once each role is assigned', () => {
       const sheet = {
+        matter_type: 'couple',
         marital_status: 'married',
         spouse_executor_slots: [slot('c1')],
         spouse_poa_slots: [slot('c2')],

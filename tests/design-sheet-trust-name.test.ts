@@ -50,10 +50,8 @@ describe('design sheet trust name autofill', () => {
 })
 
 describe('computeDesignSheetDefaults', () => {
-  it('fills citizenship, domicile, and trust names for a married separate-trust couple', () => {
+  it('leaves unknown citizenship blank while deriving domicile and trust names', () => {
     expect(computeDesignSheetDefaults(sheetWith({ is_joint: false }), matter)).toEqual({
-      client_citizenship: 'US Citizen',
-      spouse_citizenship: 'US Citizen',
       client_domicile: 'MA',
       trust_name: 'The JDS Trust',
       spouse_trust_name: 'The MAS Trust',
@@ -62,8 +60,6 @@ describe('computeDesignSheetDefaults', () => {
 
   it('uses a single family trust name and omits spouse trust when joint', () => {
     expect(computeDesignSheetDefaults(sheetWith({ is_joint: true }), matter)).toEqual({
-      client_citizenship: 'US Citizen',
-      spouse_citizenship: 'US Citizen',
       client_domicile: 'MA',
       trust_name: 'Smith Family Trust',
     })
@@ -73,7 +69,6 @@ describe('computeDesignSheetDefaults', () => {
     expect(
       computeDesignSheetDefaults(sheetWith({ marital_status: 'Single', spouse_name: null }), matter),
     ).toEqual({
-      client_citizenship: 'US Citizen',
       client_domicile: 'MA',
       trust_name: 'The JDS Trust',
     })

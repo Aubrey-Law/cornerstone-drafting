@@ -4,6 +4,7 @@ import {
   MARITAL_STATUS_OPTIONS,
   MA_COUNTY_OPTIONS,
 } from './options'
+import { citizenshipDesignLabelFromLegacyBoolean } from './citizenship'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -32,7 +33,7 @@ export function normalizeCounty(raw: unknown): string | null {
 /** Canonical design-sheet citizenship vocabulary (+ legacy aliases). */
 export function normalizeCitizenship(raw: unknown): string | null {
   if (typeof raw === 'boolean') {
-    return raw ? 'US Citizen' : 'Non-Resident Alien'
+    return citizenshipDesignLabelFromLegacyBoolean(raw)
   }
   const text = trimString(raw)
   if (!text) return null
@@ -41,7 +42,7 @@ export function normalizeCitizenship(raw: unknown): string | null {
     return 'US Citizen'
   }
   if (lower === 'not us citizen' || lower === 'non-us citizen' || lower === 'non us citizen') {
-    return 'Non-Resident Alien'
+    return 'Non-US — status unconfirmed'
   }
   const exact = CITIZENSHIP_OPTIONS.find((o) => o.value.toLowerCase() === lower)
   if (exact) return exact.value

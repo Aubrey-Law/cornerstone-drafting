@@ -19,8 +19,7 @@ const YES_NO = [
 type WillProvisionScope = 'all' | 'will' | 'dpoa' | 'healthcare'
 
 export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: SectionProps & { scope?: WillProvisionScope }) {
-  const marital = (sheet.marital_status ?? '').toLowerCase()
-  const isMarried = marital.includes('married') && !marital.includes('never')
+  const isMarried = sheet.matter_type === 'couple'
   const planType = normalizeDesignPlanType(sheet.plan_type)
   const isPourOver = planType === 'pour_over' || sheet.plan_type === 'pour_over'
   const isOutright = sheet.plan_type === 'outright_will'

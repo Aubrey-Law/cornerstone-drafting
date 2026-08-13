@@ -2,7 +2,7 @@ import type { DesignSheet, PipelineMatter } from '@/types/database'
 
 /**
  * Computed-default values for the design sheet. These fill fields that the
- * client intake never captures (trust names, citizenship, domicile) so the
+ * client intake never captures (trust names and domicile) so the
  * attorney sees a sensible pre-filled value instead of a blank box. They are
  * seeded into the saved sheet on load (see app/admin/drafting/[matterId]/page.tsx)
  * so they flow into drafting and the Word export, and they are shown live in the
@@ -63,10 +63,6 @@ export function computeDesignSheetDefaults(
   matter: NameSource,
 ): Partial<DesignSheet> {
   const patch: Partial<DesignSheet> = {}
-
-  // Citizenship — default to US Citizen (the dominant MA case; overridable).
-  if (!sheet.client_citizenship) patch.client_citizenship = 'US Citizen'
-  if (isMarried(sheet) && !sheet.spouse_citizenship) patch.spouse_citizenship = 'US Citizen'
 
   // Domicile — defaults to the client's residency state.
   if (!sheet.client_domicile && sheet.state) patch.client_domicile = sheet.state

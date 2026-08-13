@@ -28,6 +28,11 @@ import {
 import { getOrCreateClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { optionalDateOrNull } from '@/lib/intakeRequestValues'
 import { getBearerToken } from '@/lib/apiAuth'
+import {
+  citizenshipStatusToLegacyBoolean,
+  normalizeCitizenshipStatus,
+  type CitizenshipStatus,
+} from '@/lib/sharedFields'
 
 const ADMIN_NOTIFY_EMAIL = ADMIN_EMAIL
 
@@ -86,6 +91,19 @@ function normalizeStep(val: unknown): string | undefined {
   }
   if (typeof val === 'number' && STEP_NUM_TO_ID[val]) return STEP_NUM_TO_ID[val]
   return undefined
+}
+
+function citizenshipWriteValues(
+  body: Record<string, unknown>,
+  statusKey = 'citizenship_status',
+  legacyKey = 'is_us_citizen',
+): { status: CitizenshipStatus | undefined; legacy: boolean | null | undefined } {
+  const touched = Object.prototype.hasOwnProperty.call(body, statusKey)
+    || Object.prototype.hasOwnProperty.call(body, legacyKey)
+  if (!touched) return { status: undefined, legacy: undefined }
+  const legacy = typeof body[legacyKey] === 'boolean' ? body[legacyKey] : null
+  const status = normalizeCitizenshipStatus(body[statusKey], legacy)
+  return { status, legacy: citizenshipStatusToLegacyBoolean(status) }
 }
 
 async function recordInviteUse(
@@ -161,6 +179,12 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
+    const clientCitizenship = citizenshipWriteValues(body)
+    const spouseCitizenship = citizenshipWriteValues(
+      body,
+      'spouse_citizenship_status',
+      'spouse_is_us_citizen',
+    )
     const existingId: string = tokenRow.id  // always use the row found by token
     const excludedGuardian = intakeExcludedGuardianTextFromRequestBody(body)
 
@@ -178,7 +202,8 @@ export async function POST(req: Request) {
       preferred_pronoun:        body.preferred_pronoun,
       full_name:                body.full_name,
       date_of_birth:            optionalDateOrNull(body.date_of_birth),
-      is_us_citizen:            body.is_us_citizen,
+      is_us_citizen:            clientCitizenship.legacy,
+      citizenship_status:       clientCitizenship.status,
       phone:                    body.phone,
       email:                    body.email,
       address_line1:            body.address_line1,
@@ -285,7 +310,8 @@ export async function POST(req: Request) {
         prior_names:        typeof body.spouse_prior_names    === 'string' ? body.spouse_prior_names    : null,
         preferred_pronoun:  typeof body.spouse_preferred_pronoun === 'string' ? body.spouse_preferred_pronoun : null,
         date_of_birth:      optionalDateOrNull(body.spouse_date_of_birth),
-        is_us_citizen:      typeof body.spouse_is_us_citizen === 'boolean' ? body.spouse_is_us_citizen : null,
+        is_us_citizen:      spouseCitizenship.legacy ?? null,
+        citizenship_status: spouseCitizenship.status ?? null,
         email:              typeof body.spouse_email === 'string' ? body.spouse_email : null,
         phone:              typeof body.spouse_phone === 'string' ? body.spouse_phone : null,
         source:             'client',
@@ -389,6 +415,12 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
+  const clientCitizenship = citizenshipWriteValues(body)
+  const spouseCitizenship = citizenshipWriteValues(
+    body,
+    'spouse_citizenship_status',
+    'spouse_is_us_citizen',
+  )
   const existingId = body.existingId
   const excludedGuardian = intakeExcludedGuardianTextFromRequestBody(body)
 
@@ -411,7 +443,8 @@ export async function POST(req: Request) {
     preferred_pronoun:        body.preferred_pronoun,
     full_name:                body.full_name,
     date_of_birth:            optionalDateOrNull(body.date_of_birth),
-    is_us_citizen:            body.is_us_citizen,
+    is_us_citizen:            clientCitizenship.legacy,
+    citizenship_status:       clientCitizenship.status,
     phone:                    body.phone,
     email:                    body.email,
     address_line1:            body.address_line1,
@@ -693,7 +726,8 @@ export async function POST(req: Request) {
           prior_names:        typeof body.spouse_prior_names       === 'string' ? body.spouse_prior_names       : null,
           preferred_pronoun:  typeof body.spouse_preferred_pronoun === 'string' ? body.spouse_preferred_pronoun : null,
           date_of_birth:      optionalDateOrNull(body.spouse_date_of_birth),
-          is_us_citizen:      typeof body.spouse_is_us_citizen === 'boolean' ? body.spouse_is_us_citizen : null,
+          is_us_citizen:      spouseCitizenship.legacy ?? null,
+          citizenship_status: spouseCitizenship.status ?? null,
           email:              typeof body.spouse_email === 'string' ? body.spouse_email : null,
           phone:              typeof body.spouse_phone === 'string' ? body.spouse_phone : null,
           source:             'client',

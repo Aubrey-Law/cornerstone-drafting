@@ -8,6 +8,10 @@ import { formatPhoneForStorage } from '@/lib/phone'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
 import type { HouseholdRelationship } from '@/lib/contacts/saveHouseholdContact'
 import { reconcileHouseholdChildren } from '@/lib/contacts/reconcileHouseholdChildren'
+import {
+  citizenshipStatusToLegacyBoolean,
+  normalizeCitizenshipStatus,
+} from '@/lib/sharedFields'
 
 function contactKey(first: unknown, last: unknown) {
   return `${String(first ?? '').trim().toLowerCase()}|${String(last ?? '').trim().toLowerCase()}`
@@ -130,6 +134,10 @@ export async function POST(req: Request) {
 
     if (action === 'save_spouse') {
       const { data: spouseData } = body
+      const citizenshipStatus = normalizeCitizenshipStatus(
+        spouseData.citizenship_status,
+        typeof spouseData.is_us_citizen === 'boolean' ? spouseData.is_us_citizen : null,
+      )
       const { id } = await saveHouseholdContact(admin, {
         householdId: intakeId,
         relationship_type: 'spouse',
@@ -140,7 +148,8 @@ export async function POST(req: Request) {
         prior_names: spouseData.prior_names ?? spouseData.prior_name ?? null,
         preferred_pronoun: spouseData.preferred_pronoun ?? spouseData.pronouns ?? null,
         date_of_birth: spouseData.date_of_birth ?? null,
-        is_us_citizen: typeof spouseData.is_us_citizen === 'boolean' ? spouseData.is_us_citizen : null,
+        is_us_citizen: citizenshipStatusToLegacyBoolean(citizenshipStatus),
+        citizenship_status: citizenshipStatus,
         email: spouseData.email ?? null,
         phone: typeof spouseData.phone === 'string' ? spouseData.phone : null,
         source: 'client',
