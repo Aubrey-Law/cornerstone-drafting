@@ -251,12 +251,67 @@ export function setCollegePrepDesign(
   }
 }
 
-/** Mark a sheet as a college-prep plan without touching the answers. */
+/** Mark a sheet as a college-prep plan without touching anything else. */
 export function setDesignPlanTrack(
   sheet: CollegePrepSheet,
   track: DesignPlanTrack,
 ): Record<string, unknown> {
   return { ...decisionsOf(sheet), plan_track: track }
+}
+
+export interface SwitchDesignPlanTrackArgs {
+  track: DesignPlanTrack
+  /**
+   * College-prep answers to adopt with the switch — normally the matter's own
+   * questionnaire, when its intake is on that track. Omitted, the section
+   * starts empty and the attorney fills it in at the meeting.
+   */
+  answers?: CollegePrepDesign | null
+}
+
+/**
+ * Move an already-seeded sheet onto the other plan track.
+ *
+ * Seeding only runs once, against a blank sheet, so a matter whose intake track
+ * was set after drafting opened — or corrected afterwards — is stuck on the
+ * wrong track with no way back. This is that way back.
+ *
+ * The document set has to move with the track. `getDocumentInclusions` overlays
+ * explicit attorney toggles on the track's defaults, so a sheet seeded as an
+ * estate plan carries `trust: true, will: true` as *stored* values; flipping the
+ * marker alone would leave a College Preparation Plan quietly generating a trust
+ * and a pour-over will. Clearing the stored inclusions and the estate-plan
+ * ancillaries lets the new track's defaults apply.
+ *
+ * Deliberately preserved: `plan_type` (so flipping back restores the estate
+ * structure — it is inert on the college track, where every trust and will
+ * inclusion is false), `estate_plan_design.signing_type` and the health care
+ * document toggles (both tracks sign documents and both include health care),
+ * and any `college_prep` answers already collected.
+ */
+export function switchDesignPlanTrack(
+  sheet: CollegePrepSheet,
+  { track, answers }: SwitchDesignPlanTrackArgs,
+): Record<string, unknown> {
+  const decisions = { ...decisionsOf(sheet) }
+
+  decisions.plan_track = track
+  delete decisions.document_inclusions
+
+  const estatePlanDesign = isRecord(decisions.estate_plan_design)
+    ? { ...(decisions.estate_plan_design as Record<string, unknown>) }
+    : null
+  if (estatePlanDesign) {
+    delete estatePlanDesign.ancillary_documents
+    delete estatePlanDesign.will_title
+    decisions.estate_plan_design = estatePlanDesign
+  }
+
+  if (track === 'college_prep' && answers) {
+    decisions.college_prep = { ...getCollegePrepDesign(sheet), ...answers }
+  }
+
+  return decisions
 }
 
 // ── Drafting readiness ───────────────────────────────────────────────────────

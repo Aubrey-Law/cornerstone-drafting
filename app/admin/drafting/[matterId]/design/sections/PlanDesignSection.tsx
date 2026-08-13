@@ -39,8 +39,11 @@ import {
   type SectionProps,
 } from './shared'
 import { PlanStructureFactsSection } from './PlanStructureFactsSection'
+import { PlanTrackSwitch } from './PlanTrackSwitch'
+import type { IntakeSnapshot } from '@/lib/queries'
 
 interface PlanDesignSectionProps extends SectionProps {
+  intakeSnapshot?: IntakeSnapshot | null
   contacts?: MatterContact[]
   onAddContact?: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
@@ -90,6 +93,7 @@ function ApplicableDecision({
 export function PlanDesignSection({
   sheet,
   onChange,
+  intakeSnapshot = null,
   contacts: _contacts = [],
   onAddContact: _onAddContact,
   onUpdateContact: _onUpdateContact,
@@ -234,6 +238,8 @@ export function PlanDesignSection({
       <AttorneyNoteBanner>
         Select the documents for this matter first. The checked documents control which sections appear below and which drafts are generated.
       </AttorneyNoteBanner>
+
+      <PlanTrackSwitch sheet={sheet} onChange={onChange} intakeSnapshot={intakeSnapshot} />
 
       <SectionBlock title="Plan Type">
         <DecisionRow

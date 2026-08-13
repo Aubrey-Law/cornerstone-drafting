@@ -32,6 +32,23 @@ section is the drafting side of the same plan.
 Missing or unrecognized values read as `estate`, so every existing sheet is
 unaffected.
 
+### Switching an existing sheet
+
+Seeding runs once, against a blank sheet, so a matter whose questionnaire was
+chosen after drafting opened — or chosen wrong — would otherwise be stuck on the
+wrong track. `switchDesignPlanTrack` moves it, and the **Plan track** control
+does it from the UI: on an estate sheet it sits at the top of Estate Plan
+Details, on a college-prep sheet at the top of the College Preparation Plan
+section. It confirms first, because the document set moves with the track.
+
+| On switch | Behavior |
+| --- | --- |
+| `decisions.document_inclusions` | cleared, so the new track's defaults apply — a stored `trust: true` would otherwise keep drafting a trust for a student |
+| `estate_plan_design.ancillary_documents`, `.will_title` | cleared for the same reason |
+| `decisions.college_prep` | adopted from the matter's intake when it is on the college track; otherwise kept as-is (never cleared, so a switch back is not re-entry) |
+| `plan_type`, `estate_plan_design.signing_type` | preserved — plan type is inert on the college track and restores on the way back |
+| Client facts, fiduciary slots, DPOA and health care provisions | untouched |
+
 ## Design sheet fields
 
 ### Columns seeded from the answers

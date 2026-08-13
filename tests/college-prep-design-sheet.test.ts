@@ -6,6 +6,7 @@ import {
   getDesignPlanTrack,
   isCollegePrepDesignSheet,
   setCollegePrepDesign,
+  switchDesignPlanTrack,
 } from '@/lib/collegePrepDesign'
 import {
   advanceDirectiveFromCollegePrep,
@@ -509,5 +510,115 @@ describe('college prep design sheet — sections and readiness', () => {
     expect(getCollegePrepDesign(edited).dpoa_effective).toBe('springing')
     expect(getCollegePrepDesign(edited).school_name).toBe('Northeastern University')
     expect(isCollegePrepDesignSheet(edited)).toBe(true)
+  })
+})
+
+describe('college prep design sheet — switching an existing sheet between tracks', () => {
+  /**
+   * An estate sheet the attorney has already worked: explicit document toggles
+   * stored in `decisions`, which is exactly what makes a bare track flip unsafe.
+   */
+  function workedEstateSheet(): DesignSheet {
+    return {
+      client_name: 'Rowan Delgado',
+      matter_type: 'individual',
+      marital_status: 'single',
+      plan_type: 'pour_over',
+      children: null,
+      decisions: {
+        document_inclusions: { trust: true, will: true, dpoa: true, healthcare: true },
+        estate_plan_design: {
+          signing_type: 'attorney_supervised',
+          will_title: 'pour_over_will',
+          ancillary_documents: { estate_plan_summary: true, certificate_of_trust: true },
+        },
+      },
+    } as unknown as DesignSheet
+  }
+
+  const flip = (sheet: DesignSheet, args: Parameters<typeof switchDesignPlanTrack>[1]) =>
+    ({ ...sheet, decisions: switchDesignPlanTrack(sheet, args) }) as DesignSheet
+
+  it('takes the trust and will off the plan, not just the label', () => {
+    const switched = flip(workedEstateSheet(), { track: 'college_prep' })
+
+    expect(isCollegePrepDesignSheet(switched)).toBe(true)
+    // The stored `trust: true` must not survive — it would quietly draft a trust
+    // and a pour-over will for a student.
+    expect(getDocumentInclusions(switched)).toMatchObject({
+      trust: false,
+      will: false,
+      deed: false,
+      dpoa: true,
+      healthcare: true,
+    })
+    expect(getEstatePlanDesignSetup(switched).ancillary_documents.estate_plan_summary).toBe(false)
+  })
+
+  it('adopts the questionnaire answers when the matter has them', () => {
+    const switched = flip(workedEstateSheet(), {
+      track: 'college_prep',
+      answers: collegePrepDesignFromIntake(collegePrepIntake()),
+    })
+
+    expect(getCollegePrepDesign(switched).school_name).toBe('Northeastern University')
+    expect(getDocumentInclusions(switched).ferpa_release).toBe(true)
+  })
+
+  it('leaves the section empty, not wrong, when the intake has no answers', () => {
+    const switched = flip(workedEstateSheet(), { track: 'college_prep' })
+
+    expect(getCollegePrepDesign(switched).school_name).toBeNull()
+    expect(collegePrepDraftingBlockers(switched).length).toBeGreaterThan(0)
+  })
+
+  it('restores the estate document set on the way back', () => {
+    const there = flip(workedEstateSheet(), { track: 'college_prep' })
+    const back = flip(there, { track: 'estate' })
+
+    expect(isCollegePrepDesignSheet(back)).toBe(false)
+    expect(getDocumentInclusions(back)).toMatchObject({
+      trust: true,
+      will: true,
+      ferpa_release: false,
+    })
+  })
+
+  it('keeps the plan type and signing type across a round trip', () => {
+    const sheet = workedEstateSheet()
+    const back = flip(flip(sheet, { track: 'college_prep' }), { track: 'estate' })
+
+    expect(back.plan_type).toBe('pour_over')
+    expect(getEstatePlanDesignSetup(back).signing_type).toBe('attorney_supervised')
+  })
+
+  it('keeps the student answers on the estate track so a switch back is not re-entry', () => {
+    const student = flip(workedEstateSheet(), {
+      track: 'college_prep',
+      answers: collegePrepDesignFromIntake(collegePrepIntake()),
+    })
+    const back = flip(student, { track: 'estate' })
+
+    expect(getCollegePrepDesign(back).school_name).toBe('Northeastern University')
+    // Present but inert: the estate track never reads them.
+    expect(getDocumentInclusions(back).trust).toBe(true)
+
+    const again = flip(back, { track: 'college_prep' })
+    expect(getCollegePrepDesign(again).school_name).toBe('Northeastern University')
+  })
+
+  it('swaps the visible sections and tabs with the track', () => {
+    const switched = flip(workedEstateSheet(), { track: 'college_prep' })
+    const ids = getAllDesignSectionNavItems({
+      intakeSnapshot: null,
+      documentInclusions: getDocumentInclusions(switched),
+      planType: switched.plan_type,
+      planTrack: 'college_prep',
+    }).map(item => item.id)
+
+    expect(ids).toContain(DESIGN_SECTION_IDS.collegePlan)
+    expect(ids).not.toContain(DESIGN_SECTION_IDS.trustDetails)
+    expect(buildDesignSheetGroups([], 'college_prep').map(group => group.id))
+      .not.toContain('trust')
   })
 })
