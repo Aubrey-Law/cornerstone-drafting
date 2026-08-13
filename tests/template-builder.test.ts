@@ -4,6 +4,8 @@ import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 import { applyDocxReplacements, extractDocxParagraphText } from '@/lib/templateBuilder/docxEdit'
 import { extractTemplateVariables } from '@/lib/estateGenerator/templateVariables'
+import { resolveNodeEstateGeneratorRoot } from '@/lib/estateGenerator/node/config'
+import { templateBuilderToolExecutors } from '@/lib/templateBuilder/assistantTools'
 import { readBundledSystemSkill } from '@/lib/works/systemSkills'
 
 const realTemplate = fs.readFileSync(
@@ -67,6 +69,72 @@ describe('extractDocxParagraphText', () => {
     const text = extractDocxParagraphText(realTemplate)
     expect(text.length).toBeGreaterThan(200)
     expect(text).toContain('{{')
+  })
+})
+
+describe('list_template_fields catalog', () => {
+  const context = { toolUseId: 'probe', emit: () => {} } as never
+  const listFields = async (input: Record<string, string>) => {
+    const executor = templateBuilderToolExecutors('test-user').find(entry => entry.tool.name === 'list_template_fields')!
+    const result = await executor.execute(input, context) as { content: string }
+    return JSON.parse(result.content) as {
+      total: number
+      returned: number
+      truncated: boolean
+      fields: Array<{ path: string; source: string; usedIn?: string[] }>
+    }
+  }
+
+  it('covers every field the shipping templates render, not just the data dictionary', async () => {
+    const root = resolveNodeEstateGeneratorRoot()
+    const catalog = JSON.parse(
+      fs.readFileSync(path.join(root, 'schemas', 'template-variables.generated.json'), 'utf8'),
+    ) as { templates: Record<string, { variables: string[] }> }
+    const rendered = new Set(
+      Object.values(catalog.templates)
+        .flatMap(entry => entry.variables)
+        .map(variable => variable.replace(/\.\d+(?=\.|$)/g, '[]').replace(/\[\d+\]/g, '[]'))
+        .filter(variable => !variable.startsWith('extras.') && !variable.startsWith('loop.')),
+    )
+
+    const listed = new Set((await listFields({})).fields.map(field => field.path))
+    const unreachable = [...rendered].filter(variable => !listed.has(variable))
+    expect(unreachable).toEqual([])
+  })
+
+  it('returns the whole catalog without silently truncating it', async () => {
+    const result = await listFields({})
+    // The old 80-result cap hid the entire trust.* block and execution.signing_county.
+    expect(result.truncated).toBe(false)
+    expect(result.returned).toBe(result.total)
+    expect(result.total).toBeGreaterThan(200)
+  })
+
+  it('finds fields the data dictionary never documented', async () => {
+    // Sub-paths, computed flags, and whole blocks that only exist in templates.
+    for (const [needle, expected] of [
+      ['homestead', 'homestead.certificate_number'],
+      ['guardian', 'guardians.successor.full_name'],
+      ['trustee', 'fiduciaries.trustee.co_primary.full_name'],
+      ['has_minor', 'has_minor_children'],
+    ] as const) {
+      const paths = (await listFields({ search: needle })).fields.map(field => field.path)
+      expect(paths, `search "${needle}"`).toContain(expected)
+    }
+  })
+
+  it('finds every dictionary entry, including ones past the old result cap', async () => {
+    const dictionary = JSON.parse(
+      fs.readFileSync(path.join(resolveNodeEstateGeneratorRoot(), 'schemas', 'data-dictionary.json'), 'utf8'),
+    ) as Record<string, unknown>
+    const listed = new Set((await listFields({})).fields.map(field => field.path))
+    expect(Object.keys(dictionary).filter(fieldPath => !listed.has(fieldPath))).toEqual([])
+  })
+
+  it('filters to the fields one shipping template uses', async () => {
+    const result = await listFields({ template: 'pourover' })
+    expect(result.total).toBeGreaterThan(10)
+    expect(result.fields.every(field => (field.usedIn ?? []).some(name => name.includes('pourover')))).toBe(true)
   })
 })
 
