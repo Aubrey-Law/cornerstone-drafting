@@ -33,6 +33,11 @@ export function RecentPaymentsCard({ payments }: { payments: RecentPaymentRow[] 
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
                 {METHOD_LABELS[payment.method]} · {formatDateTime(payment.receivedAt)}
               </p>
+              {/* The note staff typed when logging it, falling back to the charge
+                  it paid — the same line the matter Billing tab shows. */}
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {payment.note || payment.label}
+              </p>
             </div>
             <span className="shrink-0 text-xs font-semibold tabular-nums text-green">
               +{moneyExact(payment.amount)}

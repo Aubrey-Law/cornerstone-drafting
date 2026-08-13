@@ -70,6 +70,7 @@ const snapshot: BillingSnapshot = {
       method: 'check',
       amount: 150_000,
       receivedAt: '2026-07-18T16:00:00.000Z',
+      note: 'Check 1024 — deposit',
     },
   ],
   rows: [
@@ -412,5 +413,22 @@ describe('billing workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Add charge' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add charge' })
     expect(within(dialog).getByLabelText('Matter')).toBeTruthy()
+  })
+  it('shows the note a payment was logged with in the recent payments rail', () => {
+    render(<BillingClient initialSnapshot={snapshot} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
+
+    const rail = screen.getByText('Recent payments').closest('[data-slot="card"]') as HTMLElement
+    expect(within(rail).getByText('Check 1024 — deposit')).toBeTruthy()
+  })
+
+  it('falls back to the charge the payment paid when no note was written', () => {
+    const noNote = {
+      ...snapshot,
+      recentPayments: [{ ...snapshot.recentPayments[0], note: null }],
+    }
+    render(<BillingClient initialSnapshot={noNote} loadError={null} weekStart="2026-07-27" matterOptions={matterOptions} />)
+
+    const rail = screen.getByText('Recent payments').closest('[data-slot="card"]') as HTMLElement
+    expect(within(rail).getByText('Flat fee — Joint trust package')).toBeTruthy()
   })
 })
