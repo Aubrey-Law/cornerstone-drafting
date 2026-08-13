@@ -29,6 +29,8 @@ interface DictionaryEntry {
   type?: string
   description?: string
   required?: boolean | string
+  /** Explicitly false for a documented path the draft pipeline never emits. */
+  populated?: boolean
 }
 
 function loadDictionary(): Record<string, DictionaryEntry> {
@@ -57,6 +59,8 @@ interface CatalogField {
   description: string | null
   source: 'dictionary' | 'template' | 'context'
   usedIn?: string[]
+  /** Present and false when the path is documented but never populated. */
+  populated?: boolean
 }
 
 /** Paths every bundled template actually renders, from the generated catalog. */
@@ -107,6 +111,7 @@ function buildFieldCatalog(): CatalogField[] {
       type: entry.type ?? 'string',
       description: entry.description ?? null,
       source: 'dictionary',
+      ...(entry.populated === false ? { populated: false } : {}),
     })
   }
 
@@ -143,7 +148,9 @@ function buildFieldCatalog(): CatalogField[] {
 
 /** Exact paths the generator is known to resolve — used to classify a template. */
 function knownFieldPaths(): Set<string> {
-  return new Set(buildFieldCatalog().map(field => field.path))
+  // A documented-but-unpopulated path renders empty, so it must not classify as
+  // known just because it has a dictionary entry.
+  return new Set(buildFieldCatalog().filter(field => field.populated !== false).map(field => field.path))
 }
 
 async function requireUpload(input: unknown): Promise<{ uploadId: string }> {
@@ -408,6 +415,7 @@ export function templateBuilderToolExecutors(userId: string): AdminChatToolExecu
             fields: entries,
             notes: [
               'source: dictionary = documented field; template = undocumented but rendered by a shipping template (usedIn); context = computed boolean for {% if %} conditions.',
+              '`populated: false` marks a documented path the draft pipeline never emits — it renders empty, so do not use it in a new template.',
               'Name filters: `| name` renders a person name, `| NAME` uppercase.',
               'A field missing from this list may still exist as a sub-path of a listed parent (e.g. a `.relationship` or `.full_name` under a fiduciary role) — search the parent path before giving up.',
               'extras.<snake_case_name> is the last resort. It has no source data: the attorney must type the value into the design sheet for every matter, forever. Prefer any canonical field that fits.',

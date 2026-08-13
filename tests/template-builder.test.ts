@@ -81,7 +81,13 @@ describe('list_template_fields catalog', () => {
       total: number
       returned: number
       truncated: boolean
-      fields: Array<{ path: string; source: string; usedIn?: string[] }>
+      fields: Array<{
+        path: string
+        source: string
+        description: string | null
+        usedIn?: string[]
+        populated?: boolean
+      }>
     }
   }
 
@@ -129,6 +135,23 @@ describe('list_template_fields catalog', () => {
     ) as Record<string, unknown>
     const listed = new Set((await listFields({})).fields.map(field => field.path))
     expect(Object.keys(dictionary).filter(fieldPath => !listed.has(fieldPath))).toEqual([])
+  })
+
+  it('describes every field it offers, so the assistant can pick on meaning not path spelling', async () => {
+    const undocumented = (await listFields({}))
+      .fields.filter(field => !field.description).map(field => field.path)
+    // `important_persons` is the one grandfathered dangling root (see
+    // BASELINE_UNKNOWN_ROOTS) — nothing populates it, so it stays undocumented.
+    expect(undocumented).toEqual(['important_persons'])
+  })
+
+  it('marks documented paths the pipeline never populates', async () => {
+    const fields = (await listFields({})).fields
+    const unpopulated = fields.filter(field => field.populated === false).map(field => field.path)
+    expect(unpopulated).toEqual(['client.first_name', 'spouse.first_name'])
+    for (const path of unpopulated) {
+      expect(fields.find(field => field.path === path)?.description).toMatch(/NOT POPULATED/)
+    }
   })
 
   it('filters to the fields one shipping template uses', async () => {
