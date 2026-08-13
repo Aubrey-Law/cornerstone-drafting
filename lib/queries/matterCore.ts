@@ -4,6 +4,7 @@ import { formatPhoneDisplay } from '@/lib/phone'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import { loadHouseholdChildren } from '@/lib/contacts/loadHouseholdChildren'
 import { loadIntakeFiduciarySnapshot } from '@/lib/contacts/intakeFiduciarySnapshot'
+import { getIntakeTrack } from '@/lib/intakeTrack'
 import type { PipelineMatter, DesignSheet, MatterContact, DesignSheetChild, FiduciarySlot } from '@/types/database'
 
 function normalizeFlags(m: PipelineMatter): PipelineMatter {
@@ -281,6 +282,10 @@ export interface IntakeSnapshot {
   plan_type: string | null
   /** Attorney document toggles saved on the intake (keys of DesignDocumentInclusions). */
   document_inclusions: Record<string, boolean> | null
+  /** Which question set the client answered — selects how drafting seeds the sheet. */
+  intake_track: import('@/lib/intakeTrack').IntakeTrack
+  /** College Preparation Plan answers, keyed without the wizard's `college_` prefix. */
+  college_prep_details: Record<string, unknown> | null
 }
 
 export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnapshot | null> {
@@ -428,6 +433,11 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     document_inclusions:
       ai.document_inclusions && typeof ai.document_inclusions === 'object' && !Array.isArray(ai.document_inclusions)
         ? (ai.document_inclusions as Record<string, boolean>)
+        : null,
+    intake_track: getIntakeTrack(ai),
+    college_prep_details:
+      ai.college_prep_details && typeof ai.college_prep_details === 'object' && !Array.isArray(ai.college_prep_details)
+        ? (ai.college_prep_details as Record<string, unknown>)
         : null,
   }
 }

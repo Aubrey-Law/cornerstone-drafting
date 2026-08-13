@@ -10,6 +10,7 @@ import {
   designPlanTypeIncludesRevocableTrust,
   planTypeDisallowsRevocableTrustDocument,
 } from '@/lib/designPlanType'
+import { getDesignPlanTrack, type DesignPlanTrack } from '@/lib/collegePrepDesign'
 import {
   DESIGN_SHEET_GROUP_IDS,
   DESIGN_SECTION_IDS,
@@ -24,6 +25,7 @@ import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/databas
 import type { IntakeSnapshot } from '@/lib/queries'
 import { AccordionBadge, type DesignSheetOnChange } from './sections/shared'
 import { ClientInformationSection } from './sections/PersonalSection'
+import { CollegePrepSection } from './sections/CollegePrepSection'
 import { FamilySection } from './sections/FamilySection'
 import { PlanDesignSection } from './sections/PlanDesignSection'
 import { AssetsSection } from './sections/AssetsSection'
@@ -57,24 +59,37 @@ export interface DesignSheetGroupDef {
   render: () => ReactNode
 }
 
+/**
+ * `tracks` is which plans the tab belongs to at all — distinct from whether the
+ * plan happens to include its documents. An estate sheet without a trust still
+ * shows a Trust tab reading "Not included in this plan", because the attorney
+ * can switch the trust back on; a College Preparation Plan has no trust tab
+ * because there is nothing to switch on, and an estate plan has no
+ * college-prep tab.
+ */
 const DESIGN_SHEET_GROUP_CATALOG: Array<{
   id: DesignSheetGroupId
   title: string
   subtitle: string
+  tracks: DesignPlanTrack[]
 }> = [
-  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Intake Details', subtitle: 'Client, family, and asset facts' },
-  { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Contacts, trustees, personal representatives, agents, and guardians' },
-  { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Estate Plan Details', subtitle: 'Plan type, documents, and execution mechanics' },
-  { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust', subtitle: 'Trust structure, beneficiaries, and provisions' },
-  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Last Will and Testament', subtitle: 'Will title and legacy will details' },
-  { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers' },
-  { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives' },
-  { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning' },
-  { id: DESIGN_SHEET_GROUP_IDS.notes, title: 'Attorney notes', subtitle: 'Goals, concerns, and drafting notes' },
+  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Intake Details', subtitle: 'Client, family, and asset facts', tracks: ['estate', 'college_prep'] },
+  { id: DESIGN_SHEET_GROUP_IDS.collegePlan, title: 'College Preparation Plan', subtitle: 'School, POA scope, HIPAA, and living will', tracks: ['college_prep'] },
+  { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Contacts, trustees, personal representatives, agents, and guardians', tracks: ['estate', 'college_prep'] },
+  { id: DESIGN_SHEET_GROUP_IDS.plan, title: 'Estate Plan Details', subtitle: 'Plan type, documents, and execution mechanics', tracks: ['estate'] },
+  { id: DESIGN_SHEET_GROUP_IDS.trust, title: 'Trust', subtitle: 'Trust structure, beneficiaries, and provisions', tracks: ['estate'] },
+  { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Last Will and Testament', subtitle: 'Will title and legacy will details', tracks: ['estate'] },
+  { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers', tracks: ['estate', 'college_prep'] },
+  { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives', tracks: ['estate', 'college_prep'] },
+  { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning', tracks: ['estate'] },
+  { id: DESIGN_SHEET_GROUP_IDS.notes, title: 'Attorney notes', subtitle: 'Goals, concerns, and drafting notes', tracks: ['estate', 'college_prep'] },
 ]
 
-export function buildDesignSheetGroups(sections: DesignSectionDef[]): DesignSheetGroupDef[] {
-  return DESIGN_SHEET_GROUP_CATALOG.map(group => {
+export function buildDesignSheetGroups(
+  sections: DesignSectionDef[],
+  planTrack: DesignPlanTrack = 'estate',
+): DesignSheetGroupDef[] {
+  return DESIGN_SHEET_GROUP_CATALOG.filter(group => group.tracks.includes(planTrack)).map(({ tracks: _tracks, ...group }) => {
     const groupSections = sections.filter(section => designSectionAnchorId(section.id) === group.id)
     return {
       ...group,
@@ -166,6 +181,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     spouseName: sheet.spouse_name ?? matter.spouse_name,
     isJointTrust: sheet.is_joint,
     planType: sheet.plan_type,
+    planTrack: getDesignPlanTrack(sheet),
   }
   const navItems = (showInapplicable === undefined
     ? getDesignSectionNavItems(navArgs)
@@ -229,6 +245,9 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         )}
       </>
     ),
+    [DESIGN_SECTION_IDS.collegePlan]: () => (
+      <CollegePrepSection sheet={sheet} onChange={updateField} />
+    ),
     [DESIGN_SECTION_IDS.financialPoa]: () => <DpoaDocumentSection {...docCommon} />,
     [DESIGN_SECTION_IDS.healthcareDirectives]: () => <HealthCareDocumentSection {...docCommon} />,
     [DESIGN_SECTION_IDS.assetSchedules]: () => <AssetsSection sheet={sheet} onChange={updateField} />,
@@ -252,6 +271,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
 
   const subtitles: Partial<Record<string, string>> = {
     [DESIGN_SECTION_IDS.intakeReview]: 'Client answers (read-only)',
+    [DESIGN_SECTION_IDS.collegePlan]: 'School, POA scope, HIPAA, and living will',
     [DESIGN_SECTION_IDS.estatePlanDesign]: `${selectedDocKeysCount} document${selectedDocKeysCount === 1 ? '' : 's'} selected`,
     [DESIGN_SECTION_IDS.transfersAssignments]: 'Deed, trustee certificate & realty trust',
   }

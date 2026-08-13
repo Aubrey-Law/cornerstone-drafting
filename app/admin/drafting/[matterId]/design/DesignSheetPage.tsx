@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import { cn } from '@/lib/utils'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
+import { getDesignPlanTrack } from '@/lib/collegePrepDesign'
 import {
   DESIGN_SHEET_GROUP_IDS,
   designSectionAnchorId,
@@ -279,8 +280,8 @@ function DesignSheetPageContent({
     [hideUnusedDecisions, sectionDefs, sheet],
   )
   const groups = useMemo(
-    () => buildDesignSheetGroups(visibleDesignSections(displayedSectionDefs)),
-    [displayedSectionDefs],
+    () => buildDesignSheetGroups(visibleDesignSections(displayedSectionDefs), getDesignPlanTrack(sheet)),
+    [displayedSectionDefs, sheet],
   )
 
   const handleHideUnusedChange = useCallback((checked: boolean) => {

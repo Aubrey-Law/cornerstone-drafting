@@ -3,6 +3,10 @@ import type { DesignSheet, DesignSheetChild, DesignSheetUpdate, FiduciarySlot } 
 import { formatPhoneDisplay } from '@/lib/phone'
 import { intakePlanTypeMapping } from '@/lib/intakePlanType'
 import { normalizeOverrideValue } from '@/lib/designSheet/buildInitialSheet'
+import {
+  buildCollegePrepSeedDecisions,
+  buildCollegePrepSeedPayload,
+} from '@/lib/designSheet/seedCollegePrep'
 import { formatDesignSheetImportValue } from '@/lib/designSheetImport/shared'
 import {
   citizenshipDesignLabel,
@@ -128,7 +132,17 @@ function fiduciarySlots(slots: FiduciarySlot[] | null | undefined): FiduciarySlo
 }
 
 /** Build the design-sheet patch that mirrors the current client intake snapshot. */
-export function buildIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayload {
+export function buildIntakeSeedPayload(
+  intake: IntakeSnapshot,
+): IntakeSeedPayload & DesignSheetUpdate {
+  const base = buildEstateIntakeSeedPayload(intake)
+  if (intake.intake_track !== 'college_prep') return base
+  // The student is the client, so the identity half of the estate seed is exactly
+  // right; only the plan-structure half has to give way to the college-prep answers.
+  return { ...base, ...buildCollegePrepSeedPayload(intake) }
+}
+
+function buildEstateIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayload {
   const record = intakeRecord(intake)
   const excludedName = trimOrNull(intake.excluded_guardian)
   // Attorney plan-structure choice → drafting vocabulary. This is the mapping
@@ -208,6 +222,10 @@ export function buildIntakeSeedDecisions(
   intake: IntakeSnapshot,
   currentDecisions: DesignSheet['decisions'] | null | undefined,
 ): Record<string, unknown> | undefined {
+  if (intake.intake_track === 'college_prep') {
+    return buildCollegePrepSeedDecisions(intake, currentDecisions)
+  }
+
   const planMapping = intakePlanTypeMapping(intake.plan_type)
   const seeded: Record<string, boolean> = {}
   for (const [key, value] of Object.entries(planMapping?.documentInclusions ?? {})) {

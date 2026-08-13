@@ -103,6 +103,8 @@ function intake(overrides: Partial<IntakeSnapshot> = {}): IntakeSnapshot {
     beneficiaries: null,
     plan_type: null,
     document_inclusions: null,
+    intake_track: 'estate',
+    college_prep_details: null,
     ...overrides,
   }
 }
