@@ -732,7 +732,8 @@
   "fiduciaries.trustee.co_primary.pronoun_subject": {
     "type": "string",
     "required": false,
-    "description": "Co-trustee subject pronoun, for notary and signature blocks."
+    "populated": false,
+    "description": "Co-trustee subject pronoun for notary blocks. NOT POPULATED — the pipeline carries no pronouns for fiduciaries, so certificate-of-trust.docx falls back with `| default(client.pronoun_subject)`."
   },
   "fiduciaries.trustee.co_successor.full_name": {
     "type": "string",
@@ -1092,14 +1093,12 @@
   "client.first_name": {
     "type": "string",
     "required": false,
-    "description": "Client's first name. NOT POPULATED by the draft pipeline — templates using it fall back with `client.first_name or client.full_name`. Prefer client.full_name.",
-    "populated": false
+    "description": "Client's first name, split from the full legal name. Used where a summary addresses the client informally; falls back to client.full_name when blank."
   },
   "spouse.first_name": {
     "type": "string",
     "required": false,
-    "description": "Spouse's first name. NOT POPULATED by the draft pipeline — templates using it fall back with `spouse.first_name or spouse.full_name`. Prefer spouse.full_name.",
-    "populated": false
+    "description": "Spouse's first name, split from the full legal name. Used where a summary addresses the spouse informally; falls back to spouse.full_name when blank."
   },
   "children[]": {
     "type": "string",

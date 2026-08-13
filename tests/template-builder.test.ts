@@ -148,7 +148,7 @@ describe('list_template_fields catalog', () => {
   it('marks documented paths the pipeline never populates', async () => {
     const fields = (await listFields({})).fields
     const unpopulated = fields.filter(field => field.populated === false).map(field => field.path)
-    expect(unpopulated).toEqual(['client.first_name', 'spouse.first_name'])
+    expect(unpopulated).toEqual(['fiduciaries.trustee.co_primary.pronoun_subject'])
     for (const path of unpopulated) {
       expect(fields.find(field => field.path === path)?.description).toMatch(/NOT POPULATED/)
     }
