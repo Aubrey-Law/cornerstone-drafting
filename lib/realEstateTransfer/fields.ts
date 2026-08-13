@@ -183,6 +183,14 @@ export function coerceRealEstateTransferFields(raw: unknown): RealEstateTransfer
   return RealEstateTransferFieldsSchema.parse(result)
 }
 
+/** First value that is present and not blank, else ''. */
+function firstFilled(...values: (string | undefined)[]): string {
+  for (const value of values) {
+    if (value?.trim()) return value
+  }
+  return ''
+}
+
 export function fieldsToTemplateData(fields: RealEstateTransferFields): Record<string, unknown> {
   const data: Record<string, unknown> = {}
   for (const key of REAL_ESTATE_TRANSFER_FIELD_KEYS) {
@@ -207,21 +215,24 @@ export function fieldsToTemplateData(fields: RealEstateTransferFields): Record<s
   data.witness_phrase = plural ? 'our hands and seals' : 'my hand and seal'
   data.trust_name_upper = (fields.trust_name ?? '').trim().toUpperCase()
   data.trustee_title = /(?:\band\b|;|\n)/i.test(fields.trustees ?? '') ? 'Trustees' : 'Trustee'
-  data.property_description = fields.property_description ?? fields.legal_description ?? ''
+  // `??` only guards null/undefined, so a field the user typed into and then
+  // cleared ('') used to defeat these fallbacks and merge as blank. `firstFilled`
+  // treats blank/whitespace-only the same as absent.
+  data.property_description = firstFilled(fields.property_description, fields.legal_description)
   data.description_2 = fields.description_2 ?? ''
   data.boundary_calls = fields.description_type === 'lot_plan'
     ? []
     : (fields.boundary_calls ?? []).filter(call => call.directional_call.trim() && call.bound_description.trim())
-  data.recording_date = fields.recording_date ?? fields.prior_deed_date ?? ''
-  data.registry_of_deeds = fields.registry_of_deeds ?? fields.registry_district ?? ''
-  data.current_deed_book_number = fields.current_deed_book_number ?? fields.prior_deed_book ?? ''
-  data.current_deed_page = fields.current_deed_page ?? fields.prior_deed_page ?? ''
+  data.recording_date = firstFilled(fields.recording_date, fields.prior_deed_date)
+  data.registry_of_deeds = firstFilled(fields.registry_of_deeds, fields.registry_district)
+  data.current_deed_book_number = firstFilled(fields.current_deed_book_number, fields.prior_deed_book)
+  data.current_deed_page = firstFilled(fields.current_deed_page, fields.prior_deed_page)
   data.current_deed_document_number = fields.current_deed_document_number ?? ''
-  data.current_certificate_number = fields.current_certificate_number ?? fields.certificate_number ?? ''
-  data.grantee_mailing_address = fields.grantee_mailing_address ?? propertyAddress
+  data.current_certificate_number = firstFilled(fields.current_certificate_number, fields.certificate_number)
+  data.grantee_mailing_address = firstFilled(fields.grantee_mailing_address, propertyAddress)
   data.property_address_line = propertyAddress
   data.document_date_blank = '________________________'
-  data.signing_county = fields.certificate_execution_county ?? fields.property_county ?? ''
+  data.signing_county = firstFilled(fields.certificate_execution_county, fields.property_county)
   data.notary_commission_blank = '________________________'
   return data
 }

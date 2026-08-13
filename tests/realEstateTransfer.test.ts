@@ -292,6 +292,42 @@ describe('renderRealEstateTransferPackage', () => {
     expect(xml.match(/______________________________________/g)).toHaveLength(3)
   })
 
+  it('leaves no unresolved merge fields in the realty trust', () => {
+    const result = renderRealEstateTransferPackage(['real_estate_trust'], sampleFields)
+    const zip = new PizZip(result.buffer)
+    for (const part of ['word/document.xml', 'word/footer2.xml']) {
+      const xml = zip.file(part)!.asText()
+      // Placeholder syntax must be fully consumed — including any Word split
+      // across runs, which would survive as a stray brace.
+      expect(xml, part).not.toMatch(/[{}]/)
+    }
+  })
+
+  it('merges the realty trust dates, county, and trustee title', () => {
+    const result = renderRealEstateTransferPackage(['real_estate_trust'], sampleFields)
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(xml).toContain('Doe Family Trust')
+    expect(xml).toContain('COUNTY OF Suffolk')
+    // Dates are signed-at-execution blanks, not the (uncollected) execution_date.
+    expect(xml).toContain('________________________')
+    expect(xml).not.toContain('2026-07-07')
+    // Single trustee stays singular.
+    expect(xml).toContain('Jane Doe, Trustee')
+    expect(xml).not.toContain('Jane Doe, Trustees')
+  })
+
+  it('pluralises the trustee title and falls back to the property county', () => {
+    const result = renderRealEstateTransferPackage(['real_estate_trust'], {
+      ...sampleFields,
+      trustees: 'Jane Doe and John Doe',
+      certificate_execution_county: '',
+    })
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(xml).toContain('Jane Doe and John Doe, Trustees')
+    // property_county backfills the notary blocks when the certificate county is blank.
+    expect(xml).toContain('COUNTY OF Suffolk')
+  })
+
   it('renders a ZIP when multiple documents are selected', () => {
     const result = renderRealEstateTransferPackage(
       ['deed', 'trustees_certificate', 'real_estate_trust'],
