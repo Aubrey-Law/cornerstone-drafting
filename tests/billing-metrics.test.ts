@@ -330,6 +330,14 @@ describe('billing metrics', () => {
       method: 'plan_eft',
       amount: 60_000,
     })
+    // The note travels with the payment, so the firm rail can show what it was
+    // logged against rather than only its amount.
+    expect(snapshot.recentPayments.map(payment => payment.note))
+      .toEqual(payments
+        .slice()
+        .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt) || b.id.localeCompare(a.id))
+        .slice(0, snapshot.recentPayments.length)
+        .map(payment => payment.note))
   })
 
   it('groups engaged fees by the existing matter plan facts and compares prior year', () => {

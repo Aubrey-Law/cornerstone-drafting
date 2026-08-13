@@ -241,6 +241,7 @@ function buildRecentPayments(
         method: payment.method,
         amount: payment.amount,
         receivedAt: payment.receivedAt,
+        note: payment.note,
       }]
     })
 }

@@ -102,6 +102,8 @@ export interface RecentPaymentRow {
   method: BillingPaymentMethod
   amount: number
   receivedAt: string
+  /** What the payment was logged against, when staff wrote one down. */
+  note: string | null
 }
 
 export interface BillingSnapshot {
