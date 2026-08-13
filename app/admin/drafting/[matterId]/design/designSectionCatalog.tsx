@@ -11,6 +11,7 @@ import {
   planTypeDisallowsRevocableTrustDocument,
 } from '@/lib/designPlanType'
 import { getDesignPlanTrack, type DesignPlanTrack } from '@/lib/collegePrepDesign'
+import { normalizePracticeArea } from '@/lib/practiceArea'
 import {
   DESIGN_SHEET_GROUP_IDS,
   DESIGN_SECTION_IDS,
@@ -158,6 +159,7 @@ export function designSectionAppliesWhen(sectionId: string, sheet: DesignSheet):
 
 export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSectionDef[] {
   const {
+    matterId,
     sheet,
     matter,
     contacts,
@@ -173,6 +175,10 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     showInapplicable,
     fiduciaryFlashField,
   } = args
+
+  // The plan track follows the matter's practice area; the sheet marker is kept
+  // in step by reconcilePlanTrackDecisions, so either source agrees here.
+  const practiceArea = normalizePracticeArea(matter.practice_area)
 
   const navArgs = {
     intakeSnapshot,
@@ -226,7 +232,8 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     [DESIGN_SECTION_IDS.estatePlanDesign]: () => (
       <PlanDesignSection
         {...common}
-        intakeSnapshot={intakeSnapshot}
+        matterId={matterId}
+        practiceArea={practiceArea}
         showInapplicable={Boolean(showInapplicable)}
       />
     ),
@@ -250,7 +257,12 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
       </>
     ),
     [DESIGN_SECTION_IDS.collegePlan]: () => (
-      <CollegePrepSection sheet={sheet} onChange={updateField} intakeSnapshot={intakeSnapshot} />
+      <CollegePrepSection
+        sheet={sheet}
+        onChange={updateField}
+        matterId={matterId}
+        practiceArea={practiceArea}
+      />
     ),
     [DESIGN_SECTION_IDS.financialPoa]: () => <DpoaDocumentSection {...docCommon} />,
     [DESIGN_SECTION_IDS.healthcareDirectives]: () => <HealthCareDocumentSection {...docCommon} />,

@@ -25,8 +25,7 @@ import {
   type CollegePrepDesign,
 } from '@/lib/collegePrepDesign'
 import { formatPhoneDisplay } from '@/lib/phone'
-import type { IntakeSnapshot } from '@/lib/queries'
-import { PlanTrackSwitch } from './PlanTrackSwitch'
+import { PlanTrackNotice } from './PlanTrackNotice'
 import {
   AttorneyDateInput,
   AttorneyInput,
@@ -93,10 +92,11 @@ function NotesField({
  * look like ordinary selections.
  */
 interface CollegePrepSectionProps extends SectionProps {
-  intakeSnapshot?: IntakeSnapshot | null
+  matterId: string
+  practiceArea: string | null
 }
 
-export function CollegePrepSection({ sheet, onChange, intakeSnapshot = null }: CollegePrepSectionProps) {
+export function CollegePrepSection({ sheet, onChange, matterId, practiceArea }: CollegePrepSectionProps) {
   const design = getCollegePrepDesign(sheet)
   const studentFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || 'the student'
 
@@ -133,7 +133,7 @@ export function CollegePrepSection({ sheet, onChange, intakeSnapshot = null }: C
 
   return (
     <DesignSectionContent>
-      <PlanTrackSwitch sheet={sheet} onChange={onChange} intakeSnapshot={intakeSnapshot} />
+      <PlanTrackNotice matterId={matterId} practiceArea={practiceArea} />
 
       <SectionBlock
         title="School & Records"

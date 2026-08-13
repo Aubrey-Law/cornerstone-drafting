@@ -7,10 +7,11 @@ import {
 } from '@/lib/practiceArea'
 
 describe('practice area options', () => {
-  it('exposes the three matter page choices', () => {
+  it('exposes the matter page choices', () => {
     expect(PRACTICE_AREA_OPTIONS.map(option => option.label)).toEqual([
       'Estate Planning',
       'Estate Planning - LP',
+      'College Preparation Plan',
       'Probate',
     ])
   })
