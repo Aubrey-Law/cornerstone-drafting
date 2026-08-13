@@ -40,6 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
@@ -215,6 +216,11 @@ function MatterDetailClientInner({
   const { documents, loading: docsLoading, reload: loadDocuments } = useMatterDocuments(matter.matter_id)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Set when the server refuses a first-click delete because the matter is
+  // hired or carries a signed engagement. Holds its reasons so the dialog can
+  // name what is about to be destroyed instead of repeating a generic warning.
+  const [deleteWarning, setDeleteWarning] = useState<string | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [matterNum, setMatterNum] = useState<string | null>(initialMatterNumber)
   const [matterType, setMatterType] = useState<MatterType | null>(initialMatterType)
   const [matterTypeSaving, setMatterTypeSaving] = useState(false)
@@ -681,7 +687,7 @@ function MatterDetailClientInner({
     }
   }
 
-  const handleDeleteMatter = async () => {
+  const handleDeleteMatter = async (confirm = false) => {
     if (!token) {
       toast.error('Not signed in')
       return
@@ -690,9 +696,20 @@ function MatterDetailClientInner({
     try {
       const res = await fetch(`/api/admin/matters/${matter.matter_id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm }),
       })
-      const body = await res.json().catch(() => ({}))
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string
+        requiresConfirmation?: boolean
+      }
+      // Not a failure — the matter is protected and the dialog escalates to a
+      // typed confirmation rather than sending the attorney back to the menu.
+      if (!res.ok && body.requiresConfirmation) {
+        setDeleteWarning(body.error ?? 'This matter holds client records.')
+        setDeleteConfirmText('')
+        return
+      }
       if (!res.ok) throw new Error(body.error ?? 'Could not delete matter')
       toast.success('Matter deleted')
       setDeleteOpen(false)
@@ -703,6 +720,12 @@ function MatterDetailClientInner({
     } finally {
       setDeleting(false)
     }
+  }
+
+  const closeDeleteDialog = () => {
+    setDeleteOpen(false)
+    setDeleteWarning(null)
+    setDeleteConfirmText('')
   }
 
   const unlockRequestedAt = clientIntakeRow?.unlock_requested_at ?? null
@@ -1147,26 +1170,46 @@ function MatterDetailClientInner({
         onOpenChange={setBookForClientOpen}
       />
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog open={deleteOpen} onOpenChange={open => (open ? setDeleteOpen(true) : closeDeleteDialog())}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete matter?</DialogTitle>
             <DialogDescription>
               This permanently deletes <span className="font-medium text-foreground">{matterLabel}</span>,
               including intake, documents, design sheet, messages, and activity. This cannot be undone.
+              Closing or archiving the matter keeps all of it.
             </DialogDescription>
           </DialogHeader>
+          {deleteWarning && (
+            <div className="space-y-3">
+              <p className="rounded-md border border-red-strong-border bg-red-strong-bg p-3 text-sm text-red-strong">
+                {deleteWarning}
+              </p>
+              <label className="space-y-1.5 text-sm">
+                <span className="text-muted-foreground">
+                  Type <span className="font-semibold text-foreground">DELETE</span> to confirm.
+                </span>
+                <Input
+                  autoFocus
+                  value={deleteConfirmText}
+                  onChange={event => setDeleteConfirmText(event.target.value)}
+                  aria-label="Type DELETE to confirm"
+                  placeholder="DELETE"
+                />
+              </label>
+            </div>
+          )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+            <Button type="button" variant="outline" onClick={closeDeleteDialog} disabled={deleting}>
               Cancel
             </Button>
             <Button
               type="button"
               variant="destructive"
-              onClick={() => void handleDeleteMatter()}
-              disabled={deleting}
+              onClick={() => void handleDeleteMatter(deleteWarning !== null)}
+              disabled={deleting || (deleteWarning !== null && deleteConfirmText.trim() !== 'DELETE')}
             >
-              {deleting ? 'Deleting…' : 'Delete matter'}
+              {deleting ? 'Deleting…' : deleteWarning ? 'Permanently delete' : 'Delete matter'}
             </Button>
           </DialogFooter>
         </DialogContent>
