@@ -5,7 +5,7 @@ import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { isCollegePrepIntake } from '@/lib/intakeTrack'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
-import { applySlaAnchor, ensureEstatePlanningSlaTasks } from '@/lib/slaTasks/generate'
+import { applySlaAnchor, ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
 import { firmDateKey } from '@/lib/firmDate'
 
 /**
@@ -103,7 +103,13 @@ export async function createMatterFromIntake(
   // The engagement being signed is what starts the SLA clock, and this is the
   // path the e-sign webhook takes. Idempotent, so a re-fired webhook or a
   // manual hire after the fact does not duplicate the checklist.
-  await ensureEstatePlanningSlaTasks(matterId, { practiceArea })
+  //
+  // `retemplate` is what makes the practice area resolved above stick: a lead
+  // opened as an estate matter that converts as a College Preparation Plan is
+  // carrying the estate checklist, and this is the moment to swap it — before
+  // anyone has worked it, and while the CP checklist's own pre-engagement tasks
+  // can still be dated off the discovery call the lead already had.
+  await ensureMatterSlaTasks(matterId, { practiceArea, retemplate: true })
 
   // Day 0. A lead already carries its checklist, so the tasks above are a no-op
   // and the 28-day plan is still undated — replaying the engagement anchor is
