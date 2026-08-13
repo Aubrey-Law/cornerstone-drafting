@@ -105,6 +105,52 @@ repair command for it, and `--write-missing` skips it. Drop the stray row:
 Then confirm the columns or objects the migration created are really in the catalog — a
 history row is not proof its SQL ran, in either direction.
 
+## When the CLI is killed on start (macOS)
+
+Every command dies instantly with no output, and the npm wrapper reports `signal: 'SIGKILL'`,
+`status: null`, and null stdout/stderr — the binary was killed at exec, before it ran, so
+nothing it would have printed exists. It is not the subcommand: `supabase --version` fails
+the same way.
+
+The platform package ships **two** Mach-O binaries, and `bin/supabase` execs `bin/supabase-go`:
+
+```
+node_modules/@supabase/cli-darwin-arm64/bin/supabase      (~109 MB)
+node_modules/@supabase/cli-darwin-arm64/bin/supabase-go   (~100 MB)
+```
+
+Signing only the first is the usual half-fix — the command starts, then dies the moment the
+CLI shells out. Clear extended attributes and ad-hoc sign both. Apple Silicon requires at
+least an ad-hoc signature, or the kernel kills the process on sight:
+
+```bash
+PKG=node_modules/@supabase/cli-darwin-arm64   # or cli-darwin-x64 on Intel
+xattr -cr "$PKG"
+codesign --force --sign - "$PKG/bin/supabase-go"
+codesign --force --sign - "$PKG/bin/supabase"
+./node_modules/.bin/supabase --version
+```
+
+If either file is kilobytes rather than ~100 MB, or `file` reports anything but a Mach-O of
+this machine's architecture, the download is truncated or wrong — reinstall instead:
+
+```bash
+rm -rf node_modules/@supabase/cli-darwin-arm64 node_modules/supabase && npm install
+```
+
+Signing is undone by the next `npm ci`, which re-extracts the same binaries. If it recurs
+there, the signature is what breaks; if it does not, a quarantine attribute was the one-off
+cause. `brew install supabase/tap/supabase` avoids both, but then watch version drift against
+the pinned `supabase` devDependency before any `db push`, and use the bare `supabase` rather
+than the `./node_modules/.bin/supabase` spelled everywhere above.
+
+Confirm it reaches the project, not just that it starts — this exercises the auth and the
+link that `db push` depends on, which `--version` does not:
+
+```bash
+./node_modules/.bin/supabase migration list --linked
+```
+
 ## Storage
 
 Estate-plan template fallback uses a private Supabase Storage bucket named `templates`.
