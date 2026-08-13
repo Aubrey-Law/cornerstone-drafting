@@ -50,6 +50,8 @@ export interface DraftPayload {
     preferred_pronoun: string | null
     citizenship?: string | null
     dob: string | null
+    email?: string | null
+    phone?: string | null
   } | null
   marriage?: {
     date: string | null
@@ -133,6 +135,9 @@ export interface DraftPayload {
     spouse_hcp_successor_co?: string | null
     spouse_hcp_successor_co_address?: string | null
     spouse_hcp_successor_co_relationship?: string | null
+    /** Spouse testamentary trustee, slot 0. Optional: legacy payloads carried
+     *  the primary in spouse_trustee_successor instead. */
+    spouse_trustee_primary?: string | null
     spouse_trustee_successor: string | null
     spouse_trustee_co: string | null
   }
@@ -242,6 +247,9 @@ export interface DraftPayload {
   goals_notes?: string | null
   concerns?: string | null
   execution: {
+    /** Full ISO signing date from the design sheet — the authoritative value.
+     *  Optional so stored legacy payloads without it stay type-valid. */
+    signing_date?: string | null
     signing_month: string | null
     signing_year: string | null
     signing_county: string | null
@@ -438,6 +446,7 @@ export interface DesignSheetRow {
   trust_protector?: boolean | null
   trust_protector_name?: string | null
   // Execution mechanics
+  signing_date?: string | null
   signing_month?: string | null
   signing_year?: string | null
   signing_county?: string | null

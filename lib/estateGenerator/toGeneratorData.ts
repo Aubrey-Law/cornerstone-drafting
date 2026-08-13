@@ -175,7 +175,13 @@ function normalizeSpecificBequests(raw: unknown[]): {
 
     if (!item || !recipient) continue
 
-    const gift = { item, recipient }
+    // Carry the instrument routing so per-package data can keep a gift the
+    // attorney assigned to the will out of the trust (and vice versa).
+    const documentRoute = bequest.document === 'will' || bequest.document === 'trust'
+      ? bequest.document
+      : undefined
+    const timing = textValue(bequest.timing)
+    const gift = compactObject({ item, recipient, document: documentRoute, timing: timing || undefined })
     specificGifts.push(gift)
     if (kind === 'charitable') charitableGifts.push(gift)
   }
@@ -189,6 +195,7 @@ function petCareProvision(payload: DraftPayload) {
 
   return compactObject({
     option,
+    document: details.document === 'will' || details.document === 'trust' ? details.document : undefined,
     cash_amount: option === 'omit' ? undefined : formatMoney(details.cash_amount),
     primary_caretaker: person(textValue(details.primary_caretaker)),
     successor_caretaker: person(textValue(details.successor_caretaker)),
@@ -431,9 +438,12 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   )
   const clientPronouns = pronounsFromPreference(payload.client.preferred_pronoun)
   const spousePronouns = pronounsFromPreference(payload.spouse?.preferred_pronoun)
-  const signingDate = payload.execution.signing_year && payload.execution.signing_month
-    ? `${payload.execution.signing_month} 1, ${payload.execution.signing_year}`
-    : undefined
+  // Prefer the full signing date the sheet stores; the month/year fallback
+  // covers legacy sheets that never captured a day (it can only guess the 1st).
+  const signingDate = formatLongDate(payload.execution.signing_date)
+    ?? (payload.execution.signing_year && payload.execution.signing_month
+      ? `${payload.execution.signing_month} 1, ${payload.execution.signing_year}`
+      : undefined)
   const notaryCommission = formatLongDate(payload.execution.notary_commission_expiration) ??
     payload.execution.notary_commission_expiration
 
@@ -515,6 +525,8 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
     client: {
       ...compactObject({
         full_name: payload.client.full_name,
+        first_name: payload.client.first_name,
+        last_name: payload.client.last_name,
         aka: payload.client.aka,
         street_address: payload.client.address,
         city: payload.client.city,
@@ -534,7 +546,11 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       ? compactObject({
           exists: true,
           full_name: payload.spouse.full_name,
+          first_name: payload.spouse.first_name,
+          last_name: payload.spouse.last_name,
           aka: payload.spouse.aka,
+          email: payload.spouse.email,
+          phone: formatPhoneDisplay(payload.spouse.phone),
           date_of_birth: formatLongDate(payload.spouse.dob) ?? payload.spouse.dob,
           pronoun_subject: spousePronouns.subject,
           pronoun_object: spousePronouns.object,
@@ -740,9 +756,16 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         co_trustees_action: testamentaryCoTrusteesAction(payload.will_provisions.cotrustee_decision_standard),
       },
       spouse_testamentary_trustee: {
-        primary: fiduciaryPerson(undefined, payload.fiduciaries.spouse_trustee_successor),
+        // Legacy payloads carried the primary in spouse_trustee_successor;
+        // fall back so stored payloads keep rendering the same person.
+        primary: fiduciaryPerson(
+          undefined,
+          payload.fiduciaries.spouse_trustee_primary ?? payload.fiduciaries.spouse_trustee_successor,
+        ),
         co_primary: spouseTestamentaryCoTrustee(payload),
-        successor: person(null),
+        successor: payload.fiduciaries.spouse_trustee_primary
+          ? fiduciaryPerson(undefined, payload.fiduciaries.spouse_trustee_successor)
+          : person(null),
         co_trustees_action: testamentaryCoTrusteesAction(payload.will_provisions.cotrustee_decision_standard),
       },
       agent: {
