@@ -185,16 +185,20 @@ export interface LawmaticsAddress {
 }
 
 const LEGAL_PLAN_NAMES = ['arag', 'metlife', 'legalease', 'legal ease']
-const VALID_CLIENT_INTAKE_MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed', 'separated'] as const
+// Mirrors MARITAL_STATUS_OPTIONS (packages/estate-fields) — the vocabulary
+// every intake/design surface reads.
+const VALID_CLIENT_INTAKE_MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed', 'separated', 'domestic partner'] as const
 
 export function normalizeLawmaticsMaritalStatus(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const normalized = value.toLowerCase().trim().replace(/[_-]+/g, ' ')
   if (!normalized) return null
-  if (normalized === 'domestic partnership' || normalized === 'partnered') return 'married'
-  return VALID_CLIENT_INTAKE_MARITAL_STATUSES.includes(normalized as typeof VALID_CLIENT_INTAKE_MARITAL_STATUSES[number])
-    ? normalized
-    : null
+  if (normalized === 'domestic partnership' || normalized === 'partnered') return 'domestic_partner'
+  if (!VALID_CLIENT_INTAKE_MARITAL_STATUSES.includes(normalized as typeof VALID_CLIENT_INTAKE_MARITAL_STATUSES[number])) {
+    return null
+  }
+  // Stored values use underscores ('domestic_partner'); matching is on spaces.
+  return normalized.replace(/ /g, '_')
 }
 
 // Extract legal plan from custom fields or tags

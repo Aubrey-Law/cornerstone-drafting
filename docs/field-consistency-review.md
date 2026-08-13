@@ -11,6 +11,17 @@ destructive saves. **High**: a feature that silently cannot work. **Medium**:
 inconsistency with a plausible bad outcome. **Low**: drift/dead code worth
 cleaning while nearby.
 
+> **Status update.** The following are fixed on this branch: §1.1 (plan
+> structure now seeds via `buildIntakeSeedPayload`/`buildIntakeSeedDecisions`),
+> §1.2, §2.1–§2.6 (current_step item and submit-gate item still open),
+> §4.1 (marital vocabulary unified; spouse-gating on `'married'` unchanged),
+> §4.2 (referral normalization + `referral_source` writers), §5.1, §5.3, §5.4,
+> parts of §5.5 (client/spouse names + spouse contact in the generator
+> context), §7.1–§7.5. Still open: §5.2 (the trust tangible-property article
+> needs new fallback disposition language — an attorney drafting decision),
+> the remaining §5.5 template-variable gaps, §5.6–§5.10, §3 registry
+> internals, §4.3–§4.8, and the §8 dead-surface cleanup.
+
 ---
 
 ## 1. Broken intake → design-sheet wiring

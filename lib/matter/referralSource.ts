@@ -37,6 +37,9 @@ export function normalizeReferralSource(value: unknown): ReferralSource {
   if (slug.includes('seminar') || slug.includes('event')) return 'seminar'
   if (slug.includes('web')) return 'website'
   if (slug.includes('social') || slug.includes('facebook') || slug.includes('instagram')) return 'social'
+  // The intake portal stores 'Legal Insurance' (packages/estate-fields
+  // referral vocabulary) for what this picklist calls a legal plan.
+  if (slug.includes('legal_insurance') || slug.includes('legal_plan')) return 'legal_plan'
   if (slug.includes('referral')) return 'client_referral'
   return 'other'
 }

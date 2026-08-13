@@ -38,10 +38,6 @@ export function useAutoSave(intakeId: string, delay = 1500, publicIntakeToken?: 
         if (key.startsWith('_')) continue
         if (isFinancialDetailsRootKey(key)) continue
         if (isReferralDetailKey(key)) continue
-        // referral_source has no dedicated column on client_intake — it lives
-        // inside family_details.referral.source (packed below). Skip it here
-        // so the UPDATE doesn't fail with "column does not exist".
-        if (key === 'referral_source') continue
         if (key.startsWith('financial_')) {
           financialDetails[key.slice('financial_'.length)] = value
         } else if (isCollegePrepFieldKey(key)) {
