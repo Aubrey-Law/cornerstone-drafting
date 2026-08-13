@@ -244,6 +244,8 @@ export async function buildDraftPayload(
         preferred_pronoun: designSheet.spouse_pronouns ?? null,
         citizenship: designSheet.spouse_citizenship ?? null,
         dob: designSheet.spouse_dob ?? null,
+        email: designSheet.spouse_email ?? null,
+        phone: designSheet.spouse_phone ?? null,
       }
     : null
 
@@ -428,6 +430,7 @@ export async function buildDraftPayload(
   const hipaa_provisions = healthcareBundle.hipaa_provisions
 
   const execution: DraftPayload['execution'] = {
+    signing_date: designSheet.signing_date ?? null,
     signing_month: designSheet.signing_month ?? null,
     signing_year: designSheet.signing_year ?? null,
     signing_county: designSheet.signing_county ?? null,

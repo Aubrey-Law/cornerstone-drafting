@@ -146,21 +146,76 @@ export function youngAdultEstatePlanData(data: NodeEstateData, child: Record<str
   }
 }
 
+// Single-instrument packages, used to honor a bequest's `document` routing.
+// `core-estate` renders several instruments from one context and is left
+// unfiltered, matching the previous render-everywhere behavior.
+const WILL_PACKAGE_NAMES = new Set<NodeEstatePackageName>([
+  'pourover-will',
+  'simple-will',
+  'testamentary-trust-will',
+  'spouse-pourover-will',
+  'spouse-testamentary-trust-will',
+])
+
+const TRUST_PACKAGE_NAMES = new Set<NodeEstatePackageName>([
+  'indv-disclaimer-trust',
+  'joint-trust',
+  'joint-trust-simplified',
+  'trust-individual-single',
+])
+
+/**
+ * Keep gifts and pet-care provisions the attorney routed to the other
+ * instrument out of this package. A gift with no `document` renders in both,
+ * as before — routing is opt-in per bequest.
+ */
+function routeDispositionsForPackage(
+  data: NodeEstateData,
+  packageName: NodeEstatePackageName,
+): NodeEstateData {
+  const isWill = WILL_PACKAGE_NAMES.has(packageName)
+  const isTrust = TRUST_PACKAGE_NAMES.has(packageName)
+  if (!isWill && !isTrust) return data
+
+  const excluded = isWill ? 'trust' : 'will'
+  const next: NodeEstateData = { ...data }
+
+  const filterGifts = (value: unknown): unknown[] | undefined => {
+    if (!Array.isArray(value)) return undefined
+    return value.filter(gift => recordValue(gift).document !== excluded)
+  }
+
+  const gifts = filterGifts(data.specific_gifts)
+  if (gifts) next.specific_gifts = gifts
+  const charitable = filterGifts(data.charitable_gifts)
+  if (charitable) next.charitable_gifts = charitable
+
+  const will = recordValue(data.will)
+  const petCare = recordValue(will.pet_care)
+  if (petCare.document === excluded) {
+    next.will = { ...will, pet_care: { ...petCare, option: 'omit' } }
+  }
+
+  return next
+}
+
 export function dataForNodeEstatePackage(
   data: NodeEstateData,
   packageName: NodeEstatePackageName,
 ): NodeEstateData {
+  const routed = routeDispositionsForPackage(data, packageName)
+
   if (packageName === 'spouse-pourover-will') {
-    return spousePouroverWillData(data)
+    return spousePouroverWillData(routed)
   }
 
   if (packageName === 'spouse-incapacity-documents') {
-    return spouseIncapacityDocumentsData(data)
+    return spouseIncapacityDocumentsData(routed)
   }
 
   if (packageName === 'spouse-testamentary-trust-will') {
-    return spouseTestamentaryTrustWillData(data)
+    return spouseTestamentaryTrustWillData(routed)
   }
 
-  return data
+  return routed
 }

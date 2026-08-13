@@ -1,5 +1,5 @@
-import { getDocumentInclusions, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
-import { getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
+import { getDocumentInclusions, getEstatePlanDesignSetup, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import { dpoaCoagentServingDecided, dpoaCompensationDecided, getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
 import { namedPrincipalSlots } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
@@ -220,10 +220,9 @@ export function computeDesignSheetReadiness({
   const spouseExecutorAlternate = alternateContactId(sheet.spouse_executor_slots)
   const spousePoaAlternate = alternateContactId(sheet.spouse_poa_slots)
   const spouseHcpAlternate = alternateContactId(sheet.spouse_hcp_slots)
-  const estatePlanSetup = sheet.decisions?.estate_plan_setup
-  const signingType = estatePlanSetup && typeof estatePlanSetup === 'object' && !Array.isArray(estatePlanSetup)
-    ? (estatePlanSetup as Record<string, unknown>).signing_type
-    : null
+  // The setter and UI store this under decisions.estate_plan_design — read it
+  // through the shared getter so the blocker can actually clear.
+  const signingType = getEstatePlanDesignSetup(sheet).signing_type
   const dpoaProvisions = getDesignSheetDpoaProvisions(sheet)
   const healthcareProvisions = getDesignSheetHealthcareProvisions(sheet)
   const hasDpoaBasicPowers = dpoaProvisions.all_basic_powers
@@ -238,26 +237,22 @@ export function computeDesignSheetReadiness({
     !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
     documentInclusions.trust && married && sheet.is_joint == null &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'joint or separate trusts', 'is_joint'),
-    // Checks the resolved value, not just presence: a legacy sheet carrying an
-    // unrecognised string (e.g. 'per stirpes', left over from when this column
-    // meant something else) satisfied `hasText` and so was never flagged, while
-    // the generator quietly fell back to a staged distribution.
-    documentInclusions.trust && resolveResidualBeneficiaryMethod(sheet) == null &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'distribution method', 'residual_beneficiary_method'),
     Object.entries(documentInclusions).filter(([key, value]) => key !== 'spouse_docs' && value).length === 0 &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'at least one document', null),
     (!hasText(signingType) || signingType === 'undecided') &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing type', 'estate_plan_setup.signing_type', 'client-decision', false),
+      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing type', 'signing_type', 'client-decision', false),
     !hasText(sheet.signing_date) &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing date', 'signing_date', 'client-decision', false),
     !hasText(sheet.signing_county) &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing county', 'signing_county', 'client-decision', false),
     !hasText(sheet.notary_commission_expiration) &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'notary commission expiration', 'notary_commission_expiration', 'client-decision', false),
-    ...familyBlockers,
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const clientBlockers = [
+    // Children live in Client Information — surfacing these under the
+    // estate-plan-design pill contradicted the blocker's own section id.
+    ...familyBlockers,
     !hasText(sheet.client_name) && blocker(DESIGN_SECTION_IDS.clientInformation, 'client name', 'client_name'),
     !hasText(sheet.client_dob) && blocker(DESIGN_SECTION_IDS.clientInformation, 'date of birth', 'client_dob'),
     !hasText(sheet.client_email) && blocker(DESIGN_SECTION_IDS.clientInformation, 'email', 'client_email'),
@@ -279,6 +274,13 @@ export function computeDesignSheetReadiness({
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse backup trustee', 'spouse_trustee_slots', 'required', false),
     documentInclusions.trust && !hasText(sheet.remote_beneficiary) &&
       blocker(DESIGN_SECTION_IDS.trustDetails, 'remote-contingency beneficiaries', 'remote_beneficiary', 'client-decision', false),
+    // Checks the resolved value, not just presence: a legacy sheet carrying an
+    // unrecognised string (e.g. 'per stirpes', left over from when this column
+    // meant something else) satisfied `hasText` and so was never flagged, while
+    // the generator quietly fell back to a staged distribution. Lives here —
+    // not in the plan blockers — because the control renders in Trust Details.
+    documentInclusions.trust && resolveResidualBeneficiaryMethod(sheet) == null &&
+      blocker(DESIGN_SECTION_IDS.trustDetails, 'distribution method', 'residual_beneficiary_method'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const spouseTrustBlockers = [] as DesignReadinessBlocker[]
@@ -308,10 +310,14 @@ export function computeDesignSheetReadiness({
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse attorney-in-fact', 'spouse_poa_slots'),
     documentInclusions.dpoa && spouseFiduciariesNeeded && spousePoaPrimary && !spousePoaAlternate &&
       blocker(DESIGN_SECTION_IDS.contactsFiduciaries, 'spouse backup attorney-in-fact', 'spouse_poa_slots', 'required', false),
-    documentInclusions.dpoa && !dpoaProvisions.agent_compensation &&
-      blocker(DESIGN_SECTION_IDS.financialPoa, 'agent compensation', 'dpoa_provisions.agent_compensation', 'client-decision'),
-    documentInclusions.dpoa && !dpoaProvisions.coagent_serving &&
-      blocker(DESIGN_SECTION_IDS.financialPoa, 'co-agent decision-making', 'dpoa_provisions.coagent_serving', 'client-decision'),
+    // Check the recorded decisions, not the getter output — the getter
+    // supplies working defaults, which made these two checks unreachable.
+    // Advisory, not blocking: the defaults produce a valid document, so an
+    // unrecorded decision should prompt, never hold drafting.
+    documentInclusions.dpoa && !dpoaCompensationDecided(sheet) &&
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'agent compensation', 'dpoa_provisions.agent_compensation', 'client-decision', false),
+    documentInclusions.dpoa && !dpoaCoagentServingDecided(sheet) &&
+      blocker(DESIGN_SECTION_IDS.financialPoa, 'co-agent decision-making', 'dpoa_provisions.coagent_serving', 'client-decision', false),
     documentInclusions.dpoa && !hasDpoaBasicPowers &&
       blocker(DESIGN_SECTION_IDS.financialPoa, 'basic attorney-in-fact powers', 'dpoa_provisions.basic_powers', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]

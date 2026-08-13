@@ -15,6 +15,7 @@ import { designPlanTypeLabel } from '@/lib/designPlanType'
 import { resolveDraftingDate, DRAFTING_DATE_COLUMNS } from '@/lib/matter/draftingDates'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
 import { isCoupleMatter, MATTER_TYPE_OPTIONS, normalizeMatterType, type MatterType } from '@/lib/matter/matterType'
+import { MARITAL_STATUS_OPTIONS } from '@/lib/sharedFields'
 import {
   REFERRAL_SOURCE_OPTIONS,
   normalizeReferralSource,
@@ -34,7 +35,6 @@ import { InlineDate, InlineSelect, InlineText, ReadOnlyRow } from './InlineField
 import { PanelActivity } from './PanelActivity'
 import { PanelSection } from './PanelSection'
 import { useSectionState, useShowEmptyFields } from './useSectionState'
-import { MARITAL_STATUS_OPTIONS } from '@/lib/sharedFields'
 
 interface ClientRecord {
   id: string
@@ -97,9 +97,13 @@ export interface MatterFactsPanelProps {
   onOpenTab: (tab: MatterTab) => void
 }
 
+// Shared registry vocabulary (all six values) so a status the intake portal
+// stored — separated, domestic partner — renders instead of showing '—' and
+// being silently overwritten on the next edit. Lowercase to match the row's
+// muted inline style.
 const MARITAL_OPTIONS = [
   { value: '', label: '—' },
-  ...MARITAL_STATUS_OPTIONS,
+  ...MARITAL_STATUS_OPTIONS.map(option => ({ value: option.value, label: option.label.toLowerCase() })),
 ]
 
 const URGENCY_OPTIONS = [

@@ -850,6 +850,7 @@ export type Database = {
           attorney_review_flags: Json
           billing_type: string | null
           citizenship: string | null
+          citizenship_status: string | null
           city: string | null
           client_user_id: string | null
           college_prep_details: Json | null
@@ -953,6 +954,7 @@ export type Database = {
           attorney_review_flags?: Json
           billing_type?: string | null
           citizenship?: string | null
+          citizenship_status?: string | null
           city?: string | null
           client_user_id?: string | null
           college_prep_details?: Json | null
@@ -1056,6 +1058,7 @@ export type Database = {
           attorney_review_flags?: Json
           billing_type?: string | null
           citizenship?: string | null
+          citizenship_status?: string | null
           city?: string | null
           client_user_id?: string | null
           college_prep_details?: Json | null
@@ -1259,6 +1262,7 @@ export type Database = {
           address_line1: string | null
           address_line2: string | null
           child_relationship: string | null
+          citizenship_status: string | null
           city: string | null
           client_intake_id: string | null
           county: string | null
@@ -1295,6 +1299,7 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           child_relationship?: string | null
+          citizenship_status?: string | null
           city?: string | null
           client_intake_id?: string | null
           county?: string | null
@@ -1331,6 +1336,7 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           child_relationship?: string | null
+          citizenship_status?: string | null
           city?: string | null
           client_intake_id?: string | null
           county?: string | null
@@ -5606,6 +5612,7 @@ export type Database = {
           lost_reason: string | null
           matter_number: string | null
           matter_number_manual: boolean
+          matter_type: string | null
           name: string
           on_hold_at: string | null
           pmps_at: string | null
@@ -5650,6 +5657,7 @@ export type Database = {
           lost_reason?: string | null
           matter_number?: string | null
           matter_number_manual?: boolean
+          matter_type?: string | null
           name?: string
           on_hold_at?: string | null
           pmps_at?: string | null
@@ -5694,6 +5702,7 @@ export type Database = {
           lost_reason?: string | null
           matter_number?: string | null
           matter_number_manual?: boolean
+          matter_type?: string | null
           name?: string
           on_hold_at?: string | null
           pmps_at?: string | null
@@ -7939,6 +7948,7 @@ export type Database = {
           attorney_review_flags: Json
           billing_type: string | null
           citizenship: string | null
+          citizenship_status: string | null
           city: string | null
           client_user_id: string | null
           college_prep_details: Json | null
@@ -8078,6 +8088,7 @@ export type Database = {
           attorney_review_flags: Json
           billing_type: string | null
           citizenship: string | null
+          citizenship_status: string | null
           city: string | null
           client_user_id: string | null
           college_prep_details: Json | null

@@ -37,14 +37,6 @@ export interface EstatePlanDesignSetup {
   ancillary_documents: Record<EstatePlanAncillaryDocumentKey, boolean>
 }
 
-export interface FiduciaryDisplayOptions {
-  show_phone_numbers: boolean
-  show_addresses: boolean
-  show_email_addresses: boolean
-  show_dates_of_birth: boolean
-  show_relationships: boolean
-}
-
 export const DESIGN_DOCUMENT_LABELS: Record<DesignDocumentKey, string> = {
   trust: 'Trust',
   will: 'Will',
@@ -67,14 +59,6 @@ export const ESTATE_PLAN_ANCILLARY_LABELS: Record<EstatePlanAncillaryDocumentKey
   fiduciary_role_guide: 'Fiduciary Role Guide',
   flowchart: 'Flowchart',
   include_asset_spreadsheet: 'Include Asset Spreadsheet',
-}
-
-const DEFAULT_FIDUCIARY_DISPLAY_OPTIONS: FiduciaryDisplayOptions = {
-  show_phone_numbers: false,
-  show_addresses: false,
-  show_email_addresses: false,
-  show_dates_of_birth: false,
-  show_relationships: false,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -249,31 +233,7 @@ export function setEstatePlanDesignSetup(
   }
 }
 
-export function getFiduciaryDisplayOptions(sheet: Pick<DesignSheet, 'decisions'>): FiduciaryDisplayOptions {
-  const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
-  const raw = isRecord(decisions.fiduciary_display_options) ? decisions.fiduciary_display_options : {}
-
-  return {
-    show_phone_numbers: typeof raw.show_phone_numbers === 'boolean' ? raw.show_phone_numbers : DEFAULT_FIDUCIARY_DISPLAY_OPTIONS.show_phone_numbers,
-    show_addresses: typeof raw.show_addresses === 'boolean' ? raw.show_addresses : DEFAULT_FIDUCIARY_DISPLAY_OPTIONS.show_addresses,
-    show_email_addresses: typeof raw.show_email_addresses === 'boolean' ? raw.show_email_addresses : DEFAULT_FIDUCIARY_DISPLAY_OPTIONS.show_email_addresses,
-    show_dates_of_birth: typeof raw.show_dates_of_birth === 'boolean' ? raw.show_dates_of_birth : DEFAULT_FIDUCIARY_DISPLAY_OPTIONS.show_dates_of_birth,
-    show_relationships: typeof raw.show_relationships === 'boolean' ? raw.show_relationships : DEFAULT_FIDUCIARY_DISPLAY_OPTIONS.show_relationships,
-  }
-}
-
-export function setFiduciaryDisplayOptions(
-  sheet: Pick<DesignSheet, 'decisions'>,
-  patch: Partial<FiduciaryDisplayOptions>,
-) {
-  const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
-  const current = isRecord(decisions.fiduciary_display_options) ? decisions.fiduciary_display_options : {}
-
-  return {
-    ...decisions,
-    fiduciary_display_options: {
-      ...current,
-      ...patch,
-    },
-  }
-}
+// Note: an orphaned `decisions.fiduciary_display_options` namespace used to
+// live here with zero callers. Drafting reads
+// `decisions.fiduciary_document_inclusions` (lib/designSheet/
+// fiduciaryDocumentInclusions.ts) — that is the real display-toggle store.

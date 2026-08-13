@@ -1,15 +1,17 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { INTAKE_PREFILLED_FIELDS } from '@/lib/designSheet/buildInitialSheet'
 
 describe('design sheet prefilled field overrides', () => {
   it('records attorney edits to intake-prefilled fields in sheet.overrides', () => {
-    const initial = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/buildInitialSheet.ts'), 'utf8')
     const state = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/useDesignSheetState.ts'), 'utf8')
 
-    expect(initial).toContain("'client_name'")
-    expect(initial).toContain("'city'")
-    expect(initial).toContain("'plan_type'")
+    // The set is derived from the registry's prefilled flags — assert the
+    // runtime membership rather than source text.
+    for (const field of ['client_name', 'city', 'plan_type', 'client_pronouns', 'spouse_pronouns', 'concerns', 'goals_notes']) {
+      expect(INTAKE_PREFILLED_FIELDS.has(field)).toBe(true)
+    }
     expect(state).toContain('INTAKE_PREFILLED_FIELDS')
     expect(state).toContain('const existing = previousOverrides[fieldName]')
     expect(state).toContain('const original = existing?.original ?? normalizeOverrideValue(prev[field])')

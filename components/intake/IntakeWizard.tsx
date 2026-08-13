@@ -933,7 +933,13 @@ export function StepGoals({ data, update, intakeId, publicIntakeToken }: StepPro
     update('planning_goals', updated)
   }
 
-  const obj = (data.planning_objectives as Record<string, string>) ?? {}
+  // Guard the shape: legacy rows can surface this as a JSON string or admin
+  // free text; spreading a string would corrupt it into a char-indexed object.
+  const rawObjectives = data.planning_objectives
+  const obj: Record<string, string> =
+    rawObjectives && typeof rawObjectives === 'object' && !Array.isArray(rawObjectives)
+      ? (rawObjectives as Record<string, string>)
+      : {}
   function updateObj(field: string, val: string) {
     update('planning_objectives', { ...obj, [field]: val })
   }

@@ -33,6 +33,10 @@ export interface SharedFieldDef {
   /** Household contact attribute used during intake→design sync. */
   householdKey?: string
   options?: readonly FieldOption[]
+  /** Stored values from retired option sets: not offered in pickers, but a row
+   *  carrying one must not fail validation (it would block submission with a
+   *  blank select and no visible reason). */
+  legacyValues?: readonly string[]
   /** Dynamic options (e.g. child parentage labels). */
   optionsFor?: (ctx: SharedFieldContext) => FieldOption[]
   prefilled?: boolean

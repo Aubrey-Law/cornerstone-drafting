@@ -16,7 +16,7 @@ import {
   type SectionProps,
 } from './shared'
 import { DesignField } from '@/components/sharedFields/DesignField'
-import { normalizeCitizenship } from '@/lib/sharedFields'
+import { CHILD_RELATIONSHIP_OPTIONS, childParentageOptions, normalizeCitizenship } from '@/lib/sharedFields'
 import type { DesignSheetChild } from '@/types/database'
 
 const DECEASED_OPTIONS = [
@@ -314,22 +314,14 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
                           <AttorneySelect
                             label="Child of"
                             value={child.parentage ?? 'joint'}
-                            options={[
-                              { value: 'joint', label: 'Joint (both)' },
-                              { value: 'client', label: clientLabel },
-                              { value: 'spouse', label: spouseLabel },
-                            ]}
+                            options={childParentageOptions({ clientName: clientLabel, spouseName: spouseLabel })}
                             onChange={v => updateChild(idx, { parentage: v as DesignSheetChild['parentage'] })}
                           />
                         ) : (
                           <AttorneySelect
                             label="Relationship"
                             value={child.relationship}
-                            options={[
-                              { value: 'biological', label: 'Biological' },
-                              { value: 'adopted', label: 'Adopted' },
-                              { value: 'stepchild', label: 'Stepchild' },
-                            ]}
+                            options={CHILD_RELATIONSHIP_OPTIONS}
                             onChange={v => updateChild(idx, { relationship: v as DesignSheetChild['relationship'] })}
                           />
                         )}

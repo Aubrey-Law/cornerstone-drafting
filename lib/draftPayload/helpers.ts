@@ -242,9 +242,12 @@ export function buildFiduciarySlots(contacts: ContactRow[]): DraftPayload['fiduc
     spouse_hcp_successor_co:           get('hcp', 'spouse', 2, true),
     spouse_hcp_successor_co_address:   getAddr('hcp', 'spouse', 2, true),
     spouse_hcp_successor_co_relationship: getRel('hcp', 'spouse', 2),
-    // Spouse — trustee
+    // Spouse — trustee (priority 1 = primary, matching every other role above;
+    // this builder previously read priority 2 while the design-sheet overlay
+    // read slot 0, so the two disagreed about what "successor" meant)
+    spouse_trustee_primary:   get('trustee', 'spouse', 1),
+    spouse_trustee_co:        get('trustee', 'spouse', 1, true),
     spouse_trustee_successor: get('trustee', 'spouse', 2),
-    spouse_trustee_co:        get('trustee', 'spouse', 2, true),
   }
 }
 
@@ -386,8 +389,9 @@ export function overlayDesignSheetFiduciarySlots(
   if (slotRelationship(spouseHcp, 1, true) !== undefined) next.spouse_hcp_successor_co_relationship = slotRelationship(spouseHcp, 1, true) ?? null
 
   const spouseTrustee = getDesignSlots(designSheet, 'spouse_trustee_slots')
-  applyName('spouse_trustee_successor', spouseTrustee, 0)
+  applyName('spouse_trustee_primary', spouseTrustee, 0)
   applyName('spouse_trustee_co', spouseTrustee, 0, true)
+  applyName('spouse_trustee_successor', spouseTrustee, 1)
 
   return next
 }
@@ -442,6 +446,7 @@ export function emptyFiduciarySlots(): DraftPayload['fiduciaries'] {
     spouse_hcp_successor_co_address: null,
     spouse_hcp_co_relationship: null,
     spouse_hcp_successor_co_relationship: null,
+    spouse_trustee_primary: null,
     spouse_trustee_successor: null,
     spouse_trustee_co: null,
   }

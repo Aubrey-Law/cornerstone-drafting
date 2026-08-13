@@ -1,5 +1,6 @@
 import { collegePrepFieldKey } from '@/lib/collegePrepFields'
 import { isFinancialDetailsRootKey } from '@/lib/intakeFinancialFields'
+import { parsePlanningObjectives } from '@/lib/intakePlanningObjectives'
 import { unpackReferralDetailsFromFamilyDetails } from '@/lib/intakeReferralDetails'
 import { formatPhoneInput } from '@/lib/phone'
 
@@ -58,6 +59,12 @@ export function unpackInitialIntakeData(
       phone: formatPhoneInput(typeof base.spouse_phone === 'string' ? base.spouse_phone : ''),
       email: base.spouse_email ?? '',
     }
+  }
+
+  // The column is text, so the portal's object comes back as a JSON string —
+  // normalize to the object shape before the wizard spreads into it.
+  if (base.planning_objectives != null) {
+    base.planning_objectives = parsePlanningObjectives(base.planning_objectives) ?? undefined
   }
 
   if (base.planning_goals == null && base.goals != null) base.planning_goals = base.goals

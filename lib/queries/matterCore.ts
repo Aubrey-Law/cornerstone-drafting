@@ -269,6 +269,7 @@ export interface IntakeSnapshot {
   poa_slots: FiduciarySlot[] | null
   hcp_slots: FiduciarySlot[] | null
   guardian_slots: FiduciarySlot[] | null
+  spouse_trustee_slots: FiduciarySlot[] | null
   spouse_executor_slots: FiduciarySlot[] | null
   spouse_poa_slots: FiduciarySlot[] | null
   spouse_hcp_slots: FiduciarySlot[] | null
@@ -276,6 +277,10 @@ export interface IntakeSnapshot {
   real_estate_extended: Array<{ address: string; ownership: string; estimatedValue: string; hasMortgage: boolean }> | null
   financial_accounts: Array<{ institution: string; accountType: string; approximateValue: string }> | null
   beneficiaries: Array<{ fullName: string; relationship: string; percentage: string }> | null
+  /** Attorney plan-structure choice (IntakePlanType vocabulary, e.g. 'joint_rlt'). */
+  plan_type: string | null
+  /** Attorney document toggles saved on the intake (keys of DesignDocumentInclusions). */
+  document_inclusions: Record<string, boolean> | null
 }
 
 export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnapshot | null> {
@@ -307,6 +312,7 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     poa_slots: null as FiduciarySlot[] | null,
     hcp_slots: null as FiduciarySlot[] | null,
     guardian_slots: null as FiduciarySlot[] | null,
+    spouse_trustee_slots: null as FiduciarySlot[] | null,
     spouse_executor_slots: null as FiduciarySlot[] | null,
     spouse_poa_slots: null as FiduciarySlot[] | null,
     spouse_hcp_slots: null as FiduciarySlot[] | null,
@@ -410,6 +416,7 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     poa_slots: fiduciary.poa_slots,
     hcp_slots: fiduciary.hcp_slots,
     guardian_slots: fiduciary.guardian_slots,
+    spouse_trustee_slots: fiduciary.spouse_trustee_slots,
     spouse_executor_slots: fiduciary.spouse_executor_slots,
     spouse_poa_slots: fiduciary.spouse_poa_slots,
     spouse_hcp_slots: fiduciary.spouse_hcp_slots,
@@ -417,5 +424,10 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     real_estate_extended: (ext.realEstate as IntakeSnapshot['real_estate_extended']) ?? null,
     financial_accounts: (ext.financialAccounts as IntakeSnapshot['financial_accounts']) ?? null,
     beneficiaries: (ext.beneficiaries as IntakeSnapshot['beneficiaries']) ?? null,
+    plan_type: (ai.plan_type as string) || null,
+    document_inclusions:
+      ai.document_inclusions && typeof ai.document_inclusions === 'object' && !Array.isArray(ai.document_inclusions)
+        ? (ai.document_inclusions as Record<string, boolean>)
+        : null,
   }
 }

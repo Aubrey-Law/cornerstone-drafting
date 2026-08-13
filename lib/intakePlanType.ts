@@ -111,7 +111,8 @@ export interface IntakePlanTypeMapping {
 /**
  * Translate an intake plan-type choice into the design-sheet fields the drafting
  * flow understands. This is the load-bearing mapping the intake→design-sheet
- * seed relies on (see `buildDesignSheetSeedPayload`).
+ * seed relies on (see `buildIntakeSeedPayload` / `buildIntakeSeedDecisions` in
+ * lib/designSheet/seedFromIntake.ts).
  */
 export function intakePlanTypeMapping(value: unknown): IntakePlanTypeMapping | null {
   const normalized = normalizeIntakePlanType(value)

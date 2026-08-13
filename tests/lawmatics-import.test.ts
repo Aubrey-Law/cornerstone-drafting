@@ -6,7 +6,9 @@ import { normalizeLawmaticsMaritalStatus } from '@/lib/lawmatics'
 describe('Lawmatics import', () => {
   it('maps Lawmatics marital statuses to client_intake-safe values', () => {
     expect(normalizeLawmaticsMaritalStatus('Married')).toBe('married')
-    expect(normalizeLawmaticsMaritalStatus('DOMESTIC_PARTNERSHIP')).toBe('married')
+    expect(normalizeLawmaticsMaritalStatus('DOMESTIC_PARTNERSHIP')).toBe('domestic_partner')
+    expect(normalizeLawmaticsMaritalStatus('Domestic Partner')).toBe('domestic_partner')
+    expect(normalizeLawmaticsMaritalStatus('Separated')).toBe('separated')
     expect(normalizeLawmaticsMaritalStatus('unknown')).toBeNull()
   })
 

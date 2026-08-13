@@ -140,9 +140,9 @@ describe('list_template_fields catalog', () => {
   it('describes every field it offers, so the assistant can pick on meaning not path spelling', async () => {
     const undocumented = (await listFields({}))
       .fields.filter(field => !field.description).map(field => field.path)
-    // `important_persons` is the one grandfathered dangling root (see
-    // BASELINE_UNKNOWN_ROOTS) — nothing populates it, so it stays undocumented.
-    expect(undocumented).toEqual(['important_persons'])
+    // The last grandfathered dangling root (`important_persons`) was removed
+    // from the templates, so every offered field now carries a description.
+    expect(undocumented).toEqual([])
   })
 
   it('marks documented paths the pipeline never populates', async () => {

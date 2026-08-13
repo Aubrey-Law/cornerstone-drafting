@@ -48,7 +48,8 @@ export function normalizeCitizenship(raw: unknown): string | null {
   if (exact) return exact.value
   if (lower.includes('permanent')) return 'Permanent Resident'
   if (lower.includes('resident') && lower.includes('non')) return 'Non-Resident Alien'
-  return CITIZENSHIP_VALUES.includes(text) ? text : text
+  // Unrecognised legacy text passes through unchanged rather than being lost.
+  return text
 }
 
 export function isValidEmail(raw: unknown): boolean {

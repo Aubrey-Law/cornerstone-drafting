@@ -1,5 +1,11 @@
 import { RESIDUAL_BENEFICIARY_METHODS } from '@/lib/designSheetTrustDetails'
+import { DESIGN_PLAN_TYPE_OPTIONS } from '@/lib/designPlanType'
+import { CITIZENSHIP_VALUES, MA_COUNTY_OPTIONS, MARITAL_STATUS_VALUES } from '@/lib/sharedFields'
 import type { AssetItem, DesignSheet, DesignSheetChild, DesignSheetUpdate } from '@/types/database'
+
+const DESIGN_PLAN_TYPE_VALUES = DESIGN_PLAN_TYPE_OPTIONS.map(option => option.value)
+const MA_COUNTY_VALUES = MA_COUNTY_OPTIONS.map(option => option.value)
+const REMOTE_BENEFICIARY_VALUES = ['heirs_at_law', 'half_heirs_spouse', 'named']
 
 export const MIN_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 20
 export const MAX_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 60_000
@@ -60,7 +66,7 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   client_dob: { section: 'Personal', label: 'Client date of birth', kind: 'string' },
   client_phone: { section: 'Personal', label: 'Client phone', kind: 'string' },
   client_email: { section: 'Personal', label: 'Client email', kind: 'string' },
-  client_citizenship: { section: 'Personal', label: 'Client citizenship', kind: 'string' },
+  client_citizenship: { section: 'Personal', label: 'Client citizenship', kind: 'string', options: CITIZENSHIP_VALUES },
   client_domicile: { section: 'Personal', label: 'Client domicile', kind: 'string' },
   client_aka: { section: 'Personal', label: 'Client AKA', kind: 'string' },
   client_pronouns: { section: 'Personal', label: 'Client pronouns', kind: 'string' },
@@ -68,14 +74,14 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   city: { section: 'Personal', label: 'City', kind: 'string' },
   state: { section: 'Personal', label: 'State', kind: 'string' },
   zip: { section: 'Personal', label: 'ZIP', kind: 'string' },
-  county: { section: 'Personal', label: 'County', kind: 'string' },
-  marital_status: { section: 'Personal', label: 'Marital status', kind: 'string' },
+  county: { section: 'Personal', label: 'County', kind: 'string', options: MA_COUNTY_VALUES },
+  marital_status: { section: 'Personal', label: 'Marital status', kind: 'string', options: MARITAL_STATUS_VALUES },
 
   spouse_name: { section: 'Family', label: 'Spouse name', kind: 'string' },
   spouse_dob: { section: 'Family', label: 'Spouse date of birth', kind: 'string' },
   spouse_phone: { section: 'Family', label: 'Spouse phone', kind: 'string' },
   spouse_email: { section: 'Family', label: 'Spouse email', kind: 'string' },
-  spouse_citizenship: { section: 'Family', label: 'Spouse citizenship', kind: 'string' },
+  spouse_citizenship: { section: 'Family', label: 'Spouse citizenship', kind: 'string', options: CITIZENSHIP_VALUES },
   spouse_aka: { section: 'Family', label: 'Spouse AKA', kind: 'string' },
   spouse_pronouns: { section: 'Family', label: 'Spouse pronouns', kind: 'string' },
   marriage_date: { section: 'Family', label: 'Marriage date', kind: 'string' },
@@ -108,7 +114,7 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   guardian_alt1: { section: 'Will', label: 'Guardian alternate', kind: 'string' },
   guardian_alt1_co: { section: 'Will', label: 'Guardian alternate co-guardian', kind: 'string' },
 
-  plan_type: { section: 'Plan Design', label: 'Plan type', kind: 'string' },
+  plan_type: { section: 'Plan Design', label: 'Plan type', kind: 'string', options: DESIGN_PLAN_TYPE_VALUES },
   is_joint: { section: 'Plan Design', label: 'Joint plan', kind: 'boolean' },
   trust_name: { section: 'Trust', label: 'Trust name', kind: 'string' },
   spouse_trust_name: { section: 'Trust', label: 'Spouse trust name', kind: 'string' },
@@ -138,7 +144,7 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   include_guardians_allowance: { section: 'Trust', label: 'Guardian allowance', kind: 'string' },
   beneficiary_as_cotrustee: { section: 'Trust', label: 'Beneficiary as co-trustee', kind: 'string' },
   beneficiary_as_sole_trustee: { section: 'Trust', label: 'Beneficiary as sole trustee', kind: 'string' },
-  remote_beneficiary: { section: 'Trust', label: 'Remote beneficiary', kind: 'string' },
+  remote_beneficiary: { section: 'Trust', label: 'Remote beneficiary', kind: 'string', options: REMOTE_BENEFICIARY_VALUES },
   provision_lifestyle_disability: { section: 'Trust', label: 'Lifestyle/disability provision', kind: 'string' },
   provision_substance_abuse: { section: 'Trust', label: 'Substance abuse provision', kind: 'string' },
   provision_married_beneficiary: { section: 'Trust', label: 'Married beneficiary provision', kind: 'string' },

@@ -6,12 +6,22 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 
 | Field path | Type | Required | Description |
 |---|---|---|---|
+| `assets` | string | no | Asset schedule block. Iterate assets["items"]; each item carries .description, .institution, .owner, .category_label, .estimated_value, .gross_value, and .net_value. |
+| `assets.total_gross_value` | string | no | Total gross value of the asset schedule, already formatted as currency. |
+| `assets.total_net_value` | string | no | Total net value of the asset schedule, already formatted as currency. |
+| `charitable_gifts` | array | no | Charitable gifts. Reference the container directly in {% for %} and {% if %}; see charitable_gifts[] for member fields. |
 | `charitable_gifts[]` | array | no | Charitable gifts included in the plan. |
+| `children` | array | conditional | All children, filtered to those with a name. Reference the container directly in {% for %} and {% if %}; see children[].full_name for member fields. |
+| `children[]` | string | no | A single child by position, e.g. children[0]. Used by fixed-row worksheets that print a set number of children; prefer iterating the children container instead. |
+| `children[].date_of_birth` | string | no | Child's date of birth, already formatted for display. |
 | `children[].full_name` | string | no | Child or descendant name. |
 | `children[].minor` | boolean | no | Whether a child is a minor. |
+| `children[].relationship` | string | no | Child's relationship label, e.g. Child or Stepchild. |
 | `client.aka` | string | no | Client alternate name or also-known-as name for Will opening and family declarations. |
+| `client.city` | string | conditional | Client's city or town, used in addresses and acknowledgment blocks. |
 | `client.county` | string | yes | County of residence or execution context. |
 | `client.date_of_birth` | string | conditional | Client date of birth for HIPAA authorization. |
+| `client.first_name` | string | no | Client's first name, split from the full legal name. Used where a summary addresses the client informally; falls back to client.full_name when blank. |
 | `client.full_name` | string | yes | Client's full legal name. |
 | `client.pronoun_object` | string | conditional | Object pronoun, such as her, him, or them. |
 | `client.pronoun_possessive` | string | conditional | Possessive pronoun, such as her, his, or their. |
@@ -19,6 +29,10 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `client.signing_county` | string | conditional | County used in execution and notary blocks. |
 | `client.state` | string | yes | State code used for state-specific clauses and execution rules. |
 | `client.street_address` | string | conditional | Client's street address for incapacity documents. |
+| `client.zip` | string | no | Client's ZIP code, used on summary worksheets. |
+| `dpoa.include_advanced_trust_gifting` | boolean | no | Whether the power of attorney includes advanced trust and gifting powers. |
+| `dpoa.include_entity_powers` | boolean | no | Whether the power of attorney includes powers over business entities. |
+| `dpoa.include_extended_personal_care` | boolean | no | Whether the power of attorney includes extended personal care powers. |
 | `dpoa.include_section_l` | boolean | no | Whether to include the spousal proximity and support provision. |
 | `dpoa.self_dealing_reviewer_alt.full_name` | string | no | Alternate reviewer for self-dealing actions if the primary reviewer is unavailable. |
 | `dpoa.self_dealing_reviewer.full_name` | string | no | Reviewer whose written assent may be relied upon for self-dealing actions under the durable power of attorney. |
@@ -32,49 +46,133 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `execution.ordinal_doc_date` | string | conditional | Ordinal execution date phrase, such as the 21st day of May, 2026. |
 | `execution.signing_county` | string | conditional | Signing county when signing is scheduled; falls back to client.signing_county when present. |
 | `execution.signing_scheduled` | boolean | no | Whether a signing date, signing county, and notary commission expiration are known. |
+| `family.additional_disinheritance_language` | string | no | Extra attorney-drafted disinheritance language appended to the standard clause. |
 | `fiduciaries.agent.co_agents_action` | string | no | How co-agents act under the durable power of attorney: separate, joint, or majority. |
 | `fiduciaries.agent.co_primary.full_name` | string | no | Co-agent under durable power of attorney. |
 | `fiduciaries.agent.primary.full_name` | string | yes | Primary agent under durable power of attorney. |
+| `fiduciaries.agent.successor.full_name` | string | conditional | Successor financial agent under the power of attorney. |
+| `fiduciaries.executor.co_primary` | string | no | Co-personal representative as an object. Test the object for existence, then print its .full_name. |
 | `fiduciaries.executor.co_primary.full_name` | string | conditional | Co-personal representative nominated when will.pr_structure is co_pr. |
+| `fiduciaries.executor.co_second_successor` | string | no | Co-second-successor personal representative as an object. Test the object for existence, then print its .full_name. |
 | `fiduciaries.executor.co_second_successor.full_name` | string | no | Co-second-successor personal representative; serves jointly with the second successor when present. |
+| `fiduciaries.executor.co_successor` | string | no | Co-successor personal representative as an object. Test the object for existence, then print its .full_name. |
 | `fiduciaries.executor.co_successor.full_name` | string | no | Co-first-successor personal representative; serves jointly with the first successor when present. |
 | `fiduciaries.executor.primary.full_name` | string | yes | Primary personal representative or executor. |
+| `fiduciaries.executor.second_successor` | string | no | Second successor personal representative as an object. Test the object for existence, then print its .full_name. |
 | `fiduciaries.executor.second_successor.full_name` | string | no | Second successor personal representative or executor. |
+| `fiduciaries.executor.successor` | string | no | Successor personal representative as an object. Test the object for existence, then print its .full_name. |
 | `fiduciaries.executor.successor.full_name` | string | no | First successor personal representative or executor. |
+| `fiduciaries.spouse_agent.co_primary.full_name` | string | no | Co-agent named in the spouse's power of attorney. |
+| `fiduciaries.spouse_agent.primary.full_name` | string | conditional | Financial agent named in the spouse's power of attorney (the spouse's own appointment, not the client's). |
+| `fiduciaries.spouse_agent.successor.full_name` | string | no | Successor agent named in the spouse's power of attorney. |
+| `fiduciaries.spouse_executor.co_primary.full_name` | string | no | Co-personal representative named in the spouse's will. |
+| `fiduciaries.spouse_executor.primary.full_name` | string | conditional | Personal representative named in the spouse's will. |
+| `fiduciaries.spouse_executor.successor.full_name` | string | no | Successor personal representative named in the spouse's will. |
 | `fiduciaries.testamentary_trustee.co_primary.full_name` | string | conditional | Co-trustee nominated when the testamentary trustee structure is co_trustees. |
 | `fiduciaries.testamentary_trustee.co_trustees_action` | string | no | How testamentary co-trustees act when serving together: majority or unanimous. |
 | `fiduciaries.testamentary_trustee.primary.full_name` | string | conditional | Primary trustee nominated for any testamentary trust created under the Will. |
 | `fiduciaries.testamentary_trustee.successor.full_name` | string | no | Successor trustee nominated for any testamentary trust created under the Will. |
+| `fiduciaries.trustee.co_primary` | string | no | Co-trustee as an object. Test the object for existence, then print its .full_name. |
+| `fiduciaries.trustee.co_primary.full_name` | string | conditional | Co-trustee serving alongside the primary trustee. |
+| `fiduciaries.trustee.co_primary.pronoun_subject` | string | no | Co-trustee subject pronoun for notary blocks. NOT POPULATED — the pipeline carries no pronouns for fiduciaries, so certificate-of-trust.docx falls back with `\| default(client.pronoun_subject)`. |
+| `fiduciaries.trustee.co_second_successor` | string | no | Co-second-successor trustee as an object. Test the object for existence, then print its .full_name. |
+| `fiduciaries.trustee.co_second_successor.full_name` | string | no | Co-second-successor trustee, serving alongside the second successor trustee. |
+| `fiduciaries.trustee.co_successor` | string | no | Co-successor trustee as an object. Test the object for existence, then print its .full_name. |
+| `fiduciaries.trustee.co_successor.full_name` | string | no | Co-successor trustee, serving alongside the successor trustee. |
 | `fiduciaries.trustee.co_trustees_action` | string | conditional | Whether co-trustees at the same level act jointly or independently. |
 | `fiduciaries.trustee.primary.full_name` | string | yes | Primary successor trustee. |
 | `fiduciaries.trustee.second_successor.full_name` | string | conditional | Third successor trustee for the individual single revocable trust. |
+| `fiduciaries.trustee.second_successor.relationship` | string | no | Second successor trustee's relationship to the client. |
 | `fiduciaries.trustee.successor.full_name` | string | conditional | Second successor trustee for the individual single revocable trust. |
+| `fiduciaries.trustee.successor.relationship` | string | no | Successor trustee's relationship to the client, e.g. Daughter. |
+| `funding_plan.checklist_items` | array | no | Ordered trust funding steps. Each item carries .number and .action. |
+| `funding_plan.narrative` | string | no | Trust funding plan prose, section by section. Contains markup — render it with the `\| safe` filter. |
+| `guardians.excluded` | array | no | Individuals excluded from serving as guardian. Reference the container directly in {% for %} and {% if %}; each member carries .full_name and .reason. |
 | `guardians.excluded[].full_name` | array | no | Individuals excluded from serving as guardian when minor children exist. |
 | `guardians.primary.full_name` | string | conditional | Primary guardian nominee when minor children exist. |
+| `guardians.primary.relationship` | string | no | Primary guardian's relationship to the children. |
+| `guardians.second_successor.full_name` | string | no | Second successor guardian for minor children. |
+| `guardians.second_successor.relationship` | string | no | Second successor guardian's relationship to the children. |
+| `guardians.successor.full_name` | string | conditional | Successor guardian for minor children. |
+| `guardians.successor.relationship` | string | no | Successor guardian's relationship to the children. |
 | `guardians.temporary_co.full_name` | string | no | Co-temporary agent appointed jointly with the primary temporary agent. |
 | `guardians.temporary_successor.address` | string | no | Address of alternate temporary parental delegation agent. |
 | `guardians.temporary_successor.full_name` | string | no | Alternate temporary agent for parental delegation. |
+| `guardians.temporary_successor.relationship` | string | no | Successor temporary guardian's relationship to the children. |
 | `guardians.temporary.address` | string | no | Address of temporary parental delegation agent. |
 | `guardians.temporary.full_name` | string | conditional | Temporary agent for parental delegation under MGL c.190B §5-103. |
 | `guardians.temporary.phone` | string | no | Phone number of temporary parental delegation agent. |
+| `guardians.temporary.relationship` | string | no | Temporary guardian's relationship to the children. |
+| `healthcare.agent.alternate.address` | string | no | Alternate health care agent's street address. |
 | `healthcare.agent.alternate.full_name` | string | conditional | Alternate health care agent name. |
+| `healthcare.agent.alternate.phone` | string | no | Alternate health care agent's phone number. |
+| `healthcare.agent.alternate.relationship` | string | no | Alternate health care agent's relationship to the client. |
 | `healthcare.agent.primary.address` | string | conditional | Address of primary health care agent. |
+| `healthcare.agent.primary.city` | string | no | Primary health care agent's city, used where the address is printed in parts. |
 | `healthcare.agent.primary.full_name` | string | yes | Primary health care decision maker. |
 | `healthcare.agent.primary.phone` | string | conditional | Phone number of primary health care agent. |
 | `healthcare.agent.primary.relationship` | string | conditional | Relationship of primary health care agent. |
+| `healthcare.agent.primary.state` | string | no | Primary health care agent's state, used where the address is printed in parts. |
+| `healthcare.agent.second_alternate.address` | string | no | Second alternate health care agent's street address. |
 | `healthcare.agent.second_alternate.full_name` | string | no | Second alternate health care agent name. Cornerstone cv1 template supports a second successor; design sheet currently provides only primary + one successor. |
+| `healthcare.agent.second_alternate.phone` | string | no | Second alternate health care agent's phone number. |
+| `healthcare.agent.second_alternate.relationship` | string | no | Second alternate health care agent's relationship to the client. |
 | `healthcare.anatomical_gift` | string | no | Health Care Proxy anatomical gift election: all, specified, none, or unset. |
 | `healthcare.anatomical_specified` | string | conditional | Specified organs, tissues, parts, or purposes when the anatomical gift election is specified. |
+| `healthcare.spouse_agent.alternate.full_name` | string | no | Alternate health care agent named in the spouse's proxy. |
+| `healthcare.spouse_agent.primary.full_name` | string | conditional | Health care agent named in the spouse's proxy (the spouse's own appointment, not the client's). |
+| `healthcare.spouse_agent.primary.relationship` | string | no | Relationship of the spouse's health care agent to the spouse. |
+| `hipaa.include_trustees` | boolean | no | Whether the HIPAA authorization also releases information to the trustee and successor trustee. |
 | `hipaa.psychotherapy_notes` | string | no | HIPAA psychotherapy notes disclosure election: authorize, do_not_authorize, or unset. |
+| `homestead.beneficiary_names` | string | conditional | Beneficial owners of the homestead, joined for display, e.g. "Jane Example and John Example". |
+| `homestead.beneficiary_pronoun_possessive` | string | no | Possessive pronoun matching the homestead beneficiaries, e.g. "their". |
+| `homestead.certificate_number` | string | no | Land court certificate of title number, for registered land. Blank for recorded land. |
+| `homestead.deed_book` | string | no | Book number of the recorded property deed. |
+| `homestead.deed_page` | string | no | Page number of the recorded property deed. |
+| `homestead.deed_registry_district` | string | no | Registry of deeds district where the property deed is recorded, e.g. Suffolk. |
+| `homestead.land_court_document_number` | string | no | Land court document number, for registered land. Blank for recorded land. |
+| `homestead.primary_beneficiary_name` | string | no | First beneficial owner of the homestead, where the form needs a single name. |
+| `homestead.property_address_line` | string | conditional | Address of the homestead property, on one line. |
+| `homestead.servicemember_names` | string | no | Names of any beneficiaries claiming the servicemember homestead exemption. Blank when none. |
+| `homestead.trust_deed_book` | string | no | Book number of the deed transferring the property into the trust. |
+| `homestead.trust_deed_page` | string | no | Page number of the deed transferring the property into the trust. |
+| `homestead.trustee_pronoun_possessive` | string | no | Possessive pronoun matching the declaring trustee. |
+| `marriage.date` | string | no | Date of marriage, already formatted for display. |
+| `minor_children` | array | conditional | Children flagged as minors, computed from the children list. Used by the parental-powers delegation to list the children covered. |
 | `outright_will.residuary.alternate.full_name` | string | conditional | Alternate residuary beneficiary when the standalone outright will disposition is named. |
 | `outright_will.residuary.disposition` | string | no | Standalone outright will residuary disposition: spouse_then_descendants, descendants_then_heirs, or named. |
 | `outright_will.residuary.named.full_name` | string | conditional | Named residuary beneficiary when the standalone outright will disposition is named. |
+| `planning.include_ahd` | boolean | no | Whether the plan includes an advance health directive / living will. |
+| `planning.include_dpoa` | boolean | no | Whether the plan includes a durable power of attorney. |
+| `planning.include_hcp` | boolean | no | Whether the plan includes a health care proxy. |
+| `planning.include_hipaa` | boolean | no | Whether the plan includes a HIPAA authorization. |
+| `planning.include_pour_over_will` | boolean | no | Whether the plan includes a pour-over will. |
+| `planning.include_ppm` | boolean | no | Whether the plan includes a personal property memorandum. |
+| `planning.include_simple_will` | boolean | no | Whether the plan includes an outright (non-trust) will. |
+| `planning.include_testamentary_trust_will` | boolean | no | Whether the plan includes a will containing a testamentary trust. |
+| `planning.include_trust` | boolean | no | Whether the plan includes a revocable trust. Drives summary and worksheet sections. |
+| `planning.spouse_docs` | boolean | no | Whether a matching set of documents is being drafted for the spouse. |
+| `pour_over.alternate_disposition_text` | string | no | Pour-over will: the paragraph disposing of the estate if the trust is not in effect. Defaults to standard language when unset. |
+| `specific_gifts` | array | no | Specific gifts of property or cash. Reference the container directly in {% for %} and {% if %}; see specific_gifts[] for member fields. |
 | `specific_gifts[]` | array | no | Specific gifts of property or cash. |
+| `spouse.aka` | string | no | Spouse alternate or also-known-as name. |
+| `spouse.date_of_birth` | string | no | Spouse's date of birth, already formatted for display. |
 | `spouse.exists` | boolean | no | Whether the client has a spouse. |
+| `spouse.first_name` | string | no | Spouse's first name, split from the full legal name. Used where a summary addresses the spouse informally; falls back to spouse.full_name when blank. |
 | `spouse.full_name` | string | no | Spouse's full legal name. |
 | `spouse.pronoun_object` | string | no | Spouse object pronoun for spouse companion documents. |
 | `spouse.pronoun_possessive` | string | no | Spouse possessive pronoun for spouse companion documents. |
 | `spouse.pronoun_subject` | string | no | Spouse subject pronoun for spouse companion documents. |
+| `state` | string | no | State rules block for the governing jurisdiction. Use state.code for the code itself. |
+| `state.code` | string | yes | Two-letter code of the governing state, e.g. MA. Pass this as the second argument to include_clause() for state-specific clauses. |
+| `summary.has_completion_items` | boolean | no | Estate plan summary: whether any outstanding to-do items remain for the client. |
+| `summary.show_dpoa_agent` | boolean | no | Estate plan summary: show the financial agent (POA) row. |
+| `summary.show_guardian` | boolean | no | Estate plan summary: show the guardian row. |
+| `summary.show_healthcare_agent` | boolean | no | Estate plan summary: show the health care agent row. |
+| `summary.show_key_people` | boolean | no | Estate plan summary: show the "Key People at a Glance" section. True when any individual summary.show_* row is on. |
+| `summary.show_personal_representative` | boolean | no | Estate plan summary: show the personal representative row. |
+| `summary.show_spouse` | boolean | no | Estate plan summary: show the spouse column. True when a spouse is on the matter. |
+| `summary.show_trustee` | boolean | no | Estate plan summary: show the trustee row. |
 | `testamentary_trust.age_distribution_schedule` | string | conditional | Age distribution schedule for descendants or spouse-then-descendants testamentary trust shares. |
 | `testamentary_trust.beneficiary_structure` | string | conditional | Testamentary trust beneficiary structure, such as descendants_per_stirpes, spouse_hems_then_descendants, or single_beneficiary. |
 | `testamentary_trust.remainder_beneficiary.full_name` | string | conditional | Remainder beneficiary when the testamentary trust beneficiary structure is single_beneficiary. |
@@ -82,7 +180,10 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `testamentary_trust.trust_protector_requested` | boolean | no | Whether the Testamentary Trust Will includes a trust protector provision. |
 | `testamentary_trust.trust_protector.full_name` | string | conditional | Trust protector name when a trust protector provision is requested. |
 | `testamentary_trust.trustee_structure` | string | no | Testamentary trustee nomination structure: single, spouse_first, co_trustees, or unset. |
+| `trust.blended_family` | string | no | Blended-family block for a joint trust. Test it for existence, then read .client_children and .spouse_children. |
+| `trust.blended_family.client_children` | array | no | Children of the client grantor in a blended family. Reference the container directly in {% for %} and {% if %}; see trust.blended_family.client_children[] for member fields. |
 | `trust.blended_family.client_children[]` | array | no | Children of the client grantor treated as children of both grantors in a joint trust. |
+| `trust.blended_family.spouse_children` | array | no | Children of the spouse grantor in a blended family. Reference the container directly in {% for %} and {% if %}; see trust.blended_family.spouse_children[] for member fields. |
 | `trust.blended_family.spouse_children[]` | array | no | Children of the spouse grantor treated as children of both grantors in a joint trust. |
 | `trust.contingent_beneficiary.full_name` | string | conditional | Contingent beneficiary for the residuary trust fund if no descendant survives. |
 | `trust.date` | string | no | Date of the trust agreement, formatted as Month Day, Year when known. |
@@ -91,13 +192,21 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `trust.descendants_distribution.stage_1_age` | string | conditional | First staged withdrawal age. |
 | `trust.descendants_distribution.stage_2_age` | string | conditional | Second staged withdrawal age. |
 | `trust.descendants_distribution.stage_3_age` | string | conditional | Final staged withdrawal age. |
+| `trust.disinherited` | array | no | Persons specifically disinherited by the trust. Reference the container directly in {% for %} and {% if %}; see trust.disinherited[] for member fields. |
 | `trust.disinherited[]` | array | no | Persons specifically disinherited by the trust. |
 | `trust.display_date` | string | no | Generated display value for the trust date; renders a blank date line when trust.date is unknown. |
+| `trust.display_name` | string | conditional | Trust name formatted for display in the document body, e.g. "JANE EXAMPLE REVOCABLE TRUST, U/A dated May 21, 2026". Prefer this over trust.name in running text. |
+| `trust.include_common_trust_for_children` | boolean | no | Whether the trust holds children's shares in a single common trust before splitting them. |
 | `trust.name` | string | conditional | Name of the revocable trust. |
 | `trust.remote_beneficiaries.charity.name` | string | no | Named charitable remote beneficiary. |
+| `trust.remote_beneficiaries.individuals` | array | no | Remote beneficiaries taking if no descendants survive. Reference the container directly in {% for %} and {% if %}; see trust.remote_beneficiaries.individuals[] for member fields. |
 | `trust.remote_beneficiaries.individuals[]` | array | no | Named individual remote beneficiaries. |
+| `trust.residual_beneficiary` | string | no | Residual beneficiary designation in words, e.g. "Descendants, per stirpes". |
+| `trust.special_distributions_age` | number | no | Age at which the common trust for children ends and shares are split out. |
+| `trust.tangible_personal_property.beneficiaries` | array | no | Beneficiaries of tangible personal property. Reference the container directly in {% for %} and {% if %}; see trust.tangible_personal_property.beneficiaries[] for member fields. |
 | `trust.tangible_personal_property.beneficiaries[]` | array | conditional | Named beneficiaries for equal-share tangible personal property distribution. |
 | `trust.tangible_personal_property.distribution_method` | string | conditional | Tangible personal property method, such as equal_shares or priority_order. |
+| `trust.tangible_personal_property.priority_beneficiaries` | array | no | Beneficiaries with first choice of tangible personal property. Reference the container directly in {% for %} and {% if %}; see trust.tangible_personal_property.priority_beneficiaries[] for member fields. |
 | `trust.tangible_personal_property.priority_beneficiaries[]` | array | conditional | Priority-order beneficiaries for tangible personal property distribution. |
 | `will.bond` | string | no | Bond election for Will administration: no_bond or required. |
 | `will.include_disclaimer_article` | boolean | no | Whether to include the Will disclaimer article. |
@@ -116,6 +225,8 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `will.tangible_personal_property.distribution_method` | string | no | Tangible personal property distribution method, such as children_then_descendants, spouse_then_children, named_then_children, or memorandum. |
 | `will.tangible_personal_property.named_individual.full_name` | string | conditional | Named recipient when tangible personal property uses the named_then_children method. |
 | `will.utma_age` | number | no | Age for custodial distributions under the Massachusetts Uniform Transfers to Minors Act. |
+| `young_adult.parent1.full_name` | string | conditional | Young-adult plan: first parent, taking the residue and serving as personal representative. Built from the client's own record. |
+| `young_adult.parent2.full_name` | string | no | Young-adult plan: second parent, taking the residue and serving as personal representative. Built from the spouse's record. |
 
 # Variables used per template
 
