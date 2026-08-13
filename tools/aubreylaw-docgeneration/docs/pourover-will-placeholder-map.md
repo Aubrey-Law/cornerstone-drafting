@@ -98,3 +98,4 @@ Note: `examples/client-ma-pourover.json` is minimal; full renders need `will.*`,
 - The source document is Massachusetts-specific.
 - Legal text was preserved as source material where possible, but the generated template and clauses still require attorney review before use.
 - The cv1 source already templates guardian exclusion via `{% if requires_guardian_clause and has_excluded_guardians %}` with a loop over `guardians.excluded[]` (no `TO BE DETERMINED` placeholder).
+- Two Word `REF` cross-reference fields from the source form were frozen to their cached literal text ("Section 2.02" in the Alternate Disposition article, pointing at the Pour-Over section; "(9)" after "Article Eight" in the Representation article, pointing at the Incompetent Devisee definition). The generator never recalculates Word fields, so the literals match what always rendered — but if articles/sections are ever renumbered, update these two literals by hand.

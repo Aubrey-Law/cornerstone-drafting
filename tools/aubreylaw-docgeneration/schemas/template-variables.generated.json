@@ -120,7 +120,6 @@
         "healthcare.spouse_agent.alternate.full_name",
         "healthcare.spouse_agent.primary.full_name",
         "hipaa_psychotherapy_authorized",
-        "important_persons",
         "owns_real_property",
         "planning.include_ahd",
         "planning.include_dpoa",

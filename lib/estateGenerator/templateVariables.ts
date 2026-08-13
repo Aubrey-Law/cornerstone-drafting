@@ -184,13 +184,10 @@ export function knownClauseIds(root = resolveNodeEstateGeneratorRoot()): Set<str
 
 /**
  * Pre-existing dangling references, grandfathered so the catalog check can
- * gate new regressions. Shrink this list — never grow it.
- * - design-summary-detailed.docx references `important_persons`, which nothing
- *   in the generator populates (renders as an empty loop today).
+ * gate new regressions. Shrink this list — never grow it. Currently empty:
+ * every template variable root is populated by the generator.
  */
-export const BASELINE_UNKNOWN_ROOTS: Record<string, string[]> = {
-  'design-summary-detailed.docx': ['important_persons'],
-}
+export const BASELINE_UNKNOWN_ROOTS: Record<string, string[]> = {}
 
 export interface TemplateCatalogEntry extends TemplateVariableReport {
   template: string
