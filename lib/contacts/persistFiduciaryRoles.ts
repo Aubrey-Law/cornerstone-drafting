@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import type { FiduciaryRoleEntry } from './fiduciaryEntriesToRoles'
+import type { FiduciaryForParty, FiduciaryRoleEntry } from './fiduciaryEntriesToRoles'
 
 // Re-export so admin and other callers can import the entry type from the
 // writer module without reaching into the mapper file.
@@ -27,7 +27,11 @@ function nameKey(first: unknown, last: unknown): string {
  *   • role IN (personal_rep, trustee, poa, hcp, guardian)
  *   • priority IN (1, 2)
  *   • is_coagent = false
- *   • for_party IN (client, spouse)  — both parties' principals
+ *   • for_party IN `options.parties` (default: client + spouse)
+ *
+ * A caller that only carries one party's entries — the admin sheet only
+ * captures client-party fiduciaries — must narrow `parties` so the other
+ * party's rows survive the wipe.
  *
  * Co-agents (is_coagent=true) and roles outside the managed set are LEFT
  * UNTOUCHED. Existing contact rows are reused by case-insensitive
@@ -38,7 +42,10 @@ export async function persistFiduciaryRoles(
   admin: AdminClient,
   intakeId: string,
   entries: FiduciaryRoleEntry[],
+  options?: { parties?: FiduciaryForParty[] },
 ): Promise<{ contactIds: string[] }> {
+  const parties: FiduciaryForParty[] = options?.parties ?? ['client', 'spouse']
+
   // Step 1: wipe managed contact_roles for this intake.
   const { error: deleteError } = await admin
     .from('contact_roles')
@@ -47,6 +54,7 @@ export async function persistFiduciaryRoles(
     .eq('is_coagent', false)
     .in('role', MANAGED_ROLES as unknown as string[])
     .in('priority', MANAGED_PRIORITIES as unknown as number[])
+    .in('for_party', parties)
   if (deleteError) throw new Error(`${deleteError.code ?? 'error'}: ${deleteError.message}`)
 
   if (entries.length === 0) return { contactIds: [] }

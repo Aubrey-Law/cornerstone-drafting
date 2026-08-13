@@ -5,6 +5,7 @@
  * restating them.
  */
 import { LEGAL_PLAN_OPTIONS, legalPlanDisplayName } from '@/lib/billing/billingType'
+import { MARITAL_STATUS_OPTIONS, maritalStatusLabel } from '@/lib/sharedFields'
 import { parsePracticeArea, PRACTICE_AREA_OPTIONS, practiceAreaLabel } from '@/lib/practiceArea'
 import type { LeadEditableField } from '@/lib/leads/details'
 import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
@@ -65,12 +66,10 @@ export const joined = (values: unknown[], separator = ' ') => {
   return text || null
 }
 
-export const MARITAL_OPTIONS = [
-  { value: 'single', label: 'Single' },
-  { value: 'married', label: 'Married' },
-  { value: 'divorced', label: 'Divorced' },
-  { value: 'widowed', label: 'Widowed' },
-] as const
+// The shared registry's vocabulary (packages/estate-fields) — the intake
+// portal writes all six values, so a narrower local list rendered
+// separated/domestic-partner leads blank and silently rewrote them on edit.
+export const MARITAL_OPTIONS = MARITAL_STATUS_OPTIONS
 
 export const URGENCY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -160,7 +159,10 @@ export const FIELD_DEFINITIONS: readonly LeadFieldDefinition[] = [
     label: 'Marital status',
     missingLabel: 'Marital status',
     complete: lead => hasText(lead.marital_status),
-    display: lead => hasText(lead.marital_status) ? titleCase(lead.marital_status) : null,
+    // Label lookup, not titleCase — 'domestic_partner' renders as its label.
+    display: lead => hasText(lead.marital_status)
+      ? (maritalStatusLabel(lead.marital_status) || titleCase(lead.marital_status))
+      : null,
     input: 'select',
     options: MARITAL_OPTIONS,
   },

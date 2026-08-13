@@ -1,6 +1,7 @@
 export type IntakeRow = Record<string, unknown>
 
 import { validateIntakeField } from '@/lib/sharedFields/intakeValidate'
+import { parsePlanningObjectives } from '@/lib/intakePlanningObjectives'
 import {
   COLLEGE_PREP_STEPS,
   getCollegePrepStepIssues,
@@ -389,7 +390,9 @@ function goalValues(data: IntakeRow): unknown[] {
 }
 
 function planningObjectiveText(data: IntakeRow, key: string): string {
-  return recordText(nestedRecord(data, 'planning_objectives'), key)
+  // The text column may hold the object's JSON serialization — parse it so a
+  // saved answer isn't re-flagged as missing after reload.
+  return recordText(parsePlanningObjectives(data.planning_objectives) ?? {}, key)
 }
 
 function fiduciaryEntries(data: IntakeRow): Record<string, unknown> {

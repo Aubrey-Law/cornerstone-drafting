@@ -191,6 +191,9 @@ export async function POST(req: Request) {
       has_children:             body.has_children,
       has_minor_children:       body.has_minor_children,
       date_of_marriage:         optionalDateOrNull(body.date_of_marriage),
+      // Mirrored into family_details.referral.source by the wizard's autosave
+      // packing; the column is what matterCore and the CRM read.
+      referral_source:          body.referral_source,
       estate_value:             body.estate_value,
       has_real_property:        body.has_real_property,
       has_retirement:           body.has_retirement,
@@ -425,6 +428,9 @@ export async function POST(req: Request) {
     marital_status:           body.marital_status,
     has_children:             body.has_children,
     has_minor_children:       body.has_minor_children,
+    // Mirrored into family_details.referral.source by the wizard's autosave
+    // packing; the column is what matterCore and the CRM read.
+    referral_source:          body.referral_source,
     // has_pets is stored inside family_details JSONB — no dedicated column needed
 
     // ── Spouse ───────────────────────────────────────────────────────────────
@@ -484,8 +490,9 @@ export async function POST(req: Request) {
     financial_details:        body.financial_details,
 
     // ── Plan structure + documents (Guided Interview, attorney mode) ──────────
-    // Attorney-set on the client's intake; seeded into the design sheet on
-    // submit (see buildDesignSheetSeedPayload). Clients never send these.
+    // Attorney-set on the client's intake; seeded into the design sheet by
+    // buildIntakeSeedPayload / buildIntakeSeedDecisions
+    // (lib/designSheet/seedFromIntake.ts). Clients never send these.
     plan_type:                body.plan_type,
     document_inclusions:      body.document_inclusions,
 

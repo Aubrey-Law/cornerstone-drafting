@@ -14,7 +14,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import type { Lead } from '@/types/leads'
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 const MAX_DOCX_BYTES = 10 * 1024 * 1024
@@ -32,7 +31,8 @@ interface ImportIntakeDialogProps {
 
 export interface ImportIntakeResult {
   intakeId: string
-  lead?: Lead
+  /** Raw lead row echoed by the parse endpoint; no caller reads into it. */
+  lead?: Record<string, unknown>
   data?: unknown
 }
 

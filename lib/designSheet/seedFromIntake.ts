@@ -1,6 +1,7 @@
 import type { IntakeSnapshot } from '@/lib/queries'
 import type { DesignSheet, DesignSheetChild, DesignSheetUpdate, FiduciarySlot } from '@/types/database'
 import { formatPhoneDisplay } from '@/lib/phone'
+import { intakePlanTypeMapping } from '@/lib/intakePlanType'
 import { normalizeOverrideValue } from '@/lib/designSheet/buildInitialSheet'
 import { formatDesignSheetImportValue } from '@/lib/designSheetImport/shared'
 import {
@@ -10,6 +11,8 @@ import {
 } from '@/lib/sharedFields'
 
 export const INTAKE_SEED_FIELD_META = {
+  plan_type: { label: 'Plan type', section: 'Plan' },
+  is_joint: { label: 'Joint trust', section: 'Plan' },
   client_name: { label: 'Client name', section: 'Personal' },
   client_dob: { label: 'Client date of birth', section: 'Personal' },
   client_phone: { label: 'Client phone', section: 'Personal' },
@@ -52,6 +55,7 @@ export const INTAKE_SEED_FIELD_META = {
   poa_slots: { label: 'DPOA slots', section: 'Fiduciaries' },
   hcp_slots: { label: 'Health care proxy slots', section: 'Fiduciaries' },
   guardian_slots: { label: 'Guardian slots', section: 'Fiduciaries' },
+  spouse_trustee_slots: { label: 'Spouse trustee slots', section: 'Fiduciaries' },
   spouse_executor_slots: { label: 'Spouse personal representative slots', section: 'Fiduciaries' },
   spouse_poa_slots: { label: 'Spouse DPOA slots', section: 'Fiduciaries' },
   spouse_hcp_slots: { label: 'Spouse health care proxy slots', section: 'Fiduciaries' },
@@ -125,8 +129,13 @@ function fiduciarySlots(slots: FiduciarySlot[] | null | undefined): FiduciarySlo
 export function buildIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayload {
   const record = intakeRecord(intake)
   const excludedName = trimOrNull(intake.excluded_guardian)
+  // Attorney plan-structure choice → drafting vocabulary. This is the mapping
+  // client_intake.plan_type was always meant to seed through (intakePlanType).
+  const planMapping = intakePlanTypeMapping(intake.plan_type)
 
   return {
+    plan_type: planMapping?.designPlanType ?? null,
+    is_joint: planMapping ? planMapping.isJoint : null,
     client_name: fullName([intake.first_name, intake.middle_name, intake.last_name, intake.suffix]),
     client_dob: intake.date_of_birth,
     client_phone: formatPhoneDisplay(intake.phone),
@@ -169,6 +178,7 @@ export function buildIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayloa
     poa_slots: fiduciarySlots(intake.poa_slots),
     hcp_slots: fiduciarySlots(intake.hcp_slots),
     guardian_slots: fiduciarySlots(intake.guardian_slots),
+    spouse_trustee_slots: fiduciarySlots(intake.spouse_trustee_slots),
     spouse_executor_slots: fiduciarySlots(intake.spouse_executor_slots),
     spouse_poa_slots: fiduciarySlots(intake.spouse_poa_slots),
     spouse_hcp_slots: fiduciarySlots(intake.spouse_hcp_slots),
@@ -177,6 +187,40 @@ export function buildIntakeSeedPayload(intake: IntakeSnapshot): IntakeSeedPayloa
 
 export function isDesignSheetUnseeded(sheet: { client_name?: string | null } | null | undefined): boolean {
   return !sheet?.client_name?.trim()
+}
+
+/**
+ * Decisions patch for the one-time seed: document toggles implied by the
+ * intake plan-structure choice, overlaid with any explicit attorney toggles
+ * stored on `client_intake.document_inclusions`. Returns undefined when the
+ * intake carries no plan choice, so a plain client intake never disturbs the
+ * sheet's decisions.
+ */
+export function buildIntakeSeedDecisions(
+  intake: IntakeSnapshot,
+  currentDecisions: DesignSheet['decisions'] | null | undefined,
+): Record<string, unknown> | undefined {
+  const planMapping = intakePlanTypeMapping(intake.plan_type)
+  const seeded: Record<string, boolean> = {}
+  for (const [key, value] of Object.entries(planMapping?.documentInclusions ?? {})) {
+    if (typeof value === 'boolean') seeded[key] = value
+  }
+  for (const [key, value] of Object.entries(intake.document_inclusions ?? {})) {
+    if (typeof value === 'boolean') seeded[key] = value
+  }
+  if (Object.keys(seeded).length === 0) return undefined
+
+  const base = currentDecisions && typeof currentDecisions === 'object' && !Array.isArray(currentDecisions)
+    ? (currentDecisions as Record<string, unknown>)
+    : {}
+  const currentInclusions = base.document_inclusions && typeof base.document_inclusions === 'object' && !Array.isArray(base.document_inclusions)
+    ? (base.document_inclusions as Record<string, unknown>)
+    : {}
+
+  return {
+    ...base,
+    document_inclusions: { ...currentInclusions, ...seeded },
+  }
 }
 
 export function buildIntakeResyncPreview(args: {

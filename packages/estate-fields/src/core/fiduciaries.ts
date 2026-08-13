@@ -80,6 +80,20 @@ export const FIDUCIARY_INTAKE_SLOTS: FiduciaryIntakeSlotDef[] = [
     intakeStepId: 'spouse_fiduciaries',
   },
   {
+    // The union, hydration (contact_roles trustee|spouse → this key) and the
+    // design side (spouse_trustee_slots) all knew this slot; only this list
+    // was missing it, so the slot map's total-Record cast lied and portal
+    // round-trips silently dropped spouse trustees.
+    intakeKey: 'fid_trustee_spouse',
+    intakeLocalKey: '_fid_trustee_spouse',
+    contactRole: 'trustee',
+    forParty: 'spouse',
+    designSlotKey: 'spouse_trustee_slots',
+    designRole: 'trustee',
+    label: "Spouse's successor trustee",
+    intakeStepId: 'spouse_fiduciaries',
+  },
+  {
     intakeKey: 'fid_poa_spouse',
     intakeLocalKey: '_fid_poa_spouse',
     contactRole: 'poa',

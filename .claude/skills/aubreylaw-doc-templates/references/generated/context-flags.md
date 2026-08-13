@@ -13,7 +13,6 @@ These names are available in templates *in addition to* the data-dictionary fiel
 | `disinherit_issue` | `false` |  |
 | `distributes_to_descendants` | `false` |  |
 | `dpoa_gifting_authorized` | `false` |  |
-| `family` | `{"include_child_gender_markers":false,"include_afterborn_…` |  |
 | `has_assets` | `false` |  |
 | `has_blended_family` | `false` |  |
 | `has_charitable_gifts` | `false` |  |
@@ -54,20 +53,17 @@ These names are available in templates *in addition to* the data-dictionary fiel
 | `includes_hipaa` | `false` |  |
 | `includes_pour_over_will` | `false` |  |
 | `includes_simple_will` | `false` |  |
-| `minor_children` | `[]` |  |
 | `omissions_intentional` | `false` |  |
 | `owns_real_property` | `false` |  |
-| `pour_over` | `{"alternate_disposition":"spouse_then_descendants","alter…` |  |
 | `requires_guardian_clause` | `false` |  |
 | `signing_scheduled` | `false` |  |
-| `state` | `{"code":"MA","state":"MA","requires_self_proving_affidavi…` |  |
 | `state_requires_self_proving_affidavit` | `true` |  |
 | `tax_sensitive_estate` | `false` |  |
 | `uses_revocable_trust` | `false` |  |
 
 ## Data roots also present in the context
 
-`children`, `client`, `dpoa`, `execution`, `healthcare`, `hipaa`, `outright_will`, `trust`, `will` — see fields.md for their fields. Note the context defaults several nested values (e.g. `will.pr_structure` → `single`, `will.bond` → `no_bond`, `will.utma_age` → `21`), and aliases display fields:
+`children`, `client`, `dpoa`, `execution`, `family`, `healthcare`, `hipaa`, `minor_children`, `outright_will`, `pour_over`, `state`, `trust`, `will` — see fields.md for their fields. Note the context defaults several nested values (e.g. `will.pr_structure` → `single`, `will.bond` → `no_bond`, `will.utma_age` → `21`), and aliases display fields:
 
 | Execution field | Empty-payload default |
 |---|---|

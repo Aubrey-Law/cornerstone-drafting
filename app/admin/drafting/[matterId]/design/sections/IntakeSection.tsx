@@ -6,6 +6,7 @@ import { Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { formatDobWithAge } from '@/lib/dob'
+import { parsePlanningObjectives } from '@/lib/intakePlanningObjectives'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -147,7 +148,10 @@ export function IntakeSection({
   const suffix = textValue(intake.suffix)
   const spouseFirstName = textValue(intake.spouse_first_name)
   const spouseLastName = textValue(intake.spouse_last_name)
-  const planningObjectives = textValue(intake.planning_objectives)
+  // May be stored as the portal's keyed object (JSON text) — render its
+  // answers as lines instead of raw JSON.
+  const planningObjectives = Object.values(parsePlanningObjectives(intake.planning_objectives) ?? {})
+    .join('\n\n')
   const specialNotes = textValue(intake.special_notes)
   const specialCircumstances = textArray(intake.special_circumstances)
   const goalsExtended = isRecord(intake.goals_extended) ? intake.goals_extended : null

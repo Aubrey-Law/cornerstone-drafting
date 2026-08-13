@@ -1,28 +1,17 @@
 import type { DesignSheet } from '@/types/database'
+import { SHARED_PREFILLED_DESIGN_KEYS } from '@/lib/sharedFields'
 
 // Intake-prefilled fields tracked for the override badge. Editing one of these
 // records an override entry so the UI can show "attorney changed this".
+// Derived from the registry's own prefilled flags so the two sets cannot
+// drift again (a hand-maintained copy had silently dropped client_pronouns,
+// spouse_pronouns, concerns and goals_notes — their overrides were never
+// recorded), plus the seeded fields that live outside the registry.
 export const INTAKE_PREFILLED_FIELDS = new Set<string>([
-  'client_name',
-  'client_dob',
-  'client_phone',
-  'client_email',
-  'marital_status',
-  'street',
-  'city',
-  'state',
-  'zip',
-  'county',
-  'client_citizenship',
-  'client_domicile',
-  'spouse_name',
-  'spouse_dob',
-  'spouse_phone',
-  'spouse_email',
-  'spouse_citizenship',
-  'marriage_date',
+  ...SHARED_PREFILLED_DESIGN_KEYS,
   'children',
   'plan_type',
+  'is_joint',
   'trust_name',
 ])
 

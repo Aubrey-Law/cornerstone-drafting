@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildIntakeResyncPatch,
   buildIntakeResyncPreview,
+  buildIntakeSeedDecisions,
   buildIntakeSeedPayload,
   INTAKE_SEED_FIELD_META,
   isDesignSheetUnseeded,
@@ -91,12 +92,15 @@ function intake(overrides: Partial<IntakeSnapshot> = {}): IntakeSnapshot {
     hcp_slots: null,
     guardian_slots: null,
     spouse_executor_slots: null,
+    spouse_trustee_slots: null,
     spouse_poa_slots: null,
     spouse_hcp_slots: null,
     goals_extended: null,
     real_estate_extended: null,
     financial_accounts: null,
     beneficiaries: null,
+    plan_type: null,
+    document_inclusions: null,
     ...overrides,
   }
 }
@@ -163,6 +167,36 @@ describe('seedFromIntake', () => {
 
     expect(patch.client_email).toBe('updated@example.com')
     expect(patch.overrides).toBeNull()
+  })
+
+  it('maps the intake plan-structure choice into plan_type and is_joint', () => {
+    const payload = buildIntakeSeedPayload(intake({ plan_type: 'joint_rlt' }))
+    expect(payload.plan_type).toBe('pour_over')
+    expect(payload.is_joint).toBe(true)
+
+    const willBased = buildIntakeSeedPayload(intake({ plan_type: 'will_based' }))
+    expect(willBased.plan_type).toBe('outright_will')
+    expect(willBased.is_joint).toBe(false)
+
+    const none = buildIntakeSeedPayload(intake())
+    expect(none.plan_type).toBeNull()
+    expect(none.is_joint).toBeNull()
+  })
+
+  it('seeds document inclusions from the plan choice and attorney toggles', () => {
+    expect(buildIntakeSeedDecisions(intake(), null)).toBeUndefined()
+
+    const willBased = buildIntakeSeedDecisions(intake({ plan_type: 'will_based' }), null)
+    expect(willBased?.document_inclusions).toMatchObject({ trust: false, will: true, dpoa: true, healthcare: true })
+
+    const explicit = buildIntakeSeedDecisions(
+      intake({ plan_type: 'incapacity_only', document_inclusions: { dpoa: true, healthcare: false } }),
+      { existing_key: 'kept', document_inclusions: { deed: true } } as never,
+    )
+    expect(explicit).toMatchObject({
+      existing_key: 'kept',
+      document_inclusions: { trust: false, will: false, dpoa: true, healthcare: false, deed: true },
+    })
   })
 
   it('covers registry prefilled design keys in seed metadata', () => {
