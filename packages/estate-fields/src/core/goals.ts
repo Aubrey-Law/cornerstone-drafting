@@ -35,6 +35,14 @@ const OBJECTIVE_FIELD_LABELS: Record<string, string> = {
 
 /** Fallback when no goal chips selected — summarize free-text objectives object. */
 export function formatPlanningObjectivesForDesign(raw: unknown): string | null {
+  // The column is text, so the object often arrives as its JSON serialization.
+  if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+    try {
+      raw = JSON.parse(raw)
+    } catch {
+      return null
+    }
+  }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const parts = Object.entries(raw as Record<string, unknown>)
     .map(([key, val]) => {

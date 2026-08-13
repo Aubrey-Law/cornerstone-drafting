@@ -24,13 +24,19 @@ The package lives at `aubrey-law-app/packages/estate-fields/`. Field registry ch
 | Module | Package path | Cornerstone |
 |--------|--------------|-------------|
 | Registry, options, assets, goals, fiduciaries | `core/` | Import |
-| Lead forms, intake validation | `portal/` | Skip |
-| `DesignField` / `IntakeField` | `react/` | DesignField only |
+| Intake validation (`validateIntakeField`) | `portal/` | Import — `lib/intakeSections.ts` validates client steps with it |
+| `DesignField` / `IntakeField` | `react/` | Both — `IntakeField` renders `estate_value`, pronouns and marital status in the wizard |
 | `citizenshipFromHousehold` | App `lib/sharedFields/syncPortal.ts` | N/A (no intake sync) |
 
 ## Cornerstone Lite intake seed
 
-`lib/designSheet/seedFromIntake.ts` consumes `SHARED_PREFILLED_DESIGN_KEYS` from the registry via `syncFieldToDesign`, `syncGoalsNotesFromIntake`, and `syncConcernsFromIntake`. Fiduciary slot arrays are seeded from `contact_roles` via `lib/contacts/intakeFiduciarySnapshot.ts`. CI guard: `tests/design-sheet-seed-from-intake.test.ts` (`covers registry prefilled design keys`).
+`lib/designSheet/seedFromIntake.ts` maps intake columns to design keys via
+`syncFieldToDesign`, `syncGoalsNotesFromIntake`, and `syncConcernsFromIntake`,
+and `lib/designSheet/buildInitialSheet.ts` derives its override-tracking set
+from `SHARED_PREFILLED_DESIGN_KEYS`. Fiduciary slot arrays are seeded from
+`contact_roles` via `lib/contacts/intakeFiduciarySnapshot.ts`. CI guard:
+`tests/design-sheet-seed-from-intake.test.ts` (`covers registry prefilled
+design keys`).
 
 ## Breaking changes
 

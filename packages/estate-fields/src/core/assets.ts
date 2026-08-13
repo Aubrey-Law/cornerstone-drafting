@@ -201,6 +201,8 @@ export const INTAKE_FINANCIAL_DETAIL_LABELS: Record<string, string> = {
   retirement_accounts: 'Retirement',
   life_insurance: 'Life insurance',
   business_interests: 'Business interests',
+  custodial_accounts: 'Custodial accounts',
+  cryptocurrencies: 'Cryptocurrency',
   liabilities: 'Liabilities',
   personal_property: 'Personal property',
   other_assets: 'Other assets',

@@ -1,5 +1,6 @@
 'use client'
 
+import { PRONOUN_OPTIONS } from '@/lib/sharedFields'
 import { useState, useRef, useEffect, useId, type Dispatch, type KeyboardEvent, type SetStateAction } from 'react'
 import { Loader2, Pencil, Search, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -32,13 +33,7 @@ export function contactFullName(c: Pick<Contact, 'first_name' | 'middle_name' | 
   return [c.first_name, c.middle_name, c.last_name, suffix].filter(Boolean).join(' ')
 }
 
-const PRONOUN_OPTIONS = [
-  { value: 'he/him', label: 'He/Him' },
-  { value: 'she/her', label: 'She/Her' },
-  { value: 'they/them', label: 'They/Them' },
-  { value: 'ze/zir', label: 'Ze/Zir' },
-  { value: 'other', label: 'Other' },
-]
+
 
 interface ContactPickerProps {
   role: string

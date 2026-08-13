@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Textarea } from '@/components/ui/textarea'
+import { GOALS_TEXTAREA_MAX_LENGTH } from '@/lib/sharedFields'
 import { SectionBlock, type SectionProps } from './shared'
 
 export function GoalsSection({ sheet, onChange }: SectionProps) {
@@ -21,11 +22,11 @@ export function GoalsSection({ sheet, onChange }: SectionProps) {
           onBlur={() => onChange('goals_notes', goals || null)}
           placeholder="What outcomes does the client want to achieve with this estate plan?"
           className="min-h-[120px] resize-y text-sm leading-relaxed bg-muted border-border"
-          maxLength={2000}
+          maxLength={GOALS_TEXTAREA_MAX_LENGTH}
         />
         <div className="mt-2 flex items-center justify-between">
           <p className="text-[11px] text-muted-foreground">Saved automatically on blur.</p>
-          <p className="text-[10px] text-muted-foreground tabular-nums">{goals.length} / 2000</p>
+          <p className="text-[10px] text-muted-foreground tabular-nums">{goals.length} / {GOALS_TEXTAREA_MAX_LENGTH}</p>
         </div>
       </SectionBlock>
 
@@ -39,11 +40,11 @@ export function GoalsSection({ sheet, onChange }: SectionProps) {
           onBlur={() => onChange('concerns', concerns || null)}
           placeholder="What are the client's primary concerns? (e.g., avoiding probate, protecting assets, providing for minors)"
           className="min-h-[120px] resize-y text-sm leading-relaxed bg-muted border-border"
-          maxLength={2000}
+          maxLength={GOALS_TEXTAREA_MAX_LENGTH}
         />
         <div className="mt-2 flex items-center justify-between">
           <p className="text-[11px] text-muted-foreground">Saved automatically on blur.</p>
-          <p className="text-[10px] text-muted-foreground tabular-nums">{concerns.length} / 2000</p>
+          <p className="text-[10px] text-muted-foreground tabular-nums">{concerns.length} / {GOALS_TEXTAREA_MAX_LENGTH}</p>
         </div>
       </SectionBlock>
 

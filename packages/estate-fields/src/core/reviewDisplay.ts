@@ -4,7 +4,7 @@ import {
   formatAssetTypesForReview,
   INTAKE_FINANCIAL_DETAIL_LABELS,
 } from './assets'
-import { formatPlanningGoalsForDesign } from './goals'
+import { formatPlanningGoalsForDesign, formatPlanningObjectivesForDesign } from './goals'
 import { referralSourceLabel } from './referral'
 import { getFiduciaryIntakeSlot } from './fiduciaries'
 import { MARITAL_STATUS_OPTIONS, PRONOUN_OPTIONS } from './options'
@@ -132,6 +132,10 @@ export function formatIntakeReviewValue(key: IntakeReviewFieldKey, value: unknow
       const formatted = formatPhoneDisplay(typeof value === 'string' ? value : null)
       return formatted || textReview(value)
     }
+    // Stored as a keyed object (or its JSON serialization) — textReview would
+    // render it blank and drop the row.
+    case 'planning_objectives':
+      return formatPlanningObjectivesForDesign(value) ?? ''
     default:
       return textReview(value)
   }
