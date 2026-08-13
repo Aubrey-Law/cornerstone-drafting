@@ -25,6 +25,8 @@ import {
   type CollegePrepDesign,
 } from '@/lib/collegePrepDesign'
 import { formatPhoneDisplay } from '@/lib/phone'
+import type { IntakeSnapshot } from '@/lib/queries'
+import { PlanTrackSwitch } from './PlanTrackSwitch'
 import {
   AttorneyDateInput,
   AttorneyInput,
@@ -90,7 +92,11 @@ function NotesField({
  * to state exactly. Deferred answers are called out inline rather than left to
  * look like ordinary selections.
  */
-export function CollegePrepSection({ sheet, onChange }: SectionProps) {
+interface CollegePrepSectionProps extends SectionProps {
+  intakeSnapshot?: IntakeSnapshot | null
+}
+
+export function CollegePrepSection({ sheet, onChange, intakeSnapshot = null }: CollegePrepSectionProps) {
   const design = getCollegePrepDesign(sheet)
   const studentFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || 'the student'
 
@@ -127,6 +133,8 @@ export function CollegePrepSection({ sheet, onChange }: SectionProps) {
 
   return (
     <DesignSectionContent>
+      <PlanTrackSwitch sheet={sheet} onChange={onChange} intakeSnapshot={intakeSnapshot} />
+
       <SectionBlock
         title="School & Records"
         subtitle="The campus drives which forms providers will accept, and the move-in date is the real deadline."

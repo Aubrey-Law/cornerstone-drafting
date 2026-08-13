@@ -224,7 +224,11 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
       />
     ),
     [DESIGN_SECTION_IDS.estatePlanDesign]: () => (
-      <PlanDesignSection {...common} showInapplicable={Boolean(showInapplicable)} />
+      <PlanDesignSection
+        {...common}
+        intakeSnapshot={intakeSnapshot}
+        showInapplicable={Boolean(showInapplicable)}
+      />
     ),
     [DESIGN_SECTION_IDS.trustDetails]: () => <TrustDetailsSection {...docCommon} scope="client" />,
     [DESIGN_SECTION_IDS.willDetails]: () => (
@@ -246,7 +250,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
       </>
     ),
     [DESIGN_SECTION_IDS.collegePlan]: () => (
-      <CollegePrepSection sheet={sheet} onChange={updateField} />
+      <CollegePrepSection sheet={sheet} onChange={updateField} intakeSnapshot={intakeSnapshot} />
     ),
     [DESIGN_SECTION_IDS.financialPoa]: () => <DpoaDocumentSection {...docCommon} />,
     [DESIGN_SECTION_IDS.healthcareDirectives]: () => <HealthCareDocumentSection {...docCommon} />,
