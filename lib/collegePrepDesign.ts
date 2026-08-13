@@ -81,6 +81,12 @@ export interface CollegePrepDesign {
   school_name: string | null
   school_city: string | null
   school_state: string | null
+  /**
+   * The student's campus ID number. Not asked on the questionnaire — a student
+   * often does not have one before enrollment — but registrars index by it, and
+   * a release naming the wrong Rowan Delgado is a release that does nothing.
+   */
+  student_id: string | null
   move_in_date: string | null
   studying_abroad: boolean | null
   abroad_country: string | null
@@ -127,6 +133,7 @@ export const EMPTY_COLLEGE_PREP_DESIGN: CollegePrepDesign = {
   school_name: null,
   school_city: null,
   school_state: null,
+  student_id: null,
   move_in_date: null,
   studying_abroad: null,
   abroad_country: null,
@@ -201,6 +208,7 @@ export function getCollegePrepDesign(sheet: CollegePrepSheet | null | undefined)
     school_name: readString(raw, 'school_name'),
     school_city: readString(raw, 'school_city'),
     school_state: readString(raw, 'school_state'),
+    student_id: readString(raw, 'student_id'),
     move_in_date: readString(raw, 'move_in_date'),
     studying_abroad: readBoolean(raw, 'studying_abroad'),
     abroad_country: readString(raw, 'abroad_country'),

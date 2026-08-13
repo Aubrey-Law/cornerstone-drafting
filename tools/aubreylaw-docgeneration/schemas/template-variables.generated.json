@@ -353,11 +353,12 @@
         "client.full_name",
         "execution.display_doc_date",
         "ferpa.all_records",
+        "ferpa.includes_health_center",
         "ferpa.recipients",
         "ferpa.records",
         "ferpa.school_location",
         "ferpa.school_name",
-        "ferpa_includes_health_center"
+        "ferpa.student_id"
       ],
       "clauses": [],
       "localVariables": [

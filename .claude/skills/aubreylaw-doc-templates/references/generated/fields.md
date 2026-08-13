@@ -48,6 +48,7 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `execution.signing_scheduled` | boolean | no | Whether a signing date, signing county, and notary commission expiration are known. |
 | `family.additional_disinheritance_language` | string | no | Extra attorney-drafted disinheritance language appended to the standard clause. |
 | `ferpa.all_records` | boolean | no | Whether every education record category the questionnaire offers was selected. |
+| `ferpa.includes_health_center` | boolean | no | Whether campus health or counseling records are among the categories selected, which the release names as excluded from FERPA's education-records definition. |
 | `ferpa.recipients` | string | conditional | Who may receive the education records, in the student's own words, e.g. both parents. |
 | `ferpa.records` | array | conditional | Education record categories the release covers. Reference the container directly in {% for %} and {% if %}; see ferpa.records[].label for member fields. |
 | `ferpa.records[]` | array | no | A single education record category selected on the College Preparation Plan questionnaire. |
@@ -57,6 +58,7 @@ Every `{{ path }}` in a template must resolve to one of these paths (or a derive
 | `ferpa.school_location` | string | no | Campus city and state joined for the institution line, e.g. Boston, MA. |
 | `ferpa.school_name` | string | conditional | College, university, or program whose education records the FERPA release covers. |
 | `ferpa.school_state` | string | no | Campus state, printed where the institution is identified in parts. |
+| `ferpa.student_id` | string | no | Student's campus ID number, printed under the student's name when the firm has it. |
 | `fiduciaries.agent.co_agents_action` | string | no | How co-agents act under the durable power of attorney: separate, joint, or majority. |
 | `fiduciaries.agent.co_primary.full_name` | string | no | Co-agent under durable power of attorney. |
 | `fiduciaries.agent.primary.full_name` | string | yes | Primary agent under durable power of attorney. |
@@ -282,7 +284,7 @@ Variables: `children`, `client.first_name`, `client.full_name`, `execution.displ
 
 ## ferpa-release.docx
 
-Variables: `client.date_of_birth`, `client.full_name`, `execution.display_doc_date`, `ferpa.all_records`, `ferpa.recipients`, `ferpa.records`, `ferpa.school_location`, `ferpa.school_name`, `ferpa_includes_health_center`
+Variables: `client.date_of_birth`, `client.full_name`, `execution.display_doc_date`, `ferpa.all_records`, `ferpa.includes_health_center`, `ferpa.recipients`, `ferpa.records`, `ferpa.school_location`, `ferpa.school_name`, `ferpa.student_id`
 
 ## funding-instructions.docx
 

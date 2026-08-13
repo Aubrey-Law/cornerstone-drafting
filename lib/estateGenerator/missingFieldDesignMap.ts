@@ -105,6 +105,7 @@ const EXACT: Record<string, Entry> = {
   'ferpa.school_name': { label: 'School or program', sectionId: S.collegePlan, targetField: 'college_prep.school_name' },
   'ferpa.records': { label: 'Education records covered', sectionId: S.collegePlan, targetField: null },
   'ferpa.recipients': { label: 'Who may receive school records', sectionId: S.collegePlan, targetField: 'college_prep.ferpa_recipients' },
+  'ferpa.student_id': { label: 'Student ID', sectionId: S.collegePlan, targetField: 'college_prep.student_id' },
 
   'assets.items': { label: 'Asset schedule', sectionId: S.assetSchedules, targetField: null },
   'homestead.beneficiary_names': { label: 'Homestead beneficiaries', sectionId: S.transfersAssignments, targetField: null },

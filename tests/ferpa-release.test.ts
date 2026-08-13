@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildFerpaRelease, ferpaIncludesHealthCenter } from '@/lib/draftPayload/ferpa'
 import { buildCollegePrepSeedDecisions } from '@/lib/designSheet/seedCollegePrep'
+import { setCollegePrepDesign } from '@/lib/collegePrepDesign'
 import {
   defaultDocumentInclusions,
   getDocumentInclusions,
@@ -97,11 +98,26 @@ describe('FERPA release — payload', () => {
   })
 
   it('flags the campus health center, which FERPA does not reach', () => {
-    expect(ferpaIncludesHealthCenter(buildFerpaRelease(collegePrepSheet()))).toBe(true)
-    expect(ferpaIncludesHealthCenter(buildFerpaRelease(collegePrepSheet({
+    const release = buildFerpaRelease(collegePrepSheet())
+    expect(release?.includes_health_center).toBe(true)
+    expect(ferpaIncludesHealthCenter(release)).toBe(true)
+
+    const withoutHealthCenter = buildFerpaRelease(collegePrepSheet({
       ...COLLEGE_PREP_DETAILS,
       ferpa_records: ['grades'],
-    })))).toBe(false)
+    }))
+    expect(withoutHealthCenter?.includes_health_center).toBe(false)
+    expect(ferpaIncludesHealthCenter(withoutHealthCenter)).toBe(false)
+  })
+
+  it('carries the campus ID once the attorney enters one', () => {
+    // The questionnaire never asks — an incoming student usually has no campus
+    // ID yet — so it arrives through the design sheet, not the seed.
+    const sheet = collegePrepSheet()
+    expect(buildFerpaRelease(sheet)?.student_id).toBeNull()
+
+    const withId = { ...sheet, decisions: setCollegePrepDesign(sheet, { student_id: '001234567' }) }
+    expect(buildFerpaRelease(withId as DesignSheet)?.student_id).toBe('001234567')
   })
 })
 
@@ -236,6 +252,33 @@ describe('FERPA release — rendered document', () => {
 
     expect(text).toContain('all of my education records, without limitation')
     expect(text).not.toContain('the following categories')
+  })
+
+  it('prints the student ID line only when there is one', async () => {
+    const { text } = await renderText(example)
+    expect(text).toContain('Student ID: 001234567')
+
+    const withoutId = await renderText({
+      ...example,
+      ferpa: { ...(example.ferpa as Record<string, unknown>), student_id: '' },
+    })
+    expect(withoutId.text).toContain('Northeastern University')
+    expect(withoutId.text).not.toContain('Student ID:')
+  })
+
+  it('recomputes the health-center flag rather than trusting a stale one', async () => {
+    // A payload claiming the limit while naming no health-center record would
+    // otherwise print a paragraph about records the release does not cover.
+    const { text } = await renderText({
+      ...example,
+      ferpa: {
+        ...(example.ferpa as Record<string, unknown>),
+        includes_health_center: true,
+        records: [{ key: 'grades', label: 'Grades and transcripts' }],
+      },
+    })
+
+    expect(text).not.toContain('34 C.F.R. § 99.3')
   })
 
   it('drops the campus line when the school location is unknown', async () => {

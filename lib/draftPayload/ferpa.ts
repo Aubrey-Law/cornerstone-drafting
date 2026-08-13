@@ -30,9 +30,13 @@ export interface DraftPayloadFerpaRelease {
   school_state: string | null
   /** "Boston, MA" for the document's institution line; null when neither is known. */
   school_location: string | null
+  /** Campus ID number, printed under the student's name when the firm has it. */
+  student_id: string | null
   records: FerpaRecordCategory[]
   /** Every category the questionnaire offers was selected. */
   all_records: boolean
+  /** Campus health and counseling records are among the categories selected. */
+  includes_health_center: boolean
   /** Who may receive the records, in the student's own words. */
   recipients: string | null
 }
@@ -64,8 +68,10 @@ export function buildFerpaRelease(
     school_city: design.school_city,
     school_state: design.school_state,
     school_location: joinLocation(design.school_city, design.school_state),
+    student_id: design.student_id,
     records,
     all_records: records.length === COLLEGE_FERPA_RECORD_OPTIONS.length,
+    includes_health_center: records.some(record => record.key === 'health_center'),
     recipients: design.ferpa_recipients,
   }
 }
@@ -79,5 +85,5 @@ export function buildFerpaRelease(
 export function ferpaIncludesHealthCenter(
   release: DraftPayloadFerpaRelease | null | undefined,
 ): boolean {
-  return (release?.records ?? []).some(record => record.key === 'health_center')
+  return release?.includes_health_center ?? false
 }
