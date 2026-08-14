@@ -1,6 +1,6 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: step 1 shipped (§10, §13). Steps 2–7 are still proposal.
+Status: steps 1–2 shipped (§10, §13, §14). Steps 3–7 are still proposal.
 
 ## 1. The problem
 
@@ -373,10 +373,11 @@ Each step is independently shippable and leaves the app working.
    `contacts.client_intake_id` populated and authoritative. Nothing reads the
    new tables yet. Reversible. See §13 for what the build changed about this
    plan.
-2. **Dual-write.** Every contact write populates both the legacy FK and
-   `matter_contacts`. Add a consistency check comparing the two
-   representations, in the shape of `scripts/reconcileFieldConsistency.ts`.
-   Run it against production for a few days.
+2. **Dual-write.** ✅ Shipped —
+   `supabase/migrations/20260926000000_matter_contacts_dual_write.sql` and
+   `npm run check:matter-contacts`. Done with database triggers rather than by
+   patching writers (see §13). Run the check against production for a few days
+   before starting step 3.
 3. **Flip the readers.** Re-key the eight household helpers to `matterId`,
    then the direct callers (§6). `contacts.client_intake_id` becomes
    write-only. This is the big PR; split by subsystem (design sheet, leads,
@@ -483,3 +484,50 @@ own College Prep matter.
 the client themselves, step 1 has minted a second copy of that person, and the
 pair belongs in the §9 merge queue. Needs a look at production data — the
 migration deliberately does not guess.
+
+## 14. Step 2 as built
+
+**Triggers, not patched writers.** The spec said "every contact write populates
+both". There are 24 such writes across 13 TypeScript files, plus the six
+`SECURITY DEFINER` functions in §6 that write `contacts` from SQL and never go
+through the app. Patching each is fragile in the way that matters most here: a
+missed writer diverges silently, and the thing that would catch it is a reader
+that has already flipped. So the dual-write is four triggers instead:
+
+| Trigger | On | Does |
+|---|---|---|
+| `sync_matter_contacts_from_matter` | `matters` insert | mints the self contact if absent, joins it, joins the whole existing household |
+| `sync_matter_contacts_from_contact` | `contacts` insert/update | joins the contact to its household's matters; moves the rows when the household changes |
+| `sync_self_contact_from_intake` | `client_intake` update | keeps the self contact current while the app still writes the intake |
+| `sync_contact_role_matter` | `contact_roles` insert | fills `matter_id` when the intake has exactly one matter |
+
+Deletes need no trigger — `matter_contacts` cascades on both foreign keys.
+
+**The recursion the pair creates.** Step 1 installed self contact →
+`client_intake`. Step 2 needs the reverse, because the app still writes the
+intake. Postgres fires an UPDATE trigger even when values are unchanged, so the
+two would write to each other until the stack blew. Both directions are now
+guarded on `is distinct from`: the answering write matches zero rows, fires no
+trigger, and the cycle stops after one hop.
+
+**Ambiguity is left unset, not guessed.** `sync_contact_role_matter` leaves
+`matter_id` null when the intake carries more than one matter, rather than
+attaching an appointment to the wrong engagement. The consistency check reports
+those, and they need resolving by hand before step 3 re-keys roles.
+
+**Verification.** Against PostgreSQL 16 with the step-1 fixture: new
+client + matter, adding a spouse, a second matter for the same client (inherits
+the household, zero duplicate people), intake edit propagating to the self
+contact and back, a no-op write not ping-ponging, detach/re-attach/delete, and
+role matter assignment in both the unambiguous and ambiguous cases.
+
+The consistency checker was then run against the database those triggers had
+actually written — 4 matters, 10 contacts, 11 join rows — and reported exactly
+one gap, the deliberate ambiguous role. It was written independently of the
+triggers, so the agreement is a real cross-check rather than a restatement.
+Injecting a dropped join row and a matter with no self contact produced
+`missing_join_row` and `matter_without_self` as expected.
+
+**Before step 3:** run `npm run check:matter-contacts` on production for a few
+days. It exits non-zero on any disagreement. Step 3 should not start while it
+reports drift.
