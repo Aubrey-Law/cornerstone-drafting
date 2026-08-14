@@ -242,7 +242,17 @@ export function getEstatePlanDesignSetup(
     power_of_attorney: inclusions.dpoa,
     health_care_proxy: typeof raw.health_care_proxy === 'boolean' ? raw.health_care_proxy : inclusions.healthcare,
     hipaa_authorization: typeof raw.hipaa_authorization === 'boolean' ? raw.hipaa_authorization : inclusions.healthcare,
-    living_will: typeof raw.living_will === 'boolean' ? raw.living_will : inclusions.healthcare,
+    // On a College Preparation Plan the student's own answer is the decision.
+    // `estate_plan_design.living_will` is only a mirror of it, written once at
+    // seed time, so reading the mirror meant an answer changed later in the
+    // design sheet (declined at intake, elected at the meeting) never reached
+    // the generator and the advance directive silently never drafted. A
+    // deferred answer keeps the document — dropping one the student has not
+    // declined is the harder mistake to catch, and readiness blocks drafting
+    // until it is resolved either way.
+    living_will: isCollegePrepDesignSheet(sheet)
+      ? getCollegePrepDesign(sheet).living_will_include !== 'no'
+      : typeof raw.living_will === 'boolean' ? raw.living_will : inclusions.healthcare,
     will_title: raw.will_title === 'last_will' || raw.will_title === 'pour_over_will'
       ? raw.will_title
       : defaultWillTitle(inclusions),

@@ -25,7 +25,11 @@ import {
   type CollegePrepDesign,
 } from '@/lib/collegePrepDesign'
 import { formatPhoneDisplay } from '@/lib/phone'
-import { mergeDecisionUpdates, setDocumentInclusion } from '@/lib/designSheetDocumentInclusions'
+import {
+  mergeDecisionUpdates,
+  setDocumentInclusion,
+  setEstatePlanDesignSetup,
+} from '@/lib/designSheetDocumentInclusions'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
 import type { MatterContact } from '@/types/database'
 import DesignContactPicker, { contactFullName, type Contact as PickerContact } from './ContactPicker'
@@ -538,7 +542,17 @@ export function CollegePrepSection({
             value: option.value,
             label: option.label,
           }))}
-          onChange={value => update({ living_will_include: value })}
+          onChange={value => {
+            // Keep the estate-plan-design mirror in step with the answer. The
+            // generator reads the mirror, and the seed writes it once, so the
+            // answer alone would not turn the document back on. Deferring keeps
+            // it in the package; only a declined answer drops it.
+            onChange('decisions', previous => mergeDecisionUpdates(
+              previous,
+              prev => setCollegePrepDesign(prev, { living_will_include: value }),
+              prev => setEstatePlanDesignSetup(prev, { living_will: value !== 'no' }),
+            ))
+          }}
           fieldName="college_prep.living_will_include"
         />
 
