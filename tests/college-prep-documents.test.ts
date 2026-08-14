@@ -4,6 +4,7 @@ import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 
 import { buildCollegePrep } from '@/lib/draftPayload/collegePrep'
+import { setCollegePrepDesign } from '@/lib/collegePrepDesign'
 import { buildCollegePrepSeedDecisions } from '@/lib/designSheet/seedCollegePrep'
 import {
   defaultDocumentInclusions,
@@ -150,6 +151,43 @@ describe('College prep documents — selection', () => {
 
     expect(packages).toContain('college-health-care-documents')
     expect(packages).not.toContain('college-advance-directive')
+  })
+
+  it('drafts the advance directive when the attorney elects it after the seed', () => {
+    // The seed mirrors the answer into `estate_plan_design.living_will` once.
+    // A student who declined on the questionnaire and elected written
+    // instructions at the meeting must still get the document: the answer is
+    // the decision, not the seed-time snapshot. Reading the stale mirror meant
+    // the directive silently never drafted.
+    const seeded = collegePrepSheet({ ...COLLEGE_PREP_DETAILS, living_will_include: 'no' })
+    const elected = {
+      ...seeded,
+      decisions: setCollegePrepDesign(seeded, { living_will_include: 'yes' }),
+    } as DesignSheet
+
+    expect(getEstatePlanDesignSetup(elected).living_will).toBe(true)
+    expect(selectedPackages(elected)).toContain('college-advance-directive')
+  })
+
+  it('drops the advance directive when the attorney declines it after the seed', () => {
+    const seeded = collegePrepSheet()
+    const declined = {
+      ...seeded,
+      decisions: setCollegePrepDesign(seeded, { living_will_include: 'no' }),
+    } as DesignSheet
+
+    expect(getEstatePlanDesignSetup(declined).living_will).toBe(false)
+    expect(selectedPackages(declined)).not.toContain('college-advance-directive')
+  })
+
+  it('keeps a deferred living will in the package but does not draft it unresolved', () => {
+    // Dropping a document the student has not declined is the harder mistake
+    // to catch, so the deferral keeps it included; readiness blocks drafting
+    // until the answer is resolved.
+    const deferred = collegePrepSheet({ ...COLLEGE_PREP_DETAILS, living_will_include: 'discuss' })
+
+    expect(getEstatePlanDesignSetup(deferred).living_will).toBe(true)
+    expect(selectedPackages(deferred)).not.toContain('college-advance-directive')
   })
 
   it('keeps the estate incapacity package for estate matters', () => {
