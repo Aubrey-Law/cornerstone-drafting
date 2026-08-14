@@ -5,6 +5,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdminServerAction } from '@/lib/serverActionAuth'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
 
 async function assertDraftingEligible(matterId: string) {
   const admin = getAdminClient()
@@ -111,13 +112,27 @@ export async function searchContacts(matterId: string, query: string) {
 
   if (!matter?.client_intake_id) return []
 
-  const { data, error } = await admin
-    .from('contacts')
-    .select('id, first_name, last_name, relationship_type, relationship_label, phone, email, address_line1')
-    .eq('client_intake_id', matter.client_intake_id)
-    .limit(200)
+  // Read through the join (step 3 of docs/matter-contacts-migration.md), so
+  // the fiduciary picker offers this matter's people.
+  interface ContactOption {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    relationship_type: string | null
+    relationship_label: string | null
+    phone: string | null
+    email: string | null
+    address_line1: string | null
+  }
 
-  if (error) {
+  let data: ContactOption[]
+  try {
+    data = (await loadMatterContacts(
+      admin,
+      matterId,
+      'id, first_name, last_name, relationship_type, relationship_label, phone, email, address_line1',
+    )) as unknown as ContactOption[]
+  } catch (error) {
     console.error('searchContacts error:', error)
     return []
   }

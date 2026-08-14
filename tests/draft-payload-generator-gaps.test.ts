@@ -40,6 +40,8 @@ function adminStub(responses: Record<string, QueryResult[]>) {
     }
     const chain = {
       select: () => chain,
+      // loadMatterContacts reads the join, then the contacts by id.
+      in: () => chain,
       eq: () => chain,
       order: () => chain,
       limit: () => chain,
@@ -413,6 +415,19 @@ describe('draft payload generator gap wiring', () => {
           },
           hcp_slots: [{ id: 'hcp-1', contact_id: 'contact-hcp', is_co: false, order: 0 }],
         },
+        error: null,
+      }],
+      // Drafting reads contacts through the join since step 3 of
+      // docs/matter-contacts-migration.md.
+      matter_contacts: [{
+        data: contacts.map(c => ({
+          contact_id: c.id,
+          relationship_type: c.relationship_type ?? null,
+          relationship_label: c.relationship_label ?? null,
+          child_relationship: null,
+          parentage: null,
+          is_minor: null,
+        })),
         error: null,
       }],
       contacts: [{ data: contacts, error: null }],

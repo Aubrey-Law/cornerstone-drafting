@@ -112,9 +112,13 @@ async function persistAdminSpouse(
 async function persistAdminChildren(
   admin: ReturnType<typeof getAdminClient>,
   intakeId: string,
+  matterId: string | null,
   data: AdminIntakeFormData,
 ): Promise<void> {
-  const household = await getHousehold(admin, intakeId)
+  // Reads are matter-keyed; the write still sets the legacy household FK and
+  // lets the step 2 triggers build the join from it.
+  if (!matterId) return
+  const household = await getHousehold(admin, matterId)
   const existingByName = new Map(
     household.children.map((c) => [fiduciaryNameKey(c.first_name, c.last_name), c]),
   )
@@ -282,9 +286,12 @@ function fiduciaryNameKey(first: unknown, last: unknown): string {
  *  in sync. */
 async function persistAdminFiduciaries(
   admin: ReturnType<typeof getAdminClient>,
-  intakeId: string,
+  matterId: string | null,
   data: AdminIntakeFormData,
 ): Promise<void> {
+  // No matter yet means nowhere to hang the appointments — the design sheet
+  // sync below creates one, and the next save persists them.
+  if (!matterId) return
   const adminEntries = adminFiduciaryEntriesFromForm(data)
   const entries: FiduciaryRoleEntry[] = adminEntries.map((e) => ({
     role: e.role as FiduciaryRoleEntry['role'],
@@ -298,7 +305,27 @@ async function persistAdminFiduciaries(
   // The admin sheet only captures client-party fiduciaries
   // (ADMIN_FIDUCIARY_FIELD_MAP), so scope the wipe to the client party —
   // otherwise every admin save deletes spouse rows the portal wrote.
-  await persistFiduciaryRoles(admin, intakeId, entries, { parties: ['client'] })
+  await persistFiduciaryRoles(admin, matterId, entries, { parties: ['client'] })
+}
+
+/**
+ * The matter the household writers should write against. Prefers the matter
+ * the caller is already on; otherwise falls back to the intake's single
+ * matter. §5 of docs/matter-contacts-migration.md retires this fallback in
+ * step 4 — it is only correct while an intake carries at most one matter.
+ */
+async function resolveMatterIdForIntake(
+  admin: ReturnType<typeof getAdminClient>,
+  argsMatterId: string | null,
+  intakeId: string,
+): Promise<string | null> {
+  if (argsMatterId) return argsMatterId
+  const { data } = await admin
+    .from('matters')
+    .select('id')
+    .eq('client_intake_id', intakeId)
+    .maybeSingle()
+  return (data?.id as string | undefined) ?? null
 }
 
 // ── Fetch existing intake data (for pre-population) ───────────────────────────
@@ -476,9 +503,13 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
   const { error } = await admin.from('client_intake').update(payload).eq('id', intakeId)
   if (error) throw new Error(error.message)
 
-  await persistAdminFiduciaries(admin, intakeId, args.data)
+  // Resolved before the household writers rather than after: they are keyed by
+  // matter since step 3 of docs/matter-contacts-migration.md.
+  const matterIdForSync = await resolveMatterIdForIntake(admin, args.matterId ?? null, intakeId)
+
+  await persistAdminFiduciaries(admin, matterIdForSync, args.data)
   await persistAdminSpouse(admin, intakeId, args.data)
-  await persistAdminChildren(admin, intakeId, args.data)
+  await persistAdminChildren(admin, intakeId, matterIdForSync, args.data)
 
   await syncLeadFromIntake(admin, { intakeId, fields: payload })
 
@@ -492,18 +523,8 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
   // attorney pulls edits in via the drafting workspace's intake resync dialog.
   // Submitted/approved intakes stay locked to clients and keep their attorney
   // review flags current.
-  let matterIdForSync = args.matterId ?? null
-  if (!matterIdForSync) {
-    const { data: matter } = await admin
-      .from('matters')
-      .select('id')
-      .eq('client_intake_id', intakeId)
-      .maybeSingle()
-    matterIdForSync = (matter?.id as string | undefined) ?? null
-  }
   if (args.matterId) {
     await linkIntakeToMatter(admin, args.matterId, intakeId)
-    matterIdForSync = args.matterId
   }
 
   await syncIntakeToDesignSheet(admin, intakeId, matterIdForSync, reviewFlags)
@@ -553,18 +574,21 @@ export async function submitAdminIntake(args: AdminIntakeArgs): Promise<{ id: st
     .eq('id', intakeId)
   if (error) throw new Error(error.message)
 
-  await persistAdminFiduciaries(admin, intakeId, args.data)
-  await persistAdminSpouse(admin, intakeId, args.data)
-  await persistAdminChildren(admin, intakeId, args.data)
-
-  await syncLeadFromIntake(admin, { intakeId, fields: payload })
-
-  // If a matter already exists (lead was already converted), advance it.
+  // If a matter already exists (lead was already converted), advance it. Read
+  // before the household writers, which are matter-keyed since step 3 of
+  // docs/matter-contacts-migration.md.
   const { data: matter } = await admin
     .from('matters')
     .select('id, stage, relationship_status')
     .eq('client_intake_id', intakeId)
     .maybeSingle()
+  const matterId = (matter?.id as string | undefined) ?? args.matterId ?? null
+
+  await persistAdminFiduciaries(admin, matterId, args.data)
+  await persistAdminSpouse(admin, intakeId, args.data)
+  await persistAdminChildren(admin, intakeId, matterId, args.data)
+
+  await syncLeadFromIntake(admin, { intakeId, fields: payload })
 
   // Compute readiness flags from the just-written intake row so the design
   // sheet seed and matter_alerts surface the same information the client-

@@ -14,6 +14,26 @@ type QueryResult = {
   error: { message: string } | null
 }
 
+/**
+ * The join rows that put a stubbed contact roster on a matter. Drafting reads
+ * contacts through `matter_contacts` since step 3 of
+ * docs/matter-contacts-migration.md, so a `contacts` stub alone is no longer
+ * reachable.
+ */
+function joinRowsFor(contacts: Array<Record<string, unknown>>): QueryResult {
+  return {
+    data: contacts.map(c => ({
+      contact_id: c.id,
+      relationship_type: c.relationship_type ?? null,
+      relationship_label: c.relationship_label ?? null,
+      child_relationship: null,
+      parentage: null,
+      is_minor: null,
+    })),
+    error: null,
+  }
+}
+
 function adminStub(responses: Record<string, QueryResult[]>) {
   const nextResponse = (table: string): QueryResult => {
     const queue = responses[table]
@@ -29,6 +49,8 @@ function adminStub(responses: Record<string, QueryResult[]>) {
     }
     const chain = {
       select: () => chain,
+      // loadMatterContacts reads the join, then the contacts by id.
+      in: () => chain,
       eq: () => chain,
       order: () => chain,
       limit: () => chain,
@@ -141,6 +163,11 @@ describe('buildDraftPayload', () => {
         },
         error: null,
       }],
+      matter_contacts: [joinRowsFor([
+        { id: 'contact-1', relationship_type: 'executor', relationship_label: 'Executor' },
+        { id: 'contact-2', relationship_type: 'executor', relationship_label: 'Co-Executor' },
+        { id: 'contact-3', relationship_type: 'executor', relationship_label: 'Co-Executor' },
+      ])],
       contacts: [{
         data: [{
           id: 'contact-1',
@@ -380,6 +407,7 @@ describe('buildDraftPayload', () => {
         },
         error: null,
       }],
+      matter_contacts: [joinRowsFor([{ id: 'contact-hcp', relationship_type: 'sibling', relationship_label: 'Brother' }])],
       contacts: [{
         data: [{
           id: 'contact-hcp',

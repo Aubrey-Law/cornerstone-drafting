@@ -122,8 +122,10 @@ export async function loadMatterContext(contextId: string): Promise<MatterContex
 
   const pipeline = pipelineRes.data as Row | null
   const rawIntake = intakeRes.data as Row | null
-  const spouseContact = intakeId ? await loadSpouseContact(admin, String(intakeId)) : null
-  const childContacts = intakeId ? await loadHouseholdChildren(admin, String(intakeId)) : []
+  // Keyed by matter since step 3 of docs/matter-contacts-migration.md, and
+  // contextId is already the matter here.
+  const spouseContact = await loadSpouseContact(admin, contextId)
+  const childContacts = await loadHouseholdChildren(admin, contextId)
   const intake: Row | null = rawIntake
     ? ({
         ...rawIntake,
@@ -238,8 +240,14 @@ export async function loadLeadContext(contextId: string): Promise<MatterContext>
     }
   }
 
-  const spouse = await loadSpouseContact(admin, contextId)
-  const children = await loadHouseholdChildren(admin, contextId)
+  // A lead is matter-owned since unify_leads_matters, and the household
+  // helpers are keyed by matter since step 3 of
+  // docs/matter-contacts-migration.md. The lead row already carries its
+  // matter, so no second lookup is needed — and none of the ambiguity that
+  // resolving intake → matter would introduce.
+  const leadMatterId = typeof rawLead.matter_id === 'string' ? rawLead.matter_id : null
+  const spouse = leadMatterId ? await loadSpouseContact(admin, leadMatterId) : null
+  const children = leadMatterId ? await loadHouseholdChildren(admin, leadMatterId) : []
   const lead: Row = {
     ...rawLead,
     spouse_first_name: spouse?.first_name ?? null,

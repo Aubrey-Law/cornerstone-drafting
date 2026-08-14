@@ -7,6 +7,8 @@ import {
   sanitizeLeadFiduciaryContacts,
 } from '@/lib/leadFiduciaries'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
+import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
+import { contactOnMatter } from '@/lib/contacts/assertContactOnMatter'
 import {
   ContactChannelError,
   normalizeContactChannels,
@@ -89,27 +91,31 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const intakeId = matter.client_intake_id as string
 
-  const [intakeRes, contactsRes] = await Promise.all([
+  const [intakeRes, matterContacts] = await Promise.all([
     admin
       .from('client_intake')
       .select('id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, date_of_birth, email, phone, additional_emails, additional_phones, address_line1, city, state, zip, full_name, marital_status, has_minor_children')
       .eq('id', intakeId)
       .single(),
-    admin
-      .from('contacts')
-      .select(`
-        id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, email, phone,
-        additional_emails, additional_phones, address_line1, date_of_birth,
-        relationship_type, relationship_label,
-        contact_roles ( role, for_party, priority, is_coagent )
-      `)
-      .eq('client_intake_id', intakeId)
-      .order('created_at', { ascending: true })
-      .returns<ContactRow[]>(),
+    // Read through the join (step 3 of docs/matter-contacts-migration.md), so
+    // the People tab shows this matter's roster rather than the household's.
+    loadMatterContacts(admin, matterId, `
+      id, first_name, middle_name, last_name, suffix, preferred_name, preferred_pronoun, email, phone,
+      additional_emails, additional_phones, address_line1, date_of_birth, created_at,
+      relationship_type, relationship_label,
+      contact_roles ( role, for_party, priority, is_coagent )
+    `),
   ])
 
   if (intakeRes.error || !intakeRes.data) {
     return NextResponse.json({ error: 'Intake not found' }, { status: 404 })
+  }
+
+  const contactsRes = {
+    data: (matterContacts as unknown as ContactRow[]).slice().sort((a, b) =>
+      String((a as { created_at?: string }).created_at ?? '')
+        .localeCompare(String((b as { created_at?: string }).created_at ?? '')),
+    ),
   }
 
   const contacts = (contactsRes.data ?? []).map(c => ({
@@ -331,12 +337,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: true })
     }
-    // Scope the update to this matter's intake to prevent cross-matter writes.
+    // Scope the update to this MATTER, not its household: once a client has two
+    // matters, an intake-scoped guard would let a request routed through one
+    // edit a person the other owns.
+    const { onMatter } = await contactOnMatter(admin, matterId, body.contactId)
+    if (!onMatter) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+
     const { error } = await admin
       .from('contacts')
       .update(patch)
       .eq('id', body.contactId)
-      .eq('client_intake_id', intakeId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
@@ -369,15 +379,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
   const intakeId = matter.client_intake_id as string
 
-  const { data: contact, error: loadError } = await admin
-    .from('contacts')
-    .select('id, relationship_type')
-    .eq('id', contactId)
-    .eq('client_intake_id', intakeId)
-    .maybeSingle()
-  if (loadError) return NextResponse.json({ error: loadError.message }, { status: 500 })
-  if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
-  if (contact.relationship_type === 'spouse') {
+  const { onMatter, relationshipType } = await contactOnMatter(admin, matterId, contactId)
+  if (!onMatter) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+  if (relationshipType === 'spouse') {
     return NextResponse.json(
       { error: 'The spouse is managed from the intake — edit the spouse fields to change or remove it.' },
       { status: 409 },

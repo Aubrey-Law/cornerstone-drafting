@@ -1,6 +1,6 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: steps 1–2 shipped (§10, §13, §14). Steps 3–7 are still proposal.
+Status: steps 1–2 shipped, step 3 partly (§10, §13, §14, §15). Steps 4–7 are still proposal.
 
 ## 1. The problem
 
@@ -378,10 +378,10 @@ Each step is independently shippable and leaves the app working.
    `npm run check:matter-contacts`. Done with database triggers rather than by
    patching writers (see §13). Run the check against production for a few days
    before starting step 3.
-3. **Flip the readers.** Re-key the eight household helpers to `matterId`,
-   then the direct callers (§6). `contacts.client_intake_id` becomes
-   write-only. This is the big PR; split by subsystem (design sheet, leads,
-   drafting, comms) if review gets unwieldy.
+3. **Flip the readers.** 🟡 Partly shipped — see §15. The read helpers,
+   drafting, the design sheet and the matter routes now read the join;
+   `contacts.client_intake_id` is write-only on those paths. The lead-keyed
+   subsystem still reads the legacy FK and is the remaining slice.
 4. **Fix the single-row assumptions** (§5) and rewrite RLS (§7). After this,
    a second matter per client is *safe* but not yet reachable from the UI.
 5. **Open the door.** Matter creation accepts an existing `client_intake_id`
@@ -531,3 +531,83 @@ Injecting a dropped join row and a matter with no self contact produced
 **Before step 3:** run `npm run check:matter-contacts` on production for a few
 days. It exits non-zero on any disagreement. Step 3 should not start while it
 reports drift.
+
+## 15. Step 3 as built (partial)
+
+Flipped by subsystem, as this spec anticipated. **The matter-keyed subsystems
+now read the join; the lead-keyed one does not yet.**
+
+### Flipped
+
+| Reader | Now keyed by |
+|---|---|
+| `getHousehold` | matter; returns `matterId`, and `self.contact_id` is a real id |
+| `loadSpouseContact`, `loadHouseholdChildren` | matter, via `matter_contacts` |
+| `loadIntakeFiduciarySnapshot` | matter, and filters roles to that matter |
+| `persistFiduciaryRoles` | matter — **wipe scope included** |
+| `buildDraftPayload`, the draft route, template preview | `loadMatterContacts` |
+| design-sheet contact search, `fetchMatterContacts`, matter People tab | `loadMatterContacts` |
+| matter + design-sheet contact write guards | `contactOnMatter` |
+
+Two new helpers carry most of it: `lib/contacts/loadMatterContacts.ts` (the
+drop-in for `from('contacts').eq('client_intake_id', …)`) and
+`lib/contacts/assertContactOnMatter.ts`.
+
+**The write guards were a live bug, not just a re-key.** Contact updates and
+deletes routed through a matter were scoped with
+`.eq('client_intake_id', intakeId)` — the *household*. Once a client has two
+matters, a request routed through one could edit or delete a person the other
+owns. `contactOnMatter` scopes to the join, which is what actually confines the
+write.
+
+### Not flipped, deliberately
+
+**Writes stay on the legacy FK.** `saveHouseholdContact`,
+`saveHouseholdChildren`, `saveAdditionalContacts` and the contact inserts in
+`persistFiduciaryRoles` still set `client_intake_id`; the step 2 triggers build
+the join from it. That is what "write-only" means here, and it keeps this step
+to reads.
+
+**The lead-keyed subsystem still reads the household FK:**
+
+```
+app/admin/leads/[id]/page.tsx, app/admin/leads/page.tsx
+app/api/admin/leads/[id]/{route,channels,engagement,engagement-draft}.ts
+app/api/admin/email/compose-context/route.ts
+app/api/intake/contacts/route.ts        (portal read-modify-write)
+lib/leadFiduciaries.ts, lib/intakeContactHydration.ts,
+lib/calendarAttention.ts, lib/lawmatics/importMatter.ts
+```
+
+Safe to defer, because those reads are all *household* facts — a lead's spouse
+and children are the same whichever of its matters you read them through. What
+genuinely diverges once a client has two matters is the per-matter data —
+fiduciary appointments and the relationship a matter records for a person — and
+that is exactly what this step moved. It is still work that has to land before
+step 7 drops the column.
+
+### The risk this step carries
+
+**The re-key is invisible to the type checker.** Both keys are `string`, so a
+caller left passing an intake id compiles clean. There is no branded type, and
+adding one would touch far more than this change. Two things stand in for it:
+`getHousehold` throws `no primary client in matter_contacts` when handed an
+intake id, and the reader tests assert the *filters* each query applies rather
+than only its result.
+
+`loadSpouseContact` nearly caused a silent regression of exactly this kind: its
+narrow default column set has no address fields, and `fetchMatterFallback`
+formats the spouse's address. It takes a `columns` argument now, and that caller
+passes `'*'`.
+
+### Verification
+
+Full suite green (320 files, 3202 tests) with 11 new reader tests, typecheck and
+eslint clean. Three drafting-payload tests needed their stubs extended with
+`matter_contacts` rows — those failures were the flip working as intended, since
+a `contacts` stub alone is no longer reachable.
+
+Not verified end to end: the app was never run against a database. Docker image
+pulls are blocked by the network policy here, so there is no local Supabase, and
+these paths are exercised only through mocked clients. `npm run
+check:matter-contacts` on production remains the gate before step 4.

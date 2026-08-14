@@ -346,7 +346,18 @@ export async function POST(req: Request) {
     try {
       const fiduciaryRoles = fiduciaryEntriesToRoles(body.fiduciary_entries)
       if (fiduciaryRoles.length > 0 || fiduciaryEntriesTouchesManagedRoles(body.fiduciary_entries)) {
-        await persistFiduciaryRoles(admin, existingId, fiduciaryRoles)
+        // Appointments belong to a matter since step 3 of
+        // docs/matter-contacts-migration.md, so a client returning for a second
+        // engagement no longer overwrites the first one's fiduciaries.
+        const { data: fiduciaryMatter } = await admin
+          .from('matters')
+          .select('id')
+          .eq('client_intake_id', existingId)
+          .maybeSingle()
+        const fiduciaryMatterId = (fiduciaryMatter?.id as string | undefined) ?? null
+        if (fiduciaryMatterId) {
+          await persistFiduciaryRoles(admin, fiduciaryMatterId, fiduciaryRoles)
+        }
       }
     } catch (e) {
       console.error('[intake POST token] fiduciary roles persist error:', e)
