@@ -25,6 +25,7 @@
     "check:db-rpcs": "node scripts/checkDbRpcs.mjs",
     "check:migration-drift": "node scripts/checkMigrationDrift.mjs",
     "check:db-types": "node scripts/checkSupabaseTypes.mjs",
+    "check:matter-contacts": "tsx scripts/checkMatterContactsConsistency.ts",
     "db:types:linked": "node scripts/generateSupabaseTypes.mjs",
     "audit:field-consistency": "tsx scripts/reconcileFieldConsistency.ts",
     "supabase": "supabase",

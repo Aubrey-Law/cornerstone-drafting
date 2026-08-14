@@ -40,17 +40,30 @@ function nameKey(first: unknown, last: unknown): string {
  */
 export async function persistFiduciaryRoles(
   admin: AdminClient,
-  intakeId: string,
+  matterId: string,
   entries: FiduciaryRoleEntry[],
   options?: { parties?: FiduciaryForParty[] },
 ): Promise<{ contactIds: string[] }> {
   const parties: FiduciaryForParty[] = options?.parties ?? ['client', 'spouse']
 
-  // Step 1: wipe managed contact_roles for this intake.
+  // Contacts are still written with the legacy household FK — step 3 makes it
+  // write-only, and the step 2 triggers build the join from it. matter → intake
+  // is a single FK, so unlike the reverse it can never be ambiguous.
+  const { data: matterRow, error: matterError } = await admin
+    .from('matters')
+    .select('client_intake_id')
+    .eq('id', matterId)
+    .maybeSingle()
+  if (matterError) throw new Error(`${matterError.code ?? 'error'}: ${matterError.message}`)
+  const intakeId = (matterRow as { client_intake_id?: string | null } | null)?.client_intake_id ?? null
+
+  // Step 1: wipe managed contact_roles for THIS MATTER. Scoping this to the
+  // intake would have a second engagement's fiduciary save wipe the first
+  // matter's appointments — the worst data-loss risk in the whole migration.
   const { error: deleteError } = await admin
     .from('contact_roles')
     .delete()
-    .eq('client_intake_id', intakeId)
+    .eq('matter_id', matterId)
     .eq('is_coagent', false)
     .in('role', MANAGED_ROLES as unknown as string[])
     .in('priority', MANAGED_PRIORITIES as unknown as number[])
@@ -59,11 +72,20 @@ export async function persistFiduciaryRoles(
 
   if (entries.length === 0) return { contactIds: [] }
 
-  // Step 2: read existing contacts so we can reuse by (first, last).
-  const { data: existing } = await admin
-    .from('contacts')
-    .select('id, first_name, last_name, email, phone, preferred_pronoun')
-    .eq('client_intake_id', intakeId)
+  // Step 2: read the people already on this matter so we can reuse by
+  // (first, last) rather than minting a second copy of a named fiduciary.
+  const { data: existingJoins } = await admin
+    .from('matter_contacts')
+    .select('contact_id')
+    .eq('matter_id', matterId)
+
+  const existingIds = ((existingJoins ?? []) as Array<{ contact_id: string }>).map(r => r.contact_id)
+  const { data: existing } = existingIds.length
+    ? await admin
+        .from('contacts')
+        .select('id, first_name, last_name, email, phone, preferred_pronoun')
+        .in('id', existingIds)
+    : { data: [] }
 
   const byName = new Map<
     string,
@@ -146,6 +168,10 @@ export async function persistFiduciaryRoles(
       const contactId = contactIds.get(nameKey(e.first_name, e.last_name))
       if (!contactId) return null
       return {
+        matter_id: matterId,
+        // Dual-written until step 7 drops the column. Set explicitly rather
+        // than left to sync_contact_role_matter, which declines to guess once
+        // an intake carries two matters.
         client_intake_id: intakeId,
         contact_id: contactId,
         role: e.role,

@@ -10,6 +10,7 @@ import { documentTemplateAdminClient } from './repository'
 import { getDocumentTemplateDefinition } from './registry'
 import { sha256 } from './docx'
 import type { DocumentTemplateValidationReport, ResolvedDocumentTemplate } from './types'
+import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
 
 export interface CandidateValidationResult {
   report: DocumentTemplateValidationReport
@@ -65,13 +66,11 @@ async function validateRealEstate(templateId: string, buffer: Buffer, matterId: 
     admin.from('design_sheets').select('*').eq('matter_id', matterId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
   if (!matter || !sheet) throw new Error('The selected matter needs a design sheet for this preview.')
-  const { data: contacts } = matter.client_intake_id
-    ? await admin.from('contacts').select('*').eq('client_intake_id', matter.client_intake_id)
-    : { data: [] }
+  const contacts = await loadMatterContacts(admin, matterId)
   const form = buildFormStateFromDesignSheet(
     sheet as DesignSheet,
     matter as PipelineMatter,
-    (contacts ?? []) as MatterContact[],
+    (contacts ?? []) as unknown as MatterContact[],
   )
   const fields = buildTemplateFields(form)
   const deedVariant = Object.values(DEED_TEMPLATE_VARIANTS)

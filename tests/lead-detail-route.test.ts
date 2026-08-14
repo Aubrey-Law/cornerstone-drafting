@@ -50,7 +50,12 @@ function harness({
   const admin={
     rpc:vi.fn(async (name:string,args:any)=>{calls.rpc.push([name,args]);return {data:rpcData ?? {...lead,lead_status:args.p_details?.status ?? lead?.lead_status},error:rpcError}}),
     from:vi.fn((table:string)=>{
-      const row=table==='client_intake'?lead:table==='matters'?opportunity:spouse
+      // loadSpouseContact reads the join first, then the contact by id — see
+      // step 3 of docs/matter-contacts-migration.md.
+      const row=table==='client_intake'?lead
+        :table==='matters'?opportunity
+        :table==='matter_contacts'?(spouse?{contact_id:spouse.id??'spouse-contact'}:null)
+        :spouse
       const chain:any={
         select:()=>chain,
         eq:()=>chain,

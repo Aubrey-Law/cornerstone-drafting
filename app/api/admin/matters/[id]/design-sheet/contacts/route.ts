@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { syncChildrenProjection } from '@/lib/contacts/syncChildrenProjection'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
+import { contactOnMatter } from '@/lib/contacts/assertContactOnMatter'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -201,16 +202,11 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
     const intakeId = matter.client_intake_id as string
 
-    const { data: contact, error: loadError } = await admin
-      .from('contacts')
-      .select('id, relationship_type')
-      .eq('id', contactId)
-      .eq('client_intake_id', intakeId)
-      .maybeSingle()
-
-    if (loadError) throw new Error(loadError.message)
-    if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
-    if (contact.relationship_type === 'spouse') {
+    // Scoped to the matter rather than the household — see
+    // lib/contacts/assertContactOnMatter.ts.
+    const { onMatter, relationshipType } = await contactOnMatter(admin, matterId, contactId)
+    if (!onMatter) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    if (relationshipType === 'spouse') {
       return NextResponse.json(
         { error: 'The spouse is managed from the intake — edit the spouse fields to change or remove it.' },
         { status: 409 },

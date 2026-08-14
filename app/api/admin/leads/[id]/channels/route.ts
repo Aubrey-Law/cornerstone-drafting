@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
+import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import {
   ContactChannelError,
   normalizeContactChannels,
@@ -54,14 +55,27 @@ export async function PATCH(req: Request, { params }: Params) {
   const kind = FIELDS[field]
   const primaryColumn = kind === 'email' ? 'email' : 'phone'
 
+  // The spouse comes from the join (step 3 of
+  // docs/matter-contacts-migration.md), which is keyed on the lead's matter.
+  const spouseRow = async () => {
+    const { data: lead } = await admin
+      .from('client_intake')
+      .select('matter_id')
+      .eq('id', leadId)
+      .maybeSingle()
+    const matterId = (lead?.matter_id as string | null) ?? null
+    if (!matterId) return { data: null, error: null }
+    try {
+      const spouse = await loadSpouseContact(admin, matterId, `id, ${primaryColumn}`)
+      return { data: spouse as Record<string, unknown> | null, error: null }
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } }
+    }
+  }
+
   const row = target === 'client'
     ? await admin.from('client_intake').select(`id, ${primaryColumn}`).eq('id', leadId).maybeSingle()
-    : await admin
-        .from('contacts')
-        .select(`id, ${primaryColumn}`)
-        .eq('client_intake_id', leadId)
-        .eq('relationship_type', 'spouse')
-        .maybeSingle()
+    : await spouseRow()
   if (row.error) return NextResponse.json({ error: row.error.message }, { status: 500 })
   if (!row.data) {
     return NextResponse.json(

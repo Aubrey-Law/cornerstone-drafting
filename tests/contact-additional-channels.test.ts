@@ -150,7 +150,9 @@ describe('the routes that write them', () => {
     const route = fs.readFileSync('app/api/admin/leads/[id]/channels/route.ts', 'utf8')
     expect(route).toContain('requireAdmin')
     expect(route).toContain("target !== 'client' && target !== 'spouse'")
-    expect(route).toContain("relationship_type', 'spouse'")
+    // The spouse comes from the join since step 3 of
+    // docs/matter-contacts-migration.md, keyed on the lead's matter.
+    expect(route).toContain('loadSpouseContact(admin, matterId')
     expect(route).toContain('normalizeContactChannels')
 
     // The RPC's whitelist stays as it was — lifecycle fields only.

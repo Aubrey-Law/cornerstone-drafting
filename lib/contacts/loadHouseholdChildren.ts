@@ -24,14 +24,42 @@ const CHILD_FIELDS =
  */
 export async function loadHouseholdChildren(
   admin: AdminClient,
-  clientIntakeId: string,
+  matterId: string,
 ): Promise<DesignSheetChild[]> {
-  const { data, error } = await admin
+  const { data: joinRows, error } = await admin
+    .from('matter_contacts')
+    .select('contact_id, child_relationship, parentage, is_minor')
+    .eq('matter_id', matterId)
+    .eq('relationship_type', 'child')
+  if (error) throw new Error(error.message)
+
+  const joins = (joinRows ?? []) as Array<Record<string, unknown>>
+  if (joins.length === 0) return []
+
+  const { data: contactRows, error: contactsError } = await admin
     .from('contacts')
     .select(CHILD_FIELDS)
-    .eq('client_intake_id', clientIntakeId)
-    .eq('relationship_type', 'child')
-    .order('created_at', { ascending: true })
-  if (error) throw new Error(error.message)
-  return ((data ?? []) as Array<Record<string, unknown>>).map(contactRowToDesignSheetChild)
+    .in('id', joins.map(row => String(row.contact_id)))
+  if (contactsError) throw new Error(contactsError.message)
+
+  const contactById = new Map(
+    ((contactRows ?? []) as Array<Record<string, unknown>>).map(c => [String(c.id), c]),
+  )
+
+  return joins
+    // The join row is authoritative for the facts stated relative to this
+    // matter; the contact carries the person's own.
+    .map((row): Record<string, unknown> => {
+      const contact = contactById.get(String(row.contact_id)) ?? {}
+      return {
+        ...contact,
+        child_relationship: row.child_relationship ?? contact.child_relationship ?? null,
+        parentage: row.parentage ?? contact.parentage ?? null,
+        is_minor: row.is_minor ?? contact.is_minor ?? null,
+      }
+    })
+    // Sorted here rather than in the query, so the roster order stays stable
+    // now that the driving query is over the join rather than over contacts.
+    .sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+    .map(contactRowToDesignSheetChild)
 }

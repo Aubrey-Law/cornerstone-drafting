@@ -10,6 +10,7 @@ import { fetchTasksForLead } from '@/lib/queries/tasks'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
 import { recordTaskCounts } from '@/lib/tasks/types'
+import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import { LeadDetailClient } from './LeadDetailClient'
 
 export const dynamic = 'force-dynamic'
@@ -74,14 +75,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const [
     leadResult,
-    spouseResult,
     activityResult,
     notesResult,
     meetingsResult,
     appointmentResult,
   ] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', id).maybeSingle(),
-    admin.from('contacts').select('*').eq('client_intake_id', id).eq('relationship_type', 'spouse').maybeSingle(),
     admin.from('lead_activity').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
     admin.from('lead_notes').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
     admin.from('lead_meeting_notes').select('*').eq('lead_id', id).order('meeting_date', { ascending: false }),
@@ -95,7 +94,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ])
 
   const { data: lead, error: leadError } = leadResult
-  const { data: spouse, error: spouseError } = spouseResult
   const { data: activity, error: activityError } = activityResult
   const { data: notes, error: notesError } = notesResult
   const { data: meetings, error: meetingsError } = meetingsResult
@@ -103,7 +101,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   if (leadError) console.error('Could not load lead detail', { leadId: id, error: leadError })
   if (!lead || !lead.lead_status) notFound()
-  if (spouseError) console.error('Could not load lead spouse', { leadId: id, error: spouseError })
+
+  // Read through the join (step 3 of docs/matter-contacts-migration.md), which
+  // needs the lead's matter — so this follows the lead read rather than running
+  // alongside it. '*' because the rail formats the spouse's address.
+  let spouse: Record<string, unknown> | null = null
+  try {
+    spouse = lead.matter_id
+      ? (await loadSpouseContact(admin, lead.matter_id as string, '*')) as Record<string, unknown> | null
+      : null
+  } catch (spouseError) {
+    console.error('Could not load lead spouse', { leadId: id, error: spouseError })
+  }
   if (activityError) console.error('Could not load lead activity', { leadId: id, error: activityError })
   if (notesError) console.error('Could not load lead notes', { leadId: id, error: notesError })
   if (meetingsError) console.error('Could not load lead meeting notes', { leadId: id, error: meetingsError })

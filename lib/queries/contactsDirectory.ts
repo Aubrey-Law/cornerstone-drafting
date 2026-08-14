@@ -56,7 +56,11 @@ export async function fetchContactsDirectory(): Promise<{ rows: ContactDirectory
     admin
       .from('contacts')
       .select('id, client_intake_id, first_name, last_name, preferred_name, email, phone, city, state, relationship_type, relationship_label, deceased, created_at')
-      .neq('relationship_type', 'client')
+      // 'self' contacts are the client themselves, already listed above from
+      // client_intake — see 20260925000000_matter_contacts_join.sql. Listing
+      // both shows the same person twice whenever they carry no email for the
+      // dedupe below to catch.
+      .not('relationship_type', 'in', '("client","self")')
       .order('created_at', { ascending: false })
       .limit(2000),
   ])

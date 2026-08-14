@@ -2,6 +2,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { inflateDesignSheetRow } from '@/lib/designSheetPersistence'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
+import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
 import { loadHouseholdChildren } from '@/lib/contacts/loadHouseholdChildren'
 import { loadIntakeFiduciarySnapshot } from '@/lib/contacts/intakeFiduciarySnapshot'
 import { getIntakeTrack } from '@/lib/intakeTrack'
@@ -63,9 +64,14 @@ async function fetchMatterFallback(
   const intakeId = (matter.client_intake_id ?? null) as string | null
   const [{ data: intake, error: intakeError }, { data: spouse, error: spouseError }, { data: designSheet }, { data: details }] = await Promise.all([
     intakeId ? supabase.from('client_intake').select('*').eq('id', intakeId).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    intakeId
-      ? supabase.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').limit(1).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
+    // The spouse comes from the join now, keyed on the matter rather than the
+    // household — see step 3 of docs/matter-contacts-migration.md.
+    // '*' because this caller formats the spouse's address, which the default
+    // narrow column set omits.
+    loadSpouseContact(supabase, id, '*').then(
+      data => ({ data: data as Record<string, string | null> | null, error: null as Error | null }),
+      (error: Error) => ({ data: null, error }),
+    ),
     supabase.from('design_sheets').select('status').eq('matter_id', id).order('version', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
   ])
@@ -179,17 +185,24 @@ export async function fetchMatterContacts(matterId: string): Promise<MatterConta
 
   if (!matter?.client_intake_id) return []
 
-  const { data, error } = await admin
-    .from('contacts')
-    .select('id, first_name, middle_name, last_name, relationship_type, relationship_label, phone, email, address_line1, date_of_birth')
-    .eq('client_intake_id', matter.client_intake_id)
-    .order('last_name', { ascending: true })
-    .limit(200)
-
-  if (error) {
+  // Read through the join (step 3 of docs/matter-contacts-migration.md).
+  let rows: Array<Record<string, unknown>>
+  try {
+    rows = await loadMatterContacts(
+      admin,
+      matterId,
+      'id, first_name, middle_name, last_name, relationship_type, relationship_label, phone, email, address_line1, date_of_birth',
+    )
+  } catch (error) {
     console.error('fetchMatterContacts error:', error)
     return []
   }
+
+  // Sorted here rather than in the query, now that the driving query is the
+  // join rather than contacts.
+  const data = rows.sort((a, b) =>
+    String(a.last_name ?? '').localeCompare(String(b.last_name ?? '')),
+  ) as unknown as Array<Record<string, string>>
 
   return (data ?? []).map(c => ({
     id: c.id,
@@ -323,15 +336,18 @@ export async function fetchIntakeForMatter(matterId: string): Promise<IntakeSnap
     spouse_hcp_slots: null as FiduciarySlot[] | null,
   }
   if (clientIntakeId) {
+    // The household helpers are keyed by matter since step 3 of
+    // docs/matter-contacts-migration.md; only the intake columns still need
+    // the intake id.
     const [{ data }, spouseContact, childContacts] = await Promise.all([
       admin.from('client_intake').select('*').eq('id', clientIntakeId).maybeSingle(),
-      loadSpouseContact(admin, clientIntakeId),
-      loadHouseholdChildren(admin, clientIntakeId),
+      loadSpouseContact(admin, matterId),
+      loadHouseholdChildren(admin, matterId),
     ])
     if (data) ai = data as Record<string, unknown>
     spouse = spouseContact
     householdChildren = childContacts
-    fiduciary = await loadIntakeFiduciarySnapshot(admin, clientIntakeId, ai)
+    fiduciary = await loadIntakeFiduciarySnapshot(admin, matterId, ai)
   }
 
   let ext: Record<string, unknown> = {}

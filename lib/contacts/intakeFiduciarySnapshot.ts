@@ -196,20 +196,42 @@ function mergeFlat(primary: IntakeFiduciaryFlatFields, fallback: IntakeFiduciary
   return out
 }
 
-/** Load fiduciary flat names and slot arrays from contact_roles (portal path) with column fallback. */
+/**
+ * Load fiduciary flat names and slot arrays from contact_roles (portal path)
+ * with column fallback, read through `matter_contacts` (step 3 of
+ * docs/matter-contacts-migration.md) so a second engagement reads its own
+ * appointments rather than the household's pooled ones.
+ */
 export async function loadIntakeFiduciarySnapshot(
   admin: AdminClient,
-  clientIntakeId: string,
+  matterId: string,
   intakeColumns: Record<string, unknown> = {},
 ): Promise<IntakeFiduciarySnapshot> {
-  const { data, error } = await admin
-    .from('contacts')
-    .select('id, first_name, last_name, contact_roles(role, for_party, priority, is_coagent)')
-    .eq('client_intake_id', clientIntakeId)
-
+  const { data: joinRows, error } = await admin
+    .from('matter_contacts')
+    .select('contact_id')
+    .eq('matter_id', matterId)
   if (error) throw new Error(error.message)
 
-  const contacts = (data ?? []) as unknown as ContactWithRoles[]
+  const contactIds = ((joinRows ?? []) as Array<{ contact_id: string }>).map(row => row.contact_id)
+
+  const { data, error: contactsError } = contactIds.length
+    ? await admin
+        .from('contacts')
+        .select('id, first_name, last_name, contact_roles(role, for_party, priority, is_coagent, matter_id)')
+        .in('id', contactIds)
+    : { data: [], error: null }
+  if (contactsError) throw new Error(contactsError.message)
+
+  const contacts = ((data ?? []) as unknown as ContactWithRoles[])
+    // A person on two matters carries both matters' appointments; keep only
+    // the ones this matter records.
+    .map(c => ({
+      ...c,
+      contact_roles: (c.contact_roles ?? []).filter(
+        role => (role as { matter_id?: string | null }).matter_id === matterId,
+      ),
+    }))
   const hasRoles = contacts.some(c => (c.contact_roles?.length ?? 0) > 0)
   const columnFlat = flatFromIntakeColumns(intakeColumns)
   const flat = hasRoles ? mergeFlat(flatFromContacts(contacts), columnFlat) : columnFlat

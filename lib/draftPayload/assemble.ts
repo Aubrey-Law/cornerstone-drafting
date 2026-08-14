@@ -50,6 +50,7 @@ import { resolveDraftComposition } from '@/lib/matter/matterType'
 import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
+import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
@@ -183,14 +184,11 @@ export async function buildDraftPayload(
 
   // Contacts are fetched only to resolve contact_id references in design-sheet
   // fiduciary slots — not as a generation source.
-  let contacts: ContactRow[] = []
-  if (matter.client_intake_id) {
-    const { data: contactsRaw } = await admin
-      .from('contacts')
-      .select('id, first_name, middle_name, last_name, preferred_pronoun, relationship_type, relationship_label, address_line1, date_of_birth, phone, email, contact_roles(*)')
-      .eq('client_intake_id', matter.client_intake_id)
-    contacts = (contactsRaw ?? []) as unknown as ContactRow[]
-  }
+  const contacts = (await loadMatterContacts(
+    admin,
+    matter.id,
+    'id, first_name, middle_name, last_name, preferred_pronoun, relationship_type, relationship_label, address_line1, date_of_birth, phone, email, contact_roles(*)',
+  )) as unknown as ContactRow[]
 
   const normalizedPlanType = normalizeDesignPlanType(designSheet.plan_type)
   const isJoint = designSheet.is_joint === true

@@ -30,6 +30,7 @@ import {
 import type { DesignSheet, MatterContact } from '@/types/database'
 import type { EstateClauseManifestEntry } from '@/lib/estateClauses/types'
 import { persistGeneratedEstateDocument } from '@/lib/estateClauses/persistGeneratedDocument'
+import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
 
 // Per-document marker report returned to the drafting UI. A non-zero markerCount
 // means the document still contains `[TODO:`, `[[ MISSING ]]`, or leftover
@@ -412,18 +413,11 @@ export async function POST(req: NextRequest, { params }: Params) {
         .maybeSingle()
       if (sheetRow) {
         let contacts: MatterContact[] = []
-        const { data: matterRow } = await admin
-          .from('matters')
-          .select('client_intake_id')
-          .eq('id', canonicalMatterId)
-          .maybeSingle()
-        if (matterRow?.client_intake_id) {
-          const { data: contactsRaw } = await admin
-            .from('contacts')
-            .select('*')
-            .eq('client_intake_id', matterRow.client_intake_id)
-          contacts = (contactsRaw ?? []) as MatterContact[]
-        }
+        // Read through the join (step 3 of docs/matter-contacts-migration.md).
+        contacts = (await loadMatterContacts(
+          admin,
+          canonicalMatterId,
+        )) as unknown as MatterContact[]
         const assetFiles = await generateAssetTransferFilesFromDesignSheet(
           sheetRow as DesignSheet,
           {
