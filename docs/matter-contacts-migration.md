@@ -1,6 +1,6 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: proposal. Nothing below is implemented.
+Status: step 1 shipped (§10, §13). Steps 2–7 are still proposal.
 
 ## 1. The problem
 
@@ -148,6 +148,15 @@ where cr.client_intake_id is distinct from c.client_intake_id;
 -- migration; sizing input only.
 select lower(email), count(*) from contacts
 where email is not null and email <> '' group by 1 having count(*) > 1;
+
+-- Contacts already typed 'client'. normalizeContactRelationshipType can emit
+-- this (lib/contactRelationship.ts:1) and contactsDirectory filters it out,
+-- which suggests some households already store the client as a contact. If any
+-- of these really are the client, the self contact minted in step 1 is a second
+-- copy of that person and belongs in the §9 merge queue.
+select c.id, c.client_intake_id, c.first_name, c.last_name, ci.first_name, ci.last_name
+from contacts c join client_intake ci on ci.id = c.client_intake_id
+where c.relationship_type = 'client';
 ```
 
 ## 4. Backfill
@@ -357,10 +366,13 @@ the merge tool cleans up the ones already there.
 
 Each step is independently shippable and leaves the app working.
 
-1. **Schema + backfill, no behavior change.** Create `matter_contacts`, add
-   `contact_roles.matter_id`, promote self contacts, add the write-through
-   trigger to `client_intake`. Keep `contacts.client_intake_id` populated and
-   authoritative. Nothing reads the new tables yet. Reversible.
+1. **Schema + backfill, no behavior change.** ✅ Shipped —
+   `supabase/migrations/20260925000000_matter_contacts_join.sql`. Creates
+   `matter_contacts`, adds `contact_roles.matter_id`, promotes self contacts,
+   adds the write-through trigger to `client_intake`. Keeps
+   `contacts.client_intake_id` populated and authoritative. Nothing reads the
+   new tables yet. Reversible. See §13 for what the build changed about this
+   plan.
 2. **Dual-write.** Every contact write populates both the legacy FK and
    `matter_contacts`. Add a consistency check comparing the two
    representations, in the shape of `scripts/reconcileFieldConsistency.ts`.
@@ -432,3 +444,42 @@ formality.
 4. **Merge policy.** Automatic-on-exact-email-match with review, or
    attorney-initiated only? A married couple sharing an inbox makes automatic
    matching unsafe.
+
+## 13. Step 1 as built
+
+Three things the implementation had to settle that this spec had not.
+
+**Making the self contacts invisible.** The plan said promote the client into
+`contacts`; it did not say what stops those rows from showing up. New rows in
+`contacts` are visible to readers that do not filter by intake, so the self
+contacts are inserted with `client_intake_id` NULL — which hides them from every
+intake-scoped reader — plus three targeted exclusions:
+
+- `sync_crm_person_from_contact` skips `relationship_type = 'self'`. Without it
+  the backfill mints a `cornerstone_crm_people` row per self contact, duplicating
+  the CRM person `sync_crm_person_from_intake` already maintains for the same
+  human.
+- `lib/queries/contactsDirectory.ts` excludes `'self'` alongside `'client'`.
+- `lib/queries/firmDirectory.ts` skips `'self'` in `buildFirmPeople`.
+
+The first is the one that would have shipped a visible regression: every client
+would have appeared twice in the CRM hub.
+
+**The write-through trigger is UPDATE-only.** Firing on insert would have the
+backfill write `client_intake`'s own values back over themselves and bump
+`updated_at` on every intake — which lead aging and list ordering read. It is
+inert until step 2 writes a self contact, which is the intended state.
+
+**`ON CONFLICT` does not cover partial unique indexes.** `on conflict
+(matter_id, contact_id) do nothing` does not catch `matter_contacts_one_self`,
+so a matter that already named a different person as its client raised instead
+of skipping. Both backfill inserts now carry an explicit `not exists` guard, and
+the `contact_roles` ambiguity check only considers roles still awaiting a matter
+so a re-run is a clean no-op. Verified against PostgreSQL 16: virgin run, re-run,
+and re-run after a client was given a second matter and a child was given their
+own College Prep matter.
+
+**Still open:** contacts already typed `'client'` (§3's last query). If those are
+the client themselves, step 1 has minted a second copy of that person, and the
+pair belongs in the §9 merge queue. Needs a look at production data — the
+migration deliberately does not guess.

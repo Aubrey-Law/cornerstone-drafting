@@ -263,6 +263,10 @@ export function buildFirmPeople(
 
   for (const contact of contacts) {
     if (contact.deceased) continue
+    // A 'self' contact is the client, already emitted from client_intake above
+    // — see 20260925000000_matter_contacts_join.sql. Emitting it again would
+    // list the same person twice in every picker this feeds.
+    if (contact.relationship_type === 'self') continue
     const name = personName(contact)
     if (!name || isPlaceholderName(name)) continue
 
