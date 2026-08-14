@@ -882,14 +882,18 @@ export type Database = {
           has_divorce_settlement: boolean | null
           has_existing_plan: boolean | null
           has_family_disability: boolean | null
+          has_hcp: boolean | null
           has_investments: boolean | null
           has_life_insurance: boolean | null
           has_ltc_insurance: boolean | null
           has_major_illness: boolean | null
           has_minor_children: boolean | null
+          has_poa: boolean | null
           has_prior_gift_tax: boolean | null
           has_real_property: boolean | null
           has_retirement: boolean | null
+          has_trust: boolean | null
+          has_will: boolean | null
           id: string
           intake_completed_at: string | null
           intake_invite_token: string | null
@@ -932,6 +936,7 @@ export type Database = {
           qualification_notes: string | null
           referral_source: string | null
           review_choices: Json | null
+          special_circumstances: string[] | null
           special_notes: string | null
           spouse_as_fiduciary: boolean | null
           state: string | null
@@ -986,14 +991,18 @@ export type Database = {
           has_divorce_settlement?: boolean | null
           has_existing_plan?: boolean | null
           has_family_disability?: boolean | null
+          has_hcp?: boolean | null
           has_investments?: boolean | null
           has_life_insurance?: boolean | null
           has_ltc_insurance?: boolean | null
           has_major_illness?: boolean | null
           has_minor_children?: boolean | null
+          has_poa?: boolean | null
           has_prior_gift_tax?: boolean | null
           has_real_property?: boolean | null
           has_retirement?: boolean | null
+          has_trust?: boolean | null
+          has_will?: boolean | null
           id?: string
           intake_completed_at?: string | null
           intake_invite_token?: string | null
@@ -1036,6 +1045,7 @@ export type Database = {
           qualification_notes?: string | null
           referral_source?: string | null
           review_choices?: Json | null
+          special_circumstances?: string[] | null
           special_notes?: string | null
           spouse_as_fiduciary?: boolean | null
           state?: string | null
@@ -1090,14 +1100,18 @@ export type Database = {
           has_divorce_settlement?: boolean | null
           has_existing_plan?: boolean | null
           has_family_disability?: boolean | null
+          has_hcp?: boolean | null
           has_investments?: boolean | null
           has_life_insurance?: boolean | null
           has_ltc_insurance?: boolean | null
           has_major_illness?: boolean | null
           has_minor_children?: boolean | null
+          has_poa?: boolean | null
           has_prior_gift_tax?: boolean | null
           has_real_property?: boolean | null
           has_retirement?: boolean | null
+          has_trust?: boolean | null
+          has_will?: boolean | null
           id?: string
           intake_completed_at?: string | null
           intake_invite_token?: string | null
@@ -1140,6 +1154,7 @@ export type Database = {
           qualification_notes?: string | null
           referral_source?: string | null
           review_choices?: Json | null
+          special_circumstances?: string[] | null
           special_notes?: string | null
           spouse_as_fiduciary?: boolean | null
           state?: string | null

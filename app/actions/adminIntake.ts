@@ -199,6 +199,12 @@ function buildPayload(data: AdminIntakeFormData, status: string) {
     has_business: data.has_business,
     has_life_insurance: data.has_life_insurance,
     planning_objectives: data.planning_objectives || null,
+    has_existing_plan: data.has_existing_plan,
+    has_will: data.has_will,
+    has_trust: data.has_trust,
+    has_poa: data.has_poa,
+    has_hcp: data.has_hcp,
+    special_circumstances: data.special_circumstances.length > 0 ? data.special_circumstances : null,
     special_notes: data.special_notes || null,
     family_details: data.family_notes ? { notes: data.family_notes } : null,
     probate_details: probateDetailsFromForm(data),
@@ -481,9 +487,11 @@ export async function saveAdminIntakeDraft(args: AdminIntakeArgs): Promise<{ id:
     reviewFlags = await recomputeIntakeReviewFlags(admin, intakeId)
   }
 
-  // Push attorney edits into the design sheet so the drafting workspace
-  // reflects them even on subsequent visits. Submitted/approved intakes stay
-  // locked to clients and keep their attorney review flags current.
+  // Ensure the design sheet exists and keep its intake link + review flags
+  // current. Field values only seed onto an unseeded sheet — after that the
+  // attorney pulls edits in via the drafting workspace's intake resync dialog.
+  // Submitted/approved intakes stay locked to clients and keep their attorney
+  // review flags current.
   let matterIdForSync = args.matterId ?? null
   if (!matterIdForSync) {
     const { data: matter } = await admin

@@ -26,6 +26,9 @@ import {
 } from '@/lib/collegePrepDesign'
 import { formatPhoneDisplay } from '@/lib/phone'
 import { mergeDecisionUpdates, setDocumentInclusion } from '@/lib/designSheetDocumentInclusions'
+import { designFieldTargetId } from '@/lib/designSheetReadiness'
+import type { MatterContact } from '@/types/database'
+import DesignContactPicker, { contactFullName, type Contact as PickerContact } from './ContactPicker'
 import { PlanTrackNotice } from './PlanTrackNotice'
 import {
   AttorneyDateInput,
@@ -83,6 +86,69 @@ function NotesField({
   )
 }
 
+function legacyNameContact(name: string): PickerContact {
+  const parts = name.split(/\s+/)
+  return { id: `__legacy:${name}`, first_name: parts[0] ?? name, last_name: parts.slice(1).join(' ') }
+}
+
+interface ContactNamePickerProps {
+  contacts: MatterContact[]
+  onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+}
+
+/**
+ * A ContactPicker over the matter's people that stores the picked contact's
+ * display name as a plain string, so the templates and draft payload keep
+ * receiving a printable name. A saved name that matches no contact (older
+ * free-text sheets) still shows as a removable chip.
+ */
+function ContactNameField({
+  role,
+  value,
+  fieldName,
+  contacts,
+  onAddContact,
+  onUpdateContact,
+  onChange,
+}: ContactNamePickerProps & {
+  role: string
+  value: string | null
+  fieldName?: string
+  onChange: (value: string | null) => void
+}) {
+  const name = (value ?? '').trim()
+  const match = name
+    ? contacts.find(contact => contactFullName(contact).trim().toLowerCase() === name.toLowerCase()) ?? null
+    : null
+  const selected = match
+    ? (match as unknown as PickerContact)
+    : name
+      ? legacyNameContact(name)
+      : null
+  const adaptAdd = (data: Omit<PickerContact, 'id'>) =>
+    onAddContact(data as unknown as Omit<MatterContact, 'id'>) as unknown as Promise<PickerContact>
+  const adaptUpdate = onUpdateContact
+    ? (id: string, data: Omit<PickerContact, 'id'>) =>
+        onUpdateContact(id, data as unknown as Omit<MatterContact, 'id'>) as unknown as Promise<PickerContact>
+    : undefined
+  return (
+    <div
+      id={fieldName ? designFieldTargetId(fieldName) : undefined}
+      data-design-field={fieldName}
+    >
+      <DesignContactPicker
+        role={role}
+        value={selected}
+        contacts={contacts as unknown as PickerContact[]}
+        onAddContact={adaptAdd}
+        onUpdateContact={adaptUpdate}
+        onChange={contact => onChange(contact ? contactFullName(contact).trim() || null : null)}
+      />
+    </div>
+  )
+}
+
 /**
  * The College Preparation Plan design section.
  *
@@ -92,14 +158,30 @@ function NotesField({
  * to state exactly. Deferred answers are called out inline rather than left to
  * look like ordinary selections.
  */
-interface CollegePrepSectionProps extends SectionProps {
+interface CollegePrepSectionProps extends SectionProps, ContactNamePickerProps {
   matterId: string
   practiceArea: string | null
 }
 
-export function CollegePrepSection({ sheet, onChange, matterId, practiceArea }: CollegePrepSectionProps) {
+export function CollegePrepSection({
+  sheet,
+  onChange,
+  matterId,
+  practiceArea,
+  contacts,
+  onAddContact,
+  onUpdateContact,
+}: CollegePrepSectionProps) {
   const design = getCollegePrepDesign(sheet)
   const studentFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || 'the student'
+  const contactPickerProps = { contacts, onAddContact, onUpdateContact }
+
+  const ferpaRecipientNames = (design.ferpa_recipients ?? '')
+    .split(/[;,]/)
+    .map(entry => entry.trim())
+    .filter(Boolean)
+  const setFerpaRecipientNames = (names: string[]) =>
+    update({ ferpa_recipients: names.length > 0 ? names.join('; ') : null })
 
   const update = (patch: Partial<CollegePrepDesign>) => {
     onChange('decisions', previous => setCollegePrepDesign(previous, patch))
@@ -215,13 +297,38 @@ export function CollegePrepSection({ sheet, onChange, matterId, practiceArea }: 
                 onChange={checked => toggleFerpaRecord(option.value, checked)}
               />
             ))}
-            <AttorneyInput
-              label="Who may receive the records"
-              value={design.ferpa_recipients ?? ''}
-              placeholder="e.g. both parents"
-              onChange={value => update({ ferpa_recipients: value.trim() || null })}
-              fieldName="college_prep.ferpa_recipients"
-            />
+            <div
+              id={designFieldTargetId('college_prep.ferpa_recipients')}
+              data-design-field="college_prep.ferpa_recipients"
+              className="space-y-2"
+            >
+              <FieldLabel>Who may receive the records</FieldLabel>
+              {ferpaRecipientNames.map((name, index) => (
+                <ContactNameField
+                  key={`${name}-${index}`}
+                  role={`Recipient ${index + 1}`}
+                  value={name}
+                  {...contactPickerProps}
+                  onChange={next =>
+                    setFerpaRecipientNames(
+                      next
+                        ? ferpaRecipientNames.map((entry, i) => (i === index ? next : entry))
+                        : ferpaRecipientNames.filter((_, i) => i !== index),
+                    )
+                  }
+                />
+              ))}
+              <ContactNameField
+                role={ferpaRecipientNames.length > 0 ? 'Add another recipient' : 'Recipient'}
+                value={null}
+                {...contactPickerProps}
+                onChange={next => {
+                  if (next && !ferpaRecipientNames.includes(next)) {
+                    setFerpaRecipientNames([...ferpaRecipientNames, next])
+                  }
+                }}
+              />
+            </div>
           </div>
         ) : null}
       </SectionBlock>
@@ -542,17 +649,19 @@ export function CollegePrepSection({ sheet, onChange, matterId, practiceArea }: 
         />
         {design.will_include ? (
           <div className={sectionFieldGrid2}>
-            <AttorneyInput
-              label="Parent taking the residue"
-              value={design.will_parent1_name ?? ''}
-              onChange={value => update({ will_parent1_name: value.trim() || null })}
+            <ContactNameField
+              role="Parent taking the residue"
+              value={design.will_parent1_name}
               fieldName="college_prep.will_parent1_name"
+              {...contactPickerProps}
+              onChange={value => update({ will_parent1_name: value })}
             />
-            <AttorneyInput
-              label="Second parent (optional)"
-              value={design.will_parent2_name ?? ''}
-              onChange={value => update({ will_parent2_name: value.trim() || null })}
+            <ContactNameField
+              role="Second parent (optional)"
+              value={design.will_parent2_name}
               fieldName="college_prep.will_parent2_name"
+              {...contactPickerProps}
+              onChange={value => update({ will_parent2_name: value })}
             />
           </div>
         ) : null}

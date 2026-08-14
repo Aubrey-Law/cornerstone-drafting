@@ -147,9 +147,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   }
   const schedulingSettings = await getSchedulingSettings()
   const initialTaskCounts = recordTaskCounts(await fetchTasksForLead(id, 'open'))
+  // A lead's opportunity is never `hired`, so the People tab's matter must be
+  // read through the leads-inclusive view or it comes back null for every lead.
   const [peopleMatter, initialPeopleContacts] = lead.matter_id
     ? await Promise.all([
-        fetchMatter(lead.matter_id),
+        fetchMatter(lead.matter_id, { includeLeads: true }),
         fetchMatterContacts(lead.matter_id),
       ])
     : [null, []]
