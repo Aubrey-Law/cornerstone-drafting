@@ -47,6 +47,7 @@ import {
 import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { resolveDraftComposition } from '@/lib/matter/matterType'
+import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { isDesignSheetUnseeded } from '@/lib/designSheet/seedFromIntake'
 
@@ -193,7 +194,9 @@ export async function buildDraftPayload(
 
   const normalizedPlanType = normalizeDesignPlanType(designSheet.plan_type)
   const isJoint = designSheet.is_joint === true
-  const matterType = resolveDraftComposition(matter.matter_type, isJoint)
+  const matterType = resolveDraftComposition(matter.matter_type, isJoint, {
+    singleClientPlan: isCollegePrepDesignSheet(designSheet),
+  })
   const isCouple = matterType !== 'individual'
 
   // ── Derive shared values ────────────────────────────────────────────────────
@@ -201,7 +204,9 @@ export async function buildDraftPayload(
   const designChildren = draftPayloadChildren(designSheet)
   const hasMinorChildren = designChildren.some(child => child.minor)
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(designSheet.children)
-  const participantType = matter.matter_type === 'couple' ? 'couple' : 'individual'
+  // From the resolved composition, not the raw column, so the college track's
+  // single client holds here too.
+  const participantType = isCouple ? 'couple' : 'individual'
   const documentInclusions = getDocumentInclusions(
     designSheetForDocumentInclusions(designSheet, participantType),
   )

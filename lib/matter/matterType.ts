@@ -28,11 +28,28 @@ export function matterTypeLabel(value: unknown): string {
   return MATTER_TYPE_OPTIONS.find(option => option.value === normalized)?.label ?? normalized
 }
 
+export interface ResolveDraftCompositionOptions {
+  /**
+   * The plan is only ever drafted for one client, whatever the matter says —
+   * the College Preparation Plan, where parents are contacts and nominees
+   * rather than co-clients.
+   */
+  singleClientPlan?: boolean
+}
+
 export function resolveDraftComposition(
   matterType: unknown,
   isJoint: boolean,
+  options: ResolveDraftCompositionOptions = {},
 ): DraftComposition {
+  // A plan with no one-or-two decision behind it needs no confirmation of one:
+  // blocking on a question with a single possible answer helps nobody, and a
+  // `couple` left over from a matter reclassified out of estate planning would
+  // put spouse documents into a plan that has no spouse.
+  if (options.singleClientPlan) return 'individual'
   const normalized = normalizeMatterType(matterType)
+  // Every other plan keeps the guard. Drafting a couple's plan as an
+  // individual's, or the reverse, is silent and wrong — the error is the point.
   if (!normalized) throw new Error('Matter type must be confirmed before drafting')
   if (normalized === 'individual') return 'individual'
   return isJoint ? 'married_joint' : 'married_individual'
