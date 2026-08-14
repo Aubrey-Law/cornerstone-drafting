@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isEsignConfigured } from '@/lib/esign/firma'
 import type { LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import { loadMatterContactsForMatters } from '@/lib/contacts/loadMatterContacts'
 import { LeadsClient, type LeadRow } from './LeadsClient'
 
 export const dynamic = 'force-dynamic'
@@ -64,17 +65,30 @@ export default async function LeadsPage() {
     }
   }
 
+  // Spouses come from the join (step 3 of docs/matter-contacts-migration.md),
+  // batched across every lead's matter so the flip does not turn one query into
+  // one per lead. Lead URLs stay intake-based, so the result is keyed back to
+  // the lead id the list renders with.
   const spousesByLead = new Map<string, LeadSpouseRecord>()
-  if (leadIds.length > 0) {
-    const { data: spouses, error: spouseError } = await admin
-      .from('contacts')
-      .select('client_intake_id, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth')
-      .in('client_intake_id', leadIds)
-      .eq('relationship_type', 'spouse')
-    if (spouseError) console.error('Could not load lead spouses', { error: spouseError })
-    for (const row of spouses ?? []) {
-      const { client_intake_id: leadId, ...spouse } = row as { client_intake_id: string } & LeadSpouseRecord
-      if (!spousesByLead.has(leadId)) spousesByLead.set(leadId, spouse)
+  const leadIdByMatterId = new Map<string, string>()
+  for (const lead of leads) {
+    if (lead.matter_id) leadIdByMatterId.set(lead.matter_id, lead.id)
+  }
+  if (leadIdByMatterId.size > 0) {
+    try {
+      const byMatter = await loadMatterContactsForMatters(
+        admin,
+        [...leadIdByMatterId.keys()],
+        'id, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth',
+      )
+      for (const [matterId, rows] of byMatter) {
+        const leadId = leadIdByMatterId.get(matterId)
+        if (!leadId || spousesByLead.has(leadId)) continue
+        const spouse = rows.find(row => row.relationship_type === 'spouse')
+        if (spouse) spousesByLead.set(leadId, spouse as unknown as LeadSpouseRecord)
+      }
+    } catch (spouseError) {
+      console.error('Could not load lead spouses', { error: spouseError })
     }
   }
 

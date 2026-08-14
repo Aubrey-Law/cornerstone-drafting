@@ -6,6 +6,7 @@ import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
 import { validateLeadDetails, validateLeadFieldPatch } from '@/lib/leads/details'
 import type { ValidatedLeadDetails } from '@/lib/leads/details'
 import { z, ZodError } from 'zod'
+import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 
 const snoozeRequestSchema = z.object({
   nextActionSnoozedUntil: z.union([
@@ -142,7 +143,15 @@ export async function PATCH(
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
 
   const [spouseResult, opportunityResult] = await Promise.all([
-    admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
+    // Read through the join (step 3 of docs/matter-contacts-migration.md); the
+    // lead row above already carries its matter, so no extra lookup. '*'
+    // because callers format the spouse's address.
+    lead.matter_id
+      ? loadSpouseContact(admin, lead.matter_id as string, '*').then(
+          data => ({ data: data as Record<string, unknown> | null, error: null as { message: string } | null }),
+          (error: Error) => ({ data: null, error: { message: error.message } }),
+        )
+      : Promise.resolve({ data: null, error: null }),
     lead.matter_id
       ? admin.from('matters').select('id, relationship_status').eq('id', lead.matter_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -192,7 +201,16 @@ export async function PATCH(
   if (details.status === 'lost') { /* retained as a lead; the RPC persisted lost */ }
   const [persistedLeadResult, persistedSpouseResult] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', intakeId).single(),
-    admin.from('contacts').select('*').eq('client_intake_id', intakeId).eq('relationship_type', 'spouse').maybeSingle(),
+    // The just-converted matter when conversion happened, otherwise the lead's
+    // existing one — either way the join is keyed on a matter, not on the
+    // household. Falling back matters: without it every non-converting PATCH
+    // would return a null spouse.
+    (matterId ?? (lead.matter_id as string | null))
+      ? loadSpouseContact(admin, (matterId ?? lead.matter_id) as string, '*').then(
+          data => ({ data: data as Record<string, unknown> | null, error: null as { message: string } | null }),
+          (error: Error) => ({ data: null, error: { message: error.message } }),
+        )
+      : Promise.resolve({ data: null, error: null as { message: string } | null }),
   ])
   const fallbackLead = matterId
     ? { ...savedLead, lead_status: 'hired', matter_id: matterId }

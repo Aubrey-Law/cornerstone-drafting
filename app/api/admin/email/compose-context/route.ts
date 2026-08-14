@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { buildAlternateEmails } from '@/lib/contacts/additionalChannels'
+import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -80,12 +81,12 @@ export async function GET(req: Request) {
       const [intakeExtras, spouseExtras] = intakeId
         ? await Promise.all([
             admin.from('client_intake').select('additional_emails').eq('id', intakeId).maybeSingle(),
-            admin
-              .from('contacts')
-              .select('additional_emails')
-              .eq('client_intake_id', intakeId)
-              .eq('relationship_type', 'spouse')
-              .maybeSingle(),
+            // Through the join (step 3 of docs/matter-contacts-migration.md) —
+            // this branch already has the matter.
+            loadSpouseContact(admin, matterId, 'additional_emails').then(
+              data => ({ data: data as Record<string, unknown> | null }),
+              () => ({ data: null }),
+            ),
           ])
         : [{ data: null }, { data: null }]
 
@@ -116,19 +117,22 @@ export async function GET(req: Request) {
 
     const { data, error } = await admin
       .from('client_intake')
-      .select('id, first_name, last_name, full_name, email, additional_emails')
+      .select('id, first_name, last_name, full_name, email, additional_emails, matter_id')
       .eq('id', leadId!)
       .maybeSingle()
     if (error) throw new Error(error.message)
     if (!data) return NextResponse.json({ context: null })
 
-    // A lead's spouse lives in `contacts`, not on the intake row.
-    const { data: spouse } = await admin
-      .from('contacts')
-      .select('first_name, last_name, preferred_name, email, additional_emails')
-      .eq('client_intake_id', leadId!)
-      .eq('relationship_type', 'spouse')
-      .maybeSingle()
+    // A lead's spouse lives in `contacts`, reached through its matter since
+    // step 3 of docs/matter-contacts-migration.md.
+    const leadMatterId = (data.matter_id as string | null) ?? null
+    const spouse = leadMatterId
+      ? ((await loadSpouseContact(
+          admin,
+          leadMatterId,
+          'first_name, last_name, preferred_name, email, additional_emails',
+        )) as Record<string, unknown> | null)
+      : null
     const spouseName = spouse
       ? [
           (spouse.preferred_name as string | null)?.trim() || (spouse.first_name as string | null)?.trim(),

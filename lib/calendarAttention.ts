@@ -2,6 +2,7 @@ import 'server-only'
 import { computeDesignSheetReadiness } from '@/lib/designSheetReadiness'
 import { applyContactIntakeData } from '@/lib/intakeContactHydration'
 import { getIntakeReadinessFlags } from '@/lib/intakeReadiness'
+import { loadMatterContactsForMatters } from '@/lib/contacts/loadMatterContacts'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import { fetchDesignSheet, PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
 import { fetchTasks } from '@/lib/queries/tasks'
@@ -64,21 +65,25 @@ export async function deriveCalendarAttention(dateKey: string): Promise<{
       .map(row => [row.id, row.client_intake_id]),
   )
   const intakeIds = [...new Set([...intakeIdByMatter.values()].filter((id): id is string => Boolean(id)))]
-  const [intakeResult, intakeContactsResult] = intakeIds.length
+  const [intakeResult, contactsByMatter] = intakeIds.length
     ? await Promise.all([
         admin.from('client_intake').select('*').in('id', intakeIds),
         // Spouse, children, and fiduciaries live in contacts — the matching
         // client_intake columns were dropped. Without them the readiness rules
         // report data the client did provide as missing. One batched read keeps
         // this off the per-appointment path.
-        admin.from('contacts').select('*, contact_roles(*)').in('client_intake_id', intakeIds),
+        //
+        // Read through the join (step 3 of docs/matter-contacts-migration.md).
+        // This loop already has the matters in hand, so it keys on them
+        // directly rather than going back through the household.
+        loadMatterContactsForMatters(admin, [...intakeIdByMatter.keys()], '*, contact_roles(*)'),
       ])
-    : [{ data: [] }, { data: [] }]
+    : [{ data: [] }, new Map<string, Array<Record<string, unknown>>>()]
   const contactsByIntake = new Map<string, Array<Record<string, unknown>>>()
-  for (const contact of (intakeContactsResult.data ?? []) as Array<Record<string, unknown>>) {
-    const intakeId = typeof contact.client_intake_id === 'string' ? contact.client_intake_id : null
+  for (const [matterId, rows] of contactsByMatter) {
+    const intakeId = intakeIdByMatter.get(matterId)
     if (!intakeId) continue
-    contactsByIntake.set(intakeId, [...(contactsByIntake.get(intakeId) ?? []), contact])
+    contactsByIntake.set(intakeId, [...(contactsByIntake.get(intakeId) ?? []), ...rows])
   }
   const intakeById = new Map(
     ((intakeResult.data ?? []) as Array<Record<string, unknown> & { id: string }>)

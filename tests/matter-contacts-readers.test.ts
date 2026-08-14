@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getHousehold } from '@/lib/contacts/getHousehold'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 import { loadHouseholdChildren } from '@/lib/contacts/loadHouseholdChildren'
-import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
+import { loadMatterContacts, loadMatterContactsForMatters } from '@/lib/contacts/loadMatterContacts'
 import { contactOnMatter } from '@/lib/contacts/assertContactOnMatter'
 import { persistFiduciaryRoles } from '@/lib/contacts/persistFiduciaryRoles'
 
@@ -194,6 +194,46 @@ describe('loadMatterContacts', () => {
       contacts: [ADA],
     })
     expect(await loadMatterContacts(admin, 'm1')).toHaveLength(1)
+  })
+})
+
+describe('loadMatterContactsForMatters', () => {
+  it('groups one batched read by matter, so a list does not go N+1', async () => {
+    const { admin, calls } = stub({
+      matter_contacts: [
+        { matter_id: 'm1', contact_id: 'c-ada', relationship_type: 'self' },
+        { matter_id: 'm1', contact_id: 'c-ned', relationship_type: 'spouse' },
+        { matter_id: 'm2', contact_id: 'c-love', relationship_type: 'self' },
+      ],
+      contacts: [ADA, NED, LOVELACE],
+    })
+
+    const byMatter = await loadMatterContactsForMatters(admin, ['m1', 'm2'])
+
+    expect(byMatter.get('m1')?.map(r => r.first_name)).toEqual(['Ada', 'Ned'])
+    expect(byMatter.get('m2')?.map(r => r.first_name)).toEqual(['Lovelace'])
+    // Two queries total regardless of how many matters were asked for.
+    expect(calls.filter(c => c.op === 'select')).toHaveLength(2)
+  })
+
+  it('reads nothing when handed no matters', async () => {
+    const { admin, calls } = stub({ matter_contacts: [], contacts: [] })
+    expect((await loadMatterContactsForMatters(admin, [])).size).toBe(0)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('keeps a person shared between two matters on both', async () => {
+    // Lovelace is a child on her parents' matter and the client on her own.
+    const { admin } = stub({
+      matter_contacts: [
+        { matter_id: 'm1', contact_id: 'c-love', relationship_type: 'child' },
+        { matter_id: 'm2', contact_id: 'c-love', relationship_type: 'self' },
+      ],
+      contacts: [LOVELACE],
+    })
+    const byMatter = await loadMatterContactsForMatters(admin, ['m1', 'm2'])
+    expect(byMatter.get('m1')?.[0].relationship_type).toBe('child')
+    expect(byMatter.get('m2')?.[0].relationship_type).toBe('self')
   })
 })
 

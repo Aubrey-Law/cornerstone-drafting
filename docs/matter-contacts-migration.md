@@ -1,6 +1,6 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: steps 1–2 shipped, step 3 partly (§10, §13, §14, §15). Steps 4–7 are still proposal.
+Status: steps 1–3 shipped (§10, §13, §14, §15). Steps 4–7 are still proposal.
 
 ## 1. The problem
 
@@ -378,10 +378,8 @@ Each step is independently shippable and leaves the app working.
    `npm run check:matter-contacts`. Done with database triggers rather than by
    patching writers (see §13). Run the check against production for a few days
    before starting step 3.
-3. **Flip the readers.** 🟡 Partly shipped — see §15. The read helpers,
-   drafting, the design sheet and the matter routes now read the join;
-   `contacts.client_intake_id` is write-only on those paths. The lead-keyed
-   subsystem still reads the legacy FK and is the remaining slice.
+3. **Flip the readers.** ✅ Shipped — see §15. Every contact *read* goes
+   through the join; `contacts.client_intake_id` is write-only.
 4. **Fix the single-row assumptions** (§5) and rewrite RLS (§7). After this,
    a second matter per client is *safe* but not yet reachable from the UI.
 5. **Open the door.** Matter creation accepts an existing `client_intake_id`
@@ -532,10 +530,10 @@ Injecting a dropped join row and a matter with no self contact produced
 days. It exits non-zero on any disagreement. Step 3 should not start while it
 reports drift.
 
-## 15. Step 3 as built (partial)
+## 15. Step 3 as built
 
-Flipped by subsystem, as this spec anticipated. **The matter-keyed subsystems
-now read the join; the lead-keyed one does not yet.**
+Flipped by subsystem, as this spec anticipated — the matter-keyed ones first,
+then the lead-keyed ones. **Every contact read now goes through the join.**
 
 ### Flipped
 
@@ -548,10 +546,19 @@ now read the join; the lead-keyed one does not yet.**
 | `buildDraftPayload`, the draft route, template preview | `loadMatterContacts` |
 | design-sheet contact search, `fetchMatterContacts`, matter People tab | `loadMatterContacts` |
 | matter + design-sheet contact write guards | `contactOnMatter` |
+| lead detail page + API, channels, engagement draft, compose-context | matter, via the lead's `matter_id` |
+| leads list, calendar attention | `loadMatterContactsForMatters`, batched |
+| admin intake form fiduciary prefill | matter, matching what the save writes |
 
 Two new helpers carry most of it: `lib/contacts/loadMatterContacts.ts` (the
-drop-in for `from('contacts').eq('client_intake_id', …)`) and
+drop-in for `from('contacts').eq('client_intake_id', …)`, with a batched
+`loadMatterContactsForMatters` so lists do not go N+1) and
 `lib/contacts/assertContactOnMatter.ts`.
+
+The admin intake form was reading fiduciary roles by intake while
+`persistAdminFiduciaries` had started writing them by matter. Left alone, that
+pair would have shown the form a second engagement's fiduciaries and then
+rewritten only this matter's on save. Both ends are matter-keyed now.
 
 **The write guards were a live bug, not just a re-key.** Contact updates and
 deletes routed through a matter were scoped with
@@ -568,23 +575,16 @@ write.
 the join from it. That is what "write-only" means here, and it keeps this step
 to reads.
 
-**The lead-keyed subsystem still reads the household FK:**
+**Only writes still touch the household FK**, in `saveHouseholdContact`,
+`saveHouseholdChildren`, `saveAdditionalContacts`, `leadFiduciaries`, the
+portal's contact routes and the Lawmatics import — plus the reads that exist
+only to dedupe inside those writes.
 
-```
-app/admin/leads/[id]/page.tsx, app/admin/leads/page.tsx
-app/api/admin/leads/[id]/{route,channels,engagement,engagement-draft}.ts
-app/api/admin/email/compose-context/route.ts
-app/api/intake/contacts/route.ts        (portal read-modify-write)
-lib/leadFiduciaries.ts, lib/intakeContactHydration.ts,
-lib/calendarAttention.ts, lib/lawmatics/importMatter.ts
-```
-
-Safe to defer, because those reads are all *household* facts — a lead's spouse
-and children are the same whichever of its matters you read them through. What
-genuinely diverges once a client has two matters is the per-matter data —
-fiduciary appointments and the relationship a matter records for a person — and
-that is exactly what this step moved. It is still work that has to land before
-step 7 drops the column.
+`hydrateIntakeWithContacts` is the one read left on it, deliberately: it
+decorates an *intake row* with household facts for readiness scoring, is called
+from token-authenticated portal flows that hold no matter, and the facts it
+needs (spouse, children) are household-level. It moves in step 7 with the
+column.
 
 ### The risk this step carries
 
@@ -611,3 +611,29 @@ Not verified end to end: the app was never run against a database. Docker image
 pulls are blocked by the network policy here, so there is no local Supabase, and
 these paths are exercised only through mocked clients. `npm run
 check:matter-contacts` on production remains the gate before step 4.
+
+### Step 3, second pass: the lead subsystem
+
+Lead URLs stay intake-based, so each of these needed the lead's matter. None of
+them had to look it up: the lead row already carries `matter_id`, and the pages
+and routes involved were loading it anyway. That matters because §5 is about
+*deleting* intake → matter lookups, not adding more.
+
+The leads list and the calendar attention feed both read contacts for many
+records at once, so they use `loadMatterContactsForMatters` — one join query
+and one contacts query regardless of list length, rather than the N+1 a naive
+flip would have produced. Calendar attention already held the matters, so it
+keys on them directly and maps back to intakes only for the readiness rules.
+
+Five test files needed updating, and each failure was informative rather than
+noise: three drafting-payload stubs needed `matter_id` on their join rows once
+`loadMatterContacts` became a wrapper over the batched form; two source-text
+assertions encoded the old query shape and were rewritten to assert the new one
+while keeping their intent (that leads have their own channels route, and that
+calendar attention batches rather than querying per appointment); and the lead
+detail harness had to serve `matter_contacts` before `contacts`.
+
+One of those caught something real: the lead PATCH route sets `matterId` only
+when a conversion happens, so keying the post-write spouse read on it alone
+would have returned a null spouse from every ordinary lead edit. It falls back
+to the lead's existing matter.

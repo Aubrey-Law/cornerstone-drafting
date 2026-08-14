@@ -421,6 +421,7 @@ describe('draft payload generator gap wiring', () => {
       // docs/matter-contacts-migration.md.
       matter_contacts: [{
         data: contacts.map(c => ({
+          matter_id: 'matter-gaps-2',
           contact_id: c.id,
           relationship_type: c.relationship_type ?? null,
           relationship_label: c.relationship_label ?? null,

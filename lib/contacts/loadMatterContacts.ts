@@ -24,37 +24,58 @@ export async function loadMatterContacts(
   matterId: string,
   columns = '*',
 ): Promise<Array<Record<string, unknown>>> {
+  const byMatter = await loadMatterContactsForMatters(admin, [matterId], columns)
+  return byMatter.get(matterId) ?? []
+}
+
+/**
+ * The batched form, grouped by matter. Lists that would otherwise read contacts
+ * once per row — the leads list, the calendar attention feed — use this to keep
+ * the flip from turning one query into N.
+ */
+export async function loadMatterContactsForMatters(
+  admin: AdminClient,
+  matterIds: string[],
+  columns = '*',
+): Promise<Map<string, Array<Record<string, unknown>>>> {
+  const out = new Map<string, Array<Record<string, unknown>>>()
+  const ids = [...new Set(matterIds.filter(Boolean))]
+  if (ids.length === 0) return out
+
   const { data: joinRows, error } = await admin
     .from('matter_contacts')
-    .select('contact_id, relationship_type, relationship_label, child_relationship, parentage, is_minor')
-    .eq('matter_id', matterId)
+    .select('matter_id, contact_id, relationship_type, relationship_label, child_relationship, parentage, is_minor')
+    .in('matter_id', ids)
   if (error) throw new Error(error.message)
 
   const joins = (joinRows ?? []) as Array<Record<string, unknown>>
-  if (joins.length === 0) return []
+  if (joins.length === 0) return out
 
   const { data: contactRows, error: contactsError } = await admin
     .from('contacts')
     .select(columns)
-    .in('id', joins.map(row => String(row.contact_id)))
+    .in('id', [...new Set(joins.map(row => String(row.contact_id)))])
   if (contactsError) throw new Error(contactsError.message)
 
   const contactById = new Map(
     ((contactRows ?? []) as unknown as Array<Record<string, unknown>>).map(c => [String(c.id), c]),
   )
 
-  return joins
-    .map((row): Record<string, unknown> | null => {
-      const contact = contactById.get(String(row.contact_id))
-      if (!contact) return null
-      return {
-        ...contact,
-        relationship_type: row.relationship_type ?? contact.relationship_type ?? null,
-        relationship_label: row.relationship_label ?? contact.relationship_label ?? null,
-        child_relationship: row.child_relationship ?? contact.child_relationship ?? null,
-        parentage: row.parentage ?? contact.parentage ?? null,
-        is_minor: row.is_minor ?? contact.is_minor ?? null,
-      }
-    })
-    .filter((row): row is Record<string, unknown> => row !== null)
+  for (const row of joins) {
+    const contact = contactById.get(String(row.contact_id))
+    // A join row whose contact is gone would otherwise read as a blank person.
+    if (!contact) continue
+    const matterId = String(row.matter_id)
+    const merged: Record<string, unknown> = {
+      ...contact,
+      relationship_type: row.relationship_type ?? contact.relationship_type ?? null,
+      relationship_label: row.relationship_label ?? contact.relationship_label ?? null,
+      child_relationship: row.child_relationship ?? contact.child_relationship ?? null,
+      parentage: row.parentage ?? contact.parentage ?? null,
+      is_minor: row.is_minor ?? contact.is_minor ?? null,
+    }
+    out.set(matterId, [...(out.get(matterId) ?? []), merged])
+  }
+
+  return out
 }

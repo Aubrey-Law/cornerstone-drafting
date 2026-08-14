@@ -4,6 +4,7 @@ import { createAgreementDraft } from '@/lib/engagement/repository'
 import { markEngagementDraftStatus } from '@/lib/engagement/status'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { isSupportedWorkspaceDefinition } from '@/components/engagement/workspaceState'
+import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
 
 type ExistingAgreement = {
   id: string
@@ -73,12 +74,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return Response.json({ agreementId: existingAgreement.id })
   }
 
-  const { data: spouse } = await admin
-    .from('contacts')
-    .select('*')
-    .eq('client_intake_id', id)
-    .eq('relationship_type', 'spouse')
-    .maybeSingle()
+  // Read through the join (step 3 of docs/matter-contacts-migration.md); the
+  // opportunity resolved above is the matter.
+  const spouse = await loadSpouseContact(admin, opportunity.id as string, '*')
   if (normalizePracticeArea(lead.practice_area) !== 'EP' || !spouse?.email) {
     return Response.json({ error: 'The reviewed workspace currently supports estate-planning couples only; use the legacy engagement flow.' }, { status: 400 })
   }

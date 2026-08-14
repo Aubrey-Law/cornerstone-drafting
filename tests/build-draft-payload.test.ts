@@ -20,9 +20,10 @@ type QueryResult = {
  * docs/matter-contacts-migration.md, so a `contacts` stub alone is no longer
  * reachable.
  */
-function joinRowsFor(contacts: Array<Record<string, unknown>>): QueryResult {
+function joinRowsFor(matterId: string, contacts: Array<Record<string, unknown>>): QueryResult {
   return {
     data: contacts.map(c => ({
+      matter_id: matterId,
       contact_id: c.id,
       relationship_type: c.relationship_type ?? null,
       relationship_label: c.relationship_label ?? null,
@@ -163,7 +164,7 @@ describe('buildDraftPayload', () => {
         },
         error: null,
       }],
-      matter_contacts: [joinRowsFor([
+      matter_contacts: [joinRowsFor('matter-1', [
         { id: 'contact-1', relationship_type: 'executor', relationship_label: 'Executor' },
         { id: 'contact-2', relationship_type: 'executor', relationship_label: 'Co-Executor' },
         { id: 'contact-3', relationship_type: 'executor', relationship_label: 'Co-Executor' },
@@ -407,7 +408,7 @@ describe('buildDraftPayload', () => {
         },
         error: null,
       }],
-      matter_contacts: [joinRowsFor([{ id: 'contact-hcp', relationship_type: 'sibling', relationship_label: 'Brother' }])],
+      matter_contacts: [joinRowsFor('matter-3', [{ id: 'contact-hcp', relationship_type: 'sibling', relationship_label: 'Brother' }])],
       contacts: [{
         data: [{
           id: 'contact-hcp',

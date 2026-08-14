@@ -110,8 +110,10 @@ describe('raw client_intake readers hydrate contacts', () => {
 
   it('reads intake contacts in one batch on the calendar attention path', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'lib/calendarAttention.ts'), 'utf8')
-    // Per-appointment hydration would issue a query per row in the loop.
-    expect(source).toContain(".in('client_intake_id', intakeIds)")
+    // Per-appointment hydration would issue a query per row in the loop. Since
+    // step 3 of docs/matter-contacts-migration.md the batch is keyed on the
+    // matters this loop already holds, not on their households.
+    expect(source).toContain('loadMatterContactsForMatters(admin, [...intakeIdByMatter.keys()]')
     expect(source).toContain('contactsByIntake.get(row.id) ?? []')
   })
 })

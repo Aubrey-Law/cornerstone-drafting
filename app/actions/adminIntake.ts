@@ -350,12 +350,20 @@ export async function getAdminIntakeData(
   // Also attach all contacts for the intake as _intake_contacts — the F3
   // picklist UI sources its suggestions from this list. Includes
   // lead-detail-imported contacts that don't yet have a contact_roles entry.
+  // Appointments are matter-scoped since step 3 of
+  // docs/matter-contacts-migration.md, and persistAdminFiduciaries writes them
+  // that way. Reading them by intake instead would show this form a second
+  // engagement's fiduciaries while a save only rewrites this matter's.
+  const formMatterId = await resolveMatterIdForIntake(admin, null, clientIntakeId)
+
   const [{ data: roleRows }, { data: contactRows }] = await Promise.all([
-    admin
-      .from('contact_roles')
-      .select('role, for_party, priority, is_coagent, contacts(first_name, last_name, preferred_pronoun)')
-      .eq('client_intake_id', clientIntakeId)
-      .eq('for_party', 'client'),
+    formMatterId
+      ? admin
+          .from('contact_roles')
+          .select('role, for_party, priority, is_coagent, contacts(first_name, last_name, preferred_pronoun)')
+          .eq('matter_id', formMatterId)
+          .eq('for_party', 'client')
+      : Promise.resolve({ data: [] }),
     admin
       .from('contacts')
       .select('id, first_name, last_name, relationship_label')
