@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdmin } from '@/lib/apiAuth'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
+import { reconcileMatterIntakeTrack } from '@/lib/intake/reconcileMatterIntakeTrack'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
 
@@ -84,6 +85,13 @@ export async function POST(req: Request) {
       if (!row?.matter_id) {
         return NextResponse.json({ error: 'Matter create returned no row' }, { status: 500 })
       }
+
+      // create_matter_with_client writes the practice area onto the intake but
+      // not the questionnaire, so the row lands on the 'estate' column default.
+      // A College Preparation Plan matter therefore opened the estate intake in
+      // the attorney sheet and — because the seed reads the same field — seeded
+      // an estate design sheet too. Must run before the seed.
+      await reconcileMatterIntakeTrack(admin, row.matter_id, practiceArea)
 
       // Best-effort and idempotent; a failure here must not fail the request or
       // roll back a matter that already exists.

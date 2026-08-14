@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils'
 import { formatPhoneInput } from '@/lib/phone'
 import { parsePlanningObjectives, PLANNING_OBJECTIVES_NOTES_KEY } from '@/lib/intakePlanningObjectives'
 import { DEFAULT_INTAKE_TRACK, getIntakeTrack, type IntakeTrack } from '@/lib/intakeTrack'
+import { isCollegePrepPracticeArea } from '@/lib/practiceArea'
 import {
   MA_COUNTY_OPTIONS,
   MARITAL_STATUS_OPTIONS,
@@ -191,7 +192,12 @@ export default function AdminIntakeSheet({
   // trust, so this attorney form must not present those fields as if it had.
   // Its own answers (school, HIPAA scope, living will) live in the guided
   // questionnaire — this sheet stays the shared client/fiduciary editor.
-  const isCollegePrep = intakeTrack === 'college_prep'
+  // The practice area counts as well as the stored track. Matters created
+  // before the questionnaire followed the practice area still carry
+  // `intake_track: 'estate'` (the column default), and reading the track alone
+  // put an estate questionnaire in front of a College Preparation Plan — and
+  // then demanded marital status and assets it never showed.
+  const isCollegePrep = intakeTrack === 'college_prep' || isCollegePrepPracticeArea(practiceArea)
   const showEP = isEP(practiceArea) && !isCollegePrep
   const showProbate = isProbate(practiceArea) && !isCollegePrep
   const showSpouse = form.marital_status === 'married'
