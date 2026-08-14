@@ -52,6 +52,16 @@ matter is unaffected.
 | `buildDesignSheetGroups` | six tabs: Intake, College Prep, Fiduciaries, POA, Health care, Notes |
 | `computeDesignSheetReadiness` | no plan-type blocker; college-prep blockers instead |
 | `isEstatePlanningPracticeArea` | **true** for CP — leaving it out would zero every `include_*` flag and generate an empty package |
+| `resolveDraftComposition` | always `individual`, passed `singleClientPlan` — see below |
+
+Every other track refuses to draft until `matters.matter_type` says one client or
+two, because getting it wrong is silent: a couple's plan drafted as an
+individual's loses a whole person. A College Preparation Plan has no such
+decision — the student is the client and parents are contacts and nominees — so
+the confirmation has one possible answer and blocking on it only stops work.
+`singleClientPlan` also *overrides* a stored `couple`, which a matter
+reclassified out of estate planning can still be carrying; honouring it would
+put spouse documents into a plan that has no spouse.
 
 ### What moves when the practice area changes
 
