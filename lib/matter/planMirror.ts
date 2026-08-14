@@ -91,6 +91,26 @@ function asSlots(value: unknown): FiduciarySlot[] {
 }
 
 /**
+ * Contact ids appointed in any of the ten fiduciary slot arrays, with the role
+ * labels they hold. The client/spouse sentinels are skipped — they are not
+ * contact rows. This is how the People tab knows a contact the design sheet
+ * appointed is a fiduciary even though no contact profile flag was ever set.
+ */
+export function appointedFiduciaryRolesByContact(sheet: DesignSheet | null): Map<string, string[]> {
+  const rolesByContact = new Map<string, string[]>()
+  if (!sheet) return rolesByContact
+  for (const { key, role } of FIDUCIARY_ROLES) {
+    for (const slot of asSlots(sheet[key])) {
+      if (!slot.contact_id || slot.contact_id.startsWith('__')) continue
+      const roles = rolesByContact.get(slot.contact_id) ?? []
+      if (!roles.includes(role)) roles.push(role)
+      rolesByContact.set(slot.contact_id, roles)
+    }
+  }
+  return rolesByContact
+}
+
+/**
  * Credit shelter has no dedicated design-sheet column. A two-trust plan is the
  * signal the firm actually records: a married plan with a spouse trust, or a
  * matter flagged for separate trusts. The legacy free-text column stays as a

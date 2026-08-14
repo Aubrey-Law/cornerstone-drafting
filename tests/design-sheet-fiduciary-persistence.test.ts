@@ -191,6 +191,6 @@ describe('functional fiduciary slot updates', () => {
 
     expect(grid).toContain('onChange(field, previousSheet =>')
     expect(grid).toContain('normalizeFiduciarySlots(updater(resolved))')
-    expect(grid).toContain('setPrimaryContact')
+    expect(grid).toContain('removeFiduciaryContact')
   })
 })

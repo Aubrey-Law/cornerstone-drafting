@@ -21,6 +21,7 @@ import {
   relationshipLabelForContact,
   relationshipSelectionToStructured,
 } from '@/lib/kinship/relationshipLabels'
+import { appointedFiduciaryRolesByContact } from '@/lib/matter/planMirror'
 import { contactFullName } from '@/app/admin/drafting/[matterId]/design/sections/ContactPicker'
 import type { PersonFormValues } from '@/app/admin/drafting/[matterId]/design/sections/AddPersonDialog'
 import type { PersonAddRequest } from './MatterPeopleTab'
@@ -103,14 +104,20 @@ export function MatterAdditionalContactsTab({
     [sheet?.fiduciary_slot_states],
   )
 
+  // Contacts the design sheet appointed to a fiduciary slot count as
+  // fiduciaries even though nothing ever set their contact-profile flag —
+  // the fiduciary grid writes slot arrays, not profiles.
+  const appointedRoles = useMemo(() => appointedFiduciaryRolesByContact(sheet), [sheet])
+
   const fiduciaryContacts = useMemo(() => {
     return contacts.filter(c => {
+      if (appointedRoles.has(c.id)) return true
       const profile = profiles[c.id]
       if (profile?.is_beneficiary && !profile?.is_fiduciary) return false
       if (profile?.is_fiduciary) return true
       return profile?.is_fiduciary !== false && (c.relationship?.toLowerCase().includes('trustee') || false)
     })
-  }, [contacts, profiles])
+  }, [contacts, profiles, appointedRoles])
 
   const beneficiaryContacts = useMemo(() => {
     return contacts.filter(c => profiles[c.id]?.is_beneficiary)
@@ -307,7 +314,9 @@ export function MatterAdditionalContactsTab({
           <PersonContactCardGrid>
             {fiduciaryContacts.map(contact => {
               const profile = profiles[contact.id]
-              const type = profile?.fiduciary_type ? FIDUCIARY_TYPE_LABELS[profile.fiduciary_type] : undefined
+              const type = profile?.fiduciary_type
+                ? FIDUCIARY_TYPE_LABELS[profile.fiduciary_type]
+                : appointedRoles.get(contact.id)?.join(', ')
               return (
                 <PersonContactCard
                   key={contact.id}

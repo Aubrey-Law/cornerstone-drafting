@@ -265,7 +265,9 @@ export function overlayDesignSheetFiduciarySlots(
   function slotContact(slots: FiduciarySlotRow[], order: number, co = false): FiduciarySlotRow | null {
     const mappedOrder = principalOrderByPriority(slots, order)
     if (mappedOrder === null) return null
-    const slot = slots.find(item => item.order === mappedOrder && item.is_co === co)
+    // Require a named slot — a stray empty placeholder at the same order must
+    // not shadow the appointed person.
+    const slot = slots.find(item => item.order === mappedOrder && item.is_co === co && Boolean(item.contact_id))
     return slot?.contact_id ? slot : null
   }
 

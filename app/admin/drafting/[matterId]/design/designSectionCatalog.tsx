@@ -258,8 +258,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     ),
     [DESIGN_SECTION_IDS.collegePlan]: () => (
       <CollegePrepSection
-        sheet={sheet}
-        onChange={updateField}
+        {...common}
         matterId={matterId}
         practiceArea={practiceArea}
       />

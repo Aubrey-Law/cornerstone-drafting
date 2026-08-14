@@ -12,7 +12,8 @@ describe('fiduciary grid UI', () => {
     // for the per-party roles and once for the shared child-related ones.
     expect(source).toContain('`168px repeat(${roles.length}, minmax(96px, 1fr))`')
     expect(source).toContain('overflow-x-auto')
-    expect(source).toContain('setPrimaryContact')
+    expect(source).toContain('removeFiduciaryContact')
+    expect(source).toContain('movePrincipalSlot')
     expect(source).toContain('normalizeFiduciarySlots')
     expect(source).toContain('PartyTabs')
     expect(source).toContain('Mirror reversed')

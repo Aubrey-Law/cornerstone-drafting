@@ -69,6 +69,17 @@ describe('matter query lifecycle views', () => {
     expect(result).not.toBeNull()
   })
 
+  it('lets the lead page read its own opportunity matter', () => {
+    // A lead's matter is never `hired`, so the People tab's loader must opt in
+    // to the leads-inclusive view or every lead renders the "not linked to an
+    // opportunity record" fallback.
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/leads/[id]/page.tsx'),
+      'utf8',
+    )
+    expect(source).toContain('fetchMatter(lead.matter_id, { includeLeads: true })')
+  })
+
   it('keeps the matter page hired-only', () => {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'app/admin/matters/[id]/page.tsx'),

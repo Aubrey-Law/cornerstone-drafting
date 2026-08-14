@@ -1194,11 +1194,13 @@ function mapRawToForm(raw: Record<string, unknown>): AdminIntakeFormData {
     // the free-text `notes` key so a save never stomps the client's answers.
     planning_objectives: parsePlanningObjectives(raw['planning_objectives'])?.[PLANNING_OBJECTIVES_NOTES_KEY] ?? '',
     has_existing_plan: bool('has_existing_plan'),
-    has_will: false,
-    has_trust: false,
-    has_poa: false,
-    has_hcp: false,
-    special_circumstances: [],
+    has_will: bool('has_will'),
+    has_trust: bool('has_trust'),
+    has_poa: bool('has_poa'),
+    has_hcp: bool('has_hcp'),
+    special_circumstances: Array.isArray(raw['special_circumstances'])
+      ? (raw['special_circumstances'] as unknown[]).filter((value): value is string => typeof value === 'string')
+      : [],
     trustee_primary: fid.trustee_primary ?? '',
     trustee_primary_pronouns: fid.trustee_primary_pronouns ?? '',
     trustee_alternate: fid.trustee_alternate ?? '',

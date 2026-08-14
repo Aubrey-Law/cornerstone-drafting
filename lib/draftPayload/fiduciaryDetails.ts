@@ -240,7 +240,9 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
   function slotContact(slots: FiduciarySlotRow[], order: number, co = false): ContactRow | null {
     const priorityOrder = principalOrderByPriority(slots, order)
     if (priorityOrder == null) return null
-    const slot = slots.find(item => item.order === priorityOrder && item.is_co === co)
+    // Require a named slot — a stray empty placeholder at the same order must
+    // not shadow the appointed person.
+    const slot = slots.find(item => item.order === priorityOrder && item.is_co === co && Boolean(item.contact_id))
     return slot?.contact_id ? contactsById.get(slot.contact_id) ?? null : null
   }
 
@@ -252,7 +254,7 @@ export function buildFiduciaryRoleDetailsFromDesignSheet(
   ): DraftPayloadContactDetail | null {
     const priorityOrder = principalOrderByPriority(slots, order)
     if (priorityOrder == null) return null
-    const slot = slots.find(item => item.order === priorityOrder && item.is_co === co)
+    const slot = slots.find(item => item.order === priorityOrder && item.is_co === co && Boolean(item.contact_id))
     if (!slot) return null
 
     if (slot.contact_id === CLIENT_PRIMARY_CONTACT_ID) {

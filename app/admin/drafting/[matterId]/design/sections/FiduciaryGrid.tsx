@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, Plus, X } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, ChevronUp, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { designPlanTypeIncludesTrust } from '@/lib/designPlanType'
@@ -20,7 +20,6 @@ import {
   partyFullName,
   PartyTabs,
   resolveSlotContactIds,
-  setPrimaryContact,
   SHARED_SLOT_FIELDS,
   type FiduciaryGridRole,
   type FiduciaryPartyRole,
@@ -31,6 +30,8 @@ import {
   createSlot,
   firstAvailablePrincipalOrder,
   coSlotsForOrder,
+  movePrincipalSlot,
+  removeFiduciaryContact,
   repairFiduciarySlotOrdering,
   normalizeFiduciarySlots,
   ROLE_CONFIG,
@@ -58,7 +59,9 @@ const SHARED_ROLES: Array<RoleDef<FiduciarySharedRole>> = [
 ]
 
 function namedPrincipals(slots: FiduciarySlot[]): FiduciarySlot[] {
-  return normalizeFiduciarySlots(slots)
+  // Repair (not just normalize) so a stored empty placeholder slot can never
+  // shift the displayed line of succession — the first appointee is "1st".
+  return repairFiduciarySlotOrdering(slots)
     .filter(slot => !slot.is_co && Boolean(slot.contact_id))
     .sort((a, b) => a.order - b.order)
 }
@@ -86,9 +89,10 @@ export function toggleFiduciaryGridContact(
   const finalize = (next: FiduciarySlot[]) => repairFiduciarySlotOrdering(normalizeFiduciarySlots(next))
 
   if (existing.some(slot => !slot.is_co)) {
-    const withoutExisting = normalized.filter(slot => slot.contact_id !== contactId)
-    const nextPrimaryId = namedPrincipals(withoutExisting)[0]?.contact_id ?? null
-    return finalize(setPrimaryContact(withoutExisting, nextPrimaryId))
+    // Plain removal: everyone below moves up one line. The old path promoted
+    // the next principal into the (possibly empty) first slot while their own
+    // slot kept the id, duplicating the appointment.
+    return removeFiduciaryContact(normalized, contactId)
   }
 
   const existingCoSlot = existing.find(slot => slot.is_co)
@@ -225,6 +229,13 @@ export function FiduciaryGrid({
       && contact.id !== (party === 'client' ? clientContact?.id : spouseContact?.id)
     ))
 
+  // Names for the succession lists — unlike the roster, this includes the
+  // current party's own person, since other flows can appoint them (e.g. the
+  // client as their own initial trustee).
+  const contactNameById = new Map(
+    [...syntheticContacts, ...contacts].map(contact => [contact.id, contactName(contact)]),
+  )
+
   const writeSlots = (field: FiduciarySlotField, updater: (slots: FiduciarySlot[]) => FiduciarySlot[]) => {
     onChange(field, previousSheet => {
       const current = (previousSheet[field] as FiduciarySlot[] | null) ?? []
@@ -292,6 +303,7 @@ export function FiduciaryGrid({
         slotFields={slotFields}
         sheet={sheet}
         roster={roster}
+        contactNameById={contactNameById}
         requiredRoles={requiredRoles}
         scopeResetKey={party}
         flashField={flashField}
@@ -313,6 +325,7 @@ export function FiduciaryGrid({
             slotFields={SHARED_SLOT_FIELDS}
             sheet={sheet}
             roster={roster}
+            contactNameById={contactNameById}
             requiredRoles={requiredRoles}
             scopeResetKey={party}
             flashField={flashField}
@@ -334,6 +347,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
   slotFields,
   sheet,
   roster,
+  contactNameById,
   requiredRoles,
   scopeResetKey,
   flashField,
@@ -343,6 +357,7 @@ function RoleMatrix<T extends FiduciaryGridRole>({
   slotFields: Record<T, FiduciarySlotField>
   sheet: DesignSheet
   roster: MatterContact[]
+  contactNameById: Map<string, string>
   requiredRoles: Set<FiduciaryGridRole>
   scopeResetKey?: string
   flashField: string | null
@@ -409,6 +424,62 @@ function RoleMatrix<T extends FiduciaryGridRole>({
               )}>
                 {status}
               </span>
+              {principalSlots.length > 0 ? (
+                <ol className="mt-2 space-y-1">
+                  {principalSlots.map((slot, index) => {
+                    const contactId = slot.contact_id
+                    if (!contactId) return null
+                    const name = contactNameById.get(contactId) ?? 'Contact'
+                    const field = slotFields[role.id]
+                    const reorder = (delta: -1 | 1) => {
+                      writeSlots(field, current => movePrincipalSlot(current, contactId, delta))
+                      setTargetedCo(null)
+                    }
+                    return (
+                      <li key={slot.id} className="flex items-center gap-1">
+                        <span className="w-6 shrink-0 text-[9px] font-semibold text-muted-foreground">
+                          {orderLabel(index)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[10px] text-foreground" title={name}>
+                          {name}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => reorder(-1)}
+                          aria-label={`Move ${name} up in ${role.label} succession`}
+                          title="Move up"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          <ChevronUp className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === principalSlots.length - 1}
+                          onClick={() => reorder(1)}
+                          aria-label={`Move ${name} down in ${role.label} succession`}
+                          title="Move down"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            writeSlots(field, current => removeFiduciaryContact(current, contactId))
+                            setTargetedCo(null)
+                          }}
+                          aria-label={`Remove ${name} as ${role.label}`}
+                          title="Remove"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ol>
+              ) : null}
               {roleConfig.allowCo ? (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {coTargets.length === 0 ? (
