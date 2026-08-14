@@ -1,5 +1,11 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import {
+  intakeTrackForPracticeArea,
+  reconcileMatterIntakeTrack,
+} from '@/lib/intake/reconcileMatterIntakeTrack'
 import {
   PRACTICE_AREA_OPTIONS,
   isCollegePrepPracticeArea,
@@ -156,5 +162,120 @@ describe('design sheet follows the practice area', () => {
       track: 'college_prep',
       decisions: null,
     })
+  })
+})
+
+/**
+ * A matter reclassified as a College Preparation Plan has to change what the
+ * intake asks, not just what drafts — otherwise the attorney intake sheet keeps
+ * showing assets, spouse and trust and hides the student's own questions.
+ */
+function intakeTrackHarness(options: { intakeId?: string | null; track?: string } = {}) {
+  const updates: Array<Record<string, unknown>> = []
+  const admin = {
+    from: (table: string) => {
+      if (table === 'matters') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: options.intakeId === null
+                  ? null
+                  : { client_intake_id: options.intakeId ?? 'intake-1' },
+              }),
+            }),
+          }),
+        }
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: { id: 'intake-1', intake_track: options.track ?? 'estate' },
+            }),
+          }),
+        }),
+        update: (payload: Record<string, unknown>) => ({
+          eq: async () => {
+            updates.push(payload)
+            return { error: null }
+          },
+        }),
+      }
+    },
+  }
+  return { admin: admin as unknown as Parameters<typeof reconcileMatterIntakeTrack>[0], updates }
+}
+
+describe('intake questionnaire follows the practice area', () => {
+  it('maps each practice area to its questionnaire', () => {
+    expect(intakeTrackForPracticeArea('CP')).toBe('college_prep')
+    expect(intakeTrackForPracticeArea('College Preparation Plan')).toBe('college_prep')
+    expect(intakeTrackForPracticeArea('EP')).toBe('estate')
+    expect(intakeTrackForPracticeArea('EP-LP')).toBe('estate')
+    expect(intakeTrackForPracticeArea('Probate')).toBe('estate')
+    expect(intakeTrackForPracticeArea(null)).toBe('estate')
+  })
+
+  it('moves the intake to the student questionnaire', async () => {
+    const { admin, updates } = intakeTrackHarness({ track: 'estate' })
+
+    expect(await reconcileMatterIntakeTrack(admin, 'matter-1', 'CP')).toBe(true)
+    expect(updates).toHaveLength(1)
+    expect(updates[0]).toMatchObject({ intake_track: 'college_prep' })
+  })
+
+  it('moves the intake back to the estate questionnaire', async () => {
+    const { admin, updates } = intakeTrackHarness({ track: 'college_prep' })
+
+    expect(await reconcileMatterIntakeTrack(admin, 'matter-1', 'EP')).toBe(true)
+    expect(updates[0]).toMatchObject({ intake_track: 'estate' })
+  })
+
+  it('writes nothing when the intake already agrees', async () => {
+    const { admin, updates } = intakeTrackHarness({ track: 'college_prep' })
+
+    expect(await reconcileMatterIntakeTrack(admin, 'matter-1', 'CP')).toBe(false)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('handles a matter with no intake linked', async () => {
+    const { admin, updates } = intakeTrackHarness({ intakeId: null })
+
+    expect(await reconcileMatterIntakeTrack(admin, 'matter-1', 'CP')).toBe(false)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('leaves a fresh college section to fill in when the intake collected no answers', () => {
+    // Reclassifying flips the questionnaire first, so the design-sheet
+    // reconcile then adopts answers from an intake that has none. The section
+    // has to come up empty and valid rather than throwing or inventing values.
+    const { decisions } = reconcilePlanTrackDecisions({
+      sheet: estateSheet(),
+      practiceArea: 'CP',
+      intake: {
+        intake_track: 'college_prep',
+        college_prep_details: null,
+      } as unknown as IntakeSnapshot,
+    })
+    const switched = { ...estateSheet(), decisions } as DesignSheet
+
+    expect(getDesignPlanTrack(switched)).toBe('college_prep')
+    expect(getCollegePrepDesign(switched).school_name).toBeNull()
+    expect(getCollegePrepDesign(switched).living_will_include).toBeNull()
+  })
+
+  it('reclassifies the questionnaire before the design sheet adopts the answers', () => {
+    // Order matters: reconcilePlanTrackDecisions only adopts the student's
+    // questionnaire answers when the intake is already on the college track.
+    const route = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/matter-details/route.ts'),
+      'utf8',
+    )
+    const intakeAt = route.indexOf('reconcileMatterIntakeTrack(admin, matterId, normalizedValue)')
+    const sheetAt = route.indexOf('reconcileDesignSheetPlanTrack(admin, matterId, normalizedValue)')
+
+    expect(intakeAt).toBeGreaterThan(-1)
+    expect(sheetAt).toBeGreaterThan(intakeAt)
   })
 })

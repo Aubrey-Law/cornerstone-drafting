@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { setMatterNumber } from '@/lib/matterNumber'
 import { parsePracticeArea } from '@/lib/practiceArea'
 import { reconcileDesignSheetPlanTrack } from '@/lib/designSheet/reconcilePlanTrack'
+import { reconcileMatterIntakeTrack } from '@/lib/intake/reconcileMatterIntakeTrack'
 import { resyncMatterSlaTemplate } from '@/lib/slaTasks/generate'
 import { normalizeTargetSigningDate } from '@/lib/matterDates'
 import { legalPlanDisplayName, normalizeMatterBillingType } from '@/lib/billing/billingType'
@@ -316,6 +317,11 @@ export async function PATCH(req: Request) {
   // Preparation Plan drafts the student package and an estate matter drafts the
   // estate one — without the attorney having to find a second switch.
   if (field === 'practice_area') {
+    // The questionnaire follows too, so reclassifying a matter changes what
+    // the intake asks and which fields the attorney intake sheet shows — not
+    // just what drafts. Runs first: the design-sheet reconcile adopts the
+    // student's questionnaire answers only once the intake is on that track.
+    await reconcileMatterIntakeTrack(admin, matterId, normalizedValue)
     await reconcileDesignSheetPlanTrack(admin, matterId, normalizedValue)
     // And the checklist with it, so the reclassification lands everywhere at
     // once rather than waiting for someone to open the drafting workspace.
