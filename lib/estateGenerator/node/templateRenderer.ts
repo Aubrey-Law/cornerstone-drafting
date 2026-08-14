@@ -37,8 +37,19 @@ function escapeXml(value: string): string {
 /**
  * Word often splits a single `{{ field }}` or `{% if %}` across several runs
  * (spell-check, manual edits), leaving OOXML tags inside the delimiter span.
- * Nunjucks then sees `{% if </w:t>` and throws "unexpected token: <". Strip
- * only the XML inside each delimiter span so tags are contiguous again.
+ * Nunjucks then sees `{% if </w:t>` and throws "unexpected token: <". Rejoin the
+ * tag so it is contiguous again.
+ *
+ * The split is not always inside one paragraph. A footer built from a table, or
+ * a tag the author broke over two lines, puts the halves in different `<w:p>` or
+ * different `<w:tc>` — so the scan crosses those boundaries, and the structural
+ * XML is kept rather than stripped: deleting `</w:tc><w:tc>` to make the text
+ * contiguous would merge two table cells and wreck the layout. The tag's text is
+ * collected into the first run of the span instead, and the later runs are left
+ * empty. Structure in, structure out.
+ *
+ * Scanning stops at the next opening delimiter, so an unclosed `{{` swallows
+ * nothing: it is left exactly as it was for the renderer to report.
  */
 export function repairSplitNunjucksInXml(xml: string): string {
   let result = ''
@@ -53,25 +64,59 @@ export function repairSplitNunjucksInXml(xml: string): string {
 
     result += xml.slice(i, opening.start)
     const closeToken = opening.kind === 'block' ? '%}' : '}}'
-    const paragraphEnd = xml.indexOf('</w:p>', opening.end)
-    const scanEnd = paragraphEnd === -1 ? xml.length : paragraphEnd
-    const end = findVisibleTokenEnd(xml, opening.end, closeToken, scanEnd)
+    const end = findVisibleTokenEnd(xml, opening.end, closeToken, xml.length)
     if (end === -1) {
-      if (paragraphEnd === -1) {
-        result += xml.slice(opening.start)
-        break
-      }
-      result += xml.slice(opening.start, paragraphEnd + '</w:p>'.length)
-      i = paragraphEnd + '</w:p>'.length
+      // Unclosed. Emit the delimiter itself and carry on from just after it, so
+      // a stray brace cannot consume the tags that follow it.
+      result += xml.slice(opening.start, opening.end)
+      i = opening.end
       continue
     }
 
     const segment = xml.slice(opening.start, end)
-    result += segment.includes('<') ? segment.replace(/<[^>]+>/g, '') : segment
+    result += segment.includes('<') ? collapseSpanText(segment) : segment
     i = end
   }
 
   return result
+}
+
+/**
+ * Move all of a span's visible text into its first text position, keeping every
+ * XML tag where it was. `{{ client.` + `</w:t></w:r><w:r><w:t>` + `full_name }}`
+ * becomes `{{ client.full_name }}` + `</w:t></w:r><w:r><w:t>` — one contiguous
+ * tag, same run and paragraph structure, so nothing can be left unbalanced.
+ */
+function collapseSpanText(segment: string): string {
+  const pieces: Array<{ tag: boolean; text: string }> = []
+  let cursor = 0
+
+  while (cursor < segment.length) {
+    const next = segment.indexOf('<', cursor)
+    if (next === -1) {
+      pieces.push({ tag: false, text: segment.slice(cursor) })
+      break
+    }
+    if (next > cursor) pieces.push({ tag: false, text: segment.slice(cursor, next) })
+    const tagEnd = segment.indexOf('>', next + 1)
+    if (tagEnd === -1) {
+      pieces.push({ tag: false, text: segment.slice(next) })
+      break
+    }
+    pieces.push({ tag: true, text: segment.slice(next, tagEnd + 1) })
+    cursor = tagEnd + 1
+  }
+
+  const visible = pieces.filter(piece => !piece.tag).map(piece => piece.text).join('')
+  let placed = false
+  return pieces
+    .map(piece => {
+      if (piece.tag) return piece.text
+      if (placed) return ''
+      placed = true
+      return visible
+    })
+    .join('')
 }
 
 function findVisibleOpening(
@@ -105,6 +150,10 @@ function findVisibleOpening(
  * Locate a token in the text Word displays while ignoring OOXML tags. Word can
  * put the first and second closing braces in different runs, for example
  * `}</w:t>...<w:t>}`. A raw `indexOf('}}')` cannot see that valid delimiter.
+ *
+ * Gives up on reaching another opening delimiter: a tag never contains one, so
+ * hitting `{{` or `{%` means the tag being scanned was never closed, and
+ * continuing would swallow every tag after it.
  */
 function findVisibleTokenEnd(
   xml: string,
@@ -113,6 +162,7 @@ function findVisibleTokenEnd(
   limit: number,
 ): number {
   let matched = 0
+  let brace = false
 
   for (let i = from; i < limit; i += 1) {
     if (xml[i] === '<') {
@@ -121,6 +171,9 @@ function findVisibleTokenEnd(
       i = tagEnd
       continue
     }
+
+    if (brace && (xml[i] === '{' || xml[i] === '%')) return -1
+    brace = xml[i] === '{'
 
     if (xml[i] === token[matched]) {
       matched += 1
@@ -133,10 +186,43 @@ function findVisibleTokenEnd(
   return -1
 }
 
-function templatePartError(fileName: string, error: unknown): Error {
+/**
+ * The first delimiter in the prepared XML that is never closed, as the text Word
+ * shows rather than as markup. After the split-tag repair has run, anything
+ * still open is an authoring mistake — a `{{` with no `}}`, usually because the
+ * closing braces were deleted while editing.
+ */
+export function firstUnclosedTag(xml: string): string | null {
+  let i = 0
+
+  while (i < xml.length) {
+    const opening = findVisibleOpening(xml, i)
+    if (!opening) return null
+    const closeToken = opening.kind === 'block' ? '%}' : '}}'
+    const end = findVisibleTokenEnd(xml, opening.end, closeToken, xml.length)
+    if (end === -1) {
+      // Tags become spaces, not nothing, so text from two runs does not read as
+      // one word in the message.
+      const visible = xml.slice(opening.start, opening.start + 400).replace(/<[^>]+>/g, ' ')
+      const shown = visible.replace(/\s+/g, ' ').trim().slice(0, 60)
+      return shown.length === 60 ? `${shown}…` : shown
+    }
+    i = end
+  }
+
+  return null
+}
+
+function templatePartError(fileName: string, error: unknown, preparedXml?: string): Error {
   const message = error instanceof Error ? error.message : String(error)
   const locatedMessage = message.replace('(unknown path)', fileName)
-  return new Error(`Template rendering failed in ${locatedMessage}`, { cause: error })
+  // A line and column into one long line of OOXML tells the attorney nothing
+  // about which merge field to fix. Name the tag instead.
+  const unclosed = preparedXml ? firstUnclosedTag(preparedXml) : null
+  const hint = unclosed
+    ? ` — the tag "${unclosed}" is never closed; check for a missing ${unclosed.startsWith('{%') ? '%}' : '}}'}`
+    : ''
+  return new Error(`Template rendering failed in ${locatedMessage}${hint}`, { cause: error })
 }
 
 function clientFooterName(context: NodeEstateContext): string {
@@ -320,15 +406,17 @@ export function renderNodeEstateDocxTemplate({
     const file = zip.files[fileName]
     if (file.dir || !fileName.startsWith('word/') || !fileName.endsWith('.xml')) continue
 
+    const prepared = repairSplitNunjucksInXml(
+      stripControlOnlyParagraphs(
+        hoistParagraphConditionals(hoistTableRowControls(file.asText())),
+      ),
+    )
+
     let rendered: string
     try {
       rendered = replaceStaticMarkers(
         renderNodeEstateText(
-          repairSplitNunjucksInXml(
-            stripControlOnlyParagraphs(
-              hoistParagraphConditionals(hoistTableRowControls(file.asText())),
-            ),
-          ),
+          prepared,
           context,
           {
             include_clause: (clauseId: string, state?: string) => clauses.include(clauseId, context, state),
@@ -338,7 +426,7 @@ export function renderNodeEstateDocxTemplate({
         context,
       )
     } catch (error) {
-      throw templatePartError(fileName, error)
+      throw templatePartError(fileName, error, prepared)
     }
 
     // Collect the loud `[[ MISSING: field ]]` holes left for empty values so the
