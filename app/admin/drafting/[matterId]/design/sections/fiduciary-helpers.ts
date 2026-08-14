@@ -1,17 +1,21 @@
 import type { FiduciarySlot, FiduciaryRole } from '@/types/database'
 import {
   firstAvailablePrincipalOrder,
+  movePrincipalSlot,
   namedPrincipalSlots,
   normalizeFiduciarySlots,
   principalSlotsByPriority,
+  removeFiduciaryContact,
   repairFiduciarySlotOrdering,
 } from '@/lib/designSheet/fiduciarySlotOrdering'
 
 export {
   firstAvailablePrincipalOrder,
+  movePrincipalSlot,
   namedPrincipalSlots,
   normalizeFiduciarySlots,
   principalSlotsByPriority,
+  removeFiduciaryContact,
   repairFiduciarySlotOrdering,
 }
 
