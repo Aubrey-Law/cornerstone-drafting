@@ -19,6 +19,7 @@ const willOnlyInclusions = {
   deed: false,
   young_adult_estate_plan: false,
   ferpa_release: false,
+  education_poa: false,
   spouse_docs: false,
 }
 

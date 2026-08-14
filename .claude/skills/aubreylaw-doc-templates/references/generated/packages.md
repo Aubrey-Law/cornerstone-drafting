@@ -22,6 +22,47 @@ Massachusetts certification of trust under M.G.L. c. 203E § 1013 and c. 184 § 
 
 Required fields: `client.full_name`, `client.street_address`, `client.city`, `client.state`, `client.pronoun_subject`, `trust.display_name`, `trust.date`, `fiduciaries.trustee.primary.full_name`, `execution.signing_county`, `execution.notary_commission`
 
+## college-advance-directive
+
+College Preparation Plan advance directive (living will). Selected only when the student elected written treatment instructions; the operative articles branch on the life-support, CPR, nutrition, ventilation, and organ-donation answers.
+
+| Document | Template | Output |
+|---|---|---|
+| Advance Directive (Living Will) | `templates/college-advance-directive.docx` | `03-advance-directive.docx` |
+
+Required fields: `client.full_name`, `client.city`
+
+## college-education-poa
+
+College Preparation Plan special durable power of attorney for matters concerning education, so a parent or other agent can deal with the student's school.
+
+| Document | Template | Output |
+|---|---|---|
+| Education Power of Attorney | `templates/college-education-poa.docx` | `06-education-power-of-attorney.docx` |
+
+Required fields: `client.full_name`, `client.city`, `fiduciaries.agent.primary.full_name`
+
+## college-financial-poa
+
+College Preparation Plan general durable power of attorney, drafted from the student's decisions.college_prep answers (effective date, granted powers, withheld powers).
+
+| Document | Template | Output |
+|---|---|---|
+| Durable Power of Attorney | `templates/college-financial-poa.docx` | `01-durable-power-of-attorney.docx` |
+
+Required fields: `client.full_name`, `client.city`, `fiduciaries.agent.primary.full_name`, `college.dpoa_effective`
+
+## college-health-care-documents
+
+College Preparation Plan health care proxy and HIPAA authorization, drafted from the student's decisions.college_prep answers (agent limits and guidance, HIPAA scope, recipients, and expiration).
+
+| Document | Template | Output |
+|---|---|---|
+| Health Care Proxy | `templates/college-health-care-proxy.docx` | `02-health-care-proxy.docx` |
+| HIPAA Authorization | `templates/college-hipaa-authorization.docx` | `04-hipaa-authorization.docx` |
+
+Required fields: `client.full_name`, `client.city`, `client.county`, `client.date_of_birth`, `healthcare.agent.primary.full_name`, `college.hipaa_scope`, `college.hipaa_expiration`
+
 ## core-estate
 
 Core estate-planning package with will, revocable trust, POA, health directive, HIPAA, and ancillary execution documents.
@@ -280,6 +321,11 @@ How `deriveEstateGeneratorPackages()` (lib/estateGenerator/toGeneratorData.ts) t
 | `include_testamentary_trust_will` | `spouse-testamentary-trust-will` | also requires `spouse_docs` |
 | `include_pour_over_will` | `pourover-will` | always when included |
 | `include_pour_over_will` | `spouse-pourover-will` | also requires `spouse_docs` |
+| `include_dpoa` | `college-financial-poa` | College Preparation Plan sheets (`payload.college_prep` set) — replaces `incapacity-documents` |
+| `include_education_poa` | `college-education-poa` | College Preparation Plan sheets, when the education POA is included |
+| `include_hcp` | `college-health-care-documents` | College Preparation Plan sheets — `include_hcp` or `include_hipaa` (single package: proxy + HIPAA) |
+| `include_hipaa` | `college-health-care-documents` | College Preparation Plan sheets — `include_hcp` or `include_hipaa` (single package: proxy + HIPAA) |
+| `include_ahd` | `college-advance-directive` | College Preparation Plan sheets, when the student elected written treatment instructions (`living_will_include === "yes"`) |
 | `include_dpoa` | `incapacity-documents` | any of `include_dpoa` / `include_hcp` / `include_hipaa` / `include_ahd` |
 | `include_hcp` | `incapacity-documents` | any of the four incapacity inclusions (single package) |
 | `include_hipaa` | `incapacity-documents` | any of the four incapacity inclusions (single package) |

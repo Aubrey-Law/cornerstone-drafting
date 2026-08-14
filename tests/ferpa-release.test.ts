@@ -4,6 +4,7 @@ import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 
 import { buildFerpaRelease, ferpaIncludesHealthCenter } from '@/lib/draftPayload/ferpa'
+import { buildCollegePrep } from '@/lib/draftPayload/collegePrep'
 import { buildCollegePrepSeedDecisions } from '@/lib/designSheet/seedCollegePrep'
 import { setCollegePrepDesign } from '@/lib/collegePrepDesign'
 import {
@@ -138,7 +139,7 @@ describe('FERPA release — selection', () => {
     }).ferpa_release).toBe(false)
   })
 
-  it('adds the package alongside the incapacity documents', () => {
+  it('adds the package alongside the college incapacity set', () => {
     const sheet = collegePrepSheet()
     const documents = deriveDocuments(
       'EP',
@@ -159,9 +160,16 @@ describe('FERPA release — selection', () => {
       matter: { type: 'individual' },
       trust: null,
       documents,
+      college_prep: buildCollegePrep(sheet),
     } as unknown as DraftPayload)
 
-    expect(packages).toEqual(['incapacity-documents', 'ferpa-release'])
+    expect(packages).toEqual([
+      'college-financial-poa',
+      'college-education-poa',
+      'college-health-care-documents',
+      'college-advance-directive',
+      'ferpa-release',
+    ])
   })
 
   it('is a package the node generator supports', () => {

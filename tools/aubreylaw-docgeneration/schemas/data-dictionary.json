@@ -1174,5 +1174,155 @@
     "type": "string",
     "required": false,
     "description": "A single child by position, e.g. children[0]. Used by fixed-row worksheets that print a set number of children; prefer iterating the children container instead."
+  },
+  "college.dpoa_effective": {
+    "type": "string",
+    "required": "conditional",
+    "description": "How the college financial power of attorney takes effect: immediately or springing (on incapacity)."
+  },
+  "college.dpoa_powers": {
+    "type": "array",
+    "required": "conditional",
+    "description": "Powers the student granted the financial agent. Reference the container directly in {% for %} and {% if %}; see college.dpoa_powers[].label for member fields."
+  },
+  "college.dpoa_powers[]": {
+    "type": "array",
+    "required": false,
+    "description": "A single power category selected on the College Preparation Plan questionnaire."
+  },
+  "college.dpoa_powers[].key": {
+    "type": "string",
+    "required": false,
+    "description": "Stable key for a granted power category, e.g. banking or tuition."
+  },
+  "college.dpoa_powers[].label": {
+    "type": "string",
+    "required": false,
+    "description": "Display label for a granted power category, e.g. Banking and bank accounts."
+  },
+  "college.dpoa_all_powers": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether every power category the questionnaire offers was granted."
+  },
+  "college.dpoa_withheld": {
+    "type": "string",
+    "required": false,
+    "description": "Powers the student expressly withheld from the financial agent, in the student's own words."
+  },
+  "college.hcp_limits": {
+    "type": "string",
+    "required": false,
+    "description": "Limits the student placed on the health care agent's authority."
+  },
+  "college.hcp_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Guidance the student wants the health care agent to follow."
+  },
+  "college.hipaa_scope": {
+    "type": "string",
+    "required": "conditional",
+    "description": "HIPAA release scope: all, or all_except the withheld categories."
+  },
+  "college.hipaa_excluded_categories": {
+    "type": "array",
+    "required": "conditional",
+    "description": "Sensitive categories withheld from the HIPAA release. Reference the container directly in {% for %} and {% if %}; see college.hipaa_excluded_categories[].label for member fields."
+  },
+  "college.hipaa_excluded_categories[]": {
+    "type": "array",
+    "required": false,
+    "description": "A single withheld sensitive-information category."
+  },
+  "college.hipaa_excluded_categories[].key": {
+    "type": "string",
+    "required": false,
+    "description": "Stable key for a withheld category, e.g. mental_health or substance_use."
+  },
+  "college.hipaa_excluded_categories[].label": {
+    "type": "string",
+    "required": false,
+    "description": "Display label for a withheld category, e.g. Mental health / psychotherapy notes."
+  },
+  "college.hipaa_expiration": {
+    "type": "string",
+    "required": "conditional",
+    "description": "When the HIPAA authorization expires: none (until revoked) or date."
+  },
+  "college.hipaa_expiration_date": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Expiration date printed in the HIPAA authorization when the student chose a dated release."
+  },
+  "college.hipaa_recipients": {
+    "type": "array",
+    "required": "conditional",
+    "description": "People authorized to receive the student's health information. Reference the container directly in {% for %} and {% if %}; see college.hipaa_recipients[].name for member fields."
+  },
+  "college.hipaa_recipients[]": {
+    "type": "array",
+    "required": false,
+    "description": "A single authorized recipient named on the College Preparation Plan questionnaire."
+  },
+  "college.hipaa_recipients[].name": {
+    "type": "string",
+    "required": false,
+    "description": "Authorized recipient's full name."
+  },
+  "college.hipaa_recipients[].relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Authorized recipient's relationship to the student, e.g. Parent."
+  },
+  "college.hipaa_recipients[].phone": {
+    "type": "string",
+    "required": false,
+    "description": "Authorized recipient's phone number."
+  },
+  "college.excluded_people": {
+    "type": "string",
+    "required": false,
+    "description": "People the student expressly does not want to receive health information."
+  },
+  "college.living_will_include": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Whether the plan includes written treatment instructions (the advance directive): yes or no."
+  },
+  "college.life_support": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Life-sustaining treatment instruction: all_measures, comfort_only, or trust_agent."
+  },
+  "college.cpr": {
+    "type": "string",
+    "required": false,
+    "description": "CPR preference: yes, no, or agent_decides."
+  },
+  "college.artificial_nutrition": {
+    "type": "string",
+    "required": false,
+    "description": "Artificial nutrition and hydration preference: yes, no, or agent_decides."
+  },
+  "college.ventilation": {
+    "type": "string",
+    "required": false,
+    "description": "Mechanical ventilation preference: yes, no, or agent_decides."
+  },
+  "college.comfort_always": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the directive adds the always-provide-comfort-care sentence."
+  },
+  "college.organ_donation": {
+    "type": "string",
+    "required": false,
+    "description": "Organ donation election: any, specific, or no."
+  },
+  "college.organ_donation_notes": {
+    "type": "string",
+    "required": false,
+    "description": "Organs or purposes named when the donation election is specific."
   }
 }

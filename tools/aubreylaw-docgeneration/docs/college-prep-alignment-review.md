@@ -12,11 +12,13 @@ vocabulary in `lib/collegePrepFields.ts`, drafting model in
 | `financial-poa-college-plan-v1.docx` | General Durable Power of Attorney |
 | `health-care-documents-college-plan-v1.docx` | Health Care Proxy + Advance Directive + HIPAA Authorization + FERPA Authorization (one file, four instruments) |
 
-**Status: reviewed, not yet wired.** These templates already use Nunjucks
-merge syntax, but they do not read any of the college-prep answers, and the
-college track currently generates the *estate* `incapacity-documents`
-package. This document records every field-level defect and every gap
-between the template text and the design choices, plus the wiring plan.
+**Status: implemented.** The conversion and wiring described below shipped as
+the `college-financial-poa`, `college-education-poa`,
+`college-health-care-documents`, and `college-advance-directive` packages —
+see `docs/college-prep-placeholder-map.md` for the field-by-field map and the
+list of new language awaiting attorney review. This document is retained as
+the record of the field audit and design-gap analysis that drove the
+conversion.
 
 ---
 

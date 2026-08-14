@@ -48,6 +48,10 @@ export type EstateGeneratorPackage =
   | 'young-adult-estate-plan'
   | 'ferpa-release'
   | 'will-cp'
+  | 'college-financial-poa'
+  | 'college-education-poa'
+  | 'college-health-care-documents'
+  | 'college-advance-directive'
 
 export interface EstateGeneratorData {
   client: Record<string, unknown>
@@ -68,6 +72,7 @@ export interface EstateGeneratorData {
   hipaa: Record<string, unknown>
   ferpa: Record<string, unknown>
   will_cp: Record<string, unknown>
+  college: Record<string, unknown>
   execution: Record<string, unknown>
   specific_gifts: unknown[]
   charitable_gifts: unknown[]
@@ -357,7 +362,25 @@ export function deriveEstateGeneratorPackages(payload: DraftPayload): EstateGene
     }
   }
 
-  if (docs.include_dpoa || docs.include_hcp || docs.include_hipaa || docs.include_ahd) {
+  // The College Preparation Plan replaces the estate incapacity set with the
+  // student's own documents, drafted from `decisions.college_prep`. The
+  // advance directive is a separate package because the student may decline
+  // written treatment instructions and leave everything to the agent.
+  const college = payload.college_prep ?? null
+  if (college) {
+    if (docs.include_dpoa) {
+      packages.push('college-financial-poa')
+    }
+    if (docs.include_education_poa) {
+      packages.push('college-education-poa')
+    }
+    if (docs.include_hcp || docs.include_hipaa) {
+      packages.push('college-health-care-documents')
+    }
+    if (docs.include_ahd && college.living_will_include === 'yes') {
+      packages.push('college-advance-directive')
+    }
+  } else if (docs.include_dpoa || docs.include_hcp || docs.include_hipaa || docs.include_ahd) {
     packages.push('incapacity-documents')
     if (docs.spouse_docs) {
       packages.push('spouse-incapacity-documents')
@@ -534,6 +557,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   const hcpProvisions = payload.hcp_provisions
   const hipaaProvisions = payload.hipaa_provisions
   const ferpa = payload.ferpa_release ?? null
+  const collegePrep = payload.college_prep ?? null
   const hipaaClientAgents = hipaaProvisions.client_additional_agents ?? []
   const hipaaSpouseAgents = hipaaProvisions.spouse_additional_agents ?? []
 
@@ -617,6 +641,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       include_parental_appointment: docs.include_parental_appointment,
       include_young_adult_estate_plan: docs.include_young_adult_estate_plan,
       include_ferpa_release: docs.include_ferpa_release,
+      include_education_poa: docs.include_education_poa,
       spouse_docs: docs.spouse_docs,
       client_goals: payload.goals_notes ?? null,
       client_concerns: payload.concerns ?? null,
@@ -877,6 +902,37 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       all_records: ferpa?.all_records ?? false,
       includes_health_center: ferpa?.includes_health_center ?? false,
       recipients: ferpa?.recipients ?? '',
+    },
+    college: {
+      dpoa_effective: collegePrep?.dpoa_effective ?? '',
+      dpoa_powers: (collegePrep?.dpoa_powers ?? []).map(power => ({ key: power.key, label: power.label })),
+      dpoa_all_powers: collegePrep?.dpoa_all_powers ?? false,
+      dpoa_withheld: collegePrep?.dpoa_withheld ?? '',
+      hcp_limits: collegePrep?.hcp_limits ?? '',
+      hcp_instructions: collegePrep?.hcp_instructions ?? '',
+      hipaa_scope: collegePrep?.hipaa_scope ?? '',
+      hipaa_excluded_categories: (collegePrep?.hipaa_excluded_categories ?? []).map(category => ({
+        key: category.key,
+        label: category.label,
+      })),
+      hipaa_expiration: collegePrep?.hipaa_expiration ?? '',
+      hipaa_expiration_date: formatLongDate(collegePrep?.hipaa_expiration_date)
+        ?? collegePrep?.hipaa_expiration_date
+        ?? '',
+      hipaa_recipients: (collegePrep?.hipaa_recipients ?? []).map(recipient => compactObject({
+        name: recipient.name,
+        relationship: recipient.relationship ?? undefined,
+        phone: formatPhoneDisplay(recipient.phone) || undefined,
+      })),
+      excluded_people: collegePrep?.excluded_people ?? '',
+      living_will_include: collegePrep?.living_will_include ?? '',
+      life_support: collegePrep?.life_support ?? '',
+      cpr: collegePrep?.cpr ?? '',
+      artificial_nutrition: collegePrep?.artificial_nutrition ?? '',
+      ventilation: collegePrep?.ventilation ?? '',
+      comfort_always: collegePrep?.comfort_always ?? false,
+      organ_donation: collegePrep?.organ_donation ?? '',
+      organ_donation_notes: collegePrep?.organ_donation_notes ?? '',
     },
     hipaa: {
       psychotherapy_notes: hipaaProvisions.psychotherapy_notes,

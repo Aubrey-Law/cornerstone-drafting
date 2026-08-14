@@ -1,0 +1,27 @@
+{
+  "name": "college-health-care-documents",
+  "description": "College Preparation Plan health care proxy and HIPAA authorization, drafted from the student's decisions.college_prep answers (agent limits and guidance, HIPAA scope, recipients, and expiration).",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "client.county",
+    "client.date_of_birth",
+    "healthcare.agent.primary.full_name",
+    "college.hipaa_scope",
+    "college.hipaa_expiration"
+  ],
+  "documents": [
+    {
+      "id": "college-health-care-proxy",
+      "title": "Health Care Proxy",
+      "template": "templates/college-health-care-proxy.docx",
+      "output": "02-health-care-proxy.docx"
+    },
+    {
+      "id": "college-hipaa-authorization",
+      "title": "HIPAA Authorization",
+      "template": "templates/college-hipaa-authorization.docx",
+      "output": "04-hipaa-authorization.docx"
+    }
+  ]
+}

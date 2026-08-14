@@ -25,6 +25,10 @@ export const NODE_SUPPORTED_PACKAGES = new Set<NodeEstatePackageName>([
   'young-adult-estate-plan',
   'ferpa-release',
   'will-cp',
+  'college-financial-poa',
+  'college-education-poa',
+  'college-health-care-documents',
+  'college-advance-directive',
 ])
 
 export function isNodeEstatePackageSupported(packageName: string): packageName is NodeEstatePackageName {

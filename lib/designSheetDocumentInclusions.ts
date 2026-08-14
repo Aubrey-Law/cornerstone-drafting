@@ -3,7 +3,7 @@ import { getCollegePrepDesign, isCollegePrepDesignSheet } from '@/lib/collegePre
 import { hasYoungAdultEstatePlanChild } from '@/lib/youngAdultEstatePlan'
 import type { DesignSheet } from '@/types/database'
 
-export type DesignDocumentKey = 'trust' | 'will' | 'dpoa' | 'healthcare' | 'deed' | 'young_adult_estate_plan' | 'ferpa_release'
+export type DesignDocumentKey = 'trust' | 'will' | 'dpoa' | 'healthcare' | 'deed' | 'young_adult_estate_plan' | 'ferpa_release' | 'education_poa'
 
 export type DesignDocumentInclusions = Record<DesignDocumentKey, boolean> & {
   spouse_docs: boolean
@@ -46,6 +46,7 @@ export const DESIGN_DOCUMENT_LABELS: Record<DesignDocumentKey, string> = {
   deed: 'Deed',
   young_adult_estate_plan: 'Young Adult Estate Plan',
   ferpa_release: 'FERPA Release',
+  education_poa: 'Education Power of Attorney',
 }
 
 export const ESTATE_PLAN_ANCILLARY_LABELS: Record<EstatePlanAncillaryDocumentKey, string> = {
@@ -73,10 +74,11 @@ export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' |
   const isMarried = sheet.matter_type === 'couple'
   const hasYoungAdultChild = hasYoungAdultEstatePlanChild(sheet.children)
 
-  // A College Preparation Plan is four documents for one student — the durable
-  // power of attorney, health care proxy, HIPAA authorization, and living will
-  // — plus an optional simple will (residue to the parents) when the family
-  // asks for one. Nothing else on the estate side of this list applies.
+  // A College Preparation Plan is one student's incapacity set — the durable
+  // power of attorney, education power of attorney, health care proxy, HIPAA
+  // authorization, and (when elected) living will — plus an optional simple
+  // will (residue to the parents) when the family asks for one. Nothing else
+  // on the estate side of this list applies.
   if (isCollegePrepDesignSheet(sheet)) {
     const collegePrep = getCollegePrepDesign(sheet)
     return {
@@ -91,6 +93,7 @@ export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' |
       // Education records sit outside HIPAA, so the release is a separate
       // document — and only when the student asked for one.
       ferpa_release: collegePrep.ferpa_release === true,
+      education_poa: true,
       spouse_docs: false,
     }
   }
@@ -102,9 +105,10 @@ export function defaultDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' |
     healthcare: true,
     deed: false,
     young_adult_estate_plan: hasYoungAdultChild,
-    // A FERPA release belongs to the College Preparation Plan; an estate client
-    // has no education records to authorize.
+    // A FERPA release and the education power of attorney belong to the
+    // College Preparation Plan; an estate client has neither.
     ferpa_release: false,
+    education_poa: false,
     spouse_docs: isMarried,
   }
 }
@@ -124,6 +128,7 @@ export function getDocumentInclusions(sheet: Pick<DesignSheet, 'plan_type' | 'ma
       ? raw.young_adult_estate_plan
       : defaults.young_adult_estate_plan,
     ferpa_release: typeof raw.ferpa_release === 'boolean' ? raw.ferpa_release : defaults.ferpa_release,
+    education_poa: typeof raw.education_poa === 'boolean' ? raw.education_poa : defaults.education_poa,
     spouse_docs: typeof raw.spouse_docs === 'boolean' ? raw.spouse_docs : defaults.spouse_docs,
   }
 }

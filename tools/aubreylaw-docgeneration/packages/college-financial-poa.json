@@ -1,0 +1,18 @@
+{
+  "name": "college-financial-poa",
+  "description": "College Preparation Plan general durable power of attorney, drafted from the student's decisions.college_prep answers (effective date, granted powers, withheld powers).",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "fiduciaries.agent.primary.full_name",
+    "college.dpoa_effective"
+  ],
+  "documents": [
+    {
+      "id": "college-financial-poa",
+      "title": "Durable Power of Attorney",
+      "template": "templates/college-financial-poa.docx",
+      "output": "01-durable-power-of-attorney.docx"
+    }
+  ]
+}

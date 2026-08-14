@@ -1,0 +1,87 @@
+{
+  "client": {
+    "full_name": "Rowan Delgado",
+    "street_address": "12 Elm Street",
+    "city": "Newton",
+    "state": "MA",
+    "county": "Middlesex",
+    "signing_county": "Middlesex",
+    "date_of_birth": "April 2, 2007",
+    "pronoun_subject": "they",
+    "pronoun_object": "them",
+    "pronoun_possessive": "their"
+  },
+  "fiduciaries": {
+    "agent": {
+      "primary": { "full_name": "Alma Delgado" },
+      "successor": { "full_name": "Marcus Delgado" }
+    }
+  },
+  "healthcare": {
+    "agent": {
+      "primary": {
+        "full_name": "Alma Delgado",
+        "relationship": "Parent",
+        "address": "12 Elm Street, Newton, MA 02458",
+        "phone": "(617) 555-0142"
+      },
+      "alternate": {
+        "full_name": "Marcus Delgado",
+        "relationship": "Parent",
+        "address": "12 Elm Street, Newton, MA 02458",
+        "phone": "(617) 555-0143"
+      }
+    }
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "doc_date": "August 14, 2026",
+    "ordinal_doc_date": "the 14th day of August, 2026",
+    "signing_county": "Middlesex",
+    "notary_commission": "January 1, 2030"
+  },
+  "planning": {
+    "include_dpoa": true,
+    "include_hcp": true,
+    "include_hipaa": true,
+    "include_ahd": true,
+    "include_education_poa": true
+  },
+  "college": {
+    "dpoa_effective": "springing",
+    "dpoa_powers": [
+      { "key": "banking", "label": "Banking and bank accounts" },
+      { "key": "bills", "label": "Paying bills and routine expenses" },
+      { "key": "tuition", "label": "Tuition, bursar, and student accounts" },
+      { "key": "financial_aid", "label": "Financial aid office and scholarships" },
+      { "key": "student_loans", "label": "Student loans and loan servicers" },
+      { "key": "housing", "label": "Leases, housing, and security deposits" },
+      { "key": "insurance_claims", "label": "Insurance claims of any kind" },
+      { "key": "digital", "label": "Digital accounts and online access" }
+    ],
+    "dpoa_all_powers": false,
+    "dpoa_withheld": "making gifts of my property to any person, and changing any beneficiary designation",
+    "hcp_limits": "my Agent may not consent to my long-term admission to a psychiatric facility without a second physician's opinion",
+    "hcp_instructions": "please involve my grandmother, Lucia Delgado, in any serious decision if she is reachable",
+    "hipaa_scope": "all_except",
+    "hipaa_excluded_categories": [
+      { "key": "mental_health", "label": "Mental health / psychotherapy notes" },
+      { "key": "reproductive", "label": "Reproductive and sexual health" }
+    ],
+    "hipaa_expiration": "date",
+    "hipaa_expiration_date": "June 30, 2030",
+    "hipaa_recipients": [
+      { "name": "Alma Delgado", "relationship": "Parent", "phone": "(617) 555-0142" },
+      { "name": "Marcus Delgado", "relationship": "Parent", "phone": "(617) 555-0143" }
+    ],
+    "excluded_people": "my uncle, Victor Delgado",
+    "living_will_include": "yes",
+    "life_support": "comfort_only",
+    "cpr": "agent_decides",
+    "artificial_nutrition": "no",
+    "ventilation": "agent_decides",
+    "comfort_always": true,
+    "organ_donation": "specific",
+    "organ_donation_notes": "corneas and kidneys, for transplantation only"
+  }
+}

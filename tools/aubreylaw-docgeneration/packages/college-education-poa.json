@@ -1,0 +1,17 @@
+{
+  "name": "college-education-poa",
+  "description": "College Preparation Plan special durable power of attorney for matters concerning education, so a parent or other agent can deal with the student's school.",
+  "required_fields": [
+    "client.full_name",
+    "client.city",
+    "fiduciaries.agent.primary.full_name"
+  ],
+  "documents": [
+    {
+      "id": "college-education-poa",
+      "title": "Education Power of Attorney",
+      "template": "templates/college-education-poa.docx",
+      "output": "06-education-power-of-attorney.docx"
+    }
+  ]
+}
