@@ -265,6 +265,42 @@ describe('intake questionnaire follows the practice area', () => {
     expect(getCollegePrepDesign(switched).living_will_include).toBeNull()
   })
 
+  it('sets the questionnaire when a matter is created on the college track', () => {
+    // create_matter_with_client writes the practice area onto the intake but
+    // not the questionnaire, so the row takes the 'estate' column default. The
+    // design-sheet seed reads the same field, so the reconcile has to land
+    // before it or a new College Preparation Plan seeds an estate sheet too.
+    const route = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/admin/matters/create/route.ts'),
+      'utf8',
+    )
+    const trackAt = route.indexOf('reconcileMatterIntakeTrack(admin, row.matter_id, practiceArea)')
+    const seedAt = route.indexOf('ensureDesignSheetSeededFromIntake(row.matter_id)')
+
+    expect(trackAt).toBeGreaterThan(-1)
+    expect(seedAt).toBeGreaterThan(trackAt)
+  })
+
+  it('reads the attorney intake sheet as college prep from the practice area too', () => {
+    // Matters created before the questionnaire followed the practice area keep
+    // the 'estate' default, so the sheet must not trust the track alone.
+    const sheet = fs.readFileSync(
+      path.join(process.cwd(), 'components/AdminIntakeSheet.tsx'),
+      'utf8',
+    )
+
+    expect(sheet).toContain(
+      "intakeTrack === 'college_prep' || isCollegePrepPracticeArea(practiceArea)",
+    )
+  })
+
+  it('recognises the practice area label the intake sheet is handed', () => {
+    // The sheet receives practiceAreaLabel(...), not the stored code.
+    expect(isCollegePrepPracticeArea('College Preparation Plan')).toBe(true)
+    expect(isCollegePrepPracticeArea('Estate Planning')).toBe(false)
+    expect(isCollegePrepPracticeArea('')).toBe(false)
+  })
+
   it('reclassifies the questionnaire before the design sheet adopts the answers', () => {
     // Order matters: reconcilePlanTrackDecisions only adopts the student's
     // questionnaire answers when the intake is already on the college track.
