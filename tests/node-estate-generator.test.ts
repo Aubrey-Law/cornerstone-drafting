@@ -668,25 +668,29 @@ describe('node estate generator text rendering', () => {
   })
 
   describe('repairSplitNunjucksInXml', () => {
+    // The repair rejoins a split tag by collecting its text into the first run
+    // rather than deleting the markup in between, so a span reaching across a
+    // table cell cannot merge two cells. These therefore assert the text Word
+    // shows — the tag is contiguous — and leave the run structure to
+    // tests/template-split-tag-repair.test.ts, which asserts it is preserved.
+    const visibleText = (xml: string) =>
+      [...xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(match => match[1]).join('')
+
     it('joins merge tags Word split across runs with OOXML in between', () => {
       const xml = '<w:p><w:r><w:t>{% if </w:t></w:r><w:r><w:t>client.aka</w:t></w:r><w:r><w:t> %}shown{% endif %}</w:t></w:r></w:p>'
-      expect(repairSplitNunjucksInXml(xml)).toBe(
-        '<w:p><w:r><w:t>{% if client.aka %}shown{% endif %}</w:t></w:r></w:p>',
-      )
+      expect(visibleText(repairSplitNunjucksInXml(xml))).toBe('{% if client.aka %}shown{% endif %}')
     })
 
     it('joins a closing delimiter split across Word proofing runs', () => {
       const xml = '<w:p><w:r><w:t xml:space="preserve">{{ </w:t></w:r><w:proofErr w:type="spellStart"/><w:r><w:t>execution.display_notary_commission</w:t></w:r><w:r><w:t xml:space="preserve"> }</w:t></w:r><w:proofErr w:type="gramEnd"/><w:r><w:t>}</w:t></w:r></w:p>'
-      expect(repairSplitNunjucksInXml(xml)).toBe(
-        '<w:p><w:r><w:t xml:space="preserve">{{ execution.display_notary_commission }}</w:t></w:r></w:p>',
-      )
+      expect(visibleText(repairSplitNunjucksInXml(xml)))
+        .toBe('{{ execution.display_notary_commission }}')
     })
 
     it('joins an opening control delimiter split across Word proofing runs', () => {
       const xml = '<w:p><w:r><w:t>{{ healthcare.agent.second_alternate.phone }}{</w:t></w:r><w:proofErr w:type="gramEnd"/><w:r><w:t>% endif %}</w:t></w:r></w:p>'
-      expect(repairSplitNunjucksInXml(xml)).toBe(
-        '<w:p><w:r><w:t>{{ healthcare.agent.second_alternate.phone }}{% endif %}</w:t></w:r></w:p>',
-      )
+      expect(visibleText(repairSplitNunjucksInXml(xml)))
+        .toBe('{{ healthcare.agent.second_alternate.phone }}{% endif %}')
     })
 
     it('does not consume a later paragraph when a delimiter is incomplete', () => {
