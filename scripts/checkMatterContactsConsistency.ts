@@ -8,6 +8,18 @@
  * for the few days before step 3 flips the readers. A gap found now is cheap;
  * the same gap found after the readers move is a wrong draft.
  */
+import { config } from 'dotenv'
+
+// The script is run from a shell, not from Next, so nothing has loaded the
+// environment yet — without this it dies on "supabaseUrl is required". Same
+// order and flags seedBrowserFixture uses: `override: false` means an
+// already-exported variable still wins, so callers can point it at a different
+// database without editing a file.
+config({ path: '.env.test', override: false })
+config({ path: '.env.local', override: false })
+
+// Static import is safe: getAdminClient reads the environment when it is first
+// called, inside main(), not when this module is evaluated.
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
   compareRepresentations,
