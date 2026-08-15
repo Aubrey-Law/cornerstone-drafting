@@ -169,6 +169,29 @@ describe('estate clause override request contracts', () => {
     await expect(conflict.json()).resolves.toEqual({ error: 'Current estate clause revision changed; refresh and try again' })
     expect(overrideMutationErrorResponse(new Error('database unavailable')).status).toBe(500)
   })
+
+  it('returns an incomplete drafting prerequisite as a client error instead of a server failure', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/apiAuth', () => ({
+      requireAdmin: vi.fn().mockResolvedValue({ err: null, userId: 'attorney-1' }),
+    }))
+    vi.doMock('@/lib/buildDraftPayload', () => ({
+      resolveMatterId: vi.fn().mockResolvedValue('matter-1'),
+      buildDraftPayload: vi.fn().mockRejectedValue(new Error('Matter type must be confirmed before drafting')),
+    }))
+    vi.doMock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({}) }))
+
+    const { GET } = await import('@/app/api/admin/matters/[id]/estate-clause-overrides/route')
+    const result = await GET(
+      new Request('http://localhost/api/admin/matters/matter-1/estate-clause-overrides'),
+      { params: Promise.resolve({ id: 'matter-1' }) },
+    )
+
+    expect(result).toBeDefined()
+    if (!result) throw new Error('Expected the route to return a response')
+    expect(result.status).toBe(400)
+    await expect(result.json()).resolves.toEqual({ error: 'Matter type must be confirmed before drafting' })
+  })
 })
 
 describe('matter clause override panel', () => {

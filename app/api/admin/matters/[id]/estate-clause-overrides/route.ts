@@ -22,6 +22,8 @@ import { toEstateGeneratorData } from '@/lib/estateGenerator/toGeneratorData'
 
 type Params = { params: Promise<{ id: string }> }
 
+class DraftPrerequisiteError extends Error {}
+
 type OverrideRow = {
   id: string
   clause_id: string
@@ -59,7 +61,12 @@ function defaultOutcome(
 
 async function loadEligibleClauses(canonicalMatterId: string) {
   const admin = getAdminClient()
-  const payload = await buildDraftPayload(canonicalMatterId)
+  let payload: DraftPayload
+  try {
+    payload = await buildDraftPayload(canonicalMatterId)
+  } catch (error) {
+    throw new DraftPrerequisiteError(error instanceof Error ? error.message : 'Draft prerequisites are incomplete')
+  }
   const references = await selectedEstateTemplateReferences(payload)
   const referencedTypes = new Map<string, Set<EstateDocumentType>>()
   for (const reference of references) {
@@ -165,7 +172,10 @@ export async function GET(req: Request, params: Params) {
         .sort((a, b) => a.clauseKey.localeCompare(b.clauseKey)),
     })
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Unable to load clause overrides' }, { status: 500 })
+    return Response.json(
+      { error: error instanceof Error ? error.message : 'Unable to load clause overrides' },
+      { status: error instanceof DraftPrerequisiteError ? 400 : 500 },
+    )
   }
 }
 
@@ -203,6 +213,9 @@ export async function PUT(req: Request, params: Params) {
     if (error) throw new Error(error.message)
     return Response.json({ override: data })
   } catch (error) {
+    if (error instanceof DraftPrerequisiteError) {
+      return Response.json({ error: error.message }, { status: 400 })
+    }
     return overrideMutationErrorResponse(error)
   }
 }
