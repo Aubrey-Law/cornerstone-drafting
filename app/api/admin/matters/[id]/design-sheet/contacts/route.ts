@@ -200,8 +200,6 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     if (matterError) throw new Error(matterError.message)
     if (!matter?.client_intake_id) throw new Error('This matter is missing a client intake record.')
 
-    const intakeId = matter.client_intake_id as string
-
     // Scoped to the matter rather than the household — see
     // lib/contacts/assertContactOnMatter.ts.
     const { onMatter, relationshipType } = await contactOnMatter(admin, matterId, contactId)
@@ -213,9 +211,11 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       )
     }
 
-    const { data: deletedCount, error } = await admin.rpc('delete_intake_contact', {
+    // Scoped to this matter — see delete_matter_contact in
+    // 20260927000000_matter_contacts_rls.sql.
+    const { data: deletedCount, error } = await admin.rpc('delete_matter_contact', {
       p_contact_id: contactId,
-      p_client_intake_id: intakeId,
+      p_matter_id: matterId,
     })
 
     if (error) throw new Error(error.message)

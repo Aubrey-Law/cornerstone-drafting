@@ -1,6 +1,6 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: steps 1–3 shipped (§10, §13, §14, §15). Steps 4–7 are still proposal.
+Status: steps 1–3 shipped, step 4 partly (§10, §13–§16). Steps 5–7 are still proposal.
 
 ## 1. The problem
 
@@ -380,8 +380,10 @@ Each step is independently shippable and leaves the app working.
    before starting step 3.
 3. **Flip the readers.** ✅ Shipped — see §15. Every contact *read* goes
    through the join; `contacts.client_intake_id` is write-only.
-4. **Fix the single-row assumptions** (§5) and rewrite RLS (§7). After this,
-   a second matter per client is *safe* but not yet reachable from the UI.
+4. **Fix the single-row assumptions** (§5) and rewrite RLS (§7). 🟡 RLS and
+   contact removal shipped — see §16. The §5 lookups are blocked on decision
+   §12.3 (whether a second engagement reuses its client's intake), which
+   decides whether they are wrong at all.
 5. **Open the door.** Matter creation accepts an existing `client_intake_id`
    / contact instead of always inserting; add a "New matter for this client"
    action; matter and contact pages list all related matters.
@@ -637,3 +639,78 @@ One of those caught something real: the lead PATCH route sets `matterId` only
 when a conversion happens, so keying the post-write spouse read on it alone
 would have returned a null spouse from every ordinary lead edit. It falls back
 to the lead's existing matter.
+
+## 16. Step 4 as built (partial)
+
+Two halves. The authorization half shipped; the §5 lookups are blocked on a
+decision.
+
+### Shipped — `20260927000000_matter_contacts_rls.sql`
+
+**RLS moved onto the join.** The portal policies traversed
+`contacts.client_intake_id → client_intake → auth.uid()`. That column is
+write-only after step 3 and is dropped in step 7, at which point the policies
+would have matched nothing. RLS failing closed beats failing open, but it would
+have taken the portal's fiduciary picker
+(`components/intake/FiduciaryContactPicker.tsx`, the one client-side reader on
+the anon key) down with it.
+
+**Narrowed from `FOR ALL` to `SELECT`.** The portal has that one reader and no
+client-side writer — every portal write goes through a service-role route,
+which bypasses RLS entirely, so granting INSERT/UPDATE/DELETE to `authenticated`
+was permitting more than anything used. `FOR ALL` would also have been
+unusable: its `WITH CHECK` runs against the row being inserted, and a new
+contact has no join row yet (the step 2 trigger adds it immediately after), so
+every portal insert would have failed the check.
+
+**Contact removal is now per matter.** `delete_intake_contact` deleted the
+person and all their roles. With one person on several matters that erases them
+everywhere — removing a trustee from the 2026 engagement would have taken them
+off the 2024 one. `delete_matter_contact(contact, matter)` detaches from the
+named matter, clears only that matter's appointments, and deletes the person
+only once no matter references them. The old function stays until step 7 so a
+deploy racing the migration keeps working.
+
+**Verified against PostgreSQL 16**, with RLS actually enabled and `auth.uid()`
+stubbed per session — the first run silently passed because the fixture had
+never enabled RLS on `contacts`, which is worth remembering when reading any
+policy test:
+
+- A portal client sees exactly the people on their matters; a signed-in user
+  with no matter sees none; writes are refused.
+- Standalone directory contacts stay invisible to every portal user.
+- Removing someone from one of their two matters leaves the person and their
+  other matter intact; removing them from the last one deletes them; detaching
+  a contact who was never on the matter is a no-op.
+
+**Decision §12.1 is now concrete rather than hypothetical.** A person named on
+two clients' matters is visible to both of those clients — demonstrated with a
+trustee shared between two households. Neither client gains any other visibility
+into the other's household. That is the intended semantics (it is what lets a
+parent and child share one record), but it is a real widening and should be
+confirmed rather than assumed.
+
+### Blocked — the §5 lookups
+
+Seven places resolve a matter from an intake with `.maybeSingle()`
+(`resolveMatterId`, `adminIntake`, the portal intake routes, `createLead`,
+`syncAssetIntakeToDesignSheet`, the intake shell). Whether any of them is wrong
+depends entirely on decision §12.3:
+
+- **New intake per engagement** — which is what `create_matter_with_client`
+  does today — keeps intake → matter at 1:1 forever, and every one of these
+  stays correct. Step 5 would instead attach the *existing* person to the new
+  matter rather than letting `sync_matter_contacts_from_matter` mint a fresh
+  self contact.
+- **Shared intake across engagements** makes all seven ambiguous, and each
+  needs a matter threaded through from its caller.
+
+`lib/queries/contactsDirectory.ts` needs work under either branch, but different
+work: a shared intake means one person with several matter numbers, while a new
+intake per engagement means the same human appears as several directory rows and
+the directory has to key on `contacts` instead.
+
+Note that §5's own table says to drop `client_intake.matter_id` and "query
+`matters where client_intake_id = …`" instead — that is self-contradictory under
+a shared intake, since it is exactly the ambiguous lookup. Whichever branch is
+chosen, that row of the spec needs rewriting.
