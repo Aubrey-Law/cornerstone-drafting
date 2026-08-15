@@ -33,6 +33,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { MobileRecordSectionSelect } from '@/components/admin/MobileRecordSectionSelect'
 import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
@@ -81,6 +82,19 @@ const MatterAssetsTab = dynamic(
 type LeadRecord = LeadDetailRecord
 type LeadSpouse = LeadSpouseRecord
 type LeadActivityRow = LeadActivityViewRow
+
+const LEAD_SECTION_OPTIONS: readonly { value: LeadTab; label: string }[] = [
+  { value: 'plan', label: 'Plan' },
+  { value: 'tasks', label: 'Tasks' },
+  { value: 'sla', label: 'SLA plan' },
+  { value: 'timeline', label: 'Timeline' },
+  { value: 'communications', label: 'Communications' },
+  { value: 'intake', label: 'Intake' },
+  { value: 'people', label: 'People' },
+  { value: 'assets', label: 'Assets' },
+  { value: 'documents', label: 'Documents' },
+  { value: 'notes', label: 'Notes' },
+]
 
 type LeadDetailClientProps = {
   lead: LeadRecord
@@ -788,7 +802,13 @@ export function LeadDetailClient({
             </div>
           )}
           <Tabs value={activeTab} onValueChange={value => changeTab(value as LeadTab)}>
-            <TabsList className="w-full justify-start overflow-x-auto bg-background">
+            <MobileRecordSectionSelect
+              label="Lead section"
+              value={activeTab}
+              options={LEAD_SECTION_OPTIONS}
+              onValueChange={changeTab}
+            />
+            <TabsList className="hidden w-full justify-start overflow-x-auto bg-background md:flex">
               <TabsTrigger value="plan">Plan</TabsTrigger>
               <TabsTrigger value="tasks" className="gap-1.5">
                 Tasks

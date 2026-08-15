@@ -114,6 +114,15 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+        aria-label="Search"
+        data-testid="mobile-global-search-trigger"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
         className="hidden max-w-sm flex-1 items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-xs md:flex"
         aria-label="Search"
       >

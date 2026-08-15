@@ -281,7 +281,7 @@ export default function AdminLayoutClient({
             </Button>
             <span className="text-sm font-semibold">Cornerstone</span>
           </div>
-          <div className="hidden md:block md:flex-1 md:max-w-md">
+          <div className="ml-auto md:ml-0 md:block md:flex-1 md:max-w-md">
             <GlobalSearch />
           </div>
           <div className="hidden md:block md:flex-1" />

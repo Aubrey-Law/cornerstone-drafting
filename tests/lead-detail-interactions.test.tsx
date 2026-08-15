@@ -41,6 +41,15 @@ function header() {
 }
 
 describe('lead detail page', () => {
+  it('changes the active record section from the mobile selector', async () => {
+    const user = userEvent.setup()
+    render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={[]} />)
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Lead section' }), 'documents')
+
+    expect(router.replace).toHaveBeenCalledWith('/admin/leads/l1?tab=documents', { scroll: false })
+  })
+
   it('renders the intake status strip without duplicate next actions', () => {
     render(<LeadIntakeCard intake={{}} intakeUrl={null} onOpen={vi.fn()} onCopy={vi.fn()} />)
 
@@ -254,7 +263,7 @@ describe('lead detail page', () => {
     expect(within(header()).getByRole('button', { name: 'Resume engagement' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'More actions' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'Toggle details rail' })).toBeTruthy()
-    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(within(header()).queryByRole('combobox')).toBeNull()
     expect(screen.queryByText(/Last touch/)).toBeNull()
 
     await openOverflow(user)

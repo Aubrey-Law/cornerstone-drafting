@@ -4,8 +4,15 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, CheckCircle2, ChevronRight, FilePenLine, FileText, ListChecks, Sparkles } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, FilePenLine, FileText, ListChecks, MoreHorizontal, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
 import { nextConsumedDesignFocus, shouldConsumeDesignFocus } from '@/lib/designFocusNavigation'
@@ -122,12 +129,16 @@ export default function DraftingWorkspace({
 
   const rawDesignSection = searchParams.get('section')
   const clientDisplayName = matter.client_name || 'Unnamed client'
+  const stepIndex = STEPS.findIndex(candidate => candidate.id === step)
+  const currentStep = STEPS[stepIndex]
+  const previousStep = STEPS[stepIndex - 1]
+  const nextStep = STEPS[stepIndex + 1]
 
   return (
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       {/* Workspace header */}
       <div className="shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-2 md:gap-4">
           <nav aria-label="Breadcrumb" className="min-w-0">
             <ol className="flex min-w-0 items-center gap-2 text-sm">
               <li className="shrink-0">
@@ -141,7 +152,7 @@ export default function DraftingWorkspace({
               </li>
             </ol>
           </nav>
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="hidden shrink-0 items-center gap-4 sm:flex">
             <Link
               href={`/admin/drafting/${matterId}/quick`}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -157,10 +168,60 @@ export default function DraftingWorkspace({
               Back to matter
             </Link>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 sm:hidden" aria-label="Drafting actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href={`/admin/drafting/${matterId}/quick`}>
+                  <Sparkles className="h-4 w-4" />
+                  Quick draft a document
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={`/admin/matters/${matterId}`}>
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to matter
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
+        <nav className="mt-3 flex items-center gap-2 md:hidden" aria-label="Drafting steps">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            aria-label="Previous drafting step"
+            disabled={!previousStep}
+            onClick={() => previousStep && setStep(previousStep.id)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0 flex-1 text-center">
+            <p className="truncate text-sm font-semibold">{currentStep.label}</p>
+            <p className="text-[11px] text-muted-foreground">Step {stepIndex + 1} of {STEPS.length}</p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            aria-label="Next drafting step"
+            disabled={!nextStep}
+            onClick={() => nextStep && setStep(nextStep.id)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </nav>
+
         {/* Stepper */}
-        <nav className="mt-3 flex items-center gap-1 overflow-x-auto" aria-label="Drafting steps">
+        <nav className="mt-3 hidden items-center gap-1 overflow-x-auto md:flex" aria-label="Drafting steps">
           {STEPS.map((s, idx) => {
             const active = step === s.id
             const status = stepStatus[s.id]

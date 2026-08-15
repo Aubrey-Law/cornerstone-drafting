@@ -43,6 +43,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { MobileRecordSectionSelect } from '@/components/admin/MobileRecordSectionSelect'
 import { computeMatterNextAction } from '@/lib/matterNextAction'
 import {
   type CommunicationChannel,
@@ -102,6 +103,19 @@ import { useMatterDocuments } from './useMatterDocuments'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: false })
+
+const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'tasks', label: 'Tasks' },
+  { value: 'sla', label: 'SLA plan' },
+  { value: 'people', label: 'People' },
+  { value: 'assets', label: 'Assets' },
+  { value: 'documents', label: 'Documents' },
+  { value: 'billing', label: 'Billing' },
+  { value: 'communications', label: 'Communications' },
+  { value: 'notes', label: 'Notes' },
+  { value: 'activity', label: 'Activity' },
+]
 
 interface MatterDetailClientProps {
   matter: PipelineMatter
@@ -890,7 +904,13 @@ function MatterDetailClientInner({
               onValueChange={v => setActiveTab(v as MatterTab)}
               className="w-full gap-4"
             >
-              <TabsList className="sticky top-0 z-10 w-full justify-start overflow-x-auto bg-background">
+              <MobileRecordSectionSelect
+                label="Matter section"
+                value={activeTab}
+                options={MATTER_SECTION_OPTIONS}
+                onValueChange={setActiveTab}
+              />
+              <TabsList className="sticky top-0 z-10 hidden w-full justify-start overflow-x-auto bg-background md:flex">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="tasks" className="gap-1.5">
                   Tasks
