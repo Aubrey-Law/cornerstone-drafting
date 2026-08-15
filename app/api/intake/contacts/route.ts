@@ -6,6 +6,7 @@ import { CLIENT_INTAKE_ADDITIONAL_SOURCE } from '@/lib/intakeContactSource'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { formatPhoneForStorage } from '@/lib/phone'
 import { saveHouseholdContact } from '@/lib/contacts/saveHouseholdContact'
+import { attachContactToMatter, matterIdForIntake } from '@/lib/contacts/attachContactToMatter'
 import type { HouseholdRelationship } from '@/lib/contacts/saveHouseholdContact'
 import { reconcileHouseholdChildren } from '@/lib/contacts/reconcileHouseholdChildren'
 import {
@@ -246,6 +247,14 @@ export async function POST(req: Request) {
       const [, insertResult] = await Promise.all([Promise.all(updates), insertPromise])
       if ((insertResult as { error?: unknown }).error) throw (insertResult as { error: unknown }).error
 
+      // Step 7a: every newly created person joins the matter directly, rather
+      // than relying on sync_matter_contacts_from_contact to infer it from the
+      // household FK — that trigger goes with the column in 7b.
+      const portalMatterId = await matterIdForIntake(admin, intakeId)
+      for (const row of (insertResult as { data: Array<{ id: string }> }).data ?? []) {
+        await attachContactToMatter(admin, portalMatterId, row.id, { relationship_type: 'other' })
+      }
+
       const insertedById = new Map<string, string>()
       for (const row of (insertResult as { data: Array<{ id: string; first_name: string; last_name: string }> }).data ??
         []) {
@@ -324,8 +333,15 @@ export async function POST(req: Request) {
         })
 
       if (rows.length > 0) {
-        const { error } = await admin.from('contacts').insert(rows)
+        const { data: created, error } = await admin
+          .from('contacts').insert(rows).select('id, relationship_type')
         if (error) throw error
+        const additionalMatterId = await matterIdForIntake(admin, intakeId)
+        for (const row of (created ?? []) as Array<{ id: string; relationship_type: string | null }>) {
+          await attachContactToMatter(admin, additionalMatterId, row.id, {
+            relationship_type: row.relationship_type ?? 'other',
+          })
+        }
       }
       return NextResponse.json({ ok: true })
     }

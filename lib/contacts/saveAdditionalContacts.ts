@@ -4,6 +4,7 @@ import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { composedAddressOneLine } from '@/lib/intakeContactAddress'
 import { CLIENT_INTAKE_ADDITIONAL_SOURCE } from '@/lib/intakeContactSource'
 import { formatPhoneForStorage } from '@/lib/phone'
+import { attachContactToMatter, matterIdForIntake } from '@/lib/contacts/attachContactToMatter'
 
 type AdminClient = SupabaseClient<Database>
 
@@ -68,7 +69,17 @@ export async function saveAdditionalContacts(
     }))
 
   if (rows.length > 0) {
-    const { error } = await admin.from('contacts').insert(rows)
+    const { data: inserted, error } = await admin.from('contacts').insert(rows).select('id, relationship_type')
     if (error) throw error
+
+    // Step 7a: the writer puts each person on the matter itself, rather than
+    // leaving the household FK and sync_matter_contacts_from_contact to infer
+    // it — that trigger goes with the column in 7b.
+    const matterId = await matterIdForIntake(admin, intakeId)
+    for (const row of (inserted ?? []) as Array<{ id: string; relationship_type: string | null }>) {
+      await attachContactToMatter(admin, matterId, row.id, {
+        relationship_type: row.relationship_type ?? 'other',
+      })
+    }
   }
 }

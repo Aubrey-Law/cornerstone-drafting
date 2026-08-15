@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { childInputToContactPayload, contactRowToDesignSheetChild, type HouseholdChildInput } from './childMapping'
+import { attachContactToMatter, matterIdForIntake, type MatterContactFacts } from './attachContactToMatter'
 
 type AdminClient = SupabaseClient<Database>
 
@@ -47,6 +48,8 @@ export async function saveHouseholdChildren(
 
   // Step 3: per submitted child — update or insert into contacts
   const keptIds = new Set<string>()
+  const attached: string[] = []
+  const attachedFacts = new Map<string, MatterContactFacts>()
   for (const c of submitted) {
     const payload = childInputToContactPayload(c, (intakeRow as Record<string, unknown> | null) ?? null)
     const cid = typeof c.contact_id === 'string' && /^[\da-f-]{36}$/i.test(c.contact_id.trim()) ? c.contact_id.trim() : null
@@ -55,12 +58,30 @@ export async function saveHouseholdChildren(
       const { error } = await admin.from('contacts').update(payload).eq('id', existingId)
       if (error) throw new Error(`${error.code ?? 'error'}: ${error.message}`)
       keptIds.add(existingId)
+      attached.push(existingId)
     } else {
       const { data: inserted, error } = await admin
         .from('contacts').insert({ client_intake_id: intakeId, ...payload }).select('id').single()
       if (error) throw new Error(`${error.code ?? 'error'}: ${error.message}`)
-      if ((inserted as { id?: string })?.id) keptIds.add((inserted as { id: string }).id)
+      if ((inserted as { id?: string })?.id) {
+        keptIds.add((inserted as { id: string }).id)
+        attached.push((inserted as { id: string }).id)
+      }
     }
+    attachedFacts.set(attached[attached.length - 1], {
+      relationship_type: 'child',
+      relationship_label: 'Child',
+      child_relationship: (payload.child_relationship as string | null) ?? null,
+      parentage: (payload.parentage as string | null) ?? null,
+      is_minor: (payload.is_minor as boolean | null) ?? null,
+    })
+  }
+
+  // Step 7a: put each child on the matter directly rather than leaving the
+  // household FK and sync_matter_contacts_from_contact to infer it.
+  const childMatterId = await matterIdForIntake(admin, intakeId)
+  for (const contactId of attached) {
+    await attachContactToMatter(admin, childMatterId, contactId, attachedFacts.get(contactId)!)
   }
 
   // Step 4: if departed ids — check contact_roles, then delete those with no roles

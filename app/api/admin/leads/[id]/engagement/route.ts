@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { resolveEsignProvider } from '@/lib/esign/firma'
+import { attachContactToMatter, matterIdForIntake } from '@/lib/contacts/attachContactToMatter'
 
 /**
  * POST /api/admin/leads/[id]/engagement — send (or re-send) the engagement
@@ -100,9 +101,21 @@ export async function POST(
       if (existingSpouse) {
         await admin.from('contacts').update(spouseFields).eq('id', existingSpouse.id)
       } else {
-        await admin
+        const { data: createdSpouse } = await admin
           .from('contacts')
           .insert({ client_intake_id: intakeId, relationship_type: 'spouse', ...spouseFields })
+          .select('id')
+          .single()
+        // Step 7a: put the spouse on the lead's matter directly rather than
+        // leaving sync_matter_contacts_from_contact to infer it.
+        if ((createdSpouse as { id?: string })?.id) {
+          await attachContactToMatter(
+            admin,
+            await matterIdForIntake(admin, intakeId),
+            (createdSpouse as { id: string }).id,
+            { relationship_type: 'spouse', relationship_label: 'Spouse' },
+          )
+        }
       }
     }
 
