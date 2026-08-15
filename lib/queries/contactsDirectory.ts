@@ -38,6 +38,61 @@ function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
+/** Which engagement a person's directory row should speak for. */
+const KIND_PRIORITY: Record<ContactKind, number> = {
+  client: 0,
+  lead: 1,
+  lost: 2,
+  other: 3,
+}
+
+/**
+ * Collapse one person's engagements into a single directory row.
+ *
+ * A returning client has one `client_intake` row per engagement (§12.3 of
+ * docs/matter-contacts-migration.md) but one `self` contact across all of them.
+ * The directory lists people, so the rows are merged: the live engagement
+ * supplies the link and the comms thread, and every matter number is kept so
+ * searching any of them still finds the person.
+ *
+ * Split out from the query so it can be tested without a database.
+ */
+export function mergePersonRows(group: ContactDirectoryRow[]): ContactDirectoryRow {
+  if (group.length === 1) return group[0]
+
+  // A hired matter wins over a lead, and the newest wins within a kind — the
+  // same precedence unify_leads_matters used to pick an intake's matter.
+  const ordered = [...group].sort((a, b) => {
+    const byKind = KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind]
+    if (byKind !== 0) return byKind
+    return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
+  })
+  const primary = ordered[0]
+
+  const matterNumbers = [...new Set(
+    ordered.map(row => row.matter_number).filter((n): n is string => Boolean(n)),
+  )]
+  // Earliest, so sorting by created_at answers "since when has the firm known
+  // this person" rather than "when did their latest engagement open".
+  const firstSeen = group
+    .map(row => row.created_at)
+    .filter((d): d is string => Boolean(d))
+    .sort()[0] ?? primary.created_at
+
+  return {
+    ...primary,
+    matter_number: matterNumbers.length ? matterNumbers.join(', ') : null,
+    created_at: firstSeen,
+    // Fall back across engagements: an older one may carry contact details a
+    // newer, thinner intake left blank.
+    email: ordered.find(row => row.email)?.email ?? null,
+    phone: ordered.find(row => row.phone)?.phone ?? null,
+    practice_area: ordered.find(row => row.practice_area)?.practice_area ?? null,
+    city: ordered.find(row => row.city)?.city ?? null,
+    state: ordered.find(row => row.state)?.state ?? null,
+  }
+}
+
 /**
  * Every person the firm knows, as one list: leads and clients from
  * client_intake (kind decided by the linked matter's relationship_status),
@@ -79,6 +134,25 @@ export async function fetchContactsDirectory(): Promise<{ rows: ContactDirectory
     : { data: [] as Array<{ id: string; matter_number: string | null; relationship_status: string | null; status: string | null }> }
   const matterById = new Map((matters ?? []).map(row => [row.id, row]))
 
+  // A second engagement gets its own client_intake row (docs/matter-contacts-
+  // migration.md §12.3), so a returning client is two intakes and would list
+  // twice. They share one `self` contact, which is what identifies the person
+  // across engagements — group on it so the directory lists people, not
+  // engagements.
+  const { data: selfJoins } = matterIds.length
+    ? await admin
+        .from('matter_contacts')
+        .select('matter_id, contact_id')
+        .eq('relationship_type', 'self')
+        .in('matter_id', matterIds)
+    : { data: [] as Array<{ matter_id: string; contact_id: string }> }
+  const selfContactByMatter = new Map(
+    ((selfJoins ?? []) as Array<{ matter_id: string; contact_id: string }>)
+      .map(row => [row.matter_id, row.contact_id]),
+  )
+  /** Rows for the same person, keyed by their shared self contact. */
+  const personGroups = new Map<string, ContactDirectoryRow[]>()
+
   const rows: ContactDirectoryRow[] = []
   const intakeNameById = new Map<string, string>()
   const intakeHrefById = new Map<string, string>()
@@ -113,7 +187,7 @@ export async function fetchContactsDirectory(): Promise<{ rows: ContactDirectory
       : { type: 'lead', id: intake.id }
     intakeThreadById.set(intake.id, thread)
 
-    rows.push({
+    const row: ContactDirectoryRow = {
       id: `intake:${intake.id}`,
       kind,
       name,
@@ -128,7 +202,20 @@ export async function fetchContactsDirectory(): Promise<{ rows: ContactDirectory
       created_at: intake.created_at,
       thread,
       relationship_type: null,
-    })
+    }
+
+    const selfContactId = intake.matter_id ? selfContactByMatter.get(intake.matter_id) : undefined
+    if (selfContactId) {
+      personGroups.set(selfContactId, [...(personGroups.get(selfContactId) ?? []), row])
+    } else {
+      // No self contact yet — an intake with no matter, or one predating the
+      // join backfill. Listed on its own, exactly as before.
+      rows.push(row)
+    }
+  }
+
+  for (const group of personGroups.values()) {
+    rows.push(mergePersonRows(group))
   }
 
   for (const contact of contactsRes.data ?? []) {

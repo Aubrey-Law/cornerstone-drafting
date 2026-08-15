@@ -1,6 +1,7 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: steps 1–3 shipped, step 4 partly (§10, §13–§16). Steps 5–7 are still proposal.
+Status: steps 1–4 shipped (§10, §13–§17). Steps 5–7 are still proposal.
+Decision §12.3 is settled: **a new engagement gets its own `client_intake` row.**
 
 ## 1. The problem
 
@@ -380,10 +381,9 @@ Each step is independently shippable and leaves the app working.
    before starting step 3.
 3. **Flip the readers.** ✅ Shipped — see §15. Every contact *read* goes
    through the join; `contacts.client_intake_id` is write-only.
-4. **Fix the single-row assumptions** (§5) and rewrite RLS (§7). 🟡 RLS and
-   contact removal shipped — see §16. The §5 lookups are blocked on decision
-   §12.3 (whether a second engagement reuses its client's intake), which
-   decides whether they are wrong at all.
+4. **Fix the single-row assumptions** (§5) and rewrite RLS (§7). ✅ Shipped —
+   §16 and §17. Settling §12.3 as "new intake per engagement" left most of §5
+   with nothing to fix.
 5. **Open the door.** Matter creation accepts an existing `client_intake_id`
    / contact instead of always inserting; add a "New matter for this client"
    action; matter and contact pages list all related matters.
@@ -436,12 +436,10 @@ formality.
    parents' matter and another on their own. Intrinsic-to-person (one address,
    last write wins) or matter-relative (address moves to `matter_contacts`)?
    The spec above assumes intrinsic; the CP case is the argument against.
-3. **Second matter, same intake or new one?** Step 5 can either reuse the
-   client's existing `client_intake` row (one lead record, many matters) or
-   create a new intake per engagement linked to the same person. The intake
-   answers are engagement-specific — assets, plan type — which argues for a new
-   intake per matter and makes `client_intake` truly per-matter. Deciding this
-   late means reworking step 1's trigger.
+3. ~~**Second matter, same intake or new one?**~~ **Settled: a new intake per
+   engagement**, which is also what `create_matter_with_client` already does.
+   `client_intake` is per-engagement; `contacts` is the person. See §17 for what
+   this removed from the plan and what it moves onto step 5.
 4. **Merge policy.** Automatic-on-exact-email-match with review, or
    attorney-initiated only? A married couple sharing an inbox makes automatic
    matching unsafe.
@@ -714,3 +712,69 @@ Note that §5's own table says to drop `client_intake.matter_id` and "query
 `matters where client_intake_id = …`" instead — that is self-contradictory under
 a shared intake, since it is exactly the ambiguous lookup. Whichever branch is
 chosen, that row of the spec needs rewriting.
+
+## 17. Decision §12.3, and what it changed
+
+**A new engagement gets its own `client_intake` row.** That is already what
+`create_matter_with_client` does, so it is the smaller change — and it matches
+what the row actually holds: assets, plan type and intake answers are facts
+about an engagement, not about a person. `contacts` carries the person.
+
+### What it removed from the plan
+
+`client_intake` stays 1:1 with `matters` forever, so §5's central worry — that
+resolving a matter from an intake becomes ambiguous — never materializes. These
+stay correct as written, and step 7 should not touch them:
+
+```
+lib/draftPayload/resolveMatterId.ts       app/actions/adminIntake.ts
+app/api/intake/route.ts                   app/api/intake/signup/route.ts
+app/intake/(shell)/actions.ts             lib/leads/createLead.ts
+lib/assets/syncAssetIntakeToDesignSheet.ts
+```
+
+`client_intake.matter_id` stays too. §5's table says to drop it and "query
+`matters where client_intake_id = …`" instead; under this decision the
+back-pointer is simply correct, and that row of the table is obsolete.
+
+What the join buys is therefore narrower than the original framing, and worth
+stating plainly: **it is not what lets a client have two matters — they always
+could. It is what lets the two matters share people** instead of duplicating a
+household per engagement.
+
+### What it left to fix, now shipped
+
+A returning client is two `client_intake` rows, so the contacts directory listed
+them twice. They share one `self` contact, which is exactly what identifies a
+person across engagements, so the directory now groups on it
+(`mergePersonRows`): one row per person, the live engagement supplying the link
+and comms thread, every matter number kept so searching any of them still finds
+them, contact details filled from whichever engagement has them, and the date
+being when the firm first met the person rather than when their latest matter
+opened.
+
+### What it moves onto step 5
+
+Opening a matter for an existing client now has a specific requirement, because
+the step 2 trigger does the wrong thing by default. `sync_matter_contacts_from_
+matter` calls `self_contact_for_intake`, which for a brand-new intake finds
+nothing and mints a fresh self contact — correct for a genuinely new client, and
+a duplicate person for a returning one. It also joins `contacts` by
+`client_intake_id`, which for a new intake is empty, so the spouse and children
+would not carry over either.
+
+So "New matter for this client" must, after creating the intake and matter,
+attach the existing person's `contacts` rows to the new matter itself:
+
+1. Create `client_intake` + `matters` as today.
+2. Attach the known person as `self` on the new matter — **before** anything
+   reads `self_contact_for_intake`, or the trigger will have already minted a
+   duplicate.
+3. Attach the household the attorney chooses to carry over (spouse, children),
+   as `matter_contacts` rows rather than as copied `contacts`.
+4. Leave fiduciary appointments unset: they are per matter by design, and the
+   second engagement should nominate its own.
+
+Step 1 of that ordering is the trap. The cleanest fix is for the trigger to skip
+minting when the caller has already declared who the client is — an explicit
+"open matter for person X" RPC rather than create-then-repair.
