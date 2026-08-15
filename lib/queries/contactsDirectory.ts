@@ -202,9 +202,10 @@ export async function fetchContactsDirectory(): Promise<{ rows: ContactDirectory
       created_at: intake.created_at,
       thread,
       relationship_type: null,
+      self_contact_id: intake.matter_id ? selfContactByMatter.get(intake.matter_id) ?? null : null,
     }
 
-    const selfContactId = intake.matter_id ? selfContactByMatter.get(intake.matter_id) : undefined
+    const selfContactId = row.self_contact_id ?? undefined
     if (selfContactId) {
       personGroups.set(selfContactId, [...(personGroups.get(selfContactId) ?? []), row])
     } else {
@@ -249,6 +250,9 @@ export async function fetchContactsDirectory(): Promise<{ rows: ContactDirectory
       created_at: contact.created_at,
       thread: (contact.client_intake_id && intakeThreadById.get(contact.client_intake_id)) || null,
       relationship_type: contact.relationship_type ?? null,
+      // A relationship contact is already the person — a child here is the same
+      // row that becomes `self` on their own College Prep matter.
+      self_contact_id: contact.id,
     })
   }
 

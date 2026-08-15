@@ -18,6 +18,7 @@ function row(over: Partial<ContactDirectoryRow>): ContactDirectoryRow {
     created_at: null,
     thread: null,
     relationship_type: null,
+    self_contact_id: 'c-person',
     ...over,
   }
 }

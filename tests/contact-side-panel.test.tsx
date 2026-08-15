@@ -27,6 +27,7 @@ vi.mock('@/components/rail/RailEmailPane', () => ({
 const row = (o: Partial<ContactDirectoryRow> & Pick<ContactDirectoryRow, 'id' | 'kind' | 'name'>): ContactDirectoryRow => ({
   email: null,
   phone: null,
+  self_contact_id: null,
   relationship: null,
   practice_area: null,
   city: null,

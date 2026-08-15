@@ -9,6 +9,7 @@ import {
 const row = (overrides: Partial<ContactDirectoryRow> & Pick<ContactDirectoryRow, 'id' | 'kind' | 'name'>): ContactDirectoryRow => ({
   email: null,
   phone: null,
+  self_contact_id: null,
   relationship: null,
   practice_area: null,
   city: null,

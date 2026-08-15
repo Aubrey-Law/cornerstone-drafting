@@ -29,6 +29,12 @@ export interface ContactDirectoryRow {
   thread: { type: 'lead' | 'matter'; id: string } | null
   /** Raw contacts.relationship_type for "other" rows; null for leads/clients. */
   relationship_type: string | null
+  /**
+   * The `contacts` row that *is* this person — the self contact for a
+   * lead/client, the contact itself for everyone else. What identifies someone
+   * across engagements, and what opening a new matter for them keys on.
+   */
+  self_contact_id: string | null
 }
 
 /**

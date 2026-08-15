@@ -1,6 +1,6 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: steps 1–4 shipped (§10, §13–§17). Steps 5–7 are still proposal.
+Status: steps 1–5 shipped (§10, §13–§18). Steps 6–7 are still proposal.
 Decision §12.3 is settled: **a new engagement gets its own `client_intake` row.**
 
 ## 1. The problem
@@ -384,9 +384,9 @@ Each step is independently shippable and leaves the app working.
 4. **Fix the single-row assumptions** (§5) and rewrite RLS (§7). ✅ Shipped —
    §16 and §17. Settling §12.3 as "new intake per engagement" left most of §5
    with nothing to fix.
-5. **Open the door.** Matter creation accepts an existing `client_intake_id`
-   / contact instead of always inserting; add a "New matter for this client"
-   action; matter and contact pages list all related matters.
+5. **Open the door.** ✅ Shipped — see §18. `open_matter_for_person` plus
+   `POST /api/admin/matters/open-for-person` and a "New matter" action in the
+   contacts panel.
 6. **Merge tool** (§9) and the duplicate review queue.
 7. **Cleanup.** Drop `contacts.client_intake_id`,
    `contact_roles.client_intake_id`, `client_intake.matter_id`, and the
@@ -778,3 +778,62 @@ attach the existing person's `contacts` rows to the new matter itself:
 Step 1 of that ordering is the trap. The cleanest fix is for the trigger to skip
 minting when the caller has already declared who the client is — an explicit
 "open matter for person X" RPC rather than create-then-repair.
+
+## 18. Step 5 as built
+
+`open_matter_for_person(contact, …)` is the counterpart to
+`create_matter_with_client`: same shape, same idempotency key, but it takes a
+person the firm already has instead of minting one.
+
+It creates the engagement's own `client_intake` (per §12.3), seeded from the
+person so the leads UI and email templates still have columns to read, then
+joins the *existing* contact as `self` and carries the spouse and children
+across from that person's most recent other matter. Fiduciary appointments are
+deliberately not copied — they belong to the engagement that made them.
+
+### The ordering trap, and how it is closed
+
+`sync_matter_contacts_from_matter` fires on the matter insert and mints a self
+contact when it cannot find one. For a brand-new intake it never can, so a
+returning client would get a duplicate person created inside the same statement
+that was supposed to reuse them. Repairing afterwards would leave a window where
+the duplicate exists and would fire the CRM sync on it.
+
+So the caller declares the client *before* the insert, in a transaction-local
+setting the trigger reads:
+
+```sql
+PERFORM set_config('app.open_matter_self_contact_id', p_contact_id::text, true);
+INSERT INTO public.matters (...);          -- trigger joins, does not mint
+PERFORM set_config('app.open_matter_self_contact_id', '', true);
+```
+
+`true` is `is_local`, so it cannot leak onto a pooled connection or outlive a
+rollback, and the exception path clears it too. The trigger's minting branch is
+untouched, because most matters are still for people the firm has never met.
+
+### Verified against PostgreSQL 16
+
+- **The College Prep case end to end.** Opening a matter for the child leaves
+  one `contacts` row: `self` on her own matter, `child` on both her parents'.
+- **The returning client.** A second matter for an existing client: one person,
+  two matters, spouse and both children carried across, zero fiduciary roles on
+  the new one.
+- A repeated request id returns the first matter with `created = false`.
+- A genuinely new client still gets a self contact minted — the regression that
+  would matter most.
+- An unknown contact id is refused rather than silently creating an orphan.
+
+One bug surfaced only at runtime: the `RETURNS TABLE` columns (`matter_id`,
+`matter_number`, `client_intake_id`) shadow real column names, so
+`ON CONFLICT (matter_id, contact_id)` was ambiguous. PL/pgSQL accepts that at
+`CREATE FUNCTION` time and fails when the statement runs, which is exactly the
+kind of thing the SQL-text tests cannot catch — `#variable_conflict use_column`
+resolves it.
+
+### Reachable from the UI
+
+`ContactDirectoryRow` gained `self_contact_id` — the `contacts` row that *is*
+this person, which is the self contact for a lead or client and the contact
+itself for everyone else. The contacts panel uses it for a "New matter" action,
+so the child in a client's household is one click from their own matter.
