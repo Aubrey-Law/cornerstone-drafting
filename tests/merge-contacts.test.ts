@@ -129,3 +129,69 @@ describe('the review endpoint', () => {
     expect(route).toMatch(/winnerId === loserId/)
   })
 })
+
+describe('the review screen', () => {
+  const client = source('app/admin/contacts/merge/MergeReviewClient.tsx')
+
+  it('shows both people side by side, not just their names', () => {
+    // Nobody can judge a merge from two names and a count — the fields that
+    // distinguish a couple from a duplicate are phone, DOB and the matters.
+    for (const field of ['Email', 'Phone', 'Born', 'Location']) {
+      expect(client).toContain(`label="${field}"`)
+    }
+    expect(client).toMatch(/On \$\{side\.matters\.length\} matter/)
+  })
+
+  it('labels which row survives and which goes', () => {
+    expect(client).toContain('Will be removed')
+    expect(client).toContain('Will be kept')
+  })
+
+  it('highlights the values that disagree between the two rows', () => {
+    expect(client).toMatch(/differs=\{differs\(side\.phone, other\.phone\)\}/)
+    expect(client).toMatch(/differs=\{differs\(side\.date_of_birth, other\.date_of_birth\)\}/)
+  })
+
+  it('warns loudly when the names differ', () => {
+    // Same email, different names is far more often a couple sharing an inbox
+    // than one person entered twice — the single most likely bad merge.
+    expect(client).toMatch(/Different names on the same email/)
+    expect(client).toMatch(/couple\s*\n?\s*sharing an inbox/)
+  })
+
+  it('merges one pair at a time, with no bulk action', () => {
+    expect(client).not.toMatch(/merge all|mergeAll|Merge all/i)
+    expect(client).toMatch(/loserContactId: candidate\.loser\.id/)
+  })
+
+  it('lets a reviewer dismiss a pair without merging it', () => {
+    expect(client).toContain('Not a duplicate')
+  })
+
+  it('records why the merge was approved', () => {
+    expect(client).toMatch(/reason: `Reviewed duplicate — matching email/)
+  })
+
+  it('tells the reviewer what moved, and that it can be undone', () => {
+    expect(client).toMatch(/matter link\(s\)/)
+    expect(client).toMatch(/Reversible — the removed row is kept, not deleted/)
+  })
+
+  it('is reachable from the contacts directory', () => {
+    expect(source('app/admin/contacts/ContactsClient.tsx')).toContain('/admin/contacts/merge')
+  })
+})
+
+describe('the candidate payload the screen needs', () => {
+  const route = source(ROUTE)
+
+  it('returns whole people and their matters, not just the view row', () => {
+    expect(route).toMatch(/from\('contacts'\)[\s\S]{0,200}\.in\('id', ids\)/)
+    expect(route).toMatch(/from\('matter_contacts'\)[\s\S]{0,120}\.in\('contact_id', ids\)/)
+    expect(route).toMatch(/matters: mattersByContact\.get\(id\) \?\? \[\]/)
+  })
+
+  it('skips the enrichment queries when nothing matched', () => {
+    expect(route).toMatch(/if \(pairs\.length === 0\) return NextResponse\.json\(\{ candidates: \[\], likelyDuplicates: 0 \}\)/)
+  })
+})

@@ -896,9 +896,23 @@ so a sheet naming the loser in two columns reported as two. It now collects
 distinct sheet ids — a merge's blast radius is the first thing anyone reads off
 that log, and inflating it would be misleading in exactly the wrong direction.
 
-### Not built
+### The review screen
 
-There is no review UI. The candidates and the merge are reachable over
-`/api/admin/contacts/merge` (GET proposes, POST merges one pair), which is
-enough to work the queue deliberately, but a screen showing the two rows
-side by side before approving would make it a great deal safer to use at volume.
+`/admin/contacts/merge`, linked from the contacts directory. It shows the two
+people side by side — email, phone, date of birth, location, when each was
+added, and every matter each is on — because nobody can judge a merge from two
+names and a count. Values that disagree between the rows are highlighted, since
+a differing phone or date of birth is usually the tell that these are two
+people.
+
+Which row survives is stated on the cards themselves ("Will be kept" / "Will be
+removed") rather than left to be inferred. When the names differ the pair
+carries a warning that this is far more often a couple sharing an inbox than one
+person entered twice — the single most likely bad merge. "Not a duplicate"
+dismisses a pair without touching it.
+
+After a merge the screen reports what actually moved (matter links, roles,
+messages, design sheets) and that the removed row is kept rather than deleted,
+so a reviewer who realises they were wrong knows there is something to undo.
+
+There is deliberately no bulk action.

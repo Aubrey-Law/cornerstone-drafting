@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { BookUser, Mail, Phone, Plus, Users } from 'lucide-react'
+import { BookUser, Mail, Merge, Phone, Plus, Users } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SearchField } from '@/components/SearchField'
 import { FilterChip } from '@/components/FilterChip'
@@ -127,10 +127,18 @@ export function ContactsClient({
         icon={BookUser}
         description={description}
         actions={
-          <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            Add contact
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild type="button" size="sm" variant="outline">
+              <Link href="/admin/contacts/merge">
+                <Merge className="h-3.5 w-3.5" />
+                Duplicates
+              </Link>
+            </Button>
+            <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Add contact
+            </Button>
+          </div>
         }
       />
 

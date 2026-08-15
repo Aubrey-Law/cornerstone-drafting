@@ -19,19 +19,65 @@ export async function GET(req: Request) {
   const { err } = await requireAdmin(req)
   if (err) return err
 
-  const { data, error } = await getAdminClient()
+  const admin = getAdminClient()
+  const { data, error } = await admin
     .from('contact_merge_candidates')
     .select('*')
     .limit(200)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const candidates = (data ?? []) as Array<Record<string, unknown>>
+  const pairs = (data ?? []) as Array<Record<string, unknown>>
+  if (pairs.length === 0) return NextResponse.json({ candidates: [], likelyDuplicates: 0 })
+
+  // The view answers "which pairs" — reviewing them needs the whole person on
+  // both sides, and the matters each is on. Nobody can judge a merge from two
+  // names and a count.
+  const ids = [...new Set(pairs.flatMap(p => [String(p.winner_contact_id), String(p.loser_contact_id)]))]
+
+  const [{ data: contacts }, { data: links }] = await Promise.all([
+    admin
+      .from('contacts')
+      .select('id, first_name, middle_name, last_name, preferred_name, email, phone, city, state, date_of_birth, relationship_type, relationship_label, created_at')
+      .in('id', ids),
+    admin.from('matter_contacts').select('contact_id, relationship_type, matter_id').in('contact_id', ids),
+  ])
+
+  const matterIds = [...new Set(((links ?? []) as Array<{ matter_id: string }>).map(l => l.matter_id))]
+  const { data: matters } = matterIds.length
+    ? await admin.from('matters').select('id, matter_number, name, relationship_status').in('id', matterIds)
+    : { data: [] as Array<Record<string, unknown>> }
+
+  const matterById = new Map(((matters ?? []) as Array<{ id: string }>).map(m => [m.id, m]))
+  const contactById = new Map(((contacts ?? []) as Array<{ id: string }>).map(c => [c.id, c]))
+
+  const mattersByContact = new Map<string, Array<Record<string, unknown>>>()
+  for (const link of (links ?? []) as Array<{ contact_id: string; relationship_type: string; matter_id: string }>) {
+    const matter = matterById.get(link.matter_id)
+    if (!matter) continue
+    mattersByContact.set(link.contact_id, [
+      ...(mattersByContact.get(link.contact_id) ?? []),
+      { ...matter, relationship_type: link.relationship_type },
+    ])
+  }
+
+  const side = (id: string) => ({
+    ...(contactById.get(id) ?? { id }),
+    matters: mattersByContact.get(id) ?? [],
+  })
+
+  const candidates = pairs.map(pair => ({
+    winner: side(String(pair.winner_contact_id)),
+    loser: side(String(pair.loser_contact_id)),
+    email: pair.email as string,
+    namesMatch: pair.names_match === true,
+  }))
+
   return NextResponse.json({
     candidates,
     // Same-name pairs are the ones most likely to be genuine duplicates; the
     // rest are more often two people behind one mailbox.
-    likelyDuplicates: candidates.filter(row => row.names_match === true).length,
+    likelyDuplicates: candidates.filter(c => c.namesMatch).length,
   })
 }
 
