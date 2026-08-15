@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { formatPhoneForStorage } from '@/lib/phone'
+import { attachContactToMatter, matterIdForIntake } from '@/lib/contacts/attachContactToMatter'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -67,5 +68,17 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Step 7a: a directory entry given a household is a person on that matter, so
+  // it writes its own join row. Without an intake it belongs to no matter by
+  // design and stays off the join — the one contact that legitimately does.
+  if (intakeId) {
+    const matterId = await matterIdForIntake(admin, intakeId)
+    await attachContactToMatter(admin, matterId, data.id, {
+      relationship_type: 'other',
+      relationship_label: cleanString(payload.relationship_label, 120),
+    })
+  }
+
   return NextResponse.json({ ok: true, contactId: data.id })
 }

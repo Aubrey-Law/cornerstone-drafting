@@ -17,6 +17,12 @@ export interface ContactRow {
   relationship_type: string | null
   /** Set once merged away (step 6); such a row is meant to be on no matter. */
   merged_into_id?: string | null
+  /**
+   * 'directory' marks a standalone person — a referring CPA — who belongs to no
+   * matter by design. Every household writer sets something else, which is what
+   * lets rule 5 survive the 7b column drop.
+   */
+  source?: string | null
   is_minor?: boolean | null
   child_relationship?: string | null
 }
@@ -187,15 +193,31 @@ export function compareRepresentations(input: {
   //    compare, so rule 1 can no longer be computed and this is what remains.
   const contactsOnMatters = new Set(joinRows.map(r => r.contact_id))
   for (const contact of contacts) {
-    if (!contact.client_intake_id) continue      // standalone directory entry
+    // Keyed on `source`, not on the household FK, so this rule still works
+    // after 7b drops that column — a directory entry is the one kind of person
+    // legitimately on no matter, and only the directory route writes that
+    // source. Keying it on client_intake_id would make the rule vanish at
+    // exactly the moment it becomes the only detector left.
+    if (contact.source === 'directory') continue
     if (contact.merged_into_id) continue          // merged away, kept as a tombstone
     if (contactsOnMatters.has(contact.id)) continue
-    if ((mattersByIntake.get(contact.client_intake_id) ?? []).length > 0) continue
+
+    // While client_intake_id still exists, rule 1 already names a contact whose
+    // intake has a matter. Reporting it here too would count the same person
+    // twice. The exclusion lapses on its own at 7b, when the column is gone and
+    // there is no legacy edge for rule 1 to compare.
+    const intakeHasMatter = contact.client_intake_id
+      ? (mattersByIntake.get(contact.client_intake_id) ?? []).length > 0
+      : false
+    if (intakeHasMatter) continue
+
     drift.push({
       kind: 'contact_without_matter',
       matterId: null,
       contactId: contact.id,
-      detail: `contact is on intake ${contact.client_intake_id}, which has no matter — invisible to every reader`,
+      detail: contact.client_intake_id
+        ? `contact is on intake ${contact.client_intake_id}, which has no matter — invisible to every reader`
+        : 'contact is on no matter and is not a directory entry — invisible to every reader',
     })
   }
 

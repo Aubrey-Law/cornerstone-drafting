@@ -107,7 +107,12 @@ describe('consistency check', () => {
       joinRows: [{ matter_id: 'm1', contact_id: 'c-spouse', relationship_type: 'spouse' }],
       roles: [],
     })
-    expect(report.countsByKind).toEqual({ matter_without_self: 1 })
+    // Both rules fire, and neither is redundant: matter_without_self names the
+    // matter that lost its primary client, contact_without_matter names the
+    // person who went invisible. They cannot be correlated — a self contact
+    // carries no intake FK, so nothing links the missing row to c-self — and
+    // after 7b only the second one can still identify who was lost.
+    expect(report.countsByKind).toEqual({ matter_without_self: 1, contact_without_matter: 1 })
   })
 
   it('catches a join row with nothing behind it', () => {
@@ -174,7 +179,12 @@ describe('consistency check', () => {
 
   it('ignores standalone directory contacts, which belong to no matter', () => {
     const report = compareRepresentations({
-      contacts: [...contacts, { id: 'c-cpa', client_intake_id: null, relationship_type: 'other' }],
+      contacts: [
+        ...contacts,
+        // 'directory' is the exemption, not the null intake — the null is about
+        // to stop being distinctive when 7b drops the column.
+        { id: 'c-cpa', client_intake_id: null, relationship_type: 'other', source: 'directory' },
+      ],
       matters,
       joinRows: [
         { matter_id: 'm1', contact_id: 'c-self', relationship_type: 'self' },

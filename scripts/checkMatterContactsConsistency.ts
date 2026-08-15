@@ -51,7 +51,7 @@ async function main() {
   const showDetails = process.argv.includes('--details')
 
   const [contacts, matters, joinRows, roles] = await Promise.all([
-    readAll<ContactRow>('contacts', 'id, client_intake_id, relationship_type, is_minor, child_relationship, merged_into_id'),
+    readAll<ContactRow>('contacts', 'id, client_intake_id, relationship_type, is_minor, child_relationship, merged_into_id, source'),
     readAll<MatterRow>('matters', 'id, client_intake_id'),
     readAll<JoinRow>('matter_contacts', 'matter_id, contact_id, relationship_type, is_minor, child_relationship'),
     readAll<RoleRow>('contact_roles', 'id, client_intake_id, matter_id'),
@@ -75,7 +75,10 @@ async function main() {
   if (report.drift.length) {
     console.error(
       `\n${report.drift.length} disagreement(s) between contacts.client_intake_id and matter_contacts. ` +
-      'Re-run with --details to list them. Do not start step 3 until this is clean.',
+      'Re-run with --details to list them.\n' +
+      'contact_without_matter is a person no reader can see — usually an intake that ' +
+      'never became a matter, not a writer bug. The rest mean the two representations ' +
+      'disagree, and step 7b should not drop the legacy column until they are clear.',
     )
     process.exit(1)
   }
