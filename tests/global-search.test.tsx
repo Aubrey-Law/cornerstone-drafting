@@ -38,7 +38,10 @@ describe('global search', () => {
     expect(trigger.getAttribute('aria-label')).toBe('Search')
     await user.click(trigger)
 
-    expect(screen.getByRole('dialog')).toBeTruthy()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeTruthy()
+    expect(dialog.contains(screen.getByText('Command Palette'))).toBe(true)
+    expect(dialog.contains(screen.getByText('Search for a command to run...'))).toBe(true)
     expect(screen.getByPlaceholderText('Search matters or jump to a page…')).toBeTruthy()
   })
 })
