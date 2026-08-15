@@ -98,8 +98,12 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
-        if (event.key === 'Escape') (event.target as HTMLElement).blur()
+      const target = event.target
+      const editableTarget = target instanceof HTMLElement
+        ? target.closest('input, select, textarea, [contenteditable="true"]')
+        : null
+      if (editableTarget) {
+        if (event.key === 'Escape' && editableTarget instanceof HTMLElement) editableTarget.blur()
         return
       }
       if (event.key === '/' && !event.metaKey && !event.ctrlKey) {
@@ -110,11 +114,20 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
       if (filtered.length === 0) return
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setFocusedIndex(i => Math.min(i + 1, filtered.length - 1))
+        const nextIndex = Math.min(focusedIndex + 1, filtered.length - 1)
+        setFocusedIndex(nextIndex)
+        if (target instanceof HTMLElement && target.closest('[data-drafting-card-index]')) {
+          document.querySelector<HTMLButtonElement>(`[data-drafting-card-index="${nextIndex}"]`)?.focus()
+        }
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
-        setFocusedIndex(i => Math.max(i - 1, 0))
+        const nextIndex = Math.max(focusedIndex - 1, 0)
+        setFocusedIndex(nextIndex)
+        if (target instanceof HTMLElement && target.closest('[data-drafting-card-index]')) {
+          document.querySelector<HTMLButtonElement>(`[data-drafting-card-index="${nextIndex}"]`)?.focus()
+        }
       } else if (event.key === 'Enter') {
+        if (target instanceof HTMLElement && target.closest('button, a')) return
         const item = filtered[focusedIndex]
         if (item) openMatter(item.matter.matter_id)
       }
@@ -137,7 +150,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
     <div className="-mx-4 -mb-4 flex h-full flex-col bg-background text-foreground md:-mx-6 md:-mb-6">
       <div className="border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-1">
+          <div className="mr-1 w-full sm:w-auto">
             <h1 className="text-xl font-semibold tracking-tight">Drafting</h1>
             <p className="text-[11px] text-muted-foreground">Next actions across active document work</p>
           </div>
@@ -147,9 +160,13 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
             onValueChange={setSearch}
             placeholder="Search by client, matter number, email, plan type…"
             aria-label="Search matters"
-            containerClassName="max-w-xs min-w-[12rem] flex-1"
+            containerClassName="w-full sm:max-w-xs sm:min-w-[12rem] sm:flex-1"
           />
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Next action filter">
+          <div
+            className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
+            role="group"
+            aria-label="Next action filter"
+          >
             {ACTION_CHIPS.map(chip => {
               const selected = actionFilter === chip.value
               return (
@@ -159,7 +176,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
                   aria-pressed={selected}
                   onClick={() => setActionFilter(chip.value)}
                   className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
+                    'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
                     selected ? 'bg-primary text-primary-foreground' : cn(chip.tone, 'hover:opacity-80'),
                   )}
                 >
@@ -202,7 +219,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
         <div>
           {filtered.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-card px-6 py-10 text-center">
@@ -220,6 +237,7 @@ export default function DraftingHubClient({ matters: initialMatters, loadError =
             <MatterPipelineTable
               matters={filtered}
               focusedIndex={focusedIndex}
+              onFocusIndex={setFocusedIndex}
               onOpen={openMatter}
             />
           )}
