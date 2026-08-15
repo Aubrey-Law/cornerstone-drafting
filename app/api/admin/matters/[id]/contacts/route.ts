@@ -377,8 +377,6 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
   }
 
-  const intakeId = matter.client_intake_id as string
-
   const { onMatter, relationshipType } = await contactOnMatter(admin, matterId, contactId)
   if (!onMatter) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
   if (relationshipType === 'spouse') {
@@ -388,11 +386,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     )
   }
 
-  // Clear fiduciary role assignments and delete the contact atomically (scoped
-  // to this matter's intake) so a failed delete can't strand orphaned data.
-  const { data: deletedCount, error } = await admin.rpc('delete_intake_contact', {
+  // Detach from THIS matter and clear its role assignments atomically, so a
+  // failed delete can't strand orphaned data. The person themself is deleted
+  // only when no matter still references them — removing a trustee from this
+  // engagement must not erase them from the client's other one.
+  const { data: deletedCount, error } = await admin.rpc('delete_matter_contact', {
     p_contact_id: contactId,
-    p_client_intake_id: intakeId,
+    p_matter_id: matterId,
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!deletedCount) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })

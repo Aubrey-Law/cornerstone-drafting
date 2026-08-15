@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, Mail, MessageSquare, Phone, X } from 'lucide-react'
+import { ExternalLink, FilePlus, Mail, MessageSquare, Phone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RecordCommunicationsCard } from '@/components/comms/RecordCommunicationsCard'
 import { CommunicationDialog, type CommunicationTarget } from '@/components/comms/CommunicationDialog'
@@ -37,6 +37,45 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
   const router = useRouter()
   const token = useAccessToken()
   const [composerChannel, setComposerChannel] = useState<'email' | 'sms' | null>(null)
+  const [openingMatter, setOpeningMatter] = useState(false)
+  const [openMatterError, setOpenMatterError] = useState<string | null>(null)
+  const openMatterRequestId = useRef<string | null>(null)
+
+  /**
+   * Open a matter for this person, reusing the `contacts` row the firm already
+   * has rather than minting a duplicate — a returning client, or a child
+   * getting their own College Prep plan.
+   */
+  async function openMatter() {
+    if (!contact.self_contact_id || !token) return
+    setOpenMatterError(null)
+    // Held across retries so a double-click resolves to one matter, and cleared
+    // on success so opening a genuine second one still works.
+    if (!openMatterRequestId.current) {
+      openMatterRequestId.current =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : null
+    }
+    setOpeningMatter(true)
+    try {
+      const res = await fetch('/api/admin/matters/open-for-person', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactId: contact.self_contact_id,
+          planType: contact.practice_area,
+          requestId: openMatterRequestId.current,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'Could not open the matter')
+      openMatterRequestId.current = null
+      router.push(`/admin/matters/${json.matterId}`)
+    } catch (error) {
+      setOpenMatterError(error instanceof Error ? error.message : 'Could not open the matter')
+    } finally {
+      setOpeningMatter(false)
+    }
+  }
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -137,6 +176,21 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
               Text
             </Button>
           </div>
+        )}
+
+        {contact.self_contact_id && (
+          <Button
+            type="button" size="sm" variant="outline"
+            disabled={openingMatter}
+            onClick={openMatter}
+            title="Open a new matter for this person, reusing their record and household"
+          >
+            <FilePlus className="h-3.5 w-3.5" />
+            {openingMatter ? 'Opening…' : 'New matter'}
+          </Button>
+        )}
+        {openMatterError && (
+          <p role="alert" className="text-sm text-destructive">{openMatterError}</p>
         )}
 
         <section className="rounded-md border border-border px-3 py-1.5">
