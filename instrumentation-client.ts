@@ -52,3 +52,5 @@ if (dsn) {
     },
   })
 }
+
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart

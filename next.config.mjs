@@ -7,24 +7,12 @@ const withBundleAnalyzer = bundleAnalyzer({
   openAnalyzer: false,
 });
 
-// Sentry's Next plugin (release creation, source-map upload, debug-id
-// injection, telemetry) runs in `runAfterProductionCompile` on every
-// `next build`. Locally that's pure overhead — runtime error reporting is
-// initialized independently from `instrumentation.ts` and the
-// `sentry.*.config.ts` files, which only need `NEXT_PUBLIC_SENTRY_DSN`.
-//
-// We only opt into the build plugin when one of the following is true:
-//   • `SENTRY_AUTH_TOKEN` is set (the upload would actually authenticate)
-//   • `SENTRY_UPLOAD_SOURCEMAPS=1` is explicitly set
-//   • Running on CI (`CI=1` or `VERCEL=1`) in production mode
-//
-// Otherwise we return the bare Next config and skip the post-compile work
-// entirely.
-const SENTRY_BUILD_PLUGIN_ENABLED =
-  Boolean(process.env.SENTRY_AUTH_TOKEN) ||
-  process.env.SENTRY_UPLOAD_SOURCEMAPS === '1' ||
-  ((process.env.CI === '1' || process.env.CI === 'true' || process.env.VERCEL === '1') &&
-    process.env.NODE_ENV === 'production');
+// Runtime error reporting only needs the DSN and is initialized through the
+// Next.js instrumentation entrypoints. The build plugin is solely for release
+// creation and source-map upload, both of which require an authenticated Sentry
+// token. Do not run it in a Vercel build without that credential: the upload
+// cannot succeed and the plugin only emits misleading release warnings.
+const SENTRY_BUILD_PLUGIN_ENABLED = Boolean(process.env.SENTRY_AUTH_TOKEN);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -106,12 +94,12 @@ const finalConfig = SENTRY_BUILD_PLUGIN_ENABLED
 
       project: 'javascript-nextjs',
 
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+
       // Only print logs for uploading source maps in CI
       silent: !process.env.CI,
 
-      // Skip telemetry pings unless we actually have an auth token to back
-      // a real upload — keeps the post-compile hook idle in CI dry runs.
-      telemetry: Boolean(process.env.SENTRY_AUTH_TOKEN),
+      telemetry: false,
 
       // Avoid uploading extra client source maps unless explicitly needed.
       widenClientFileUpload: process.env.SENTRY_WIDEN_CLIENT_FILE_UPLOAD === '1',
@@ -121,12 +109,6 @@ const finalConfig = SENTRY_BUILD_PLUGIN_ENABLED
       // route will not match with the Next.js proxy, otherwise reporting of
       // client-side errors will fail.
       tunnelRoute: process.env.SENTRY_TUNNEL_ROUTE || undefined,
-
-      // If somehow enabled without an auth token (e.g. CI dry run) we still
-      // want to skip the actual upload/inject work to keep the hook short.
-      sourcemaps: {
-        disable: !process.env.SENTRY_AUTH_TOKEN,
-      },
 
       webpack: {
         // Automatic instrumentation of Vercel Cron Monitors.
