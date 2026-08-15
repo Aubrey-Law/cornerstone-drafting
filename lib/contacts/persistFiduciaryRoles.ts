@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FiduciaryForParty, FiduciaryRoleEntry } from './fiduciaryEntriesToRoles'
+import { attachContactToMatter } from './attachContactToMatter'
 
 // Re-export so admin and other callers can import the entry type from the
 // writer module without reaching into the mapper file.
@@ -151,6 +152,12 @@ export async function persistFiduciaryRoles(
         .single()
       if (insertError) throw new Error(`${insertError.code ?? 'error'}: ${insertError.message}`)
       if ((created as { id?: string })?.id) {
+        // Step 7a: a fiduciary created here goes onto the matter directly.
+        await attachContactToMatter(admin, matterId, (created as { id: string }).id, {
+          relationship_type: 'other',
+          relationship_label: e.relationship_label ?? null,
+          for_party: e.for_party,
+        })
         contactIds.set(key, (created as { id: string }).id)
         byName.set(key, {
           id: (created as { id: string }).id,

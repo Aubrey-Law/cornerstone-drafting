@@ -34,6 +34,8 @@ function stub(tables: Record<string, unknown[]>) {
     const chain = {
       select: () => chain,
       insert: (value: unknown) => { call.op = 'insert'; payload = value; call.payload = value; calls.push(call); return chain },
+      // attachContactToMatter writes the join row idempotently.
+      upsert: (value: unknown) => { call.op = 'insert'; payload = value; call.payload = value; calls.push(call); return Promise.resolve({ data: null, error: null }) },
       update: (value: unknown) => { call.op = 'update'; payload = value; return chain },
       delete: () => { call.op = 'delete'; return chain },
       eq: (column: string, value: unknown) => { call.filters.push({ op: 'eq', column, value }); return chain },

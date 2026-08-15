@@ -51,7 +51,7 @@ async function main() {
   const showDetails = process.argv.includes('--details')
 
   const [contacts, matters, joinRows, roles] = await Promise.all([
-    readAll<ContactRow>('contacts', 'id, client_intake_id, relationship_type, is_minor, child_relationship'),
+    readAll<ContactRow>('contacts', 'id, client_intake_id, relationship_type, is_minor, child_relationship, merged_into_id'),
     readAll<MatterRow>('matters', 'id, client_intake_id'),
     readAll<JoinRow>('matter_contacts', 'matter_id, contact_id, relationship_type, is_minor, child_relationship'),
     readAll<RoleRow>('contact_roles', 'id, client_intake_id, matter_id'),

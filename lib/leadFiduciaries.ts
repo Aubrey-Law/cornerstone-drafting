@@ -3,6 +3,7 @@ import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { syncChildrenProjection } from '@/lib/contacts/syncChildrenProjection'
 import { formatPhoneForStorage } from '@/lib/phone'
 import type { Database } from '@/types/supabase'
+import { attachContactToMatter, matterIdForIntake } from '@/lib/contacts/attachContactToMatter'
 
 export interface LeadFiduciaryContact {
   name: string
@@ -214,8 +215,18 @@ export async function insertFiduciaryContactsForIntake(
     return { insertedContactCount: 0 }
   }
 
-  const { error: contactsInsertError } = await admin.from('contacts').insert(rowsToInsert)
+  const { data: insertedContacts, error: contactsInsertError } = await admin
+    .from('contacts').insert(rowsToInsert).select('id, relationship_type')
   if (contactsInsertError) throw contactsInsertError
+
+  // Step 7a: attach each to the lead's matter directly. Without this they would
+  // rely on sync_matter_contacts_from_contact, which goes with the column in 7b.
+  const leadMatterId = await matterIdForIntake(admin, args.clientIntakeId)
+  for (const row of (insertedContacts ?? []) as Array<{ id: string; relationship_type: string | null }>) {
+    await attachContactToMatter(admin, leadMatterId, row.id, {
+      relationship_type: row.relationship_type ?? 'other',
+    })
+  }
 
   if (rowsToInsert.some((row) => row.relationship_type === 'child')) {
     await syncChildrenProjection(admin, args.clientIntakeId)

@@ -15,6 +15,8 @@ export interface ContactRow {
   id: string
   client_intake_id: string | null
   relationship_type: string | null
+  /** Set once merged away (step 6); such a row is meant to be on no matter. */
+  merged_into_id?: string | null
   is_minor?: boolean | null
   child_relationship?: string | null
 }
@@ -44,6 +46,7 @@ export type DriftKind =
   | 'matter_without_self'
   | 'relationship_mismatch'
   | 'role_without_matter'
+  | 'contact_without_matter'
 
 export interface Drift {
   kind: DriftKind
@@ -168,6 +171,31 @@ export function compareRepresentations(input: {
       detail: count > 1
         ? `role ${role.id}: intake ${role.client_intake_id} has ${count} matters, target is ambiguous`
         : `role ${role.id}: intake ${role.client_intake_id} has no matter to attach to`,
+    })
+  }
+
+  // 5. A household contact on no matter at all — invisible to every reader,
+  //    since step 3. Standalone directory contacts (a referring CPA) and merge
+  //    tombstones are legitimately like this and are skipped.
+  //
+  //    Scoped to intakes that have no matter, because where the intake *does*
+  //    have one, rule 1 already reports the same contact as `missing_join_row`
+  //    and naming it twice would overstate the drift.
+  //
+  //    This becomes the primary missed-writer detector in step 7b: once
+  //    `contacts.client_intake_id` is dropped there is no legacy edge left to
+  //    compare, so rule 1 can no longer be computed and this is what remains.
+  const contactsOnMatters = new Set(joinRows.map(r => r.contact_id))
+  for (const contact of contacts) {
+    if (!contact.client_intake_id) continue      // standalone directory entry
+    if (contact.merged_into_id) continue          // merged away, kept as a tombstone
+    if (contactsOnMatters.has(contact.id)) continue
+    if ((mattersByIntake.get(contact.client_intake_id) ?? []).length > 0) continue
+    drift.push({
+      kind: 'contact_without_matter',
+      matterId: null,
+      contactId: contact.id,
+      detail: `contact is on intake ${contact.client_intake_id}, which has no matter — invisible to every reader`,
     })
   }
 

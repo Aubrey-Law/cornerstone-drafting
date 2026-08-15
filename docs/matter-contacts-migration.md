@@ -1,6 +1,6 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: steps 1–6 shipped (§10, §13–§19). Step 7 is still proposal.
+Status: steps 1–6 shipped, step 7a shipped (§10, §13–§20). Step 7b — the column drop — is written up but not applied.
 Decision §12.4 is settled: **candidates on exact email match, merged only on review.**
 Decision §12.3 is settled: **a new engagement gets its own `client_intake` row.**
 
@@ -389,9 +389,11 @@ Each step is independently shippable and leaves the app working.
    `POST /api/admin/matters/open-for-person` and a "New matter" action in the
    contacts panel.
 6. **Merge tool** (§9) and the duplicate review queue. ✅ Shipped — see §19.
-7. **Cleanup.** Drop `contacts.client_intake_id`,
-   `contact_roles.client_intake_id`, `client_intake.matter_id`, and the
-   `delete_intake_contact` RPC.
+7. **Cleanup**, in two parts — see §20. **7a ✅ shipped:** every writer writes
+   its own join row, so the column is no longer load-bearing. **7b (pending):**
+   drop `contacts.client_intake_id`, `contact_roles.client_intake_id`, the two
+   dual-write triggers, and `delete_intake_contact`. `client_intake.matter_id`
+   and the seven intake→matter lookups stay — §17 settled that.
 
 Steps 1–4 are the migration proper. Step 5 is the feature that answers the
 original question. Steps 6–7 pay off the old data.
@@ -916,3 +918,70 @@ messages, design sheets) and that the removed row is kept rather than deleted,
 so a reviewer who realises they were wrong knows there is something to undo.
 
 There is deliberately no bulk action.
+
+## 20. Step 7, split in two
+
+`contacts.client_intake_id` was not a dead column. `sync_matter_contacts_from_
+contact` reads it to build every join row, and seven write paths still set it.
+Dropping it in one move means removing the column in the same deploy that stops
+needing it, with no window to catch a writer that was missed.
+
+That matters because the failure is silent. A missed writer does not error — it
+creates a contact that never gets a join row, and since step 3 every reader goes
+through the join, so that person simply does not exist to the app: absent from
+the People tab, absent from the draft. Found later, on client records.
+
+### 7a — shipped
+
+Every writer now calls `attachContactToMatter` and puts the person on the matter
+itself:
+
+```
+saveHouseholdContact      saveHouseholdChildren     saveAdditionalContacts
+persistFiduciaryRoles     leadFiduciaries           lawmatics/importMatter
+leads/[id]/engagement     api/intake/contacts
+```
+
+`saveHouseholdContact` deliberately skips `self`: the client's own join row is
+owned by matter creation (`open_matter_for_person`,
+`sync_matter_contacts_from_matter`), and a household writer also claiming it
+could contradict them.
+
+The helper is an idempotent upsert on the join's own unique key, so it is safe
+running alongside the trigger while both exist — which is the point of splitting:
+**7a changes nothing observable.** The column is still written, the trigger still
+fires, and every join row now has two independent authors that agree.
+
+### 7b — the drop, not yet applied
+
+```sql
+drop trigger sync_matter_contacts_from_contact on public.contacts;
+drop function public.sync_matter_contacts_from_contact();
+alter table public.contacts      drop column client_intake_id;
+alter table public.contact_roles drop column client_intake_id;
+drop function public.delete_intake_contact(uuid, uuid);
+```
+
+`sync_matter_contacts_from_matter` also needs rewriting first — it joins
+`contacts` by `client_intake_id` to carry a household onto a new matter, which
+`open_matter_for_person` now does explicitly. And the two lead RPCs
+(`update_lead_opportunity_field`, `update_lead_opportunity_details`) upsert a
+spouse with the column set; those fail loudly once it is gone, which is the good
+kind of failure but still has to be fixed in the same migration.
+
+**Run 7a in production first, and check `contact_without_matter` stays zero.**
+A writer that was missed shows up as `missing_join_row` while the column still
+exists — that is what makes 7a's soak worth having, and there is no equivalent
+signal afterwards.
+
+### The detector that survives the drop
+
+`check:matter-contacts` gained a `contact_without_matter` rule: a household
+contact on no matter, skipping standalone directory entries and merge
+tombstones, which are legitimately on none.
+
+It is deliberately scoped to intakes with no matter, because where the intake
+has one, `missing_join_row` already names the same contact and counting it twice
+would overstate the drift. Its real job starts at 7b: once the column is gone
+there is no legacy edge left to compare, `missing_join_row` cannot be computed,
+and this is the only thing left that can see an invisible person.

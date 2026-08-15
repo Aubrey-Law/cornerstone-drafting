@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { formatPhoneForStorage } from '@/lib/phone'
+import { attachContactToMatter, matterIdForIntake } from '@/lib/contacts/attachContactToMatter'
 import type { CitizenshipStatus } from '@/lib/sharedFields'
 
 type AdminClient = SupabaseClient<Database>
@@ -144,6 +145,21 @@ export async function saveHouseholdContact(
       .single()
     if (error) throw new Error(`${error.code ?? 'error'}: ${error.message}`)
     resultId = (data as { id: string }).id
+  }
+
+  // Step 7a: the writer puts the person on the matter itself rather than
+  // leaving sync_matter_contacts_from_contact to infer it from the household
+  // FK. 'self' is excluded — the client's join row is owned by matter creation
+  // (open_matter_for_person / sync_matter_contacts_from_matter), and writing it
+  // here could contradict it.
+  if (input.relationship_type !== 'self') {
+    const matterId = await matterIdForIntake(admin, input.householdId)
+    await attachContactToMatter(admin, matterId, resultId, {
+      relationship_type: input.relationship_type,
+      relationship_label: LABELS[input.relationship_type],
+      child_relationship: (payload.child_relationship as string | null) ?? null,
+      parentage: (payload.parentage as string | null) ?? null,
+    })
   }
 
   return { id: resultId }

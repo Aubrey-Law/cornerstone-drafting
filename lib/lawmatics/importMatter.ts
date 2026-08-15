@@ -8,6 +8,7 @@ import {
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { createMatterFromIntake } from '@/lib/matters/createFromIntake'
+import { attachContactToMatter, matterIdForIntake } from '@/lib/contacts/attachContactToMatter'
 
 function splitName(full: string | null): { first: string; last: string | null } {
   const name = (full ?? '').trim()
@@ -43,10 +44,21 @@ async function upsertSpouseContact(
   if (readError) throw new Error(readError.message)
 
   const result = existing
-    ? await admin.from('contacts').update(row).eq('id', existing.id)
-    : await admin.from('contacts').insert(row)
+    ? await admin.from('contacts').update(row).eq('id', existing.id).select('id').maybeSingle()
+    : await admin.from('contacts').insert(row).select('id').maybeSingle()
 
   if (result.error) throw new Error(result.error.message)
+
+  // Step 7a: an imported spouse joins the matter directly.
+  const importedId = (result.data as { id?: string } | null)?.id ?? existing?.id ?? null
+  if (importedId) {
+    await attachContactToMatter(
+      admin,
+      await matterIdForIntake(admin, clientIntakeId),
+      importedId,
+      { relationship_type: 'spouse', relationship_label: 'Spouse' },
+    )
+  }
 }
 
 function buildIntakeRow(row: Record<string, unknown>, lmId: string) {
