@@ -1,6 +1,7 @@
 # Spec: `matter_contacts` — one person, many matters
 
-Status: steps 1–5 shipped (§10, §13–§18). Steps 6–7 are still proposal.
+Status: steps 1–6 shipped (§10, §13–§19). Step 7 is still proposal.
+Decision §12.4 is settled: **candidates on exact email match, merged only on review.**
 Decision §12.3 is settled: **a new engagement gets its own `client_intake` row.**
 
 ## 1. The problem
@@ -387,7 +388,7 @@ Each step is independently shippable and leaves the app working.
 5. **Open the door.** ✅ Shipped — see §18. `open_matter_for_person` plus
    `POST /api/admin/matters/open-for-person` and a "New matter" action in the
    contacts panel.
-6. **Merge tool** (§9) and the duplicate review queue.
+6. **Merge tool** (§9) and the duplicate review queue. ✅ Shipped — see §19.
 7. **Cleanup.** Drop `contacts.client_intake_id`,
    `contact_roles.client_intake_id`, `client_intake.matter_id`, and the
    `delete_intake_contact` RPC.
@@ -440,9 +441,10 @@ formality.
    engagement**, which is also what `create_matter_with_client` already does.
    `client_intake` is per-engagement; `contacts` is the person. See §17 for what
    this removed from the plan and what it moves onto step 5.
-4. **Merge policy.** Automatic-on-exact-email-match with review, or
-   attorney-initiated only? A married couple sharing an inbox makes automatic
-   matching unsafe.
+4. ~~**Merge policy.**~~ **Settled: candidates proposed automatically on exact
+   email match, merged only when a human approves.** The couple-sharing-an-inbox
+   case is handled by surfacing `names_match` rather than by refusing to
+   propose. See §19.
 
 ## 13. Step 1 as built
 
@@ -837,3 +839,80 @@ resolves it.
 this person, which is the self contact for a lead or client and the contact
 itself for everyone else. The contacts panel uses it for a "New matter" action,
 so the child in a client's household is one click from their own matter.
+
+## 19. Step 6 as built
+
+`merge_contacts(winner, loser, reason, actor)` collapses two rows that are the
+same human. Three things make it defensible for a law firm's records:
+
+**The loser is tombstoned, never deleted.** `merged_into_id` and `merged_at` are
+set and the household FK cleared; the row stays. A wrong merge is undone by
+clearing those two columns and re-linking, and any stale reference still
+resolves to a row that says where the person went.
+
+**Every merge is logged.** `contact_merges` carries no foreign keys — the same
+reasoning as `matter_deletions` (20260923000000) — so it stays readable whatever
+happens to the rows later, and records who approved it and what moved.
+
+**Nothing merges on its own.** `contact_merge_candidates` proposes pairs on
+exact, case-insensitive email match, ranks the better-connected row as winner
+(a `self` contact first, then matter count), and surfaces `names_match`. That
+last column is the point: by email alone a couple sharing an inbox is
+indistinguishable from a duplicate, and differing names is the signal that says
+so. `POST /api/admin/contacts/merge` takes one reviewed pair at a time —
+deliberately not a bulk endpoint, because a wrong judgement here is expensive to
+undo.
+
+### The design-sheet rewrite
+
+§8 lists roughly fifteen places a contact id can sit in a design sheet, and
+warns that two of them — `fiduciary_contact_details` and
+`fiduciary_document_inclusions` — are keyed *by* contact id. A rewrite that only
+replaces values passes every obvious test and still leaves a fiduciary's details
+attached to a person who no longer exists.
+
+Rather than enumerate the paths, `jsonb_replace_id` walks the document and
+replaces the id wherever it occurs, as a value and as an object key, recursing
+through arrays and nested objects. Where both ids are keys of the same object
+the winner's entry survives. The columns it runs over are discovered from
+`information_schema` rather than listed, so a jsonb column added later is
+covered without anyone remembering this function exists. Contact ids are UUIDs,
+so a false positive would need a collision.
+
+### Verified against PostgreSQL 16
+
+- The rewrite in isolation, across all four shapes: slot objects, id arrays,
+  `excluded_guardians` objects, and the map-keyed structures — plus a nested
+  case and the both-keys-present collision.
+- A full merge: matter links moved with the overlapping one dropped rather than
+  violating `(matter_id, contact_id)`, appointments moved, messages moved,
+  design sheet repointed in both value and key position, loser tombstoned and
+  detached, audit row written.
+- All five guards: self-merge, already-merged loser, tombstoned winner, unknown
+  contact, and a caller without the service role.
+
+One correctness fix came out of it: the log counted *column* writes as sheets,
+so a sheet naming the loser in two columns reported as two. It now collects
+distinct sheet ids — a merge's blast radius is the first thing anyone reads off
+that log, and inflating it would be misleading in exactly the wrong direction.
+
+### The review screen
+
+`/admin/contacts/merge`, linked from the contacts directory. It shows the two
+people side by side — email, phone, date of birth, location, when each was
+added, and every matter each is on — because nobody can judge a merge from two
+names and a count. Values that disagree between the rows are highlighted, since
+a differing phone or date of birth is usually the tell that these are two
+people.
+
+Which row survives is stated on the cards themselves ("Will be kept" / "Will be
+removed") rather than left to be inferred. When the names differ the pair
+carries a warning that this is far more often a couple sharing an inbox than one
+person entered twice — the single most likely bad merge. "Not a duplicate"
+dismisses a pair without touching it.
+
+After a merge the screen reports what actually moved (matter links, roles,
+messages, design sheets) and that the removed row is kept rather than deleted,
+so a reviewer who realises they were wrong knows there is something to undo.
+
+There is deliberately no bulk action.
