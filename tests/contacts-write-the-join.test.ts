@@ -20,6 +20,7 @@ const WRITERS = [
   'lib/lawmatics/importMatter.ts',
   'app/api/admin/leads/[id]/engagement/route.ts',
   'app/api/intake/contacts/route.ts',
+  'app/api/admin/contacts/route.ts',
 ]
 
 describe('every contact writer puts the person on the matter', () => {
@@ -71,13 +72,29 @@ describe('detecting a writer that was missed', () => {
     const report = compareRepresentations({
       contacts: [
         { id: 'c-self', client_intake_id: null, relationship_type: 'self' },
-        { id: 'c-cpa', client_intake_id: null, relationship_type: 'other' },
+        { id: 'c-cpa', client_intake_id: null, relationship_type: 'other', source: 'directory' },
       ],
       matters,
       joinRows,
       roles: [],
     })
     expect(report.countsByKind.contact_without_matter).toBeUndefined()
+  })
+
+  it('keys the exemption on source, not on the column 7b drops', () => {
+    // The rule has to survive `contacts.client_intake_id` going away, since at
+    // that point it is the only missed-writer detector left. A household person
+    // on no matter is drift whether or not the legacy FK is still there.
+    const report = compareRepresentations({
+      contacts: [
+        { id: 'c-self', client_intake_id: null, relationship_type: 'self' },
+        { id: 'c-child', client_intake_id: null, relationship_type: 'child', source: 'client' },
+      ],
+      matters,
+      joinRows,
+      roles: [],
+    })
+    expect(report.countsByKind.contact_without_matter).toBe(1)
   })
 
   it('does not flag a merge tombstone', () => {

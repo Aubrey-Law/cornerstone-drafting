@@ -939,8 +939,14 @@ itself:
 ```
 saveHouseholdContact      saveHouseholdChildren     saveAdditionalContacts
 persistFiduciaryRoles     leadFiduciaries           lawmatics/importMatter
-leads/[id]/engagement     api/intake/contacts
+leads/[id]/engagement     api/intake/contacts       api/admin/contacts
 ```
+
+`api/admin/contacts` was missed on the first pass. It looked like the pure
+directory route — the one writer whose contacts belong to no matter — but it
+accepts an optional `client_intake_id`, and a directory person given a household
+is a person on that matter. It now attaches when an intake is supplied and stays
+off the join when one is not.
 
 `saveHouseholdContact` deliberately skips `self`: the client's own join row is
 owned by matter creation (`open_matter_for_person`,
@@ -980,8 +986,17 @@ signal afterwards.
 contact on no matter, skipping standalone directory entries and merge
 tombstones, which are legitimately on none.
 
-It is deliberately scoped to intakes with no matter, because where the intake
-has one, `missing_join_row` already names the same contact and counting it twice
-would overstate the drift. Its real job starts at 7b: once the column is gone
-there is no legacy edge left to compare, `missing_join_row` cannot be computed,
-and this is the only thing left that can see an invisible person.
+The exemption is keyed on `contacts.source = 'directory'`, **not** on
+`client_intake_id`. Keyed on the column, the rule would have gone quiet at
+exactly the moment it became the only detector left — every contact looks
+standalone once the household FK is gone. `'directory'` is written by one route
+and by nothing else, so it still separates the two populations at 7b.
+
+It is also scoped to intakes with no matter, because where the intake has one,
+`missing_join_row` already names the same contact and counting it twice would
+overstate the drift. That exclusion lapses on its own when the column goes.
+
+**First production run: 2 hits, both demo rows** — a `child` and a `spouse` on
+an intake that never became a matter. That is the expected shape of a false
+positive here: an abandoned intake, not a missed writer. Worth confirming the
+intake, not worth changing the rule.
