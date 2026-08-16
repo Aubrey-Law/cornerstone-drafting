@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { PasswordInput } from '@/components/auth/PasswordInput'
 import { AuthShell } from '@/components/layout/AuthShell'
 import {
   DEFAULT_ADMIN_HOME,
@@ -17,7 +18,7 @@ const ADMIN_ROLES = ['attorney', 'admin'] as const
 // text-base on mobile (matching components/ui/input.tsx): iOS Safari auto-zooms
 // the page when focusing an input whose font-size is under 16px.
 const inputCls =
-  'mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-base md:text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground'
+  'mt-1 block h-11 w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground md:text-sm'
 
 function GoogleIcon() {
   return (
@@ -42,7 +43,7 @@ function MicrosoftIcon() {
 }
 
 const oauthBtnCls =
-  'flex w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted disabled:opacity-50'
+  'flex h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted disabled:opacity-50'
 
 async function resolveDestination(userId: string, redirectTo: string | null): Promise<string> {
   const { data: authData } = await supabase.auth.getUser()
@@ -135,7 +136,7 @@ function LoginForm() {
 
   return (
     <AuthShell>
-      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border bg-card p-8 shadow-sm">
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border bg-card p-5 shadow-sm sm:p-8">
           <div>
             <h2 className="text-center text-lg font-medium text-foreground">Sign in</h2>
             <p className="mt-1 text-center text-xs text-muted-foreground/60">
@@ -185,36 +186,31 @@ function LoginForm() {
             />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="login-password" className="block text-sm font-medium text-foreground">
-                Password
-              </label>
+          <PasswordInput
+            id="login-password"
+            label="Password"
+            toggleLabel="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Your password"
+            labelAction={
               <button
                 type="button"
                 onClick={() => void handlePasswordReset()}
                 disabled={resetLoading}
-                className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                className="-my-2 min-h-11 text-xs font-medium text-primary hover:underline disabled:opacity-50"
               >
                 {resetLoading ? 'Sending…' : 'Forgot password?'}
               </button>
-            </div>
-            <input
-              id="login-password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className={inputCls}
-              placeholder="Your password"
-            />
-          </div>
+            }
+          />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
+            className="h-11 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
