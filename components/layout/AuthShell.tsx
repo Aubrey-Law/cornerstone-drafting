@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 interface AuthShellProps {
@@ -22,19 +22,24 @@ export function AuthShell({
   logoHeight = 140,
 }: AuthShellProps) {
   return (
-    <main className={cn('dark flex min-h-screen items-center justify-center bg-background px-4 py-12', className)}>
-      <div className={cn('w-full max-w-md space-y-8', contentClassName)}>
+    <main className={cn('dark flex min-h-screen items-start justify-center bg-background px-4 py-6 sm:items-center sm:py-12', className)}>
+      <div className={cn('w-full max-w-md space-y-5 sm:space-y-8', contentClassName)}>
         <div className="flex justify-center">
           <Link
             href={homeHref}
             aria-label="Aubrey Law home"
-            className="rounded-sm transition-opacity hover:opacity-90"
+            className="block w-[var(--auth-logo-mobile-width)] rounded-sm transition-opacity hover:opacity-90 sm:w-[var(--auth-logo-width)]"
+            style={{
+              '--auth-logo-mobile-width': `${Math.min(160, logoWidth)}px`,
+              '--auth-logo-width': `${logoWidth}px`,
+            } as CSSProperties}
           >
             <Image
               src="/logos/aubrey-law-stacked-dark.svg"
               alt="Aubrey Law"
               width={logoWidth}
               height={logoHeight}
+              className="h-auto w-full"
               priority
             />
           </Link>
