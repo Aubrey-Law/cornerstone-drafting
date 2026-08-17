@@ -5,6 +5,8 @@ export interface SidebarCounts {
   agingRedCount: number
   agingAmberCount: number
   tasksOverdueCount: number
+  /** Issued invoices past their due date with a balance outstanding. */
+  overdueInvoiceCount: number
 }
 
 export type SidebarBadgeTone = 'destructive' | 'accent'
@@ -21,6 +23,7 @@ export const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
   agingRedCount: 0,
   agingAmberCount: 0,
   tasksOverdueCount: 0,
+  overdueInvoiceCount: 0,
 }
 
 export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge | null {
@@ -39,6 +42,11 @@ export function getNavBadge(href: string, counts: SidebarCounts): SidebarBadge |
   if (href === '/admin/tasks' && counts.tasksOverdueCount > 0) {
     return { value: counts.tasksOverdueCount, tone: 'destructive' }
   }
+  // Late money is destructive, not accent: an overdue invoice is the firm
+  // being owed, which is the same urgency as an overdue task.
+  if (href === '/admin/billing' && counts.overdueInvoiceCount > 0) {
+    return { value: counts.overdueInvoiceCount, tone: 'destructive' }
+  }
   return null
 }
 
@@ -54,5 +62,6 @@ export function mergeSidebarCounts(
     agingRedCount: next.agingRedCount ?? prev.agingRedCount,
     agingAmberCount: next.agingAmberCount ?? prev.agingAmberCount,
     tasksOverdueCount: next.tasksOverdueCount ?? prev.tasksOverdueCount,
+    overdueInvoiceCount: next.overdueInvoiceCount ?? prev.overdueInvoiceCount,
   }
 }

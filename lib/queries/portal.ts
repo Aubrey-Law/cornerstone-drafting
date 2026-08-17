@@ -1,4 +1,5 @@
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
+import { firmTodayKey } from '@/lib/firmDate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { MatterDocument } from '@/types/database'
 
@@ -182,5 +183,110 @@ export async function fetchNextAppointment(matterId: string): Promise<PortalAppo
     id: data.id as string,
     startTime: data.start_time as string,
     typeLabel: typeRow?.label ?? null,
+  }
+}
+
+/** One invoice as the client sees it. Drafts and voids never appear. */
+export interface PortalInvoice {
+  id: string
+  number: string
+  issueDate: string | null
+  dueDate: string | null
+  subtotalCents: number
+  collectedCents: number
+  balanceCents: number
+  overdue: boolean
+  paid: boolean
+  paymentLink: string | null
+  /** The rendered invoice, when one was produced. */
+  documentId: string | null
+}
+
+export interface PortalAccount {
+  invoices: PortalInvoice[]
+  balanceCents: number
+  /** Soonest due date with money still owed, or null when nothing is open. */
+  nextDueDate: string | null
+}
+
+/**
+ * What the client owes, and the invoices behind it.
+ *
+ * Only issued, non-void invoices are ever returned: a draft is the firm's
+ * working copy and must not be visible to the client, and a void invoice is
+ * not a bill. That filter is applied here as well as in RLS, because this read
+ * deliberately uses the admin client per the trust model above.
+ */
+export async function fetchPortalAccount(
+  matterId: string,
+  today = firmTodayKey(),
+): Promise<PortalAccount> {
+  const admin = getAdminClient()
+
+  const { data, error } = await admin
+    .from('invoices')
+    .select('id, number, issue_date, due_date, subtotal_cents, payment_link, pdf_document_id, docx_document_id, status')
+    .eq('matter_id', matterId)
+    .not('issued_at', 'is', null)
+    .neq('status', 'void')
+    .order('issue_date', { ascending: false })
+
+  if (error) {
+    console.error('fetchPortalAccount error:', error)
+    return { invoices: [], balanceCents: 0, nextDueDate: null }
+  }
+
+  type Row = {
+    id: string
+    number: string | null
+    issue_date: string | null
+    due_date: string | null
+    subtotal_cents: number
+    payment_link: string | null
+    pdf_document_id: string | null
+    docx_document_id: string | null
+    status: string
+  }
+  const rows = (data ?? []) as Row[]
+  if (rows.length === 0) return { invoices: [], balanceCents: 0, nextDueDate: null }
+
+  const paymentResult = await admin
+    .from('billing_payments')
+    .select('invoice_id, amount')
+    .in('invoice_id', rows.map(row => row.id))
+  if (paymentResult.error) {
+    console.error('fetchPortalAccount payments error:', paymentResult.error)
+  }
+
+  const collected = new Map<string, number>()
+  for (const payment of (paymentResult.data ?? []) as { invoice_id: string; amount: number }[]) {
+    collected.set(payment.invoice_id, (collected.get(payment.invoice_id) ?? 0) + payment.amount)
+  }
+
+  const invoices: PortalInvoice[] = rows.map(row => {
+    const collectedCents = collected.get(row.id) ?? 0
+    const balanceCents = Math.max(0, row.subtotal_cents - collectedCents)
+    return {
+      id: row.id,
+      number: row.number ?? '',
+      issueDate: row.issue_date,
+      dueDate: row.due_date,
+      subtotalCents: row.subtotal_cents,
+      collectedCents,
+      balanceCents,
+      overdue: balanceCents > 0 && Boolean(row.due_date) && today > row.due_date!,
+      paid: balanceCents === 0,
+      paymentLink: row.payment_link,
+      documentId: row.pdf_document_id ?? row.docx_document_id,
+    }
+  })
+
+  const open = invoices.filter(invoice => invoice.balanceCents > 0 && invoice.dueDate)
+  return {
+    invoices,
+    balanceCents: invoices.reduce((sum, invoice) => sum + invoice.balanceCents, 0),
+    nextDueDate: open.length > 0
+      ? open.map(invoice => invoice.dueDate!).sort()[0]
+      : null,
   }
 }
