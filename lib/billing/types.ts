@@ -88,15 +88,26 @@ export interface UnpreparedClaim {
   legalPlan: BillingPlan
 }
 
+/**
+ * One item of billing follow-up for the week.
+ *
+ * `bill` and `claim_submit` were split out of the old single `invoice` kind
+ * because they are different jobs: a client charge is grouped onto an invoice
+ * in the composer, while a legal plan claim is submitted to the carrier and
+ * never appears on a client invoice.
+ */
 export interface BillingNudge {
   key: string
-  kind: 'invoice' | 'reminder' | 'claim'
+  kind: 'bill' | 'claim_submit' | 'reminder' | 'claim'
   clientName: string
   description: string
   itemId: string | null
   matterId: string
   clientEmail: string | null
   legalPlan: BillingPlan | null
+  /** Set on a `reminder`, which is only ever raised for an invoiced charge. */
+  invoiceId?: string | null
+  invoiceNumber?: string | null
 }
 
 /** One bar of the six-month collections chart on the finance dashboard. */

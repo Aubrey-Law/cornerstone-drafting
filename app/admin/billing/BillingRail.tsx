@@ -73,6 +73,14 @@ function ClaimsCard({ snapshot }: { snapshot: BillingSnapshot }) {
   )
 }
 
+/** The verb for each follow-up, so the button says what it will actually do. */
+const nudgeAction: Record<BillingNudge['kind'], string> = {
+  bill: 'Bill',
+  claim_submit: 'Submit',
+  reminder: 'Remind',
+  claim: 'Prep',
+}
+
 function WeekCard({
   nudges,
   onAction,
@@ -105,7 +113,7 @@ function WeekCard({
                 className="mt-1 h-auto min-h-11 px-0"
                 onClick={() => onAction(nudge)}
               >
-                {nudge.kind === 'invoice' ? 'Send' : nudge.kind === 'reminder' ? 'Remind' : 'Prep'}
+                {nudgeAction[nudge.kind]}
               </Button>
             </div>
             <Button
