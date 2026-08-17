@@ -1,5 +1,11 @@
-import { RESIDUAL_BENEFICIARY_METHODS } from '@/lib/designSheetTrustDetails'
 import { DESIGN_PLAN_TYPE_OPTIONS } from '@/lib/designPlanType'
+import {
+  DESIGN_SHEET_DECISION_FIELDS,
+  flattenDecisionNamespaces,
+  isDesignSheetDecisionField,
+  readDecisionFieldRaw,
+  type DesignSheetDecisionField,
+} from '@/lib/designSheetImport/decisionFields'
 import { CITIZENSHIP_VALUES, MA_COUNTY_OPTIONS, MARITAL_STATUS_VALUES } from '@/lib/sharedFields'
 import type { AssetItem, DesignSheet, DesignSheetChild, DesignSheetUpdate } from '@/types/database'
 
@@ -12,13 +18,15 @@ export const MAX_DESIGN_SHEET_IMPORT_TEXT_LENGTH = 60_000
 export const MAX_DESIGN_SHEET_DOCX_BYTES = 10 * 1024 * 1024
 export const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-// `residual_beneficiary_method` lives in decisions.trust_details rather than a
-// column, so it is named here alongside drafting_notes rather than derived from
-// DesignSheetUpdate. The apply path routes it to its decisions home.
+// Fields without a dedicated column are addressed by their `decisions` home:
+// `drafting_notes` lands as a flat decisions key, while provision fields carry a
+// qualified `<namespace>.<key>` name from DESIGN_SHEET_DECISION_FIELDS. The bare
+// `residual_beneficiary_method` used to sit here; accepting it wrote
+// `decisions.residual_beneficiary_method`, which no reader ever looks at.
 export type DesignSheetImportField =
   | keyof DesignSheetUpdate
   | 'drafting_notes'
-  | 'residual_beneficiary_method'
+  | DesignSheetDecisionField
 export type DesignSheetImportProposal = Partial<Record<DesignSheetImportField, unknown>>
 
 export interface DesignSheetImportPreviewRow {
@@ -48,7 +56,7 @@ export interface DesignSheetImportRejection {
   options: readonly string[]
 }
 
-type FieldKind = 'string' | 'boolean' | 'number' | 'children' | 'assets' | 'json'
+export type FieldKind = 'string' | 'boolean' | 'number' | 'children' | 'assets' | 'json'
 /**
  * `options` marks a field the design sheet renders as a fixed choice. Imported text
  * is matched against it and dropped when it does not fit, so a document that says
@@ -120,7 +128,6 @@ export const DESIGN_SHEET_IMPORT_FIELDS = {
   spouse_trust_name: { section: 'Trust', label: 'Spouse trust name', kind: 'string' },
   restatement: { section: 'Trust', label: 'Restatement', kind: 'boolean' },
   trust_protector: { section: 'Trust', label: 'Trust protector', kind: 'boolean' },
-  residual_beneficiary_method: { section: 'Trust', label: 'Residual beneficiary method', kind: 'string', options: RESIDUAL_BENEFICIARY_METHODS },
   distribution_age: { section: 'Trust', label: 'Distribution age', kind: 'number' },
   stagger_age_1: { section: 'Trust', label: 'First stagger age', kind: 'number' },
   stagger_pct_1: { section: 'Trust', label: 'First stagger percentage', kind: 'number' },
@@ -308,6 +315,33 @@ function isKnownImportField(field: string): field is KnownDesignSheetImportField
   return field in DESIGN_SHEET_IMPORT_FIELDS
 }
 
+/**
+ * Metadata for any proposable field, column-backed or `decisions`-backed.
+ * Column fields win on name collision, but there is none by construction: a
+ * decision field is always addressed as `<namespace>.<key>`.
+ */
+export function getDesignSheetImportFieldMeta(field: string): FieldMeta | null {
+  if (isKnownImportField(field)) return DESIGN_SHEET_IMPORT_FIELDS[field]
+  const decision = (DESIGN_SHEET_DECISION_FIELDS as Record<string, {
+    section: string
+    label: string
+    kind: FieldKind
+    options?: readonly string[]
+  }>)[field]
+  if (!decision) return null
+  return { section: decision.section, label: decision.label, kind: decision.kind, options: decision.options }
+}
+
+/** Every field a proposal may name, for the extraction prompt's allowlist. */
+export function listDesignSheetImportFieldNames(): DesignSheetImportField[] {
+  // Both registries are keyed by members of DesignSheetImportField; Object.keys
+  // just widens them to string on the way out.
+  return [
+    ...Object.keys(DESIGN_SHEET_IMPORT_FIELDS),
+    ...Object.keys(DESIGN_SHEET_DECISION_FIELDS),
+  ] as DesignSheetImportField[]
+}
+
 export function getDesignSheetImportTextValidationError(text: string): string | null {
   if (!text.trim()) return 'text required'
   if (text.trim().length < MIN_DESIGN_SHEET_IMPORT_TEXT_LENGTH) return 'text too short (20 char min)'
@@ -345,13 +379,21 @@ export function coerceDesignSheetImport(parsed: unknown): {
 } {
   if (!isRecord(parsed)) return { proposed: {}, rejected: [] }
 
+  const flattened = flattenDecisionNamespaces(parsed)
+
   const proposed: DesignSheetImportProposal = {}
   const rejected: DesignSheetImportRejection[] = []
 
-  for (const [field, meta] of Object.entries(DESIGN_SHEET_IMPORT_FIELDS) as Array<[KnownDesignSheetImportField, FieldMeta]>) {
-    if (!(field in parsed)) continue
+  const allFields: Array<[DesignSheetImportField, FieldMeta]> = listDesignSheetImportFieldNames()
+    .flatMap(field => {
+      const meta = getDesignSheetImportFieldMeta(field)
+      return meta ? [[field, meta] as [DesignSheetImportField, FieldMeta]] : []
+    })
 
-    const rawValue = parsed[field]
+  for (const [field, meta] of allFields) {
+    if (!(field in flattened)) continue
+
+    const rawValue = flattened[field]
     let value: unknown = null
 
     if (meta.kind === 'string') value = coerceString(rawValue)
@@ -410,11 +452,13 @@ export function buildDesignSheetImportPreview(args: {
   const currentSheet = args.currentSheet ?? {}
 
   return Object.entries(args.proposed)
-    .filter(([field, proposedValue]) => isKnownImportField(field) && !isEmptyValue(proposedValue))
+    .filter(([field, proposedValue]) => getDesignSheetImportFieldMeta(field) && !isEmptyValue(proposedValue))
     .map(([field, proposedValue]) => {
       const knownField = field as KnownDesignSheetImportField
-      const meta = DESIGN_SHEET_IMPORT_FIELDS[knownField]
-      const currentValue = currentSheet[knownField]
+      const meta = getDesignSheetImportFieldMeta(field) as FieldMeta
+      const currentValue = isDesignSheetDecisionField(field)
+        ? readDecisionFieldRaw(currentSheet as Pick<DesignSheet, 'decisions'>, field)
+        : currentSheet[knownField]
       const replacement =
         !isEmptyValue(currentValue) &&
         stableStringify(currentValue) !== stableStringify(proposedValue)

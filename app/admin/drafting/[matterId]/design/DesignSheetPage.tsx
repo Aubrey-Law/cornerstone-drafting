@@ -504,6 +504,7 @@ function DesignSheetPageContent({
               onOpenChange={setImportDialogOpen}
               matterId={matterId}
               currentSheet={sheet}
+              expectedUpdatedAt={sheet.updated_at ?? null}
               onAccepted={handleImportedDesignSheetFields}
             />
           ) : null}
@@ -546,6 +547,8 @@ function DesignSheetPageContent({
                     documentInclusions={documentInclusions}
                     attorneyPreset={attorneyPreset}
                     onAttorneyPresetChange={handleAttorneyPresetChange}
+                    blockingCount={blockingDetails.reduce((total, group) => total + group.blockers.length, 0)}
+                    onAutofill={() => setImportDialogOpen(true)}
                   />
                 </>
               )}

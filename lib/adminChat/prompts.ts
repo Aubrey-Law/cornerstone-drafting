@@ -3,6 +3,11 @@ import { formatPhoneDisplay } from '@/lib/phone'
 import { estateValueLabel } from '@aubrey-law/estate-fields'
 import { firmTodayKey } from '@/lib/firmDate'
 import { loadSystemSkillBody } from '@/lib/works/systemSkills'
+import {
+  DESIGN_SHEET_DECISION_FIELDS,
+  readDecisionFieldRaw,
+} from '@/lib/designSheetImport/decisionFields'
+import type { DesignSheet } from '@/types/database'
 
 export type Row = Record<string, unknown>
 
@@ -160,7 +165,51 @@ export function formatDesignSheetSummary(designSheet: Row | null): string {
 - Spouse trustee slots: ${text(designSheet.spouse_trustee_slots)}
 - Spouse PR slots: ${text(designSheet.spouse_executor_slots)}
 - Spouse POA slots: ${text(designSheet.spouse_poa_slots)}
-- Spouse HCP slots: ${text(designSheet.spouse_hcp_slots)}`
+- Spouse HCP slots: ${text(designSheet.spouse_hcp_slots)}
+${formatDesignSheetProvisions(designSheet)}`
+}
+
+/**
+ * The provisions the sheet holds, as a compact list of the decisions actually
+ * made.
+ *
+ * Only fields with a stored value are listed. A decisions getter answers with a
+ * default for every unset key, so rendering through one would tell the assistant
+ * that every provision on a blank sheet had already been decided — and the whole
+ * point of showing it these fields is so it can tell settled from open.
+ */
+export function formatDesignSheetProvisions(designSheet: Row | null): string {
+  if (!designSheet) return ''
+
+  const decided: string[] = []
+  for (const field of Object.keys(DESIGN_SHEET_DECISION_FIELDS)) {
+    const value = readDecisionFieldRaw(
+      designSheet as unknown as Pick<DesignSheet, 'decisions'>,
+      field,
+    )
+    if (value === undefined || value === null || value === '') continue
+    const meta = (DESIGN_SHEET_DECISION_FIELDS as Record<string, { label: string }>)[field]
+    decided.push(`  - ${meta.label} (${field}): ${text(value)}`)
+  }
+
+  const columnProvisions = [
+    ['Bond', designSheet.bond], ['Supervision', designSheet.supervision],
+    ['UTMA age', designSheet.utma_age], ['No-contest clause', designSheet.no_contest_clause],
+    ['PR structure', designSheet.pr_structure], ['Trustee structure', designSheet.trustee_structure],
+    ['Beneficiary structure', designSheet.beneficiary_structure],
+    ['Age distribution schedule', designSheet.age_distribution_schedule],
+    ['Simultaneous death', designSheet.simultaneous_death],
+    ['Distribution age', designSheet.distribution_age],
+  ] as const
+  for (const [label, value] of columnProvisions) {
+    if (value === null || value === undefined || value === '') continue
+    decided.push(`  - ${label}: ${text(value)}`)
+  }
+
+  if (decided.length === 0) {
+    return 'PROVISIONS DECIDED SO FAR: none — every provision on this sheet is still open.'
+  }
+  return `PROVISIONS DECIDED SO FAR (anything not listed is still open):\n${decided.join('\n')}`
 }
 
 // --- System-skill-backed drafting instructions -------------------------------

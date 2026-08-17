@@ -1,7 +1,8 @@
 import type { ApiKeyProvider } from '@/lib/userApiKeys'
 import {
+  ATTORNEY_PRESET_DECISION_FIELDS,
   ATTORNEY_PRESET_FIELDS,
-  ATTORNEY_PRESET_VERSION,
+  ATTORNEY_PRESET_SUPPORTED_VERSIONS,
   type AttorneyDesignPreset,
 } from '@/lib/designSheet/fastEntryWorkflow'
 
@@ -148,15 +149,40 @@ function parseModels(raw: unknown): ModelsUserPreferences | undefined {
 
 function parseAttorneyPreset(raw: unknown): AttorneyDesignPreset | undefined {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
-  const candidate = raw as { version?: unknown; fields?: unknown }
-  if (candidate.version !== ATTORNEY_PRESET_VERSION) return undefined
+  const candidate = raw as { version?: unknown; fields?: unknown; decisions?: unknown }
+  // Every supported version is read, not just the current one. A stored v1 preset
+  // predates the decisions map but its column fields are still the attorney's
+  // standards; rejecting it here would silently retire them, and the preset is
+  // only rewritten when they next press save.
+  if (!ATTORNEY_PRESET_SUPPORTED_VERSIONS.includes(candidate.version as 1 | 2)) return undefined
   if (candidate.fields == null || typeof candidate.fields !== 'object' || Array.isArray(candidate.fields)) return undefined
+
   const source = candidate.fields as Record<string, unknown>
   const fields: Record<string, unknown> = {}
   for (const field of ATTORNEY_PRESET_FIELDS) {
     if (source[field] !== undefined) fields[field] = source[field]
   }
-  return { version: ATTORNEY_PRESET_VERSION, fields: fields as AttorneyDesignPreset['fields'] }
+
+  const version = candidate.version as AttorneyDesignPreset['version']
+  if (version === 1) {
+    return { version, fields: fields as AttorneyDesignPreset['fields'] }
+  }
+
+  const decisionSource = candidate.decisions != null
+    && typeof candidate.decisions === 'object'
+    && !Array.isArray(candidate.decisions)
+    ? candidate.decisions as Record<string, unknown>
+    : {}
+  const decisions: Record<string, unknown> = {}
+  for (const field of ATTORNEY_PRESET_DECISION_FIELDS) {
+    if (decisionSource[field] !== undefined) decisions[field] = decisionSource[field]
+  }
+
+  return {
+    version,
+    fields: fields as AttorneyDesignPreset['fields'],
+    decisions: decisions as AttorneyDesignPreset['decisions'],
+  }
 }
 
 export function parseUserPreferences(raw: unknown): UserPreferences {

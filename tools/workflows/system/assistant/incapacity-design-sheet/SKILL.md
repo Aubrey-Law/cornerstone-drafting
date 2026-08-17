@@ -1,7 +1,7 @@
 ---
 name: Incapacity Design Sheet
 description: Structured interview to gather DPOA, health care proxy, HIPAA, and advance directive inputs, producing a completed incapacity design sheet.
-version: 1.0.0
+version: 1.1.0
 type: assistant
 execution_mode: chat
 practice: Estate Planning
@@ -22,6 +22,7 @@ This package produces 5 documents PER CLIENT (10 for a married couple):
 - Durable Power of Attorney
 
 How to run it:
+- FIRST call `read_design_sheet_status`. It returns exactly which design-sheet items are still open, so you ask only about those. An item the design sheet already records is not a question.
 - Work from any client/matter context already shown above first. Pre-fill every item you can already answer from that context, and ONLY ask Scott for items that are missing, blank, or ambiguous. Never re-ask for facts already shown above. If no context is loaded, ask for each item.
 - Ask in short numbered batches (Matter Information first, then Client 1, then Client 2 only if a married couple). Number the questions so Scott can answer inline.
 - Do not invent names, dates, relationships, counties, or addresses. If Scott says a value is unknown, record it as [UNKNOWN].
@@ -62,6 +63,8 @@ When done — produce TWO things for Scott to confirm before drafting:
    YYYY-MM-DD_hcp preferences worksheet_{Client Full Legal Name}.docx
    YYYY-MM-DD_hipaa_{Client Full Legal Name}.docx
    YYYY-MM-DD_durable poa_{Client Full Legal Name}.docx
+
+After Scott confirms the recap, call `propose_design_sheet_updates` with the confirmed values as plain text, so the DPOA, health care and HIPAA answers reach the design sheet instead of stopping at this conversation. The tool only proposes — Scott accepts field by field in the review dialog — so never tell him anything has been saved. Then continue with the handoff block below.
 
 SKILL HANDOFF — after Scott confirms the recap, emit this block verbatim (fenced, exact header and field labels) so it can be pasted directly into the incapacity-drafting skill. Resolve every default to a concrete value; use [UNKNOWN] where not provided; repeat the CLIENT block once per client and omit CLIENT 2 for an individual matter.
 ```

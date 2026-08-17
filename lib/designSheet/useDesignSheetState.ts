@@ -28,7 +28,10 @@ import {
   writeDesignSheetDraft,
 } from '@/lib/designSheet/designSheetDraft'
 import { stripDecisionOnlyTopLevelMirrors } from '@/lib/designSheetPersistence'
-import { normalizeResidualBeneficiaryMethod, setTrustDetails } from '@/lib/designSheetTrustDetails'
+import {
+  applyDecisionFieldValues,
+  isDesignSheetDecisionField,
+} from '@/lib/designSheetImport/decisionFields'
 import type { DesignSheetOnChange } from '@/app/admin/drafting/[matterId]/design/sections/shared'
 
 export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
@@ -540,19 +543,37 @@ export function useDesignSheetState({
     }
   }, [updateField])
 
-  const handleImportedDesignSheetFields = useCallback((patch: DesignSheetImportProposal) => {
+  /**
+   * Mirror an accepted proposal into local state. The server has already saved it
+   * (apply-proposal), so this only keeps the open workspace from showing stale
+   * values until the refreshed props arrive.
+   *
+   * Decision fields are routed by namespace rather than dropped at the top level:
+   * a `<namespace>.<key>` name set directly on the sheet object would be read back
+   * by nothing, which is exactly the bug the qualified names were introduced to fix.
+   */
+  const handleImportedDesignSheetFields = useCallback((
+    patch: DesignSheetImportProposal,
+    fiduciaryCount = 0,
+  ) => {
     commitSheet(prev => {
-      // The import map is flat, so the method arrives as a top-level key. Route it
-      // into decisions.trust_details, which is where the design sheet keeps it.
-      const { residual_beneficiary_method: importedMethod, ...rest } = patch as Record<string, unknown>
-      const next = { ...prev, ...rest } as DesignSheet
-      const method = normalizeResidualBeneficiaryMethod(importedMethod)
-      if (!method) return next
-      return { ...next, decisions: setTrustDetails(next, { residual_beneficiary_method: method }) }
+      const columnFields: Record<string, unknown> = {}
+      const decisionFields: Record<string, unknown> = {}
+      for (const [field, value] of Object.entries(patch as Record<string, unknown>)) {
+        if (isDesignSheetDecisionField(field)) decisionFields[field] = value
+        else columnFields[field] = value
+      }
+
+      const next = { ...prev, ...columnFields } as DesignSheet
+      if (Object.keys(decisionFields).length === 0) return next
+      return { ...next, decisions: applyDecisionFieldValues(next, decisionFields) }
     })
     setSaveStatus('saved')
     setDirtyFields(new Set())
     setLastSavedAt(new Date().toISOString())
+    // Accepted fiduciaries changed contacts and slot arrays server-side; the
+    // refreshed props are the only source for those.
+    void fiduciaryCount
     router.refresh()
   }, [commitSheet, router])
 

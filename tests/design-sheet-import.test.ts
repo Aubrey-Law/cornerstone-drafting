@@ -356,7 +356,7 @@ describe('legacy inheritance-structure migration', () => {
 })
 
 describe('design sheet import UI source', () => {
-  it('shared dialog posts DOCX imports and saves accepted fields with current sheet context', () => {
+  it('shared dialog reads a DOCX and saves accepted fields through apply-proposal', () => {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'components/design-sheet/DesignSheetImportDialog.tsx'),
       'utf8',
@@ -364,12 +364,20 @@ describe('design sheet import UI source', () => {
 
     expect(source).toContain('import-docx')
     expect(source).toContain('Accept selected')
-    expect(source).toContain('acceptedPatch')
+    expect(source).toContain('acceptedFields')
     expect(source).toContain('currentSheet')
-    expect(source).toContain('sheet: acceptedPatch')
-    expect(source).not.toContain('{ ...currentSheet, ...acceptedPatch }')
-    expect(source).toContain("method: 'PATCH'")
     expect(source).toContain('Only Word .docx documents are supported')
+
+    // Accepted values go to apply-proposal, not the generic PATCH. The generic
+    // route has no way to tell a `<namespace>.<key>` decision field from a
+    // column, and parked the one that used to come through it at
+    // decisions.<key>, where no reader ever looked.
+    expect(source).toContain('design-sheet/apply-proposal')
+    expect(source).not.toContain('sheet: acceptedPatch')
+
+    // The save is guarded, so a proposal reviewed against a stale sheet is
+    // rejected rather than written over someone else's edit.
+    expect(source).toContain('expectedUpdatedAt')
   })
 
   it('DesignSheetPage renders the shared import dialog and updates local sheet state after accept', () => {
@@ -421,11 +429,13 @@ describe('design sheet import UI source', () => {
 // carried that value for three weeks before anything noticed.
 describe('imported choice fields are validated against their options', () => {
   it('rejects a value the field cannot hold, and does not propose it', () => {
-    const { proposed, rejected } = coerceDesignSheetImport({ residual_beneficiary_method: 'per stirpes' })
+    const { proposed, rejected } = coerceDesignSheetImport({
+      'trust_details.residual_beneficiary_method': 'per stirpes',
+    })
 
     expect(proposed).toEqual({})
     expect(rejected).toEqual([{
-      field: 'residual_beneficiary_method',
+      field: 'trust_details.residual_beneficiary_method',
       label: 'Residual beneficiary method',
       section: 'Trust',
       value: 'per stirpes',
@@ -440,8 +450,10 @@ describe('imported choice fields are validated against their options', () => {
       ['  Trust For Life  ', 'trust_for_life'],
       ['trust-for-life', 'trust_for_life'],
     ] as const) {
-      const { proposed, rejected } = coerceDesignSheetImport({ residual_beneficiary_method: input })
-      expect(proposed.residual_beneficiary_method, input).toBe(expected)
+      const { proposed, rejected } = coerceDesignSheetImport({
+        'trust_details.residual_beneficiary_method': input,
+      })
+      expect(proposed['trust_details.residual_beneficiary_method'], input).toBe(expected)
       expect(rejected, input).toEqual([])
     }
   })

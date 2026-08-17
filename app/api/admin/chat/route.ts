@@ -12,7 +12,7 @@ import {
   type MatterContext,
 } from '@/lib/adminChat/engine'
 import { isDraftingSummaryRequest, formatClaudeDraftingSkillInput } from '@/lib/adminChat/prompts'
-import { designSheetImportExecutor } from '@/lib/adminChat/designSheetTool'
+import { designSheetImportExecutor, designSheetStatusExecutor } from '@/lib/adminChat/designSheetTool'
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
 import { createLeadToolExecutor, leadSystemPromptNote } from '@/lib/adminChat/leadTools'
 import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
@@ -113,7 +113,12 @@ export async function POST(req: Request) {
   const contextLeadId = contextType === 'lead' && body.context_id ? body.context_id : null
   const tools: AdminChatToolExecutor[] = [
     createLeadToolExecutor,
-    ...(contextMatterId ? [designSheetImportExecutor(contextMatterId, adminUserId ?? null)] : []),
+    ...(contextMatterId
+      ? [
+          designSheetImportExecutor(contextMatterId, adminUserId ?? null),
+          designSheetStatusExecutor(contextMatterId),
+        ]
+      : []),
     ...workflowToolExecutors({ userId: adminUserId ?? '', email: user?.email ?? null }),
     ...calendarPlanningToolExecutors({
       defaultMatterId: contextMatterId,
