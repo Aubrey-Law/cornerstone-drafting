@@ -1,19 +1,25 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { listDocuments } from '@/lib/documents'
-import type { MatterDocument } from '@/types/database'
+import { listDocumentFolders, listDocuments } from '@/lib/documents'
+import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
 
 export function useMatterDocuments(matterId: string) {
   const [documents, setDocuments] = useState<MatterDocument[]>([])
+  const [folders, setFolders] = useState<MatterDocumentFolder[]>([])
   const [loading, setLoading] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      setDocuments(await listDocuments(matterId))
-    } catch {
-      setDocuments([])
+      // One await so a folder list that fails doesn't blank the documents, and
+      // vice versa — each falls back to empty on its own.
+      const [nextDocuments, nextFolders] = await Promise.all([
+        listDocuments(matterId).catch(() => [] as MatterDocument[]),
+        listDocumentFolders(matterId).catch(() => [] as MatterDocumentFolder[]),
+      ])
+      setDocuments(nextDocuments)
+      setFolders(nextFolders)
     } finally {
       setLoading(false)
     }
@@ -23,5 +29,5 @@ export function useMatterDocuments(matterId: string) {
     void reload()
   }, [reload])
 
-  return { documents, loading, reload }
+  return { documents, folders, loading, reload }
 }

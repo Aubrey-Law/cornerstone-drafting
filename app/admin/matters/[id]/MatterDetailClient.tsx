@@ -227,7 +227,7 @@ function MatterDetailClientInner({
   const [statusSaving, setStatusSaving] = useState(false)
   const [sendingIntake, setSendingIntake] = useState(false)
   const [intakeUrl, setIntakeUrl] = useState<string | null>(null)
-  const { documents, loading: docsLoading, reload: loadDocuments } = useMatterDocuments(matter.matter_id)
+  const { documents, folders: documentFolders, loading: docsLoading, reload: loadDocuments } = useMatterDocuments(matter.matter_id)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   // Set when the server refuses a first-click delete because the matter is
@@ -1064,6 +1064,7 @@ function MatterDetailClientInner({
                   clientName={matter.client_name}
                   deepLinkedDocumentId={searchParams.get('document')}
                   documents={documents}
+                  folders={documentFolders}
                   loading={docsLoading}
                   onDocumentsChanged={loadDocuments}
                   unreviewedUploadCounts={unreviewedUploadCounts}

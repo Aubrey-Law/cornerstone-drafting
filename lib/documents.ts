@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
+import type { DocumentAccessAudit, MatterDocument, MatterDocumentFolder } from '@/types/database'
 
 const WORD_CONTENT_TYPES = new Set([
   'application/msword',
@@ -302,4 +302,84 @@ export async function listDocuments(
   if (!res.ok) return []
   const { documents } = await res.json()
   return documents ?? []
+}
+
+/** List the attorney-created folders for a matter. */
+export async function listDocumentFolders(matterId: string): Promise<MatterDocumentFolder[]> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(`/api/documents/folders?matterId=${encodeURIComponent(matterId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return []
+  const { folders } = await res.json()
+  return (folders ?? []) as MatterDocumentFolder[]
+}
+
+export async function createDocumentFolder(
+  matterId: string,
+  name: string,
+): Promise<MatterDocumentFolder> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch('/api/documents/folders', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ matterId, name }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error ?? 'Could not create folder')
+  return body.folder as MatterDocumentFolder
+}
+
+export async function renameDocumentFolder(
+  folderId: string,
+  name: string,
+): Promise<MatterDocumentFolder> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(`/api/documents/folders/${folderId}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ name }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error ?? 'Could not rename folder')
+  return body.folder as MatterDocumentFolder
+}
+
+/** Delete a folder. Its documents survive and fall back to the workspace root. */
+export async function deleteDocumentFolder(folderId: string): Promise<void> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(`/api/documents/folders/${folderId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.error ?? 'Could not delete folder')
+  }
+}
+
+/** File a document into a folder, or pass null to move it back to the root. */
+export async function moveDocumentToFolder(
+  docId: string,
+  folderId: string | null,
+): Promise<MatterDocument> {
+  const token = await getToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const res = await fetch(`/api/documents/${docId}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ folderId }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error ?? 'Could not move document')
+  return body.document as MatterDocument
 }

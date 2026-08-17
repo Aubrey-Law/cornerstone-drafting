@@ -9,6 +9,8 @@ import {
   Eye,
   FileSearch,
   FileText,
+  Folder,
+  FolderPlus,
   History,
   Loader2,
   MoreHorizontal,
@@ -65,30 +67,34 @@ import { CombineWordDraftsDialog } from '@/components/drafting/CombineWordDrafts
 import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
 import { DocumentStatusBadges } from '@/components/documents/DocumentStatusBadges'
 import {
-  DOCUMENT_FOLDERS,
   buildDocumentStatusBadges,
-  documentFolderKey,
-  documentFolderLabel,
+  documentFolderId,
+  documentFolderViews,
   formatDocumentSize,
   isDocumentPdf,
   isDocumentShared,
   isDocumentWord,
-  type DocumentFolderKey,
+  resolveFolderLabel,
 } from '@/lib/documentWorkspace'
+import { MAX_FOLDER_NAME_LENGTH, normalizeFolderName } from '@/lib/documentFolders'
 import {
+  createDocumentFolder,
   deleteDocument,
+  deleteDocumentFolder,
   downloadDocumentsZip,
   getDocumentAuditEvents,
   getDocumentUrl,
   getDocumentViewerUrl,
+  moveDocumentToFolder,
   renameDocument,
+  renameDocumentFolder,
   setDocumentReviewed,
   setDocumentShared,
   uploadDocument,
 } from '@/lib/documents'
 import { cn, formatDateTime } from '@/lib/utils'
 import type { UnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
-import type { DocumentAccessAudit, MatterDocument } from '@/types/database'
+import type { DocumentAccessAudit, MatterDocument, MatterDocumentFolder } from '@/types/database'
 import { documentDisplayTitle } from '@/lib/documentDisplayTitle'
 import { useFileDrop } from '@/hooks/useFileDrop'
 import { DocumentTypeIcon, FolderIcon } from './DocumentTypeIcon'
@@ -122,6 +128,8 @@ function auditLabel(event: DocumentAccessAudit) {
 interface MatterDocumentsTabProps {
   matterId: string
   documents: MatterDocument[]
+  /** Attorney-created folders. Derived folders come from the documents themselves. */
+  folders?: MatterDocumentFolder[]
   loading: boolean
   onDocumentsChanged: () => void | Promise<void>
   unreviewedUploadCounts?: UnreviewedUploadCounts
@@ -135,6 +143,7 @@ interface MatterDocumentsTabProps {
 export function MatterDocumentsTab({
   matterId,
   documents,
+  folders: customFolders = [],
   loading,
   onDocumentsChanged,
   unreviewedUploadCounts = { intake: 0, portal: 0, total: 0 },
@@ -147,7 +156,7 @@ export function MatterDocumentsTab({
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<Scope>('all')
-  const [openFolder, setOpenFolder] = useState<DocumentFolderKey | null>(null)
+  const [openFolder, setOpenFolder] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortAscending, setSortAscending] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
@@ -163,6 +172,11 @@ export function MatterDocumentsTab({
   const [auditEvents, setAuditEvents] = useState<DocumentAccessAudit[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [highlightedDocumentId, setHighlightedDocumentId] = useState<string | null>(null)
+  const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [folderRenameTarget, setFolderRenameTarget] = useState<MatterDocumentFolder | null>(null)
+  const [folderRenameValue, setFolderRenameValue] = useState('')
+  const [folderDeleteTarget, setFolderDeleteTarget] = useState<MatterDocumentFolder | null>(null)
 
   useEffect(() => {
     if (!deepLinkedDocumentId) return
@@ -172,7 +186,7 @@ export function MatterDocumentsTab({
     setQuery('')
     // Open the folder that holds the target, otherwise the row we are about to
     // scroll to is not on screen — loose files sit at the root.
-    setOpenFolder(documentFolderKey(target))
+    setOpenFolder(documentFolderId(target))
     setHighlightedDocumentId(target.id)
     const scrollTimer = window.setTimeout(() => {
       window.document.getElementById(`document-row-${target.id}`)?.scrollIntoView({
@@ -212,15 +226,19 @@ export function MatterDocumentsTab({
     })
   }, [query, scope, visibleDocuments])
 
-  /** Folder tiles summarise what survived the scope and search, not the raw set. */
-  const folders = useMemo(() => DOCUMENT_FOLDERS.map(folder => {
-    const contents = matchingDocuments.filter(doc => documentFolderKey(doc) === folder.key)
+  /**
+   * Folder tiles summarise what survived the scope and search, not the raw set.
+   * Attorney-created folders are listed even when empty — one you just made and
+   * have not filed anything into yet still has to be visible to drop files on.
+   */
+  const folders = useMemo(() => documentFolderViews(customFolders).map(folder => {
+    const contents = matchingDocuments.filter(doc => documentFolderId(doc) === folder.id)
     return {
       ...folder,
       documents: contents,
       size: contents.reduce((sum, doc) => sum + (doc.size || 0), 0),
     }
-  }), [matchingDocuments])
+  }), [customFolders, matchingDocuments])
 
   const sortDocuments = useCallback((docs: MatterDocument[]) => {
     const direction = sortAscending ? 1 : -1
@@ -241,10 +259,10 @@ export function MatterDocumentsTab({
    */
   const listedDocuments = useMemo(() => {
     if (openFolder !== null) {
-      return sortDocuments(matchingDocuments.filter(doc => documentFolderKey(doc) === openFolder))
+      return sortDocuments(matchingDocuments.filter(doc => documentFolderId(doc) === openFolder))
     }
     if (searching) return sortDocuments(matchingDocuments)
-    return sortDocuments(matchingDocuments.filter(doc => documentFolderKey(doc) === null))
+    return sortDocuments(matchingDocuments.filter(doc => documentFolderId(doc) === null))
   }, [matchingDocuments, openFolder, searching, sortDocuments])
 
   /** Folder tiles are root furniture; a flattened search replaces them. */
@@ -349,13 +367,24 @@ export function MatterDocumentsTab({
     const list = Array.from(files ?? [])
     if (list.length === 0) return
     setUploading(true)
+    // A file dropped while a folder is open belongs in that folder — anything
+    // else makes the attorney go find it again at the root. Only attorney-made
+    // folders can hold a document; the derived three are computed.
+    const destinationFolder = customFolders.some(folder => folder.id === openFolder)
+      ? openFolder
+      : null
     // Upload sequentially and count outcomes rather than failing the whole
     // batch on one bad file — a rejected scan shouldn't discard the others.
     let uploaded = 0
     try {
       for (const file of list) {
         try {
-          await uploadDocument(file, matterId)
+          const created = await uploadDocument(file, matterId)
+          if (destinationFolder) {
+            // A failed move still leaves the file uploaded — it just lands
+            // at the root instead of inside the open folder.
+            await moveDocumentToFolder(created.id, destinationFolder).catch(() => {})
+          }
           uploaded += 1
         } catch (error) {
           toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `Could not upload ${file.name}`)
@@ -369,7 +398,7 @@ export function MatterDocumentsTab({
       setUploading(false)
       if (uploadInputRef.current) uploadInputRef.current.value = ''
     }
-  }, [matterId, refresh])
+  }, [customFolders, matterId, openFolder, refresh])
 
   const { isDragging, dropProps } = useFileDrop(handleUpload, uploading)
 
@@ -418,6 +447,84 @@ export function MatterDocumentsTab({
     } finally {
       setBusy(null)
       setDeleteTargets([])
+    }
+  }
+
+  const handleCreateFolder = async () => {
+    const name = normalizeFolderName(newFolderName)
+    if (!name) return
+    setBusy('create-folder')
+    try {
+      const folder = await createDocumentFolder(matterId, name)
+      toast.success(`Created “${folder.name}”`)
+      setNewFolderOpen(false)
+      setNewFolderName('')
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create folder')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleRenameFolder = async () => {
+    const folder = folderRenameTarget
+    const name = normalizeFolderName(folderRenameValue)
+    if (!folder || !name) return
+    setBusy('rename-folder')
+    try {
+      await renameDocumentFolder(folder.id, name)
+      toast.success('Folder renamed')
+      setFolderRenameTarget(null)
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not rename folder')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleDeleteFolder = async () => {
+    const folder = folderDeleteTarget
+    if (!folder) return
+    setBusy('delete-folder')
+    try {
+      await deleteDocumentFolder(folder.id)
+      // Its documents survive; the view they were in does not.
+      if (openFolder === folder.id) setOpenFolder(null)
+      toast.success(`Deleted “${folder.name}”. Its documents moved back to All documents.`)
+      setFolderDeleteTarget(null)
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete folder')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /** File documents into a folder, or pass null to send them back to the root. */
+  const handleMove = async (docs: MatterDocument[], folderId: string | null) => {
+    if (docs.length === 0) return
+    setBusy('move')
+    const moved: string[] = []
+    try {
+      for (const doc of docs) {
+        try {
+          await moveDocumentToFolder(doc.id, folderId)
+          moved.push(doc.id)
+        } catch (error) {
+          toast.error(error instanceof Error ? `${doc.name}: ${error.message}` : `Could not move ${doc.name}`)
+        }
+      }
+      if (moved.length > 0) {
+        const destination = folderId
+          ? resolveFolderLabel(folderId, customFolders)
+          : 'All documents'
+        toast.success(moved.length === 1 ? `Moved to ${destination}` : `Moved ${moved.length} documents to ${destination}`)
+        await refresh()
+      }
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -493,6 +600,16 @@ export function MatterDocumentsTab({
               className="hidden"
               onChange={event => void handleUpload(event.target.files)}
             />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => { setNewFolderName(''); setNewFolderOpen(true) }}
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              New folder
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -606,7 +723,7 @@ export function MatterDocumentsTab({
             </button>
             <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden />
             <span aria-current="page" className="px-1.5 py-1 font-medium">
-              {documentFolderLabel(openFolder)}
+              {resolveFolderLabel(openFolder, customFolders)}
             </span>
           </nav>
         )}
@@ -632,6 +749,33 @@ export function MatterDocumentsTab({
               <Combine className="h-3.5 w-3.5" />
               Combine Word documents
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline" className="gap-1.5" disabled={busy === 'move'}>
+                  {busy === 'move' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
+                  Move to
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Move to folder</DropdownMenuLabel>
+                {customFolders.length === 0 ? (
+                  <DropdownMenuItem disabled>No folders yet</DropdownMenuItem>
+                ) : (
+                  customFolders.map(folder => (
+                    <DropdownMenuItem
+                      key={folder.id}
+                      onSelect={() => void handleMove(selectedDocuments, folder.id)}
+                    >
+                      {folder.name}
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void handleMove(selectedDocuments, null)}>
+                  All documents (no folder)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               type="button"
               size="sm"
@@ -651,7 +795,9 @@ export function MatterDocumentsTab({
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading documents...
           </div>
-        ) : matchingDocuments.length === 0 ? (
+        ) : matchingDocuments.length === 0 && (!showFolders || customFolders.length === 0) ? (
+          // Empty folders are still worth drawing, so the empty state only
+          // takes over when there would be nothing on screen at all.
           <div className="px-6 py-12 text-center">
             <FileText className="mx-auto h-8 w-8 text-muted-foreground/60" />
             <p className="mt-3 text-sm font-medium">
@@ -666,7 +812,7 @@ export function MatterDocumentsTab({
         ) : (
           <ul className="divide-y divide-border">
             {showFolders && folders.map(folder => (
-              <li key={folder.key}>
+              <li key={folder.id}>
                 <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30">
                   <Checkbox
                     checked={folder.documents.length > 0
@@ -678,8 +824,8 @@ export function MatterDocumentsTab({
                   <button
                     type="button"
                     className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default disabled:opacity-60"
-                    disabled={folder.documents.length === 0}
-                    onClick={() => setOpenFolder(folder.key)}
+                    disabled={!folder.custom && folder.documents.length === 0}
+                    onClick={() => setOpenFolder(folder.id)}
                   >
                     <FolderIcon />
                     <span className="min-w-0 flex-1">
@@ -693,13 +839,52 @@ export function MatterDocumentsTab({
                     </span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   </button>
+                  {/* Only an attorney-created folder can be renamed or removed:
+                      the derived three are computed, with nothing to edit. */}
+                  {folder.custom && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          aria-label={`Actions for folder ${folder.label}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            const row = customFolders.find(candidate => candidate.id === folder.id)
+                            if (!row) return
+                            setFolderRenameTarget(row)
+                            setFolderRenameValue(row.name)
+                          }}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />Rename folder
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={() => {
+                            const row = customFolders.find(candidate => candidate.id === folder.id)
+                            if (row) setFolderDeleteTarget(row)
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />Delete folder
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </li>
             ))}
 
             {listedDocuments.map(doc => {
               const issues = (doc.marker_count ?? 0) + (doc.missing_count ?? 0)
-              const folderKey = documentFolderKey(doc)
+              const folderKey = documentFolderId(doc)
               return (
                 <li
                   key={doc.id}
@@ -729,7 +914,7 @@ export function MatterDocumentsTab({
                           there the chip is what says where the hit lives. */}
                       {openFolder === null && folderKey !== null && (
                         <span className="text-[11px] text-muted-foreground">
-                          {documentFolderLabel(folderKey)}
+                          {resolveFolderLabel(folderKey, customFolders)}
                         </span>
                       )}
                       <DocumentStatusBadges badges={buildDocumentStatusBadges(doc).slice(0, 2)} />
@@ -803,6 +988,35 @@ export function MatterDocumentsTab({
                         <DropdownMenuItem onSelect={() => { setRenameTarget(doc); setRenameValue(doc.name) }}>
                           <Pencil className="mr-2 h-4 w-4" />Rename
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+                          Move to folder
+                        </DropdownMenuLabel>
+                        {customFolders.length === 0 ? (
+                          <DropdownMenuItem
+                            onSelect={() => { setNewFolderName(''); setNewFolderOpen(true) }}
+                          >
+                            <FolderPlus className="mr-2 h-4 w-4" />New folder…
+                          </DropdownMenuItem>
+                        ) : (
+                          customFolders
+                            .filter(folder => folder.id !== doc.folder_id)
+                            .map(folder => (
+                              <DropdownMenuItem
+                                key={folder.id}
+                                onSelect={() => void handleMove([doc], folder.id)}
+                              >
+                                <Folder className="mr-2 h-4 w-4" />
+                                <span className="truncate">{folder.name}</span>
+                              </DropdownMenuItem>
+                            ))
+                        )}
+                        {doc.folder_id && (
+                          <DropdownMenuItem onSelect={() => void handleMove([doc], null)}>
+                            <Undo2 className="mr-2 h-4 w-4" />Remove from folder
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => void openAudit(doc)}>
                           <History className="mr-2 h-4 w-4" />History
                         </DropdownMenuItem>
@@ -825,6 +1039,90 @@ export function MatterDocumentsTab({
           </ul>
         )}
       </section>
+
+      <Dialog open={newFolderOpen} onOpenChange={open => { if (!open) setNewFolderOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New folder</DialogTitle>
+            <DialogDescription>
+              Group this {recordLabel}&rsquo;s documents however the work is organised. Folders are
+              firm-only — the client portal never shows them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="new-folder-name">Folder name</Label>
+            <Input
+              id="new-folder-name"
+              value={newFolderName}
+              maxLength={MAX_FOLDER_NAME_LENGTH}
+              placeholder="Deed work"
+              onChange={event => setNewFolderName(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreateFolder()
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setNewFolderOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              disabled={!normalizeFolderName(newFolderName) || busy === 'create-folder'}
+              onClick={() => void handleCreateFolder()}
+            >
+              Create folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={folderRenameTarget !== null} onOpenChange={open => !open && setFolderRenameTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename folder</DialogTitle>
+            <DialogDescription>The documents inside stay where they are.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="folder-name">Folder name</Label>
+            <Input
+              id="folder-name"
+              value={folderRenameValue}
+              maxLength={MAX_FOLDER_NAME_LENGTH}
+              onChange={event => setFolderRenameValue(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setFolderRenameTarget(null)}>Cancel</Button>
+            <Button
+              type="button"
+              disabled={!normalizeFolderName(folderRenameValue) || busy === 'rename-folder'}
+              onClick={() => void handleRenameFolder()}
+            >
+              Save name
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={folderDeleteTarget !== null} onOpenChange={open => !open && setFolderDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete folder?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{folderDeleteTarget?.name ?? ''}&rdquo; will be removed. The documents filed in it are
+              not deleted — they move back to All documents.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={busy === 'delete-folder'} onClick={() => void handleDeleteFolder()}>
+              Delete folder
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={renameTarget !== null} onOpenChange={open => !open && setRenameTarget(null)}>
         <DialogContent className="sm:max-w-md">

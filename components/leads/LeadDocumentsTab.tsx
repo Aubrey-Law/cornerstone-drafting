@@ -5,24 +5,29 @@ import Link from 'next/link'
 import { FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MatterDocumentsTab } from '@/app/admin/matters/[id]/MatterDocumentsTab'
-import { listDocuments } from '@/lib/documents'
-import type { MatterDocument } from '@/types/database'
+import { listDocumentFolders, listDocuments } from '@/lib/documents'
+import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
 
 export function useLeadDocuments(matterId: string | null | undefined) {
   const [documents, setDocuments] = useState<MatterDocument[]>([])
+  const [folders, setFolders] = useState<MatterDocumentFolder[]>([])
   const [loading, setLoading] = useState(Boolean(matterId))
 
   const reload = useCallback(async () => {
     if (!matterId) {
       setDocuments([])
+      setFolders([])
       setLoading(false)
       return
     }
     setLoading(true)
     try {
-      setDocuments(await listDocuments(matterId))
-    } catch {
-      setDocuments([])
+      const [nextDocuments, nextFolders] = await Promise.all([
+        listDocuments(matterId).catch(() => [] as MatterDocument[]),
+        listDocumentFolders(matterId).catch(() => [] as MatterDocumentFolder[]),
+      ])
+      setDocuments(nextDocuments)
+      setFolders(nextFolders)
     } finally {
       setLoading(false)
     }
@@ -32,11 +37,12 @@ export function useLeadDocuments(matterId: string | null | undefined) {
     void reload()
   }, [reload])
 
-  return { documents, loading, reload }
+  return { documents, folders, loading, reload }
 }
 
 type LeadDocumentsTabProps = {
   documents: MatterDocument[]
+  folders?: MatterDocumentFolder[]
   loading: boolean
   matterId: string | null
   agreementId: string | null
@@ -46,6 +52,7 @@ type LeadDocumentsTabProps = {
 
 export function LeadDocumentsTab({
   documents,
+  folders = [],
   loading,
   matterId,
   agreementId,
@@ -77,6 +84,7 @@ export function LeadDocumentsTab({
       <MatterDocumentsTab
         matterId={matterId}
         documents={documents}
+        folders={folders}
         loading={loading}
         onDocumentsChanged={onDocumentsChanged}
         clientName={clientName}
