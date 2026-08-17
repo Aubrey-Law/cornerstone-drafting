@@ -2,10 +2,10 @@ import { inflateDesignSheetRow } from '@/lib/designSheetPersistence'
 import { completeLlmText, resolveLlmConfig } from '@/lib/llm'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import {
-  DESIGN_SHEET_IMPORT_FIELDS,
   buildDesignSheetImportPreview,
   coerceDesignSheetImport,
   getDesignSheetImportTextValidationError,
+  listDesignSheetImportFieldNames,
   type DesignSheetImportResult,
 } from './shared'
 
@@ -14,7 +14,11 @@ export const DESIGN_SHEET_IMPORT_SYSTEM_PROMPT = `You extract Massachusetts esta
 Output ONLY one JSON object. Do not include markdown, explanation, comments, or additional text.
 
 Use only these known design sheet fields from the shared allowlist:
-${Object.keys(DESIGN_SHEET_IMPORT_FIELDS).join(', ')}
+${listDesignSheetImportFieldNames().join(', ')}
+
+A field name containing a dot is a single JSON key, not a nested object: emit
+{"trust_details.co_trustee_decision": "independent"}, never
+{"trust_details": {"co_trustee_decision": "independent"}}.
 
 Never invent facts. If a value is unknown, omitted, unclear, or only implied, omit that field entirely. Use ISO dates (YYYY-MM-DD) where possible. Put relevant notes that do not map cleanly to a known field into drafting_notes.`
 

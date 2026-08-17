@@ -421,11 +421,13 @@ describe('design sheet import UI source', () => {
 // carried that value for three weeks before anything noticed.
 describe('imported choice fields are validated against their options', () => {
   it('rejects a value the field cannot hold, and does not propose it', () => {
-    const { proposed, rejected } = coerceDesignSheetImport({ residual_beneficiary_method: 'per stirpes' })
+    const { proposed, rejected } = coerceDesignSheetImport({
+      'trust_details.residual_beneficiary_method': 'per stirpes',
+    })
 
     expect(proposed).toEqual({})
     expect(rejected).toEqual([{
-      field: 'residual_beneficiary_method',
+      field: 'trust_details.residual_beneficiary_method',
       label: 'Residual beneficiary method',
       section: 'Trust',
       value: 'per stirpes',
@@ -440,8 +442,10 @@ describe('imported choice fields are validated against their options', () => {
       ['  Trust For Life  ', 'trust_for_life'],
       ['trust-for-life', 'trust_for_life'],
     ] as const) {
-      const { proposed, rejected } = coerceDesignSheetImport({ residual_beneficiary_method: input })
-      expect(proposed.residual_beneficiary_method, input).toBe(expected)
+      const { proposed, rejected } = coerceDesignSheetImport({
+        'trust_details.residual_beneficiary_method': input,
+      })
+      expect(proposed['trust_details.residual_beneficiary_method'], input).toBe(expected)
       expect(rejected, input).toEqual([])
     }
   })
