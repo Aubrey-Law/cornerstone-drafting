@@ -25,6 +25,7 @@ import {
   type CalendarAppointment,
   type CalendarRailData,
   type CalendarView,
+  type OutlookCalendarRef,
   type OutlookEvent,
   type PlanData,
   LOCATION_LABEL,
@@ -37,6 +38,7 @@ import {
   categorize,
   isBlock,
 } from './eventCategories'
+import { endMinutesOfDay, minutesOfDay, timeGridBounds } from './timeGrid'
 
 /** Last two segments of a matter number, e.g. "2026-EP-Example-007" → "Example-007". */
 function shortMatterLabel(matterNumber: string): string {
@@ -44,9 +46,6 @@ function shortMatterLabel(matterNumber: string): string {
 }
 
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-/** Time-grid bounds for day/week views (minutes from midnight, local). */
-const GRID_START_MIN = 7 * 60
-const GRID_END_MIN = 19 * 60
 const SLOT_MIN = 30
 const SLOT_PX = 40
 
@@ -56,6 +55,11 @@ function dayKey(d: Date): string {
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+/** Names the Outlook calendar an event came from, for tooltips. */
+function outlookSource(event: OutlookEvent): string {
+  return event.calendarName ? `Outlook · ${event.calendarName}` : 'Outlook'
 }
 
 function availabilityLabel(appointment: CalendarAppointment): string {
@@ -105,12 +109,6 @@ function monthGrid(year: number, month: number): Date[] {
 
 function toDateInputValue(d: Date): string {
   return dayKey(d)
-}
-
-/** Minutes from local midnight for an ISO instant. */
-function minutesOfDay(iso: string): number {
-  const d = new Date(iso)
-  return d.getHours() * 60 + d.getMinutes()
 }
 
 interface RescheduleDraft {
@@ -187,6 +185,8 @@ export function CalendarClient() {
   const [showOutlook, setShowOutlook] = useState(true)
   const [outlookEvents, setOutlookEvents] = useState<OutlookEvent[]>([])
   const [outlookConnected, setOutlookConnected] = useState(true)
+  const [outlookCalendars, setOutlookCalendars] = useState<OutlookCalendarRef[]>([])
+  const [outlookTruncated, setOutlookTruncated] = useState(false)
   const [attention, setAttention] = useState<AttentionItem[]>([])
   const [rail, setRail] = useState<CalendarRailData>({ datesThisWeek: [], followUps: [], openSlots: [] })
   const [planData, setPlanData] = useState<PlanData | null>(null)
@@ -226,15 +226,38 @@ export function CalendarClient() {
         return
       }
       const json = await apptRes.json()
-      setAppointments(json.appointments ?? [])
       setTypes((json.types ?? []).filter((t: BookableType) => t.active))
+      let appointmentRows: CalendarAppointment[] = json.appointments ?? []
       if (outlookRes) {
-        const outlookJson = outlookRes.ok ? await outlookRes.json() : { connected: false, events: [] }
+        const outlookJson = outlookRes.ok
+          ? await outlookRes.json()
+          : { connected: false, events: [], calendars: [], truncated: false }
         setOutlookEvents(outlookJson.events ?? [])
         setOutlookConnected(Boolean(outlookJson.connected))
+        setOutlookCalendars(outlookJson.calendars ?? [])
+        setOutlookTruncated(Boolean(outlookJson.truncated))
+        // The Outlook fetch also mirrors Outlook-side moves and deletions back
+        // onto the appointment rows. Those writes land after the parallel
+        // appointments read, so re-read once when anything actually changed.
+        const synced = outlookJson.synced as { moved?: number; cancelled?: number } | undefined
+        const changed = (synced?.moved ?? 0) + (synced?.cancelled ?? 0)
+        if (changed > 0) {
+          const resyncRes = await fetch(`/api/admin/scheduling/appointments?${rangeQuery}`, {
+            headers: authHeaders(),
+          })
+          if (resyncRes.ok) {
+            appointmentRows = (await resyncRes.json()).appointments ?? appointmentRows
+          }
+          toast.info(
+            `Synced ${changed} appointment${changed === 1 ? '' : 's'} from Outlook`,
+          )
+        }
       } else {
         setOutlookEvents([])
+        setOutlookCalendars([])
+        setOutlookTruncated(false)
       }
+      setAppointments(appointmentRows)
     } catch {
       toast.error('Failed to load appointments')
     } finally {
@@ -737,6 +760,19 @@ export function CalendarClient() {
             {showOutlook && !outlookConnected && (
               <span className="text-amber-700">⚠ not connected</span>
             )}
+            {showOutlook && outlookConnected && outlookCalendars.length > 1 && (
+              <span title={outlookCalendars.map(c => c.name).join(', ')}>
+                · {outlookCalendars.length} calendars
+              </span>
+            )}
+            {showOutlook && outlookTruncated && (
+              <span
+                className="text-amber-700"
+                title="Outlook returned more events than this view reads. Narrow the range to see the rest."
+              >
+                ⚠ partial
+              </span>
+            )}
           </label>
           <QuickBookPopover
             open={quickBookOpen}
@@ -1093,7 +1129,7 @@ function MonthGrid(props: {
                     key={e.id}
                     className="truncate rounded px-1 py-0.5 text-[11px] leading-4"
                     style={{ background: style.bg, color: style.text, borderLeft: `3px solid ${style.dot}` }}
-                    title={`${e.isAllDay ? 'All day' : fmtTime(e.startIso)} ${e.subject} (Outlook)`}
+                    title={`${e.isAllDay ? 'All day' : fmtTime(e.startIso)} ${e.subject} (${outlookSource(e)})`}
                   >
                     {e.isAllDay ? '◦' : fmtTime(e.startIso)} {e.subject}
                   </span>
@@ -1119,7 +1155,10 @@ function TimeGrid(props: {
   onEventClick: (a: CalendarAppointment) => void
 }) {
   const { days, byDay, outlookByDay, todayKey, onSlotClick, onEventClick } = props
-  const slotCount = (GRID_END_MIN - GRID_START_MIN) / SLOT_MIN
+  // Widened past the business window when the days on screen hold earlier or
+  // later events, so nothing on the Outlook calendar falls off the grid.
+  const { startMin: gridStartMin, endMin: gridEndMin } = timeGridBounds(days, byDay, outlookByDay)
+  const slotCount = (gridEndMin - gridStartMin) / SLOT_MIN
   const gridHeight = slotCount * SLOT_PX
 
   return (
@@ -1164,7 +1203,7 @@ function TimeGrid(props: {
                         color: style.text,
                         borderLeft: `3px solid ${style.dot}`,
                       }}
-                      title={`All day: ${e.subject} (Outlook)`}
+                      title={`All day: ${e.subject} (${outlookSource(e)})`}
                     >
                       {e.subject}
                     </span>
@@ -1177,7 +1216,7 @@ function TimeGrid(props: {
         <div className="grid" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
           <div className="relative" style={{ height: gridHeight }}>
             {Array.from({ length: slotCount }, (_, i) => {
-              const minutes = GRID_START_MIN + i * SLOT_MIN
+              const minutes = gridStartMin + i * SLOT_MIN
               return minutes % 60 === 0 ? (
                 <span
                   key={i}
@@ -1202,7 +1241,7 @@ function TimeGrid(props: {
                 style={{ height: gridHeight }}
               >
                 {Array.from({ length: slotCount }, (_, i) => {
-                  const minutes = GRID_START_MIN + i * SLOT_MIN
+                  const minutes = gridStartMin + i * SLOT_MIN
                   const hh = String(Math.floor(minutes / 60)).padStart(2, '0')
                   const mm = String(minutes % 60).padStart(2, '0')
                   return (
@@ -1220,13 +1259,13 @@ function TimeGrid(props: {
                   )
                 })}
                 {blocks.map(e => {
-                  const startMin = Math.max(minutesOfDay(e.startIso), GRID_START_MIN)
+                  const startMin = Math.max(minutesOfDay(e.startIso), gridStartMin)
                   const endMin = Math.min(
-                    Math.max(minutesOfDay(e.endIso), startMin + 15),
-                    GRID_END_MIN,
+                    Math.max(endMinutesOfDay(e.startIso, e.endIso), startMin + 15),
+                    gridEndMin,
                   )
-                  if (startMin >= GRID_END_MIN) return null
-                  const top = ((startMin - GRID_START_MIN) / SLOT_MIN) * SLOT_PX
+                  if (startMin >= gridEndMin) return null
+                  const top = ((startMin - gridStartMin) / SLOT_MIN) * SLOT_PX
                   const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 18)
                   return (
                     <div
@@ -1238,13 +1277,13 @@ function TimeGrid(props: {
                   )
                 })}
                 {outlookTimed.map(e => {
-                  const startMin = Math.max(minutesOfDay(e.startIso), GRID_START_MIN)
+                  const startMin = Math.max(minutesOfDay(e.startIso), gridStartMin)
                   const endMin = Math.min(
-                    Math.max(minutesOfDay(e.endIso), startMin + 15),
-                    GRID_END_MIN,
+                    Math.max(endMinutesOfDay(e.startIso, e.endIso), startMin + 15),
+                    gridEndMin,
                   )
-                  if (startMin >= GRID_END_MIN) return null
-                  const top = ((startMin - GRID_START_MIN) / SLOT_MIN) * SLOT_PX
+                  if (startMin >= gridEndMin) return null
+                  const top = ((startMin - gridStartMin) / SLOT_MIN) * SLOT_PX
                   const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 18)
                   const style = CATEGORY_STYLE[categorize(e.subject)]
                   return (
@@ -1261,7 +1300,7 @@ function TimeGrid(props: {
                         color: style.text,
                         borderLeft: `3px solid ${style.dot}`,
                       }}
-                      title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (Outlook)`}
+                      title={`${fmtTime(e.startIso)}–${fmtTime(e.endIso)} ${e.subject} (${outlookSource(e)})`}
                     >
                       <span className="block truncate text-[11px] leading-4">
                         {fmtTime(e.startIso)} {e.subject}
@@ -1270,13 +1309,13 @@ function TimeGrid(props: {
                   )
                 })}
                 {events.map(a => {
-                  const startMin = Math.max(minutesOfDay(a.startTime), GRID_START_MIN)
+                  const startMin = Math.max(minutesOfDay(a.startTime), gridStartMin)
                   const endMin = Math.min(
-                    Math.max(minutesOfDay(a.endTime), startMin + 15),
-                    GRID_END_MIN,
+                    Math.max(endMinutesOfDay(a.startTime, a.endTime), startMin + 15),
+                    gridEndMin,
                   )
-                  if (startMin >= GRID_END_MIN) return null
-                  const top = ((startMin - GRID_START_MIN) / SLOT_MIN) * SLOT_PX
+                  if (startMin >= gridEndMin) return null
+                  const top = ((startMin - gridStartMin) / SLOT_MIN) * SLOT_PX
                   const height = Math.max(((endMin - startMin) / SLOT_MIN) * SLOT_PX, 20)
                   const style = CATEGORY_STYLE[categorize(a.typeLabel)]
                   const matterChip = a.linkedMatterNumber

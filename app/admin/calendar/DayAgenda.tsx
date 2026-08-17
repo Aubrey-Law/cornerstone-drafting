@@ -135,7 +135,9 @@ function OutlookRow({ event }: { event: OutlookEvent }) {
         <CategoryStrip label={CATEGORY_LABEL[category]} style={style} />
         <div className="px-3 py-2 text-muted-foreground">
           <p className="text-sm font-medium text-foreground">{event.subject}</p>
-          <p className="text-[11px]">Outlook event</p>
+          <p className="text-[11px]">
+            {event.calendarName ? `Outlook · ${event.calendarName}` : 'Outlook event'}
+          </p>
         </div>
       </div>
     </div>
