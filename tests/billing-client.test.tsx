@@ -278,6 +278,55 @@ describe('billing workspace', () => {
     expect(within(dialog).queryByRole('status')).toBeNull()
   })
 
+  // The reminder used to open a blank `mailto:`. It now sends a branded email
+  // with the invoice attached and records the send.
+  it('sends a real templated reminder for an overdue invoice', async () => {
+    const user = userEvent.setup()
+    const request = vi.fn().mockResolvedValue(Response.json({ sent: true }))
+    vi.stubGlobal('fetch', request)
+    const assign = vi.fn()
+    vi.stubGlobal('location', { assign, href: 'http://app.test/admin/billing' })
+
+    render(
+      <BillingClient
+        initialSnapshot={{
+          ...snapshot,
+          nudges: [{
+            key: 'reminder:invoice:inv-1',
+            kind: 'reminder',
+            clientName: 'Chen, Marcus & Lily',
+            description: 'Invoice 2026-0004, 20 days past due',
+            itemId: snapshot.rows[0].id,
+            matterId: snapshot.rows[0].matterId,
+            clientEmail: 'chen@example.com',
+            legalPlan: null,
+            invoiceId: 'inv-1',
+            invoiceNumber: '2026-0004',
+          }],
+        }}
+        loadError={null}
+        weekStart="2026-07-27"
+        matterOptions={matterOptions}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Remind' }))
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        '/api/admin/billing/invoices/inv-1/reminder',
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+    // 20 days past due escalates past "friendly" but not to "final".
+    expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
+      tone: 'firm',
+      attachInvoice: true,
+    })
+    // Nothing may navigate the window to a mail client.
+    expect(assign).not.toHaveBeenCalled()
+  })
+
   it('deletes one ledger charge through the REST delete', async () => {
     const user = userEvent.setup()
     const request = vi.fn().mockResolvedValue(Response.json({ deleted: 1, items: [] }))

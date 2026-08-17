@@ -315,27 +315,51 @@ export default function BillingClient({
     }
   }
 
+  /**
+   * Escalates with age the way a person would: a gentle note in the first
+   * fortnight, firmer through six weeks, final after that.
+   */
+  function reminderTone(description: string): 'friendly' | 'firm' | 'final' {
+    const days = Number(description.match(/(\d+) days past due/)?.[1] ?? 0)
+    return days > 45 ? 'final' : days > 14 ? 'firm' : 'friendly'
+  }
+
   async function actOnNudge(nudge: BillingNudge) {
-    if (nudge.kind === 'invoice' && nudge.itemId) {
+    // Billing a matter is composing an invoice, so hand off to the composer
+    // with its open charges already selected.
+    if (nudge.kind === 'bill') {
+      billMatter(nudge.matterId)
+      return
+    }
+
+    // A plan claim is submitted to MetLife or LegalEASE, never invoiced to the
+    // client, so it keeps the per-item carrier path.
+    if (nudge.kind === 'claim_submit' && nudge.itemId) {
       const row = initialSnapshot.rows.find(candidate => candidate.id === nudge.itemId)
       if (row) await markInvoice(row)
       return
     }
-    if (nudge.kind === 'reminder' && nudge.itemId) {
+
+    // A real, branded reminder with the invoice attached and the send recorded
+    // — this replaced a `mailto:` that opened an empty message.
+    if (nudge.kind === 'reminder' && nudge.invoiceId) {
       try {
-        await request(`/api/admin/billing/items/${nudge.itemId}/reminder`)
-        toast.success(`Reminder recorded for ${nudge.clientName}`)
+        await request(`/api/admin/billing/invoices/${nudge.invoiceId}/reminder`, {
+          tone: reminderTone(nudge.description),
+          attachInvoice: true,
+        })
+        toast.success(
+          nudge.invoiceNumber
+            ? `Reminder for invoice ${nudge.invoiceNumber} sent to ${nudge.clientName}`
+            : `Reminder sent to ${nudge.clientName}`,
+        )
         router.refresh()
-        if (nudge.clientEmail) {
-          window.location.assign(
-            `mailto:${encodeURIComponent(nudge.clientEmail)}?subject=${encodeURIComponent('Payment reminder')}`,
-          )
-        }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not record reminder')
+        toast.error(error instanceof Error ? error.message : 'Could not send the reminder')
       }
       return
     }
+
     const search = nudge.legalPlan === 'metlife' ? 'metlife-claim' : 'legalease'
     await dismissNudge(nudge)
     router.replace(`/admin/works?search=${search}`)

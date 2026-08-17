@@ -299,39 +299,88 @@ function buildNudges(
   today: string,
 ): BillingNudge[] {
   const nudges: BillingNudge[] = []
+  // One "bill this matter" nudge per matter, not one per charge: the composer
+  // groups a matter's open charges onto a single invoice, so three unbilled
+  // charges are one job, not three.
+  const billable = new Map<string, BillingLedgerRow[]>()
+
   for (const row of rows) {
-    if (row.status === 'to_invoice') {
-      const key = `invoice:${row.id}`
+    const awaitingClaim = row.kind === 'plan_claim' && row.status === 'to_invoice'
+    const awaitingBill = row.kind !== 'plan_claim' && row.status === 'to_invoice'
+
+    if (awaitingClaim) {
+      const key = `claim-submit:${row.id}`
       if (!dismissed.has(key)) {
         nudges.push({
           key,
-          kind: 'invoice',
+          kind: 'claim_submit',
           clientName: row.clientName,
-          description: `Send ${row.label.toLowerCase()}`,
+          description: `Submit ${row.label.toLowerCase()} to the carrier`,
           itemId: row.id,
           matterId: row.matterId,
           clientEmail: row.clientEmail,
           legalPlan: row.plan,
         })
       }
-    } else if (row.overdue) {
+      continue
+    }
+
+    // An overdue charge with no invoice predates invoicing (or was flagged by
+    // the legacy per-item path). Reminding on it would have nothing to attach,
+    // so the useful action is to bill it properly instead.
+    if (row.overdue && !row.invoiceId) {
+      billable.set(row.matterId, [...(billable.get(row.matterId) ?? []), row])
+      continue
+    }
+
+    if (awaitingBill) {
+      billable.set(row.matterId, [...(billable.get(row.matterId) ?? []), row])
+      continue
+    }
+
+    if (row.overdue && row.invoiceId) {
       const reminderKey = row.lastRemindedAt ? firmDateKey(row.lastRemindedAt) : null
       const recentlyReminded =
         reminderKey !== null && calendarDaysBetween(reminderKey, today) < 7
-      const key = `reminder:${row.id}`
-      if (!recentlyReminded && !dismissed.has(key)) {
+      // Keyed on the invoice, so one reminder covers every charge on it rather
+      // than nagging once per line.
+      const key = `reminder:invoice:${row.invoiceId}`
+      if (!recentlyReminded && !dismissed.has(key) && !nudges.some(n => n.key === key)) {
         nudges.push({
           key,
           kind: 'reminder',
           clientName: row.clientName,
-          description: `Payment reminder, ${row.ageDays} days past due`,
+          description: row.invoiceNumber
+            ? `Invoice ${row.invoiceNumber}, ${row.ageDays} days past due`
+            : `Payment reminder, ${row.ageDays} days past due`,
           itemId: row.id,
           matterId: row.matterId,
           clientEmail: row.clientEmail,
           legalPlan: row.plan,
+          invoiceId: row.invoiceId,
+          invoiceNumber: row.invoiceNumber ?? null,
         })
       }
     }
+  }
+
+  for (const [matterId, matterRows] of billable) {
+    const key = `bill:${matterId}`
+    if (dismissed.has(key)) continue
+    const total = matterRows.reduce((sum, row) => sum + row.balance, 0)
+    const [first] = matterRows
+    nudges.push({
+      key,
+      kind: 'bill',
+      clientName: first.clientName,
+      description: matterRows.length === 1
+        ? `Bill ${first.label.toLowerCase()}`
+        : `Bill ${matterRows.length} charges (${billingMoney(total)})`,
+      itemId: first.id,
+      matterId,
+      clientEmail: first.clientEmail,
+      legalPlan: null,
+    })
   }
   for (const claim of unpreparedClaims) {
     const key = `claim:${claim.matterId}:${claim.legalPlan}`
