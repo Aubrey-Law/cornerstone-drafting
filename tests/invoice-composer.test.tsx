@@ -17,6 +17,8 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'access-token' }))
 vi.mock('sonner', () => ({ toast }))
+const download = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/invoices/downloadInvoice', () => ({ downloadInvoiceDocument: download }))
 
 import InvoiceComposer from '@/app/admin/billing/invoices/new/InvoiceComposer'
 
@@ -138,8 +140,103 @@ describe('InvoiceComposer', () => {
       dueDate: '2026-10-30',
     })
     expect(fetchMock.mock.calls[1][0]).toBe('/api/admin/billing/invoices/invoice-1/issue')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ send: true })
     expect(navigation.push).toHaveBeenCalledWith('/admin/billing/invoices/invoice-1')
     expect(toast.success).toHaveBeenCalledWith('Invoice issued and emailed')
+  })
+
+  it('issues without emailing and hands back the PDF', async () => {
+    // For a bill given to the client in person or posted, rather than emailed.
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ invoice: { id: 'invoice-9' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sent: false,
+          invoice: { number: '2026-0009', pdfDocumentId: 'doc-9', docxDocumentId: 'docx-9' },
+        }),
+      })
+    download.mockResolvedValue(undefined)
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ send: false })
+    await waitFor(() => expect(download).toHaveBeenCalledWith({
+      documentId: 'doc-9',
+      invoiceNumber: '2026-0009',
+      isPdf: true,
+    }))
+    expect(navigation.push).toHaveBeenCalledWith('/admin/billing/invoices/invoice-9')
+  })
+
+  it('falls back to the Word file when no PDF was produced', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ invoice: { id: 'invoice-10' } }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sent: false,
+          invoice: { number: '2026-0010', pdfDocumentId: null, docxDocumentId: 'docx-10' },
+        }),
+      })
+    download.mockResolvedValue(undefined)
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+
+    await waitFor(() => expect(download).toHaveBeenCalledWith({
+      documentId: 'docx-10',
+      invoiceNumber: '2026-0010',
+      isPdf: false,
+    }))
+  })
+
+  it('still counts the invoice as issued when the download itself fails', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ invoice: { id: 'invoice-11' } }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sent: false,
+          invoice: { number: '2026-0011', pdfDocumentId: 'doc-11', docxDocumentId: null },
+        }),
+      })
+    download.mockRejectedValue(new Error('network'))
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'Invoice issued, but the download could not start',
+    ))
+    // The invoice exists regardless, so the user still lands on it.
+    expect(navigation.push).toHaveBeenCalledWith('/admin/billing/invoices/invoice-11')
+  })
+
+  it('keeps emailing on the send action', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ invoice: { id: 'invoice-12' } }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ sent: true }) })
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: /Issue & send/ }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ send: true })
+    expect(download).not.toHaveBeenCalled()
   })
 
   it('saves a draft without issuing it', async () => {

@@ -24,7 +24,7 @@ import {
 import { moneyExact } from '@/app/admin/billing/financeFormat'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type { InvoiceDetail } from '@/lib/billing/invoices'
-import { getDocumentUrl } from '@/lib/documents'
+import { downloadInvoiceDocument } from '@/lib/invoices/downloadInvoice'
 import { formatFirmDate, formatFirmDateTime } from '@/lib/format'
 import type { BillingPaymentMethod } from '@/lib/billing/types'
 
@@ -50,7 +50,9 @@ export default function InvoiceDetailClient({
   const token = useAccessToken()
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [voidOpen, setVoidOpen] = useState(false)
-  const [busy, setBusy] = useState<'payment' | 'void' | 'send' | 'reminder' | 'checkout' | null>(null)
+  const [busy, setBusy] = useState<
+    'payment' | 'void' | 'send' | 'reminder' | 'checkout' | 'issue-send' | 'issue-download' | null
+  >(null)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const voidOpenerRef = useRef<HTMLElement | null>(null)
 
@@ -146,6 +148,53 @@ export default function InvoiceDetailClient({
   }
 
   /**
+   * Issues a saved draft, optionally emailing it.
+   *
+   * Until this existed a draft could be created and then not acted on from its
+   * own page — the only route to issuing was the composer, which you had
+   * already left.
+   */
+  async function issue(mode: 'send' | 'download') {
+    setBusy(mode === 'send' ? 'issue-send' : 'issue-download')
+    try {
+      const json = await post(
+        `/api/admin/billing/invoices/${invoice.id}/issue`,
+        { send: mode === 'send' },
+      ) as {
+        warning?: string
+        sent?: boolean
+        invoice?: {
+          number: string | null
+          pdfDocumentId: string | null
+          docxDocumentId: string | null
+        }
+      }
+
+      if (json.warning) toast.warning(json.warning)
+      else if (json.sent) toast.success('Invoice issued and emailed')
+      else toast.success('Invoice issued')
+
+      if (mode === 'download') {
+        const issuedDocumentId = json.invoice?.pdfDocumentId ?? json.invoice?.docxDocumentId ?? null
+        if (issuedDocumentId) {
+          await downloadInvoiceDocument({
+            documentId: issuedDocumentId,
+            invoiceNumber: json.invoice?.number ?? null,
+            isPdf: Boolean(json.invoice?.pdfDocumentId),
+          }).catch(() => toast.error('Invoice issued, but the download could not start'))
+        } else if (!json.warning) {
+          toast.warning('Invoice issued, but no document was produced to download')
+        }
+      }
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not issue the invoice')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
    * Opens a hosted checkout and stores its link on the invoice, which is what
    * puts a Pay button on the next email and in the client's portal.
    */
@@ -170,7 +219,11 @@ export default function InvoiceDetailClient({
   async function download() {
     if (!documentId) return
     try {
-      window.location.assign(await getDocumentUrl(documentId, 'download'))
+      await downloadInvoiceDocument({
+        documentId,
+        invoiceNumber: invoice.number,
+        isPdf: Boolean(invoice.pdfDocumentId),
+      })
     } catch {
       toast.error('Could not fetch the invoice document')
     }
@@ -209,6 +262,29 @@ export default function InvoiceDetailClient({
                 <Download className="size-4" aria-hidden />
                 Download
               </Button>
+            )}
+            {isDraft && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11"
+                  disabled={busy !== null}
+                  onClick={() => void issue('download')}
+                >
+                  <Download className="size-4" aria-hidden />
+                  {busy === 'issue-download' ? 'Issuing…' : 'Issue & download'}
+                </Button>
+                <Button
+                  type="button"
+                  className="min-h-11"
+                  disabled={busy !== null}
+                  onClick={() => void issue('send')}
+                >
+                  <Send className="size-4" aria-hidden />
+                  {busy === 'issue-send' ? 'Issuing…' : 'Issue & send'}
+                </Button>
+              </>
             )}
             {!isDraft && !isVoid && (
               <>
