@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { AlertTriangle, Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmptyState } from '@/components/EmptyState'
@@ -501,6 +502,11 @@ export function MatterBillingTab({
 
   const toInvoice = rows.filter(row => row.status === 'to_invoice')
   const overdue = rows.filter(row => row.overdue)
+  const claimsToSubmit = toInvoice.filter(row => row.kind === 'plan_claim')
+  const billableCharges = rows.filter(row =>
+    row.kind !== 'plan_claim' && !row.invoiceId && row.balance > 0)
+  const billMatterHref = `/admin/billing/invoices/new?matterId=${matterId}`
+    + (billableCharges.length > 0 ? `&items=${billableCharges.map(row => row.id).join(',')}` : '')
 
   return (
     <TabsContent value="billing" className="space-y-4">
@@ -560,14 +566,31 @@ export function MatterBillingTab({
               closing={closing}
               alreadyClosed={alreadyClosed}
             />
-            {(toInvoice.length > 0 || overdue.length > 0) && (
+            {(billableCharges.length > 0 || claimsToSubmit.length > 0 || overdue.length > 0) && (
               <Card>
                 <CardHeader className="border-b">
                   <CardTitle className="text-sm">Quick actions</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-1">
-                    {toInvoice.map(row => (
+                    {/* Client charges go on one invoice through the composer;
+                        a plan claim keeps its own carrier-facing verb. */}
+                    {billableCharges.length > 0 && (
+                      <li>
+                        <Button
+                          asChild
+                          variant="link"
+                          size="sm"
+                          className="h-auto min-h-11 w-full justify-start whitespace-normal px-0 text-left"
+                        >
+                          <Link href={billMatterHref}>
+                            Bill this matter — {billableCharges.length} charge
+                            {billableCharges.length === 1 ? '' : 's'}
+                          </Link>
+                        </Button>
+                      </li>
+                    )}
+                    {claimsToSubmit.map(row => (
                       <li key={`invoice-${row.id}`}>
                         <Button
                           variant="link"
@@ -575,7 +598,7 @@ export function MatterBillingTab({
                           className="h-auto min-h-11 w-full justify-start whitespace-normal px-0 text-left"
                           onClick={() => void markInvoice(row)}
                         >
-                          Send invoice for {row.label}
+                          Submit claim — {row.label}
                         </Button>
                       </li>
                     ))}

@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Download, Trash2 } from 'lucide-react'
+import { Download, FileText, Plus, Trash2 } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
@@ -100,6 +101,19 @@ export default function BillingClient({
     () => rows.filter(row => selectedRows[row.id]),
     [rows, selectedRows],
   )
+  /**
+   * An invoice belongs to one matter, so a cross-matter selection cannot become
+   * one. Plan claims and already-invoiced charges are excluded too — the first
+   * bills the carrier, the second is already on a bill.
+   */
+  const billableSelection = useMemo(() => {
+    const billable = selection.filter(row =>
+      row.kind !== 'plan_claim' && !row.invoiceId && row.balance > 0)
+    if (billable.length === 0) return null
+    const matterIds = new Set(billable.map(row => row.matterId))
+    return matterIds.size === 1 ? billable[0].matterId : null
+  }, [selection])
+
   const editingInput = useMemo(
     () => (editingCharge ? editableCharge(editingCharge) : undefined),
     [editingCharge],
@@ -151,6 +165,23 @@ export default function BillingClient({
 
   async function request(path: string, body?: unknown) {
     await send(path, 'POST', body)
+  }
+
+  /**
+   * Opens the composer for a matter with its uninvoiced charges pre-selected.
+   * The ids ride in the URL so the composer's first paint already shows the
+   * right bill rather than an empty form the user has to rebuild.
+   */
+  function billMatter(matterId: string) {
+    const billable = initialSnapshot.rows.filter(row =>
+      row.matterId === matterId
+      && row.kind !== 'plan_claim'
+      && !row.invoiceId
+      && row.balance > 0)
+    const items = billable.map(row => row.id).join(',')
+    router.push(
+      `/admin/billing/invoices/new?matterId=${matterId}${items ? `&items=${items}` : ''}`,
+    )
   }
 
   function openPayment(row?: BillingLedgerRow) {
@@ -318,6 +349,18 @@ export default function BillingClient({
         actions={
           <>
             <label className="sr-only" htmlFor="billing-month">Collection month</label>
+            <Button asChild variant="outline" className="min-h-11">
+              <Link href="/admin/billing/invoices">
+                <FileText className="size-4" aria-hidden />
+                Invoices
+              </Link>
+            </Button>
+            <Button asChild className="min-h-11">
+              <Link href="/admin/billing/invoices/new">
+                <Plus className="size-4" aria-hidden />
+                New invoice
+              </Link>
+            </Button>
             <Input
               id="billing-month"
               type="month"
@@ -387,6 +430,16 @@ export default function BillingClient({
                 <span className="text-xs text-muted-foreground">
                   {selection.length} selected
                 </span>
+                {billableSelection && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => billMatter(billableSelection)}
+                  >
+                    <Plus className="size-4" aria-hidden />
+                    Invoice selected
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="destructive"
@@ -414,6 +467,7 @@ export default function BillingClient({
               selected={selectedRows}
               onLogPayment={openPayment}
               onInvoice={row => void markInvoice(row)}
+              onBillMatter={row => billMatter(row.matterId)}
               onToggleRow={(id, checked) =>
                 setSelectedRows(current => ({ ...current, [id]: checked }))}
               onToggleAll={checked =>
