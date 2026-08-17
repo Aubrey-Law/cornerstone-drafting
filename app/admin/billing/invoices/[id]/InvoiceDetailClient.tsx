@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Ban, Banknote, Bell, Download, Send } from 'lucide-react'
+import { ArrowLeft, Ban, Banknote, Bell, CreditCard, Download, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
@@ -24,7 +24,7 @@ import {
 import { moneyExact } from '@/app/admin/billing/financeFormat'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type { InvoiceDetail } from '@/lib/billing/invoices'
-import { getDocumentUrl } from '@/lib/documents'
+import { downloadInvoiceDocument } from '@/lib/invoices/downloadInvoice'
 import { formatFirmDate, formatFirmDateTime } from '@/lib/format'
 import type { BillingPaymentMethod } from '@/lib/billing/types'
 
@@ -39,15 +39,20 @@ const methodLabels: Record<BillingPaymentMethod, string> = {
 export default function InvoiceDetailClient({
   invoice,
   firm,
+  paymentsEnabled,
 }: {
   invoice: InvoiceDetail
   firm: { name: string; remitTo: string }
+  /** False when no processor is configured, which hides online payment entirely. */
+  paymentsEnabled: boolean
 }) {
   const router = useRouter()
   const token = useAccessToken()
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [voidOpen, setVoidOpen] = useState(false)
-  const [busy, setBusy] = useState<'payment' | 'void' | 'send' | 'reminder' | null>(null)
+  const [busy, setBusy] = useState<
+    'payment' | 'void' | 'send' | 'reminder' | 'checkout' | 'issue-send' | 'issue-download' | null
+  >(null)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const voidOpenerRef = useRef<HTMLElement | null>(null)
 
@@ -142,10 +147,83 @@ export default function InvoiceDetailClient({
     }
   }
 
+  /**
+   * Issues a saved draft, optionally emailing it.
+   *
+   * Until this existed a draft could be created and then not acted on from its
+   * own page — the only route to issuing was the composer, which you had
+   * already left.
+   */
+  async function issue(mode: 'send' | 'download') {
+    setBusy(mode === 'send' ? 'issue-send' : 'issue-download')
+    try {
+      const json = await post(
+        `/api/admin/billing/invoices/${invoice.id}/issue`,
+        { send: mode === 'send' },
+      ) as {
+        warning?: string
+        sent?: boolean
+        invoice?: {
+          number: string | null
+          pdfDocumentId: string | null
+          docxDocumentId: string | null
+        }
+      }
+
+      if (json.warning) toast.warning(json.warning)
+      else if (json.sent) toast.success('Invoice issued and emailed')
+      else toast.success('Invoice issued')
+
+      if (mode === 'download') {
+        const issuedDocumentId = json.invoice?.pdfDocumentId ?? json.invoice?.docxDocumentId ?? null
+        if (issuedDocumentId) {
+          await downloadInvoiceDocument({
+            documentId: issuedDocumentId,
+            invoiceNumber: json.invoice?.number ?? null,
+            isPdf: Boolean(json.invoice?.pdfDocumentId),
+          }).catch(() => toast.error('Invoice issued, but the download could not start'))
+        } else if (!json.warning) {
+          toast.warning('Invoice issued, but no document was produced to download')
+        }
+      }
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not issue the invoice')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * Opens a hosted checkout and stores its link on the invoice, which is what
+   * puts a Pay button on the next email and in the client's portal.
+   */
+  async function createPayLink() {
+    setBusy('checkout')
+    try {
+      const json = await post(`/api/admin/billing/invoices/${invoice.id}/checkout`) as
+        { checkoutUrl?: string }
+      toast.success(
+        json.checkoutUrl
+          ? 'Payment link created — it now prints on the invoice and shows in the portal'
+          : 'Payment link created',
+      )
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create a payment link')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function download() {
     if (!documentId) return
     try {
-      window.location.assign(await getDocumentUrl(documentId, 'download'))
+      await downloadInvoiceDocument({
+        documentId,
+        invoiceNumber: invoice.number,
+        isPdf: Boolean(invoice.pdfDocumentId),
+      })
     } catch {
       toast.error('Could not fetch the invoice document')
     }
@@ -185,6 +263,29 @@ export default function InvoiceDetailClient({
                 Download
               </Button>
             )}
+            {isDraft && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11"
+                  disabled={busy !== null}
+                  onClick={() => void issue('download')}
+                >
+                  <Download className="size-4" aria-hidden />
+                  {busy === 'issue-download' ? 'Issuing…' : 'Issue & download'}
+                </Button>
+                <Button
+                  type="button"
+                  className="min-h-11"
+                  disabled={busy !== null}
+                  onClick={() => void issue('send')}
+                >
+                  <Send className="size-4" aria-hidden />
+                  {busy === 'issue-send' ? 'Issuing…' : 'Issue & send'}
+                </Button>
+              </>
+            )}
             {!isDraft && !isVoid && (
               <>
                 <Button
@@ -207,6 +308,18 @@ export default function InvoiceDetailClient({
                   >
                     <Bell className="size-4" aria-hidden />
                     {busy === 'reminder' ? 'Sending…' : 'Send reminder'}
+                  </Button>
+                )}
+                {paymentsEnabled && invoice.balance > 0 && !invoice.paymentLink && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11"
+                    disabled={busy !== null}
+                    onClick={() => void createPayLink()}
+                  >
+                    <CreditCard className="size-4" aria-hidden />
+                    {busy === 'checkout' ? 'Creating…' : 'Create pay link'}
                   </Button>
                 )}
                 {invoice.balance > 0 && (

@@ -116,6 +116,10 @@ describe('API route auth coverage', () => {
           // than a header, so the check is a local helper: HMAC-SHA256 with
           // timingSafeEqual and a 15-minute replay window, 401 on failure.
           /hasValidSignature\b/,
+          // Payments: the provider is behind an adapter, so the verifier is a
+          // method on it rather than a provider-named helper. The route still
+          // has to call it, which is what this guard is really asserting.
+          /processor\.verifySignature\b/,
           // Intake uploads: invite-token or bearer auth resolved in a shared helper.
           /resolveIntakeUploadAccess\b/,
         ]),
