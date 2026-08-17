@@ -51,6 +51,21 @@ export function LedgerTable({
     )
   }
 
+  // Grouped in first-appearance order, so the ledger's own sort (open first,
+  // then oldest) still decides which client you see at the top.
+  const groups: { matterId: string; clientName: string; balance: number; rows: BillingLedgerRow[] }[] = []
+  const groupIndex = new Map<string, number>()
+  for (const row of rows) {
+    const at = groupIndex.get(row.matterId)
+    if (at === undefined) {
+      groupIndex.set(row.matterId, groups.length)
+      groups.push({ matterId: row.matterId, clientName: row.clientName, balance: row.balance, rows: [row] })
+    } else {
+      groups[at].rows.push(row)
+      groups[at].balance += row.balance
+    }
+  }
+
   return (
     <div className="overflow-x-auto">
       <Table className="min-w-[940px]">
@@ -76,8 +91,33 @@ export function LedgerTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map(row => {
-            return (
+          {groups.flatMap(group => [
+            // A matter with several charges gets a subtotal line, so "this
+            // client owes $3,240" is readable without adding three rows up by
+            // hand. Its checkbox selects the whole matter, which is exactly the
+            // selection batch invoicing wants.
+            ...(group.rows.length > 1 ? [(
+              <TableRow key={`group-${group.matterId}`} className="bg-muted/40">
+                <TableCell className="pl-4">
+                  <Checkbox
+                    checked={group.rows.every(row => selected[row.id])}
+                    onCheckedChange={checked =>
+                      group.rows.forEach(row => onToggleRow(row.id, checked === true))}
+                    aria-label={`Select all ${group.rows.length} charges for ${group.clientName}`}
+                  />
+                </TableCell>
+                <TableCell colSpan={5} className="text-xs font-medium">
+                  {group.clientName} · {group.rows.length} charges
+                </TableCell>
+                <TableCell className="text-right text-xs font-semibold tabular-nums">
+                  {billingMoney(group.balance)}
+                </TableCell>
+                <TableCell colSpan={4} className="pr-4 text-xs text-muted-foreground">
+                  matter total
+                </TableCell>
+              </TableRow>
+            )] : []),
+            ...group.rows.map(row => (
               <TableRow key={row.id}>
                 <TableCell className="pl-4">
                   <Checkbox
@@ -204,8 +244,8 @@ export function LedgerTable({
                   </Button>
                 </TableCell>
               </TableRow>
-            )
-          })}
+            )),
+          ])}
         </TableBody>
       </Table>
     </div>

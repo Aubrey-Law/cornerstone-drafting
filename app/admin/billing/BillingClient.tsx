@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Download, FileText, Plus, Trash2 } from 'lucide-react'
+import { Banknote, Download, FileText, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { billingCsv, filterBillingRows } from '@/lib/billing/metrics'
+import { planBatchInvoices } from '@/lib/billing/invoices'
 import type {
   BillingFilter,
   BillingLedgerRow,
@@ -37,16 +38,25 @@ import {
   type BillingMatterOption,
 } from '@/components/billing/AddChargeDialog'
 import { DeleteChargesDialog } from '@/components/billing/DeleteChargesDialog'
+import { BatchInvoiceDialog } from '@/components/billing/BatchInvoiceDialog'
+import {
+  InvoiceListTable,
+  type InvoiceListRowView,
+} from '@/components/billing/InvoiceListTable'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const filterLabels: { value: BillingFilter; label: string }[] = [
   { value: 'all', label: 'All' },
+  { value: 'to_invoice', label: 'To invoice' },
   { value: 'open', label: 'Open' },
   { value: 'overdue', label: 'Overdue' },
   { value: 'paid', label: 'Paid' },
 ]
 
 function validFilter(value: string | null): BillingFilter {
-  return value === 'all' || value === 'overdue' || value === 'paid' ? value : 'open'
+  return value === 'all' || value === 'to_invoice' || value === 'overdue' || value === 'paid'
+    ? value
+    : 'open'
 }
 
 function downloadCsv(rows: BillingLedgerRow[], month: string) {
@@ -64,11 +74,13 @@ export default function BillingClient({
   loadError,
   weekStart,
   matterOptions,
+  invoices,
 }: {
   initialSnapshot: BillingSnapshot
   loadError: string | null
   weekStart: string
   matterOptions: BillingMatterOption[]
+  invoices: InvoiceListRowView[]
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -78,6 +90,9 @@ export default function BillingClient({
   const month = /^\d{4}-\d{2}$/.test(searchParams.get('month') ?? '')
     ? searchParams.get('month')!
     : initialSnapshot.selectedMonth
+  const tab = ['invoices', 'insights'].includes(searchParams.get('tab') ?? '')
+    ? searchParams.get('tab')!
+    : 'ledger'
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentItemId, setPaymentItemId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -86,6 +101,9 @@ export default function BillingClient({
   const [editingCharge, setEditingCharge] = useState<BillingLedgerRow | null>(null)
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchSaving, setBatchSaving] = useState(false)
+  const batchOpenerRef = useRef<HTMLElement | null>(null)
   const [deleting, setDeleting] = useState(false)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const chargeOpenerRef = useRef<HTMLElement | null>(null)
@@ -102,17 +120,13 @@ export default function BillingClient({
     [rows, selectedRows],
   )
   /**
-   * An invoice belongs to one matter, so a cross-matter selection cannot become
-   * one. Plan claims and already-invoiced charges are excluded too — the first
-   * bills the carrier, the second is already on a bill.
+   * A selection spanning several matters becomes several invoices — one each,
+   * since an invoice belongs to exactly one matter. The dialog previews the
+   * split before anything is created.
    */
-  const billableSelection = useMemo(() => {
-    const billable = selection.filter(row =>
-      row.kind !== 'plan_claim' && !row.invoiceId && row.balance > 0)
-    if (billable.length === 0) return null
-    const matterIds = new Set(billable.map(row => row.matterId))
-    return matterIds.size === 1 ? billable[0].matterId : null
-  }, [selection])
+  const batchPlan = useMemo(() => planBatchInvoices(selection), [selection])
+  const batchGroupCount = batchPlan.groups.length
+  const invoiceableCount = batchPlan.groups.reduce((sum, g) => sum + g.chargeCount, 0)
 
   const editingInput = useMemo(
     () => (editingCharge ? editableCharge(editingCharge) : undefined),
@@ -126,13 +140,18 @@ export default function BillingClient({
   )
   const counts = useMemo(() => ({
     all: initialSnapshot.rows.length,
+    to_invoice: filterBillingRows(initialSnapshot.rows, 'to_invoice', '', month).length,
     open: initialSnapshot.rows.filter(row => row.balance > 0).length,
     overdue: initialSnapshot.rows.filter(row => row.overdue).length,
     paid: filterBillingRows(initialSnapshot.rows, 'paid', '', month).length,
   }), [initialSnapshot.rows, month])
 
-  function setUrl(next: Partial<{ filter: BillingFilter; search: string; month: string }>) {
+  function setUrl(next: Partial<{ filter: BillingFilter; search: string; month: string; tab: string }>) {
     const params = new URLSearchParams(searchParams.toString())
+    if (next.tab !== undefined) {
+      if (next.tab === 'ledger') params.delete('tab')
+      else params.set('tab', next.tab)
+    }
     const nextFilter = next.filter ?? filter
     const nextSearch = next.search ?? search
     const nextMonth = next.month ?? month
@@ -257,6 +276,59 @@ export default function BillingClient({
     }
   }
 
+  function openBatch() {
+    batchOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setBatchOpen(true)
+  }
+
+  async function createBatch(input: {
+    itemIds: string[]
+    issueDate: string
+    dueInDays: number
+    terms: string | null
+  }) {
+    setBatchSaving(true)
+    try {
+      const response = await fetch('/api/admin/billing/invoices/batch', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify(input),
+      })
+      const json = await response.json().catch(() => ({})) as {
+        created?: { invoiceId: string }[]
+        skipped?: { clientName: string; reason: string }[]
+        error?: string
+      }
+      if (!response.ok) throw new Error(json.error ?? 'Could not create the invoices')
+
+      const created = json.created ?? []
+      const skipped = json.skipped ?? []
+      setBatchOpen(false)
+      setSelectedRows({})
+      if (created.length > 0) {
+        toast.success(
+          created.length === 1
+            ? 'Draft invoice created'
+            : `${created.length} draft invoices created`,
+        )
+      }
+      // Anything the database refused is surfaced, never swallowed — a charge
+      // dropped quietly is a charge that never gets billed.
+      if (skipped.length > 0) {
+        toast.warning(
+          `${skipped.length} skipped: ${skipped.map(s => `${s.clientName} (${s.reason})`).join('; ')}`,
+        )
+      }
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create the invoices')
+    } finally {
+      setBatchSaving(false)
+    }
+  }
+
   function openCharge() {
     chargeOpenerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -373,11 +445,18 @@ export default function BillingClient({
         actions={
           <>
             <label className="sr-only" htmlFor="billing-month">Collection month</label>
-            <Button asChild variant="outline" className="min-h-11">
-              <Link href="/admin/billing/invoices">
-                <FileText className="size-4" aria-hidden />
-                Invoices
-              </Link>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => openPayment()}
+            >
+              <Banknote className="size-4" aria-hidden />
+              Log payment
+            </Button>
+            <Button type="button" variant="outline" className="min-h-11" onClick={openCharge}>
+              <FileText className="size-4" aria-hidden />
+              Add charge
             </Button>
             <Button asChild className="min-h-11">
               <Link href="/admin/billing/invoices/new">
@@ -411,106 +490,128 @@ export default function BillingClient({
         </div>
       )}
 
-      <FinanceHeroCards
-        snapshot={initialSnapshot}
-        onLogPayment={() => openPayment()}
-        onAddCharge={openCharge}
-      />
+      <FinanceHeroCards snapshot={initialSnapshot} />
 
-      <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-        <RevenueSourcesCard revenue={initialSnapshot.revenue} />
-        <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
-        <ReceivablesSummaryCard snapshot={initialSnapshot} />
-      </div>
+      {/* The ledger is what you act on, so it is the landing tab; the
+          analytics that used to sit above it move to Insights. */}
+      <Tabs value={tab} onValueChange={value => setUrl({ tab: value })} className="min-w-0 gap-4">
+        <TabsList>
+          <TabsTrigger value="ledger" className="min-h-11">Ledger</TabsTrigger>
+          <TabsTrigger value="invoices" className="min-h-11">
+            Invoices{invoices.length > 0 ? ` (${invoices.length})` : ''}
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="min-h-11">Insights</TabsTrigger>
+        </TabsList>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <Card className="min-w-0 gap-0 py-0">
-          <CardHeader className="gap-3 border-b border-border py-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <CardTitle className="text-sm">Ledger</CardTitle>
-              <SearchField
-                value={search}
-                onValueChange={value => setUrl({ search: value })}
-                placeholder="Search clients…"
-                aria-label="Search billing clients"
-                containerClassName="min-h-11 min-w-[14rem] flex-1 sm:max-w-sm"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2" aria-label="Billing status filter">
-              {filterLabels.map(option => (
-                <FilterChip
-                  key={option.value}
-                  selected={filter === option.value}
-                  count={counts[option.value]}
-                  onClick={() => setUrl({ filter: option.value })}
-                  className="min-h-11"
-                >
-                  {option.label}
-                </FilterChip>
-              ))}
-            </div>
-            {selection.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {selection.length} selected
-                </span>
-                {billableSelection && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => billMatter(billableSelection)}
-                  >
-                    <Plus className="size-4" aria-hidden />
-                    Invoice selected
-                  </Button>
+        <TabsContent value="ledger" className="min-w-0 space-y-4">
+          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+            <Card className="min-w-0 gap-0 py-0">
+              <CardHeader className="gap-3 border-b border-border py-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <CardTitle className="text-sm">Ledger</CardTitle>
+                  <SearchField
+                    value={search}
+                    onValueChange={value => setUrl({ search: value })}
+                    placeholder="Search clients…"
+                    aria-label="Search billing clients"
+                    containerClassName="min-h-11 min-w-[14rem] flex-1 sm:max-w-sm"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2" aria-label="Billing status filter">
+                  {filterLabels.map(option => (
+                    <FilterChip
+                      key={option.value}
+                      selected={filter === option.value}
+                      count={counts[option.value]}
+                      onClick={() => setUrl({ filter: option.value })}
+                      className="min-h-11"
+                    >
+                      {option.label}
+                    </FilterChip>
+                  ))}
+                </div>
+                {selection.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {selection.length} selected
+                    </span>
+                    {invoiceableCount > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={openBatch}
+                      >
+                        <Plus className="size-4" aria-hidden />
+                        {batchGroupCount === 1
+                          ? 'Create invoice'
+                          : `Create ${batchGroupCount} invoices`}
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => askDelete(selection)}
+                      disabled={deleting}
+                    >
+                      <Trash2 className="size-4" aria-hidden />
+                      Delete selected
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedRows({})}
+                    >
+                      Clear selection
+                    </Button>
+                  </div>
                 )}
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => askDelete(selection)}
-                  disabled={deleting}
-                >
-                  <Trash2 className="size-4" aria-hidden />
-                  Delete selected
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedRows({})}
-                >
-                  Clear selection
-                </Button>
-              </div>
-            )}
-          </CardHeader>
-          <CardContent className="px-0">
-            <LedgerTable
-              rows={rows}
-              selected={selectedRows}
-              onLogPayment={openPayment}
-              onInvoice={row => void markInvoice(row)}
-              onBillMatter={row => billMatter(row.matterId)}
-              onToggleRow={(id, checked) =>
-                setSelectedRows(current => ({ ...current, [id]: checked }))}
-              onToggleAll={checked =>
-                setSelectedRows(checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {})}
-              onEdit={openEdit}
-              onDelete={askDelete}
-            />
-          </CardContent>
-        </Card>
-        <div className="space-y-3">
-          <CollectionGoalCard snapshot={initialSnapshot} />
-          <BillingRail
-            snapshot={initialSnapshot}
-            onNudgeAction={nudge => void actOnNudge(nudge)}
-            onDismiss={nudge => void dismissNudge(nudge)}
-          />
-          <RecentPaymentsCard payments={initialSnapshot.recentPayments} />
-        </div>
-      </div>
+              </CardHeader>
+              <CardContent className="px-0">
+                <LedgerTable
+                  rows={rows}
+                  selected={selectedRows}
+                  onLogPayment={openPayment}
+                  onInvoice={row => void markInvoice(row)}
+                  onBillMatter={row => billMatter(row.matterId)}
+                  onToggleRow={(id, checked) =>
+                    setSelectedRows(current => ({ ...current, [id]: checked }))}
+                  onToggleAll={checked =>
+                    setSelectedRows(checked ? Object.fromEntries(rows.map(row => [row.id, true])) : {})}
+                  onEdit={openEdit}
+                  onDelete={askDelete}
+                />
+              </CardContent>
+            </Card>
+            <div className="space-y-3">
+              <CollectionGoalCard snapshot={initialSnapshot} />
+              <BillingRail
+                snapshot={initialSnapshot}
+                onNudgeAction={nudge => void actOnNudge(nudge)}
+                onDismiss={nudge => void dismissNudge(nudge)}
+              />
+              <RecentPaymentsCard payments={initialSnapshot.recentPayments} />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="invoices" className="min-w-0">
+          <Card className="min-w-0 gap-0 py-0">
+            <CardContent className="px-0">
+              <InvoiceListTable invoices={invoices} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="insights" className="min-w-0">
+          <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            <RevenueSourcesCard revenue={initialSnapshot.revenue} />
+            <CollectionsTrendCard trend={initialSnapshot.collectionsTrend} />
+            <ReceivablesSummaryCard snapshot={initialSnapshot} />
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <AddChargeDialog
         open={chargeOpen}
@@ -526,6 +627,16 @@ export default function BillingClient({
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
         onSave={saveCharge}
+      />
+
+      <BatchInvoiceDialog
+        open={batchOpen}
+        onOpenChange={setBatchOpen}
+        rows={selection}
+        today={new Date().toISOString().slice(0, 10)}
+        saving={batchSaving}
+        returnFocusRef={batchOpenerRef}
+        onConfirm={createBatch}
       />
 
       <DeleteChargesDialog

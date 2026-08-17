@@ -534,6 +534,12 @@ export function filterBillingRows(
 ): BillingLedgerRow[] {
   const normalized = search.trim().toLowerCase()
   return rows.filter(row => {
+    // Work that still needs billing — a client charge not yet on an invoice.
+    // A plan claim is excluded: it goes to the carrier, not onto an invoice.
+    if (
+      filter === 'to_invoice'
+      && (row.invoiceId || row.kind === 'plan_claim' || row.balance === 0)
+    ) return false
     if (filter === 'open' && row.balance === 0) return false
     if (filter === 'overdue' && !row.overdue) return false
     if (

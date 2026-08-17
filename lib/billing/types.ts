@@ -15,7 +15,7 @@ export type BillingKind = (typeof billingKinds)[number]
 export type BillingPlan = (typeof billingPlans)[number]
 export type BillingStatus = (typeof billingStatuses)[number]
 export type BillingPaymentMethod = (typeof billingPaymentMethods)[number]
-export type BillingFilter = 'all' | 'open' | 'overdue' | 'paid'
+export type BillingFilter = 'all' | 'to_invoice' | 'open' | 'overdue' | 'paid'
 export type RevenueCategory = 'trust' | 'will' | 'probate' | 'legal'
 
 export interface BillingItem {

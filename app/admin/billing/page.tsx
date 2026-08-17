@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { getCachedClaims } from '@/lib/supabaseServer'
 import { firmTodayKey } from '@/lib/firmDate'
 import { fetchBillingData, fetchBillingMatterOptions } from '@/lib/queries/billing'
+import { fetchInvoices } from '@/lib/queries/invoices'
 import BillingClient from './BillingClient'
 
 export const dynamic = 'force-dynamic'
@@ -21,12 +22,13 @@ export default async function BillingPage({
   const auth = await getCachedClaims()
   if (!auth) return null
   const params = await searchParams
-  const [data, matterOptions] = await Promise.all([
+  const [data, matterOptions, invoices] = await Promise.all([
     fetchBillingData({
       userId: auth.id,
       selectedMonth: selectedMonth(params.month),
     }),
     fetchBillingMatterOptions(),
+    fetchInvoices(),
   ])
   return (
     <BillingClient
@@ -34,6 +36,7 @@ export default async function BillingPage({
       loadError={data.error}
       weekStart={data.weekStart}
       matterOptions={matterOptions}
+      invoices={invoices}
     />
   )
 }
