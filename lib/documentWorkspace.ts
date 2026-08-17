@@ -36,7 +36,7 @@ export function isDocumentShared(doc: Pick<MatterDocument, 'shared_at'>) {
  *
  * Derivation cannot express "Deed work" or "2026 tax returns", so the attorney
  * can also create named folders (`matter_document_folders`, restored by
- * 20261001000000). Those are stored, and a document carries at most one of
+ * 20261002000000). Those are stored, and a document carries at most one of
  * them in `folder_id`. A stored folder wins over a derived one — see
  * `documentFolderId`.
  */

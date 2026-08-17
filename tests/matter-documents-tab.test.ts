@@ -58,7 +58,7 @@ describe('matter documents tab', () => {
     const source = readFileSync(tabPath, 'utf8')
 
     // Derived folders (provenance + lifecycle) and stored ones
-    // (matter_document_folders, 20261001000000) share a single id space, so
+    // (matter_document_folders, 20261002000000) share a single id space, so
     // the tab must never reach for the derived-only key helper directly.
     expect(source).toContain('documentFolderId')
     expect(source).toContain('documentFolderViews')
