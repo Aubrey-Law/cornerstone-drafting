@@ -10,6 +10,8 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  Clock3,
+  Mail,
   MessageSquare,
   PauseCircle,
   Phone,
@@ -27,6 +29,21 @@ import { TaskListRow } from '@/components/tasks/TaskPrimitives'
 import { useTaskActions } from '@/components/tasks/useTaskActions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +74,13 @@ interface TodayQueueProps {
   tasksDueToday: TaskRow[]
 }
 
+type PrimaryDecision =
+  | { kind: 'task'; key: string; task: TaskRow; urgency: 'Overdue task' | 'Due today' }
+  | { kind: 'aging'; key: string; row: TodayQueueRow; urgency: 'Blocking a client' | 'Queue item' }
+  | { kind: 'message'; key: string; thread: TodayUnreadThread }
+  | { kind: 'review'; key: string; matter: TodayMatterItem }
+  | { kind: 'send'; key: string; matter: TodayMatterItem }
+
 type TabKey = 'you' | 'clients' | 'snoozed'
 
 const QUEUE_PREVIEW_COUNT = 10
@@ -74,6 +98,12 @@ function rowKey(row: TodayQueueRow) {
 
 function rowHref(row: TodayQueueRow) {
   return row.entity === 'lead' ? `/admin/crm/opportunities/${row.id}` : `/admin/matters/${row.id}`
+}
+
+function taskHref(task: TaskRow) {
+  if (task.matter_id) return `/admin/matters/${task.matter_id}?tab=tasks`
+  if (task.lead_id) return `/admin/crm/opportunities/${task.lead_id}?tab=tasks`
+  return '/admin/tasks'
 }
 
 function daysCell(row: TodayQueueRow) {
@@ -333,6 +363,8 @@ export function TodayQueue({
   const [tab, setTab] = useState<TabKey>('you')
   const [queueExpanded, setQueueExpanded] = useState(false)
   const [clientsExpanded, setClientsExpanded] = useState(false)
+  const [laterOpen, setLaterOpen] = useState(false)
+  const [nudgePreviewOpen, setNudgePreviewOpen] = useState(false)
   const [removedKeys, setRemovedKeys] = useState<ReadonlySet<string>>(new Set())
   const [focusKey, setFocusKey] = useState<string | null>(null)
   const [snoozeMenuKey, setSnoozeMenuKey] = useState<string | null>(null)
@@ -364,11 +396,12 @@ export function TodayQueue({
   const mineAll = visible(waitingOnYou)
   const blocking = mineAll.filter(r => (r.days_over_sla ?? 0) >= BLOCKING_DAYS_OVER)
   const queue = mineAll.filter(r => (r.days_over_sla ?? 0) < BLOCKING_DAYS_OVER)
-  const queueShown = queueExpanded ? queue : queue.slice(0, QUEUE_PREVIEW_COUNT)
-  const queueHidden = queue.length - queueShown.length
   const clientRows = visible(waitingOnClient)
   const clientRowsShown = clientsExpanded ? clientRows : clientRows.slice(0, QUEUE_PREVIEW_COUNT)
   const snoozedRows = visible(snoozed)
+  const nudgeCandidates = clientRows.filter(row => row.nudge_matter_id)
+  const sendableNudges = nudgeCandidates.filter(row => row.client_email)
+  const skippedNudges = nudgeCandidates.filter(row => !row.client_email)
 
   const setKeyRemoved = useCallback((key: string, removed: boolean) => {
     setRemovedKeys(prev => {
@@ -494,20 +527,25 @@ export function TodayQueue({
     [nudgeMatter, router],
   )
 
-  const nudgeAll = useCallback(async () => {
-    const nudgeable = clientRows.filter(r => r.nudge_matter_id)
-    if (nudgeable.length === 0) {
+  const openNudgePreview = useCallback(() => {
+    if (nudgeCandidates.length === 0) {
       toast.info('No one to nudge — these rows are not waiting on an intake')
       return
     }
+    setNudgePreviewOpen(true)
+  }, [nudgeCandidates.length])
+
+  const nudgeAll = useCallback(async () => {
+    if (sendableNudges.length === 0) return
     setNudging(true)
     let sent = 0
-    for (const row of nudgeable) {
+    for (const row of sendableNudges) {
       if (await nudgeMatter(row.nudge_matter_id as string, row.client_name)) sent += 1
     }
     setNudging(false)
+    setNudgePreviewOpen(false)
     if (sent > 0) toast.success(`Sent ${sent} intake reminder${sent === 1 ? '' : 's'}`)
-  }, [clientRows, nudgeMatter])
+  }, [sendableNudges, nudgeMatter])
 
   const runPrimary = useCallback(
     (row: TodayQueueRow) => {
@@ -535,6 +573,51 @@ export function TodayQueue({
     () => tasksDueToday.filter(t => !completedTaskIds.has(t.id)).sort(compareTasks),
     [tasksDueToday, completedTaskIds],
   )
+
+  const primaryDecision = useMemo<PrimaryDecision | null>(() => {
+    const overdueTask = overdueTaskRows[0]
+    if (overdueTask) {
+      return { kind: 'task', key: `task:${overdueTask.id}`, task: overdueTask, urgency: 'Overdue task' }
+    }
+    const blockingRow = blocking[0]
+    if (blockingRow) {
+      return { kind: 'aging', key: rowKey(blockingRow), row: blockingRow, urgency: 'Blocking a client' }
+    }
+    const dueTask = dueTodayTaskRows[0]
+    if (dueTask) {
+      return { kind: 'task', key: `task:${dueTask.id}`, task: dueTask, urgency: 'Due today' }
+    }
+    const thread = unreadThreads[0]
+    if (thread) return { kind: 'message', key: `unread:${thread.matter_id}`, thread }
+    const review = intakeReview[0]
+    if (review) return { kind: 'review', key: `review:${review.matter_id}`, matter: review }
+    const send = intakeToSend[0]
+    if (send) return { kind: 'send', key: `send:${send.matter_id}`, matter: send }
+    const queueRow = queue[0]
+    if (queueRow) {
+      return { kind: 'aging', key: rowKey(queueRow), row: queueRow, urgency: 'Queue item' }
+    }
+    return null
+  }, [overdueTaskRows, blocking, dueTodayTaskRows, unreadThreads, intakeReview, intakeToSend, queue])
+
+  const remainingOverdueTasks = overdueTaskRows.filter(task => primaryDecision?.key !== `task:${task.id}`)
+  const remainingBlocking = blocking.filter(row => primaryDecision?.key !== rowKey(row))
+  const remainingDueTodayTasks = dueTodayTaskRows.filter(task => primaryDecision?.key !== `task:${task.id}`)
+  const remainingUnreadThreads = unreadThreads.filter(
+    thread => primaryDecision?.key !== `unread:${thread.matter_id}`,
+  )
+  const remainingIntakeReview = intakeReview.filter(
+    matter => primaryDecision?.key !== `review:${matter.matter_id}`,
+  )
+  const remainingQueue = queue.filter(row => primaryDecision?.key !== rowKey(row))
+  const remainingIntakeToSend = intakeToSend.filter(
+    matter => primaryDecision?.key !== `send:${matter.matter_id}`,
+  )
+  const queueShown = queueExpanded
+    ? remainingQueue
+    : remainingQueue.slice(0, QUEUE_PREVIEW_COUNT)
+  const queueHidden = remainingQueue.length - queueShown.length
+  const laterCount = remainingQueue.length + remainingIntakeToSend.length + clientRows.length
 
   // Fresh server rows already exclude what was completed, so the optimistic
   // hide has to clear or a re-opened task would stay invisible.
@@ -588,41 +671,58 @@ export function TodayQueue({
   // Ordered list of what J/K walk through on the active tab.
   const focusTargets = useMemo<FocusTarget[]>(() => {
     if (tab === 'you') {
-      const agingTargets = [...blocking, ...queueShown].map(row => ({
+      const agingTargets = (rows: TodayQueueRow[]) => rows.map(row => ({
         key: rowKey(row),
         run: () => runPrimary(row),
         snoozeRow: row,
         nudge: () => void nudgeRow(row),
       }))
-      const taskTargets = [...overdueTaskRows, ...dueTodayTaskRows].map(task => ({
+      const taskTargets = (tasks: TaskRow[]) => tasks.map(task => ({
         key: `task:${task.id}`,
-        run: () => {
-          const href = task.matter_id
-            ? `/admin/matters/${task.matter_id}?tab=tasks`
-            : task.lead_id
-              ? `/admin/crm/opportunities/${task.lead_id}?tab=tasks`
-              : '/admin/tasks'
-          router.push(href)
-        },
+        run: () => router.push(taskHref(task)),
         complete: () => void completeTask(task),
       }))
-      return [
-        // Tasks lead the queue: they are the most specific thing owed today.
-        ...taskTargets,
-        ...agingTargets,
-        ...unreadThreads.map(t => ({
+
+      const primaryTarget: FocusTarget[] = primaryDecision
+        ? primaryDecision.kind === 'task'
+          ? taskTargets([primaryDecision.task])
+          : primaryDecision.kind === 'aging'
+            ? agingTargets([primaryDecision.row])
+            : [{
+                key: primaryDecision.key,
+                run: () => router.push(
+                  primaryDecision.kind === 'message'
+                    ? `/admin/matters/${primaryDecision.thread.matter_id}?tab=communications`
+                    : primaryDecision.kind === 'review'
+                      ? `/admin/drafting/${primaryDecision.matter.matter_id}`
+                      : `/admin/matters/${primaryDecision.matter.matter_id}`,
+                ),
+              }]
+        : []
+
+      const urgentTargets: FocusTarget[] = [
+        ...taskTargets(remainingOverdueTasks),
+        ...agingTargets(remainingBlocking),
+        ...taskTargets(remainingDueTodayTasks),
+        ...remainingUnreadThreads.map(t => ({
           key: `unread:${t.matter_id}`,
           run: () => router.push(`/admin/matters/${t.matter_id}?tab=communications`),
         })),
-        ...intakeReview.map(m => ({
+        ...remainingIntakeReview.map(m => ({
           key: `review:${m.matter_id}`,
           run: () => router.push(`/admin/drafting/${m.matter_id}`),
         })),
-        ...intakeToSend.map(m => ({
+      ]
+      const laterTargets: FocusTarget[] = laterOpen
+        ? [
+          ...agingTargets(queueShown),
+          ...remainingIntakeToSend.map(m => ({
           key: `send:${m.matter_id}`,
           run: () => router.push(`/admin/matters/${m.matter_id}`),
         })),
-      ]
+        ]
+        : []
+      return [...primaryTarget, ...urgentTargets, ...laterTargets]
     }
     if (tab === 'clients') {
       return clientRowsShown.map(row => ({
@@ -642,15 +742,18 @@ export function TodayQueue({
     tab,
     removedKeys,
     queueExpanded,
+    laterOpen,
     clientsExpanded,
     waitingOnYou,
     waitingOnClient,
     snoozed,
-    unreadThreads,
-    intakeReview,
-    intakeToSend,
-    overdueTaskRows,
-    dueTodayTaskRows,
+    primaryDecision,
+    remainingOverdueTasks,
+    remainingBlocking,
+    remainingDueTodayTasks,
+    remainingUnreadThreads,
+    remainingIntakeReview,
+    remainingIntakeToSend,
     completeTask,
     router,
     runPrimary,
@@ -748,7 +851,7 @@ export function TodayQueue({
         case 'm':
         case 'M':
           e.preventDefault()
-          if (tab === 'you') setQueueExpanded(prev => !prev)
+          if (tab === 'you') setLaterOpen(prev => !prev)
           if (tab === 'clients') setClientsExpanded(prev => !prev)
           break
         case 'Escape':
@@ -801,6 +904,61 @@ export function TodayQueue({
     />
   )
 
+  const primaryDecisionContent = (() => {
+    if (!primaryDecision) return null
+    if (primaryDecision.kind === 'task') {
+      return (
+        <ul className="divide-y divide-border">
+          {taskRow(primaryDecision.task)}
+        </ul>
+      )
+    }
+    if (primaryDecision.kind === 'aging') {
+      return (
+        <ul>
+          <AgingRow
+            row={primaryDecision.row}
+            focused={focusKey === primaryDecision.key}
+            handlers={handlers}
+          />
+        </ul>
+      )
+    }
+    if (primaryDecision.kind === 'message') {
+      return (
+        <ul>
+          <SimpleRow
+            id={primaryDecision.key}
+            href={`/admin/matters/${primaryDecision.thread.matter_id}?tab=communications`}
+            icon={MessageSquare}
+            primary={primaryDecision.thread.client_name ?? 'Unnamed matter'}
+            secondary={`${primaryDecision.thread.unread_count} unread message${primaryDecision.thread.unread_count === 1 ? '' : 's'}`}
+            cta="Read & reply"
+            focused={focusKey === primaryDecision.key}
+          />
+        </ul>
+      )
+    }
+    const isReview = primaryDecision.kind === 'review'
+    return (
+      <ul>
+        <SimpleRow
+          id={primaryDecision.key}
+          href={
+            isReview
+              ? `/admin/drafting/${primaryDecision.matter.matter_id}`
+              : `/admin/matters/${primaryDecision.matter.matter_id}`
+          }
+          icon={isReview ? ClipboardCheck : Send}
+          primary={primaryDecision.matter.client_name ?? 'Unnamed matter'}
+          secondary={primaryDecision.matter.stage_label}
+          cta={isReview ? 'Review & draft' : 'Send intake'}
+          focused={focusKey === primaryDecision.key}
+        />
+      </ul>
+    )
+  })()
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -842,29 +1000,49 @@ export function TodayQueue({
 
       {tab === 'you' && (
         <div>
-          {overdueTaskRows.length > 0 && (
+          {primaryDecision && (
+            <section
+              role="region"
+              aria-labelledby="today-primary-heading"
+              className="mt-3 overflow-hidden rounded-xl border border-primary/35 bg-primary/[0.04] shadow-sm"
+            >
+              <header className="flex items-center justify-between gap-3 border-b border-primary/15 px-3 py-2.5">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
+                    Highest priority
+                  </p>
+                  <h2 id="today-primary-heading" className="text-base font-semibold text-foreground">
+                    Do this next
+                  </h2>
+                </div>
+                <Badge variant="outline" className="border-primary/25 bg-background text-xs">
+                  {primaryDecision.kind === 'task' || primaryDecision.kind === 'aging'
+                    ? primaryDecision.urgency
+                    : primaryDecision.kind === 'message'
+                      ? 'Client message'
+                      : primaryDecision.kind === 'review'
+                        ? 'Ready for review'
+                        : 'Intake to send'}
+                </Badge>
+              </header>
+              {primaryDecisionContent}
+            </section>
+          )}
+
+          {remainingOverdueTasks.length > 0 && (
             <>
-              <GroupHeader title="Overdue tasks — do first" count={overdueTaskRows.length} />
+              <GroupHeader title="Overdue work" count={remainingOverdueTasks.length} />
               <ul className="divide-y divide-border rounded-lg border border-border border-l-[3px] border-l-destructive bg-card">
-                {overdueTaskRows.map(taskRow)}
+                {remainingOverdueTasks.map(taskRow)}
               </ul>
             </>
           )}
 
-          {dueTodayTaskRows.length > 0 && (
+          {remainingBlocking.length > 0 && (
             <>
-              <GroupHeader title="Due today" count={dueTodayTaskRows.length} />
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {dueTodayTaskRows.map(taskRow)}
-              </ul>
-            </>
-          )}
-
-          {blocking.length > 0 && (
-            <>
-              <GroupHeader title="Blocking a client — do first" count={blocking.length} />
+              <GroupHeader title="Blocking a client" count={remainingBlocking.length} />
               <ul className="space-y-2">
-                {blocking.map(row => (
+                {remainingBlocking.map(row => (
                   <li
                     key={rowKey(row)}
                     className="overflow-hidden rounded-lg border border-border border-l-[3px] border-l-destructive bg-card"
@@ -878,38 +1056,20 @@ export function TodayQueue({
             </>
           )}
 
-          <GroupHeader title="Queue" count={queue.length} />
-          {queue.length === 0 ? (
-            <p className="px-1 text-sm text-muted-foreground">Nothing else in your queue.</p>
-          ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-              {queueShown.map(row => (
-                <AgingRow
-                  key={rowKey(row)}
-                  row={row}
-                  focused={focusKey === rowKey(row)}
-                  handlers={handlers}
-                />
-              ))}
-              {queueHidden > 0 && (
-                <li>
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    onClick={() => setQueueExpanded(true)}
-                  >
-                    Show {queueHidden} more
-                  </button>
-                </li>
-              )}
-            </ul>
+          {remainingDueTodayTasks.length > 0 && (
+            <>
+              <GroupHeader title="Due today" count={remainingDueTodayTasks.length} />
+              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+                {remainingDueTodayTasks.map(taskRow)}
+              </ul>
+            </>
           )}
 
-          {unreadThreads.length > 0 && (
+          {remainingUnreadThreads.length > 0 && (
             <>
-              <GroupHeader title="Unread client messages" count={unreadThreads.length} />
+              <GroupHeader title="Unread client messages" count={remainingUnreadThreads.length} />
               <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {unreadThreads.map(t => (
+                {remainingUnreadThreads.map(t => (
                   <SimpleRow
                     key={t.matter_id}
                     id={`unread:${t.matter_id}`}
@@ -925,11 +1085,11 @@ export function TodayQueue({
             </>
           )}
 
-          {intakeReview.length > 0 && (
+          {remainingIntakeReview.length > 0 && (
             <>
-              <GroupHeader title="Intake ready for review" count={intakeReview.length} />
+              <GroupHeader title="Intake ready for review" count={remainingIntakeReview.length} />
               <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {intakeReview.map(m => (
+                {remainingIntakeReview.map(m => (
                   <SimpleRow
                     key={m.matter_id}
                     id={`review:${m.matter_id}`}
@@ -945,50 +1105,104 @@ export function TodayQueue({
             </>
           )}
 
-          {intakeToSend.length > 0 && (
-            <>
-              <GroupHeader title="Intake to send" count={intakeToSend.length} />
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {intakeToSend.map(m => (
-                  <SimpleRow
-                    key={m.matter_id}
-                    id={`send:${m.matter_id}`}
-                    href={`/admin/matters/${m.matter_id}`}
-                    icon={Send}
-                    primary={m.client_name ?? 'Unnamed matter'}
-                    secondary={m.stage_label}
-                    cta="Send intake"
-                    focused={focusKey === `send:${m.matter_id}`}
-                  />
-                ))}
-              </ul>
-            </>
-          )}
+          {laterCount > 0 && (
+            <Collapsible open={laterOpen} onOpenChange={setLaterOpen} className="mt-3">
+              <div className="flex items-center gap-2">
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-w-0 flex-1 justify-between bg-card"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Clock3 className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      Later
+                      <Badge variant="secondary" className="text-[11px]">{laterCount}</Badge>
+                    </span>
+                    <ChevronDown
+                      className={cn('h-4 w-4 transition-transform', laterOpen && 'rotate-180')}
+                      aria-hidden
+                    />
+                  </Button>
+                </CollapsibleTrigger>
+                {clientRows.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={nudging}
+                    onClick={openNudgePreview}
+                  >
+                    <BellRing className="h-4 w-4" />
+                    Nudge all
+                  </Button>
+                )}
+              </div>
+              <CollapsibleContent className="space-y-3 pt-2">
+                {remainingQueue.length > 0 && (
+                  <div>
+                    <GroupHeader title="Queue" count={remainingQueue.length} />
+                    <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+                      {queueShown.map(row => (
+                        <AgingRow
+                          key={rowKey(row)}
+                          row={row}
+                          focused={focusKey === rowKey(row)}
+                          handlers={handlers}
+                        />
+                      ))}
+                      {queueHidden > 0 && (
+                        <li>
+                          <button
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            onClick={() => setQueueExpanded(true)}
+                          >
+                            Show {queueHidden} more
+                          </button>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
 
-          {clientRows.length > 0 && (
-            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
-              <button
-                type="button"
-                className="inline-flex min-w-0 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                onClick={() => setTab('clients')}
-              >
-                <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="truncate">
-                  {clientRows.length} waiting on client{clientRows.length === 1 ? '' : 's'}
-                </span>
-              </button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                disabled={nudging}
-                onClick={() => void nudgeAll()}
-              >
-                <BellRing className="h-3.5 w-3.5" />
-                Nudge all
-              </Button>
-            </div>
+                {remainingIntakeToSend.length > 0 && (
+                  <div>
+                    <GroupHeader title="Intake to send" count={remainingIntakeToSend.length} />
+                    <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+                      {remainingIntakeToSend.map(m => (
+                        <SimpleRow
+                          key={m.matter_id}
+                          id={`send:${m.matter_id}`}
+                          href={`/admin/matters/${m.matter_id}`}
+                          icon={Send}
+                          primary={m.client_name ?? 'Unnamed matter'}
+                          secondary={m.stage_label}
+                          cta="Send intake"
+                          focused={focusKey === `send:${m.matter_id}`}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {clientRows.length > 0 && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
+                    <button
+                      type="button"
+                      className="inline-flex min-w-0 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                      onClick={() => setTab('clients')}
+                    >
+                      <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
+                      <span className="truncate">
+                        {clientRows.length} waiting on client{clientRows.length === 1 ? '' : 's'}
+                      </span>
+                    </button>
+                    <span className="shrink-0 text-xs text-muted-foreground">Client tab</span>
+                  </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {youCount === 0 && (
@@ -1012,7 +1226,7 @@ export function TodayQueue({
                 size="sm"
                 className="h-7 text-xs"
                 disabled={nudging}
-                onClick={() => void nudgeAll()}
+                onClick={openNudgePreview}
               >
                 <BellRing className="h-3.5 w-3.5" />
                 Nudge all
@@ -1095,6 +1309,64 @@ export function TodayQueue({
           )}
         </div>
       )}
+
+      <AlertDialog open={nudgePreviewOpen} onOpenChange={setNudgePreviewOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Review intake reminders</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirm who will receive an email reminder before anything is sent.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-border">
+            <ul className="divide-y divide-border">
+              {nudgeCandidates.map(row => (
+                <li key={rowKey(row)} className="flex items-start justify-between gap-3 px-3 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {row.client_name ?? 'Unnamed client'}
+                    </span>
+                    {row.client_email ? (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {row.client_email}
+                      </span>
+                    ) : (
+                      <span className="block text-xs text-amber-orange">
+                        No email on file — skipped
+                      </span>
+                    )}
+                  </span>
+                  {row.client_email && (
+                    <Badge variant="secondary" className="shrink-0 gap-1 text-[11px]">
+                      <Mail className="h-3 w-3" aria-hidden />
+                      Email
+                    </Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {skippedNudges.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {skippedNudges.length} client{skippedNudges.length === 1 ? '' : 's'} will be skipped because no email address is available.
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={nudging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={nudging || sendableNudges.length === 0}
+              onClick={event => {
+                event.preventDefault()
+                void nudgeAll()
+              }}
+            >
+              {nudging
+                ? 'Sending…'
+                : `Send ${sendableNudges.length} email${sendableNudges.length === 1 ? '' : 's'}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {(queueExpanded || clientsExpanded) && (
         <button
