@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { requireAdminServerAction } from '@/lib/serverActionAuth'
 import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
+import { attachContactToMatter } from '@/lib/contacts/attachContactToMatter'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
 import { loadMatterContacts } from '@/lib/contacts/loadMatterContacts'
 
@@ -83,6 +84,16 @@ export async function addContact(data: {
     .single()
 
   if (error) throw new Error(error.message)
+
+  // Step 7a of docs/matter-contacts-migration.md: a fiduciary added from the
+  // design sheet is a person on this matter, so this writer creates the join row
+  // rather than leaving it to the legacy client_intake_id trigger. Readers have
+  // gone through the join since step 3, so without it the person this action
+  // just returned would be invisible once step 7b drops that trigger.
+  await attachContactToMatter(admin, data.matterId, contact.id, {
+    relationship_type: normalizeContactRelationshipType(data.relationship),
+    relationship_label: data.relationship ?? null,
+  })
 
   // Map DB column names back to app-facing names
   return {
