@@ -72,9 +72,40 @@ export default async function AdminTodayPage() {
             overdueTasks={today.overdueTasks}
             tasksDueToday={today.tasksDueToday}
           />
+
+          <details className="group mt-4 rounded-lg border border-border bg-card">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium text-foreground marker:content-none">
+              <span>Later · planning and context</span>
+              <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
+              <span className="hidden text-xs text-muted-foreground group-open:inline">Hide</span>
+            </summary>
+            <div className="grid gap-4 border-t border-border p-3 md:grid-cols-2">
+              <NextActionsCard />
+              <ComingDueCard />
+              <DailyBriefCard />
+
+              {allClear.length > 0 && (
+                <section className="rounded-lg border border-border bg-card px-3 py-2.5">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <CheckCircle2 className="h-4 w-4 text-green" aria-hidden />
+                    All clear
+                  </h2>
+                  <ul className="mt-1.5 space-y-1">
+                    {allClear.map(line => (
+                      <li key={line} className="text-xs text-muted-foreground">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              <TodayClearedCard />
+            </div>
+          </details>
         </div>
 
-        <aside className="basis-[320px] max-w-[340px] grow space-y-4">
+        <aside className="basis-[280px] grow space-y-3 lg:sticky lg:top-4 lg:max-w-[320px] lg:self-start">
           <section className="rounded-lg border border-border bg-card">
             <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
               <CalendarClock className="h-4 w-4 text-muted-foreground" aria-hidden />
@@ -84,7 +115,7 @@ export default async function AdminTodayPage() {
               <p className="px-3 py-2.5 text-sm text-muted-foreground">Nothing scheduled today</p>
             ) : (
               <ul className="divide-y divide-border">
-                {today.appointmentsToday.map(appt => (
+                {today.appointmentsToday.slice(0, 4).map(appt => (
                   <li key={appt.id}>
                     <Link
                       href={appt.href}
@@ -104,31 +135,15 @@ export default async function AdminTodayPage() {
                 ))}
               </ul>
             )}
+            {today.appointmentsToday.length > 4 && (
+              <Link
+                href="/admin/calendar"
+                className="block border-t border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              >
+                View {today.appointmentsToday.length - 4} more appointment{today.appointmentsToday.length - 4 === 1 ? '' : 's'}
+              </Link>
+            )}
           </section>
-
-          <NextActionsCard />
-
-          <ComingDueCard />
-
-          <DailyBriefCard />
-
-          {allClear.length > 0 && (
-            <section className="rounded-lg border border-border bg-card px-3 py-2.5">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <CheckCircle2 className="h-4 w-4 text-green" aria-hidden />
-                All clear
-              </h2>
-              <ul className="mt-1.5 space-y-1">
-                {allClear.map(line => (
-                  <li key={line} className="text-xs text-muted-foreground">
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <TodayClearedCard />
 
           <p className="px-1">
             <Link
