@@ -6,6 +6,7 @@ import { normalizeContactRelationshipType } from '@/lib/contactRelationship'
 import { syncChildrenProjection } from '@/lib/contacts/syncChildrenProjection'
 import { formatPhoneDisplay, formatPhoneForStorage } from '@/lib/phone'
 import { contactOnMatter } from '@/lib/contacts/assertContactOnMatter'
+import { attachContactToMatter } from '@/lib/contacts/attachContactToMatter'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -103,6 +104,19 @@ export async function POST(req: Request, { params }: Params) {
       .single()
 
     if (error) throw new Error(error.message)
+
+    // Step 7a of docs/matter-contacts-migration.md: this writer puts the person
+    // on the matter itself rather than leaving it to the legacy
+    // client_intake_id trigger. Every reader has gone through the join since
+    // step 3 — including getHousehold, which is what syncChildrenProjection
+    // below reads — so without this row the contact, and for a child the design
+    // sheet's children projection built from it, both go missing the moment
+    // step 7b drops that trigger. Written before the projection sync for that
+    // reason.
+    await attachContactToMatter(admin, matterId, contact.id, {
+      relationship_type: relationshipType,
+      relationship_label: body?.relationship?.trim() || null,
+    })
 
     if (relationshipType === 'child') {
       await syncChildrenProjection(admin, matter.client_intake_id as string)

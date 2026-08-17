@@ -21,6 +21,8 @@ const WRITERS = [
   'app/api/admin/leads/[id]/engagement/route.ts',
   'app/api/intake/contacts/route.ts',
   'app/api/admin/contacts/route.ts',
+  'app/api/admin/matters/[id]/design-sheet/contacts/route.ts',
+  'app/admin/drafting/[matterId]/design/actions.ts',
 ]
 
 describe('every contact writer puts the person on the matter', () => {
@@ -40,6 +42,22 @@ describe('every contact writer puts the person on the matter', () => {
   it('is idempotent, so it can run alongside the trigger that still exists', () => {
     const helper = source('lib/contacts/attachContactToMatter.ts')
     expect(helper).toMatch(/onConflict: 'matter_id,contact_id'/)
+  })
+
+  it('puts the design-sheet contact on the matter before projecting children', () => {
+    // syncChildrenProjection reads getHousehold, which goes through the join.
+    // Attaching afterwards would leave a newly added child out of the household
+    // it was just asked to rebuild, so design_sheets.children would silently
+    // drop the child the attorney had entered.
+    const file = source('app/api/admin/matters/[id]/design-sheet/contacts/route.ts')
+    const attachAt = file.indexOf('attachContactToMatter(admin')
+    const projectAt = file.indexOf('syncChildrenProjection(admin')
+
+    // Guard the guard: indexOf returns -1 for a missing call, which would
+    // satisfy a bare less-than comparison and assert nothing.
+    expect(attachAt).toBeGreaterThan(-1)
+    expect(projectAt).toBeGreaterThan(-1)
+    expect(attachAt).toBeLessThan(projectAt)
   })
 
   it('does nothing for a person who belongs to no matter', () => {
