@@ -273,14 +273,23 @@ export async function fetchInvoice(
 /**
  * Charges on a matter that can still go on an invoice: not already invoiced,
  * still owing, and not a plan claim — a claim is billed to the carrier.
+ *
+ * `draftInvoiceId` widens that to the charges a given draft already holds, so
+ * its editor can show them ticked instead of hiding the very lines being
+ * edited. Only ever a draft: an issued invoice's charges are frozen.
  */
-export async function fetchInvoiceableCharges(matterId: string): Promise<InvoiceableCharge[]> {
+export async function fetchInvoiceableCharges(
+  matterId: string,
+  draftInvoiceId?: string,
+): Promise<InvoiceableCharge[]> {
   const admin = getAdminClient()
+  // Filtered in memory rather than in the query: a matter carries a handful of
+  // charges, and "unclaimed or claimed by this one draft" costs an interpolated
+  // id in a PostgREST `or` for no meaningful saving.
   const { data, error } = await admin
     .from('billing_items')
-    .select('id, kind, label, amount_billed, created_at')
+    .select('id, kind, label, amount_billed, invoice_id, created_at')
     .eq('matter_id', matterId)
-    .is('invoice_id', null)
     .neq('kind', 'plan_claim')
     .order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
@@ -290,12 +299,16 @@ export async function fetchInvoiceableCharges(matterId: string): Promise<Invoice
     kind: BillingKind
     label: string
     amount_billed: number
+    invoice_id: string | null
     created_at: string
-  }[]).map(row => ({
-    id: row.id,
-    kind: row.kind,
-    label: row.label,
-    amountBilled: row.amount_billed,
-    createdAt: row.created_at,
-  }))
+  }[])
+    .filter(row => row.invoice_id === null
+      || (draftInvoiceId !== undefined && row.invoice_id === draftInvoiceId))
+    .map(row => ({
+      id: row.id,
+      kind: row.kind,
+      label: row.label,
+      amountBilled: row.amount_billed,
+      createdAt: row.created_at,
+    }))
 }

@@ -1,0 +1,79 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({ from: vi.fn() }))
+vi.mock('@/lib/supabaseAdmin', () => ({ getAdminClient: () => ({ from: mocks.from }) }))
+
+import { fetchInvoiceableCharges } from '@/lib/queries/invoices'
+
+const MATTER = 'matter-1'
+const DRAFT = 'invoice-draft'
+
+/** The read chains .select().eq().neq().order(). */
+function db(rows: unknown[]) {
+  const captured: Record<string, unknown[]> = {}
+  mocks.from.mockImplementation(() => {
+    const chain = {
+      select: () => chain,
+      eq: (...args: unknown[]) => { captured.eq = args; return chain },
+      neq: (...args: unknown[]) => { captured.neq = args; return chain },
+      order: () => Promise.resolve({ data: rows, error: null }),
+    }
+    return chain
+  })
+  return captured
+}
+
+function charge(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'item-1',
+    kind: 'flat_fee',
+    label: 'Flat fee — Trust package',
+    amount_billed: 245_000,
+    invoice_id: null,
+    created_at: '2026-06-01T16:00:00.000Z',
+    ...overrides,
+  }
+}
+
+describe('fetchInvoiceableCharges', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('offers only unclaimed charges, and never a plan claim', async () => {
+    const captured = db([
+      charge(),
+      charge({ id: 'item-2', invoice_id: 'some-other-invoice' }),
+    ])
+
+    const charges = await fetchInvoiceableCharges(MATTER)
+
+    expect(charges.map(row => row.id)).toEqual(['item-1'])
+    expect(captured.eq).toEqual(['matter_id', MATTER])
+    // A legal plan claim bills the carrier, so it can never join a client bill.
+    expect(captured.neq).toEqual(['kind', 'plan_claim'])
+  })
+
+  it('also offers the charges the draft being edited already holds', async () => {
+    db([
+      charge(),
+      charge({ id: 'item-2', invoice_id: DRAFT }),
+      charge({ id: 'item-3', invoice_id: 'another-invoice' }),
+    ])
+
+    const charges = await fetchInvoiceableCharges(MATTER, DRAFT)
+
+    // Without item-2 the editor would hide the very lines it exists to change.
+    expect(charges.map(row => row.id)).toEqual(['item-1', 'item-2'])
+  })
+
+  it('maps cents through untouched', async () => {
+    db([charge({ amount_billed: 45_000 })])
+
+    expect((await fetchInvoiceableCharges(MATTER))[0]).toEqual({
+      id: 'item-1',
+      kind: 'flat_fee',
+      label: 'Flat fee — Trust package',
+      amountBilled: 45_000,
+      createdAt: '2026-06-01T16:00:00.000Z',
+    })
+  })
+})

@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  inferTerm,
   invoiceTermLabels,
   invoiceTerms,
   resolveDueDate,
@@ -41,20 +42,43 @@ import type { BillingMatterOption } from '@/components/billing/AddChargeDialog'
 import { ReceiptText } from 'lucide-react'
 
 /**
+ * A draft being edited rather than a new invoice being composed. The matter is
+ * absent on purpose: `update_invoice_draft` cannot move an invoice to another
+ * matter, because its charges live on the one it was drawn from.
+ */
+export interface ComposerDraft {
+  invoiceId: string
+  issueDate: string | null
+  dueDate: string | null
+  notes: string | null
+  terms: string | null
+  billToName: string | null
+  billToEmail: string | null
+  paymentLink: string | null
+  /** Lines whose charge has since been deleted, which an edit cannot carry over. */
+  orphanedLineCount: number
+}
+
+/**
  * The invoice composer: pick a matter, tick the charges to bill, and watch the
  * document assemble beside the form.
  *
  * A route rather than a dialog — a live document preview needs the width, and
  * the URL is worth having so the ledger can deep-link a pre-filled invoice.
  * Totals are computed here, synchronously, so typing never waits on a request.
+ *
+ * The same component edits a saved draft (`draft` set): the fields and the
+ * rules behind them are identical, only the matter is fixed and the save is a
+ * PATCH onto an invoice that already exists.
  */
-export default function InvoiceComposer({
+export function InvoiceComposer({
   matters,
   initialMatterId,
   initialCharges,
   preselectedChargeIds,
   today,
   firm,
+  draft,
 }: {
   matters: BillingMatterOption[]
   initialMatterId: string | null
@@ -62,6 +86,8 @@ export default function InvoiceComposer({
   preselectedChargeIds: string[]
   today: string
   firm: { name: string; remitTo: string }
+  /** Set to edit an existing draft instead of composing a new invoice. */
+  draft?: ComposerDraft
 }) {
   const router = useRouter()
   const token = useAccessToken()
@@ -70,25 +96,43 @@ export default function InvoiceComposer({
   const [loadingCharges, setLoadingCharges] = useState(false)
   const [selected, setSelected] = useState<Record<string, boolean>>(
     // Everything outstanding is billed by default: the common case is "bill
-    // this matter", not "bill part of this matter".
+    // this matter", not "bill part of this matter". Editing instead restores
+    // exactly what the draft holds, even if that is a subset.
     Object.fromEntries(
-      (preselectedChargeIds.length > 0
+      (draft || preselectedChargeIds.length > 0
         ? preselectedChargeIds
         : initialCharges.map(charge => charge.id)
       ).map(id => [id, true]),
     ),
   )
-  const [issueDate, setIssueDate] = useState(today)
-  const [term, setTerm] = useState<InvoiceTerm>('net_30')
-  const [billToName, setBillToName] = useState('')
-  const [billToEmail, setBillToEmail] = useState('')
-  const [paymentLink, setPaymentLink] = useState('')
-  const [notes, setNotes] = useState('')
-  const [terms, setTerms] = useState('')
+  const initialIssueDate = draft?.issueDate ?? today
+  const [issueDate, setIssueDate] = useState(initialIssueDate)
+  // A draft whose stored dates match no term keeps them as 'custom' rather
+  // than being silently snapped to Net 30 the moment it is opened.
+  const [term, setTerm] = useState<InvoiceTerm | 'custom'>(
+    draft ? inferTerm(draft.issueDate, draft.dueDate) ?? 'custom' : 'net_30',
+  )
+  const [dueDate, setDueDate] = useState(
+    draft?.dueDate ?? resolveDueDate(initialIssueDate, 'net_30'),
+  )
+  const [billToName, setBillToName] = useState(draft?.billToName ?? '')
+  const [billToEmail, setBillToEmail] = useState(draft?.billToEmail ?? '')
+  const [paymentLink, setPaymentLink] = useState(draft?.paymentLink ?? '')
+  const [notes, setNotes] = useState(draft?.notes ?? '')
+  const [terms, setTerms] = useState(draft?.terms ?? '')
   const [saving, setSaving] = useState<'draft' | 'send' | 'download' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const dueDate = useMemo(() => resolveDueDate(issueDate, term), [issueDate, term])
+  // The term drives the due date; it never reads back from it, so a custom due
+  // date survives until a real term is chosen.
+  function changeIssueDate(next: string) {
+    setIssueDate(next)
+    if (next && term !== 'custom') setDueDate(resolveDueDate(next, term))
+  }
+  function changeTerm(next: InvoiceTerm | 'custom') {
+    setTerm(next)
+    if (issueDate && next !== 'custom') setDueDate(resolveDueDate(issueDate, next))
+  }
   const chosen = useMemo(
     () => charges.filter(charge => selected[charge.id]),
     [charges, selected],
@@ -126,6 +170,42 @@ export default function InvoiceComposer({
   }, [matterId, initialMatterId, token])
 
   /**
+   * Writes the form to the server and hands back the invoice id: a PATCH onto
+   * the draft being edited, or a POST that creates one.
+   */
+  async function persist(): Promise<string> {
+    const body = {
+      itemIds: chosen.map(charge => charge.id),
+      issueDate,
+      dueDate,
+      notes: notes.trim() || null,
+      terms: terms.trim() || null,
+      billToName: billToName.trim() || null,
+      billToEmail: billToEmail.trim() || null,
+      paymentLink: paymentLink.trim() || null,
+    }
+    const response = await fetch(
+      draft ? `/api/admin/billing/invoices/${draft.invoiceId}` : '/api/admin/billing/invoices',
+      {
+        method: draft ? 'PATCH' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(draft ? body : { matterId, ...body }),
+      },
+    )
+    const json = await response.json().catch(() => ({})) as {
+      invoice?: { id: string }
+      error?: string
+    }
+    if (!response.ok || !json.invoice) {
+      throw new Error(json.error ?? (draft ? 'Could not save the invoice' : 'Could not create the invoice'))
+    }
+    return draft ? draft.invoiceId : json.invoice.id
+  }
+
+  /**
    * `download` issues the invoice without emailing it and hands back the PDF —
    * for a bill given to the client in person, posted, or sent from the
    * attorney's own mail client.
@@ -139,38 +219,16 @@ export default function InvoiceComposer({
       setError('Tick at least one charge to bill.')
       return
     }
+    if (dueDate < issueDate) {
+      setError('The due date cannot fall before the issue date.')
+      return
+    }
     setError(null)
     setSaving(mode)
     try {
-      const created = await fetch('/api/admin/billing/invoices', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          matterId,
-          itemIds: chosen.map(charge => charge.id),
-          issueDate,
-          dueDate,
-          notes: notes.trim() || null,
-          terms: terms.trim() || null,
-          billToName: billToName.trim() || null,
-          billToEmail: billToEmail.trim() || null,
-          paymentLink: paymentLink.trim() || null,
-        }),
-      })
-      const createdJson = await created.json().catch(() => ({})) as {
-        invoice?: { id: string }
-        error?: string
-      }
-      if (!created.ok || !createdJson.invoice) {
-        throw new Error(createdJson.error ?? 'Could not create the invoice')
-      }
-
-      const invoiceId = createdJson.invoice.id
+      const invoiceId = await persist()
       if (mode === 'draft') {
-        toast.success('Draft invoice saved')
+        toast.success(draft ? 'Draft invoice updated' : 'Draft invoice saved')
         router.push(`/admin/billing/invoices/${invoiceId}`)
         return
       }
@@ -241,7 +299,9 @@ export default function InvoiceComposer({
       <CardContent className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="invoice-matter">Matter</Label>
-          <Select value={matterId} onValueChange={setMatterId}>
+          {/* Fixed while editing: the draft's charges belong to this matter,
+              so moving it would mean discarding and starting again. */}
+          <Select value={matterId} onValueChange={setMatterId} disabled={Boolean(draft)}>
             <SelectTrigger id="invoice-matter" className="min-h-11 w-full">
               <SelectValue placeholder="Choose a matter" />
             </SelectTrigger>
@@ -251,6 +311,11 @@ export default function InvoiceComposer({
               ))}
             </SelectContent>
           </Select>
+          {draft && (
+            <p className="text-xs text-muted-foreground">
+              Discard this draft to bill a different matter.
+            </p>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -260,13 +325,13 @@ export default function InvoiceComposer({
               id="invoice-issue-date"
               type="date"
               value={issueDate}
-              onChange={event => setIssueDate(event.target.value)}
+              onChange={event => changeIssueDate(event.target.value)}
               className="min-h-11"
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="invoice-terms">Payment terms</Label>
-            <Select value={term} onValueChange={value => setTerm(value as InvoiceTerm)}>
+            <Select value={term} onValueChange={value => changeTerm(value as InvoiceTerm | 'custom')}>
               <SelectTrigger id="invoice-terms" className="min-h-11 w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -274,6 +339,9 @@ export default function InvoiceComposer({
                 {invoiceTerms.map(value => (
                   <SelectItem key={value} value={value}>{invoiceTermLabels[value]}</SelectItem>
                 ))}
+                {/* Only ever reachable on a draft saved with a due date that
+                    matches no term — offered so it can be kept, not chosen. */}
+                {term === 'custom' && <SelectItem value="custom">Custom</SelectItem>}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Due {dueDate}</p>
@@ -381,6 +449,17 @@ export default function InvoiceComposer({
           />
         </div>
 
+        {draft && draft.orphanedLineCount > 0 && (
+          <p
+            role="status"
+            className="rounded-md border border-amber-border bg-amber-bg px-3 py-2 text-xs text-amber"
+          >
+            {draft.orphanedLineCount} line{draft.orphanedLineCount === 1 ? '' : 's'} on this draft
+            {draft.orphanedLineCount === 1 ? ' refers' : ' refer'} to a charge that has since been
+            deleted. Saving will drop {draft.orphanedLineCount === 1 ? 'it' : 'them'}.
+          </p>
+        )}
+
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </CardContent>
     </Card>
@@ -413,14 +492,18 @@ export default function InvoiceComposer({
   return (
     <AdminPageShell className="mx-auto w-full max-w-[1440px]">
       <PageHeader
-        title="New invoice"
-        description="Group a matter’s open charges into one bill, then issue and email it."
+        title={draft ? 'Edit draft invoice' : 'New invoice'}
+        description={
+          draft
+            ? 'Change the charges, dates or wording. Nothing has been sent yet.'
+            : 'Group a matter’s open charges into one bill, then issue and email it.'
+        }
         actions={
           <>
             <Button asChild variant="ghost" className="min-h-11">
-              <Link href="/admin/billing">
+              <Link href={draft ? `/admin/billing/invoices/${draft.invoiceId}` : '/admin/billing'}>
                 <ArrowLeft className="size-4" aria-hidden />
-                Back to billing
+                {draft ? 'Back to invoice' : 'Back to billing'}
               </Link>
             </Button>
             <Button
@@ -431,7 +514,7 @@ export default function InvoiceComposer({
               onClick={() => void submit('draft')}
             >
               <Save className="size-4" aria-hidden />
-              {saving === 'draft' ? 'Saving…' : 'Save draft'}
+              {saving === 'draft' ? 'Saving…' : draft ? 'Save changes' : 'Save draft'}
             </Button>
             <Button
               type="button"
