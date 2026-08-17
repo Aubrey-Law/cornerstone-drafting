@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { loadFirmSettings } from '@/lib/firmSettings'
+import { isPaymentProcessorConfigured } from '@/lib/payments'
 import { fetchInvoice } from '@/lib/queries/invoices'
 import { getCachedClaims } from '@/lib/supabaseServer'
 import InvoiceDetailClient from './InvoiceDetailClient'
@@ -27,6 +28,7 @@ export default async function InvoiceDetailPage({
   return (
     <InvoiceDetailClient
       invoice={invoice}
+      paymentsEnabled={isPaymentProcessorConfigured()}
       firm={{
         name: firm.firmName,
         remitTo: [firm.firmName, firm.street, cityStateZip, firm.phone, firm.email]

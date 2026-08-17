@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Ban, Banknote, Bell, Download, Send } from 'lucide-react'
+import { ArrowLeft, Ban, Banknote, Bell, CreditCard, Download, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
@@ -39,15 +39,18 @@ const methodLabels: Record<BillingPaymentMethod, string> = {
 export default function InvoiceDetailClient({
   invoice,
   firm,
+  paymentsEnabled,
 }: {
   invoice: InvoiceDetail
   firm: { name: string; remitTo: string }
+  /** False when no processor is configured, which hides online payment entirely. */
+  paymentsEnabled: boolean
 }) {
   const router = useRouter()
   const token = useAccessToken()
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [voidOpen, setVoidOpen] = useState(false)
-  const [busy, setBusy] = useState<'payment' | 'void' | 'send' | 'reminder' | null>(null)
+  const [busy, setBusy] = useState<'payment' | 'void' | 'send' | 'reminder' | 'checkout' | null>(null)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const voidOpenerRef = useRef<HTMLElement | null>(null)
 
@@ -142,6 +145,28 @@ export default function InvoiceDetailClient({
     }
   }
 
+  /**
+   * Opens a hosted checkout and stores its link on the invoice, which is what
+   * puts a Pay button on the next email and in the client's portal.
+   */
+  async function createPayLink() {
+    setBusy('checkout')
+    try {
+      const json = await post(`/api/admin/billing/invoices/${invoice.id}/checkout`) as
+        { checkoutUrl?: string }
+      toast.success(
+        json.checkoutUrl
+          ? 'Payment link created — it now prints on the invoice and shows in the portal'
+          : 'Payment link created',
+      )
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create a payment link')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function download() {
     if (!documentId) return
     try {
@@ -207,6 +232,18 @@ export default function InvoiceDetailClient({
                   >
                     <Bell className="size-4" aria-hidden />
                     {busy === 'reminder' ? 'Sending…' : 'Send reminder'}
+                  </Button>
+                )}
+                {paymentsEnabled && invoice.balance > 0 && !invoice.paymentLink && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11"
+                    disabled={busy !== null}
+                    onClick={() => void createPayLink()}
+                  >
+                    <CreditCard className="size-4" aria-hidden />
+                    {busy === 'checkout' ? 'Creating…' : 'Create pay link'}
                   </Button>
                 )}
                 {invoice.balance > 0 && (
