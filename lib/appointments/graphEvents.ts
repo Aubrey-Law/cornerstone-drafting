@@ -162,6 +162,10 @@ export interface OutlookCalendarEvent {
   isAllDay: boolean
   /** Outlook free/busy status: free | tentative | busy | oof | workingElsewhere. */
   showAs: string
+  /** Graph id of the mailbox calendar the event lives on. */
+  calendarId?: string | null
+  /** Display name of that calendar ("Calendar", "Court dates", a shared one…). */
+  calendarName?: string | null
 }
 
 export interface OutlookAttendee {
@@ -207,6 +211,9 @@ interface RawGraphViewEvent {
   showAs?: string
   start?: { dateTime?: string }
   end?: { dateTime?: string }
+  /** Injected by listCalendarView — Graph does not return these on calendarView. */
+  calendarId?: string
+  calendarName?: string
 }
 
 /** Graph returns naive datetimes in the requested zone (we request UTC). */
@@ -218,58 +225,147 @@ function graphDateTimeToIso(value: string | undefined): string | null {
 }
 
 /**
- * Map a Graph calendarView page to calendar events, dropping cancelled
- * events and any event that IS a Cornerstone appointment (those render from
- * the appointments table — excluding them here prevents duplicates).
+ * Map Graph calendarView items (across every mailbox calendar) to calendar
+ * events, dropping cancelled events and any event that IS a Cornerstone
+ * appointment (those render from the appointments table — excluding them here
+ * prevents duplicates). Duplicate ids are collapsed: an event that lives on
+ * two calendars the mailbox can see is still one event.
  */
 export function mapGraphCalendarView(
   raw: unknown,
   excludeEventIds: ReadonlySet<string>,
 ): OutlookCalendarEvent[] {
   if (!Array.isArray(raw)) return []
-  const events: OutlookCalendarEvent[] = []
+  const byId = new Map<string, OutlookCalendarEvent>()
   for (const item of raw as RawGraphViewEvent[]) {
     if (!item || typeof item !== 'object' || !item.id) continue
     if (item.isCancelled) continue
     if (excludeEventIds.has(item.id)) continue
     if (item.seriesMasterId && excludeEventIds.has(item.seriesMasterId)) continue
+    if (byId.has(item.id)) continue
     const startIso = graphDateTimeToIso(item.start?.dateTime)
     const endIso = graphDateTimeToIso(item.end?.dateTime)
     if (!startIso || !endIso) continue
-    events.push({
+    byId.set(item.id, {
       id: item.id,
       subject: item.subject?.trim() || '(no subject)',
       startIso,
       endIso,
       isAllDay: Boolean(item.isAllDay),
       showAs: item.showAs ?? 'busy',
+      calendarId: item.calendarId ?? null,
+      calendarName: item.calendarName?.trim() || null,
     })
   }
-  return events.sort((a, b) => a.startIso.localeCompare(b.startIso))
+  return [...byId.values()].sort((a, b) => a.startIso.localeCompare(b.startIso))
 }
 
-const CALENDAR_VIEW_MAX_PAGES = 3
+export interface OutlookEventTimes {
+  id: string
+  startIso: string
+  endIso: string
+  isCancelled: boolean
+}
 
 /**
- * The attorney's Outlook calendar for a range (raw Graph events, UTC).
- * Follows up to a few nextLink pages; throws when Outlook is unreachable
- * or not connected.
+ * Index raw Graph calendarView items by event id for reconciliation.
+ *
+ * Unlike `mapGraphCalendarView` this keeps cancelled events and Cornerstone's
+ * own bookings — those are exactly the rows the appointments table needs to be
+ * told about. Recurring instances are indexed under their series master id too,
+ * so a Cornerstone booking that Outlook turned into a series still resolves.
  */
-export async function listCalendarView(fromIso: string, toIso: string): Promise<unknown[]> {
+export function mapGraphEventTimes(raw: unknown): Map<string, OutlookEventTimes> {
+  const byId = new Map<string, OutlookEventTimes>()
+  if (!Array.isArray(raw)) return byId
+  for (const item of raw as RawGraphViewEvent[]) {
+    if (!item || typeof item !== 'object' || !item.id) continue
+    const startIso = graphDateTimeToIso(item.start?.dateTime)
+    const endIso = graphDateTimeToIso(item.end?.dateTime)
+    if (!startIso || !endIso) continue
+    const times: OutlookEventTimes = {
+      id: item.id,
+      startIso,
+      endIso,
+      isCancelled: Boolean(item.isCancelled),
+    }
+    byId.set(item.id, times)
+    // A series master resolves to its earliest occurrence in range, which is
+    // the instance a Cornerstone booking turned into a series would match.
+    if (item.seriesMasterId) {
+      const current = byId.get(item.seriesMasterId)
+      if (!current || startIso < current.startIso) {
+        byId.set(item.seriesMasterId, { ...times, id: item.seriesMasterId })
+      }
+    }
+  }
+  return byId
+}
+
+const CALENDAR_VIEW_MAX_PAGES = 10
+const CALENDAR_VIEW_PAGE_SIZE = 200
+const MAX_CALENDARS = 50
+const CALENDAR_VIEW_SELECT = 'id,seriesMasterId,subject,isAllDay,isCancelled,showAs,start,end'
+
+/** One calendar in the connected mailbox. */
+export interface OutlookCalendarRef {
+  id: string
+  name: string
+  isDefault: boolean
+}
+
+export interface CalendarViewResult {
+  /** Raw Graph events, each tagged with the calendar it came from. */
+  raw: unknown[]
+  /** Calendars actually read, default calendar first. */
+  calendars: OutlookCalendarRef[]
+  /** True when a calendar had more pages than we read — events were left out. */
+  truncated: boolean
+}
+
+/**
+ * Every calendar in the connected mailbox, default first. Includes secondary
+ * and added/shared calendars, which `/me/calendarView` alone never returns.
+ */
+export async function listMailboxCalendars(): Promise<OutlookCalendarRef[]> {
   const conn = await getMicrosoftConnectionForUser(null)
   if (!conn) throw new Error('Microsoft Outlook is not connected')
   const token = await getAccessToken(conn.user_id)
+  return fetchMailboxCalendars(token)
+}
 
+async function fetchMailboxCalendars(token: string): Promise<OutlookCalendarRef[]> {
   const params = new URLSearchParams({
-    startDateTime: fromIso,
-    endDateTime: toIso,
-    $top: '100',
-    $orderby: 'start/dateTime',
-    $select: 'id,seriesMasterId,subject,isAllDay,isCancelled,showAs,start,end',
+    $select: 'id,name,isDefaultCalendar',
+    $top: String(MAX_CALENDARS),
   })
-  let url: string | null = `${GRAPH_BASE}/me/calendarView?${params.toString()}`
-  const all: unknown[] = []
+  const r = await graphFetch(`${GRAPH_BASE}/me/calendars?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const json = (await r.json().catch(() => ({}))) as {
+    value?: Array<{ id?: string; name?: string; isDefaultCalendar?: boolean }>
+    error?: { message?: string }
+  }
+  if (!r.ok) throw new Error(json.error?.message || `Graph calendars failed (${r.status})`)
+  const calendars = (json.value ?? []).flatMap(item => {
+    if (!item?.id) return []
+    return [{
+      id: item.id,
+      name: item.name?.trim() || 'Calendar',
+      isDefault: Boolean(item.isDefaultCalendar),
+    }]
+  })
+  // Default first so the primary calendar's events win any id collision.
+  return calendars.sort((a, b) => Number(b.isDefault) - Number(a.isDefault))
+}
 
+/** Follow nextLink pages for one calendarView URL. */
+async function fetchCalendarViewPages(
+  token: string,
+  firstUrl: string,
+): Promise<{ items: unknown[]; truncated: boolean }> {
+  let url: string | null = firstUrl
+  const items: unknown[] = []
   for (let page = 0; url && page < CALENDAR_VIEW_MAX_PAGES; page++) {
     const r = await graphFetch(url, {
       headers: {
@@ -285,11 +381,107 @@ export async function listCalendarView(fromIso: string, toIso: string): Promise<
     if (!r.ok) {
       throw new Error(json.error?.message || `Graph calendarView failed (${r.status})`)
     }
-    all.push(...(json.value ?? []))
+    items.push(...(json.value ?? []))
     url = json['@odata.nextLink'] ?? null
   }
+  return { items, truncated: Boolean(url) }
+}
 
-  return all
+function calendarViewUrl(calendarId: string | null, fromIso: string, toIso: string): string {
+  const params = new URLSearchParams({
+    startDateTime: fromIso,
+    endDateTime: toIso,
+    $top: String(CALENDAR_VIEW_PAGE_SIZE),
+    $orderby: 'start/dateTime',
+    $select: CALENDAR_VIEW_SELECT,
+  })
+  const base = calendarId
+    ? `${GRAPH_BASE}/me/calendars/${encodeURIComponent(calendarId)}/calendarView`
+    : `${GRAPH_BASE}/me/calendarView`
+  return `${base}?${params.toString()}`
+}
+
+/**
+ * The attorney's Outlook events for a range across **every** calendar in the
+ * mailbox (raw Graph events, UTC), each tagged with its calendar id and name.
+ * Throws when Outlook is unreachable or not connected; falls back to the
+ * default calendar alone if the mailbox's calendar list cannot be read.
+ */
+export async function listCalendarView(
+  fromIso: string,
+  toIso: string,
+): Promise<CalendarViewResult> {
+  const conn = await getMicrosoftConnectionForUser(null)
+  if (!conn) throw new Error('Microsoft Outlook is not connected')
+  const token = await getAccessToken(conn.user_id)
+
+  let calendars: OutlookCalendarRef[]
+  try {
+    calendars = await fetchMailboxCalendars(token)
+  } catch (err) {
+    // Degrade to the primary calendar rather than losing the view entirely.
+    console.error('[appointments] could not list mailbox calendars', err)
+    const { items, truncated } = await fetchCalendarViewPages(
+      token,
+      calendarViewUrl(null, fromIso, toIso),
+    )
+    return { raw: items, calendars: [], truncated }
+  }
+  if (calendars.length === 0) {
+    const { items, truncated } = await fetchCalendarViewPages(
+      token,
+      calendarViewUrl(null, fromIso, toIso),
+    )
+    return { raw: items, calendars: [], truncated }
+  }
+
+  const pages = await Promise.all(
+    calendars.map(async calendar => {
+      const { items, truncated } = await fetchCalendarViewPages(
+        token,
+        calendarViewUrl(calendar.id, fromIso, toIso),
+      )
+      return {
+        truncated,
+        items: items.map(item =>
+          item && typeof item === 'object'
+            ? { ...(item as Record<string, unknown>), calendarId: calendar.id, calendarName: calendar.name }
+            : item,
+        ),
+      }
+    }),
+  )
+
+  return {
+    raw: pages.flatMap(page => page.items),
+    calendars,
+    truncated: pages.some(page => page.truncated),
+  }
+}
+
+/**
+ * Look one Outlook event up directly. Returns null when Outlook no longer has
+ * it (404) — that is how a delete made in Outlook is detected, as opposed to
+ * an event that merely moved out of the range being viewed.
+ */
+export async function getCalendarEventTimes(eventId: string): Promise<OutlookEventTimes | null> {
+  const conn = await getMicrosoftConnectionForUser(null)
+  if (!conn) throw new Error('Microsoft Outlook is not connected')
+  const token = await getAccessToken(conn.user_id)
+  const params = new URLSearchParams({ $select: 'id,isCancelled,start,end' })
+  const r = await graphFetch(
+    `${GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC"' } },
+  )
+  if (r.status === 404) return null
+  const json = (await r.json().catch(() => ({}))) as RawGraphViewEvent & {
+    error?: { message?: string }
+  }
+  if (!r.ok) throw new Error(json.error?.message || `Graph event lookup failed (${r.status})`)
+  const startIso = graphDateTimeToIso(json.start?.dateTime)
+  const endIso = graphDateTimeToIso(json.end?.dateTime)
+  if (!startIso || !endIso) return null
+  return { id: eventId, startIso, endIso, isCancelled: Boolean(json.isCancelled) }
 }
 
 /** Delete the Outlook event — Outlook sends the cancellation to the attendee. */

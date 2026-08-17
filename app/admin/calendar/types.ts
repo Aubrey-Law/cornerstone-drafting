@@ -42,6 +42,16 @@ export interface OutlookEvent {
   endIso: string
   isAllDay: boolean
   showAs: string
+  /** Which mailbox calendar the event came from (null for local previews). */
+  calendarId?: string | null
+  calendarName?: string | null
+}
+
+/** One synced Outlook calendar, as reported by the outlook-events route. */
+export interface OutlookCalendarRef {
+  id: string
+  name: string
+  isDefault: boolean
 }
 
 export interface CalendarAction {

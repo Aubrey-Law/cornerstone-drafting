@@ -6,7 +6,7 @@ vi.mock('@/lib/microsoftCalendar', () => ({
   getMicrosoftConnectionForUser: vi.fn(),
 }))
 
-import { mapGraphCalendarView } from '@/lib/appointments/graphEvents'
+import { mapGraphCalendarView, mapGraphEventTimes } from '@/lib/appointments/graphEvents'
 
 const NONE = new Set<string>()
 
@@ -74,5 +74,76 @@ describe('mapGraphCalendarView', () => {
     expect(events.map(e => e.id)).toEqual(['early', 'late'])
     expect(mapGraphCalendarView(null, NONE)).toEqual([])
     expect(mapGraphCalendarView({ value: [] }, NONE)).toEqual([])
+  })
+})
+
+describe('mapGraphCalendarView calendar attribution', () => {
+  it('carries the calendar each event came from', () => {
+    const [event] = mapGraphCalendarView(
+      [rawEvent({ calendarId: 'cal-court', calendarName: '  Court dates  ' })],
+      NONE,
+    )
+    expect(event).toMatchObject({ calendarId: 'cal-court', calendarName: 'Court dates' })
+  })
+
+  it('nulls the calendar when Graph gave none', () => {
+    const [event] = mapGraphCalendarView([rawEvent()], NONE)
+    expect(event).toMatchObject({ calendarId: null, calendarName: null })
+  })
+
+  it('keeps one copy of an event visible on two calendars, preferring the first', () => {
+    const events = mapGraphCalendarView(
+      [
+        rawEvent({ calendarId: 'cal-default', calendarName: 'Calendar' }),
+        rawEvent({ calendarId: 'cal-shared', calendarName: 'Shared' }),
+      ],
+      NONE,
+    )
+    expect(events).toHaveLength(1)
+    expect(events[0].calendarName).toBe('Calendar')
+  })
+})
+
+describe('mapGraphEventTimes', () => {
+  it('indexes every event by id, including Cornerstone-managed ones', () => {
+    const times = mapGraphEventTimes([rawEvent({ id: 'ev-a' }), rawEvent({ id: 'ev-b' })])
+    expect([...times.keys()].sort()).toEqual(['ev-a', 'ev-b'])
+    expect(times.get('ev-a')).toEqual({
+      id: 'ev-a',
+      startIso: '2026-08-10T14:00:00.000Z',
+      endIso: '2026-08-10T15:00:00.000Z',
+      isCancelled: false,
+    })
+  })
+
+  it('keeps cancelled events so the appointment row can be cancelled too', () => {
+    const times = mapGraphEventTimes([rawEvent({ isCancelled: true })])
+    expect(times.get('ev-1')?.isCancelled).toBe(true)
+  })
+
+  it('resolves a series master to its earliest occurrence, whatever the order', () => {
+    const times = mapGraphEventTimes([
+      rawEvent({
+        id: 'ev-instance-2',
+        seriesMasterId: 'ev-master',
+        start: { dateTime: '2026-08-17T14:00:00' },
+        end: { dateTime: '2026-08-17T15:00:00' },
+      }),
+      rawEvent({ id: 'ev-instance-1', seriesMasterId: 'ev-master' }),
+    ])
+    expect(times.get('ev-master')).toMatchObject({
+      id: 'ev-master',
+      startIso: '2026-08-10T14:00:00.000Z',
+    })
+    expect(times.get('ev-instance-2')?.startIso).toBe('2026-08-17T14:00:00.000Z')
+  })
+
+  it('skips entries without an id or with unparseable times', () => {
+    const times = mapGraphEventTimes([
+      rawEvent({ id: undefined }),
+      rawEvent({ id: 'ev-bad', start: { dateTime: 'garbage' } }),
+    ])
+    expect(times.size).toBe(0)
+    expect(mapGraphEventTimes(null).size).toBe(0)
   })
 })

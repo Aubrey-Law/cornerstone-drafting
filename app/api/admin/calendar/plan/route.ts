@@ -54,10 +54,8 @@ export async function GET(req: NextRequest) {
     const exclude = new Set(
       appointments.map(row => row.microsoft_event_id).filter((id): id is string => Boolean(id)),
     )
-    const outlook = mapGraphCalendarView(
-      await listCalendarView(rangeFrom.toISOString(), rangeTo.toISOString()),
-      exclude,
-    )
+    const view = await listCalendarView(rangeFrom.toISOString(), rangeTo.toISOString())
+    const outlook = mapGraphCalendarView(view.raw, exclude)
     workEvents.push(...outlook
       .filter(event => !event.isAllDay)
       .map(event => ({ startIso: event.startIso, endIso: event.endIso, kind: 'internal' as const })))

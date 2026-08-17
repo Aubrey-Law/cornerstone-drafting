@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
-import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
+import {
+  listCalendarView,
+  mapGraphCalendarView,
+  mapGraphEventTimes,
+} from '@/lib/appointments/graphEvents'
+import {
+  reconcileAppointmentsFromOutlook,
+  type ReconcilableAppointment,
+} from '@/lib/appointments/outlookReconcile'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
@@ -10,8 +18,15 @@ const MAX_RANGE_DAYS = 45
 const DAY_MS = 86_400_000
 
 /**
- * The attorney's Outlook events for a calendar range, minus events that are
- * Cornerstone appointments (those render from the appointments table).
+ * The attorney's Outlook events for a calendar range, across every calendar in
+ * the mailbox, minus events that are Cornerstone appointments (those render
+ * from the appointments table).
+ *
+ * This is also where the inbound half of the two-way sync runs: before the
+ * overlay is built, moves and deletions made in Outlook are mirrored onto the
+ * matching appointment rows, so the app never shows a booking at a time Outlook
+ * has already abandoned.
+ *
  * Outlook problems degrade to `connected: false` — the calendar still works.
  */
 export async function GET(req: NextRequest) {
@@ -31,30 +46,45 @@ export async function GET(req: NextRequest) {
   const fromIso = new Date(from).toISOString()
   const toIso = new Date(to).toISOString()
 
-  // Event ids of Cornerstone bookings in range → excluded from the overlay.
+  // Cornerstone bookings in range: excluded from the overlay, and the rows the
+  // inbound sync reconciles against Outlook.
   const { data } = await getAdminClient()
     .from('appointments')
-    .select('microsoft_event_id')
+    .select('id, start_time, end_time, status, microsoft_event_id')
     .gte('start_time', fromIso)
     .lt('start_time', toIso)
     .not('microsoft_event_id', 'is', null)
+  const managed = (data ?? []) as ReconcilableAppointment[]
   const exclude = new Set(
-    ((data ?? []) as { microsoft_event_id: string | null }[])
-      .map(r => r.microsoft_event_id)
-      .filter((id): id is string => Boolean(id)),
+    managed.map(row => row.microsoft_event_id).filter((id): id is string => Boolean(id)),
   )
 
   try {
-    const raw = await listCalendarView(fromIso, toIso)
+    const view = await listCalendarView(fromIso, toIso)
+
+    let synced = { moved: 0, cancelled: 0, failed: 0 }
+    try {
+      synced = await reconcileAppointmentsFromOutlook(managed, mapGraphEventTimes(view.raw))
+    } catch (e) {
+      // Reconciliation is best-effort; the overlay still renders without it.
+      console.error('[appointments] outlook reconciliation failed', e)
+    }
+
     return NextResponse.json({
       connected: true,
-      events: mapGraphCalendarView(raw, exclude),
+      events: mapGraphCalendarView(view.raw, exclude),
+      calendars: view.calendars,
+      truncated: view.truncated,
+      synced,
     })
   } catch (e) {
     console.error('[appointments] outlook calendarView failed', e)
     return NextResponse.json({
       connected: false,
       events: [],
+      calendars: [],
+      truncated: false,
+      synced: { moved: 0, cancelled: 0, failed: 0 },
       error: e instanceof Error ? e.message : 'Outlook is unreachable',
     })
   }
