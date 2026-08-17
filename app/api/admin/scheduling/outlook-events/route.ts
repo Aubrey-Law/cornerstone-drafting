@@ -13,6 +13,10 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+// Reading Outlook can take several Graph round-trips; the platform default is
+// short enough that a slow mailbox would be killed mid-read and surface as
+// "not connected".
+export const maxDuration = 30
 
 const MAX_RANGE_DAYS = 45
 const DAY_MS = 86_400_000
@@ -75,6 +79,7 @@ export async function GET(req: NextRequest) {
       events: mapGraphCalendarView(view.raw, exclude),
       calendars: view.calendars,
       truncated: view.truncated,
+      skipped: view.skipped,
       synced,
     })
   } catch (e) {
@@ -84,6 +89,7 @@ export async function GET(req: NextRequest) {
       events: [],
       calendars: [],
       truncated: false,
+      skipped: [],
       synced: { moved: 0, cancelled: 0, failed: 0 },
       error: e instanceof Error ? e.message : 'Outlook is unreachable',
     })
