@@ -30,6 +30,7 @@ export interface MatterContext {
 }
 
 export const DESIGN_SHEET_IMPORT_TOOL_NAME = 'propose_design_sheet_updates'
+export const DESIGN_SHEET_STATUS_TOOL_NAME = 'read_design_sheet_status'
 
 const CHAT_MATTER_COLUMNS =
   'id, client_intake_id, matter_number, stage, status, name' as const
@@ -44,8 +45,12 @@ const CHAT_MATTER_NOTE_COLUMNS =
   'created_at, note_type, body' as const
 const CHAT_MATTER_DETAILS_COLUMNS =
   'practice_area, legal_plan, legal_plan_id, legal_plan_type, legal_plan_service_start, legal_plan_service_end, ep_plan_category, plan_type' as const
+// `decisions` and the will-provision columns are here so the assistant can see
+// the provisions at all. Without them it saw ~20 of ~200 fields — every trust,
+// DPOA and health-care decision was invisible, so it could neither report what
+// was missing nor avoid re-asking what was already settled.
 const CHAT_DESIGN_SHEET_COLUMNS =
-  'status, plan_type, trust_name, is_joint, client_name, spouse_name, children, assets, goals_notes, concerns, excluded_guardian_flag, excluded_guardian_name, trustee_slots, executor_slots, poa_slots, hcp_slots, guardian_slots, spouse_trustee_slots, spouse_executor_slots, spouse_poa_slots, spouse_hcp_slots' as const
+  'status, plan_type, trust_name, is_joint, client_name, spouse_name, marital_status, county, children, assets, goals_notes, concerns, excluded_guardian_flag, excluded_guardian_name, trustee_slots, executor_slots, poa_slots, hcp_slots, guardian_slots, spouse_trustee_slots, spouse_executor_slots, spouse_poa_slots, spouse_hcp_slots, decisions, bond, supervision, utma_age, no_contest_clause, pr_structure, trustee_structure, beneficiary_structure, age_distribution_schedule, simultaneous_death, distribution_age, restatement, trust_protector' as const
 
 export async function generalSystemPrompt() {
   const firm = getFirmConfig()
@@ -157,7 +162,9 @@ export async function loadMatterContext(contextId: string): Promise<MatterContex
   const practiceArea = (details?.practice_area ?? pipeline?.practice_area ?? '') as string
   const legalPlan = (details?.legal_plan ?? '') as string
 
-  const designSheetImportNote = `\n\nDESIGN SHEET IMPORT TOOL: If the attorney asks to import, map, fill, update, or extract design-sheet fields from pasted or typed design-sheet text, call the \`${DESIGN_SHEET_IMPORT_TOOL_NAME}\` tool with the raw text they provided. The tool only proposes updates for attorney review; it never saves design-sheet data. Do not claim anything was saved unless the attorney uses the review flow.`
+  const designSheetImportNote = `\n\nDESIGN SHEET IMPORT TOOL: If the attorney asks to import, map, fill, update, or extract design-sheet fields from pasted or typed design-sheet text, call the \`${DESIGN_SHEET_IMPORT_TOOL_NAME}\` tool with the raw text they provided. The tool only proposes updates for attorney review; it never saves design-sheet data. Do not claim anything was saved unless the attorney uses the review flow.
+
+DESIGN SHEET STATUS TOOL: Call \`${DESIGN_SHEET_STATUS_TOOL_NAME}\` whenever the attorney asks what a design sheet still needs, what is blocking drafting, or before running any design-sheet interview. It returns the required and optional items that are still open. Ask only about what it reports as open — the provisions already decided are listed in the design sheet context above, and re-asking them wastes the attorney's time.`
   const draftingSummaryNote = await draftingSkillSummaryInstructions()
   const trustIntakeNote = await trustDraftingIntakeInstructions()
   const incapacityIntakeNote = await incapacityDesignSheetInstructions()

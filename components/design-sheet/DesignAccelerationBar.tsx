@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, WandSparkles } from 'lucide-react'
+import { ChevronDown, Sparkles, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -31,6 +31,10 @@ export interface DesignAccelerationBarProps {
   documentInclusions: DesignDocumentInclusions
   attorneyPreset: AttorneyDesignPreset | null
   onAttorneyPresetChange: (preset: AttorneyDesignPreset) => void
+  /** How many required fields still gate Generate, for the button's badge. */
+  blockingCount?: number
+  /** Opens the proposal review. Omitted when the workspace has no dialog mounted. */
+  onAutofill?: () => void
 }
 
 export function DesignAccelerationBar({
@@ -39,6 +43,8 @@ export function DesignAccelerationBar({
   documentInclusions,
   attorneyPreset,
   onAttorneyPresetChange,
+  blockingCount = 0,
+  onAutofill,
 }: DesignAccelerationBarProps) {
   const [presetDialogOpen, setPresetDialogOpen] = useState(false)
   const [overwritePresetConflicts, setOverwritePresetConflicts] = useState(false)
@@ -170,7 +176,23 @@ export function DesignAccelerationBar({
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center">
+      <div className="flex items-center gap-2">
+        {onAutofill && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={onAutofill}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Complete sheet
+            {blockingCount > 0 && (
+              <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                {blockingCount}
+              </span>
+            )}
+          </Button>
+        )}
         {shortcutsMenu}
       </div>
     </>

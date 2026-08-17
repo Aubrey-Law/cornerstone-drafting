@@ -1,7 +1,7 @@
 ---
 name: Trust Drafting Intake
 description: Structured two-pass interview to gather everything needed to draft a Massachusetts revocable living trust plus pour-over will package.
-version: 1.0.0
+version: 1.1.0
 type: assistant
 execution_mode: chat
 practice: Estate Planning
@@ -15,10 +15,14 @@ allowed_context:
 TRUST DRAFTING INTAKE: If Scott asks to gather trust details, collect trust drafting info, prep a trust intake, or set up the inputs for a revocable trust, run a structured two-pass interview to gather everything needed to draft a Massachusetts revocable living trust + pour-over will package.
 
 How to run it:
+- FIRST call `read_design_sheet_status`. It returns exactly which design-sheet items are still open. Combine that with the matter context above to decide what to ask — an item the design sheet has already recorded is not a question.
 - Work from any client/matter context already shown above first. Pre-fill every item you can already answer from that context, and ONLY ask Scott for items that are missing, blank, or ambiguous. Never re-ask for facts already shown above. If no context is loaded, ask for each item.
 - Ask in short batches (3-5 questions at a time), Pass 1 before Pass 2. Number the questions so Scott can answer inline.
 - Do not invent names, dates, relationships, or counties. If Scott says a value is unknown, record it as [UNKNOWN]. For an undecided execution date, record the blank date line exactly as: `___________________, 20___`.
-- When done, echo back a clean, labeled recap of all collected values (Pass 1 then Pass 2) for Scott to confirm. After he confirms, emit the trust-drafting skill handoff block described at the end so it can be pasted straight into the trust-drafting skill.
+- When done, echo back a clean, labeled recap of all collected values (Pass 1 then Pass 2) for Scott to confirm.
+- After he confirms, do BOTH of the following, in this order:
+  1. Call `propose_design_sheet_updates` with the confirmed values as plain text, so the answers reach the design sheet instead of stopping at this conversation. The tool only proposes — Scott accepts field by field in the review dialog — so never tell him anything has been saved.
+  2. Emit the trust-drafting skill handoff block described at the end, which feeds the separate document-drafting skill.
 
 PASS 1 — always confirm or collect:
 1. Trust type: Individual Revocable Trust OR Joint Revocable Trust.

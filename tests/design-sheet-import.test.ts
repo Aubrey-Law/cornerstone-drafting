@@ -356,7 +356,7 @@ describe('legacy inheritance-structure migration', () => {
 })
 
 describe('design sheet import UI source', () => {
-  it('shared dialog posts DOCX imports and saves accepted fields with current sheet context', () => {
+  it('shared dialog reads a DOCX and saves accepted fields through apply-proposal', () => {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'components/design-sheet/DesignSheetImportDialog.tsx'),
       'utf8',
@@ -364,12 +364,20 @@ describe('design sheet import UI source', () => {
 
     expect(source).toContain('import-docx')
     expect(source).toContain('Accept selected')
-    expect(source).toContain('acceptedPatch')
+    expect(source).toContain('acceptedFields')
     expect(source).toContain('currentSheet')
-    expect(source).toContain('sheet: acceptedPatch')
-    expect(source).not.toContain('{ ...currentSheet, ...acceptedPatch }')
-    expect(source).toContain("method: 'PATCH'")
     expect(source).toContain('Only Word .docx documents are supported')
+
+    // Accepted values go to apply-proposal, not the generic PATCH. The generic
+    // route has no way to tell a `<namespace>.<key>` decision field from a
+    // column, and parked the one that used to come through it at
+    // decisions.<key>, where no reader ever looked.
+    expect(source).toContain('design-sheet/apply-proposal')
+    expect(source).not.toContain('sheet: acceptedPatch')
+
+    // The save is guarded, so a proposal reviewed against a stale sheet is
+    // rejected rather than written over someone else's edit.
+    expect(source).toContain('expectedUpdatedAt')
   })
 
   it('DesignSheetPage renders the shared import dialog and updates local sheet state after accept', () => {

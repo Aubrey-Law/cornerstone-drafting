@@ -53,7 +53,8 @@ describe('fast-entry workflow helpers', () => {
     }))
 
     expect(preset).toEqual({
-      version: 1,
+      version: 2,
+      decisions: {},
       fields: { bond: 'no_bond', supervision: 'unsupervised' },
     })
   })
@@ -164,5 +165,80 @@ describe('fast-entry workflow helpers', () => {
 
     expect(patch).toMatchObject({ executor_slots: trusteeSlots, poa_slots: trusteeSlots })
     expect(patch.hcp_slots).toBeUndefined()
+  })
+})
+
+/**
+ * v2 widened the preset past the ten will-provision columns to the provisions a
+ * firm actually repeats — trust, DPOA, HIPAA and PR powers, which live in the
+ * `decisions` JSONB and so need qualified names.
+ */
+describe('standards covering decision provisions', () => {
+  const decisionSheet = (decisions: Record<string, unknown> = {}) =>
+    ({ decisions } as unknown as DesignSheet)
+
+  it('captures only decisions the attorney actually set', () => {
+    // Reading through getTrustDetails would answer with a default for every
+    // unset key, capturing the whole provision set as "the standard" the first
+    // time someone saved from a barely-touched sheet.
+    const preset = buildAttorneyPreset(decisionSheet({
+      trust_details: { trustee_compensation: 'reasonable' },
+    }))
+
+    expect(preset.decisions).toEqual({ 'trust_details.trustee_compensation': 'reasonable' })
+  })
+
+  it('fills an undecided provision without calling it a conflict', () => {
+    const items = previewAttorneyPreset(decisionSheet(), {
+      version: 2,
+      fields: {},
+      decisions: { 'dpoa_provisions.coagent_serving': 'separately' },
+    })
+
+    expect(items).toEqual([{
+      field: 'dpoa_provisions.coagent_serving',
+      currentValue: undefined,
+      presetValue: 'separately',
+      conflict: false,
+    }])
+  })
+
+  it('treats a stored false as a decision worth protecting', () => {
+    const [item] = previewAttorneyPreset(
+      decisionSheet({ dpoa_provisions: { allow_delegation: false } }),
+      { version: 2, fields: {}, decisions: { 'dpoa_provisions.allow_delegation': true } },
+    )
+
+    expect(item.conflict).toBe(true)
+    expect(applyAttorneyPreset(
+      decisionSheet({ dpoa_provisions: { allow_delegation: false } }),
+      { version: 2, fields: {}, decisions: { 'dpoa_provisions.allow_delegation': true } },
+    )).toEqual({})
+  })
+
+  it('collapses accepted provisions into the decisions blob the sheet stores', () => {
+    const patch = applyAttorneyPreset(decisionSheet({ deed: { keep: 'me' } }), {
+      version: 2,
+      fields: { bond: 'no_bond' },
+      decisions: { 'will_pr_powers.allow_manage_digital_assets': true },
+    })
+
+    expect(patch.bond).toBe('no_bond')
+    expect((patch.decisions as Record<string, unknown>).will_pr_powers)
+      .toEqual({
+        allow_pay_taxes_debts_expenses: false,
+        allow_manage_digital_assets: true,
+        include_distribution_cash_or_kind: false,
+      })
+    expect((patch.decisions as Record<string, unknown>).deed).toEqual({ keep: 'me' })
+  })
+
+  it('still honours a preset saved before decisions existed', () => {
+    // Rejecting a v1 preset outright would silently retire every standard an
+    // attorney had already saved.
+    expect(applyAttorneyPreset(sheet({ bond: null }), {
+      version: 1,
+      fields: { bond: 'no_bond' },
+    })).toEqual({ bond: 'no_bond' })
   })
 })
