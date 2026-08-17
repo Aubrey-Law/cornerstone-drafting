@@ -655,6 +655,18 @@ export interface MatterDocument {
   reviewed_by?: string | null
   /** Active row in document_versions (nullable until versions migration applied). */
   current_version_id?: string | null
+  /** Attorney-created folder this document was filed into, or null for the root. */
+  folder_id?: string | null
+}
+
+/** An attorney-named folder in a matter's document workspace. */
+export interface MatterDocumentFolder {
+  id: string
+  matter_id: string
+  name: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface DocumentVersionRow {

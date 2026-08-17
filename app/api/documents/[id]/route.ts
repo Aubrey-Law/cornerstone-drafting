@@ -37,25 +37,32 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 // PATCH /api/documents/[id]
 //
-// Three modes, all attorney-only:
-//   { shared: boolean }   toggle client visibility
-//   { name: string }      rename
-//   { reviewed: boolean } informational review marker (gates nothing)
+// Four modes, all attorney-only:
+//   { shared: boolean }            toggle client visibility
+//   { name: string }               rename
+//   { reviewed: boolean }          informational review marker (gates nothing)
+//   { folderId: string | null }    move into an attorney-created folder, or back
+//                                  to the root of the workspace with null
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getBearerUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const { shared, reviewed, name } = (await req.json()) as {
+  const body = (await req.json()) as {
     shared?: boolean
     reviewed?: boolean
     name?: string
+    folderId?: string | null
   }
+  const { shared, reviewed, name } = body
 
   const isShareToggle = typeof shared === 'boolean'
   const isReviewToggle = typeof reviewed === 'boolean'
   const isRename = typeof name === 'string'
-  if (!isShareToggle && !isReviewToggle && !isRename) {
+  // `null` is the meaningful "move to root" value, so presence of the key —
+  // not truthiness — is what selects this mode.
+  const isMove = 'folderId' in body && (typeof body.folderId === 'string' || body.folderId === null)
+  if (!isShareToggle && !isReviewToggle && !isRename && !isMove) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
@@ -68,6 +75,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .eq('id', id)
     .single()
   if (loadError || !existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (isMove) {
+    const folderId = body.folderId ?? null
+    if (folderId) {
+      // A folder belongs to one matter; moving a document across matters with
+      // it would quietly relocate the file.
+      const { data: folder } = await sb
+        .from('matter_document_folders')
+        .select('id, matter_id, name')
+        .eq('id', folderId)
+        .maybeSingle()
+      if (!folder || folder.matter_id !== existing.matter_id) {
+        return NextResponse.json({ error: 'Folder not found for this matter' }, { status: 404 })
+      }
+    }
+
+    const { data, error: moveErr } = await sb
+      .from('matter_documents')
+      .update({ folder_id: folderId })
+      .eq('id', id)
+      .select(MATTER_DOCUMENT_COLUMNS)
+      .single()
+    if (moveErr) return NextResponse.json({ error: moveErr.message }, { status: 500 })
+
+    return NextResponse.json({ document: data })
+  }
 
   if (isShareToggle) {
     const wasShared = existing.shared_at !== null

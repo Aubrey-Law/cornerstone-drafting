@@ -5651,11 +5651,47 @@ export type Database = {
           },
         ]
       }
+      matter_document_folders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_document_folders_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matter_documents: {
         Row: {
           content_type: string
           created_at: string
           current_version_id: string | null
+          folder_id: string | null
           generation_engine: string | null
           generation_id: string | null
           id: string
@@ -5678,6 +5714,7 @@ export type Database = {
           content_type?: string
           created_at?: string
           current_version_id?: string | null
+          folder_id?: string | null
           generation_engine?: string | null
           generation_id?: string | null
           id?: string
@@ -5700,6 +5737,7 @@ export type Database = {
           content_type?: string
           created_at?: string
           current_version_id?: string | null
+          folder_id?: string | null
           generation_engine?: string | null
           generation_id?: string | null
           id?: string
@@ -5724,6 +5762,13 @@ export type Database = {
             columns: ["current_version_id"]
             isOneToOne: false
             referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_documents_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "matter_document_folders"
             referencedColumns: ["id"]
           },
           {

@@ -18,6 +18,10 @@ import { designSheetImportExecutor } from '@/lib/adminChat/designSheetTool'
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
 import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
 import { templateBuilderSystemPromptNote, templateBuilderToolExecutors } from '@/lib/templateBuilder/assistantTools'
+import {
+  matterKnowledgeSystemPromptNote,
+  matterKnowledgeToolExecutors,
+} from '@/lib/adminChat/matterKnowledgeTools'
 
 export const maxDuration = 120
 
@@ -82,6 +86,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
     ...workflowToolExecutors({ userId: auth.userId, email: auth.user?.email ?? null }),
     ...calendarPlanningToolExecutors(),
     ...templateBuilderToolExecutors(auth.userId),
+    // A lead is matter-owned, so its record reads by the same id.
+    ...matterKnowledgeToolExecutors({ defaultRecordId: chat.context_id }),
   ]
 
   // Mike OSS handoff convention: an attached workflow becomes a [Workflow: ...]
@@ -98,7 +104,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ chatId:
   const events: Record<string, unknown>[] = []
 
   return createAdminChatStream({
-    system: context.systemPrompt + workflowSystemPromptNote() + calendarPlanningSystemPromptNote() + templateBuilderSystemPromptNote(),
+    system: context.systemPrompt + workflowSystemPromptNote() + calendarPlanningSystemPromptNote()
+      + templateBuilderSystemPromptNote() + matterKnowledgeSystemPromptNote(),
     messages,
     tools,
     maxIterations: 6,

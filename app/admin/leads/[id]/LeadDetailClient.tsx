@@ -230,6 +230,7 @@ export function LeadDetailClient({
   const interactionLockRef = useRef(false)
   const {
     documents,
+    folders: documentFolders,
     loading: documentsLoading,
     reload: reloadDocuments,
   } = useLeadDocuments(lead.matter_id)
@@ -942,6 +943,7 @@ export function LeadDetailClient({
             <TabsContent value="documents" className="mt-4">
               <LeadDocumentsTab
                 documents={documents}
+                folders={documentFolders}
                 loading={documentsLoading}
                 matterId={lead.matter_id ?? null}
                 agreementId={activeAgreement?.id ?? null}

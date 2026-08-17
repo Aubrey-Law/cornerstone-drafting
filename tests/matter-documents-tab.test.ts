@@ -54,21 +54,41 @@ describe('matter documents tab', () => {
     expect(source).toContain('onReviewPortalUploads')
   })
 
-  it('groups into folders without writing a folder anywhere', () => {
+  it('lists derived and attorney-created folders through one resolver', () => {
     const source = readFileSync(tabPath, 'utf8')
 
-    // Folders are derived from provenance and lifecycle. The stored folder
-    // column is gone (20260806135231_drop_document_folders), so nothing here
-    // may move, promote, or persist one.
-    expect(source).toContain('documentFolderKey')
-    expect(source).toContain('DOCUMENT_FOLDERS')
+    // Derived folders (provenance + lifecycle) and stored ones
+    // (matter_document_folders, 20261001000000) share a single id space, so
+    // the tab must never reach for the derived-only key helper directly.
+    expect(source).toContain('documentFolderId')
+    expect(source).toContain('documentFolderViews')
+    expect(source).toContain('resolveFolderLabel')
     expect(source).toContain('setOpenFolder')
+    expect(source).not.toContain('documentFolderKey')
+    expect(source).not.toContain('DOCUMENT_FOLDERS')
     expect(source).not.toContain('PromoteDocumentDialog')
-    expect(source).not.toContain('Bulk move')
-    expect(source).not.toContain('updateDocumentFolder')
-    expect(source).not.toContain('doc.folder')
     expect(source).not.toContain('getDocumentShareEligibility')
     expect(source).not.toContain('visibilityFilter')
+  })
+
+  it('creates, renames, deletes folders and moves documents into them', () => {
+    const source = readFileSync(tabPath, 'utf8')
+
+    for (const helper of [
+      'createDocumentFolder',
+      'renameDocumentFolder',
+      'deleteDocumentFolder',
+      'moveDocumentToFolder',
+    ]) {
+      expect(source).toContain(helper)
+    }
+
+    for (const label of ['New folder', 'Move to folder', 'Rename folder', 'Delete folder']) {
+      expect(source).toContain(label)
+    }
+
+    // Deleting a folder must never read as deleting what is inside it.
+    expect(source).toContain('they move back to All documents')
   })
 
   it('carries the file-manager toolbar: search, filter, and sort', () => {

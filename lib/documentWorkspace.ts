@@ -1,5 +1,5 @@
 import { isPdfDocument, isWordDocument } from '@/lib/documents'
-import type { MatterDocument } from '@/types/database'
+import type { MatterDocument, MatterDocumentFolder } from '@/types/database'
 
 export type FileTypeFilter = 'all' | 'pdf' | 'word' | 'other'
 
@@ -30,10 +30,15 @@ export function isDocumentShared(doc: Pick<MatterDocument, 'shared_at'>) {
 }
 
 /**
- * File-manager folders are *derived*, not stored. `matter_documents` has no
- * folder column — it was dropped once it turned out nothing ever populated it
- * (20260806135231_drop_document_folders) — so grouping is computed from the
- * provenance and lifecycle facts the row already carries. Nothing here writes.
+ * The built-in folders are *derived*, not stored: grouping is computed from the
+ * provenance and lifecycle facts a document row already carries, so nothing has
+ * to file anything for them to be right.
+ *
+ * Derivation cannot express "Deed work" or "2026 tax returns", so the attorney
+ * can also create named folders (`matter_document_folders`, restored by
+ * 20261001000000). Those are stored, and a document carries at most one of
+ * them in `folder_id`. A stored folder wins over a derived one — see
+ * `documentFolderId`.
  */
 export const DOCUMENT_FOLDERS = [
   {
@@ -74,6 +79,68 @@ export function documentFolderKey(
 
 export function documentFolderLabel(key: DocumentFolderKey): string {
   return DOCUMENT_FOLDERS.find(folder => folder.key === key)?.label ?? 'Documents'
+}
+
+/**
+ * A folder as the workspace lists it: either one the attorney created or one
+ * derived from the documents themselves. `id` is what the UI keys on and what
+ * a move writes; `custom` says which of the two kinds it is.
+ */
+export interface DocumentFolderView {
+  id: string
+  label: string
+  description: string
+  custom: boolean
+}
+
+export function customFolderView(folder: MatterDocumentFolder): DocumentFolderView {
+  return { id: folder.id, label: folder.name, description: 'Folder you created', custom: true }
+}
+
+const DERIVED_FOLDER_VIEWS: DocumentFolderView[] = DOCUMENT_FOLDERS.map(folder => ({
+  id: folder.key,
+  label: folder.label,
+  description: folder.description,
+  custom: false,
+}))
+
+/**
+ * Every folder the root should show, attorney-created ones first — they are
+ * the ones somebody deliberately made, and burying them under three fixtures
+ * would defeat the point of creating them.
+ */
+export function documentFolderViews(folders: MatterDocumentFolder[]): DocumentFolderView[] {
+  return [
+    ...[...folders]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(customFolderView),
+    ...DERIVED_FOLDER_VIEWS,
+  ]
+}
+
+/**
+ * The single folder a document is listed under. An attorney filing a document
+ * somewhere is a decision, so it outranks anything derivation would have said —
+ * a signed client upload dragged into "Deed work" is in "Deed work".
+ */
+export function documentFolderId(
+  doc: Pick<MatterDocument, 'name' | 'source'> & {
+    generation_id?: string | null
+    folder_id?: string | null
+  },
+): string | null {
+  return doc.folder_id ?? documentFolderKey(doc)
+}
+
+/** The name to show for whichever folder `documentFolderId` returned. */
+export function resolveFolderLabel(
+  folderId: string,
+  folders: MatterDocumentFolder[],
+): string {
+  const custom = folders.find(folder => folder.id === folderId)
+  if (custom) return custom.name
+  const derived = DOCUMENT_FOLDERS.find(folder => folder.key === folderId)
+  return derived?.label ?? 'Documents'
 }
 
 /** Byte counts as a file manager shows them. */

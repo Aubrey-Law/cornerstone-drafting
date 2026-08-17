@@ -16,6 +16,10 @@ import { designSheetImportExecutor, designSheetStatusExecutor } from '@/lib/admi
 import { workflowToolExecutors, workflowSystemPromptNote } from '@/lib/adminChat/workflowTools'
 import { createLeadToolExecutor, leadSystemPromptNote } from '@/lib/adminChat/leadTools'
 import { calendarPlanningSystemPromptNote, calendarPlanningToolExecutors } from '@/lib/adminChat/calendarTools'
+import {
+  matterKnowledgeSystemPromptNote,
+  matterKnowledgeToolExecutors,
+} from '@/lib/adminChat/matterKnowledgeTools'
 
 export const maxDuration = 120
 
@@ -125,10 +129,13 @@ export async function POST(req: Request) {
       defaultLeadId: contextLeadId,
       actor: user,
     }),
+    // A lead is matter-owned, so its record reads by the same id.
+    ...matterKnowledgeToolExecutors({ defaultRecordId: contextMatterId ?? contextLeadId }),
   ]
 
   return createAdminChatStream({
-    system: context.systemPrompt + workflowSystemPromptNote() + leadSystemPromptNote() + calendarPlanningSystemPromptNote(),
+    system: context.systemPrompt + workflowSystemPromptNote() + leadSystemPromptNote()
+      + calendarPlanningSystemPromptNote() + matterKnowledgeSystemPromptNote(),
     messages: requestMessages.map(message => ({ role: message.role, content: message.content })),
     tools,
     maxIterations: 4,
