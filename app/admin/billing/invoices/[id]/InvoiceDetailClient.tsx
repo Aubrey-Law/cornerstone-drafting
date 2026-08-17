@@ -3,10 +3,11 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Ban, Banknote, Bell, CreditCard, Download, Send } from 'lucide-react'
+import { ArrowLeft, Ban, Banknote, Bell, CreditCard, Download, Pencil, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
+import { DiscardInvoiceDialog } from '@/components/billing/DiscardInvoiceDialog'
 import { InvoicePreview } from '@/components/billing/InvoicePreview'
 import { InvoiceStatusBadge } from '@/components/billing/InvoiceStatusBadge'
 import { RecordInvoicePaymentDialog } from '@/components/billing/RecordInvoicePaymentDialog'
@@ -50,11 +51,14 @@ export default function InvoiceDetailClient({
   const token = useAccessToken()
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [voidOpen, setVoidOpen] = useState(false)
+  const [discardOpen, setDiscardOpen] = useState(false)
   const [busy, setBusy] = useState<
-    'payment' | 'void' | 'send' | 'reminder' | 'checkout' | 'issue-send' | 'issue-download' | null
+    | 'payment' | 'void' | 'discard' | 'send' | 'reminder' | 'checkout'
+    | 'issue-send' | 'issue-download' | null
   >(null)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const voidOpenerRef = useRef<HTMLElement | null>(null)
+  const discardOpenerRef = useRef<HTMLElement | null>(null)
 
   const isDraft = invoice.status === 'draft'
   const isVoid = invoice.status === 'void'
@@ -65,9 +69,9 @@ export default function InvoiceDetailClient({
     setter(true)
   }
 
-  async function post(path: string, body?: unknown) {
+  async function request(method: 'POST' | 'DELETE', path: string, body?: unknown) {
     const response = await fetch(path, {
-      method: 'POST',
+      method,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -79,6 +83,10 @@ export default function InvoiceDetailClient({
       throw new Error(json.error ?? 'Something went wrong')
     }
     return json
+  }
+
+  async function post(path: string, body?: unknown) {
+    return request('POST', path, body)
   }
 
   async function recordPayment(input: {
@@ -108,6 +116,25 @@ export default function InvoiceDetailClient({
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not void the invoice')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * Deletes a draft and releases its charges. Only ever offered on a draft —
+   * an issued invoice keeps its number and is voided instead.
+   */
+  async function discard() {
+    setBusy('discard')
+    try {
+      await request('DELETE', `/api/admin/billing/invoices/${invoice.id}`)
+      setDiscardOpen(false)
+      toast.success('Draft discarded — its charges are back on the ledger')
+      router.push('/admin/billing/invoices')
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not discard the draft')
     } finally {
       setBusy(null)
     }
@@ -265,6 +292,22 @@ export default function InvoiceDetailClient({
             )}
             {isDraft && (
               <>
+                <Button asChild variant="outline" className="min-h-11">
+                  <Link href={`/admin/billing/invoices/${invoice.id}/edit`}>
+                    <Pencil className="size-4" aria-hidden />
+                    Edit
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11"
+                  disabled={busy !== null}
+                  onClick={() => rememberOpener(setDiscardOpen, discardOpenerRef)}
+                >
+                  <Trash2 className="size-4" aria-hidden />
+                  Discard
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -462,6 +505,16 @@ export default function InvoiceDetailClient({
         saving={busy === 'payment'}
         returnFocusRef={paymentOpenerRef}
         onSave={recordPayment}
+      />
+
+      <DiscardInvoiceDialog
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        lineCount={invoice.lines.length}
+        subtotalCents={invoice.subtotalCents}
+        discarding={busy === 'discard'}
+        returnFocusRef={discardOpenerRef}
+        onConfirm={discard}
       />
 
       <VoidInvoiceDialog

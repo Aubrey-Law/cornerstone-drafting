@@ -20,7 +20,7 @@ vi.mock('sonner', () => ({ toast }))
 const download = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/invoices/downloadInvoice', () => ({ downloadInvoiceDocument: download }))
 
-import InvoiceComposer from '@/app/admin/billing/invoices/new/InvoiceComposer'
+import { InvoiceComposer } from '@/components/billing/InvoiceComposer'
 
 const MATTER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const FEE_ID = '11111111-1111-4111-8111-111111111111'
@@ -57,6 +57,14 @@ function renderComposer(overrides: Partial<Parameters<typeof InvoiceComposer>[0]
       {...overrides}
     />,
   )
+}
+
+// Radix Select needs these in jsdom before its listbox will open.
+if (!HTMLElement.prototype.hasPointerCapture) {
+  Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', { value: () => false })
+}
+if (!HTMLElement.prototype.scrollIntoView) {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: () => undefined })
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -307,5 +315,146 @@ describe('InvoiceComposer', () => {
       expect(screen.getByRole('button', { name }).className).toContain('min-h-11')
     }
     expect(screen.getByLabelText('Issue date').className).toContain('min-h-11')
+  })
+
+  describe('editing a saved draft', () => {
+    const INVOICE_ID = '33333333-3333-4333-8333-333333333333'
+
+    const draft = {
+      invoiceId: INVOICE_ID,
+      issueDate: '2026-09-01',
+      dueDate: '2026-10-01',
+      notes: 'Thank you for your business.',
+      terms: null,
+      billToName: 'Marcus Chen',
+      billToEmail: 'marcus@example.com',
+      paymentLink: null,
+      orphanedLineCount: 0,
+    }
+
+    function renderEditor(overrides: Record<string, unknown> = {}) {
+      return renderComposer({
+        preselectedChargeIds: [FEE_ID],
+        draft: { ...draft, ...overrides },
+      })
+    }
+
+    it('seeds the form from the draft rather than from today', () => {
+      renderEditor()
+
+      expect(screen.getByRole('heading', { name: 'Edit draft invoice' })).toBeTruthy()
+      expect((screen.getByLabelText('Issue date') as HTMLInputElement).value).toBe('2026-09-01')
+      expect((screen.getByLabelText(/Bill to/) as HTMLInputElement).value).toBe('Marcus Chen')
+      expect((screen.getByLabelText(/Send to/) as HTMLInputElement).value)
+        .toBe('marcus@example.com')
+      expect((screen.getByLabelText(/^Notes/) as HTMLTextAreaElement).value)
+        .toBe('Thank you for your business.')
+    })
+
+    it('restores exactly the charges the draft holds, not every open charge', () => {
+      renderEditor()
+
+      expect((screen.getByLabelText('Flat fee — Joint trust package') as HTMLInputElement)
+        .getAttribute('data-state')).toBe('checked')
+      expect((screen.getByLabelText('Deed recording fee') as HTMLInputElement)
+        .getAttribute('data-state')).toBe('unchecked')
+      expect(screen.getByText('1 of 2 selected')).toBeTruthy()
+    })
+
+    it('fixes the matter, because a draft cannot move between matters', () => {
+      renderEditor()
+
+      expect(screen.getByLabelText('Matter').hasAttribute('disabled')).toBe(true)
+      expect(screen.getByText(/Discard this draft to bill a different matter/)).toBeTruthy()
+    })
+
+    it('saves changes with PATCH onto the existing invoice', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ invoice: { id: INVOICE_ID } }),
+      })
+      renderEditor()
+
+      await user.click(screen.getByLabelText('Deed recording fee'))
+      await user.click(screen.getByRole('button', { name: /Save changes/ }))
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(url).toBe(`/api/admin/billing/invoices/${INVOICE_ID}`)
+      expect(init.method).toBe('PATCH')
+      const body = JSON.parse(init.body)
+      // No matterId: the RPC cannot move an invoice, so sending one would lie.
+      expect(body.matterId).toBeUndefined()
+      expect(body.itemIds).toEqual([FEE_ID, COST_ID])
+      expect(body.issueDate).toBe('2026-09-01')
+      expect(toast.success).toHaveBeenCalledWith('Draft invoice updated')
+      expect(navigation.push).toHaveBeenCalledWith(`/admin/billing/invoices/${INVOICE_ID}`)
+    })
+
+    it('saves the edit before issuing, so the sent invoice is the edited one', async () => {
+      const user = userEvent.setup()
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ invoice: { id: INVOICE_ID } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ sent: true }),
+        })
+      renderEditor()
+
+      await user.click(screen.getByRole('button', { name: /Issue & send/ }))
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      expect(fetchMock.mock.calls[0][1].method).toBe('PATCH')
+      expect(fetchMock.mock.calls[1][0])
+        .toBe(`/api/admin/billing/invoices/${INVOICE_ID}/issue`)
+      expect(toast.success).toHaveBeenCalledWith('Invoice issued and emailed')
+    })
+
+    it('keeps a due date that matches no term instead of snapping it to Net 30', () => {
+      renderEditor({ dueDate: '2026-09-20' })
+
+      expect(screen.getByText('Due 2026-09-20')).toBeTruthy()
+      expect(screen.getByLabelText('Payment terms').textContent).toContain('Custom')
+    })
+
+    it('re-derives the due date once a real term is chosen', async () => {
+      const user = userEvent.setup()
+      renderEditor({ dueDate: '2026-09-20' })
+
+      await user.click(screen.getByLabelText('Payment terms'))
+      await user.click(screen.getByRole('option', { name: 'Net 15' }))
+
+      await waitFor(() => expect(screen.getByText('Due 2026-09-16')).toBeTruthy())
+    })
+
+    it('warns when a line points at a charge that has since been deleted', () => {
+      renderEditor({ orphanedLineCount: 1 })
+
+      expect(screen.getByRole('status').textContent)
+        .toContain('refers to a charge that has since been deleted')
+    })
+
+    it('surfaces a rejected edit without navigating away', async () => {
+      const user = userEvent.setup()
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'Only a draft invoice can be edited' }),
+      })
+      renderEditor()
+
+      await user.click(screen.getByRole('button', { name: /Save changes/ }))
+
+      await waitFor(() =>
+        expect(screen.getByRole('alert').textContent).toContain('Only a draft invoice can be edited'))
+      expect(navigation.push).not.toHaveBeenCalled()
+    })
   })
 })

@@ -4,7 +4,7 @@ import { firmTodayKey } from '@/lib/firmDate'
 import { loadFirmSettings } from '@/lib/firmSettings'
 import { fetchBillingMatterOptions } from '@/lib/queries/billing'
 import { fetchInvoiceableCharges } from '@/lib/queries/invoices'
-import InvoiceComposer from './InvoiceComposer'
+import { InvoiceComposer } from '@/components/billing/InvoiceComposer'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'New invoice' }

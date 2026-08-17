@@ -172,4 +172,66 @@ describe('issuing from the invoice detail page', () => {
     // Replaced by the post-issue actions.
     expect(screen.getByRole('button', { name: /^Send$/ })).toBeTruthy()
   })
+
+  // The RPCs behind both of these shipped with the invoice schema, but nothing
+  // in the UI called them: a draft could only be issued or abandoned in place.
+  it('links a draft to its editor', () => {
+    renderDetail()
+
+    expect(screen.getByRole('link', { name: /^Edit$/ }).getAttribute('href'))
+      .toBe('/admin/billing/invoices/inv-1/edit')
+  })
+
+  it('offers no editor once the invoice is issued', () => {
+    renderDetail({ status: 'issued', number: '2026-0004' })
+
+    expect(screen.queryByRole('link', { name: /^Edit$/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Discard$/ })).toBeNull()
+    // Void is the issued-invoice equivalent: it keeps the number on the record.
+    expect(screen.getByRole('button', { name: /^Void$/ })).toBeTruthy()
+  })
+
+  it('confirms before discarding, naming what goes back to the ledger', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: /^Discard$/ }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog.textContent).toContain('1 charge')
+    expect(dialog.textContent).toContain('$2,450.00')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('discards the draft and returns to the invoice list', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true }) })
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: /^Discard$/ }))
+    await user.click(await screen.findByRole('button', { name: /Discard draft/ }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/billing/invoices/inv-1')
+    expect(init.method).toBe('DELETE')
+    expect(navigation.push).toHaveBeenCalledWith('/admin/billing/invoices')
+  })
+
+  it('keeps the draft when the discard is refused', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: 'Only a draft invoice can be discarded' }),
+    })
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: /^Discard$/ }))
+    await user.click(await screen.findByRole('button', { name: /Discard draft/ }))
+
+    await waitFor(() => expect(toast.error)
+      .toHaveBeenCalledWith('Only a draft invoice can be discarded'))
+    expect(navigation.push).not.toHaveBeenCalled()
+  })
 })

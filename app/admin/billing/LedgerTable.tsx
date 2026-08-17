@@ -137,15 +137,15 @@ export function LedgerTable({
                 </TableCell>
                 <TableCell className="max-w-52 whitespace-normal">{row.label}</TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {row.invoiceId && row.invoiceNumber ? (
+                  {row.invoiceId ? (
+                    /* A draft has no number yet, but it still has a page — and
+                       that page is where it is edited, issued or discarded. */
                     <Link
                       href={`/admin/billing/invoices/${row.invoiceId}`}
                       className="text-xs font-medium hover:text-primary hover:underline"
                     >
-                      {row.invoiceNumber}
+                      {row.invoiceNumber ?? 'Draft'}
                     </Link>
-                  ) : row.invoiceId ? (
-                    <span className="text-xs text-muted-foreground">Draft</span>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}

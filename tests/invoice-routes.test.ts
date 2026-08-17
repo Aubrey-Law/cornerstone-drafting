@@ -142,6 +142,47 @@ describe('invoice routes', () => {
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
+  it('updates a draft through the actor-checked RPC, without moving its matter', async () => {
+    mocks.rpc.mockResolvedValue({ data: { id: INVOICE_ID }, error: null })
+
+    // matterId is deliberately sent and deliberately ignored: the RPC has no
+    // parameter for it, so an invoice cannot be moved by editing it.
+    const response = await updateInvoice(post({ ...draft, notes: 'Revised' }), context)
+
+    expect(response.status).toBe(200)
+    expect(mocks.rpc).toHaveBeenCalledWith('update_invoice_draft', {
+      p_invoice_id: INVOICE_ID,
+      p_item_ids: draft.itemIds,
+      p_issue_date: draft.issueDate,
+      p_due_date: draft.dueDate,
+      p_notes: 'Revised',
+      p_terms: null,
+      p_bill_to_name: null,
+      p_bill_to_email: null,
+      p_payment_link: null,
+      p_actor_id: USER_ID,
+    })
+  })
+
+  it('maps an edit of an already-issued invoice onto a conflict', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { code: '22023', message: 'Only a draft invoice can be edited' },
+    })
+
+    const response = await updateInvoice(post(draft), context)
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'Only a draft invoice can be edited' })
+  })
+
+  it('refuses an edit that empties the invoice', async () => {
+    const response = await updateInvoice(post({ ...draft, itemIds: [] }), context)
+
+    expect(response.status).toBe(400)
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
   it('discards a draft through the actor-checked RPC', async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: null })
 
