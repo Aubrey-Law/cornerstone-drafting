@@ -209,6 +209,34 @@ describe('InvoiceComposer', () => {
     }))
   })
 
+  it('says the download is the Word version rather than passing it off as a PDF', async () => {
+    const user = userEvent.setup()
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ invoice: { id: 'invoice-11' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sent: false,
+          pdfUnavailableReason: 'DOCX→PDF conversion is not configured.',
+          invoice: { number: '2026-0011', pdfDocumentId: null, docxDocumentId: 'doc-docx' },
+        }),
+      })
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+
+    await waitFor(() => expect(download).toHaveBeenCalled())
+    expect(toast.warning).toHaveBeenCalledWith(
+      'No PDF could be produced, so this is the Word version.',
+    )
+    expect(download.mock.calls[0][0]).toMatchObject({ documentId: 'doc-docx', isPdf: false })
+  })
+
   it('still counts the invoice as issued when the download itself fails', async () => {
     const user = userEvent.setup()
     fetchMock

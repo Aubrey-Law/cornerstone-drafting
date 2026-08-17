@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Ban, Banknote, Bell, CreditCard, Download, Pencil, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, Ban, Banknote, Bell, CreditCard, Download, FileText, Pencil, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
@@ -41,11 +41,14 @@ export default function InvoiceDetailClient({
   invoice,
   firm,
   paymentsEnabled,
+  pdfConversionEnabled,
 }: {
   invoice: InvoiceDetail
   firm: { name: string; remitTo: string }
   /** False when no processor is configured, which hides online payment entirely. */
   paymentsEnabled: boolean
+  /** Whether the DOCX→PDF worker is reachable, so a missing PDF can be retried. */
+  pdfConversionEnabled: boolean
 }) {
   const router = useRouter()
   const token = useAccessToken()
@@ -54,7 +57,7 @@ export default function InvoiceDetailClient({
   const [discardOpen, setDiscardOpen] = useState(false)
   const [busy, setBusy] = useState<
     | 'payment' | 'void' | 'discard' | 'send' | 'reminder' | 'checkout'
-    | 'issue-send' | 'issue-download' | null
+    | 'issue-send' | 'issue-download' | 'render' | null
   >(null)
   const paymentOpenerRef = useRef<HTMLElement | null>(null)
   const voidOpenerRef = useRef<HTMLElement | null>(null)
@@ -190,6 +193,7 @@ export default function InvoiceDetailClient({
       ) as {
         warning?: string
         sent?: boolean
+        pdfUnavailableReason?: string | null
         invoice?: {
           number: string | null
           pdfDocumentId: string | null
@@ -204,6 +208,11 @@ export default function InvoiceDetailClient({
       if (mode === 'download') {
         const issuedDocumentId = json.invoice?.pdfDocumentId ?? json.invoice?.docxDocumentId ?? null
         if (issuedDocumentId) {
+          // Handing over a .docx when a PDF was asked for is worth saying out
+          // loud — otherwise the difference is only visible in the file name.
+          if (!json.invoice?.pdfDocumentId && json.pdfUnavailableReason) {
+            toast.warning('No PDF could be produced, so this is the Word version.')
+          }
           await downloadInvoiceDocument({
             documentId: issuedDocumentId,
             invoiceNumber: json.invoice?.number ?? null,
@@ -238,6 +247,26 @@ export default function InvoiceDetailClient({
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create a payment link')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * Re-renders the invoice's documents. The way back from an invoice issued
+   * while the convert worker was unreachable, which keeps its Word file and no
+   * PDF until something asks for one again.
+   */
+  async function renderDocuments() {
+    setBusy('render')
+    try {
+      const json = await post(`/api/admin/billing/invoices/${invoice.id}/document`) as
+        { pdfUnavailableReason?: string | null }
+      if (json.pdfUnavailableReason) toast.warning(json.pdfUnavailableReason)
+      else toast.success('PDF generated')
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not produce the document')
     } finally {
       setBusy(null)
     }
@@ -399,10 +428,33 @@ export default function InvoiceDetailClient({
       {!invoice.pdfDocumentId && !isDraft && (
         <div
           role="status"
-          className="rounded-lg border border-amber-border bg-amber-bg px-4 py-3 text-sm text-amber"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-border bg-amber-bg px-4 py-3 text-sm text-amber"
         >
-          No PDF was produced for this invoice — the DOCX→PDF converter is not configured, so the
-          Word version was sent instead. The emailed invoice still shows every line in full.
+          <span className="min-w-0">
+            {/* Says only what is true. The old copy claimed the Word file "was
+                sent", which is wrong for an invoice issued without emailing,
+                and blamed the converter without checking whether it is up. */}
+            This invoice has no PDF — only the Word version.
+            {invoice.sentAt
+              ? ' That is what was emailed, and the email shows every line in full.'
+              : ' Downloading it gives you the Word file.'}
+            {pdfConversionEnabled
+              ? ' The converter is available now, so a PDF can be produced.'
+              : ' The DOCX→PDF converter is not configured, so no PDF can be produced yet.'}
+          </span>
+          {pdfConversionEnabled && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 shrink-0"
+              disabled={busy !== null}
+              onClick={() => void renderDocuments()}
+            >
+              <FileText className="size-4" aria-hidden />
+              {busy === 'render' ? 'Generating…' : 'Generate PDF'}
+            </Button>
+          )}
         </div>
       )}
 

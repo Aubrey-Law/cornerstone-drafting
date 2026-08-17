@@ -67,12 +67,16 @@ function invoice(overrides: Partial<InvoiceDetail> = {}): InvoiceDetail {
   }
 }
 
-function renderDetail(overrides: Partial<InvoiceDetail> = {}) {
+function renderDetail(
+  overrides: Partial<InvoiceDetail> = {},
+  options: { pdfConversionEnabled?: boolean } = {},
+) {
   return render(
     <InvoiceDetailClient
       invoice={invoice(overrides)}
       firm={{ name: 'Aubrey Law', remitTo: 'Aubrey Law · Needham, MA' }}
       paymentsEnabled={false}
+      pdfConversionEnabled={options.pdfConversionEnabled ?? false}
     />,
   )
 }
@@ -216,6 +220,84 @@ describe('issuing from the invoice detail page', () => {
     expect(url).toBe('/api/admin/billing/invoices/inv-1')
     expect(init.method).toBe('DELETE')
     expect(navigation.push).toHaveBeenCalledWith('/admin/billing/invoices')
+  })
+
+  // The banner used to hardcode "the Word version was sent instead" and blame
+  // the converter, both of which can be false.
+  it('does not claim the Word file was emailed when it never was', () => {
+    renderDetail({ status: 'issued', number: '2026-0004', sentAt: null, pdfDocumentId: null })
+
+    const banner = screen.getByRole('status')
+    expect(banner.textContent).toContain('Downloading it gives you the Word file')
+    expect(banner.textContent).not.toContain('emailed')
+  })
+
+  it('says the Word file is what went out when the invoice was emailed', () => {
+    renderDetail({
+      status: 'issued',
+      number: '2026-0004',
+      sentAt: '2026-08-17T13:00:00.000Z',
+      pdfDocumentId: null,
+    })
+
+    expect(screen.getByRole('status').textContent).toContain('That is what was emailed')
+  })
+
+  it('offers no retry, and names the cause, when the converter is down', () => {
+    renderDetail({ status: 'issued', number: '2026-0004', pdfDocumentId: null })
+
+    expect(screen.getByRole('status').textContent).toContain('not configured')
+    expect(screen.queryByRole('button', { name: /Generate PDF/ })).toBeNull()
+  })
+
+  it('offers a retry once the converter is available', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ invoice: { id: 'inv-1' }, pdfUnavailableReason: null }),
+    })
+    renderDetail(
+      { status: 'issued', number: '2026-0004', pdfDocumentId: null },
+      { pdfConversionEnabled: true },
+    )
+
+    expect(screen.getByRole('status').textContent).toContain('converter is available now')
+    await user.click(screen.getByRole('button', { name: /Generate PDF/ }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin/billing/invoices/inv-1/document')
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST')
+    expect(toast.success).toHaveBeenCalledWith('PDF generated')
+    expect(navigation.refresh).toHaveBeenCalled()
+  })
+
+  it('shows no banner at all once the invoice has a PDF', () => {
+    renderDetail({ status: 'issued', number: '2026-0004', pdfDocumentId: 'doc-pdf' })
+
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('says the download is the Word version rather than letting it pass silently', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        sent: false,
+        pdfUnavailableReason: 'DOCX→PDF conversion is not configured.',
+        invoice: { number: '2026-0004', pdfDocumentId: null, docxDocumentId: 'doc-docx' },
+      }),
+    })
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: /Issue & download/ }))
+
+    await waitFor(() => expect(download).toHaveBeenCalled())
+    expect(toast.warning).toHaveBeenCalledWith(
+      'No PDF could be produced, so this is the Word version.',
+    )
+    expect(download.mock.calls[0][0]).toMatchObject({ documentId: 'doc-docx', isPdf: false })
   })
 
   it('keeps the draft when the discard is refused', async () => {

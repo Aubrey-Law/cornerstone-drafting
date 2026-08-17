@@ -118,6 +118,12 @@ Without this key, staff can still paste notes manually in the dialog; Granola li
 | `SENTRY_AUTH_TOKEN` | Source map upload on production builds |
 | `ADMIN_EMAIL` | Default admin contact email in server helpers |
 
+`DOCX_PDF_CONVERT_URL` is only optional for invoices, which fall back to the
+Word file and say so on the invoice. Engagement agreement rendering requires
+it and fails outright without it. An invoice issued while it was unset keeps
+its Word file until **Generate PDF** is used on the invoice, which re-renders
+it once the worker is reachable.
+
 ## Optional — online invoice payment
 
 Absent by default. With `PAYMENTS_PROVIDER` unset the checkout route returns

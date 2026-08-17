@@ -245,6 +245,7 @@ export function InvoiceComposer({
         error?: string
         warning?: string
         sent?: boolean
+        pdfUnavailableReason?: string | null
         invoice?: {
           number: string | null
           pdfDocumentId: string | null
@@ -265,6 +266,11 @@ export function InvoiceComposer({
           ?? issuedJson.invoice?.docxDocumentId
           ?? null
         if (documentId) {
+          // Handing over a .docx when a PDF was asked for is worth saying out
+          // loud — otherwise the difference is only visible in the file name.
+          if (!issuedJson.invoice?.pdfDocumentId && issuedJson.pdfUnavailableReason) {
+            toast.warning('No PDF could be produced, so this is the Word version.')
+          }
           try {
             await downloadInvoiceDocument({
               documentId,
