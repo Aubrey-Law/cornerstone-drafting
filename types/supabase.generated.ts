@@ -367,29 +367,32 @@ export type Database = {
       billing_events: {
         Row: {
           actor_id: string | null
-          billing_item_id: string
+          billing_item_id: string | null
           created_at: string
           detail: string | null
           event_type: string
           id: string
+          invoice_id: string | null
           metadata: Json
         }
         Insert: {
           actor_id?: string | null
-          billing_item_id: string
+          billing_item_id?: string | null
           created_at?: string
           detail?: string | null
           event_type: string
           id?: string
+          invoice_id?: string | null
           metadata?: Json
         }
         Update: {
           actor_id?: string | null
-          billing_item_id?: string
+          billing_item_id?: string | null
           created_at?: string
           detail?: string | null
           event_type?: string
           id?: string
+          invoice_id?: string | null
           metadata?: Json
         }
         Relationships: [
@@ -398,6 +401,13 @@ export type Database = {
             columns: ["billing_item_id"]
             isOneToOne: false
             referencedRelation: "billing_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_events_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -481,6 +491,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_id: string | null
           invoiced_at: string | null
           kind: string
           label: string
@@ -497,6 +508,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          invoice_id?: string | null
           invoiced_at?: string | null
           kind: string
           label: string
@@ -513,6 +525,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          invoice_id?: string | null
           invoiced_at?: string | null
           kind?: string
           label?: string
@@ -525,6 +538,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "billing_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "billing_items_matter_id_fkey"
             columns: ["matter_id"]
@@ -575,9 +595,13 @@ export type Database = {
           billing_item_id: string
           created_at: string
           created_by: string | null
+          external_reference: string | null
           id: string
+          invoice_id: string | null
           method: string
           note: string | null
+          payment_group_id: string
+          processor_fee_cents: number
           received_at: string
         }
         Insert: {
@@ -585,9 +609,13 @@ export type Database = {
           billing_item_id: string
           created_at?: string
           created_by?: string | null
+          external_reference?: string | null
           id?: string
+          invoice_id?: string | null
           method: string
           note?: string | null
+          payment_group_id?: string
+          processor_fee_cents?: number
           received_at?: string
         }
         Update: {
@@ -595,9 +623,13 @@ export type Database = {
           billing_item_id?: string
           created_at?: string
           created_by?: string | null
+          external_reference?: string | null
           id?: string
+          invoice_id?: string | null
           method?: string
           note?: string | null
+          payment_group_id?: string
+          processor_fee_cents?: number
           received_at?: string
         }
         Relationships: [
@@ -606,6 +638,13 @@ export type Database = {
             columns: ["billing_item_id"]
             isOneToOne: false
             referencedRelation: "billing_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -1222,6 +1261,54 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_merges: {
+        Row: {
+          created_at: string
+          design_sheets_rewritten: number
+          id: string
+          loser_contact_id: string
+          loser_email: string | null
+          loser_first_name: string | null
+          loser_last_name: string | null
+          matter_links_moved: number
+          merged_by: string | null
+          messages_moved: number
+          reason: string | null
+          roles_moved: number
+          winner_contact_id: string
+        }
+        Insert: {
+          created_at?: string
+          design_sheets_rewritten?: number
+          id?: string
+          loser_contact_id: string
+          loser_email?: string | null
+          loser_first_name?: string | null
+          loser_last_name?: string | null
+          matter_links_moved?: number
+          merged_by?: string | null
+          messages_moved?: number
+          reason?: string | null
+          roles_moved?: number
+          winner_contact_id: string
+        }
+        Update: {
+          created_at?: string
+          design_sheets_rewritten?: number
+          id?: string
+          loser_contact_id?: string
+          loser_email?: string | null
+          loser_first_name?: string | null
+          loser_last_name?: string | null
+          matter_links_moved?: number
+          merged_by?: string | null
+          messages_moved?: number
+          reason?: string | null
+          roles_moved?: number
+          winner_contact_id?: string
+        }
+        Relationships: []
+      }
       contact_roles: {
         Row: {
           client_intake_id: string | null
@@ -1230,6 +1317,7 @@ export type Database = {
           for_party: string
           id: string
           is_coagent: boolean
+          matter_id: string | null
           priority: number
           role: string
         }
@@ -1240,6 +1328,7 @@ export type Database = {
           for_party?: string
           id?: string
           is_coagent?: boolean
+          matter_id?: string | null
           priority?: number
           role: string
         }
@@ -1250,6 +1339,7 @@ export type Database = {
           for_party?: string
           id?: string
           is_coagent?: boolean
+          matter_id?: string | null
           priority?: number
           role?: string
         }
@@ -1265,8 +1355,43 @@ export type Database = {
             foreignKeyName: "contact_roles_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "contact_roles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
+          },
+          {
+            foreignKeyName: "contact_roles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_roles_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_roles_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "contact_roles_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
           },
         ]
       }
@@ -1294,6 +1419,8 @@ export type Database = {
           is_us_citizen: boolean | null
           last_name: string | null
           lawmatics_contact_id: string | null
+          merged_at: string | null
+          merged_into_id: string | null
           middle_name: string | null
           parentage: string | null
           phone: string | null
@@ -1331,6 +1458,8 @@ export type Database = {
           is_us_citizen?: boolean | null
           last_name?: string | null
           lawmatics_contact_id?: string | null
+          merged_at?: string | null
+          merged_into_id?: string | null
           middle_name?: string | null
           parentage?: string | null
           phone?: string | null
@@ -1368,6 +1497,8 @@ export type Database = {
           is_us_citizen?: boolean | null
           last_name?: string | null
           lawmatics_contact_id?: string | null
+          merged_at?: string | null
+          merged_into_id?: string | null
           middle_name?: string | null
           parentage?: string | null
           phone?: string | null
@@ -1388,6 +1519,27 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "contacts_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
+          },
+          {
+            foreignKeyName: "contacts_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -2155,6 +2307,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cornerstone_crm_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "cornerstone_crm_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
           },
           {
             foreignKeyName: "cornerstone_crm_people_contact_id_fkey"
@@ -3362,6 +3528,20 @@ export type Database = {
             foreignKeyName: "email_log_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "email_log_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
+          },
+          {
+            foreignKeyName: "email_log_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
@@ -4483,6 +4663,202 @@ export type Database = {
           },
         ]
       }
+      invoice_items: {
+        Row: {
+          amount_cents: number
+          billing_item_id: string | null
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          kind: string
+          position: number
+        }
+        Insert: {
+          amount_cents: number
+          billing_item_id?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          kind: string
+          position: number
+        }
+        Update: {
+          amount_cents?: number
+          billing_item_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          kind?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_billing_item_id_fkey"
+            columns: ["billing_item_id"]
+            isOneToOne: false
+            referencedRelation: "billing_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_number_sequences: {
+        Row: {
+          last_value: number
+          year: number
+        }
+        Insert: {
+          last_value?: number
+          year: number
+        }
+        Update: {
+          last_value?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        Insert: {
+          bill_to_email?: string | null
+          bill_to_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_of_invoice_id?: string | null
+          docx_document_id?: string | null
+          due_date?: string | null
+          id?: string
+          issue_date?: string | null
+          issued_at?: string | null
+          kind?: string
+          last_reminded_at?: string | null
+          matter_id: string
+          notes?: string | null
+          number?: string | null
+          number_year?: number | null
+          paid_at?: string | null
+          payment_link?: string | null
+          pdf_document_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subtotal_cents?: number
+          terms?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Update: {
+          bill_to_email?: string | null
+          bill_to_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_of_invoice_id?: string | null
+          docx_document_id?: string | null
+          due_date?: string | null
+          id?: string
+          issue_date?: string | null
+          issued_at?: string | null
+          kind?: string
+          last_reminded_at?: string | null
+          matter_id?: string
+          notes?: string | null
+          number?: string | null
+          number_year?: number | null
+          paid_at?: string | null
+          payment_link?: string | null
+          pdf_document_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subtotal_cents?: number
+          terms?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_credit_of_invoice_id_fkey"
+            columns: ["credit_of_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_docx_document_id_fkey"
+            columns: ["docx_document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "invoices_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "invoices_pdf_document_id_fkey"
+            columns: ["pdf_document_id"]
+            isOneToOne: false
+            referencedRelation: "matter_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lawmatics_tokens: {
         Row: {
           access_token: string
@@ -4703,6 +5079,148 @@ export type Database = {
           matter_id?: string
           role?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      matter_contacts: {
+        Row: {
+          child_relationship: string | null
+          contact_id: string
+          created_at: string
+          for_party: string | null
+          from_prior_relationship: boolean | null
+          id: string
+          is_minor: boolean | null
+          matter_id: string
+          parentage: string | null
+          relationship_label: string | null
+          relationship_type: string
+          updated_at: string
+        }
+        Insert: {
+          child_relationship?: string | null
+          contact_id: string
+          created_at?: string
+          for_party?: string | null
+          from_prior_relationship?: boolean | null
+          id?: string
+          is_minor?: boolean | null
+          matter_id: string
+          parentage?: string | null
+          relationship_label?: string | null
+          relationship_type: string
+          updated_at?: string
+        }
+        Update: {
+          child_relationship?: string | null
+          contact_id?: string
+          created_at?: string
+          for_party?: string | null
+          from_prior_relationship?: boolean | null
+          id?: string
+          is_minor?: boolean | null
+          matter_id?: string
+          parentage?: string | null
+          relationship_label?: string | null
+          relationship_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "matter_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
+          },
+          {
+            foreignKeyName: "matter_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_contacts_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_contacts_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_contacts_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
+      matter_deletions: {
+        Row: {
+          client_intake_id: string | null
+          deleted_at: string
+          deleted_by: string | null
+          deleted_by_email: string | null
+          documents_deleted: number
+          had_signed_engagement: boolean
+          id: string
+          matter_created_at: string | null
+          matter_id: string
+          matter_name: string | null
+          matter_number: string | null
+          reason: string | null
+          relationship_status: string
+          stage: string | null
+          status: string
+        }
+        Insert: {
+          client_intake_id?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_email?: string | null
+          documents_deleted?: number
+          had_signed_engagement?: boolean
+          id?: string
+          matter_created_at?: string | null
+          matter_id: string
+          matter_name?: string | null
+          matter_number?: string | null
+          reason?: string | null
+          relationship_status: string
+          stage?: string | null
+          status: string
+        }
+        Update: {
+          client_intake_id?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_email?: string | null
+          documents_deleted?: number
+          had_signed_engagement?: boolean
+          id?: string
+          matter_created_at?: string | null
+          matter_id?: string
+          matter_name?: string | null
+          matter_number?: string | null
+          reason?: string | null
+          relationship_status?: string
+          stage?: string | null
+          status?: string
         }
         Relationships: []
       }
@@ -6078,6 +6596,20 @@ export type Database = {
             foreignKeyName: "sms_messages_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
@@ -6938,6 +7470,21 @@ export type Database = {
       }
     }
     Views: {
+      contact_merge_candidates: {
+        Row: {
+          email: string | null
+          loser_contact_id: string | null
+          loser_first_name: string | null
+          loser_last_name: string | null
+          loser_matter_count: number | null
+          names_match: boolean | null
+          winner_contact_id: string | null
+          winner_first_name: string | null
+          winner_last_name: string | null
+          winner_matter_count: number | null
+        }
+        Relationships: []
+      }
       v_communication_threads: {
         Row: {
           archived_at: string | null
@@ -7128,13 +7675,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_intake_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "client_intake_matter_id_fkey"
             columns: ["matter_id"]
             isOneToOne: false
             referencedRelation: "matters"
@@ -7144,8 +7684,8 @@ export type Database = {
             foreignKeyName: "client_intake_matter_id_fkey"
             columns: ["cornerstone_matter_id"]
             isOneToOne: false
-            referencedRelation: "v_matter_pipeline"
-            referencedColumns: ["matter_id"]
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "client_intake_matter_id_fkey"
@@ -7157,13 +7697,20 @@ export type Database = {
           {
             foreignKeyName: "client_intake_matter_id_fkey"
             columns: ["cornerstone_matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "client_intake_matter_id_fkey"
+            columns: ["matter_id"]
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
           },
           {
             foreignKeyName: "client_intake_matter_id_fkey"
-            columns: ["matter_id"]
+            columns: ["cornerstone_matter_id"]
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
@@ -7188,6 +7735,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "client_intake"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cornerstone_crm_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["loser_contact_id"]
+          },
+          {
+            foreignKeyName: "cornerstone_crm_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_merge_candidates"
+            referencedColumns: ["winner_contact_id"]
           },
           {
             foreignKeyName: "cornerstone_crm_people_contact_id_fkey"
@@ -7355,7 +7916,51 @@ export type Database = {
       }
     }
     Functions: {
+      assert_billing_actor: { Args: { p_actor_id: string }; Returns: undefined }
       assert_lead_note_actor: { Args: { p_actor_id: string }; Returns: string }
+      attach_invoice_documents: {
+        Args: {
+          p_actor_id: string
+          p_docx_document_id: string
+          p_invoice_id: string
+          p_pdf_document_id: string
+        }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       business_days_elapsed: {
         Args: { p_end?: string; p_start: string }
         Returns: number
@@ -7496,6 +8101,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_id: string | null
           invoiced_at: string | null
           kind: string
           label: string
@@ -7541,6 +8147,55 @@ export type Database = {
           to: "engagement_agreement_revisions"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      create_invoice_draft: {
+        Args: {
+          p_actor_id: string
+          p_bill_to_email: string
+          p_bill_to_name: string
+          p_due_date: string
+          p_issue_date: string
+          p_item_ids: string[]
+          p_matter_id: string
+          p_notes: string
+          p_payment_link: string
+          p_terms: string
+        }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       create_lead_meeting_note_with_activity: {
@@ -7636,6 +8291,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_id: string | null
           invoiced_at: string | null
           kind: string
           label: string
@@ -7660,6 +8316,14 @@ export type Database = {
       }
       delete_lead_note_with_activity: {
         Args: { p_actor_id: string; p_lead_id: string; p_note_id: string }
+        Returns: undefined
+      }
+      delete_matter_contact: {
+        Args: { p_contact_id: string; p_matter_id: string }
+        Returns: number
+      }
+      discard_invoice_draft: {
+        Args: { p_actor_id: string; p_invoice_id: string }
         Returns: undefined
       }
       drafting_hub_draft_rollups: {
@@ -7701,6 +8365,48 @@ export type Database = {
         }[]
       }
       is_contact_channel_list: { Args: { value: Json }; Returns: boolean }
+      issue_invoice: {
+        Args: { p_actor_id: string; p_invoice_id: string }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      jsonb_replace_id: {
+        Args: { doc: Json; from_id: string; to_id: string }
+        Returns: Json
+      }
       legal_plan_display_name: {
         Args: { p_billing_type: string }
         Returns: string
@@ -7717,6 +8423,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_id: string | null
           invoiced_at: string | null
           kind: string
           label: string
@@ -7742,6 +8449,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_id: string | null
           invoiced_at: string | null
           kind: string
           label: string
@@ -7792,11 +8500,126 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      mark_invoice_reminder_sent: {
+        Args: { p_actor_id: string; p_invoice_id: string }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mark_invoice_sent: {
+        Args: {
+          p_actor_id: string
+          p_channel: string
+          p_invoice_id: string
+          p_recipient: string
+        }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_messages_read: {
         Args: { p_matter_id: string; p_reader_role: string }
         Returns: undefined
       }
+      merge_contacts: {
+        Args: {
+          p_actor_id?: string
+          p_loser_id: string
+          p_reason?: string
+          p_winner_id: string
+        }
+        Returns: {
+          design_sheets_rewritten: number
+          matter_links_moved: number
+          messages_moved: number
+          roles_moved: number
+        }[]
+      }
+      next_invoice_number: { Args: { p_year: number }; Returns: string }
       normalize_us_phone: { Args: { value: string }; Returns: string }
+      open_matter_for_person: {
+        Args: {
+          p_actor_id?: string
+          p_carry_household?: boolean
+          p_client_user_id?: string
+          p_contact_id: string
+          p_extra_contact_ids?: string[]
+          p_matter_name: string
+          p_matter_number: string
+          p_practice_area: string
+          p_request_id?: string
+        }
+        Returns: {
+          client_intake_id: string
+          created: boolean
+          matter_id: string
+          matter_number: string
+        }[]
+      }
       persist_generated_estate_document: {
         Args: { p_document: Json; p_manifest: Json }
         Returns: Json
@@ -7840,6 +8663,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_id: string | null
           invoiced_at: string | null
           kind: string
           label: string
@@ -7869,6 +8693,53 @@ export type Database = {
           p_validation_report: Json
         }
         Returns: string
+      }
+      record_invoice_payment: {
+        Args: {
+          p_actor_id: string
+          p_amount: number
+          p_external_reference?: string
+          p_invoice_id: string
+          p_method: string
+          p_note: string
+          p_processor_fee_cents?: number
+          p_received_at: string
+        }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       release_webhook_event: {
         Args: { p_event_id: string; p_provider: string }
@@ -7907,6 +8778,10 @@ export type Database = {
         }
         Returns: string
       }
+      self_contact_for_intake: {
+        Args: { p_intake_id: string }
+        Returns: string
+      }
       snooze_lead_next_action: {
         Args: { p_actor_id: string; p_lead_id: string; p_until: string }
         Returns: Json
@@ -7929,6 +8804,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_id: string | null
           invoiced_at: string | null
           kind: string
           label: string
@@ -7943,6 +8819,55 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "billing_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_invoice_draft: {
+        Args: {
+          p_actor_id: string
+          p_bill_to_email: string
+          p_bill_to_name: string
+          p_due_date: string
+          p_invoice_id: string
+          p_issue_date: string
+          p_item_ids: string[]
+          p_notes: string
+          p_payment_link: string
+          p_terms: string
+        }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -7995,14 +8920,18 @@ export type Database = {
           has_divorce_settlement: boolean | null
           has_existing_plan: boolean | null
           has_family_disability: boolean | null
+          has_hcp: boolean | null
           has_investments: boolean | null
           has_life_insurance: boolean | null
           has_ltc_insurance: boolean | null
           has_major_illness: boolean | null
           has_minor_children: boolean | null
+          has_poa: boolean | null
           has_prior_gift_tax: boolean | null
           has_real_property: boolean | null
           has_retirement: boolean | null
+          has_trust: boolean | null
+          has_will: boolean | null
           id: string
           intake_completed_at: string | null
           intake_invite_token: string | null
@@ -8045,6 +8974,7 @@ export type Database = {
           qualification_notes: string | null
           referral_source: string | null
           review_choices: Json | null
+          special_circumstances: string[] | null
           special_notes: string | null
           spouse_as_fiduciary: boolean | null
           state: string | null
@@ -8135,14 +9065,18 @@ export type Database = {
           has_divorce_settlement: boolean | null
           has_existing_plan: boolean | null
           has_family_disability: boolean | null
+          has_hcp: boolean | null
           has_investments: boolean | null
           has_life_insurance: boolean | null
           has_ltc_insurance: boolean | null
           has_major_illness: boolean | null
           has_minor_children: boolean | null
+          has_poa: boolean | null
           has_prior_gift_tax: boolean | null
           has_real_property: boolean | null
           has_retirement: boolean | null
+          has_trust: boolean | null
+          has_will: boolean | null
           id: string
           intake_completed_at: string | null
           intake_invite_token: string | null
@@ -8185,6 +9119,7 @@ export type Database = {
           qualification_notes: string | null
           referral_source: string | null
           review_choices: Json | null
+          special_circumstances: string[] | null
           special_notes: string | null
           spouse_as_fiduciary: boolean | null
           state: string | null
@@ -8235,6 +9170,44 @@ export type Database = {
           conflict: boolean
           previous_summary: string
         }[]
+      }
+      void_invoice: {
+        Args: { p_actor_id: string; p_invoice_id: string; p_reason: string }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
