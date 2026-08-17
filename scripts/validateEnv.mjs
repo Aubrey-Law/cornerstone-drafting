@@ -35,4 +35,27 @@ if (missing.length > 0) {
   process.exit(1)
 }
 
+// Optional features: absent is fine, half-configured is a deployment mistake
+// that would otherwise only surface as a silently disabled feature.
+const PARTIAL_FEATURES = [
+  {
+    name: 'Online invoice payment',
+    trigger: 'PAYMENTS_PROVIDER',
+    // Only Stripe needs keys today; LawPay is a stub with nothing to configure.
+    requires: (value) => (value === 'stripe' ? ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] : []),
+  },
+]
+
+for (const feature of PARTIAL_FEATURES) {
+  const value = process.env[feature.trigger]?.trim()
+  if (!value) continue
+  const absent = feature.requires(value).filter((name) => !process.env[name])
+  if (absent.length > 0) {
+    console.warn(
+      `\n⚠ ${feature.name} is switched on via ${feature.trigger}=${value} but ` +
+        `${absent.join(', ')} ${absent.length === 1 ? 'is' : 'are'} unset — the feature will stay disabled.\n`,
+    )
+  }
+}
+
 console.log('✓ All required environment variables are set')

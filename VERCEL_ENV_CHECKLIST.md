@@ -118,6 +118,32 @@ Without this key, staff can still paste notes manually in the dialog; Granola li
 | `SENTRY_AUTH_TOKEN` | Source map upload on production builds |
 | `ADMIN_EMAIL` | Default admin contact email in server helpers |
 
+## Optional — online invoice payment
+
+Absent by default. With `PAYMENTS_PROVIDER` unset the checkout route returns
+503, the **Create pay link** button never renders, and the firm keeps pasting a
+payment link by hand — exactly as it did before this existed.
+
+No trust accounting is involved: the firm bills flat fees earned on receipt and
+does not run client funds through IOLTA, so payments land in operating. If that
+ever changes, payments need a trust/operating destination *before* checkout is
+switched on — money that should have been held in trust cannot be re-routed
+after the fact.
+
+| Variable | Purpose |
+|----------|---------|
+| `PAYMENTS_PROVIDER` | `stripe` or `lawpay`. Unset disables online payment entirely |
+| `STRIPE_SECRET_KEY` | Stripe server API key, for creating checkout sessions |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…`, verifies the webhook signature |
+
+Register the endpoint as `https://{app}/api/webhooks/payments` and subscribe it
+to `checkout.session.completed`, `checkout.session.expired` and
+`checkout.session.async_payment_failed`. `NEXT_PUBLIC_APP_URL` and
+`NEXT_PUBLIC_PORTAL_URL` already exist and supply the return URLs.
+
+LawPay is a stub with the same interface: choosing it means implementing three
+methods in `lib/payments/lawpay.ts` and flipping `PAYMENTS_PROVIDER`.
+
 ## Optional — Resend (lite alerts)
 
 | Variable | Purpose |

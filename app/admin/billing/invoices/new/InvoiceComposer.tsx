@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Send, Save } from 'lucide-react'
+import { ArrowLeft, Download, Send, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
 import { PageHeader } from '@/components/PageHeader'
@@ -35,6 +35,7 @@ import {
   type InvoiceTerm,
 } from '@/lib/billing/invoices'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
+import { downloadInvoiceDocument } from '@/lib/invoices/downloadInvoice'
 import { moneyExact } from '@/app/admin/billing/financeFormat'
 import type { BillingMatterOption } from '@/components/billing/AddChargeDialog'
 import { ReceiptText } from 'lucide-react'
@@ -84,7 +85,7 @@ export default function InvoiceComposer({
   const [paymentLink, setPaymentLink] = useState('')
   const [notes, setNotes] = useState('')
   const [terms, setTerms] = useState('')
-  const [saving, setSaving] = useState<'draft' | 'issue' | null>(null)
+  const [saving, setSaving] = useState<'draft' | 'send' | 'download' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const dueDate = useMemo(() => resolveDueDate(issueDate, term), [issueDate, term])
@@ -124,7 +125,12 @@ export default function InvoiceComposer({
     return () => { cancelled = true }
   }, [matterId, initialMatterId, token])
 
-  async function submit(mode: 'draft' | 'issue') {
+  /**
+   * `download` issues the invoice without emailing it and hands back the PDF —
+   * for a bill given to the client in person, posted, or sent from the
+   * attorney's own mail client.
+   */
+  async function submit(mode: 'draft' | 'send' | 'download') {
     if (!matterId) {
       setError('Choose a matter to bill.')
       return
@@ -175,12 +181,17 @@ export default function InvoiceComposer({
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ send: true }),
+        body: JSON.stringify({ send: mode === 'send' }),
       })
       const issuedJson = await issued.json().catch(() => ({})) as {
         error?: string
         warning?: string
         sent?: boolean
+        invoice?: {
+          number: string | null
+          pdfDocumentId: string | null
+          docxDocumentId: string | null
+        }
       }
       if (!issued.ok && issued.status !== 207) {
         // The draft exists; take the user to it so the work is not lost.
@@ -190,6 +201,28 @@ export default function InvoiceComposer({
       if (issuedJson.warning) toast.warning(issuedJson.warning)
       else if (issuedJson.sent) toast.success('Invoice issued and emailed')
       else toast.success('Invoice issued')
+
+      if (mode === 'download') {
+        const documentId = issuedJson.invoice?.pdfDocumentId
+          ?? issuedJson.invoice?.docxDocumentId
+          ?? null
+        if (documentId) {
+          try {
+            await downloadInvoiceDocument({
+              documentId,
+              invoiceNumber: issuedJson.invoice?.number ?? null,
+              isPdf: Boolean(issuedJson.invoice?.pdfDocumentId),
+            })
+          } catch {
+            // The invoice is issued either way; only the download failed, and
+            // the detail page it lands on offers the same button.
+            toast.error('Invoice issued, but the download could not start')
+          }
+        } else if (!issuedJson.warning) {
+          toast.warning('Invoice issued, but no document was produced to download')
+        }
+      }
+
       router.push(`/admin/billing/invoices/${invoiceId}`)
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : 'Could not save the invoice'
@@ -402,12 +435,22 @@ export default function InvoiceComposer({
             </Button>
             <Button
               type="button"
+              variant="outline"
               className="min-h-11"
               disabled={saving !== null || chosen.length === 0}
-              onClick={() => void submit('issue')}
+              onClick={() => void submit('download')}
+            >
+              <Download className="size-4" aria-hidden />
+              {saving === 'download' ? 'Issuing…' : 'Issue & download'}
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11"
+              disabled={saving !== null || chosen.length === 0}
+              onClick={() => void submit('send')}
             >
               <Send className="size-4" aria-hidden />
-              {saving === 'issue' ? 'Issuing…' : 'Issue & send'}
+              {saving === 'send' ? 'Issuing…' : 'Issue & send'}
             </Button>
           </>
         }
