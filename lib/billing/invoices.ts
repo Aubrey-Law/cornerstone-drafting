@@ -251,6 +251,107 @@ export const invoiceReminderSchema = z.object({
   message: z.string().trim().max(4000).optional(),
 })
 
+/**
+ * Bill several matters in one pass from a ledger selection.
+ *
+ * The route groups by matter server-side rather than trusting the client to:
+ * an invoice belongs to exactly one matter, and that rule should not depend on
+ * how the caller happened to slice the selection.
+ */
+export const batchInvoiceSchema = z
+  .object({
+    itemIds: z.array(z.string().uuid()).min(1).max(200),
+    issueDate: dateKeySchema,
+    dueInDays: z.number().int().min(0).max(180).default(30),
+    terms: z.string().trim().max(2000).nullable().optional(),
+  })
+
+export type BatchInvoiceInput = z.infer<typeof batchInvoiceSchema>
+
+/** One matter's worth of a batch, as the dialog previews it and the route creates it. */
+export interface BatchInvoiceGroup {
+  matterId: string
+  clientName: string
+  matterNumber: string | null
+  chargeCount: number
+  subtotalCents: number
+}
+
+export interface BatchInvoiceSkip {
+  matterId: string
+  clientName: string
+  reason: string
+}
+
+export interface BatchInvoiceResult {
+  created: { invoiceId: string; matterId: string; subtotalCents: number }[]
+  skipped: BatchInvoiceSkip[]
+}
+
+/**
+ * Splits a ledger selection into the invoices it would produce and the rows
+ * that cannot go on one. Pure, so the dialog can preview the exact grouping the
+ * route will perform without a round trip.
+ */
+export function planBatchInvoices(
+  rows: {
+    id: string
+    matterId: string
+    clientName: string
+    matterNumber: string | null
+    kind: string
+    amountBilled: number
+    balance: number
+    invoiceId?: string | null
+  }[],
+): { groups: (BatchInvoiceGroup & { itemIds: string[] })[]; skipped: BatchInvoiceSkip[] } {
+  const groups = new Map<string, BatchInvoiceGroup & { itemIds: string[] }>()
+  const skipped: BatchInvoiceSkip[] = []
+  const seenSkip = new Set<string>()
+
+  const skip = (row: { matterId: string; clientName: string }, reason: string) => {
+    const key = `${row.matterId}:${reason}`
+    if (seenSkip.has(key)) return
+    seenSkip.add(key)
+    skipped.push({ matterId: row.matterId, clientName: row.clientName, reason })
+  }
+
+  for (const row of rows) {
+    if (row.kind === 'plan_claim') {
+      skip(row, 'Legal plan claims are billed to the carrier')
+      continue
+    }
+    if (row.invoiceId) {
+      skip(row, 'Already on an invoice')
+      continue
+    }
+    if (row.balance <= 0) {
+      skip(row, 'Nothing left to bill')
+      continue
+    }
+    const existing = groups.get(row.matterId)
+    if (existing) {
+      existing.itemIds.push(row.id)
+      existing.chargeCount += 1
+      existing.subtotalCents += row.amountBilled
+    } else {
+      groups.set(row.matterId, {
+        matterId: row.matterId,
+        clientName: row.clientName,
+        matterNumber: row.matterNumber,
+        chargeCount: 1,
+        subtotalCents: row.amountBilled,
+        itemIds: [row.id],
+      })
+    }
+  }
+
+  return {
+    groups: [...groups.values()].sort((a, b) => a.clientName.localeCompare(b.clientName)),
+    skipped,
+  }
+}
+
 /** Unpersisted preview for the composer's first paint. */
 export const previewInvoiceSchema = z.object({
   matterId: z.string().uuid(),

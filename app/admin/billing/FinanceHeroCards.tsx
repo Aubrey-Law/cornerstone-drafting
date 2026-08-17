@@ -1,8 +1,7 @@
 'use client'
 
-import { Banknote, FileClock, Plus, ReceiptText, TrendingUp, Wallet } from 'lucide-react'
+import { FileClock, ReceiptText, TrendingUp, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import type { BillingSnapshot } from '@/lib/billing/types'
 import { money, trend, type Trend } from './financeFormat'
@@ -51,15 +50,12 @@ function HeroCard({
   )
 }
 
-export function FinanceHeroCards({
-  snapshot,
-  onLogPayment,
-  onAddCharge,
-}: {
-  snapshot: BillingSnapshot
-  onLogPayment: () => void
-  onAddCharge: () => void
-}) {
+/**
+ * The figures strip. Log payment and Add charge used to live inside the
+ * Outstanding card; they are the page's primary verbs, so they sit in the page
+ * header now and this is purely a readout.
+ */
+export function FinanceHeroCards({ snapshot }: { snapshot: BillingSnapshot }) {
   const collected = trend(snapshot.collectedMonth.deltaPercent)
   const costs = trend(snapshot.costsMonth.deltaPercent, { goodWhenUp: false })
 
@@ -73,16 +69,6 @@ export function FinanceHeroCards({
             ? ` · ${money(snapshot.outstanding.overdueAmount)} past due`
             : ''}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" size="sm" className="min-h-9" onClick={onLogPayment}>
-            <Banknote className="size-4" aria-hidden />
-            Log payment
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="min-h-9" onClick={onAddCharge}>
-            <Plus className="size-4" aria-hidden />
-            Add charge
-          </Button>
-        </div>
       </HeroCard>
 
       <HeroCard icon={TrendingUp} label="Collected this month">
