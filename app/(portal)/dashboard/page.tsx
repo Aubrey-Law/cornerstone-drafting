@@ -5,11 +5,13 @@ import { createServerSupabase, getCachedClaims } from '@/lib/supabaseServer'
 import { getMatterForUser } from '@/lib/portal/getMatterForUser'
 import { findClientIntakeForUser } from '@/lib/intake/getOrCreateClientIntake'
 import { Button } from '@/components/ui/button'
+import { PortalAccountCard } from '@/components/portal/PortalAccountCard'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import {
   fetchLatestFirmMessage,
   fetchNextAppointment,
+  fetchPortalAccount,
   fetchPortalMatterMeta,
   fetchRecentPortalDocuments,
   fetchUnreadFirmMessageCount,
@@ -106,15 +108,16 @@ export default async function PortalDashboardPage() {
   const submitted = intakeStatus === 'submitted' || intakeStatus === 'approved'
 
   // Matter-scoped reads only run once ownership is established above.
-  const [meta, documents, latestMessage, unreadCount, appointment] = matter
+  const [meta, documents, latestMessage, unreadCount, appointment, account] = matter
     ? await Promise.all([
         fetchPortalMatterMeta(matter.id),
         fetchRecentPortalDocuments(matter.id, auth.id, 2),
         fetchLatestFirmMessage(matter.id),
         fetchUnreadFirmMessageCount(matter.id),
         fetchNextAppointment(matter.id),
+        fetchPortalAccount(matter.id),
       ])
-    : [null, [] as MatterDocument[], null, 0, null]
+    : [null, [] as MatterDocument[], null, 0, null, null]
 
   const firm = getFirmConfig()
   const group: StageGroup = matter ? stageInfo((matter.stage ?? 'intake') as MatterStage).group : 'early'
@@ -214,6 +217,14 @@ export default async function PortalDashboardPage() {
           </>
         )}
       </section>
+
+      {/* Only shown when there is something to say: a client with no invoices
+          should not be told their balance is zero. */}
+      {account && account.invoices.length > 0 && (
+        <div className="mt-4">
+          <PortalAccountCard account={account} />
+        </div>
+      )}
 
       {/* ── documents + messages ── */}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">

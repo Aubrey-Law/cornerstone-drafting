@@ -3,6 +3,7 @@ import { fetchMatterAging, type MatterAgingRow } from '@/lib/queries/pipelineAgi
 import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
 import { computeMatterNextAction, type MatterNextActionKind } from '@/lib/matterNextAction'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import { invoiceOverdue } from '@/lib/billing/invoices'
 import { fetchTasks } from '@/lib/queries/tasks'
 import { taskDueGroup, type TaskRow } from '@/lib/tasks/types'
 import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
@@ -65,6 +66,29 @@ export interface TodayData {
   needsYou: number
   /** Non-snoozed rows with red health. */
   overdueCount: number
+  /**
+   * Money the attorney can clear today. Deliberately a short action list, not
+   * a second finance dashboard — the Billing page is that.
+   */
+  billing: TodayBilling
+}
+
+export interface TodayOverdueInvoice {
+  id: string
+  number: string
+  matterId: string
+  clientName: string
+  balanceCents: number
+  daysPastDue: number
+}
+
+export interface TodayBilling {
+  /** Client charges not yet on any invoice. */
+  unbilledCount: number
+  unbilledCents: number
+  /** Issued invoices past their due date with a balance, worst first. */
+  overdueInvoices: TodayOverdueInvoice[]
+  overdueCents: number
 }
 
 const ACTION_LABEL: Record<MatterNextActionKind, string> = {
@@ -101,7 +125,7 @@ export async function fetchTodayData(): Promise<TodayData> {
   const calendarFrom = new Date(firmNoonUtc - 18 * 60 * 60 * 1000).toISOString()
   const calendarTo = new Date(firmNoonUtc + 18 * 60 * 60 * 1000).toISOString()
 
-  const [aging, mattersRes, unreadRes, openTasks, appointmentsRes] = await Promise.all([
+  const [aging, mattersRes, unreadRes, openTasks, appointmentsRes, billing] = await Promise.all([
     fetchMatterAging(),
     admin
       .from('v_matter_pipeline')
@@ -122,6 +146,7 @@ export async function fetchTodayData(): Promise<TodayData> {
       .lt('start_time', calendarTo)
       .eq('status', 'scheduled')
       .order('start_time', { ascending: true }),
+    fetchTodayBilling(admin, todayKey),
   ])
 
   if (mattersRes.error) console.error('fetchTodayData matters error:', mattersRes.error)
@@ -266,5 +291,114 @@ export async function fetchTodayData(): Promise<TodayData> {
       overdueTasks.length + tasksDueToday.length + waitingOnYou.length + unreadThreads.length
       + intakeReview.length + intakeToSend.length,
     overdueCount: atRisk.filter(r => r.health === 'red').length,
+    billing,
+  }
+}
+
+const EMPTY_BILLING: TodayBilling = {
+  unbilledCount: 0,
+  unbilledCents: 0,
+  overdueInvoices: [],
+  overdueCents: 0,
+}
+
+/**
+ * Two billing facts worth acting on today: work that is done but unbilled, and
+ * invoices that are late.
+ *
+ * Best-effort — Today is a queue, not a ledger, so a billing read that fails
+ * must not take the whole page down with it.
+ */
+async function fetchTodayBilling(
+  admin: ReturnType<typeof getAdminClient>,
+  todayKey: string,
+): Promise<TodayBilling> {
+  try {
+    const [chargeRes, invoiceRes] = await Promise.all([
+      admin
+        .from('billing_items')
+        .select('id, amount_billed, kind, invoice_id, status')
+        .is('invoice_id', null)
+        .neq('kind', 'plan_claim')
+        .neq('status', 'paid'),
+      admin
+        .from('invoices')
+        .select('id, number, matter_id, subtotal_cents, due_date, status')
+        .in('status', ['issued', 'partial'])
+        .not('due_date', 'is', null)
+        .lt('due_date', todayKey),
+    ])
+    if (chargeRes.error || invoiceRes.error) return EMPTY_BILLING
+
+    const charges = (chargeRes.data ?? []) as { id: string; amount_billed: number }[]
+    const invoices = (invoiceRes.data ?? []) as {
+      id: string
+      number: string | null
+      matter_id: string
+      subtotal_cents: number
+      due_date: string
+    }[]
+
+    if (invoices.length === 0) {
+      return {
+        ...EMPTY_BILLING,
+        unbilledCount: charges.length,
+        unbilledCents: charges.reduce((sum, row) => sum + row.amount_billed, 0),
+      }
+    }
+
+    const [paymentRes, pipelineRes] = await Promise.all([
+      admin
+        .from('billing_payments')
+        .select('invoice_id, amount')
+        .in('invoice_id', invoices.map(invoice => invoice.id)),
+      admin
+        .from('v_matter_pipeline')
+        .select('matter_id, client_name, matter_name')
+        .in('matter_id', [...new Set(invoices.map(invoice => invoice.matter_id))]),
+    ])
+
+    const collected = new Map<string, number>()
+    for (const payment of (paymentRes.data ?? []) as { invoice_id: string; amount: number }[]) {
+      collected.set(payment.invoice_id, (collected.get(payment.invoice_id) ?? 0) + payment.amount)
+    }
+    const nameById = new Map(
+      ((pipelineRes.data ?? []) as {
+        matter_id: string
+        client_name: string | null
+        matter_name: string | null
+      }[]).map(row => [row.matter_id, row.client_name ?? row.matter_name ?? 'Unknown client']),
+    )
+
+    const overdueInvoices = invoices
+      .map(invoice => {
+        const balanceCents = Math.max(0, invoice.subtotal_cents - (collected.get(invoice.id) ?? 0))
+        // invoiceOverdue owns the "past due" rule and its calendar arithmetic;
+        // re-deriving it here is how the two surfaces would drift apart.
+        const { daysPastDue } = invoiceOverdue(
+          { status: 'issued', dueDate: invoice.due_date },
+          balanceCents,
+          todayKey,
+        )
+        return {
+          id: invoice.id,
+          number: invoice.number ?? '',
+          matterId: invoice.matter_id,
+          clientName: nameById.get(invoice.matter_id) ?? 'Unknown client',
+          balanceCents,
+          daysPastDue,
+        }
+      })
+      .filter(invoice => invoice.balanceCents > 0)
+      .sort((a, b) => b.daysPastDue - a.daysPastDue)
+
+    return {
+      unbilledCount: charges.length,
+      unbilledCents: charges.reduce((sum, row) => sum + row.amount_billed, 0),
+      overdueInvoices,
+      overdueCents: overdueInvoices.reduce((sum, invoice) => sum + invoice.balanceCents, 0),
+    }
+  } catch {
+    return EMPTY_BILLING
   }
 }

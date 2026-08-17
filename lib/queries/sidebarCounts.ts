@@ -1,3 +1,4 @@
+import { firmTodayKey } from '@/lib/firmDate'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { fetchInboxNeedsReplyCount } from '@/lib/queries/inbox'
 import { fetchMatterAgingTiles } from '@/lib/queries/pipelineAging'
@@ -77,6 +78,13 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     console.error('sidebar counts inbox error:', error)
   }
 
+  let overdueInvoiceCount = 0
+  try {
+    overdueInvoiceCount = await fetchOverdueInvoiceCount()
+  } catch (error) {
+    console.error('sidebar counts billing error:', error)
+  }
+
   return {
     inboxNeedsReplyCount,
     intakeReviewCount,
@@ -84,5 +92,37 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
     agingRedCount,
     agingAmberCount,
     tasksOverdueCount,
+    overdueInvoiceCount,
   }
+}
+
+/**
+ * Issued invoices past their due date that still owe something.
+ *
+ * Counted here rather than reusing the Today query because the badge only
+ * needs a number, and the payment join is what makes that query expensive.
+ */
+async function fetchOverdueInvoiceCount(): Promise<number> {
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('invoices')
+    .select('id, subtotal_cents')
+    .in('status', ['issued', 'partial'])
+    .not('due_date', 'is', null)
+    .lt('due_date', firmTodayKey())
+  if (error || !data || data.length === 0) return 0
+
+  const invoices = data as { id: string; subtotal_cents: number }[]
+  const { data: payments } = await admin
+    .from('billing_payments')
+    .select('invoice_id, amount')
+    .in('invoice_id', invoices.map(invoice => invoice.id))
+
+  const collected = new Map<string, number>()
+  for (const payment of (payments ?? []) as { invoice_id: string; amount: number }[]) {
+    collected.set(payment.invoice_id, (collected.get(payment.invoice_id) ?? 0) + payment.amount)
+  }
+  return invoices.filter(
+    invoice => invoice.subtotal_cents - (collected.get(invoice.id) ?? 0) > 0,
+  ).length
 }

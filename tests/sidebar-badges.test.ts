@@ -21,6 +21,17 @@ describe('sidebar badges', () => {
     expect(getNavBadge('/admin/settings', counts)).toBeNull()
   })
 
+  it('badges Billing when an invoice is past due', () => {
+    // Late money carries the same urgency as an overdue task, so it is
+    // destructive rather than accent.
+    expect(getNavBadge('/admin/billing', { ...EMPTY_SIDEBAR_COUNTS, overdueInvoiceCount: 3 }))
+      .toEqual({ value: 3, tone: 'destructive' })
+  })
+
+  it('leaves Billing unbadged when nothing is late', () => {
+    expect(getNavBadge('/admin/billing', EMPTY_SIDEBAR_COUNTS)).toBeNull()
+  })
+
   it('falls back from aging red to needs-design, then aging amber on the drafting badge', () => {
     expect(getNavBadge('/admin/drafting', {
       ...EMPTY_SIDEBAR_COUNTS,
