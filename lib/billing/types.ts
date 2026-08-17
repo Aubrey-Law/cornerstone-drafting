@@ -36,6 +36,15 @@ export interface BillingItem {
   practiceArea: string | null
   planType: string | null
   legalPlan: string | null
+  /**
+   * Invoice context, when the charge has been put on one. Optional so every
+   * existing fixture and caller keeps type-checking, and so a charge that
+   * predates invoicing keeps the original invoicedAt + 30 overdue rule.
+   */
+  invoiceId?: string | null
+  invoiceNumber?: string | null
+  /** YYYY-MM-DD. When present it decides overdue instead of the 30-day default. */
+  invoiceDueOn?: string | null
 }
 
 export interface BillingPayment {
@@ -45,6 +54,15 @@ export interface BillingPayment {
   method: BillingPaymentMethod
   note: string | null
   receivedAt: string
+  /**
+   * One client payment spanning several charges is stored as one row per
+   * charge, all sharing this id, so the per-item balance math in buildRows
+   * stays untouched. Display collapses a group back into a single payment.
+   * Optional: rows written before invoicing have no group.
+   */
+  paymentGroupId?: string | null
+  invoiceId?: string | null
+  invoiceNumber?: string | null
 }
 
 export interface BillingLedgerRow extends BillingItem {
@@ -104,6 +122,10 @@ export interface RecentPaymentRow {
   receivedAt: string
   /** What the payment was logged against, when staff wrote one down. */
   note: string | null
+  /** Set when the payment came in against an invoice rather than one charge. */
+  invoiceNumber?: string | null
+  /** How many charges one grouped payment was spread across. 1 when ungrouped. */
+  allocationCount?: number
 }
 
 export interface BillingSnapshot {

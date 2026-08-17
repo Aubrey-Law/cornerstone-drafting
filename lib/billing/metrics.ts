@@ -129,7 +129,14 @@ export function buildRows(
         collected,
         balance,
         ageDays,
-        overdue: balance > 0 && item.invoicedAt !== null && ageDays > 30,
+        // An invoiced charge is late once its invoice's due date has passed.
+        // Charges billed before invoices existed have no due date and keep the
+        // original net-30-from-invoiced rule.
+        overdue: balance > 0 && (
+          item.invoiceDueOn
+            ? today > item.invoiceDueOn
+            : item.invoicedAt !== null && ageDays > 30
+        ),
         paidAt: paymentCompletionDate(item, itemPayments),
       }
     })
@@ -218,18 +225,55 @@ function buildCollectionsTrend(
 }
 
 /** Newest payments across every matter, joined back to their ledger row. */
+/**
+ * One client payment against a multi-charge invoice is stored as one row per
+ * charge. Collapse those back into a single entry before taking the top slice —
+ * otherwise one $3,240 check would render as three payments and eat three of
+ * the eight slots on the card.
+ */
+function collapsePaymentGroups(payments: BillingPayment[]): BillingPayment[] {
+  const groups = new Map<string, BillingPayment[]>()
+  const singles: BillingPayment[] = []
+  for (const payment of payments) {
+    if (!payment.paymentGroupId) {
+      singles.push(payment)
+      continue
+    }
+    const list = groups.get(payment.paymentGroupId) ?? []
+    list.push(payment)
+    groups.set(payment.paymentGroupId, list)
+  }
+  const merged = [...groups.values()].map(list => {
+    // The earliest allocation carries the group: it is the charge the payment
+    // was applied to first, so its label reads as the payment's subject.
+    const [first, ...rest] = [...list].sort((a, b) => a.id.localeCompare(b.id))
+    return rest.length === 0
+      ? first
+      : { ...first, amount: list.reduce((sum, payment) => sum + payment.amount, 0) }
+  })
+  return [...singles, ...merged]
+}
+
 function buildRecentPayments(
   rows: BillingLedgerRow[],
   payments: BillingPayment[],
   limit = 8,
 ): RecentPaymentRow[] {
   const rowById = new Map(rows.map(row => [row.id, row]))
-  return [...payments]
+  const groupSizes = new Map<string, number>()
+  for (const payment of payments) {
+    if (!payment.paymentGroupId) continue
+    groupSizes.set(payment.paymentGroupId, (groupSizes.get(payment.paymentGroupId) ?? 0) + 1)
+  }
+  return collapsePaymentGroups(payments)
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt) || b.id.localeCompare(a.id))
     .slice(0, limit)
     .flatMap((payment): RecentPaymentRow[] => {
       const row = rowById.get(payment.billingItemId)
       if (!row) return []
+      const allocationCount = payment.paymentGroupId
+        ? groupSizes.get(payment.paymentGroupId) ?? 1
+        : 1
       return [{
         id: payment.id,
         billingItemId: payment.billingItemId,
@@ -242,6 +286,8 @@ function buildRecentPayments(
         amount: payment.amount,
         receivedAt: payment.receivedAt,
         note: payment.note,
+        invoiceNumber: payment.invoiceNumber ?? null,
+        allocationCount,
       }]
     })
 }

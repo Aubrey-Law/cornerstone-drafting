@@ -210,16 +210,39 @@ describe('MatterBillingTab', () => {
     expect(toast.success).toHaveBeenCalled()
   })
 
-  it('sends an invoice for a to_invoice item', async () => {
-    const user = userEvent.setup()
+  // A client charge is billed by composing an invoice, not by flipping a flag:
+  // the quick action deep-links the composer with the charge pre-selected.
+  it('links an uninvoiced client charge to the invoice composer', async () => {
     respondWith({
       rows: [row({ status: 'to_invoice', invoicedAt: null, collected: 0, balance: 480_000 })],
     })
     renderTab()
 
-    await user.click(
-      await screen.findByRole('button', { name: /Send invoice for Flat fee/ }),
+    const link = await screen.findByRole('link', { name: /Bill this matter/ })
+    expect(link.getAttribute('href')).toBe(
+      `/admin/billing/invoices/new?matterId=${MATTER_ID}`
+      + '&items=11111111-1111-4111-8111-111111111111',
     )
+  })
+
+  // A plan claim bills MetLife or LegalEASE, so it keeps the carrier-facing
+  // verb and the original per-item route.
+  it('submits a plan claim through the carrier route', async () => {
+    const user = userEvent.setup()
+    respondWith({
+      rows: [row({
+        kind: 'plan_claim',
+        plan: 'metlife',
+        label: 'MetLife claim',
+        status: 'to_invoice',
+        invoicedAt: null,
+        collected: 0,
+        balance: 480_000,
+      })],
+    })
+    renderTab()
+
+    await user.click(await screen.findByRole('button', { name: /Submit claim/ }))
     await waitFor(() => {
       const post = fetchMock.mock.calls.find(call => call[1]?.method === 'POST')
       expect(post?.[0]).toBe(

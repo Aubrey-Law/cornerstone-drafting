@@ -24,6 +24,7 @@ type BillingItemRow = {
   source: BillingItem['source']
   last_reminded_at: string | null
   created_at: string
+  invoice_id: string | null
 }
 type PaymentRow = {
   id: string
@@ -32,6 +33,16 @@ type PaymentRow = {
   method: BillingPayment['method']
   note: string | null
   received_at: string
+  invoice_id: string | null
+  payment_group_id: string | null
+}
+
+/** Just enough of an invoice to label a charge and decide whether it is late. */
+type InvoiceContextRow = {
+  id: string
+  number: string | null
+  due_date: string | null
+  status: string
 }
 
 type MatterRow = {
@@ -112,9 +123,14 @@ export async function fetchBillingMatterOptions(): Promise<BillingMatterOption[]
 /** Joins a raw billing_items row to its matter context. Shared by both views. */
 function mapBillingItem(
   row: BillingItemRow,
-  context: { matter: MatterRow | null; pipeline: PipelineRow | null; details: DetailRow | null },
+  context: {
+    matter: MatterRow | null
+    pipeline: PipelineRow | null
+    details: DetailRow | null
+    invoice?: InvoiceContextRow | null
+  },
 ): BillingItem {
-  const { matter, pipeline, details } = context
+  const { matter, pipeline, details, invoice } = context
   return {
     id: row.id,
     matterId: row.matter_id,
@@ -133,6 +149,11 @@ function mapBillingItem(
     practiceArea: details?.practice_area ?? pipeline?.practice_area ?? null,
     planType: details?.plan_type ?? pipeline?.plan_type ?? null,
     legalPlan: details?.legal_plan ?? null,
+    invoiceId: row.invoice_id,
+    invoiceNumber: invoice?.number ?? null,
+    // A void invoice stops governing the charge's due date; the charge is
+    // released back to to_invoice and falls back to the legacy rule.
+    invoiceDueOn: invoice && invoice.status !== 'void' ? invoice.due_date : null,
   }
 }
 
@@ -153,7 +174,7 @@ export async function fetchMatterBilling(
   now?: Date,
 ): Promise<MatterBillingView> {
   const admin = getAdminClient()
-  const [itemResult, matterResult, pipelineResult, detailResult] = await Promise.all([
+  const [itemResult, matterResult, pipelineResult, detailResult, invoiceResult] = await Promise.all([
     admin
       .from('billing_items')
       .select('*')
@@ -172,11 +193,19 @@ export async function fetchMatterBilling(
       )
       .eq('client_id', matterId)
       .maybeSingle(),
+    admin
+      .from('invoices')
+      .select('id, number, due_date, status')
+      .eq('matter_id', matterId),
   ])
 
-  const error = itemResult.error ?? matterResult.error ?? pipelineResult.error ?? detailResult.error
+  const error = itemResult.error ?? matterResult.error ?? pipelineResult.error
+    ?? detailResult.error ?? invoiceResult.error
   if (error) throw new Error(error.message)
 
+  const invoiceById = new Map(
+    ((invoiceResult.data ?? []) as InvoiceContextRow[]).map(invoice => [invoice.id, invoice]),
+  )
   const itemRows = (itemResult.data ?? []) as BillingItemRow[]
   const details = (detailResult.data ?? null) as DetailRow | null
   const items = itemRows.map(row =>
@@ -184,6 +213,7 @@ export async function fetchMatterBilling(
       matter: (matterResult.data ?? null) as MatterRow | null,
       pipeline: (pipelineResult.data ?? null) as PipelineRow | null,
       details,
+      invoice: row.invoice_id ? invoiceById.get(row.invoice_id) ?? null : null,
     }),
   )
 
@@ -203,6 +233,9 @@ export async function fetchMatterBilling(
     method: row.method,
     note: row.note,
     receivedAt: row.received_at,
+    paymentGroupId: row.payment_group_id,
+    invoiceId: row.invoice_id,
+    invoiceNumber: row.invoice_id ? invoiceById.get(row.invoice_id)?.number ?? null : null,
   }))
 
   return {
@@ -227,6 +260,7 @@ export async function fetchBillingData(input: {
     detailResult,
     settingsResult,
     dismissalResult,
+    invoiceResult,
   ] = await Promise.all([
     admin.from('billing_items').select('*').order('created_at', { ascending: true }),
     admin.from('billing_payments').select('*').order('received_at', { ascending: true }),
@@ -249,6 +283,7 @@ export async function fetchBillingData(input: {
       .select('nudge_key')
       .eq('user_id', input.userId)
       .eq('week_start', weekStart),
+    admin.from('invoices').select('id, number, due_date, status'),
   ])
 
   const errors = [
@@ -259,6 +294,7 @@ export async function fetchBillingData(input: {
     detailResult.error,
     settingsResult.error,
     dismissalResult.error,
+    invoiceResult.error,
   ].filter((error): error is NonNullable<typeof error> => Boolean(error))
 
   const matterById = new Map(
@@ -270,12 +306,16 @@ export async function fetchBillingData(input: {
   const detailById = new Map(
     ((detailResult.data ?? []) as DetailRow[]).map(detail => [detail.client_id, detail]),
   )
+  const invoiceById = new Map(
+    ((invoiceResult.data ?? []) as InvoiceContextRow[]).map(invoice => [invoice.id, invoice]),
+  )
 
   const items = ((itemResult.data ?? []) as BillingItemRow[]).map(row =>
     mapBillingItem(row, {
       matter: matterById.get(row.matter_id) ?? null,
       pipeline: pipelineById.get(row.matter_id) ?? null,
       details: detailById.get(row.matter_id) ?? null,
+      invoice: row.invoice_id ? invoiceById.get(row.invoice_id) ?? null : null,
     }),
   )
 
@@ -286,6 +326,9 @@ export async function fetchBillingData(input: {
     method: row.method,
     note: row.note,
     receivedAt: row.received_at,
+    paymentGroupId: row.payment_group_id,
+    invoiceId: row.invoice_id,
+    invoiceNumber: row.invoice_id ? invoiceById.get(row.invoice_id)?.number ?? null : null,
   }))
 
   const engagementRevenueItems = ((detailResult.data ?? []) as DetailRow[])

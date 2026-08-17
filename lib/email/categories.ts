@@ -14,6 +14,8 @@ export const EMAIL_CATEGORIES = [
   'scheduling_link',
   'sla_task_nudge',
   'sla_task_internal_reminder',
+  'invoice_sent',
+  'invoice_reminder',
   'manual',
 ] as const
 
@@ -125,6 +127,18 @@ export const EMAIL_CATEGORY_META: Record<EmailCategory, EmailCategoryMeta> = {
     label: 'SLA task internal reminder',
     description: 'Sent to the firm when an attorney-owned SLA task reaches its nudge date.',
     recipient: 'internal',
+  },
+  invoice_sent: {
+    category: 'invoice_sent',
+    label: 'Invoice',
+    description: 'Sent to a client when the firm issues an invoice, with the invoice attached.',
+    recipient: 'client',
+  },
+  invoice_reminder: {
+    category: 'invoice_reminder',
+    label: 'Invoice payment reminder',
+    description: 'Sent to a client when an issued invoice passes its due date and still owes a balance.',
+    recipient: 'client',
   },
   manual: {
     category: 'manual',
