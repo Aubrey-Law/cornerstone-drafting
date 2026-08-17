@@ -187,6 +187,8 @@ export function CalendarClient() {
   const [outlookConnected, setOutlookConnected] = useState(true)
   const [outlookCalendars, setOutlookCalendars] = useState<OutlookCalendarRef[]>([])
   const [outlookTruncated, setOutlookTruncated] = useState(false)
+  const [outlookError, setOutlookError] = useState<string | null>(null)
+  const [outlookSkipped, setOutlookSkipped] = useState<string[]>([])
   const [attention, setAttention] = useState<AttentionItem[]>([])
   const [rail, setRail] = useState<CalendarRailData>({ datesThisWeek: [], followUps: [], openSlots: [] })
   const [planData, setPlanData] = useState<PlanData | null>(null)
@@ -236,6 +238,12 @@ export function CalendarClient() {
         setOutlookConnected(Boolean(outlookJson.connected))
         setOutlookCalendars(outlookJson.calendars ?? [])
         setOutlookTruncated(Boolean(outlookJson.truncated))
+        setOutlookSkipped(outlookJson.skipped ?? [])
+        setOutlookError(
+          outlookRes.ok
+            ? (typeof outlookJson.error === 'string' ? outlookJson.error : null)
+            : `Outlook request failed (${outlookRes.status})`,
+        )
         // The Outlook fetch also mirrors Outlook-side moves and deletions back
         // onto the appointment rows. Those writes land after the parallel
         // appointments read, so re-read once when anything actually changed.
@@ -256,6 +264,8 @@ export function CalendarClient() {
         setOutlookEvents([])
         setOutlookCalendars([])
         setOutlookTruncated(false)
+        setOutlookSkipped([])
+        setOutlookError(null)
       }
       setAppointments(appointmentRows)
     } catch {
@@ -758,7 +768,18 @@ export function CalendarClient() {
             />
             Outlook events
             {showOutlook && !outlookConnected && (
-              <span className="text-amber-700">⚠ not connected</span>
+              <span className="text-amber-700" title={outlookError ?? undefined}>
+                ⚠ not connected{outlookError ? ` — ${outlookError}` : ''}
+              </span>
+            )}
+            {showOutlook && outlookConnected && outlookSkipped.length > 0 && (
+              <span
+                className="text-amber-700"
+                title={`Outlook would not return these calendars: ${outlookSkipped.join(', ')}`}
+              >
+                ⚠ {outlookSkipped.length} calendar
+                {outlookSkipped.length === 1 ? '' : 's'} unavailable
+              </span>
             )}
             {showOutlook && outlookConnected && outlookCalendars.length > 1 && (
               <span title={outlookCalendars.map(c => c.name).join(', ')}>

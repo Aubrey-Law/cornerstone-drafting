@@ -302,10 +302,19 @@ export function mapGraphEventTimes(raw: unknown): Map<string, OutlookEventTimes>
   return byId
 }
 
-const CALENDAR_VIEW_MAX_PAGES = 10
+const CALENDAR_VIEW_MAX_PAGES = 5
+const SECONDARY_CALENDAR_MAX_PAGES = 2
 const CALENDAR_VIEW_PAGE_SIZE = 200
-const MAX_CALENDARS = 50
+const MAX_SECONDARY_CALENDARS = 15
 const CALENDAR_VIEW_SELECT = 'id,seriesMasterId,subject,isAllDay,isCancelled,showAs,start,end'
+
+/**
+ * Wall-clock budget for reading the extra calendars. The default calendar is
+ * fetched first and is never subject to this — the budget only decides how
+ * many *additional* calendars we still have time for before the serverless
+ * function's own limit would cut us off.
+ */
+const SECONDARY_CALENDAR_BUDGET_MS = 6_000
 
 /** One calendar in the connected mailbox. */
 export interface OutlookCalendarRef {
@@ -321,6 +330,8 @@ export interface CalendarViewResult {
   calendars: OutlookCalendarRef[]
   /** True when a calendar had more pages than we read — events were left out. */
   truncated: boolean
+  /** Names of calendars Graph would not serve, or that we ran out of time for. */
+  skipped: string[]
 }
 
 /**
@@ -337,7 +348,7 @@ export async function listMailboxCalendars(): Promise<OutlookCalendarRef[]> {
 async function fetchMailboxCalendars(token: string): Promise<OutlookCalendarRef[]> {
   const params = new URLSearchParams({
     $select: 'id,name,isDefaultCalendar',
-    $top: String(MAX_CALENDARS),
+    $top: '50',
   })
   const r = await graphFetch(`${GRAPH_BASE}/me/calendars?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -363,10 +374,11 @@ async function fetchMailboxCalendars(token: string): Promise<OutlookCalendarRef[
 async function fetchCalendarViewPages(
   token: string,
   firstUrl: string,
+  maxPages: number,
 ): Promise<{ items: unknown[]; truncated: boolean }> {
   let url: string | null = firstUrl
   const items: unknown[] = []
-  for (let page = 0; url && page < CALENDAR_VIEW_MAX_PAGES; page++) {
+  for (let page = 0; url && page < maxPages; page++) {
     const r = await graphFetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -401,11 +413,27 @@ function calendarViewUrl(calendarId: string | null, fromIso: string, toIso: stri
   return `${base}?${params.toString()}`
 }
 
+/** Tag each raw Graph item with the calendar it was read from. */
+function tagWithCalendar(items: unknown[], id: string | null, name: string | null): unknown[] {
+  if (!id && !name) return items
+  return items.map(item =>
+    item && typeof item === 'object'
+      ? { ...(item as Record<string, unknown>), calendarId: id, calendarName: name }
+      : item,
+  )
+}
+
 /**
- * The attorney's Outlook events for a range across **every** calendar in the
- * mailbox (raw Graph events, UTC), each tagged with its calendar id and name.
- * Throws when Outlook is unreachable or not connected; falls back to the
- * default calendar alone if the mailbox's calendar list cannot be read.
+ * The attorney's Outlook events for a range, across the mailbox's calendars
+ * (raw Graph events, UTC), each tagged with its calendar id and name.
+ *
+ * The **default calendar is authoritative**: it is read first, on its own, via
+ * `/me/calendarView`, and a failure there is a real "cannot read Outlook" and
+ * throws. Every other calendar is best-effort enrichment — one that Graph
+ * refuses to serve (the Birthdays calendar and subscribed holiday calendars
+ * commonly error) is recorded in `skipped` and never takes the view down with
+ * it. Reading the extras is also time-boxed, so a slow mailbox cannot push the
+ * request past the serverless function's own limit.
  */
 export async function listCalendarView(
   fromIso: string,
@@ -415,48 +443,72 @@ export async function listCalendarView(
   if (!conn) throw new Error('Microsoft Outlook is not connected')
   const token = await getAccessToken(conn.user_id)
 
-  let calendars: OutlookCalendarRef[]
+  // 1. The default calendar. Required — this is what "connected" means.
+  const primary = await fetchCalendarViewPages(
+    token,
+    calendarViewUrl(null, fromIso, toIso),
+    CALENDAR_VIEW_MAX_PAGES,
+  )
+
+  // 2. The rest of the mailbox, best effort. Never fatal from here down.
+  let mailbox: OutlookCalendarRef[] = []
   try {
-    calendars = await fetchMailboxCalendars(token)
+    mailbox = await fetchMailboxCalendars(token)
   } catch (err) {
-    // Degrade to the primary calendar rather than losing the view entirely.
     console.error('[appointments] could not list mailbox calendars', err)
-    const { items, truncated } = await fetchCalendarViewPages(
-      token,
-      calendarViewUrl(null, fromIso, toIso),
-    )
-    return { raw: items, calendars: [], truncated }
-  }
-  if (calendars.length === 0) {
-    const { items, truncated } = await fetchCalendarViewPages(
-      token,
-      calendarViewUrl(null, fromIso, toIso),
-    )
-    return { raw: items, calendars: [], truncated }
   }
 
-  const pages = await Promise.all(
-    calendars.map(async calendar => {
+  const defaultCalendar = mailbox.find(calendar => calendar.isDefault) ?? null
+  const raw = tagWithCalendar(
+    primary.items,
+    defaultCalendar?.id ?? null,
+    defaultCalendar?.name ?? null,
+  )
+  if (mailbox.length === 0) {
+    return {
+      raw,
+      calendars: [],
+      truncated: primary.truncated,
+      skipped: [],
+    }
+  }
+
+  const secondary = mailbox
+    .filter(calendar => !calendar.isDefault)
+    .slice(0, MAX_SECONDARY_CALENDARS)
+  const skipped = mailbox
+    .filter(calendar => !calendar.isDefault)
+    .slice(MAX_SECONDARY_CALENDARS)
+    .map(calendar => calendar.name)
+  const deadline = Date.now() + SECONDARY_CALENDAR_BUDGET_MS
+
+  const settled = await Promise.allSettled(
+    secondary.map(async calendar => {
+      if (Date.now() > deadline) throw new Error('calendar read budget exhausted')
       const { items, truncated } = await fetchCalendarViewPages(
         token,
         calendarViewUrl(calendar.id, fromIso, toIso),
+        SECONDARY_CALENDAR_MAX_PAGES,
       )
-      return {
-        truncated,
-        items: items.map(item =>
-          item && typeof item === 'object'
-            ? { ...(item as Record<string, unknown>), calendarId: calendar.id, calendarName: calendar.name }
-            : item,
-        ),
-      }
+      return { calendar, truncated, items: tagWithCalendar(items, calendar.id, calendar.name) }
     }),
   )
 
-  return {
-    raw: pages.flatMap(page => page.items),
-    calendars,
-    truncated: pages.some(page => page.truncated),
-  }
+  const readCalendars: OutlookCalendarRef[] = defaultCalendar ? [defaultCalendar] : []
+  let truncated = primary.truncated
+  settled.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      const name = secondary[index]?.name ?? 'Unknown calendar'
+      console.error(`[appointments] skipping Outlook calendar "${name}"`, result.reason)
+      skipped.push(name)
+      return
+    }
+    raw.push(...result.value.items)
+    readCalendars.push(result.value.calendar)
+    truncated = truncated || result.value.truncated
+  })
+
+  return { raw, calendars: readCalendars, truncated, skipped }
 }
 
 /**
