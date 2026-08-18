@@ -12,6 +12,14 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 
 type Context = { params: Promise<{ id: string }> }
 
+/**
+ * Matches the 120s ceiling convertDocxToPdf allows the worker. Without it the
+ * platform default cuts the function off mid-conversion, and because the number
+ * is assigned first that leaves a real issued invoice carrying no documents at
+ * all — the worst of the three outcomes, and the hardest to read from the UI.
+ */
+export const maxDuration = 120
+
 const MONEY = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
 /**

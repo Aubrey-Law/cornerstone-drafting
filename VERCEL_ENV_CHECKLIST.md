@@ -118,6 +118,18 @@ Without this key, staff can still paste notes manually in the dialog; Granola li
 | `SENTRY_AUTH_TOKEN` | Source map upload on production builds |
 | `ADMIN_EMAIL` | Default admin contact email in server helpers |
 
+`DOCX_PDF_CONVERT_URL` is only optional for invoices, which fall back to the
+Word file and say so on the invoice. An invoice issued while the worker was
+unreachable keeps whatever it got until **Generate PDF** is used on the
+invoice, which re-renders it — no number is taken and nothing is re-sent.
+
+The worker is scale-to-zero on Fly, so the first conversion after an idle
+period pays a LibreOffice cold start. Routes that call it therefore set
+`export const maxDuration = 120` to match the client's own ceiling; without
+that the platform default can cut the request off mid-conversion, and because
+the invoice number is assigned first, that leaves a real issued invoice with
+no document attached at all.
+
 ## Optional — online invoice payment
 
 Absent by default. With `PAYMENTS_PROVIDER` unset the checkout route returns

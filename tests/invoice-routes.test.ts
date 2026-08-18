@@ -32,6 +32,9 @@ vi.mock('@/lib/invoices/issue', () => ({
 import { POST as createInvoice } from '@/app/api/admin/billing/invoices/route'
 import { DELETE as discardInvoice, PATCH as updateInvoice } from '@/app/api/admin/billing/invoices/[id]/route'
 import { POST as issueInvoice } from '@/app/api/admin/billing/invoices/[id]/issue/route'
+import { POST as renderInvoiceDocument } from '@/app/api/admin/billing/invoices/[id]/document/route'
+import { maxDuration as issueMaxDuration } from '@/app/api/admin/billing/invoices/[id]/issue/route'
+import { maxDuration as documentMaxDuration } from '@/app/api/admin/billing/invoices/[id]/document/route'
 import { POST as invoicePayment } from '@/app/api/admin/billing/invoices/[id]/payments/route'
 import { POST as voidInvoice } from '@/app/api/admin/billing/invoices/[id]/void/route'
 
@@ -250,6 +253,81 @@ describe('invoice routes', () => {
     // 207: the invoice is real and numbered; only the document is missing.
     expect(response.status).toBe(207)
     expect((await response.json()).warning).toContain('2026-0004')
+  })
+
+  // convertDocxToPdf gives the worker 120s. A shorter function budget kills the
+  // request mid-conversion, and since the number is assigned first that leaves
+  // an issued invoice with nothing attached.
+  it('gives both render routes as long as the converter is allowed', () => {
+    expect(issueMaxDuration).toBe(120)
+    expect(documentMaxDuration).toBe(120)
+  })
+
+  // A PDF is optional at issue time, so an invoice can end up Word-only. This
+  // is the way back once the convert worker is reachable again.
+  it('re-renders an issued invoice without touching its number', async () => {
+    const invoice = {
+      id: INVOICE_ID,
+      matterId: MATTER_ID,
+      number: '2026-0006',
+      status: 'issued',
+      subtotalCents: 245_000,
+    }
+    mocks.reloadInvoice.mockResolvedValue(invoice)
+    mocks.renderAndAttachInvoice.mockResolvedValue({
+      pdf: { id: 'doc-pdf' }, docx: { id: 'doc-docx' }, renderData: {}, pdfUnavailableReason: null,
+    })
+
+    const response = await renderInvoiceDocument(post({}), context)
+
+    expect(response.status).toBe(200)
+    expect(mocks.renderAndAttachInvoice).toHaveBeenCalledWith(invoice, USER_ID)
+    // Nothing re-issues: no number is taken and no send is triggered.
+    expect(mocks.rpc).not.toHaveBeenCalled()
+    expect(mocks.emailInvoice).not.toHaveBeenCalled()
+  })
+
+  it('reports the reason when the retry still cannot make a PDF', async () => {
+    mocks.reloadInvoice.mockResolvedValue({ id: INVOICE_ID, matterId: MATTER_ID, status: 'issued' })
+    mocks.renderAndAttachInvoice.mockResolvedValue({
+      pdf: null,
+      docx: { id: 'doc-docx' },
+      renderData: {},
+      pdfUnavailableReason: 'DOCX→PDF conversion is not configured.',
+    })
+
+    const response = await renderInvoiceDocument(post({}), context)
+
+    expect(response.status).toBe(200)
+    expect((await response.json()).pdfUnavailableReason).toContain('not configured')
+  })
+
+  it('refuses to render a draft, which has no number to print', async () => {
+    mocks.reloadInvoice.mockResolvedValue({ id: INVOICE_ID, matterId: MATTER_ID, status: 'draft' })
+
+    const response = await renderInvoiceDocument(post({}), context)
+
+    expect(response.status).toBe(409)
+    expect(mocks.renderAndAttachInvoice).not.toHaveBeenCalled()
+  })
+
+  it('refuses to render a void invoice', async () => {
+    mocks.reloadInvoice.mockResolvedValue({ id: INVOICE_ID, matterId: MATTER_ID, status: 'void' })
+
+    const response = await renderInvoiceDocument(post({}), context)
+
+    expect(response.status).toBe(409)
+    expect(mocks.renderAndAttachInvoice).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a render failure as a bad gateway, not a 500', async () => {
+    mocks.reloadInvoice.mockResolvedValue({ id: INVOICE_ID, matterId: MATTER_ID, status: 'issued' })
+    mocks.renderAndAttachInvoice.mockRejectedValue(new Error('convert worker unreachable'))
+
+    const response = await renderInvoiceDocument(post({}), context)
+
+    expect(response.status).toBe(502)
+    expect((await response.json()).error).toContain('convert worker unreachable')
   })
 
   it('issues without sending when there is no address on file', async () => {

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { loadFirmSettings } from '@/lib/firmSettings'
+import { isDocxPdfConvertConfigured } from '@/lib/docxPdfConvert'
 import { isPaymentProcessorConfigured } from '@/lib/payments'
 import { fetchInvoice } from '@/lib/queries/invoices'
 import { getCachedClaims } from '@/lib/supabaseServer'
@@ -29,6 +30,7 @@ export default async function InvoiceDetailPage({
     <InvoiceDetailClient
       invoice={invoice}
       paymentsEnabled={isPaymentProcessorConfigured()}
+      pdfConversionEnabled={isDocxPdfConvertConfigured()}
       firm={{
         name: firm.firmName,
         remitTo: [firm.firmName, firm.street, cityStateZip, firm.phone, firm.email]
