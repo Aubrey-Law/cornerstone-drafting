@@ -29,9 +29,12 @@
 //     applied migrations. That case is now told apart by name and sent to the
 //     repair it actually needs.
 //
-// Nothing deploys migrations automatically here — Vercel ships code only — so a
-// merged migration reaches the database only when someone remembers to run
-// `supabase db push`. The scheduled run is what catches the time they don't.
+// `.github/workflows/db-migrate-deploy.yml` applies migrations when they merge
+// to main, so the plain "nobody ran db push" case above should no longer happen.
+// The scheduled run stays as the check on that: a deploy that failed and went
+// unnoticed, a migration applied out-of-band under a wall-clock version, or a
+// version `db push` skipped because the history already claimed it all still
+// land here and nowhere else.
 //
 // Run: npm run check:migration-drift
 // Exits 1 on a duplicate, colliding, orphaned or out-of-order migration always,

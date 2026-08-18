@@ -1,0 +1,132 @@
+name: Deploy database migrations
+
+# Applies migrations to the shared firm database when they merge to main.
+#
+# Until this existed, a merged migration reached the database only when someone
+# remembered to run `supabase db push` by hand, and the record of what that costs
+# is written up in scripts/checkMigrationDrift.mjs: an opt-in index that sat
+# unapplied for weeks while every save failed with 42P10, a hand-applied
+# migration stamped with a wall-clock version that then blocked `db push`
+# entirely, and a version used twice where the second file's SQL silently never
+# ran. Most recently four migrations shipped with live invoice and folder code
+# and went unrecorded for a day.
+#
+# The drift check is the alarm for that; this is the fix. The alarm stays, since
+# a deploy that fails still has to be noticed, and it now also covers the case
+# this workflow cannot: a migration applied out-of-band, or a history row with no
+# file behind it.
+#
+# ORDERING. Vercel ships code on the same push, independently, so the schema
+# change and the code that needs it land within a minute or two of each other in
+# no guaranteed order. Migrations must therefore be additive and safe to run
+# against the previous release: add nullable columns and new tables, backfill,
+# and leave drops and renames to a later migration once nothing reads the old
+# shape. That is the discipline this workflow assumes rather than one it can
+# enforce.
+#
+# APPROVAL GATE. The job names a `production` environment. Out of the box that
+# deploys straight through; adding required reviewers to that environment under
+# Settings → Environments turns every migration deploy into a notification to
+# approve, without going back to "somebody has to remember a CLI command".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never two pushes at once against one database, and never cancel one midway:
+# `db push` applies migrations in sequence and a killed run leaves the history
+# describing less than the schema.
+concurrency:
+  group: db-migrate-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Apply merged migrations to the database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # Fails rather than warns and skips. The other database workflows are
+      # checks, where skipping costs a signal; this one is the deploy, and a
+      # deploy that quietly does nothing is the exact failure being fixed.
+      - name: Require credentials
+        run: |
+          missing=
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -n "$SUPABASE_DB_PASSWORD" ] || missing="$missing SUPABASE_DB_PASSWORD"
+          [ -n "$SUPABASE_URL" ] || missing="$missing SUPABASE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — merged migrations are NOT reaching the database. Add them under Settings → Secrets and variables → Actions, then re-run this workflow."
+            exit 1
+          fi
+
+      # The repo pins a `supabase` devDependency and supabase/migrations/README.md
+      # warns about version drift before any `db push`, so the CLI here is the
+      # pinned one rather than whatever is newest.
+      #
+      # Read from the lockfile first: package.json carries a caret range, whose
+      # floor is not what `npm ci` installs. Taking the range would run a CLI
+      # older than the one the migration was written and dry-run against, which
+      # is the same drift the README warns about pointed the other way.
+      - name: Resolve the pinned CLI version
+        id: cli
+        run: |
+          version=$(node -p "require('./package-lock.json').packages['node_modules/supabase']?.version || require('./package.json').devDependencies.supabase.replace(/^[^0-9]*/, '')")
+          echo "Using Supabase CLI $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ steps.cli.outputs.version }}
+
+      - name: Resolve the project ref
+        run: |
+          ref=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://([^.]+)\..*$#\1#')
+          case "$ref" in
+            "" | *[!a-z0-9]* )
+              echo "::error::Could not read a project ref out of SUPABASE_URL. Expected https://<ref>.supabase.co."
+              exit 1
+              ;;
+          esac
+          echo "PROJECT_REF=$ref" >> "$GITHUB_ENV"
+
+      - name: Link the project
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      # Logged before anything runs, so the run itself is the record of what was
+      # applied to a production database and when.
+      - name: Show what will apply
+        run: supabase db push --dry-run
+
+      - name: Apply
+        run: supabase db push
+
+      # The post-condition, not a formality: `db push` reports success for a
+      # version it skipped because the history already claimed it, which is how
+      # 20260909000000 shipped SQL that never ran. --strict fails on anything
+      # merged but unapplied, so a skip that mattered still turns the run red.
+      - name: Verify the repo and the history now agree
+        run: npm run check:migration-drift -- --strict
+
+      - name: Explain a failure
+        if: failure()
+        run: |
+          echo "::error::Migrations were not fully applied. The database may be mid-way through the set — check 'supabase migration list' against supabase/migrations/ before merging anything else, and see supabase/migrations/README.md for the reconciliation steps."
