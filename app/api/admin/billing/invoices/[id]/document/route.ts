@@ -5,6 +5,9 @@ import { reloadInvoice, renderAndAttachInvoice } from '@/lib/invoices/issue'
 
 type Context = { params: Promise<{ id: string }> }
 
+/** Same conversion, same ceiling as the issue route. */
+export const maxDuration = 120
+
 /**
  * Re-renders an issued invoice's documents and attaches them.
  *

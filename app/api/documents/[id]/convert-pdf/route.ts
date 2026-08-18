@@ -18,6 +18,9 @@ import { putFileToR2, safeUploadFilename } from '@/lib/documentUpload'
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
+/** LibreOffice conversion can outlive the platform default; see docxPdfConvert. */
+export const maxDuration = 120
+
 /**
  * POST /api/documents/[id]/convert-pdf
  * Converts the active DOCX via the external LibreOffice worker and registers a PDF

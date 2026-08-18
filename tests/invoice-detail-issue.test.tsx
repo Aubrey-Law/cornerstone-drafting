@@ -225,7 +225,13 @@ describe('issuing from the invoice detail page', () => {
   // The banner used to hardcode "the Word version was sent instead" and blame
   // the converter, both of which can be false.
   it('does not claim the Word file was emailed when it never was', () => {
-    renderDetail({ status: 'issued', number: '2026-0004', sentAt: null, pdfDocumentId: null })
+    renderDetail({
+      status: 'issued',
+      number: '2026-0004',
+      sentAt: null,
+      pdfDocumentId: null,
+      docxDocumentId: 'doc-docx',
+    })
 
     const banner = screen.getByRole('status')
     expect(banner.textContent).toContain('Downloading it gives you the Word file')
@@ -238,16 +244,50 @@ describe('issuing from the invoice detail page', () => {
       number: '2026-0004',
       sentAt: '2026-08-17T13:00:00.000Z',
       pdfDocumentId: null,
+      docxDocumentId: 'doc-docx',
     })
 
     expect(screen.getByRole('status').textContent).toContain('That is what was emailed')
   })
 
   it('offers no retry, and names the cause, when the converter is down', () => {
-    renderDetail({ status: 'issued', number: '2026-0004', pdfDocumentId: null })
+    renderDetail({
+      status: 'issued',
+      number: '2026-0004',
+      pdfDocumentId: null,
+      docxDocumentId: 'doc-docx',
+    })
 
-    expect(screen.getByRole('status').textContent).toContain('not configured')
+    expect(screen.getByRole('status').textContent).toContain('not reachable')
     expect(screen.queryByRole('button', { name: /Generate PDF/ })).toBeNull()
+  })
+
+  // A killed render leaves an issued invoice with nothing attached. Telling the
+  // attorney they have "only the Word version" points them at a file that is
+  // not there.
+  it('separates a render that never finished from a PDF that was skipped', () => {
+    renderDetail({
+      status: 'issued',
+      number: '2026-0004',
+      pdfDocumentId: null,
+      docxDocumentId: null,
+    })
+
+    const banner = screen.getByRole('status')
+    expect(banner.textContent).toContain('No document was produced')
+    expect(banner.textContent).not.toContain('only the Word version')
+  })
+
+  it('offers the retry with no documents at all, even with the converter down', () => {
+    renderDetail({
+      status: 'issued',
+      number: '2026-0004',
+      pdfDocumentId: null,
+      docxDocumentId: null,
+    })
+
+    // The Word file needs no converter, so there is always something to retry.
+    expect(screen.getByRole('button', { name: /Generate document/ })).toBeTruthy()
   })
 
   it('offers a retry once the converter is available', async () => {
@@ -258,7 +298,12 @@ describe('issuing from the invoice detail page', () => {
       json: async () => ({ invoice: { id: 'inv-1' }, pdfUnavailableReason: null }),
     })
     renderDetail(
-      { status: 'issued', number: '2026-0004', pdfDocumentId: null },
+      {
+        status: 'issued',
+        number: '2026-0004',
+        pdfDocumentId: null,
+        docxDocumentId: 'doc-docx',
+      },
       { pdfConversionEnabled: true },
     )
 

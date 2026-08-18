@@ -433,16 +433,26 @@ export default function InvoiceDetailClient({
           <span className="min-w-0">
             {/* Says only what is true. The old copy claimed the Word file "was
                 sent", which is wrong for an invoice issued without emailing,
-                and blamed the converter without checking whether it is up. */}
-            This invoice has no PDF — only the Word version.
-            {invoice.sentAt
-              ? ' That is what was emailed, and the email shows every line in full.'
-              : ' Downloading it gives you the Word file.'}
+                and blamed the converter without checking whether it is up.
+                No documents at all is a different failure from Word-only —
+                it means the render never finished, not that the PDF step
+                was skipped. */}
+            {documentId
+              ? <>
+                  This invoice has no PDF — only the Word version.
+                  {invoice.sentAt
+                    ? ' That is what was emailed, and the email shows every line in full.'
+                    : ' Downloading it gives you the Word file.'}
+                </>
+              : 'No document was produced for this invoice — the render did not finish. '
+                + 'The invoice itself is real and keeps its number.'}
             {pdfConversionEnabled
-              ? ' The converter is available now, so a PDF can be produced.'
-              : ' The DOCX→PDF converter is not configured, so no PDF can be produced yet.'}
+              ? ' The converter is available now, so a document can be produced.'
+              : ' The DOCX→PDF converter is not reachable, so no PDF can be produced yet.'}
           </span>
-          {pdfConversionEnabled && (
+          {/* With no documents at all the retry is worth offering whatever the
+              converter is doing — the Word file does not need it. */}
+          {(pdfConversionEnabled || !documentId) && (
             <Button
               type="button"
               variant="outline"
@@ -452,7 +462,9 @@ export default function InvoiceDetailClient({
               onClick={() => void renderDocuments()}
             >
               <FileText className="size-4" aria-hidden />
-              {busy === 'render' ? 'Generating…' : 'Generate PDF'}
+              {busy === 'render'
+                ? 'Generating…'
+                : documentId ? 'Generate PDF' : 'Generate document'}
             </Button>
           )}
         </div>

@@ -33,6 +33,8 @@ import { POST as createInvoice } from '@/app/api/admin/billing/invoices/route'
 import { DELETE as discardInvoice, PATCH as updateInvoice } from '@/app/api/admin/billing/invoices/[id]/route'
 import { POST as issueInvoice } from '@/app/api/admin/billing/invoices/[id]/issue/route'
 import { POST as renderInvoiceDocument } from '@/app/api/admin/billing/invoices/[id]/document/route'
+import { maxDuration as issueMaxDuration } from '@/app/api/admin/billing/invoices/[id]/issue/route'
+import { maxDuration as documentMaxDuration } from '@/app/api/admin/billing/invoices/[id]/document/route'
 import { POST as invoicePayment } from '@/app/api/admin/billing/invoices/[id]/payments/route'
 import { POST as voidInvoice } from '@/app/api/admin/billing/invoices/[id]/void/route'
 
@@ -251,6 +253,14 @@ describe('invoice routes', () => {
     // 207: the invoice is real and numbered; only the document is missing.
     expect(response.status).toBe(207)
     expect((await response.json()).warning).toContain('2026-0004')
+  })
+
+  // convertDocxToPdf gives the worker 120s. A shorter function budget kills the
+  // request mid-conversion, and since the number is assigned first that leaves
+  // an issued invoice with nothing attached.
+  it('gives both render routes as long as the converter is allowed', () => {
+    expect(issueMaxDuration).toBe(120)
+    expect(documentMaxDuration).toBe(120)
   })
 
   // A PDF is optional at issue time, so an invoice can end up Word-only. This
