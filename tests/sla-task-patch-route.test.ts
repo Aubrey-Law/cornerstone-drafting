@@ -1,63 +1,79 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MatterTaskRow } from '@/lib/slaTasks/types'
+import { toPlanTask } from '@/lib/slaTasks/plan'
+import type { PlanTask } from '@/lib/slaTasks/types'
+import type { TaskRow, TaskStatus } from '@/lib/tasks/types'
+import { taskFixture } from './fixtures/task'
 
 /**
  * Executed-handler tests for PATCH /api/matters/[matterId]/tasks/[taskId].
  *
- * The clock-pause rules are the part of the SLA system that quietly moves dates
- * a client has already been told about, so the arithmetic is pinned here rather
+ * The clock-pause rules are the part of the plan that quietly moves dates a
+ * client has already been told about, so the arithmetic is pinned here rather
  * than left to the UI to demonstrate.
  */
 
 const MATTER_ID = 'matter-1'
 
-function task(overrides: Partial<MatterTaskRow> = {}): MatterTaskRow {
-  return {
+/** A plan day, as `tasks` stores it. See lib/slaTasks/plan.ts. */
+function at(dateKey: string | null): string | null {
+  return dateKey ? `${dateKey}T12:00:00.000Z` : null
+}
+
+/**
+ * Plan-shaped overrides, since that is the vocabulary these cases are written
+ * in; the fixture converts them to the timestamp columns the row actually has.
+ */
+interface PlanOverrides {
+  id?: string
+  sort_order?: number
+  status?: TaskStatus
+  skipped_at?: string | null
+  paused_at?: string | null
+  pauses_clock?: boolean
+  due_date?: string | null
+  nudge_date?: string | null
+  escalation_date?: string | null
+}
+
+function task(overrides: PlanOverrides = {}): TaskRow {
+  const { due_date = '2026-03-08', nudge_date = '2026-03-06', escalation_date = null, ...rest } =
+    overrides
+  return taskFixture({
     id: 'task-a',
     matter_id: MATTER_ID,
-    template_id: 'template-1',
+    source: 'sla',
+    plan_template_id: 'template-1',
     phase: 'onboarding',
-    name: 'Client returns questionnaire & documents',
+    title: 'Client returns questionnaire & documents',
     sort_order: 3,
-    assignee: 'client',
-    skill: null,
-    conditional: false,
+    owner: 'client',
     pauses_clock: true,
-    start_date: '2026-03-01',
-    due_date: '2026-03-08',
-    nudge_date: '2026-03-06',
+    plan_start_date: '2026-03-01',
+    due_at: at(due_date),
+    hard_due_at: at(due_date),
+    nudge_at: at(nudge_date),
     nudge_tier: 'gentle',
-    escalation_date: null,
-    escalation_tier: null,
+    escalation_at: at(escalation_date),
     due_offset_days: 7,
     nudge_offset_days: 5,
-    escalation_offset_days: null,
-    relative_to: null,
-    pre_engagement: false,
-    auto: false,
-    gate: null,
-    extends_target_days: null,
-    recurring_interval_days: null,
-    variant: null,
-    triggers_day_zero: false,
-    status: 'pending',
-    completed_at: null,
-    skipped_at: null,
-    notes: null,
-    paused_at: null,
-    total_paused_days: 0,
-    nudge_sent_at: null,
-    escalation_sent_at: null,
     created_at: '2026-03-01T00:00:00Z',
     updated_at: '2026-03-01T00:00:00Z',
-    ...overrides,
-  }
+    ...rest,
+  })
 }
+
+/** The same row as the plan sees it — what `fetchPlanTasks` hands the handler. */
+function plan(overrides: PlanOverrides = {}): PlanTask {
+  return toPlanTask(task(overrides))
+}
+
+/** Archived because it did not apply, which is how the plan spells "skipped". */
+const SKIPPED = { status: 'archived' as const, skipped_at: '2026-03-04T00:00:00Z' }
 
 /** Every `update()` the handler issued, in order, with the row it targeted. */
 const updates: { id: string | null; patch: Record<string, unknown> }[] = []
-let currentTask: MatterTaskRow = task()
-let siblings: MatterTaskRow[] = []
+let currentTask: TaskRow = task()
+let siblings: PlanTask[] = []
 
 /**
  * Enough of the PostgREST builder to drive this route: filters chain and are
@@ -110,7 +126,7 @@ vi.mock('@/lib/apiAuth', () => ({
 }))
 
 vi.mock('@/lib/slaTasks/queries', () => ({
-  fetchMatterTasks: async () => siblings,
+  fetchPlanTasks: async () => siblings,
 }))
 
 vi.mock('@/lib/firmDate', async importOriginal => {
@@ -145,18 +161,18 @@ beforeEach(() => {
 describe('PATCH matter task', () => {
   it('completing a clock-pausing task late pushes the open tasks after it', async () => {
     siblings = [
-      task({ id: 'task-a', sort_order: 3, status: 'completed' }),
-      task({
+      plan({ id: 'task-a', sort_order: 3, status: 'done' }),
+      plan({
         id: 'task-b',
         sort_order: 4,
         due_date: '2026-03-11',
         nudge_date: '2026-03-10',
         pauses_clock: false,
       }),
-      task({ id: 'task-c', sort_order: 5, due_date: '2026-03-15', status: 'skipped' }),
+      plan({ id: 'task-c', sort_order: 5, due_date: '2026-03-15', ...SKIPPED }),
     ]
 
-    const res = await PATCH(request({ status: 'completed' }), { params })
+    const res = await PATCH(request({ status: 'done' }), { params })
     const body = await res.json()
 
     expect(res.status).toBe(200)
@@ -167,7 +183,7 @@ describe('PATCH matter task', () => {
     ])
 
     const own = updates[0].patch
-    expect(own.status).toBe('completed')
+    expect(own.status).toBe('done')
     expect(own.total_paused_days).toBe(6)
     // The skipped task keeps its historical date.
     expect(updates.map(entry => entry.id)).toEqual(['task-a', 'task-b'])
@@ -175,9 +191,12 @@ describe('PATCH matter task', () => {
 
   it('does not move anything when a clock-pausing task lands on time', async () => {
     currentTask = task({ due_date: '2026-03-20' })
-    siblings = [currentTask, task({ id: 'task-b', sort_order: 4, due_date: '2026-03-25' })]
+    siblings = [
+      plan({ due_date: '2026-03-20' }),
+      plan({ id: 'task-b', sort_order: 4, due_date: '2026-03-25' }),
+    ]
 
-    const body = await (await PATCH(request({ status: 'completed' }), { params })).json()
+    const body = await (await PATCH(request({ status: 'done' }), { params })).json()
 
     expect(body.shiftedDays).toBe(0)
     expect(body.shifted).toEqual([])
@@ -187,9 +206,9 @@ describe('PATCH matter task', () => {
 
   it('a task with pauses_clock false never shifts the plan, however late it is', async () => {
     currentTask = task({ pauses_clock: false })
-    siblings = [currentTask, task({ id: 'task-b', sort_order: 4 })]
+    siblings = [plan({ pauses_clock: false }), plan({ id: 'task-b', sort_order: 4 })]
 
-    const body = await (await PATCH(request({ status: 'completed' }), { params })).json()
+    const body = await (await PATCH(request({ status: 'done' }), { params })).json()
 
     expect(body.shiftedDays).toBe(0)
     expect(body.shifted).toEqual([])
@@ -198,8 +217,8 @@ describe('PATCH matter task', () => {
   it('resuming charges the days parked and moves the task itself too', async () => {
     currentTask = task({ status: 'blocked', paused_at: '2026-03-10T12:00:00Z' })
     siblings = [
-      task({ id: 'task-a', sort_order: 3, status: 'active', due_date: '2026-03-08' }),
-      task({ id: 'task-b', sort_order: 4, due_date: '2026-03-11', nudge_date: null }),
+      plan({ id: 'task-a', sort_order: 3, status: 'in_progress', due_date: '2026-03-08' }),
+      plan({ id: 'task-b', sort_order: 4, due_date: '2026-03-11', nudge_date: null }),
     ]
 
     const body = await (await PATCH(request({ paused: false }), { params })).json()
@@ -208,7 +227,7 @@ describe('PATCH matter task', () => {
     expect(body.shiftedDays).toBe(4)
     expect(updates[0].patch).toMatchObject({
       paused_at: null,
-      status: 'active',
+      status: 'in_progress',
       total_paused_days: 4,
     })
     expect(body.shifted).toEqual([
@@ -226,10 +245,13 @@ describe('PATCH matter task', () => {
 
   it('resuming and completing in one call bills the pause once', async () => {
     currentTask = task({ status: 'blocked', paused_at: '2026-03-10T12:00:00Z' })
-    siblings = [currentTask, task({ id: 'task-b', sort_order: 4, due_date: '2026-03-11' })]
+    siblings = [
+      plan({ status: 'blocked', paused_at: '2026-03-10T12:00:00Z' }),
+      plan({ id: 'task-b', sort_order: 4, due_date: '2026-03-11' }),
+    ]
 
     const body = await (
-      await PATCH(request({ paused: false, status: 'completed' }), { params })
+      await PATCH(request({ paused: false, status: 'done' }), { params })
     ).json()
 
     // Six days late, not six plus the four it sat paused.

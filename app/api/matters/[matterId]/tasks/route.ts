@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
-import { fetchMatterTasks } from '@/lib/slaTasks/queries'
+import { fetchMatterPlan } from '@/lib/slaTasks/queries'
 import { summarizeSlaProgress } from '@/lib/slaTasks/schedule'
 import { firmDateKey } from '@/lib/firmDate'
-import { isSlaTaskStatus, type SlaTaskStatus } from '@/lib/slaTasks/types'
+import { TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types'
 
 /**
- * GET /api/matters/[matterId]/tasks — the matter's SLA checklist, earliest due
- * first, with the phase/progress summary the tasks tab renders above it.
+ * GET /api/matters/[matterId]/tasks — the matter's plan: every task on the
+ * matter in plan order, with the phase/progress summary the Plan view renders
+ * above it.
  *
- * `?status=pending,active` narrows the list. The summary is always computed
+ * Since the SLA plan and the task queue became one table this is not a separate
+ * checklist — it is the same rows the Tasks queue shows, grouped by phase
+ * instead of by due date.
+ *
+ * `?status=open,in_progress` narrows the list. The summary is always computed
  * from the unfiltered set, so "8 of 21 complete" stays true while you filter.
  */
 export async function GET(
@@ -24,12 +29,12 @@ export async function GET(
   const statusParam = new URL(req.url).searchParams.get('status')
   const statuses = (statusParam?.split(',') ?? [])
     .map(value => value.trim())
-    .filter(isSlaTaskStatus) as SlaTaskStatus[]
+    .filter((value): value is TaskStatus => (TASK_STATUSES as readonly string[]).includes(value))
 
   const admin = getAdminClient()
   try {
-    const allTasks = await fetchMatterTasks(admin, matterId)
-    const templateId = allTasks.find(task => task.template_id)?.template_id ?? null
+    const allTasks = await fetchMatterPlan(admin, matterId)
+    const templateId = allTasks.find(task => task.plan_template_id)?.plan_template_id ?? null
 
     // The target is a property of the template the matter was generated from,
     // not of the tasks, so it takes a second read to compute "days remaining".

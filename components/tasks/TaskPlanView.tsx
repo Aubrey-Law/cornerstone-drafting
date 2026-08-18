@@ -32,24 +32,34 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { TabsContent } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { formatFirmDate } from '@/lib/format'
 import { dueTone, type SlaDueTone, type SlaProgress } from '@/lib/slaTasks/schedule'
-import {
-  SLA_PHASES,
-  SLA_PHASE_LABEL,
-  type MatterTaskRow,
-  type SlaPhase,
-  type SlaTaskStatus,
-} from '@/lib/slaTasks/types'
+import { SLA_PHASES, SLA_PHASE_LABEL, type PlanTask, type SlaPhase } from '@/lib/slaTasks/types'
+import { TASK_SOURCE_LABEL, isTaskSkipped } from '@/lib/tasks/types'
 import { cn } from '@/lib/utils'
 
-interface MatterSlaTabProps {
+/**
+ * The status values the plan's menu offers. 'skipped' is not a task status —
+ * the API turns it into `archived` with `skipped_at` set — but it is a distinct
+ * choice here, because skipping a task as not applicable and abandoning it mean
+ * different things to the plan.
+ */
+type PlanStatusChoice = 'open' | 'in_progress' | 'done' | 'skipped' | 'blocked'
+
+interface TaskPlanViewProps {
   matterId: string
-  /** False until the tab is first opened, so its data loads lazily. */
+  /** False until the view is first opened, so its data loads lazily. */
   enabled: boolean
+  /** Called after any change, so the tab badge and queue can refresh. */
+  onTasksChanged?: () => void
+}
+
+const OWNER_LABEL: Record<string, string> = {
+  firm: 'firm',
+  client: 'client',
+  automation: 'automation',
 }
 
 const TONE_CLASS: Record<SlaDueTone, string> = {
@@ -60,12 +70,12 @@ const TONE_CLASS: Record<SlaDueTone, string> = {
   unscheduled: 'text-muted-foreground italic',
 }
 
-const STATUS_ACTIONS: { status: SlaTaskStatus; label: string }[] = [
-  { status: 'active', label: 'Mark in progress' },
-  { status: 'completed', label: 'Mark complete' },
+const STATUS_ACTIONS: { status: PlanStatusChoice; label: string }[] = [
+  { status: 'in_progress', label: 'Mark in progress' },
+  { status: 'done', label: 'Mark complete' },
   { status: 'skipped', label: 'Skip — not applicable' },
   { status: 'blocked', label: 'Block' },
-  { status: 'pending', label: 'Reset to pending' },
+  { status: 'open', label: 'Reset to open' },
 ]
 
 function dayLabel(dateKey: string): string {
@@ -134,16 +144,16 @@ function DaysRemaining({ progress }: { progress: SlaProgress }) {
   )
 }
 
-function TaskRow({
+function PlanTaskRow({
   task,
   busy,
   onStatus,
   onNotes,
   onPause,
 }: {
-  task: MatterTaskRow
+  task: PlanTask
   busy: boolean
-  onStatus: (status: SlaTaskStatus) => void
+  onStatus: (status: PlanStatusChoice) => void
   onNotes: (notes: string) => void
   onPause: (paused: boolean) => void
 }) {
@@ -151,7 +161,8 @@ function TaskRow({
   const [draft, setDraft] = useState(task.notes ?? '')
   useEffect(() => setDraft(task.notes ?? ''), [task.notes])
 
-  const resolved = task.status === 'completed' || task.status === 'skipped'
+  const skipped = isTaskSkipped(task)
+  const resolved = task.status === 'done' || skipped
   const tone = dueTone(task)
 
   return (
@@ -159,10 +170,10 @@ function TaskRow({
       <div className="flex items-start gap-3">
         <Checkbox
           className="mt-0.5"
-          checked={task.status === 'completed'}
+          checked={task.status === 'done'}
           disabled={busy}
           aria-label={`Mark "${task.name}" complete`}
-          onCheckedChange={checked => onStatus(checked === true ? 'completed' : 'pending')}
+          onCheckedChange={checked => onStatus(checked === true ? 'done' : 'open')}
         />
 
         <div className="min-w-0 flex-1">
@@ -176,8 +187,13 @@ function TaskRow({
               {task.name}
             </span>
             <Badge variant="secondary" className="capitalize">
-              {task.assignee}
+              {OWNER_LABEL[task.owner] ?? task.owner}
             </Badge>
+            {/* A hand-added or stage-fired task sits on the same board as the
+                generated plan now, so the board says which is which. */}
+            {task.source !== 'sla' && (
+              <Badge variant="outline">{TASK_SOURCE_LABEL[task.source]}</Badge>
+            )}
             {task.conditional && <Badge variant="outline">conditional</Badge>}
             {task.pauses_clock && <Badge variant="outline">pauses clock</Badge>}
             {task.skill && (
@@ -187,14 +203,14 @@ function TaskRow({
               </Badge>
             )}
             {task.status === 'blocked' && <Badge variant="destructive">blocked</Badge>}
-            {task.status === 'skipped' && <Badge variant="secondary">skipped</Badge>}
+            {skipped && <Badge variant="secondary">skipped</Badge>}
           </div>
 
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
             <span className={TONE_CLASS[tone]}>
               {task.due_date ? `Due ${dayLabel(task.due_date)}` : 'Not scheduled yet'}
             </span>
-            {task.nudge_date && !task.nudge_sent_at && task.status !== 'completed' && (
+            {task.nudge_date && !task.nudge_sent_at && task.status !== 'done' && (
               <span className="text-muted-foreground">· nudge {dayLabel(task.nudge_date)}</span>
             )}
             {task.nudge_sent_at && <span className="text-muted-foreground">· nudged</span>}
@@ -283,10 +299,7 @@ function TaskRow({
   )
 }
 
-/**
- * The matter's SLA plan: the dated checklist generated from a task template,
- * grouped by phase, with the phase progress bar on top.
- */
+/** The dates the plan's schedule hangs off. */
 export interface SlaAnchors {
   discoveryCallAt: string | null
   pmpsAt: string | null
@@ -363,9 +376,17 @@ function KeyDatesCard({
   )
 }
 
-export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
+/**
+ * The matter's plan: the same `tasks` rows the queue shows, grouped by pipeline
+ * phase with the SLA clock on top, plus the key dates the schedule hangs off.
+ *
+ * This used to be its own "SLA plan" tab reading its own `matter_tasks` table.
+ * It is now a second view of the Tasks tab — one store, two ways of looking at
+ * it: the queue answers "what is due", the plan answers "where is this matter".
+ */
+export function TaskPlanView({ matterId, enabled, onTasksChanged }: TaskPlanViewProps) {
   const token = useAccessToken()
-  const [tasks, setTasks] = useState<MatterTaskRow[]>([])
+  const [tasks, setTasks] = useState<PlanTask[]>([])
   const [progress, setProgress] = useState<SlaProgress | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -384,12 +405,12 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
     try {
       const res = await fetch(`/api/matters/${matterId}/tasks`, { headers: authHeaders })
       const body = await res.json()
-      if (!res.ok) throw new Error(body?.error ?? 'Could not load the SLA plan')
+      if (!res.ok) throw new Error(body?.error ?? 'Could not load the plan')
       setTasks(body.tasks ?? [])
       setProgress(body.progress ?? null)
       setAnchors(body.anchors ?? null)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not load the SLA plan')
+      toast.error(e instanceof Error ? e.message : 'Could not load the plan')
     } finally {
       setLoading(false)
     }
@@ -445,13 +466,14 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
           toast.success(`Downstream dates moved out ${body.shiftedDays} day(s)`)
         }
         await load()
+        onTasksChanged?.()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Could not update the task')
       } finally {
         setBusyId(null)
       }
     },
-    [authHeaders, load, matterId],
+    [authHeaders, load, matterId, onTasksChanged],
   )
 
   const generate = useCallback(async () => {
@@ -464,29 +486,36 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
         body: JSON.stringify({ template_name: 'estate_planning_sla' }),
       })
       const body = await res.json()
-      if (!res.ok) throw new Error(body?.error ?? 'Could not generate the SLA plan')
-      toast.success(body.created ? 'SLA plan generated' : 'This matter already has an SLA plan')
+      if (!res.ok) throw new Error(body?.error ?? 'Could not generate the plan')
+      toast.success(body.created ? 'Plan generated' : 'This matter already has a plan')
       await load()
+      onTasksChanged?.()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not generate the SLA plan')
+      toast.error(e instanceof Error ? e.message : 'Could not generate the plan')
     } finally {
       setGenerating(false)
     }
-  }, [authHeaders, load, matterId])
+  }, [authHeaders, load, matterId, onTasksChanged])
 
   const byPhase = useMemo(() => {
-    const groups = new Map<SlaPhase, MatterTaskRow[]>()
+    const groups = new Map<SlaPhase | 'unphased', PlanTask[]>()
     for (const phase of SLA_PHASES) {
       const inPhase = tasks
         .filter(task => task.phase === phase)
         .sort((a, b) => a.sort_order - b.sort_order)
       if (inPhase.length > 0) groups.set(phase, inPhase)
     }
+    // Hand-added work that names no phase still belongs on the board — leaving
+    // it out is how the plan and the queue drifted apart in the first place.
+    const unphased = tasks
+      .filter(task => task.phase === null || !SLA_PHASES.includes(task.phase))
+      .sort((a, b) => a.sort_order - b.sort_order)
+    if (unphased.length > 0) groups.set('unphased', unphased)
     return groups
   }, [tasks])
 
   return (
-    <TabsContent value="sla" className="space-y-4">
+    <div className="space-y-4">
       {loading ? (
         <Card>
           <CardContent className="space-y-2 py-6">
@@ -506,12 +535,12 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
               <CardContent className="px-0">
                 <EmptyState
                   icon={ListChecks}
-                  title="No SLA plan on this matter"
-                  description="Generate the standard estate planning checklist — every task dated from today, with client nudges and internal reminders already scheduled."
+                  title="No plan on this matter"
+                  description="Generate the standard estate planning checklist — every task dated from today, with client nudges and internal reminders already scheduled. The tasks land in this matter's queue too."
                   action={
                     <Button onClick={() => void generate()} disabled={generating}>
                       <CalendarCheck className="size-4" aria-hidden />
-                      {generating ? 'Generating…' : 'Generate SLA plan'}
+                      {generating ? 'Generating…' : 'Generate plan'}
                     </Button>
                   }
                 />
@@ -525,7 +554,7 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
                     <CardTitle className="text-sm">
                       {progress.currentPhase
                         ? `${SLA_PHASE_LABEL[progress.currentPhase]} phase`
-                        : 'SLA plan'}
+                        : 'Plan'}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
                       {progress.complete} of {progress.total} tasks complete
@@ -545,16 +574,18 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
               {[...byPhase.entries()].map(([phase, phaseTasks]) => (
                 <Card key={phase}>
                   <CardHeader className="border-b [.border-b]:pb-3">
-                    <CardTitle className="text-sm">{SLA_PHASE_LABEL[phase]}</CardTitle>
+                    <CardTitle className="text-sm">
+                      {phase === 'unphased' ? 'No stage' : SLA_PHASE_LABEL[phase]}
+                    </CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      {phaseTasks.filter(task => task.status === 'completed').length} of{' '}
+                      {phaseTasks.filter(task => task.status === 'done').length} of{' '}
                       {phaseTasks.length} complete
                     </p>
                   </CardHeader>
                   <CardContent className="px-0">
                     <ul className="divide-y divide-border">
                       {phaseTasks.map(task => (
-                        <TaskRow
+                        <PlanTaskRow
                           key={task.id}
                           task={task}
                           busy={busyId === task.id}
@@ -571,6 +602,6 @@ export function MatterSlaTab({ matterId, enabled }: MatterSlaTabProps) {
           )}
         </>
       )}
-    </TabsContent>
+    </div>
   )
 }

@@ -5,14 +5,16 @@ import { getFirmConfig } from '@/lib/firmConfig'
 import { firmTodayKey } from '@/lib/firmDate'
 import { appUrl } from '@/lib/urls'
 import { formatFirmDate } from '@/lib/format'
-import { MATTER_TASK_COLUMNS, type MatterTaskRow, type SlaNudgeTier } from '@/lib/slaTasks/types'
+import { toPlanTasks } from '@/lib/slaTasks/plan'
+import { PLAN_TASK_COLUMNS, type PlanTask, type SlaNudgeTier } from '@/lib/slaTasks/types'
+import type { TaskRow } from '@/lib/tasks/types'
 
 export const dynamic = 'force-dynamic'
 
 type Kind = 'nudge' | 'escalation'
 
 interface Pending {
-  task: MatterTaskRow
+  task: PlanTask
   kind: Kind
   tier: SlaNudgeTier
 }
@@ -46,7 +48,7 @@ function subjectFor(pending: Pending, contact: MatterContact, firmName: string):
 }
 
 function bodyFor(pending: Pending, contact: MatterContact, firmName: string): string {
-  const due = formatFirmDate(`${pending.task.due_date}T12:00:00Z`)
+  const due = pending.task.due_date ? formatFirmDate(`${pending.task.due_date}T12:00:00Z`) : 'soon'
   const name = escapeHtml(contact.client_name || 'there')
   const taskName = escapeHtml(pending.task.name)
 
@@ -55,7 +57,7 @@ function bodyFor(pending: Pending, contact: MatterContact, firmName: string): st
       <p><strong>${taskName}</strong> is due ${due} on ${escapeHtml(
         contact.client_name || contact.matter_name || 'an open matter',
       )}.</p>
-      <p><a href="${appUrl(`/admin/matters/${pending.task.matter_id}?tab=sla`)}" style="color:#1a6b72">Open the matter plan →</a></p>
+      <p><a href="${appUrl(`/admin/matters/${pending.task.matter_id}?tab=tasks&view=plan`)}" style="color:#1a6b72">Open the matter plan →</a></p>
     </div>`
   }
 
@@ -74,7 +76,8 @@ function bodyFor(pending: Pending, contact: MatterContact, firmName: string): st
 }
 
 /**
- * GET /api/cron/sla-task-nudges — weekday-morning pass over `matter_tasks`.
+ * GET /api/cron/sla-task-nudges — weekday-morning pass over the plan tasks in
+ * `public.tasks`.
  *
  * Sends every nudge whose date has landed and that has not been sent, then the
  * same for escalations, and stamps the row so it never fires twice. A task that
@@ -90,20 +93,25 @@ export async function GET(req: Request) {
   const admin = getAdminClient()
   const today = firmTodayKey()
 
+  // Plan days are stored at 12:00Z, so "the nudge date has landed" is
+  // `nudge_at <= today at 12:00Z`. The cron runs on weekday mornings, before
+  // that instant in the firm's timezone, which is why the bound is inclusive.
+  const dueBy = `${today}T12:00:00.000Z`
+
   const [nudges, escalations] = await Promise.all([
     admin
-      .from('matter_tasks')
-      .select(MATTER_TASK_COLUMNS)
-      .in('status', ['pending', 'active'])
-      .not('nudge_date', 'is', null)
-      .lte('nudge_date', today)
+      .from('tasks')
+      .select(PLAN_TASK_COLUMNS)
+      .in('status', ['open', 'in_progress'])
+      .not('nudge_at', 'is', null)
+      .lte('nudge_at', dueBy)
       .is('nudge_sent_at', null),
     admin
-      .from('matter_tasks')
-      .select(MATTER_TASK_COLUMNS)
-      .in('status', ['pending', 'active'])
-      .not('escalation_date', 'is', null)
-      .lte('escalation_date', today)
+      .from('tasks')
+      .select(PLAN_TASK_COLUMNS)
+      .in('status', ['open', 'in_progress'])
+      .not('escalation_at', 'is', null)
+      .lte('escalation_at', dueBy)
       .is('escalation_sent_at', null),
   ])
 
@@ -113,12 +121,12 @@ export async function GET(req: Request) {
   }
 
   const pending: Pending[] = [
-    ...((nudges.data ?? []) as unknown as MatterTaskRow[]).map(task => ({
+    ...toPlanTasks((nudges.data ?? []) as unknown as TaskRow[]).map(task => ({
       task,
       kind: 'nudge' as const,
       tier: (task.nudge_tier ?? 'gentle') as SlaNudgeTier,
     })),
-    ...((escalations.data ?? []) as unknown as MatterTaskRow[]).map(task => ({
+    ...toPlanTasks((escalations.data ?? []) as unknown as TaskRow[]).map(task => ({
       task,
       kind: 'escalation' as const,
       tier: (task.escalation_tier ?? 'firm') as SlaNudgeTier,
@@ -129,7 +137,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, sent: 0, skipped: 0 })
   }
 
-  const matterIds = [...new Set(pending.map(item => item.task.matter_id))]
+  const matterIds = [
+    ...new Set(pending.map(item => item.task.matter_id).filter((id): id is string => !!id)),
+  ]
   const { data: matterRows, error: matterError } = await admin
     .from('v_matter_pipeline')
     .select('matter_id, matter_name, client_name, client_email')
@@ -150,7 +160,7 @@ export async function GET(req: Request) {
   const skipped: string[] = []
 
   for (const item of pending) {
-    const contact = contacts.get(item.task.matter_id)
+    const contact = item.task.matter_id ? contacts.get(item.task.matter_id) : undefined
     if (!contact) {
       skipped.push(`${item.task.id}: matter archived or not hired`)
       continue
@@ -179,7 +189,7 @@ export async function GET(req: Request) {
       item.kind === 'nudge'
         ? { nudge_sent_at: new Date().toISOString() }
         : { escalation_sent_at: new Date().toISOString() }
-    const { error } = await admin.from('matter_tasks').update(stamp).eq('id', item.task.id)
+    const { error } = await admin.from('tasks').update(stamp).eq('id', item.task.id)
     if (error) {
       skipped.push(`${item.task.id}: sent but not stamped (${error.message})`)
       continue

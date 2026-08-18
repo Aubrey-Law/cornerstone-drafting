@@ -23,10 +23,10 @@ import { LeadIntakeCard } from '@/app/admin/leads/[id]/LeadIntakeCard'
 const lead = { id:'l1', first_name:'Jane', middle_name:null, last_name:'Doe', preferred_name:null, full_name:'Jane Doe', email:'jane@example.com', phone:'617', date_of_birth:null, address_line1:'1 Main', address_line2:null, city:'Boston', state:'MA', zip:'02108', county:'Suffolk', marital_status:'married', practice_area:'EP', lead_source:'Referral', lead_status:'lead', engagement_fee_quoted:4500, created_at:'2026-07-21T12:00:00Z', updated_at:'2026-07-25T10:00:00Z', intake_sent_at:null, intake_completed_at:null, lead_next_action_snoozed_until:null }
 const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred_name:null, email:'john@example.com', phone:null, date_of_birth:null }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset(); toastSuccess.mockReset() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset(); toastSuccess.mockReset(); searchParams.current = new URLSearchParams() })
 
 /** The workspace is tabbed; most assertions need their tab on screen first. */
-function showTab(name: 'Plan' | 'SLA plan' | 'Timeline' | 'Intake' | 'Documents' | 'Notes') {
+function showTab(name: 'Plan' | 'Tasks' | 'Timeline' | 'Intake' | 'Documents' | 'Notes') {
   // Radix tabs activate on mouse down, not click.
   act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) })) })
 }
@@ -196,7 +196,7 @@ describe('lead detail page', () => {
     expect(precedes(ribbon, tabs)).toBe(true)
   })
 
-  it('loads the matter-owned SLA plan only after its lead tab is opened', async () => {
+  it('fetches nothing while the workspace is on its opening tab', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({ tasks: [], progress: null }),
@@ -205,7 +205,20 @@ describe('lead detail page', () => {
     render(<LeadDetailClient lead={{ ...lead, matter_id: 'm1' }} spouse={spouse} initialActivity={[]} />)
 
     expect(fetchMock).not.toHaveBeenCalled()
-    showTab('SLA plan')
+  })
+
+  it('loads the matter-owned plan from the tasks tab, not a tab of its own', async () => {
+    // The plan and the task queue are one table now, so the plan is the Tasks
+    // tab's second view. It still reads the `matters` row the lead owns.
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ tasks: [], progress: null }),
+    } as Response)
+
+    searchParams.current = new URLSearchParams('tab=tasks&view=plan')
+    render(<LeadDetailClient lead={{ ...lead, matter_id: 'm1' }} spouse={spouse} initialActivity={[]} />)
+
+    expect(screen.queryByRole('tab', { name: /^SLA plan/ })).toBeNull()
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('/api/matters/m1/tasks', expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer token' }),

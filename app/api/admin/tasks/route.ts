@@ -7,15 +7,18 @@ import { parseRecurrence } from '@/lib/tasks/recurrence'
 import { createCalendarHold } from '@/lib/appointments/graphEvents'
 import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/graphBusy'
 import {
+  TASK_OWNERS,
   TASK_PRIORITIES,
   TASK_SOURCES,
   TASK_TYPES,
   type ChecklistItem,
+  type TaskOwner,
   type TaskPriority,
   type TaskRow,
   type TaskSource,
   type TaskType,
 } from '@/lib/tasks/types'
+import { isSlaPhase } from '@/lib/slaTasks/types'
 
 const SCOPES: TaskScope[] = ['mine', 'team', 'unassigned', 'all']
 const TASK_HOLD_TYPE_KEY = 'task_block'
@@ -96,6 +99,7 @@ export async function GET(req: Request) {
   const sourceParam = url.searchParams.get('source')
   const assignee = url.searchParams.get('assignee')
   const recordId = url.searchParams.get('recordId')
+  const ownerParam = url.searchParams.get('owner')
 
   const tasks = await fetchTasks({
     scope: parseScope(url.searchParams.get('scope')),
@@ -104,6 +108,13 @@ export async function GET(req: Request) {
     source: TASK_SOURCES.includes(sourceParam as TaskSource) ? (sourceParam as TaskSource) : 'all',
     status: statusParam === 'done' || statusParam === 'all' ? statusParam : 'open',
     recordId: recordId && isUuid(recordId) ? recordId : null,
+    // The plan view asks for everything — client- and automation-owned rows and
+    // the skipped ones — because it is a picture of the matter, not a work list.
+    owner:
+      ownerParam === 'all' || TASK_OWNERS.includes(ownerParam as TaskOwner)
+        ? (ownerParam as TaskOwner | 'all')
+        : 'firm',
+    includeArchived: url.searchParams.get('includeArchived') === '1',
   })
 
   return NextResponse.json({ tasks })
@@ -118,6 +129,7 @@ interface CreateBody {
   checklist?: unknown
   matter_id?: unknown
   lead_id?: unknown
+  phase?: unknown
   due_at?: unknown
   assignee_id?: unknown
   estimate_minutes?: unknown
@@ -204,6 +216,9 @@ export async function POST(req: Request) {
       checklist,
       matter_id: matterId,
       lead_id: leadId,
+      // Set when the task is added from the plan view, so hand-added work lands
+      // in the phase it belongs to instead of falling out of the plan entirely.
+      phase: isSlaPhase(body.phase) ? body.phase : null,
       due_at: optionalTimestamp(body.due_at),
       assignee_id: optionalId(body.assignee_id),
       estimate_minutes: Number.isFinite(estimate) && estimate > 0 ? Math.round(estimate) : null,

@@ -1,3 +1,5 @@
+import type { TaskOwner, TaskRow } from '@/lib/tasks/types'
+
 /**
  * A task's phase is the Cornerstone pipeline stage it belongs to, not a second
  * vocabulary sitting alongside one. Grouping the checklist by stage means the
@@ -76,14 +78,23 @@ export const SLA_PRE_ENGAGEMENT_PHASES: SlaPhase[] = [
 export const SLA_NUDGE_TIERS = ['gentle', 'firm', 'internal'] as const
 export type SlaNudgeTier = (typeof SLA_NUDGE_TIERS)[number]
 
+/**
+ * The assignee vocabulary inside a stored template's JSONB. It predates the
+ * merge into `tasks` and is left alone because it is data, not code; templates
+ * are parsed through `ownerFromAssignee` into the `owner` a task row carries.
+ */
 export const SLA_ASSIGNEES = ['attorney', 'client', 'automation'] as const
 export type SlaAssignee = (typeof SLA_ASSIGNEES)[number]
 
-export const SLA_TASK_STATUSES = ['pending', 'active', 'completed', 'skipped', 'blocked'] as const
-export type SlaTaskStatus = (typeof SLA_TASK_STATUSES)[number]
+export function ownerFromAssignee(assignee: SlaAssignee): TaskOwner {
+  return assignee === 'attorney' ? 'firm' : assignee
+}
 
-/** Statuses that still consume the clock — a task in one of these is open work. */
-export const SLA_OPEN_STATUSES: SlaTaskStatus[] = ['pending', 'active', 'blocked']
+/**
+ * Plan tasks use the one task-status vocabulary — there is no second set. The
+ * old SLA statuses map on as pending→open, active→in_progress,
+ * completed→done, blocked→blocked, and skipped→archived with `skipped_at` set.
+ */
 
 /**
  * What a task's offsets are measured from. `null` means Day 0 — the engagement
@@ -150,74 +161,66 @@ export interface SlaTemplateRow {
   updated_at: string
 }
 
-export interface MatterTaskRow {
-  id: string
-  matter_id: string
-  template_id: string | null
-  phase: SlaPhase
+/**
+ * A plan task: one `public.tasks` row with source = 'sla', read through the
+ * plan's vocabulary.
+ *
+ * There is no second table and no second status vocabulary — this is a
+ * projection, not a store. It exists because the plan reasons in calendar days
+ * ("the organizer is due the day before the planning session") while `tasks`
+ * stores timestamps, and because the plan calls a task's text its `name`. The
+ * date keys below are derived from `hard_due_at` / `nudge_at` / `escalation_at`
+ * by `toPlanTask`; nothing writes them directly.
+ */
+export interface PlanTask extends TaskRow {
+  /** `title`, under the name the plan vocabulary uses. */
   name: string
-  sort_order: number
-  assignee: SlaAssignee
-  skill: string | null
-  conditional: boolean
-  pauses_clock: boolean
-  start_date: string
-  /** Null while the task's anchor has not happened yet. */
+  /** Calendar-day (YYYY-MM-DD) projections of the plan's timestamps. */
+  start_date: string | null
   due_date: string | null
   nudge_date: string | null
-  nudge_tier: SlaNudgeTier | null
   escalation_date: string | null
-  escalation_tier: SlaNudgeTier | null
-  due_offset_days: number | null
-  nudge_offset_days: number | null
-  escalation_offset_days: number | null
+
+  // Narrowed from the string columns TaskRow declares.
+  phase: SlaPhase | null
   relative_to: SlaAnchor | null
-  pre_engagement: boolean
-  auto: boolean
+  nudge_tier: SlaNudgeTier | null
+  escalation_tier: SlaNudgeTier | null
   gate: SlaGate | null
-  extends_target_days: number | null
-  recurring_interval_days: number | null
   variant: SlaVariant | null
-  triggers_day_zero: boolean
-  status: SlaTaskStatus
-  completed_at: string | null
-  skipped_at: string | null
-  notes: string | null
-  paused_at: string | null
-  total_paused_days: number
-  nudge_sent_at: string | null
-  escalation_sent_at: string | null
-  created_at: string
-  updated_at: string
 }
 
-/** A matter task with its matter's display names, for the cross-matter boards. */
-export interface MatterTaskWithMatter extends MatterTaskRow {
+/** A plan task with its matter's display names, for the cross-matter boards. */
+export interface PlanTaskWithMatter extends PlanTask {
   matter_name: string | null
   client_name: string | null
 }
 
 /**
- * A task a due-date range query has already constrained to a real date. SQL
- * comparisons against null are never true, so `due_date >= today` filters out
+ * A plan task a due-date range query has already constrained to a real date. SQL
+ * comparisons against null are never true, so `hard_due_at >= today` filters out
  * undated tasks on its own; this states that in the type.
  */
-export type ScheduledMatterTask = MatterTaskWithMatter & { due_date: string }
+export type ScheduledPlanTask = PlanTaskWithMatter & { due_date: string }
 
-export const MATTER_TASK_COLUMNS =
-  'id, matter_id, template_id, phase, name, sort_order, assignee, skill, conditional, pauses_clock, ' +
-  'start_date, due_date, nudge_date, nudge_tier, escalation_date, escalation_tier, ' +
-  'due_offset_days, nudge_offset_days, escalation_offset_days, relative_to, pre_engagement, auto, ' +
-  'gate, extends_target_days, recurring_interval_days, variant, triggers_day_zero, status, ' +
-  'completed_at, skipped_at, notes, paused_at, total_paused_days, nudge_sent_at, escalation_sent_at, ' +
-  'created_at, updated_at'
+/**
+ * The `tasks` columns a plan read needs. The queue's own `TASK_COLUMNS` is a
+ * subset of this — the plan additionally wants the anchor offsets, the nudge
+ * clock and the pause bookkeeping.
+ */
+export const PLAN_TASK_COLUMNS =
+  'id, title, description, status, priority, source, task_type, checklist, matter_id, lead_id, ' +
+  'stage_key, stage_entered_at, batch_tag, soft_due_at, hard_due_at, due_at, assignee_id, ' +
+  'estimate_minutes, remind_at, recurrence, template_id, document_id, completed_at, completed_by, ' +
+  'created_by, created_at, updated_at, ' +
+  'phase, owner, plan_template_id, sort_order, skill, notes, plan_start_date, relative_to, ' +
+  'due_offset_days, nudge_offset_days, escalation_offset_days, nudge_at, nudge_tier, ' +
+  'escalation_at, escalation_tier, nudge_sent_at, escalation_sent_at, pauses_clock, paused_at, ' +
+  'total_paused_days, pre_engagement, auto, conditional, gate, variant, extends_target_days, ' +
+  'recurring_interval_days, triggers_day_zero, skipped_at'
 
 export function isSlaPhase(value: unknown): value is SlaPhase {
   return typeof value === 'string' && (SLA_PHASES as readonly string[]).includes(value)
-}
-
-export function isSlaTaskStatus(value: unknown): value is SlaTaskStatus {
-  return typeof value === 'string' && (SLA_TASK_STATUSES as readonly string[]).includes(value)
 }
 
 export function isSlaAnchor(value: unknown): value is SlaAnchor {

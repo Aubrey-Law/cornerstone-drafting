@@ -2,19 +2,30 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
-import { fetchMatterTasks } from '@/lib/slaTasks/queries'
+import { planDateColumns, toPlanTask } from '@/lib/slaTasks/plan'
+import { fetchPlanTasks } from '@/lib/slaTasks/queries'
 import {
   daysBetween,
   delayDaysFor,
   shiftDownstreamTasks,
   type ShiftedTaskDates,
 } from '@/lib/slaTasks/schedule'
-import {
-  MATTER_TASK_COLUMNS,
-  isSlaTaskStatus,
-  type MatterTaskRow,
-  type SlaTaskStatus,
-} from '@/lib/slaTasks/types'
+import { PLAN_TASK_COLUMNS } from '@/lib/slaTasks/types'
+import { TASK_STATUSES, type TaskRow, type TaskStatus } from '@/lib/tasks/types'
+
+/**
+ * "Skipped — not applicable" is `archived` with `skipped_at` set. It travels as
+ * its own value over the wire because that is what the plan's status menu
+ * offers, and because the two archived flavours mean different things: only a
+ * skip counts as the phase having moved past the task.
+ */
+type PlanStatusInput = TaskStatus | 'skipped'
+
+function isPlanStatus(value: unknown): value is PlanStatusInput {
+  return (
+    value === 'skipped' || (typeof value === 'string' && (TASK_STATUSES as readonly string[]).includes(value))
+  )
+}
 
 interface PatchBody {
   status?: unknown
@@ -24,11 +35,12 @@ interface PatchBody {
 }
 
 /** Timestamp columns that must agree with whatever status the task lands in. */
-function statusStamps(status: SlaTaskStatus, now: string) {
+function statusStamps(status: PlanStatusInput, now: string) {
+  const skipped = status === 'skipped'
   return {
-    status,
-    completed_at: status === 'completed' ? now : null,
-    skipped_at: status === 'skipped' ? now : null,
+    status: skipped ? 'archived' : status,
+    completed_at: status === 'done' ? now : null,
+    skipped_at: skipped ? now : null,
   }
 }
 
@@ -56,7 +68,7 @@ export async function PATCH(
   const { matterId, taskId } = await params
   const body = (await req.json().catch(() => ({}))) as PatchBody
 
-  if (body.status !== undefined && !isSlaTaskStatus(body.status)) {
+  if (body.status !== undefined && !isPlanStatus(body.status)) {
     return NextResponse.json({ error: 'Unknown task status' }, { status: 400 })
   }
   if (body.paused !== undefined && typeof body.paused !== 'boolean') {
@@ -68,15 +80,15 @@ export async function PATCH(
 
   const admin = getAdminClient()
   const { data: existing, error: readError } = await admin
-    .from('matter_tasks')
-    .select(MATTER_TASK_COLUMNS)
+    .from('tasks')
+    .select(PLAN_TASK_COLUMNS)
     .eq('id', taskId)
     .eq('matter_id', matterId)
     .maybeSingle()
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 })
   if (!existing) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  const task = existing as unknown as MatterTaskRow
+  const task = toPlanTask(existing as unknown as TaskRow)
   const now = new Date().toISOString()
   const today = firmTodayKey()
 
@@ -89,7 +101,7 @@ export async function PATCH(
   let shiftDays = 0
   let shiftInclusive = false
 
-  const completing = body.status === 'completed'
+  const completing = body.status === 'done'
 
   if (body.paused === true) {
     if (!task.paused_at) update.paused_at = now
@@ -105,11 +117,11 @@ export async function PATCH(
       const pausedFrom = firmDateKey(task.paused_at)
       shiftDays = pausedFrom ? Math.max(0, daysBetween(pausedFrom, today)) : 0
       shiftInclusive = true
-      if (!isSlaTaskStatus(body.status)) Object.assign(update, statusStamps('active', now))
+      if (!isPlanStatus(body.status)) Object.assign(update, statusStamps('in_progress', now))
     }
   }
 
-  if (isSlaTaskStatus(body.status)) {
+  if (isPlanStatus(body.status)) {
     Object.assign(update, statusStamps(body.status, now))
     if (completing) {
       update.paused_at = null
@@ -131,29 +143,26 @@ export async function PATCH(
   }
 
   const { data: updated, error: updateError } = await admin
-    .from('matter_tasks')
+    .from('tasks')
     .update(update)
     .eq('id', taskId)
     .eq('matter_id', matterId)
-    .select(MATTER_TASK_COLUMNS)
+    .select(PLAN_TASK_COLUMNS)
     .single()
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
   let shifted: ShiftedTaskDates[] = []
   if (shiftDays > 0) {
     try {
-      const siblings = await fetchMatterTasks(admin, matterId)
+      const siblings = await fetchPlanTasks(admin, matterId)
+      const adopted = new Map(siblings.map(row => [row.id, row.stage_entered_at !== null]))
       shifted = shiftDownstreamTasks(siblings, task.sort_order, shiftDays, {
         inclusive: shiftInclusive,
       })
       for (const row of shifted) {
         const { error } = await admin
-          .from('matter_tasks')
-          .update({
-            due_date: row.due_date,
-            nudge_date: row.nudge_date,
-            escalation_date: row.escalation_date,
-          })
+          .from('tasks')
+          .update(planDateColumns(row, { adopted: adopted.get(row.id) === true }))
           .eq('id', row.id)
         if (error) throw error
       }
@@ -162,7 +171,7 @@ export async function PATCH(
       // pretending the whole plan moved.
       return NextResponse.json(
         {
-          task: updated as unknown as MatterTaskRow,
+          task: toPlanTask(updated as unknown as TaskRow),
           shifted,
           warning: `Task saved, but downstream dates did not all shift: ${
             e instanceof Error ? e.message : 'unknown error'
@@ -174,7 +183,7 @@ export async function PATCH(
   }
 
   return NextResponse.json({
-    task: updated as unknown as MatterTaskRow,
+    task: toPlanTask(updated as unknown as TaskRow),
     shifted,
     shiftedDays: shiftDays,
   })

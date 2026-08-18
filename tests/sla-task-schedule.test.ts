@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addDays,
-  buildMatterTaskInserts,
+  buildPlanTaskDrafts,
   daysBetween,
   delayDaysFor,
   dueTone,
@@ -12,7 +12,8 @@ import {
   shiftDownstreamTasks,
   summarizeSlaProgress,
 } from '@/lib/slaTasks/schedule'
-import type { MatterTaskRow, SlaTemplateTask } from '@/lib/slaTasks/types'
+import type { PlanScheduleFields } from '@/lib/slaTasks/schedule'
+import type { SlaTemplateTask } from '@/lib/slaTasks/types'
 
 /**
  * The SLA plan is a pile of date arithmetic, and every date it produces is a
@@ -45,45 +46,32 @@ function templateTask(overrides: Partial<SlaTemplateTask> = {}): SlaTemplateTask
   }
 }
 
-function matterTask(overrides: Partial<MatterTaskRow> = {}): MatterTaskRow {
+/**
+ * The plan projection the schedule math reads — a `tasks` row seen through
+ * `toPlanTask`, narrowed to the fields these functions actually touch.
+ */
+function planTask(overrides: Partial<PlanScheduleFields> = {}): PlanScheduleFields {
   return {
     id: 'task-1',
-    matter_id: 'matter-1',
-    template_id: 'template-1',
-    phase: 'onboarding',
-    name: 'Task',
     sort_order: 0,
-    assignee: 'attorney',
-    skill: null,
-    conditional: false,
-    pauses_clock: false,
-    start_date: '2026-03-01',
-    due_date: '2026-03-08',
-    nudge_date: null,
-    nudge_tier: null,
-    escalation_date: null,
-    escalation_tier: null,
+    phase: 'onboarding',
+    status: 'open',
+    plan_template_id: 'template-1',
+    notes: null,
+    completed_at: null,
+    skipped_at: null,
+    paused_at: null,
+    total_paused_days: 0,
+    extends_target_days: null,
+    pre_engagement: false,
+    relative_to: null,
     due_offset_days: 7,
     nudge_offset_days: null,
     escalation_offset_days: null,
-    relative_to: null,
-    pre_engagement: false,
-    auto: false,
-    gate: null,
-    extends_target_days: null,
-    recurring_interval_days: null,
-    variant: null,
-    triggers_day_zero: false,
-    status: 'pending',
-    completed_at: null,
-    skipped_at: null,
-    notes: null,
-    paused_at: null,
-    total_paused_days: 0,
-    nudge_sent_at: null,
-    escalation_sent_at: null,
-    created_at: '2026-03-01T00:00:00Z',
-    updated_at: '2026-03-01T00:00:00Z',
+    start_date: '2026-03-01',
+    due_date: '2026-03-08',
+    nudge_date: null,
+    escalation_date: null,
     ...overrides,
   }
 }
@@ -155,9 +143,9 @@ describe('parseTemplateTask', () => {
   })
 })
 
-describe('buildMatterTaskInserts', () => {
+describe('buildPlanTaskDrafts', () => {
   it('dates every task off the start date and preserves template order', () => {
-    const rows = buildMatterTaskInserts(
+    const rows = buildPlanTaskDrafts(
       [
         templateTask({ name: 'First', due_offset_days: 0 }),
         templateTask({
@@ -195,9 +183,9 @@ describe('clock pausing', () => {
 
   it('shifts open downstream tasks and leaves resolved ones alone', () => {
     const tasks = [
-      matterTask({ id: 'a', sort_order: 0, due_date: '2026-03-08' }),
-      matterTask({ id: 'b', sort_order: 1, due_date: '2026-03-11', status: 'completed' }),
-      matterTask({
+      planTask({ id: 'a', sort_order: 0, due_date: '2026-03-08' }),
+      planTask({ id: 'b', sort_order: 1, due_date: '2026-03-11', status: 'done' }),
+      planTask({
         id: 'c',
         sort_order: 2,
         due_date: '2026-03-15',
@@ -214,8 +202,8 @@ describe('clock pausing', () => {
 
   it('moves the pausing task too when a resume is inclusive', () => {
     const tasks = [
-      matterTask({ id: 'a', sort_order: 0, due_date: '2026-03-08' }),
-      matterTask({ id: 'b', sort_order: 1, due_date: '2026-03-15' }),
+      planTask({ id: 'a', sort_order: 0, due_date: '2026-03-08' }),
+      planTask({ id: 'b', sort_order: 1, due_date: '2026-03-15' }),
     ]
     expect(shiftDownstreamTasks(tasks, 0, 3, { inclusive: true }).map(row => row.id)).toEqual([
       'a',
@@ -224,8 +212,8 @@ describe('clock pausing', () => {
   })
 
   it('never shifts backwards', () => {
-    expect(shiftDownstreamTasks([matterTask({ sort_order: 1 })], 0, 0)).toEqual([])
-    expect(shiftDownstreamTasks([matterTask({ sort_order: 1 })], 0, -4)).toEqual([])
+    expect(shiftDownstreamTasks([planTask({ sort_order: 1 })], 0, 0)).toEqual([])
+    expect(shiftDownstreamTasks([planTask({ sort_order: 1 })], 0, -4)).toEqual([])
   })
 })
 
@@ -233,24 +221,24 @@ describe('dueTone', () => {
   const today = '2026-03-10'
 
   it('bands a due date red, amber, then green', () => {
-    expect(dueTone(matterTask({ due_date: '2026-03-09' }), today)).toBe('overdue')
-    expect(dueTone(matterTask({ due_date: '2026-03-10' }), today)).toBe('soon')
-    expect(dueTone(matterTask({ due_date: '2026-03-13' }), today)).toBe('soon')
-    expect(dueTone(matterTask({ due_date: '2026-03-14' }), today)).toBe('on_track')
+    expect(dueTone(planTask({ due_date: '2026-03-09' }), today)).toBe('overdue')
+    expect(dueTone(planTask({ due_date: '2026-03-10' }), today)).toBe('soon')
+    expect(dueTone(planTask({ due_date: '2026-03-13' }), today)).toBe('soon')
+    expect(dueTone(planTask({ due_date: '2026-03-14' }), today)).toBe('on_track')
   })
 
   it('stops colouring a task once it is resolved', () => {
-    expect(dueTone(matterTask({ due_date: '2026-01-01', status: 'completed' }), today)).toBe('done')
-    expect(dueTone(matterTask({ due_date: '2026-01-01', status: 'skipped' }), today)).toBe('done')
+    expect(dueTone(planTask({ due_date: '2026-01-01', status: 'done' }), today)).toBe('done')
+    expect(dueTone(planTask({ due_date: '2026-01-01', status: 'archived', skipped_at: '2026-03-01T00:00:00Z' }), today)).toBe('done')
   })
 })
 
 describe('summarizeSlaProgress', () => {
   const tasks = [
-    matterTask({ id: 'a', phase: 'onboarding', sort_order: 0, status: 'completed' }),
-    matterTask({ id: 'b', phase: 'onboarding', sort_order: 1, status: 'skipped' }),
-    matterTask({ id: 'c', phase: 'design', sort_order: 2, due_date: '2026-03-05' }),
-    matterTask({ id: 'd', phase: 'signing', sort_order: 3, due_date: '2026-04-12' }),
+    planTask({ id: 'a', phase: 'onboarding', sort_order: 0, status: 'done' }),
+    planTask({ id: 'b', phase: 'onboarding', sort_order: 1, status: 'archived', skipped_at: '2026-03-01T00:00:00Z' }),
+    planTask({ id: 'c', phase: 'design', sort_order: 2, due_date: '2026-03-05' }),
+    planTask({ id: 'd', phase: 'signing', sort_order: 3, due_date: '2026-04-12' }),
   ]
 
   it('reports the first phase with work left as current', () => {
@@ -284,7 +272,7 @@ describe('summarizeSlaProgress', () => {
   })
 
   it('holds on the last phase once everything is resolved', () => {
-    const done = tasks.map(task => ({ ...task, status: 'completed' as const }))
+    const done = tasks.map(task => ({ ...task, status: 'done' as const }))
     expect(summarizeSlaProgress(done, { today: '2026-03-10' }).currentPhase).toBe('signing')
   })
 })
@@ -293,7 +281,7 @@ describe('dual clock', () => {
   const anchors = { engagement: '2026-04-01', discovery_call: '2026-03-01', pmps: '2026-03-12' }
 
   it('dates each task off its own anchor', () => {
-    const rows = buildMatterTaskInserts(
+    const rows = buildPlanTaskDrafts(
       [
         templateTask({ name: 'Hold discovery call', due_offset_days: 0, relative_to: 'discovery_call' }),
         // Negative offsets run backwards from the anchor: the organizer is due
@@ -308,7 +296,7 @@ describe('dual clock', () => {
   })
 
   it('falls back to the start date for Day 0 before the engagement is signed', () => {
-    const [row] = buildMatterTaskInserts([templateTask({ due_offset_days: 7 })], {
+    const [row] = buildPlanTaskDrafts([templateTask({ due_offset_days: 7 })], {
       matterId: 'matter-1',
       templateId: null,
       startDate: '2026-02-20',
@@ -318,7 +306,7 @@ describe('dual clock', () => {
   })
 
   it('leaves a task undated while its anchor is unknown', () => {
-    const [row] = buildMatterTaskInserts(
+    const [row] = buildPlanTaskDrafts(
       [
         templateTask({
           due_offset_days: -1,
@@ -333,13 +321,15 @@ describe('dual clock', () => {
     expect(row.nudge_date).toBeNull()
     // The offsets survive so the task can be dated once the PMPS is booked.
     expect(row.due_offset_days).toBe(-1)
-    expect(dueTone({ due_date: row.due_date, status: 'pending' }, '2026-03-01')).toBe('unscheduled')
+    expect(dueTone({ due_date: row.due_date, status: 'open', skipped_at: null }, '2026-03-01')).toBe(
+      'unscheduled',
+    )
   })
 
   it('withholds dates from a task whose gate has not opened', () => {
     const task = templateTask({ due_offset_days: 7, relative_to: 'discovery_call', gate: 'fit_confirmed' })
     const build = (gatesMet: 'fit_confirmed'[]) =>
-      buildMatterTaskInserts([task], {
+      buildPlanTaskDrafts([task], {
         matterId: 'matter-1',
         templateId: null,
         startDate: '2026-02-20',
@@ -360,25 +350,25 @@ describe('dual clock', () => {
     ]
     const options = { matterId: 'matter-1', templateId: null, startDate: '2026-04-01', anchors }
 
-    expect(buildMatterTaskInserts(tasks, options).map(row => row.name)).toEqual([
+    expect(buildPlanTaskDrafts(tasks, options).map(row => row.name)).toEqual([
       'Signing meeting held',
     ])
     expect(
-      buildMatterTaskInserts(tasks, { ...options, variants: ['remote_signing'] }).map(row => row.name),
+      buildPlanTaskDrafts(tasks, { ...options, variants: ['remote_signing'] }).map(row => row.name),
     ).toEqual(['Signing meeting held', 'Mail signing package'])
   })
 })
 
 describe('rescheduleForAnchor', () => {
-  const pending = (overrides: Partial<MatterTaskRow>) =>
-    matterTask({ relative_to: 'pmps', due_date: null, due_offset_days: -1, ...overrides })
+  const pending = (overrides: Partial<PlanScheduleFields>) =>
+    planTask({ relative_to: 'pmps', due_date: null, due_offset_days: -1, ...overrides })
 
   it('dates the waiting tasks once the anchor lands', () => {
     const updates = rescheduleForAnchor(
       [
         pending({ id: 'organizer', nudge_offset_days: -3 }),
         pending({ id: 'prep', due_offset_days: -1 }),
-        matterTask({ id: 'day-zero', relative_to: null, due_offset_days: 7 }),
+        planTask({ id: 'day-zero', relative_to: null, due_offset_days: 7 }),
       ],
       'pmps',
       '2026-03-12',
@@ -392,7 +382,7 @@ describe('rescheduleForAnchor', () => {
 
   it('leaves resolved tasks on their historical dates', () => {
     const updates = rescheduleForAnchor(
-      [pending({ id: 'done', status: 'completed', due_date: '2026-03-05' })],
+      [pending({ id: 'done', status: 'done', due_date: '2026-03-05' })],
       'pmps',
       '2026-03-12',
     )
@@ -412,15 +402,19 @@ describe('rescheduleForAnchor', () => {
 describe('target date extensions', () => {
   it('pushes the target out when a Round 2 revision is on the plan', () => {
     const tasks = [
-      matterTask({ id: 'a', phase: 'client_review' }),
-      matterTask({ id: 'b', phase: 'client_review', extends_target_days: 5 }),
+      planTask({ id: 'a', phase: 'client_review' }),
+      planTask({ id: 'b', phase: 'client_review', extends_target_days: 5 }),
     ]
     expect(summarizeSlaProgress(tasks, { targetDays: 28, today: '2026-03-01' }).targetDate).toBe(
       '2026-04-03',
     )
 
     // Skipping it puts the original commitment back.
-    const skipped = tasks.map(task => (task.id === 'b' ? { ...task, status: 'skipped' as const } : task))
+    const skipped = tasks.map(task =>
+      task.id === 'b'
+        ? { ...task, status: 'archived' as const, skipped_at: '2026-03-01T00:00:00Z' }
+        : task,
+    )
     expect(summarizeSlaProgress(skipped, { targetDays: 28, today: '2026-03-01' }).targetDate).toBe(
       '2026-03-29',
     )
@@ -436,7 +430,7 @@ describe('a lead has no Day 0 yet', () => {
   it('leaves Day-0 tasks undated while the engagement is unsigned', () => {
     // The whole point of the soft clock: an unsigned matter must not show a
     // 28-day plan counted from the day the lead happened to be created.
-    const rows = buildMatterTaskInserts([preEngagement, dayZero], {
+    const rows = buildPlanTaskDrafts([preEngagement, dayZero], {
       matterId: 'm', templateId: null, startDate: '2026-03-01',
       anchors: { discovery_call: '2026-03-05' },
     })
@@ -445,7 +439,7 @@ describe('a lead has no Day 0 yet', () => {
   })
 
   it('dates Day-0 tasks once the engagement date is known', () => {
-    const rows = buildMatterTaskInserts([preEngagement, dayZero], {
+    const rows = buildPlanTaskDrafts([preEngagement, dayZero], {
       matterId: 'm', templateId: null, startDate: '2026-03-01',
       anchors: { discovery_call: '2026-03-05', engagement: '2026-04-01' },
     })
@@ -455,7 +449,7 @@ describe('a lead has no Day 0 yet', () => {
   it('still dates a template with no pre-engagement work from its start date', () => {
     // v1 is only ever generated at hire, where the start date *is* Day 0, so
     // removing its fallback would have broken every existing matter.
-    const [row] = buildMatterTaskInserts([dayZero], {
+    const [row] = buildPlanTaskDrafts([dayZero], {
       matterId: 'm', templateId: null, startDate: '2026-03-01', anchors: {},
     })
     expect(row.due_date).toBe('2026-03-08')
@@ -463,9 +457,9 @@ describe('a lead has no Day 0 yet', () => {
 
   it('starts the firm clock when the engagement anchor lands', () => {
     const tasks = [
-      matterTask({ id: 'design', relative_to: null, due_offset_days: 7, due_date: null }),
-      matterTask({ id: 'sign', relative_to: null, due_offset_days: 28, due_date: null }),
-      matterTask({ id: 'pmps', relative_to: 'pmps', due_offset_days: -1, due_date: '2026-03-11' }),
+      planTask({ id: 'design', relative_to: null, due_offset_days: 7, due_date: null }),
+      planTask({ id: 'sign', relative_to: null, due_offset_days: 28, due_date: null }),
+      planTask({ id: 'pmps', relative_to: 'pmps', due_offset_days: -1, due_date: '2026-03-11' }),
     ]
     const updates = rescheduleForAnchor(tasks, 'engagement', '2026-04-01')
     expect(updates).toEqual([

@@ -14,6 +14,7 @@ import { practiceAreaLabel } from '@/lib/practiceArea'
 import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
 import type { LeadEditableField } from '@/lib/leads/details'
 import { parseLeadTab, type LeadTab } from '@/lib/leads/leadPageTabs'
+import { parseTaskView, type TaskView } from '@/lib/matterPageTabs'
 import { computeNextAction, type NextAction } from '@/lib/leads/nextAction'
 import type {
   LeadTimelineMeeting,
@@ -70,7 +71,6 @@ import type {
 } from '@/lib/leads/viewTypes'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import { MatterPeopleTab } from '@/app/admin/matters/[id]/MatterPeopleTab'
-import { MatterSlaTab } from '@/app/admin/matters/[id]/tabs/sla'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -86,7 +86,6 @@ type LeadActivityRow = LeadActivityViewRow
 const LEAD_SECTION_OPTIONS: readonly { value: LeadTab; label: string }[] = [
   { value: 'plan', label: 'Plan' },
   { value: 'tasks', label: 'Tasks' },
-  { value: 'sla', label: 'SLA plan' },
   { value: 'timeline', label: 'Timeline' },
   { value: 'communications', label: 'Communications' },
   { value: 'intake', label: 'Intake' },
@@ -239,18 +238,25 @@ export function LeadDetailClient({
   // The URL owns the tab, but the click applies immediately so the workspace
   // never waits on a router round trip.
   const urlTab = parseLeadTab(searchParams?.get('tab'))
+  const taskView = parseTaskView(searchParams?.get('view'))
   const [activeTab, setActiveTab] = useState<LeadTab>(urlTab)
-  const [slaTabVisited, setSlaTabVisited] = useState(urlTab === 'sla')
   useEffect(() => { setActiveTab(urlTab) }, [urlTab])
-  useEffect(() => {
-    if (activeTab === 'sla') setSlaTabVisited(true)
-  }, [activeTab])
 
   function changeTab(tab: LeadTab) {
     setActiveTab(tab)
     const params = new URLSearchParams(searchParams?.toString() ?? '')
     if (tab === 'plan') params.delete('tab')
     else params.set('tab', tab)
+    if (tab !== 'tasks') params.delete('view')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? ''), { scroll: false })
+  }
+
+  function changeTaskView(view: TaskView) {
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    params.set('tab', 'tasks')
+    if (view === 'queue') params.delete('view')
+    else params.set('view', view)
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : (pathname ?? ''), { scroll: false })
   }
@@ -819,7 +825,6 @@ export function LeadDetailClient({
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="sla">SLA plan</TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
               <TabsTrigger value="communications">Communications</TabsTrigger>
               <TabsTrigger value="intake">Intake</TabsTrigger>
@@ -856,22 +861,14 @@ export function LeadDetailClient({
                 recordKind="lead"
                 recordName={clientName}
                 onTasksChanged={() => void taskCounts.refresh()}
+                // The dated plan lives on the `matters` row this opportunity
+                // owns; without one there is nothing to show, so the Plan view
+                // does not appear at all.
+                planMatterId={lead.matter_id ?? null}
+                view={taskView}
+                onViewChange={changeTaskView}
               />
             </TabsContent>
-
-            {lead.matter_id ? (
-              slaTabVisited ? (
-                <MatterSlaTab matterId={lead.matter_id} enabled />
-              ) : (
-                <TabsContent value="sla" />
-              )
-            ) : (
-              <TabsContent value="sla" className="mt-4">
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  The SLA plan is unavailable because this opportunity is not linked to its matter record.
-                </p>
-              </TabsContent>
-            )}
 
             <TabsContent value="timeline" className="mt-4">
               {timeline}

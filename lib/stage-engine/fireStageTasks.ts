@@ -48,8 +48,46 @@ async function loadGateContext(
 }
 
 /**
- * Create a `tasks` row (source = 'stage') when a matter enters an attorney-owned
- * engine stage. Idempotent on (matter_id, stage_key, stage_entered_at).
+ * The plan task a stage entry should adopt, or null when there is none.
+ *
+ * The SLA plan and the stage engine used to describe the same work twice — the
+ * plan said "Draft full document package" for the drafting phase while the
+ * engine fired "Draft documents — {client}" with the per-document checklist. Now
+ * that both live in `public.tasks`, the stage entry attaches its checklist and
+ * its soft target to the plan's own row instead of creating a second one.
+ *
+ * The candidate is the first unstarted, firm-owned plan task in the pipeline
+ * stage being entered. A row already carrying a `stage_entered_at` is left
+ * alone, so re-entering a stage (revisions round 2) fires a fresh task exactly
+ * as it always did.
+ */
+async function findAdoptablePlanTask(
+  admin: SupabaseClient,
+  matterId: string,
+  matterStage: string,
+): Promise<{ id: string; hard_due_at: string | null } | null> {
+  const { data } = await admin
+    .from('tasks')
+    .select('id, hard_due_at')
+    .eq('matter_id', matterId)
+    .eq('source', 'sla')
+    .eq('phase', matterStage)
+    .eq('owner', 'firm')
+    .in('status', ['open', 'in_progress'])
+    .is('stage_entered_at', null)
+    .order('sort_order', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  return (data as { id: string; hard_due_at: string | null } | null) ?? null
+}
+
+/**
+ * Task a matter's entry into an attorney-owned engine stage.
+ *
+ * Adopts the matching plan row when there is one, so the stage's checklist and
+ * the plan's deadline end up on a single task; otherwise inserts a `tasks` row
+ * with source = 'stage', idempotent on (matter_id, stage_key, stage_entered_at).
  */
 export async function fireEngineStageTask(
   admin: SupabaseClient,
@@ -93,11 +131,56 @@ export async function fireEngineStageTask(
     ? null
     : addBusinessDays(enteredAt, template.task.sla_days)
 
+  const checklist = buildStageChecklist(template, context)
+
+  // Re-firing on the same stage entry must stay a no-op. Checked before
+  // adoption rather than relying on the upsert's ON CONFLICT, because adopting
+  // a plan row into a key another task already holds would trip the unique
+  // index instead of doing nothing.
+  const { data: alreadyFired } = await admin
+    .from('tasks')
+    .select('id')
+    .eq('matter_id', args.matterId)
+    .eq('stage_key', engineStage)
+    .eq('stage_entered_at', matter.stage_entered_at)
+    .limit(1)
+    .maybeSingle()
+  if (alreadyFired) return
+
+  const adoptable = await findAdoptablePlanTask(admin, args.matterId, args.matterStage)
+
+  if (adoptable) {
+    // The plan's own deadline wins where it has one: it is the date the firm
+    // committed to, and it already accounts for whatever the matter has slipped.
+    const { error: adoptError } = await admin
+      .from('tasks')
+      .update({
+        stage_key: engineStage,
+        stage_entered_at: matter.stage_entered_at,
+        task_type: template.task.type,
+        checklist,
+        batch_tag: template.task.batch_tag ?? null,
+        priority: template.task.priority ?? 'normal',
+        soft_due_at: softDue.toISOString(),
+        hard_due_at: adoptable.hard_due_at ?? (hardDue ? hardDue.toISOString() : null),
+        // Stage work runs off the soft date; hard_due_at stays the SLA badge.
+        due_at: softDue.toISOString(),
+      })
+      .eq('id', adoptable.id)
+      // Nothing else may have claimed it between the read and the write.
+      .is('stage_entered_at', null)
+
+    if (adoptError) console.error('fireEngineStageTask (adopt):', adoptError.message)
+    else return
+  }
+
   const { error } = await admin.from('tasks').upsert(
     {
       matter_id: args.matterId,
       source: 'stage',
       stage_key: engineStage,
+      // Keeps a stage task in the same phase vocabulary the plan groups by.
+      phase: args.matterStage,
       stage_entered_at: matter.stage_entered_at,
       title,
       task_type: template.task.type,
@@ -108,7 +191,7 @@ export async function fireEngineStageTask(
       priority: template.task.priority ?? 'normal',
       status: 'open',
       batch_tag: template.task.batch_tag ?? null,
-      checklist: buildStageChecklist(template, context),
+      checklist,
     },
     { onConflict: 'matter_id,stage_key,stage_entered_at', ignoreDuplicates: true },
   )
@@ -136,13 +219,19 @@ export async function reconcileEngineStageTask(
   const template = findStageTaskTemplate(engineStage)
   if (!template || template.task.type !== 'checklist') return
 
+  // Not filtered by source: the open task for this stage may be a plan row the
+  // stage entry adopted, and a mid-stage flag change has to reach that too.
+  // Newest first and capped at one, since a matter that has been through the
+  // stage twice can have an older adopted row still open alongside the current
+  // task, and reconciling the stale one would be wrong.
   const { data: task } = await admin
     .from('tasks')
     .select('id, checklist')
     .eq('matter_id', matterId)
-    .eq('source', 'stage')
     .eq('stage_key', engineStage)
     .eq('status', 'open')
+    .order('stage_entered_at', { ascending: false, nullsFirst: false })
+    .limit(1)
     .maybeSingle()
 
   if (!task) return
@@ -157,6 +246,13 @@ export async function reconcileEngineStageTask(
   if (error) console.error('reconcileEngineStageTask:', error.message)
 }
 
+/**
+ * Close out a stage's open task when the matter leaves it.
+ *
+ * Restricted to source = 'stage' on purpose. A plan row the stage adopted is
+ * still the firm's commitment for that phase — leaving the stage with the work
+ * unfinished is exactly the case the plan exists to keep visible.
+ */
 export async function archiveEngineStageTasks(
   admin: SupabaseClient,
   matterId: string,

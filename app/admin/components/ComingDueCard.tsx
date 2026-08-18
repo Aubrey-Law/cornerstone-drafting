@@ -37,7 +37,7 @@ export async function ComingDueCard({ limit = 5 }: { limit?: number }) {
           return (
             <li key={task.id}>
               <Link
-                href={`/admin/matters/${task.matter_id}?tab=sla`}
+                href={`/admin/matters/${task.matter_id}?tab=tasks&view=plan`}
                 className="block px-3 py-2 text-sm hover:bg-muted/50"
               >
                 <span
@@ -51,7 +51,7 @@ export async function ComingDueCard({ limit = 5 }: { limit?: number }) {
                 <span className="text-foreground"> · {task.name}</span>
                 <span className="block text-xs text-muted-foreground">
                   {task.client_name ?? task.matter_name ?? 'Unnamed matter'}
-                  {task.assignee === 'client' && ' · waiting on client'}
+                  {task.owner === 'client' && ' · waiting on client'}
                 </span>
               </Link>
             </li>

@@ -52,9 +52,9 @@ describe('SLA anchors route', () => {
   })
 })
 
-describe('SLA tab key dates', () => {
+describe('plan view key dates', () => {
   const tab = fs.readFileSync(
-    path.join(process.cwd(), 'app/admin/matters/[id]/tabs/sla.tsx'),
+    path.join(process.cwd(), 'components/tasks/TaskPlanView.tsx'),
     'utf8',
   )
 

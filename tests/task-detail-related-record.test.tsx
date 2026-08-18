@@ -12,39 +12,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { TaskDetailSheet } from '@/components/tasks/TaskDetailSheet'
 import type { TaskRow } from '@/lib/tasks/types'
-
-function task(overrides: Partial<TaskRow> = {}): TaskRow {
-  return {
-    id: 'task-1',
-    title: 'Send the trust draft',
-    description: null,
-    status: 'open',
-    priority: 'normal',
-    source: 'manual',
-    task_type: 'single',
-    checklist: [],
-    matter_id: null,
-    lead_id: null,
-    stage_key: null,
-    stage_entered_at: null,
-    batch_tag: null,
-    soft_due_at: null,
-    hard_due_at: null,
-    due_at: null,
-    assignee_id: null,
-    estimate_minutes: null,
-    remind_at: null,
-    recurrence: null,
-    template_id: null,
-    document_id: null,
-    completed_at: null,
-    completed_by: null,
-    created_by: null,
-    created_at: '2026-08-01T00:00:00.000Z',
-    updated_at: '2026-08-01T00:00:00.000Z',
-    ...overrides,
-  }
-}
+import { taskFixture as task } from './fixtures/task'
 
 function renderSheet(row: TaskRow) {
   return render(

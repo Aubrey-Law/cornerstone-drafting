@@ -6,6 +6,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { buildCrmDashboard } from '@/lib/crm/dashboard'
 import type { CrmPeopleRow, CrmStageRow } from '@/lib/queries/cornerstoneCrm'
 import type { TaskRow } from '@/lib/tasks/types'
+import { taskFixture } from './fixtures/task'
 
 import { CrmStatCards } from '@/app/admin/crm/CrmStatCards'
 import { CrmPipelineCard } from '@/app/admin/crm/CrmPipelineCard'
@@ -66,7 +67,7 @@ const snapshot = buildCrmDashboard({
   ],
 })
 
-const task: TaskRow = {
+const task: TaskRow = taskFixture({
   id: 'task-1',
   title: 'Follow up with Chen',
   description: 'Send the engagement letter',
@@ -94,7 +95,7 @@ const task: TaskRow = {
   created_by: null,
   created_at: '2026-08-01T12:00:00.000Z',
   updated_at: '2026-08-01T12:00:00.000Z',
-}
+})
 
 describe('crm dashboard cards', () => {
   afterEach(cleanup)
