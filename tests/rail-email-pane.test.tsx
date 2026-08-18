@@ -15,7 +15,7 @@ vi.mock('@/lib/supabaseClient', () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: { access_token: 'token' } } }) } },
 }))
 
-import { RailEmailPane } from '@/components/rail/RailEmailPane'
+import { ManualEmailComposer, RailEmailPane } from '@/components/rail/RailEmailPane'
 
 const MATTER_CONTEXT = {
   recordType: 'matter' as const,
@@ -154,7 +154,7 @@ function mockFetch(options: {
 }
 
 /**
- * The file input is visually hidden behind an "From computer" button, so
+ * The file input is visually hidden inside the "From computer" label, so
  * userEvent.upload refuses it — drive the change event directly.
  */
 function attach(...files: File[]) {
@@ -260,7 +260,7 @@ describe('rail email pane', () => {
     mockFetch()
     const user = userEvent.setup()
     render(<RailEmailPane />)
-    await screen.findByRole('button', { name: /from computer/i })
+    await screen.findByText(/from computer/i)
 
     attach(new File(['hello'], 'notes.txt', { type: 'text/plain' }))
     expect(screen.getByText('notes.txt')).toBeTruthy()
@@ -278,7 +278,7 @@ describe('rail email pane', () => {
       expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('harold.pike@example.com'),
     )
     expect(screen.queryByRole('button', { name: /from documents/i })).toBeNull()
-    expect(screen.getByRole('button', { name: /from computer/i })).toBeTruthy()
+    expect(screen.getByText(/from computer/i)).toBeTruthy()
     expect(screen.getByText('Logs to the lead timeline')).toBeTruthy()
   })
 
@@ -319,7 +319,9 @@ describe('rail email pane', () => {
     expect((screen.getByLabelText('Subject') as HTMLInputElement).value).toBe('Keep me')
   })
 
-  it('blocks sending when the attachments exceed the size cap', async () => {
+  it('blocks sending when a computer upload exceeds the request body cap', async () => {
+    // Uploads ride in the request body, which the host rejects before the
+    // route runs — the pane has to catch it first and say why.
     mockFetch()
     const user = userEvent.setup()
     render(<RailEmailPane />)
@@ -330,7 +332,30 @@ describe('rail email pane', () => {
     await user.type(screen.getByLabelText('Subject'), 'Too big')
     await typeBody(user, 'Body.')
 
-    attach(new File([new Uint8Array(11 * 1024 * 1024)], 'huge.zip', { type: 'application/zip' }))
+    attach(new File([new Uint8Array(5 * 1024 * 1024)], 'huge.zip', { type: 'application/zip' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/the upload limit is/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: /^send$/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('blocks sending when the selected matter documents exceed the total cap', async () => {
+    mockFetch({
+      context: {
+        ...MATTER_CONTEXT,
+        documents: [{ id: 'd3', name: 'Scans.pdf', size: 11 * 1024 * 1024, source: 'firm' }],
+      },
+    })
+    const user = userEvent.setup()
+    render(<RailEmailPane />)
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+
+    await user.type(screen.getByLabelText('Subject'), 'Too big')
+    await typeBody(user, 'Body.')
+    await user.click(screen.getByRole('button', { name: /from documents/i }))
+    await user.click(screen.getByRole('checkbox', { name: /Scans\.pdf/ }))
 
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText(/the limit is 10\.0 MB/)).toBeTruthy()
@@ -769,5 +794,76 @@ describe('AI drafting in the composer', () => {
     )
     expect(String(draftCall?.[0])).toBe('/api/admin/matters/m1/draft-reply')
     expect(JSON.parse(String((draftCall?.[1] as RequestInit).body)).channel).toBe('email')
+  })
+})
+
+describe('a composer opened with a seeded context', () => {
+  // The matter and lead dialogs hand the composer the recipient they already
+  // know and an empty document list. That seed used to stand in for the whole
+  // context, so "From documents" reported every matter as having none.
+  const SEED = {
+    recordType: 'matter' as const,
+    recordId: 'm1',
+    recipientName: 'Margaret Whitfield',
+    recipientEmail: 'margaret@example.com',
+    spouseName: null,
+    spouseEmail: null,
+    alternateEmails: [],
+    documents: [],
+  }
+
+  it('still loads the matter documents behind the seed', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    render(
+      <ManualEmailComposer embedded recordOverride={{ type: 'matter', id: 'm1' }} initialContext={SEED} />,
+    )
+
+    const picker = await screen.findByRole('button', { name: /from documents/i })
+    await user.click(picker)
+
+    expect(await screen.findByRole('checkbox', { name: /Trust draft\.docx/ })).toBeTruthy()
+    expect(screen.queryByText(/no documents yet/i)).toBeNull()
+  })
+
+  it('keeps a typed recipient when the fetched context arrives', async () => {
+    mockFetch()
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <ManualEmailComposer embedded recordOverride={{ type: 'matter', id: 'm1' }} initialContext={SEED} />,
+    )
+
+    const to = await screen.findByLabelText('To')
+    await user.clear(to)
+    await user.type(to, 'cpa@northshore.example.com')
+
+    // A parent re-render hands down a fresh seed object; the address the
+    // operator typed has to survive it.
+    rerender(
+      <ManualEmailComposer embedded recordOverride={{ type: 'matter', id: 'm1' }} initialContext={{ ...SEED }} />,
+    )
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('cpa@northshore.example.com'),
+    )
+  })
+
+  it('does not fetch a context for a bare contact', async () => {
+    const fetchMock = mockFetch()
+    render(
+      <ManualEmailComposer
+        embedded
+        recordOverride={{ type: 'contact', id: 'c1' }}
+        initialContext={{ ...SEED, recordType: 'contact', recordId: 'c1' }}
+      />,
+    )
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('margaret@example.com'),
+    )
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes('/api/admin/email/compose-context')),
+    ).toBe(false)
+    expect(screen.queryByRole('button', { name: /from documents/i })).toBeNull()
   })
 })
