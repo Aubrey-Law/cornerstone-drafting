@@ -28,12 +28,35 @@ Create a schema change with the CLI so filenames and timestamps remain consisten
 Review generated or handwritten SQL before committing it. Never put production data,
 credentials, or client information in seed files.
 
+## Deploying to the shared firm database
+
+Merging a migration to `main` applies it. `.github/workflows/db-migrate-deploy.yml` links the
+project, dry-runs, pushes, and then re-checks that the repo and the recorded history agree.
+Nobody has to remember a CLI command, which is what the incidents listed in
+`scripts/checkMigrationDrift.mjs` all came down to.
+
+Two consequences worth designing around:
+
+- **A migration goes live within a minute or two of the code, in no guaranteed order.** Vercel
+  ships on the same push and finishes independently. Write migrations that are safe against the
+  previous release — add nullable columns and new tables, backfill, and leave drops and renames
+  to a later migration once nothing reads the old shape.
+- **A failed deploy can leave the set half-applied**, since `db push` runs migrations in
+  sequence. The run turns red and the workflow says so; reconcile with `migration list` before
+  merging anything else, using the sections below.
+
+The workflow needs the `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` and `SUPABASE_URL`
+repository secrets, and fails loudly without them rather than skipping. To require a human
+approval before each deploy, add reviewers to the `production` environment under
+**Settings → Environments**.
+
 ## Linked shared firm database
 
 The linked production/staging project is not disposable. Never run `db reset --linked`, and
 never use migration repair merely to force a green status.
 
-Before applying a change:
+Applying by hand is still the right move for a migration that cannot ride the automatic path —
+a reconciliation, a repair, or anything you want to watch land. Before applying a change:
 
 ```bash
 ./node_modules/.bin/supabase migration list --linked

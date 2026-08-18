@@ -4,11 +4,16 @@ name: Database migration drift
 # still describe the same thing.
 #
 # The scheduled run is the important one, and it is the reason this exists
-# separately from db-rpc-check. Nothing deploys migrations here — Vercel ships
-# code only — so a merged migration reaches the database only when someone runs
-# `supabase db push`. When that step is missed the code goes live against a
-# schema that never got its change, and nothing fails until a user hits it: the
-# lead opt-in index sat unapplied for weeks that way, failing every opt-in save.
+# separately from db-rpc-check. db-migrate-deploy.yml now applies migrations when
+# they merge to main, which closes the hole this check was written for — a
+# migration nobody remembered to `db push`, leaving code live against a schema
+# that never got its change, failing nothing until a user hit it. The lead opt-in
+# index sat unapplied for weeks that way.
+#
+# The alarm stays, because a deploy is not proof. It fails and goes unnoticed; a
+# migration gets applied out-of-band and stamped with a wall-clock version;
+# `db push` reports success for a version it skipped because the history already
+# claimed it. None of those are things the deploy can catch about itself.
 #
 # A pull_request run cannot enforce that, because a migration added in a branch
 # is *supposed* to be unapplied. So pending migrations are only an error on the

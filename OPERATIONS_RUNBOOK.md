@@ -98,7 +98,9 @@ Re-verify quarterly.
 
 1. Merge to main → Vercel production deploy.
 2. Build runs the estate-generator preflight + Next build (see `vercel.json`).
-3. No migration reset on shared firm database — app-only deploys are normal.
+3. No migration reset on shared firm database. Migrations in the same push are
+   applied by `.github/workflows/db-migrate-deploy.yml`, which runs alongside the
+   Vercel build rather than before it — see supabase/migrations/README.md.
 4. After deploy: `/api/health?check=full` and sign-in smoke test.
 
 ### Massachusetts estate-clause library rollout

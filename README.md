@@ -84,6 +84,11 @@ npx supabase migration list --linked
 npx supabase db push --dry-run
 ```
 
+Migrations apply themselves: merging one to `main` runs
+[`db-migrate-deploy.yml`](.github/workflows/db-migrate-deploy.yml), which pushes it to the
+shared firm database and verifies the history afterwards. Because the code ships on the same
+push and in no guaranteed order, write migrations that are safe against the previous release.
+
 Never run `supabase db reset --linked` against the shared firm database. See
 [supabase/migrations/README.md](supabase/migrations/README.md) for the reconciliation and
 deployment workflow.
