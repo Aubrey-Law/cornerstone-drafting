@@ -74,7 +74,13 @@ describe('what the deploy refuses to do quietly', () => {
     // supabase/migrations/README.md warns about version drift before a db push.
     expect(WORKFLOW).toContain('version: ${{ steps.cli.outputs.version }}')
     expect(WORKFLOW).not.toContain('version: latest')
-    expect(step('Resolve the pinned CLI version')).toContain('devDependencies.supabase')
+    // The lockfile, not the caret range in package.json — the range's floor is
+    // not what `npm ci` installs, so it would pin CI to an older CLI than the
+    // one the migration was dry-run against.
+    const resolve = step('Resolve the pinned CLI version')
+    expect(resolve).toContain('package-lock.json')
+    expect(resolve).toContain('devDependencies.supabase')
+    expect(resolve.indexOf('package-lock.json')).toBeLessThan(resolve.indexOf('package.json\').devDependencies'))
   })
 
   it('says what to do when it goes red', () => {

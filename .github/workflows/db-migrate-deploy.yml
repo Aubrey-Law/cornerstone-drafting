@@ -81,10 +81,15 @@ jobs:
       # The repo pins a `supabase` devDependency and supabase/migrations/README.md
       # warns about version drift before any `db push`, so the CLI here is the
       # pinned one rather than whatever is newest.
+      #
+      # Read from the lockfile first: package.json carries a caret range, whose
+      # floor is not what `npm ci` installs. Taking the range would run a CLI
+      # older than the one the migration was written and dry-run against, which
+      # is the same drift the README warns about pointed the other way.
       - name: Resolve the pinned CLI version
         id: cli
         run: |
-          version=$(node -p "require('./package.json').devDependencies.supabase.replace(/^[^0-9]*/, '')")
+          version=$(node -p "require('./package-lock.json').packages['node_modules/supabase']?.version || require('./package.json').devDependencies.supabase.replace(/^[^0-9]*/, '')")
           echo "Using Supabase CLI $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
