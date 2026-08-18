@@ -1,14 +1,14 @@
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import { isTaskOpen, isTaskResolved, type TaskOwner, type TaskStatus } from '@/lib/tasks/types'
 import {
   SLA_ASSIGNEES,
   SLA_GATES,
   SLA_NUDGE_TIERS,
-  SLA_OPEN_STATUSES,
   SLA_PHASES,
   SLA_VARIANTS,
   isSlaAnchor,
   isSlaPhase,
-  type MatterTaskRow,
+  ownerFromAssignee,
   type SlaAnchor,
   type SlaAnchorDates,
   type SlaClockAnchor,
@@ -132,13 +132,48 @@ export function resolveAnchorDate(
   return anchor && isDateKey(anchor) ? anchor : null
 }
 
-export interface MatterTaskInsert {
+/**
+ * The plan projection this module's date math reads — see `PlanTask`, which
+ * satisfies it. Structural rather than the row type itself so the pure
+ * functions below stay callable with a fixture, and so the calendar-day
+ * vocabulary stays visible: every date here is a YYYY-MM-DD key.
+ */
+export interface PlanScheduleFields {
+  id: string
+  sort_order: number
+  phase: SlaPhase | null
+  status: TaskStatus
+  plan_template_id: string | null
+  notes: string | null
+  completed_at: string | null
+  skipped_at: string | null
+  paused_at: string | null
+  total_paused_days: number
+  extends_target_days: number | null
+  pre_engagement: boolean
+  relative_to: SlaAnchor | null
+  due_offset_days: number | null
+  nudge_offset_days: number | null
+  escalation_offset_days: number | null
+  start_date: string | null
+  due_date: string | null
+  nudge_date: string | null
+  escalation_date: string | null
+}
+
+/**
+ * One row a template instantiates into, still in the plan's calendar-day
+ * vocabulary. `generateMatterTasks` converts these into `tasks` columns on the
+ * way to the database; keeping the builder pure and dateless-of-timezone is what
+ * makes it testable.
+ */
+export interface PlanTaskDraft {
   matter_id: string
-  template_id: string | null
+  plan_template_id: string | null
   phase: SlaPhase
   name: string
   sort_order: number
-  assignee: SlaAssignee
+  owner: TaskOwner
   skill: string | null
   conditional: boolean
   pauses_clock: boolean
@@ -161,7 +196,7 @@ export interface MatterTaskInsert {
   triggers_day_zero: boolean
 }
 
-export interface BuildMatterTaskOptions {
+export interface BuildPlanTaskOptions {
   matterId: string
   templateId: string | null
   startDate: string
@@ -182,10 +217,10 @@ function offsetDate(anchor: string | null, offset: number | null): string | null
 }
 
 /** Instantiate a template into dated rows. Pure — no I/O, no clock reads. */
-export function buildMatterTaskInserts(
+export function buildPlanTaskDrafts(
   tasks: SlaTemplateTask[],
-  options: BuildMatterTaskOptions,
-): MatterTaskInsert[] {
+  options: BuildPlanTaskOptions,
+): PlanTaskDraft[] {
   const { matterId, templateId, startDate, anchors = {}, gatesMet = [], variants = [] } = options
   // A template carrying pre-engagement work models Day 0 as a real event, so an
   // unsigned matter leaves those tasks undated. A template without it (v1) is
@@ -200,11 +235,11 @@ export function buildMatterTaskInserts(
       const anchor = gateOpen ? resolveAnchorDate(task.relative_to, anchors, dayZeroFallback) : null
       return {
         matter_id: matterId,
-        template_id: templateId,
+        plan_template_id: templateId,
         phase: task.phase,
         name: task.name,
         sort_order: index,
-        assignee: task.assignee,
+        owner: ownerFromAssignee(task.assignee),
         skill: task.skill,
         conditional: task.conditional,
         pauses_clock: task.pauses_clock,
@@ -237,10 +272,10 @@ export function buildMatterTaskInserts(
  * loses nothing, because there is nothing on it but the template's own text.
  */
 export function isUntouchedTask(
-  task: Pick<MatterTaskRow, 'status' | 'notes' | 'completed_at' | 'skipped_at' | 'paused_at'>,
+  task: Pick<PlanScheduleFields, 'status' | 'notes' | 'completed_at' | 'skipped_at' | 'paused_at'>,
 ): boolean {
   return (
-    task.status === 'pending' &&
+    task.status === 'open' &&
     !task.completed_at &&
     !task.skipped_at &&
     !task.paused_at &&
@@ -273,14 +308,14 @@ export type TemplateSwapVerdict =
  */
 export function templateSwapVerdict(
   tasks: Pick<
-    MatterTaskRow,
-    'template_id' | 'status' | 'notes' | 'completed_at' | 'skipped_at' | 'paused_at'
+    PlanScheduleFields,
+    'plan_template_id' | 'status' | 'notes' | 'completed_at' | 'skipped_at' | 'paused_at'
   >[],
   templateId: string,
 ): TemplateSwapVerdict {
   if (tasks.length === 0) return 'same_template'
-  if (tasks.some(task => task.template_id === null)) return 'work_started'
-  if (tasks.every(task => task.template_id === templateId)) return 'same_template'
+  if (tasks.some(task => task.plan_template_id === null)) return 'work_started'
+  if (tasks.every(task => task.plan_template_id === templateId)) return 'same_template'
   return tasks.every(isUntouchedTask) ? 'swap' : 'work_started'
 }
 
@@ -301,7 +336,7 @@ export interface RescheduledTaskDates {
  */
 export function rescheduleForAnchor(
   tasks: Pick<
-    MatterTaskRow,
+    PlanScheduleFields,
     | 'id'
     | 'status'
     | 'relative_to'
@@ -319,7 +354,7 @@ export function rescheduleForAnchor(
   // Day-0 tasks are stored with a null `relative_to`; the other two name theirs.
   const relativeTo = anchor === 'engagement' ? null : anchor
   return tasks.flatMap(task => {
-    if (task.relative_to !== relativeTo || !SLA_OPEN_STATUSES.includes(task.status)) return []
+    if (task.relative_to !== relativeTo || !isTaskOpen(task)) return []
     const next: RescheduledTaskDates = {
       id: task.id,
       due_date: offsetDate(anchorDate, task.due_offset_days),
@@ -366,7 +401,10 @@ export interface ShiftedTaskDates {
  * behind it, so completing it later must not bill the same delay twice.
  */
 export function shiftDownstreamTasks(
-  tasks: Pick<MatterTaskRow, 'id' | 'sort_order' | 'status' | 'due_date' | 'nudge_date' | 'escalation_date'>[],
+  tasks: Pick<
+    PlanScheduleFields,
+    'id' | 'sort_order' | 'status' | 'due_date' | 'nudge_date' | 'escalation_date'
+  >[],
   fromSortOrder: number,
   days: number,
   options: { inclusive?: boolean } = {},
@@ -379,7 +417,7 @@ export function shiftDownstreamTasks(
     .filter(
       task =>
         matches(task.sort_order) &&
-        SLA_OPEN_STATUSES.includes(task.status) &&
+        isTaskOpen(task) &&
         task.due_date !== null,
     )
     .map(task => ({
@@ -400,10 +438,10 @@ export type SlaDueTone = 'done' | 'overdue' | 'soon' | 'on_track' | 'unscheduled
  * made no commitment about it yet.
  */
 export function dueTone(
-  task: Pick<MatterTaskRow, 'due_date' | 'status'>,
+  task: Pick<PlanScheduleFields, 'due_date' | 'status' | 'skipped_at'>,
   today: string = firmTodayKey(),
 ): SlaDueTone {
-  if (task.status === 'completed' || task.status === 'skipped') return 'done'
+  if (isTaskResolved(task)) return 'done'
   if (!task.due_date) return 'unscheduled'
   const remaining = daysBetween(today, task.due_date)
   if (remaining < 0) return 'overdue'
@@ -438,7 +476,7 @@ export interface SlaProgress {
 }
 
 export function summarizeSlaProgress(
-  tasks: MatterTaskRow[],
+  tasks: PlanScheduleFields[],
   options: { targetDays?: number | null; today?: string; startDate?: string | null } = {},
 ): SlaProgress {
   const today = options.today ?? firmTodayKey()
@@ -447,8 +485,8 @@ export function summarizeSlaProgress(
     return {
       phase,
       total: inPhase.length,
-      complete: inPhase.filter(task => task.status === 'completed').length,
-      resolved: inPhase.filter(task => task.status === 'completed' || task.status === 'skipped').length,
+      complete: inPhase.filter(task => task.status === 'done').length,
+      resolved: inPhase.filter(isTaskResolved).length,
     }
   })
 
@@ -461,7 +499,7 @@ export function summarizeSlaProgress(
   const totalPausedDays = tasks.reduce((sum, task) => sum + (task.total_paused_days || 0), 0)
   // Round 2 revisions and friends move the finish line for the whole matter.
   const extensionDays = tasks
-    .filter(task => task.status !== 'skipped')
+    .filter(task => !task.skipped_at)
     .reduce((sum, task) => sum + (task.extends_target_days || 0), 0)
   // Day 0 for the firm clock. Pre-engagement tasks share the generation start
   // date, so the first Day-0-relative task is the one that dates the target.
@@ -479,7 +517,7 @@ export function summarizeSlaProgress(
     phases,
     currentPhase,
     total: tasks.length,
-    complete: tasks.filter(task => task.status === 'completed').length,
+    complete: tasks.filter(task => task.status === 'done').length,
     overdue: tasks.filter(task => dueTone(task, today) === 'overdue').length,
     unscheduled: tasks.filter(task => dueTone(task, today) === 'unscheduled').length,
     daysRemaining: targetDate ? daysBetween(today, targetDate) : null,

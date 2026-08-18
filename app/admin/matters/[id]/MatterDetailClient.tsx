@@ -50,6 +50,8 @@ import {
   type MatterTab,
   parseCommunicationChannel,
   parseMatterTab,
+  parseTaskView,
+  type TaskView,
 } from '@/lib/matterPageTabs'
 import {
   mergeUnreviewedCounts,
@@ -85,7 +87,6 @@ import { useMatterEngineStageTask } from './useMatterEngineStageTask'
 import { MatterNotesTab, mergeLinkedNotes, type LinkedMatterNote } from './tabs/notes'
 import { MatterCommunicationsTab } from './tabs/messages'
 import { MatterBillingTab } from './tabs/billing'
-import { MatterSlaTab } from './tabs/sla'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookCalendlyDialog } from '@/components/scheduling/BookCalendlyDialog'
 import { MatterDetailHeader } from './MatterDetailHeader'
@@ -107,7 +108,6 @@ const ImportIntakeDialog = dynamic(() => import('./ImportIntakeDialog'), { ssr: 
 const MATTER_SECTION_OPTIONS: readonly { value: MatterTab; label: string }[] = [
   { value: 'overview', label: 'Overview' },
   { value: 'tasks', label: 'Tasks' },
-  { value: 'sla', label: 'SLA plan' },
   { value: 'people', label: 'People' },
   { value: 'assets', label: 'Assets' },
   { value: 'documents', label: 'Documents' },
@@ -214,6 +214,9 @@ function MatterDetailClientInner({
   const searchParams = useSearchParams()
   const activeTab = parseMatterTab(searchParams.get('tab'))
   const communicationChannel = parseCommunicationChannel(searchParams.get('channel'))
+  // The Tasks tab's two faces. `?tab=sla` from an older link resolves to
+  // `tasks`, so plan links keep working; `?view=plan` opens the plan directly.
+  const taskView = parseTaskView(searchParams.get('view'))
 
   const [matter, setMatter] = useState(initialMatter)
   const [contacts, setContacts] = useState(initialContacts)
@@ -242,7 +245,6 @@ function MatterDetailClientInner({
   const [unreviewedUploadCounts, setUnreviewedUploadCounts] = useState(initialUnreviewedUploadCounts)
   const [assetsTabVisited, setAssetsTabVisited] = useState(false)
   const [billingTabVisited, setBillingTabVisited] = useState(false)
-  const [slaTabVisited, setSlaTabVisited] = useState(false)
   const [factsRailOpen, setFactsRailOpen] = useState(false)
 
   useEffect(() => {
@@ -357,6 +359,7 @@ function MatterDetailClientInner({
       } else {
         params.delete('channel')
       }
+      if (tab !== 'tasks') params.delete('view')
     }
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
@@ -367,6 +370,15 @@ function MatterDetailClientInner({
     }
   }, [communicationChannel, pathname, router, searchParams])
 
+  const setTaskView = useCallback((view: TaskView) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'tasks')
+    if (view === 'queue') params.delete('view')
+    else params.set('view', view)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [pathname, router, searchParams])
+
   const scrollToIntakeActions = useCallback(() => {
     document.getElementById('matter-intake-actions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
@@ -374,7 +386,6 @@ function MatterDetailClientInner({
   useEffect(() => {
     if (activeTab === 'assets') setAssetsTabVisited(true)
     if (activeTab === 'billing') setBillingTabVisited(true)
-    if (activeTab === 'sla') setSlaTabVisited(true)
   }, [activeTab])
 
   useEffect(() => {
@@ -920,7 +931,6 @@ function MatterDetailClientInner({
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="sla">SLA plan</TabsTrigger>
                 <TabsTrigger value="people">People</TabsTrigger>
                 <TabsTrigger value="assets">Assets</TabsTrigger>
                 <TabsTrigger value="documents" className="gap-1.5">
@@ -1036,10 +1046,10 @@ function MatterDetailClientInner({
                   recordName={matter.client_name ?? null}
                   onStageTaskCompleted={() => void refreshEngineStageTask()}
                   onTasksChanged={() => void taskCounts.refresh()}
+                  view={taskView}
+                  onViewChange={setTaskView}
                 />
               </TabsContent>
-
-              <MatterSlaTab matterId={matterId} enabled={slaTabVisited} />
 
               <MatterPeopleTab
                 matterId={matterId}

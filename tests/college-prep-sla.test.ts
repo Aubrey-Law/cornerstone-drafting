@@ -4,12 +4,13 @@ import { describe, expect, it } from 'vitest'
 
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
 import {
-  buildMatterTaskInserts,
+  buildPlanTaskDrafts,
   isUntouchedTask,
   parseTemplateTasks,
   templateSwapVerdict,
 } from '@/lib/slaTasks/schedule'
-import { SLA_PHASES, type MatterTaskRow, type SlaTemplateTask } from '@/lib/slaTasks/types'
+import type { PlanScheduleFields } from '@/lib/slaTasks/schedule'
+import { SLA_PHASES, type SlaTemplateTask } from '@/lib/slaTasks/types'
 import { COLLEGE_PREP_SLA_V1, ESTATE_PLANNING_SLA_V3, slaTemplateForPracticeArea } from '@/lib/slaTasks/generate'
 
 /**
@@ -29,45 +30,28 @@ const MIGRATION = path.join(
   'supabase/migrations/20260922000000_college_prep_sla_v1.sql',
 )
 
-function matterTask(overrides: Partial<MatterTaskRow> = {}): MatterTaskRow {
+function planTask(overrides: Partial<PlanScheduleFields> = {}): PlanScheduleFields {
   return {
     id: 'task-1',
-    matter_id: 'matter-1',
-    template_id: 'estate-template',
-    phase: 'new_lead',
-    name: 'Task',
     sort_order: 0,
-    assignee: 'attorney',
-    skill: null,
-    conditional: false,
-    pauses_clock: false,
-    start_date: '2026-03-01',
-    due_date: null,
-    nudge_date: null,
-    nudge_tier: null,
-    escalation_date: null,
-    escalation_tier: null,
+    phase: 'new_lead',
+    status: 'open',
+    plan_template_id: 'estate-template',
+    notes: null,
+    completed_at: null,
+    skipped_at: null,
+    paused_at: null,
+    total_paused_days: 0,
+    extends_target_days: null,
+    pre_engagement: false,
+    relative_to: null,
     due_offset_days: null,
     nudge_offset_days: null,
     escalation_offset_days: null,
-    relative_to: null,
-    pre_engagement: false,
-    auto: false,
-    gate: null,
-    extends_target_days: null,
-    recurring_interval_days: null,
-    variant: null,
-    triggers_day_zero: false,
-    status: 'pending',
-    completed_at: null,
-    skipped_at: null,
-    notes: null,
-    paused_at: null,
-    total_paused_days: 0,
-    nudge_sent_at: null,
-    escalation_sent_at: null,
-    created_at: '2026-03-01T00:00:00Z',
-    updated_at: '2026-03-01T00:00:00Z',
+    start_date: '2026-03-01',
+    due_date: null,
+    nudge_date: null,
+    escalation_date: null,
     ...overrides,
   }
 }
@@ -104,37 +88,37 @@ describe('swapping a lead checklist for the one its matter needs', () => {
   const collegeTemplate = 'college-template'
 
   it('swaps when the whole checklist came from another template untouched', () => {
-    const tasks = [matterTask({ id: 'a' }), matterTask({ id: 'b' })]
+    const tasks = [planTask({ id: 'a' }), planTask({ id: 'b' })]
     expect(templateSwapVerdict(tasks, collegeTemplate)).toBe('swap')
   })
 
   it('leaves a checklist already on the right template alone', () => {
-    const tasks = [matterTask({ template_id: collegeTemplate })]
+    const tasks = [planTask({ plan_template_id: collegeTemplate })]
     expect(templateSwapVerdict(tasks, collegeTemplate)).toBe('same_template')
   })
 
   it('refuses once any task is completed or skipped', () => {
     const completed = [
-      matterTask({ id: 'a' }),
-      matterTask({ id: 'b', status: 'completed', completed_at: '2026-03-04T00:00:00Z' }),
+      planTask({ id: 'a' }),
+      planTask({ id: 'b', status: 'done', completed_at: '2026-03-04T00:00:00Z' }),
     ]
     expect(templateSwapVerdict(completed, collegeTemplate)).toBe('work_started')
 
-    const skipped = [matterTask({ status: 'skipped', skipped_at: '2026-03-04T00:00:00Z' })]
+    const skipped = [planTask({ status: 'archived', skipped_at: '2026-03-04T00:00:00Z' })]
     expect(templateSwapVerdict(skipped, collegeTemplate)).toBe('work_started')
   })
 
   it('refuses once a task carries a note or a pause', () => {
-    expect(templateSwapVerdict([matterTask({ notes: 'called the parent' })], collegeTemplate)).toBe(
+    expect(templateSwapVerdict([planTask({ notes: 'called the parent' })], collegeTemplate)).toBe(
       'work_started',
     )
     expect(
-      templateSwapVerdict([matterTask({ status: 'blocked', paused_at: '2026-03-04T00:00:00Z' })], collegeTemplate),
+      templateSwapVerdict([planTask({ status: 'blocked', paused_at: '2026-03-04T00:00:00Z' })], collegeTemplate),
     ).toBe('work_started')
   })
 
   it('refuses when any task was added by hand rather than generated', () => {
-    const tasks = [matterTask({ id: 'a' }), matterTask({ id: 'b', template_id: null })]
+    const tasks = [planTask({ id: 'a' }), planTask({ id: 'b', plan_template_id: null })]
     expect(templateSwapVerdict(tasks, collegeTemplate)).toBe('work_started')
   })
 
@@ -143,8 +127,8 @@ describe('swapping a lead checklist for the one its matter needs', () => {
   })
 
   it('treats whitespace-only notes as untouched', () => {
-    expect(isUntouchedTask(matterTask({ notes: '   ' }))).toBe(true)
-    expect(isUntouchedTask(matterTask({ notes: 'ready' }))).toBe(false)
+    expect(isUntouchedTask(planTask({ notes: '   ' }))).toBe(true)
+    expect(isUntouchedTask(planTask({ notes: 'ready' }))).toBe(false)
   })
 })
 
@@ -220,7 +204,7 @@ describe('the seeded College Preparation Plan template', () => {
   })
 
   it('leaves every task undated on a lead that has not had its intro call', () => {
-    const rows = buildMatterTaskInserts(tasks, {
+    const rows = buildPlanTaskDrafts(tasks, {
       matterId: 'matter-1',
       templateId: 'college-template',
       startDate: '2026-03-01',
@@ -230,7 +214,7 @@ describe('the seeded College Preparation Plan template', () => {
   })
 
   it('dates the pre-engagement work off the intro call and the rest off Day 0', () => {
-    const rows = buildMatterTaskInserts(tasks, {
+    const rows = buildPlanTaskDrafts(tasks, {
       matterId: 'matter-1',
       templateId: 'college-template',
       startDate: '2026-03-01',

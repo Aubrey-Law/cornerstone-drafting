@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Layers, Plus, Repeat } from 'lucide-react'
+import { CalendarRange, ChevronDown, ChevronRight, Layers, ListTodo, Plus, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { engineStageLabel } from '@/lib/stage-engine/labels'
@@ -27,7 +27,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import type { TaskView } from '@/lib/matterPageTabs'
 import { TaskComposer } from './TaskComposer'
+import { TaskPlanView } from './TaskPlanView'
 import { TaskDetailSheet, type TaskAssigneeOption } from './TaskDetailSheet'
 import { TaskCheckbox, TaskDueCell, TaskPriorityDot, TaskSourcePill } from './TaskPrimitives'
 import { useTaskActions } from './useTaskActions'
@@ -47,6 +49,15 @@ export interface RecordTasksTabProps {
   onStageTaskCompleted?: () => void
   /** Called whenever the record's tasks change, so the tab badge can refresh. */
   onTasksChanged?: () => void
+  /**
+   * The matter whose dated plan the Plan view shows. For a matter record that
+   * is the record itself; a lead's plan hangs off the `matters` row the lead
+   * owns, so its id comes in separately. Null hides the Plan view.
+   */
+  planMatterId?: string | null
+  /** Which view to open on, and how to reflect a switch in the URL. */
+  view?: TaskView
+  onViewChange?: (view: TaskView) => void
 }
 
 /**
@@ -59,6 +70,9 @@ export function RecordTasksTab({
   recordName,
   onStageTaskCompleted,
   onTasksChanged,
+  planMatterId = null,
+  view: viewMode,
+  onViewChange,
 }: RecordTasksTabProps) {
   const token = useAccessToken()
   const [tasks, setTasks] = useState<TaskRow[]>([])
@@ -129,7 +143,10 @@ export function RecordTasksTab({
     [tasks],
   )
 
-  const stageTask = useMemo(() => open.find(t => t.source === 'stage') ?? null, [open])
+  // Identified by its stage_key, not its source: when a matter enters a stage
+  // the plan already covers, the engine attaches its checklist to that plan row
+  // rather than firing a second task, so the stage's task can be either source.
+  const stageTask = useMemo(() => open.find(t => t.stage_key !== null) ?? null, [open])
 
   const listed = useMemo(() => {
     const base = view === 'open' ? open.filter(t => t.id !== stageTask?.id) : done
@@ -156,7 +173,7 @@ export function RecordTasksTab({
       const updated = task.status === 'done' ? await actions.reopen(task) : await actions.complete(task)
       // Finishing a stage task is what lets the matter advance; a manual task
       // never touches the stage engine.
-      if (updated?.status === 'done' && task.source === 'stage') onStageTaskCompleted?.()
+      if (updated?.status === 'done' && task.stage_key !== null) onStageTaskCompleted?.()
     },
     [actions, onStageTaskCompleted],
   )
@@ -164,14 +181,37 @@ export function RecordTasksTab({
   const toggleChecklistItem = useCallback(
     async (task: TaskRow, index: number, checked: boolean) => {
       const updated = await actions.toggleChecklistItem(task, index, checked)
-      if (updated?.status === 'done' && task.source === 'stage') onStageTaskCompleted?.()
+      if (updated?.status === 'done' && task.stage_key !== null) onStageTaskCompleted?.()
     },
     [actions, onStageTaskCompleted],
   )
 
+  // The plan hangs off a matter. A lead has one too — the `matters` row it owns
+  // — but only when the caller passes its id.
+  const planMatter = planMatterId ?? (recordKind === 'matter' ? recordId : null)
+  const mode: TaskView = planMatter ? viewMode ?? 'queue' : 'queue'
+  const switchView = onViewChange ?? (() => {})
+
+  if (mode === 'plan' && planMatter) {
+    return (
+      <div className="space-y-3">
+        <ViewSwitch value={mode} onChange={switchView} />
+        <TaskPlanView
+          matterId={planMatter}
+          enabled
+          onTasksChanged={() => {
+            void load()
+            onTasksChanged?.()
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <div className="min-w-0 space-y-3">
+        {planMatter && <ViewSwitch value={mode} onChange={switchView} />}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
             <button
@@ -452,6 +492,48 @@ export function RecordTasksTab({
           onTasksChanged?.()
         }}
       />
+    </div>
+  )
+}
+
+/**
+ * Queue or plan. Two views of the same rows: the queue sorts the firm's open
+ * work by due date, the plan groups every task on the matter — client- and
+ * automation-owned rows included — by the stage it belongs to.
+ */
+function ViewSwitch({
+  value,
+  onChange,
+}: {
+  value: TaskView
+  onChange: (view: TaskView) => void
+}) {
+  const options: { value: TaskView; label: string; icon: typeof ListTodo }[] = [
+    { value: 'queue', label: 'Queue', icon: ListTodo },
+    { value: 'plan', label: 'Plan', icon: CalendarRange },
+  ]
+  return (
+    <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5 text-xs">
+      {options.map(option => {
+        const Icon = option.icon
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-pressed={value === option.value}
+            className={cn(
+              'flex items-center gap-1 rounded px-2 py-1 transition-colors',
+              value === option.value
+                ? 'bg-card font-medium text-foreground shadow-xs'
+                : 'text-muted-foreground',
+            )}
+          >
+            <Icon className="size-3.5" aria-hidden />
+            {option.label}
+          </button>
+        )
+      })}
     </div>
   )
 }

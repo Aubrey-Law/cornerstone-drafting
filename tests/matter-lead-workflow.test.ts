@@ -14,12 +14,15 @@ describe('lead and matter workspaces stay lifecycle-specific', () => {
     expect(client).not.toContain('Filter by lifecycle')
   })
 
-  it('exposes the matter-owned SLA plan from the lead workspace', () => {
+  it('exposes the matter-owned plan from the lead workspace', () => {
+    // The plan is the Tasks tab's second view now, not a tab of its own, and it
+    // still hangs off the `matters` row the opportunity owns.
     const tabs = read('lib/leads/leadPageTabs.ts')
     const leadClient = read('app/admin/leads/[id]/LeadDetailClient.tsx')
-    expect(tabs).toContain("'sla'")
-    expect(leadClient).toContain('<TabsTrigger value="sla">SLA plan</TabsTrigger>')
-    expect(leadClient).toContain('<MatterSlaTab matterId={lead.matter_id} enabled />')
+    expect(tabs).not.toContain("'sla',")
+    expect(tabs).toContain('sla: \'tasks\'')
+    expect(leadClient).toContain('planMatterId={lead.matter_id ?? null}')
+    expect(leadClient).toContain('onViewChange={changeTaskView}')
   })
 
   it('does not expose lead lifecycle actions on matter detail', () => {

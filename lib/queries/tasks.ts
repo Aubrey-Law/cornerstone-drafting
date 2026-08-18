@@ -8,21 +8,33 @@ import {
   type ChecklistItem,
   type TaskCounts,
   type TaskDueFields,
+  type TaskOwner,
   type TaskRow,
   type TaskSource,
   type TaskStatus,
 } from '@/lib/tasks/types'
+import { PLAN_TASK_COLUMNS } from '@/lib/slaTasks/types'
 
-export const TASK_COLUMNS =
-  'id, title, description, status, priority, source, task_type, checklist, matter_id, lead_id, ' +
-  'stage_key, stage_entered_at, batch_tag, soft_due_at, hard_due_at, due_at, assignee_id, ' +
-  'estimate_minutes, remind_at, recurrence, template_id, document_id, completed_at, completed_by, ' +
-  'created_by, created_at, updated_at'
+/**
+ * One column list for every task surface. It is the plan's list because the
+ * plan is no longer a separate table: a queue row and a plan row are the same
+ * row, read by the same query, and splitting the projection would just
+ * reintroduce the seam this consolidated away.
+ */
+export const TASK_COLUMNS = PLAN_TASK_COLUMNS
 
 export type TaskScope = 'mine' | 'team' | 'unassigned' | 'all'
 
 export interface FetchTasksOptions {
   scope?: TaskScope
+  /**
+   * Whose work to return. Defaults to the firm's: a plan task owned by the
+   * client ("Client signs engagement agreement") or by an automation belongs on
+   * the plan board, not in anybody's queue. Pass 'all' for the plan view.
+   */
+  owner?: TaskOwner | 'all'
+  /** Include archived tasks — skipped plan rows, which the plan still shows. */
+  includeArchived?: boolean
   /** The signed-in user, required to resolve the `mine` scope. */
   viewerId?: string | null
   assignee?: string | null
@@ -131,16 +143,20 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
     source = null,
     status = 'open',
     recordId = null,
+    owner = 'firm',
+    includeArchived = false,
     limit = 500,
   } = options
 
   const admin = getAdminClient()
-  let query = admin.from('tasks').select(TASK_COLUMNS).neq('status', 'archived')
+  let query = admin.from('tasks').select(TASK_COLUMNS)
 
+  if (!includeArchived) query = query.neq('status', 'archived')
   if (status === 'open') query = query.in('status', OPEN_STATUSES)
   else if (status === 'done') query = query.eq('status', 'done')
 
   if (source && source !== 'all') query = query.eq('source', source)
+  if (owner !== 'all') query = query.eq('owner', owner)
 
   if (assignee) query = query.eq('assignee_id', assignee)
   else if (scope === 'mine' && viewerId) query = query.eq('assignee_id', viewerId)
@@ -172,9 +188,17 @@ export async function fetchTasksForLead(leadId: string, status: 'open' | 'done' 
   return fetchTasks({ recordId: leadId, status, limit: 200 })
 }
 
-/** Open stage-engine tasks for a matter — what the SLA card reads. */
+/**
+ * The open task for whatever stage a record is in — what the stage card reads.
+ *
+ * Not filtered to source = 'stage': when a matter enters a stage the plan
+ * already has a task for, the stage engine attaches its checklist to that plan
+ * row rather than creating a second one, so the stage's task can be either
+ * source. What identifies it is carrying a `stage_key`.
+ */
 export async function fetchOpenStageTasksForRecord(recordId: string): Promise<TaskRow[]> {
-  return fetchTasks({ recordId, source: 'stage', status: 'open', limit: 50 })
+  const tasks = await fetchTasks({ recordId, status: 'open', limit: 200 })
+  return tasks.filter(task => task.stage_key !== null).slice(0, 50)
 }
 
 /** Counts behind the nav badge, the scope segmented control and the Today page. */
@@ -184,6 +208,7 @@ export async function fetchTaskCounts(viewerId: string | null = null): Promise<T
     .from('tasks')
     .select('id, status, due_at, soft_due_at, hard_due_at, assignee_id')
     .in('status', OPEN_STATUSES)
+    .eq('owner', 'firm')
     .limit(2000)
 
   if (error) {

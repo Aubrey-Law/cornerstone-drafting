@@ -4,16 +4,19 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { normalizePracticeArea } from '@/lib/practiceArea'
+import { planDateColumns, planTimestamp, toPlanTasks } from './plan'
+import { fetchPlanTasks } from './queries'
 import {
-  buildMatterTaskInserts,
+  buildPlanTaskDrafts,
   isDateKey,
   parseTemplateTasks,
   rescheduleForAnchor,
   templateSwapVerdict,
+  type PlanTaskDraft,
 } from './schedule'
 import {
-  MATTER_TASK_COLUMNS,
-  type MatterTaskRow,
+  PLAN_TASK_COLUMNS,
+  type PlanTask,
   type SlaAnchorDates,
   type SlaClockAnchor,
   type SlaGate,
@@ -67,13 +70,57 @@ function gatesFromMatter(matter: MatterAnchorRow): SlaGate[] {
   return matter.fit_decision === 'fit' ? ['fit_confirmed'] : []
 }
 
+/**
+ * One draft, as the columns `public.tasks` stores. The plan reasons in calendar
+ * days; the table stores timestamps, so the conversion happens here, once, at
+ * the write boundary — see `planTimestamp`.
+ */
+function planTaskInsert(draft: PlanTaskDraft): Record<string, unknown> {
+  const due = planTimestamp(draft.due_date)
+  return {
+    matter_id: draft.matter_id,
+    source: 'sla',
+    status: 'open',
+    priority: 'normal',
+    task_type: 'single',
+    title: draft.name,
+    phase: draft.phase,
+    owner: draft.owner,
+    plan_template_id: draft.plan_template_id,
+    sort_order: draft.sort_order,
+    skill: draft.skill,
+    plan_start_date: draft.start_date,
+    // Nothing has adopted a freshly generated row, so its working due date and
+    // its SLA are the same day; a stage entry later splits them.
+    due_at: due,
+    hard_due_at: due,
+    nudge_at: planTimestamp(draft.nudge_date),
+    nudge_tier: draft.nudge_tier,
+    escalation_at: planTimestamp(draft.escalation_date),
+    escalation_tier: draft.escalation_tier,
+    due_offset_days: draft.due_offset_days,
+    nudge_offset_days: draft.nudge_offset_days,
+    escalation_offset_days: draft.escalation_offset_days,
+    relative_to: draft.relative_to,
+    pre_engagement: draft.pre_engagement,
+    auto: draft.auto,
+    conditional: draft.conditional,
+    pauses_clock: draft.pauses_clock,
+    gate: draft.gate,
+    variant: draft.variant,
+    extends_target_days: draft.extends_target_days,
+    recurring_interval_days: draft.recurring_interval_days,
+    triggers_day_zero: draft.triggers_day_zero,
+  }
+}
+
 export type GenerateResult =
-  | { ok: true; created: true; tasks: MatterTaskRow[]; templateId: string }
+  | { ok: true; created: true; tasks: PlanTask[]; templateId: string }
   | {
       ok: true
       created: false
       reason: 'already_generated' | 'template_in_progress'
-      tasks: MatterTaskRow[]
+      tasks: PlanTask[]
     }
   | { ok: false; error: string; status: number }
 
@@ -109,7 +156,7 @@ export async function loadSlaTemplate(
 }
 
 /**
- * Instantiate an SLA template into `matter_tasks` for one matter.
+ * Instantiate an SLA template into `tasks` (source = 'sla') for one matter.
  *
  * Generation is a snapshot: later edits to the template never reach back into a
  * matter that has already been kicked off. Re-running is a no-op unless
@@ -149,15 +196,12 @@ export async function generateMatterTasks(
     return { ok: false, error: `Template "${templateName}" has no tasks`, status: 422 }
   }
 
-  const { data: existing, error: existingError } = await admin
-    .from('matter_tasks')
-    .select(MATTER_TASK_COLUMNS)
-    .eq('matter_id', matterId)
-    .order('due_date', { ascending: true })
-    .order('sort_order', { ascending: true })
-  if (existingError) return { ok: false, error: existingError.message, status: 500 }
-
-  const existingTasks = (existing ?? []) as unknown as MatterTaskRow[]
+  let existingTasks: PlanTask[]
+  try {
+    existingTasks = await fetchPlanTasks(admin, matterId)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Task lookup failed', status: 500 }
+  }
   if (existingTasks.length > 0) {
     const verdict = options.retemplate ? templateSwapVerdict(existingTasks, template.id) : 'same_template'
     if (!replace && verdict !== 'swap') {
@@ -168,11 +212,18 @@ export async function generateMatterTasks(
         tasks: existingTasks,
       }
     }
-    const { error: deleteError } = await admin.from('matter_tasks').delete().eq('matter_id', matterId)
+    // Only the generated plan is discarded. Stage-engine and hand-added tasks on
+    // the same matter live in the same table now, and a template swap has no
+    // business deleting them.
+    const { error: deleteError } = await admin
+      .from('tasks')
+      .delete()
+      .eq('matter_id', matterId)
+      .eq('source', 'sla')
     if (deleteError) return { ok: false, error: deleteError.message, status: 500 }
   }
 
-  const rows = buildMatterTaskInserts(template.tasks, {
+  const drafts = buildPlanTaskDrafts(template.tasks, {
     matterId,
     templateId: template.id,
     startDate,
@@ -182,12 +233,12 @@ export async function generateMatterTasks(
   })
 
   const { data: inserted, error: insertError } = await admin
-    .from('matter_tasks')
-    .insert(rows)
-    .select(MATTER_TASK_COLUMNS)
+    .from('tasks')
+    .insert(drafts.map(planTaskInsert))
+    .select(PLAN_TASK_COLUMNS)
   if (insertError) return { ok: false, error: insertError.message, status: 500 }
 
-  const tasks = ((inserted ?? []) as unknown as MatterTaskRow[]).sort(
+  const tasks = toPlanTasks((inserted ?? []) as unknown as Parameters<typeof toPlanTasks>[0]).sort(
     (a, b) => a.sort_order - b.sort_order,
   )
   return { ok: true, created: true, tasks, templateId: template.id }
@@ -312,9 +363,10 @@ export async function resyncMatterSlaTemplate(
     if (!templateName) return 'skipped'
 
     const { data: taskRows, error: tasksError } = await admin
-      .from('matter_tasks')
-      .select('template_id, status, notes, completed_at, skipped_at, paused_at')
+      .from('tasks')
+      .select('plan_template_id, status, notes, completed_at, skipped_at, paused_at')
       .eq('matter_id', matterId)
+      .eq('source', 'sla')
     if (tasksError) throw new Error(tasksError.message)
 
     const tasks = (taskRows ?? []) as unknown as Parameters<typeof templateSwapVerdict>[0]
@@ -383,21 +435,19 @@ export async function applySlaAnchor(
     return { ok: false, updated: 0, error: 'anchor date must be a calendar date (YYYY-MM-DD)' }
   }
 
-  const { data, error } = await admin
-    .from('matter_tasks')
-    .select(MATTER_TASK_COLUMNS)
-    .eq('matter_id', matterId)
-  if (error) return { ok: false, updated: 0, error: error.message }
+  let plan: PlanTask[]
+  try {
+    plan = await fetchPlanTasks(admin, matterId)
+  } catch (e) {
+    return { ok: false, updated: 0, error: e instanceof Error ? e.message : 'Task lookup failed' }
+  }
 
-  const updates = rescheduleForAnchor((data ?? []) as unknown as MatterTaskRow[], anchor, anchorDate)
+  const adopted = new Map(plan.map(task => [task.id, task.stage_entered_at !== null]))
+  const updates = rescheduleForAnchor(plan, anchor, anchorDate)
   for (const update of updates) {
     const { error: updateError } = await admin
-      .from('matter_tasks')
-      .update({
-        due_date: update.due_date,
-        nudge_date: update.nudge_date,
-        escalation_date: update.escalation_date,
-      })
+      .from('tasks')
+      .update(planDateColumns(update, { adopted: adopted.get(update.id) === true }))
       .eq('id', update.id)
     if (updateError) return { ok: false, updated: 0, error: updateError.message }
   }

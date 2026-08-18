@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TodayQueueRow } from '@/lib/queries/today'
 import type { TaskRow } from '@/lib/tasks/types'
+import { taskFixture } from './fixtures/task'
 
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }))
 const taskActions = vi.hoisted(() => ({
@@ -51,7 +52,7 @@ function agingRow(overrides: Partial<TodayQueueRow> = {}): TodayQueueRow {
 }
 
 function task(overrides: Partial<TaskRow> = {}): TaskRow {
-  return {
+  return taskFixture({
     id: 'task-1',
     title: 'File petition',
     description: null,
@@ -82,7 +83,7 @@ function task(overrides: Partial<TaskRow> = {}): TaskRow {
     record_name: 'Jordan Family',
     assignee_name: null,
     ...overrides,
-  }
+  })
 }
 
 function renderQueue(overrides: Partial<React.ComponentProps<typeof TodayQueue>> = {}) {

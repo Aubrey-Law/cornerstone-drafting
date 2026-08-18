@@ -183,7 +183,7 @@ describe('a cancelled session keeps its anchor', () => {
     // only move dates to a real day, so nulling them would be new machinery.
     const task: Parameters<typeof rescheduleForAnchor>[0][number] = {
       id: 'task-1',
-      status: 'pending',
+      status: 'open',
       relative_to: 'pmps',
       due_offset_days: -1,
       nudge_offset_days: -2,

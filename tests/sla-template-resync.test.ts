@@ -29,8 +29,8 @@ const COLLEGE_TASKS = [
 
 function task(overrides: Record<string, unknown> = {}) {
   return {
-    template_id: ESTATE_TEMPLATE,
-    status: 'pending',
+    plan_template_id: ESTATE_TEMPLATE,
+    status: 'open',
     notes: null,
     completed_at: null,
     skipped_at: null,
@@ -95,7 +95,7 @@ describe('resyncMatterSlaTemplate', () => {
     // cleared. Filling it in under someone who only opened the workspace would
     // drop 40-odd tasks on them, most already overdue against a past Day 0.
     const { client, ops } = stubClient(op =>
-      op.table === 'matter_tasks' ? { data: [], error: null } : { data: null, error: null },
+      op.table === 'tasks' ? { data: [], error: null } : { data: null, error: null },
     )
 
     expect(await resyncMatterSlaTemplate(client, MATTER, 'CP')).toBe('no_checklist')
@@ -106,8 +106,8 @@ describe('resyncMatterSlaTemplate', () => {
 
   it('does nothing when the matter is already on the right template', async () => {
     const { client, ops } = stubClient(op =>
-      op.table === 'matter_tasks'
-        ? { data: [task({ template_id: COLLEGE_TEMPLATE })], error: null }
+      op.table === 'tasks'
+        ? { data: [task({ plan_template_id: COLLEGE_TEMPLATE })], error: null }
         : { data: { id: COLLEGE_TEMPLATE }, error: null },
     )
 
@@ -127,24 +127,24 @@ describe('resyncMatterSlaTemplate', () => {
     })
 
     expect(await resyncMatterSlaTemplate(client, MATTER, 'CP')).toBe('swapped')
-    expect(ops.some(op => op.table === 'matter_tasks' && op.verb === 'delete')).toBe(true)
+    expect(ops.some(op => op.table === 'tasks' && op.verb === 'delete')).toBe(true)
 
     const insert = ops.find(op => op.verb === 'insert')
-    expect(insert?.table).toBe('matter_tasks')
+    expect(insert?.table).toBe('tasks')
     expect(insert?.rows).toHaveLength(COLLEGE_TASKS.length)
-    expect((insert?.rows as { template_id: string }[])[0].template_id).toBe(COLLEGE_TEMPLATE)
+    expect((insert?.rows as { plan_template_id: string }[])[0].plan_template_id).toBe(COLLEGE_TEMPLATE)
   })
 
   it('refuses once any of the work is real', async () => {
     for (const started of [
-      task({ status: 'completed', completed_at: '2026-08-12T00:00:00Z' }),
-      task({ status: 'skipped', skipped_at: '2026-08-12T00:00:00Z' }),
+      task({ status: 'done', completed_at: '2026-08-12T00:00:00Z' }),
+      task({ status: 'archived', skipped_at: '2026-08-12T00:00:00Z' }),
       task({ notes: 'called the school' }),
       task({ status: 'blocked', paused_at: '2026-08-12T00:00:00Z' }),
-      task({ template_id: null }),
+      task({ plan_template_id: null }),
     ]) {
       const { client, ops } = stubClient(op =>
-        op.table === 'matter_tasks'
+        op.table === 'tasks'
           ? { data: [task(), started], error: null }
           : { data: { id: COLLEGE_TEMPLATE }, error: null },
       )
@@ -158,7 +158,7 @@ describe('resyncMatterSlaTemplate', () => {
     // The migration has not been applied to this database. Deleting a working
     // checklist to replace it with nothing is the worst available outcome.
     const { client, ops } = stubClient(op =>
-      op.table === 'matter_tasks'
+      op.table === 'tasks'
         ? { data: [task()], error: null }
         : { data: null, error: null },
     )

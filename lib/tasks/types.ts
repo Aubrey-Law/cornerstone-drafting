@@ -3,10 +3,18 @@ import type { TaskTemplateItem } from '@/lib/tasks/templateItems'
 
 export const TASK_STATUSES = ['open', 'in_progress', 'blocked', 'done', 'archived'] as const
 export const TASK_PRIORITIES = ['high', 'normal', 'low'] as const
-export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence'] as const
+export const TASK_SOURCES = ['manual', 'stage', 'template', 'cadence', 'sla'] as const
 export const TASK_TYPES = ['single', 'checklist'] as const
 
+/**
+ * Who owes the work. Distinct from `assignee_id`, which names a person at the
+ * firm: a plan task owned by the client or by an automation has no assignee and
+ * must stay out of the firm's working queue, while still counting on the plan.
+ */
+export const TASK_OWNERS = ['firm', 'client', 'automation'] as const
+
 export type TaskStatus = (typeof TASK_STATUSES)[number]
+export type TaskOwner = (typeof TASK_OWNERS)[number]
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 export type TaskSource = (typeof TASK_SOURCES)[number]
 export type TaskType = (typeof TASK_TYPES)[number]
@@ -53,6 +61,45 @@ export interface TaskRow {
   created_by: string | null
   created_at: string
   updated_at: string
+
+  // ── Plan fields (source = 'sla', and `phase` on stage tasks) ──────────────
+  // See supabase/migrations/20261003000000_tasks_absorb_sla_plan.sql. Every one
+  // of these is null/default on an ad-hoc task; they carry the dated SLA spine
+  // that used to live in its own `matter_tasks` table.
+  /** Pipeline stage, not the engine key `stage_key` holds. */
+  phase: string | null
+  owner: TaskOwner
+  plan_template_id: string | null
+  sort_order: number
+  skill: string | null
+  /** The attorney's running notes, as opposed to the template's `description`. */
+  notes: string | null
+  plan_start_date: string | null
+  /** Null means Day 0 — the engagement signature. */
+  relative_to: string | null
+  due_offset_days: number | null
+  nudge_offset_days: number | null
+  escalation_offset_days: number | null
+  nudge_at: string | null
+  nudge_tier: string | null
+  escalation_at: string | null
+  escalation_tier: string | null
+  nudge_sent_at: string | null
+  escalation_sent_at: string | null
+  pauses_clock: boolean
+  paused_at: string | null
+  total_paused_days: number
+  pre_engagement: boolean
+  auto: boolean
+  conditional: boolean
+  gate: string | null
+  variant: string | null
+  extends_target_days: number | null
+  recurring_interval_days: number | null
+  triggers_day_zero: boolean
+  /** Set alongside status 'archived' when the task is skipped as N/A. */
+  skipped_at: string | null
+
   /** Joined for display — the matter/lead this task hangs off. */
   record_name?: string | null
   assignee_name?: string | null
@@ -103,6 +150,20 @@ export function effectiveDueAt(task: Pick<TaskRow, 'due_at' | 'soft_due_at' | 'h
 
 export function isTaskOpen(task: Pick<TaskRow, 'status'>): boolean {
   return task.status === 'open' || task.status === 'in_progress' || task.status === 'blocked'
+}
+
+/**
+ * Archived because it did not apply, rather than abandoned. Only the first
+ * counts as plan progress, and `skipped_at` is the only thing that tells them
+ * apart — the status is 'archived' either way.
+ */
+export function isTaskSkipped(task: Pick<TaskRow, 'status' | 'skipped_at'>): boolean {
+  return task.status === 'archived' && !!task.skipped_at
+}
+
+/** Done or deliberately skipped — either way, the phase has moved past it. */
+export function isTaskResolved(task: Pick<TaskRow, 'status' | 'skipped_at'>): boolean {
+  return task.status === 'done' || isTaskSkipped(task)
 }
 
 export type TaskDueGroup = 'overdue' | 'today' | 'week' | 'later' | 'none' | 'done'
@@ -225,6 +286,7 @@ export const TASK_SOURCE_LABEL: Record<TaskSource, string> = {
   manual: 'Manual',
   template: 'Template',
   cadence: 'Cadence',
+  sla: 'Plan',
 }
 
 export const TASK_SOURCE_PILL: Record<TaskSource, string> = {
@@ -232,6 +294,7 @@ export const TASK_SOURCE_PILL: Record<TaskSource, string> = {
   manual: 'bg-muted text-foreground',
   template: 'bg-blue-bg text-blue',
   cadence: 'bg-stage-active-bg text-stage-active-text',
+  sla: 'bg-teal-bg text-accent',
 }
 
 export const TASK_PRIORITY_DOT: Record<TaskPriority, string> = {
