@@ -49,10 +49,6 @@ function claim(payloadOverrides: Partial<DraftPayload> = {}, documents: Partial<
   return assembleMetlifeClaim(payload(payloadOverrides, documents), details, input, new Date('2026-04-20T16:00:00Z'))
 }
 
-/** The shared incapacity block: three POAs plus the directive. */
-const SHARED_COUPLE = METLIFE_FEES.powerOfAttorney.couple * 3 + METLIFE_FEES.advancedMedicalDirective.couple
-const SHARED_MEMBER = METLIFE_FEES.powerOfAttorney.member * 3 + METLIFE_FEES.advancedMedicalDirective.member
-
 describe('MetLife plan-type derivation', () => {
   it('reads a joint trust from a joint married design sheet', () => {
     expect(deriveMetlifePlanType(payload())).toBe('joint_trust')
@@ -80,12 +76,43 @@ describe('MetLife plan-type derivation', () => {
 })
 
 describe('MetLife claim totals', () => {
-  it('bills a joint trust at the couple rates', () => {
-    const result = claim()
+  const willMember = ['Will with support trust/Codicil — Individual - Member', '200', 15_000] as const
+  const willSpouse = ['Will with support trust/Codicil — Individual - Spouse', '200', 15_000] as const
+  const financialCouple = ['Power of Attorney_Financial — Member and Spouse', '220', 8_500] as const
+  const healthCareCouple = ['Power of Attorney_Health Care — Member and Spouse', '220', 8_500] as const
+  const livingWillCouple = ['Living Will — Member and Spouse', '230', 6_000] as const
+  const financialMember = ['Power of Attorney_Financial — Member', '220', 6_000] as const
+  const healthCareMember = ['Power of Attorney_Health Care — Member', '220', 6_000] as const
+  const livingWillMember = ['Living Will — Member', '230', 4_500] as const
+  const trustCouple = ['Trust — Member and Spouse', '260', 40_000] as const
+  const trustMember = ['Trust — Individual - Member', '260', 32_500] as const
+  const trustSpouse = ['Trust — Individual - Spouse', '260', 32_500] as const
+
+  it.each([
+    ['Couple Joint Trust', () => claim(), 'joint_trust', 93_000, [
+      willMember, willSpouse, financialCouple, healthCareCouple, livingWillCouple, trustCouple,
+    ]],
+    ['Couple Separate Trusts', () => claim({ trust: { separate_trusts: true } as DraftPayload['trust'] }), 'separate_trust', 118_000, [
+      willMember, willSpouse, financialCouple, healthCareCouple, livingWillCouple, trustMember, trustSpouse,
+    ]],
+    ['Couple Will', () => claim({}, { include_trust: false, include_pour_over_will: false, include_simple_will: true }), 'will_couple', 53_000, [
+      willMember, willSpouse, financialCouple, healthCareCouple, livingWillCouple,
+    ]],
+    ['Individual Trust', () => claim({ spouse: null }), 'individual_trust', 64_000, [
+      willMember, financialMember, healthCareMember, livingWillMember, trustMember,
+    ]],
+    ['Individual Will', () => claim({ spouse: null }, { include_trust: false, include_pour_over_will: false, include_simple_will: true }), 'will_individual', 31_500, [
+      willMember, financialMember, healthCareMember, livingWillMember,
+    ]],
+  ] as const)('auto-populates the %s charges', (_label, assemble, planType, totalCents, expectedRows) => {
+    const result = assemble()
     expect(result.preflight).toEqual([])
-    expect(result.data?.planType).toBe('joint_trust')
-    expect(result.data?.grandTotalCents).toBe(
-      SHARED_COUPLE + METLIFE_FEES.will.couple + METLIFE_FEES.trust.couple + METLIFE_FEES.affidavit.member,
+    expect(result.data?.planType).toBe(planType)
+    expect(result.data?.grandTotalCents).toBe(totalCents)
+    expect(result.data?.sections[0].title).toBe('Estate Planning Claim')
+    expect(result.data?.sections[0].items.map(item => [item.document, item.serviceCode, item.feeCents])).toEqual(expectedRows)
+    expect(result.data?.sections[0].items.map(item => item.comment)).toEqual(
+      expectedRows.map(([document, serviceCode]) => `CT ${serviceCode} — ${document}`),
     )
     expect(result.data?.grandTotalCents).toBe(96_500)
   })
@@ -106,6 +133,7 @@ describe('MetLife claim totals', () => {
       .toBe(SHARED_MEMBER + METLIFE_FEES.will.member)
     expect(claim({ spouse: null }).data?.grandTotalCents)
       .toBe(SHARED_MEMBER + METLIFE_FEES.will.member + METLIFE_FEES.trust.member + METLIFE_FEES.affidavit.member)
+
   })
 
   it('adds one realty trust section per property', () => {
@@ -118,17 +146,20 @@ describe('MetLife claim totals', () => {
     expect(three.data!.sections.filter(section => section.title.startsWith('Realty Trust and Deed'))).toHaveLength(3)
   })
 
-  it('bills only the documents the design sheet includes', () => {
-    const result = claim({}, { include_hipaa: false, include_ahd: false })
-    expect(result.data?.grandTotalCents).toBe(
-      METLIFE_FEES.powerOfAttorney.couple * 2 + METLIFE_FEES.will.couple + METLIFE_FEES.trust.couple + METLIFE_FEES.affidavit.member,
-    )
-    expect(result.data!.sections.flatMap(s => s.items).some(item => item.document.includes('HIPAA'))).toBe(false)
+  it('does not add HIPAA or trust-affidavit charges to a core package', () => {
+    // The design sheet includes HIPAA and a trust certificate by default; the
+    // approved package matrix intentionally does not turn either into a core row.
+    const result = claim()
+    const coreDocuments = result.data!.sections[0].items.map(item => item.document)
+    expect(coreDocuments).toHaveLength(6)
+    expect(coreDocuments.some(document => document.includes('HIPAA'))).toBe(false)
+    expect(coreDocuments.some(document => document.includes('Affidavit'))).toBe(false)
   })
 
   it('adds a temporary guardian affidavit when the matter appoints a guardian', () => {
     const result = claim({}, { include_parental_appointment: true })
-    const guardian = result.data!.sections[0].items.find(item => item.document === 'Temporary Guardian Affidavit')
+    const guardian = result.data!.sections.flatMap(section => section.items)
+      .find(item => item.document === 'Temporary Guardian Affidavit')
     expect(guardian?.feeCents).toBe(METLIFE_FEES.affidavit.member)
     expect(guardian?.serviceType).toBe('Affidavit')
     expect(guardian?.serviceCode).toBe('700')
@@ -191,6 +222,7 @@ describe('Portal submission table', () => {
     expect(rows.every(row => row.complete === 'Yes')).toBe(true)
     expect(rows[0].fee).toBe('$85.00')
     expect(rows[0].serviceCode).toBe('220')
+
   })
 
   it('renders a CSV with a header row and quoted fields', () => {

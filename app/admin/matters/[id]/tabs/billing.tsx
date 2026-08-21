@@ -568,6 +568,8 @@ export function MatterBillingTab({
               onCloseMatter={() => void onCloseMatter()}
               closing={closing}
               alreadyClosed={alreadyClosed}
+              directBalance={rows.filter(row => row.kind !== 'plan_claim').reduce((sum, row) => sum + row.balance, 0)}
+              uninvoicedDirectCount={billableCharges.length}
             />
             {(billableCharges.length > 0 || claimsToSubmit.length > 0 || overdue.length > 0) && (
               <Card>

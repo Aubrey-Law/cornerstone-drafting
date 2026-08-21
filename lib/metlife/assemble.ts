@@ -68,56 +68,45 @@ function section(title: string, items: MetlifeLineItem[]): MetlifeSection {
   return { title, items, totalCents: items.reduce((sum, item) => sum + item.feeCents, 0) }
 }
 
-/**
- * The incapacity documents, billed once for the pair on a couple plan and once
- * per person otherwise. Each line is gated on the design sheet actually
- * including that document — a claim never bills work the matter does not contain.
- */
-function sharedSection(
-  payload: DraftPayload,
-  planType: MetlifePlanType,
-  memberName: string,
-  spouseName: string | null,
-  includeMinorGuardian: boolean,
-): MetlifeSection {
-  const couple = planTypeIsCouple(planType)
-  const rate = couple ? 'couple' : 'member'
-  const suffix = couple ? '(Member and Spouse)' : ''
-  const forWhom = couple && spouseName ? 'Member and Spouse' : memberName
-  const documents = payload.documents
-  const items: MetlifeLineItem[] = []
-
-  if (documents.include_dpoa) {
-    items.push(line(`Power of Attorney (Financial)${suffix}`, 'powerOfAttorney', rate, `Financial Power of Attorney for ${forWhom}`))
-  }
-  if (documents.include_hcp) {
-    items.push(line(`Power of Attorney (Medical)${suffix}`, 'powerOfAttorney', rate, `Medical Power of Attorney for ${forWhom}`))
-  }
-  if (documents.include_hipaa) {
-    items.push(line(`Power of Attorney (HIPAA)${suffix}`, 'powerOfAttorney', rate, `HIPAA authorization for ${forWhom}`))
-  }
-  if (documents.include_ahd) {
-    items.push(line(`Advanced Medical Directive${suffix ? ` ${suffix}` : ''}`.trim(), 'advancedMedicalDirective', rate, `Advanced Medical Directive for ${forWhom}`))
-  }
-  if (includeMinorGuardian) {
-    // MetLife bills a minor guardianship as an affidavit; there is no separate rate for it.
-    items.push(line('Temporary Guardian Affidavit', 'affidavit', 'member', 'Temporary Guardian Affidavit for minor children'))
-  }
-
-  const title = couple && spouseName ? `Shared — ${memberName} and ${spouseName}` : `Shared — ${memberName}`
-  return section(title, items)
+function presetLine(
+  document: string,
+  fee: Parameters<typeof feeCents>[0],
+  rate: 'member' | 'couple',
+) {
+  return line(document, fee, rate, document)
 }
 
-function trustSectionFor(name: string, hasWill: boolean): MetlifeSection {
+/**
+ * The five estate-planning claim presets approved by the firm. Selecting (or
+ * deriving) a composition auto-populates these rows in portal order. Optional
+ * deed, realty-trust, and guardian-affidavit work is appended separately and
+ * never changes the core package.
+ */
+function estatePlanningSection(planType: MetlifePlanType): MetlifeSection {
+  const couple = planTypeIsCouple(planType)
+  const audience = couple ? 'Member and Spouse' : 'Member'
+  const rate = couple ? 'couple' : 'member'
   const items: MetlifeLineItem[] = []
-  if (hasWill) {
-    // Separate-trust pour-over wills are non-reciprocal, so each bills at the
-    // member rate rather than the $185 couple rate.
-    items.push(line(`Last Will and Testament for ${name}`, 'will', 'member', `Pour-over will for ${name} (non-reciprocal)`))
+
+  items.push(presetLine('Will with support trust/Codicil — Individual - Member', 'will', 'member'))
+  if (couple) {
+    items.push(presetLine('Will with support trust/Codicil — Individual - Spouse', 'will', 'member'))
   }
-  items.push(line(`Individual Trust No-Tax Planning (${name})`, 'trust', 'member', `Individual revocable trust for ${name}`))
-  items.push(line('Affidavit', 'affidavit', 'member', `Affidavit of Trust for the ${name} Revocable Trust`))
-  return section(`${name} Trust Claim`, items)
+
+  items.push(presetLine(`Power of Attorney_Financial — ${audience}`, 'powerOfAttorney', rate))
+  items.push(presetLine(`Power of Attorney_Health Care — ${audience}`, 'powerOfAttorney', rate))
+  items.push(presetLine(`Living Will — ${audience}`, 'advancedMedicalDirective', rate))
+
+  if (planType === 'joint_trust') {
+    items.push(presetLine('Trust — Member and Spouse', 'trust', 'couple'))
+  } else if (planType === 'separate_trust') {
+    items.push(presetLine('Trust — Individual - Member', 'trust', 'member'))
+    items.push(presetLine('Trust — Individual - Spouse', 'trust', 'member'))
+  } else if (planType === 'individual_trust') {
+    items.push(presetLine('Trust — Individual - Member', 'trust', 'member'))
+  }
+
+  return section('Estate Planning Claim', items)
 }
 
 function realtySections(planType: MetlifePlanType, count: number): MetlifeSection[] {
@@ -134,46 +123,16 @@ function realtySections(planType: MetlifePlanType, count: number): MetlifeSectio
 }
 
 function claimSections(
-  payload: DraftPayload,
   planType: MetlifePlanType,
-  memberName: string,
-  spouseName: string | null,
   realtyTrustCount: number,
   includeMinorGuardian: boolean,
 ): MetlifeSection[] {
-  const documents = payload.documents
-  const hasWill = Boolean(
-    documents.include_pour_over_will || documents.include_simple_will || documents.include_testamentary_trust_will,
-  )
-  const sections = [sharedSection(payload, planType, memberName, spouseName, includeMinorGuardian)]
+  const sections = [estatePlanningSection(planType)]
 
-  if (planType === 'separate_trust') {
-    sections.push(trustSectionFor(memberName, hasWill))
-    if (spouseName) sections.push(trustSectionFor(spouseName, hasWill))
-  } else if (planType === 'joint_trust') {
-    const items: MetlifeLineItem[] = []
-    if (hasWill) {
-      items.push(line('Last Will and Testament (Member and Spouse)', 'will', 'couple', `Pour-over wills for ${memberName} and ${spouseName ?? 'Spouse'}`))
-    }
-    items.push(line('Joint Trust No-Tax Planning (Member and Spouse)', 'trust', 'couple', `Joint revocable trust for ${memberName} and ${spouseName ?? 'Spouse'}`))
-    items.push(line('Affidavit', 'affidavit', 'member', 'Affidavit of Trust for the joint Revocable Trust'))
-    sections.push(section('Trust Claim', items))
-  } else if (planType === 'will_couple') {
-    if (hasWill) {
-      sections.push(section('Wills', [
-        line('Last Will and Testament (Member and Spouse)', 'will', 'couple', `Wills for ${memberName} and ${spouseName ?? 'Spouse'}`),
-      ]))
-    }
-  } else if (planType === 'will_individual') {
-    if (hasWill) {
-      sections.push(section('Will', [line('Last Will and Testament', 'will', 'member', `Will for ${memberName}`)]))
-    }
-  } else {
-    const items: MetlifeLineItem[] = []
-    if (hasWill) items.push(line('Last Will and Testament', 'will', 'member', `Pour-over will for ${memberName}`))
-    items.push(line('Individual Trust No-Tax Planning', 'trust', 'member', `Individual revocable trust for ${memberName}`))
-    items.push(line('Affidavit', 'affidavit', 'member', `Affidavit of Trust for the ${memberName} Revocable Trust`))
-    sections.push(section('Trust Claim', items))
+  if (includeMinorGuardian) {
+    sections.push(section('Additional Affidavit', [
+      line('Temporary Guardian Affidavit', 'affidavit', 'member', 'Temporary Guardian Affidavit for minor children'),
+    ]))
   }
 
   sections.push(...realtySections(planType, realtyTrustCount))
@@ -232,10 +191,7 @@ export function assembleMetlifeClaim(
     ? input.includeMinorGuardian
     : Boolean(payload.documents.include_parental_appointment || payload.documents.include_temp_delegation)
 
-  const sections = claimSections(payload, planType, memberName ?? 'Member', spouseName, realtyTrustCount, includeMinorGuardian)
-  if (sections.every(entry => entry.items.length === 0)) {
-    preflight.push({ field: 'documents', message: '[UNKNOWN] This matter includes no MetLife-billable documents.' })
-  }
+  const sections = claimSections(planType, realtyTrustCount, includeMinorGuardian)
 
   if (preflight.length || !memberName || !memberId || !serviceStart || !serviceEnd) {
     return { data: null, preflight }

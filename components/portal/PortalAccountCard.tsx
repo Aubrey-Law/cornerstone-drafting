@@ -35,9 +35,9 @@ function displayDate(key: string | null): string {
  * already enforces "shared, and on a matter you can access". One access rule
  * is easier to keep correct than two.
  */
-export function PortalAccountCard({ account }: { account: PortalAccount }) {
+export function PortalAccountCard({ account, showAll = false }: { account: PortalAccount; showAll?: boolean }) {
   const [pending, setPending] = useState<string | null>(null)
-  const recent = account.invoices.slice(0, 3)
+  const visibleInvoices = showAll ? account.invoices : account.invoices.slice(0, 3)
 
   async function download(invoice: PortalAccount['invoices'][number]) {
     if (!invoice.documentId) return
@@ -78,7 +78,7 @@ export function PortalAccountCard({ account }: { account: PortalAccount }) {
       )}
 
       <ul className="mt-4 space-y-3">
-        {recent.map(invoice => (
+        {visibleInvoices.map(invoice => (
           <li key={invoice.id} className="flex items-start gap-2.5">
             <ReceiptText className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
             <div className="min-w-0 flex-1">
@@ -106,7 +106,9 @@ export function PortalAccountCard({ account }: { account: PortalAccount }) {
                 onClick={() => void download(invoice)}
               >
                 <Download className="size-4" aria-hidden />
-                <span className="sr-only">Download invoice {invoice.number}</span>
+                <span className="sr-only">
+                  Download {invoice.paid ? 'receipt' : 'invoice'} {invoice.number}
+                </span>
               </Button>
             )}
           </li>
@@ -123,6 +125,11 @@ export function PortalAccountCard({ account }: { account: PortalAccount }) {
           </a>
         </Button>
       )}
+      {!showAll && account.invoices.length > 3 ? (
+        <Button asChild variant="outline" className="mt-3 min-h-11 w-full">
+          <a href="/account">View all invoices and receipts</a>
+        </Button>
+      ) : null}
     </section>
   )
 }

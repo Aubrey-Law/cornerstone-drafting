@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { FieldLabel, SectionBlock, type SectionProps } from './shared'
@@ -41,11 +42,20 @@ function newAsset(): AssetItem {
     institution: '',
     estimated_value: null,
     notes: '',
+    current_owner: '',
+    target_owner: '',
+    beneficiary_designation: '',
   }
 }
 
 export function AssetsSection({ sheet, onChange }: SectionProps) {
   const [assets, setAssets] = useState<AssetItem[]>(Array.isArray(sheet.assets) ? sheet.assets : [])
+  const storedFunding = sheet.decisions?.funding_plan as {
+    narrative?: string | null
+    checklist_items?: Array<{ number: string; action: string; trust: string; priority: string }>
+  } | undefined
+  const [fundingNarrative, setFundingNarrative] = useState(storedFunding?.narrative ?? '')
+  const [fundingItems, setFundingItems] = useState(storedFunding?.checklist_items ?? [])
 
   function commit(next: AssetItem[]) {
     setAssets(next)
@@ -63,6 +73,24 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
   function updateAsset(id: string, patch: Partial<AssetItem>) {
     const next = assets.map(a => a.id === id ? { ...a, ...patch } : a)
     commit(next)
+  }
+
+  function commitFunding(
+    narrative: string,
+    checklistItems: Array<{ number: string; action: string; trust: string; priority: string }>,
+  ) {
+    setFundingNarrative(narrative)
+    setFundingItems(checklistItems)
+    onChange('decisions', previous => ({
+      ...(previous.decisions ?? {}),
+      funding_plan: { narrative, checklist_items: checklistItems },
+    }))
+  }
+
+  function addFundingItem() {
+    commitFunding(fundingNarrative, [...fundingItems, {
+      number: String(fundingItems.length + 1), action: '', trust: '', priority: 'MEDIUM',
+    }])
   }
 
   const totalValue = assets.reduce((sum, a) => sum + (a.estimated_value ?? 0), 0)
@@ -159,6 +187,20 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
                       />
                     </div>
                   </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <div>
+                      <FieldLabel>Current owner / title</FieldLabel>
+                      <Input value={asset.current_owner ?? ''} onChange={e => updateAsset(asset.id, { current_owner: e.target.value })} placeholder="Individual, joint, trust, entity" className="h-9 bg-card text-sm" />
+                    </div>
+                    <div>
+                      <FieldLabel>Target owner / title</FieldLabel>
+                      <Input value={asset.target_owner ?? ''} onChange={e => updateAsset(asset.id, { target_owner: e.target.value })} placeholder="Leave as-is or name target trust" className="h-9 bg-card text-sm" />
+                    </div>
+                    <div>
+                      <FieldLabel>Beneficiary designation</FieldLabel>
+                      <Input value={asset.beneficiary_designation ?? ''} onChange={e => updateAsset(asset.id, { beneficiary_designation: e.target.value })} placeholder="Primary and contingent" className="h-9 bg-card text-sm" />
+                    </div>
+                  </div>
                 </div>
               )
             })}
@@ -180,6 +222,47 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
             }).format(totalValue)}
           </span>
         </footer>
+      </SectionBlock>
+      <SectionBlock title="Trust Funding Roadmap" subtitle="Editable instructions used by the funding-plan document">
+        <FieldLabel>Client-facing funding narrative</FieldLabel>
+        <Textarea
+          value={fundingNarrative}
+          onChange={event => commitFunding(event.target.value, fundingItems)}
+          placeholder="Explain which assets should move to the trust, which should stay outside it, and which beneficiary designations must be reviewed."
+          rows={4}
+        />
+        <div className="mt-4 space-y-3">
+          {fundingItems.map((item, index) => (
+            <div key={`${item.number}:${index}`} className="grid gap-2 rounded-lg border border-border p-3 lg:grid-cols-[1fr_12rem_9rem_auto]">
+              <Input
+                aria-label={`Funding action ${index + 1}`}
+                value={item.action}
+                onChange={event => commitFunding(fundingNarrative, fundingItems.map((row, rowIndex) => rowIndex === index ? { ...row, action: event.target.value } : row))}
+                placeholder="Retitle account or update beneficiary"
+              />
+              <Input
+                aria-label={`Target trust ${index + 1}`}
+                value={item.trust}
+                onChange={event => commitFunding(fundingNarrative, fundingItems.map((row, rowIndex) => rowIndex === index ? { ...row, trust: event.target.value } : row))}
+                placeholder="Target trust"
+              />
+              <Select value={item.priority} onValueChange={priority => commitFunding(fundingNarrative, fundingItems.map((row, rowIndex) => rowIndex === index ? { ...row, priority } : row))}>
+                <SelectTrigger aria-label={`Priority ${index + 1}`}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="ghost" size="icon" aria-label={`Remove funding action ${index + 1}`} onClick={() => commitFunding(fundingNarrative, fundingItems.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, number: String(rowIndex + 1) })))}>
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" variant="outline" size="sm" onClick={addFundingItem}>
+            <Plus className="size-4" /> Add funding action
+          </Button>
+        </div>
       </SectionBlock>
     </div>
   )

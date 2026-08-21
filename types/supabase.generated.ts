@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -364,6 +362,65 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_adjustments: {
+        Row: {
+          amount_cents: number
+          balance_effect: string
+          created_at: string
+          created_by: string | null
+          external_reference: string | null
+          id: string
+          invoice_id: string
+          kind: string
+          metadata: Json
+          payment_group_id: string | null
+          provider: string | null
+          reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          balance_effect: string
+          created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
+          id?: string
+          invoice_id: string
+          kind: string
+          metadata?: Json
+          payment_group_id?: string | null
+          provider?: string | null
+          reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          balance_effect?: string
+          created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
+          id?: string
+          invoice_id?: string
+          kind?: string
+          metadata?: Json
+          payment_group_id?: string | null
+          provider?: string | null
+          reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_adjustments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_events: {
         Row: {
           actor_id: string | null
@@ -491,6 +548,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          incurred_at: string | null
           invoice_id: string | null
           invoiced_at: string | null
           kind: string
@@ -508,6 +566,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          incurred_at?: string | null
           invoice_id?: string | null
           invoiced_at?: string | null
           kind: string
@@ -525,6 +584,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          incurred_at?: string | null
           invoice_id?: string | null
           invoiced_at?: string | null
           kind?: string
@@ -4384,8 +4444,10 @@ export type Database = {
           attorney_short_name: string | null
           bar_number: string | null
           billing_annual_goal_cents: number
+          billing_milestones_enabled: boolean
           calendar_daily_target_minutes: number
           city: string | null
+          durable_workflow_jobs_enabled: boolean
           email: string | null
           email_logo_header: boolean
           email_signature_default: boolean
@@ -4393,6 +4455,7 @@ export type Database = {
           firm_name: string | null
           id: number
           phone: string | null
+          probate_track_enabled: boolean
           specialization: string | null
           state: string | null
           street: string | null
@@ -4407,8 +4470,10 @@ export type Database = {
           attorney_short_name?: string | null
           bar_number?: string | null
           billing_annual_goal_cents?: number
+          billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          durable_workflow_jobs_enabled?: boolean
           email?: string | null
           email_logo_header?: boolean
           email_signature_default?: boolean
@@ -4416,6 +4481,7 @@ export type Database = {
           firm_name?: string | null
           id?: number
           phone?: string | null
+          probate_track_enabled?: boolean
           specialization?: string | null
           state?: string | null
           street?: string | null
@@ -4430,8 +4496,10 @@ export type Database = {
           attorney_short_name?: string | null
           bar_number?: string | null
           billing_annual_goal_cents?: number
+          billing_milestones_enabled?: boolean
           calendar_daily_target_minutes?: number
           city?: string | null
+          durable_workflow_jobs_enabled?: boolean
           email?: string | null
           email_logo_header?: boolean
           email_signature_default?: boolean
@@ -4439,6 +4507,7 @@ export type Database = {
           firm_name?: string | null
           id?: number
           phone?: string | null
+          probate_track_enabled?: boolean
           specialization?: string | null
           state?: string | null
           street?: string | null
@@ -4663,6 +4732,65 @@ export type Database = {
           },
         ]
       }
+      invoice_checkout_sessions: {
+        Row: {
+          amount_cents: number
+          checkout_url: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          invoice_id: string
+          payment_group_id: string | null
+          provider: string
+          provider_payment_intent_id: string | null
+          provider_session_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          checkout_url?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          invoice_id: string
+          payment_group_id?: string | null
+          provider: string
+          provider_payment_intent_id?: string | null
+          provider_session_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          checkout_url?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          invoice_id?: string
+          payment_group_id?: string | null
+          provider?: string
+          provider_payment_intent_id?: string | null
+          provider_session_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_checkout_sessions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_items: {
         Row: {
           amount_cents: number
@@ -4725,6 +4853,65 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      invoice_reminders: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          body: string
+          cadence_week: string
+          created_at: string
+          escalation_level: string
+          id: string
+          invoice_id: string
+          recipient_email: string
+          sent_at: string | null
+          status: string
+          subject: string
+          suppressed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          body: string
+          cadence_week: string
+          created_at?: string
+          escalation_level: string
+          id?: string
+          invoice_id: string
+          recipient_email: string
+          sent_at?: string | null
+          status?: string
+          subject: string
+          suppressed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          body?: string
+          cadence_week?: string
+          created_at?: string
+          escalation_level?: string
+          id?: string
+          invoice_id?: string
+          recipient_email?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          suppressed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_reminders_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invoices: {
         Row: {
@@ -5684,6 +5871,20 @@ export type Database = {
             referencedRelation: "matters"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "matter_document_folders_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_document_folders_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
         ]
       }
       matter_documents: {
@@ -5866,6 +6067,210 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "matter_estate_clause_overrides"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_fee_milestones: {
+        Row: {
+          amount_cents: number
+          billing_item_id: string | null
+          created_at: string
+          id: string
+          label: string
+          matter_id: string
+          milestone_key: string
+          position: number
+          released_at: string | null
+          schedule_id: string
+          state: string
+          terms: string
+          trigger_key: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          billing_item_id?: string | null
+          created_at?: string
+          id?: string
+          label: string
+          matter_id: string
+          milestone_key: string
+          position: number
+          released_at?: string | null
+          schedule_id: string
+          state?: string
+          terms?: string
+          trigger_key: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          billing_item_id?: string | null
+          created_at?: string
+          id?: string
+          label?: string
+          matter_id?: string
+          milestone_key?: string
+          position?: number
+          released_at?: string | null
+          schedule_id?: string
+          state?: string
+          terms?: string
+          trigger_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_fee_milestones_billing_item_id_fkey"
+            columns: ["billing_item_id"]
+            isOneToOne: true
+            referencedRelation: "billing_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_fee_milestones_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_fee_milestones_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_fee_milestones_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_fee_milestones_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "matter_fee_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_fee_schedules: {
+        Row: {
+          agreed_total_cents: number
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          package_snapshot: Json
+          service_package_id: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          agreed_total_cents: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          package_snapshot: Json
+          service_package_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          agreed_total_cents?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          package_snapshot?: Json
+          service_package_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_fee_schedules_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: true
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_fee_schedules_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: true
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_fee_schedules_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: true
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_fee_schedules_service_package_id_fkey"
+            columns: ["service_package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_financial_exceptions: {
+        Row: {
+          documented_at: string
+          documented_by: string
+          id: string
+          matter_id: string
+          reason: string
+          revoked_at: string | null
+          status: string
+        }
+        Insert: {
+          documented_at?: string
+          documented_by: string
+          id?: string
+          matter_id: string
+          reason: string
+          revoked_at?: string | null
+          status?: string
+        }
+        Update: {
+          documented_at?: string
+          documented_by?: string
+          id?: string
+          matter_id?: string
+          reason?: string
+          revoked_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_financial_exceptions_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_financial_exceptions_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_financial_exceptions_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
           },
         ]
       }
@@ -6338,6 +6743,47 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_receipts: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          payment_group_id: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          payment_group_id: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          payment_group_id?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_receipts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_aging_snooze: {
         Row: {
           created_at: string
@@ -6524,6 +6970,83 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           weekly_hours?: Json
+        }
+        Relationships: []
+      }
+      service_package_milestones: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          milestone_key: string
+          percentage_bps: number | null
+          position: number
+          service_package_id: string
+          terms: string
+          trigger_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          milestone_key: string
+          percentage_bps?: number | null
+          position: number
+          service_package_id: string
+          terms?: string
+          trigger_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          milestone_key?: string
+          percentage_bps?: number | null
+          position?: number
+          service_package_id?: string
+          terms?: string
+          trigger_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_package_milestones_service_package_id_fkey"
+            columns: ["service_package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_packages: {
+        Row: {
+          billing_strategy: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          practice_area: string
+          scope_key: string
+          updated_at: string
+        }
+        Insert: {
+          billing_strategy: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          practice_area: string
+          scope_key: string
+          updated_at?: string
+        }
+        Update: {
+          billing_strategy?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          practice_area?: string
+          scope_key?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -6895,24 +7418,50 @@ export type Database = {
       tasks: {
         Row: {
           assignee_id: string | null
+          auto: boolean
           batch_tag: string | null
           checklist: Json
           completed_at: string | null
           completed_by: string | null
+          conditional: boolean
           created_at: string
           created_by: string | null
           description: string | null
           document_id: string | null
           due_at: string | null
+          due_offset_days: number | null
+          escalation_at: string | null
+          escalation_offset_days: number | null
+          escalation_sent_at: string | null
+          escalation_tier: string | null
           estimate_minutes: number | null
+          extends_target_days: number | null
+          gate: string | null
           hard_due_at: string | null
           id: string
           lead_id: string | null
           matter_id: string | null
+          notes: string | null
+          nudge_at: string | null
+          nudge_offset_days: number | null
+          nudge_sent_at: string | null
+          nudge_tier: string | null
+          owner: string
+          paused_at: string | null
+          pauses_clock: boolean
+          phase: string | null
+          plan_start_date: string | null
+          plan_template_id: string | null
+          pre_engagement: boolean
           priority: string
           recurrence: Json | null
+          recurring_interval_days: number | null
+          relative_to: string | null
           remind_at: string | null
+          skill: string | null
+          skipped_at: string | null
           soft_due_at: string | null
+          sort_order: number
           source: string
           stage_entered_at: string | null
           stage_key: string | null
@@ -6920,28 +7469,57 @@ export type Database = {
           task_type: string
           template_id: string | null
           title: string
+          total_paused_days: number
+          triggers_day_zero: boolean
           updated_at: string
+          variant: string | null
         }
         Insert: {
           assignee_id?: string | null
+          auto?: boolean
           batch_tag?: string | null
           checklist?: Json
           completed_at?: string | null
           completed_by?: string | null
+          conditional?: boolean
           created_at?: string
           created_by?: string | null
           description?: string | null
           document_id?: string | null
           due_at?: string | null
+          due_offset_days?: number | null
+          escalation_at?: string | null
+          escalation_offset_days?: number | null
+          escalation_sent_at?: string | null
+          escalation_tier?: string | null
           estimate_minutes?: number | null
+          extends_target_days?: number | null
+          gate?: string | null
           hard_due_at?: string | null
           id?: string
           lead_id?: string | null
           matter_id?: string | null
+          notes?: string | null
+          nudge_at?: string | null
+          nudge_offset_days?: number | null
+          nudge_sent_at?: string | null
+          nudge_tier?: string | null
+          owner?: string
+          paused_at?: string | null
+          pauses_clock?: boolean
+          phase?: string | null
+          plan_start_date?: string | null
+          plan_template_id?: string | null
+          pre_engagement?: boolean
           priority?: string
           recurrence?: Json | null
+          recurring_interval_days?: number | null
+          relative_to?: string | null
           remind_at?: string | null
+          skill?: string | null
+          skipped_at?: string | null
           soft_due_at?: string | null
+          sort_order?: number
           source?: string
           stage_entered_at?: string | null
           stage_key?: string | null
@@ -6949,28 +7527,57 @@ export type Database = {
           task_type?: string
           template_id?: string | null
           title: string
+          total_paused_days?: number
+          triggers_day_zero?: boolean
           updated_at?: string
+          variant?: string | null
         }
         Update: {
           assignee_id?: string | null
+          auto?: boolean
           batch_tag?: string | null
           checklist?: Json
           completed_at?: string | null
           completed_by?: string | null
+          conditional?: boolean
           created_at?: string
           created_by?: string | null
           description?: string | null
           document_id?: string | null
           due_at?: string | null
+          due_offset_days?: number | null
+          escalation_at?: string | null
+          escalation_offset_days?: number | null
+          escalation_sent_at?: string | null
+          escalation_tier?: string | null
           estimate_minutes?: number | null
+          extends_target_days?: number | null
+          gate?: string | null
           hard_due_at?: string | null
           id?: string
           lead_id?: string | null
           matter_id?: string | null
+          notes?: string | null
+          nudge_at?: string | null
+          nudge_offset_days?: number | null
+          nudge_sent_at?: string | null
+          nudge_tier?: string | null
+          owner?: string
+          paused_at?: string | null
+          pauses_clock?: boolean
+          phase?: string | null
+          plan_start_date?: string | null
+          plan_template_id?: string | null
+          pre_engagement?: boolean
           priority?: string
           recurrence?: Json | null
+          recurring_interval_days?: number | null
+          relative_to?: string | null
           remind_at?: string | null
+          skill?: string | null
+          skipped_at?: string | null
           soft_due_at?: string | null
+          sort_order?: number
           source?: string
           stage_entered_at?: string | null
           stage_key?: string | null
@@ -6978,7 +7585,10 @@ export type Database = {
           task_type?: string
           template_id?: string | null
           title?: string
+          total_paused_days?: number
+          triggers_day_zero?: boolean
           updated_at?: string
+          variant?: string | null
         }
         Relationships: [
           {
@@ -7036,6 +7646,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_matter_pipeline_all"
             referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "tasks_plan_template_id_fkey"
+            columns: ["plan_template_id"]
+            isOneToOne: false
+            referencedRelation: "sla_task_templates"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "tasks_template_id_fkey"
@@ -7513,6 +8130,85 @@ export type Database = {
         }
         Relationships: []
       }
+      workflow_jobs: {
+        Row: {
+          attempts: number
+          available_at: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          matter_id: string | null
+          max_attempts: number
+          payload: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          dedupe_key: string
+          id?: string
+          job_type: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          matter_id?: string | null
+          max_attempts?: number
+          payload?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          dedupe_key?: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          matter_id?: string | null
+          max_attempts?: number
+          payload?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_jobs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_jobs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "workflow_jobs_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
     }
     Views: {
       contact_merge_candidates: {
@@ -7961,6 +8657,31 @@ export type Database = {
       }
     }
     Functions: {
+      approve_invoice_reminder: {
+        Args: { p_actor_id: string; p_reminder_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          body: string
+          cadence_week: string
+          created_at: string
+          escalation_level: string
+          id: string
+          invoice_id: string
+          recipient_email: string
+          sent_at: string | null
+          status: string
+          subject: string
+          suppressed_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoice_reminders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       assert_billing_actor: { Args: { p_actor_id: string }; Returns: undefined }
       assert_lead_note_actor: { Args: { p_actor_id: string }; Returns: string }
       attach_invoice_documents: {
@@ -8110,6 +8831,82 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_workflow_jobs: {
+        Args: { p_limit: number; p_worker: string }
+        Returns: {
+          attempts: number
+          available_at: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          matter_id: string | null
+          max_attempts: number
+          payload: Json
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "workflow_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      close_invoice_checkout_session: {
+        Args: { p_provider: string; p_session_id: string; p_status: string }
+        Returns: undefined
+      }
+      complete_invoice_checkout_session: {
+        Args: {
+          p_amount_cents: number
+          p_payment_intent_id: string
+          p_processor_fee_cents: number
+          p_provider: string
+          p_received_at: string
+          p_session_id: string
+        }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       convert_lead_to_matter: {
         Args: {
           p_actor_id?: string
@@ -8146,6 +8943,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          incurred_at: string | null
           invoice_id: string | null
           invoiced_at: string | null
           kind: string
@@ -8289,6 +9087,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_matter_fee_schedule: {
+        Args: {
+          p_actor_id: string
+          p_agreed_total_cents: number
+          p_manual_milestones?: Json
+          p_matter_id: string
+          p_package_id: string
+        }
+        Returns: {
+          agreed_total_cents: number
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          package_snapshot: Json
+          service_package_id: string | null
+          state: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "matter_fee_schedules"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_matter_with_client: {
         Args: {
           p_actor_id?: string
@@ -8336,6 +9160,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          incurred_at: string | null
           invoice_id: string | null
           invoiced_at: string | null
           kind: string
@@ -8371,6 +9196,24 @@ export type Database = {
         Args: { p_actor_id: string; p_invoice_id: string }
         Returns: undefined
       }
+      document_matter_financial_exception: {
+        Args: { p_actor_id: string; p_matter_id: string; p_reason: string }
+        Returns: {
+          documented_at: string
+          documented_by: string
+          id: string
+          matter_id: string
+          reason: string
+          revoked_at: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "matter_financial_exceptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       drafting_hub_draft_rollups: {
         Args: { p_matter_ids: string[] }
         Returns: {
@@ -8380,9 +9223,69 @@ export type Database = {
           superseded_draft_count: number
         }[]
       }
+      enqueue_workflow_job: {
+        Args: {
+          p_actor_id: string
+          p_dedupe_key: string
+          p_job_type: string
+          p_matter_id: string
+          p_payload: Json
+        }
+        Returns: {
+          attempts: number
+          available_at: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          matter_id: string | null
+          max_attempts: number
+          payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workflow_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       ensure_user_profile: {
         Args: { p_display_name?: string }
         Returns: string
+      }
+      finish_workflow_job: {
+        Args: { p_error?: string; p_job_id: string }
+        Returns: {
+          attempts: number
+          available_at: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          matter_id: string | null
+          max_attempts: number
+          payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workflow_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_matter_links_by_emails: {
         Args: { p_emails: string[] }
@@ -8448,6 +9351,49 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      issue_invoice_credit_note: {
+        Args: {
+          p_actor_id: string
+          p_amount_cents: number
+          p_invoice_id: string
+          p_reason: string
+        }
+        Returns: {
+          bill_to_email: string | null
+          bill_to_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_of_invoice_id: string | null
+          docx_document_id: string | null
+          due_date: string | null
+          id: string
+          issue_date: string | null
+          issued_at: string | null
+          kind: string
+          last_reminded_at: string | null
+          matter_id: string
+          notes: string | null
+          number: string | null
+          number_year: number | null
+          paid_at: string | null
+          payment_link: string | null
+          pdf_document_id: string | null
+          sent_at: string | null
+          status: string
+          subtotal_cents: number
+          terms: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       jsonb_replace_id: {
         Args: { doc: Json; from_id: string; to_id: string }
         Returns: Json
@@ -8468,6 +9414,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          incurred_at: string | null
           invoice_id: string | null
           invoiced_at: string | null
           kind: string
@@ -8494,6 +9441,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          incurred_at: string | null
           invoice_id: string | null
           invoiced_at: string | null
           kind: string
@@ -8708,6 +9656,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          incurred_at: string | null
           invoice_id: string | null
           invoiced_at: string | null
           kind: string
@@ -8738,6 +9687,39 @@ export type Database = {
           p_validation_report: Json
         }
         Returns: string
+      }
+      record_invoice_checkout_session: {
+        Args: {
+          p_actor_id: string
+          p_amount_cents: number
+          p_checkout_url: string
+          p_expires_at: string
+          p_invoice_id: string
+          p_provider: string
+          p_session_id: string
+        }
+        Returns: {
+          amount_cents: number
+          checkout_url: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          invoice_id: string
+          payment_group_id: string | null
+          provider: string
+          provider_payment_intent_id: string | null
+          provider_session_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoice_checkout_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       record_invoice_payment: {
         Args: {
@@ -8786,6 +9768,92 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_payment_adjustment: {
+        Args: {
+          p_actor_id?: string
+          p_amount_cents: number
+          p_balance_effect: string
+          p_external_reference: string
+          p_invoice_id: string
+          p_kind: string
+          p_metadata: Json
+          p_payment_group_id: string
+          p_provider: string
+          p_reason: string
+        }
+        Returns: {
+          amount_cents: number
+          balance_effect: string
+          created_at: string
+          created_by: string | null
+          external_reference: string | null
+          id: string
+          invoice_id: string
+          kind: string
+          metadata: Json
+          payment_group_id: string | null
+          provider: string | null
+          reason: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "billing_adjustments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      release_matter_fee_milestone: {
+        Args: { p_actor_id: string; p_milestone_id: string }
+        Returns: {
+          amount_cents: number
+          billing_item_id: string | null
+          created_at: string
+          id: string
+          label: string
+          matter_id: string
+          milestone_key: string
+          position: number
+          released_at: string | null
+          schedule_id: string
+          state: string
+          terms: string
+          trigger_key: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "matter_fee_milestones"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      release_matter_fee_milestone_internal: {
+        Args: { p_actor_id?: string; p_milestone_id: string }
+        Returns: {
+          amount_cents: number
+          billing_item_id: string | null
+          created_at: string
+          id: string
+          label: string
+          matter_id: string
+          milestone_key: string
+          position: number
+          released_at: string | null
+          schedule_id: string
+          state: string
+          terms: string
+          trigger_key: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "matter_fee_milestones"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       release_webhook_event: {
         Args: { p_event_id: string; p_provider: string }
         Returns: undefined
@@ -8812,6 +9880,33 @@ export type Database = {
         }
         Returns: Json
       }
+      retry_workflow_job: {
+        Args: { p_actor_id: string; p_job_id: string }
+        Returns: {
+          attempts: number
+          available_at: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          matter_id: string | null
+          max_attempts: number
+          payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workflow_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       revert_estate_clause_publication: {
         Args: {
           p_actor_id: string
@@ -8835,6 +9930,29 @@ export type Database = {
         Args: { p_actor_id: string; p_working_draft_id: string }
         Returns: string
       }
+      transition_matter_stage_with_jobs: {
+        Args: {
+          p_actor_email: string
+          p_actor_id: string
+          p_actor_name: string
+          p_matter_id: string
+          p_stage: string
+          p_stage_label: string
+        }
+        Returns: Json
+      }
+      transition_matter_status_with_closeout: {
+        Args: {
+          p_actor_email: string
+          p_actor_id: string
+          p_actor_name: string
+          p_hold_reason: string
+          p_matter_id: string
+          p_status: string
+          p_status_label: string
+        }
+        Returns: Json
+      }
       update_billing_item: {
         Args: {
           p_actor_id: string
@@ -8849,6 +9967,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          incurred_at: string | null
           invoice_id: string | null
           invoiced_at: string | null
           kind: string

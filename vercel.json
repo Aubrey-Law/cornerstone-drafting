@@ -33,6 +33,10 @@
     {
       "path": "/api/cron/crm-campaigns",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/workflow-jobs",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

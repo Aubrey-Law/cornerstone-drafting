@@ -190,19 +190,12 @@ describe('processor selection', () => {
 
   it('refuses to half-work when LawPay is selected', async () => {
     process.env.PAYMENTS_PROVIDER = 'lawpay'
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { getPaymentProcessor } = await import('@/lib/payments')
     const lawpay = getPaymentProcessor()
 
-    expect(lawpay?.id).toBe('lawpay')
-    expect(lawpay?.verifySignature('{}', new Headers())).toBe(false)
-    await expect(lawpay!.createCheckoutSession({
-      invoiceId: 'inv-1',
-      invoiceNumber: '1',
-      amountCents: 1,
-      clientEmail: null,
-      description: 'x',
-      successUrl: 'x',
-      cancelUrl: 'x',
-    })).rejects.toThrow(/not implemented/i)
+    expect(lawpay).toBeNull()
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('unsupported'))
+    error.mockRestore()
   })
 })

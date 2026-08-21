@@ -1,4 +1,3 @@
-import { lawpayProcessor } from './lawpay'
 import { stripeProcessor } from './stripe'
 import { paymentProviders, type PaymentProcessor, type PaymentProvider } from './types'
 
@@ -15,7 +14,12 @@ export function getPaymentProcessor(): PaymentProcessor | null {
   const provider = process.env.PAYMENTS_PROVIDER?.trim() as PaymentProvider | undefined
   if (!provider || !(paymentProviders as readonly string[]).includes(provider)) return null
 
-  if (provider === 'lawpay') return lawpayProcessor()
+  if (provider === 'lawpay') {
+    // LawPay is intentionally unavailable until checkout, webhooks, refunds,
+    // and the firm's funds-handling policy are all implemented together.
+    console.error('[payments] PAYMENTS_PROVIDER=lawpay is unsupported; configure Stripe instead')
+    return null
+  }
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim()
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim()

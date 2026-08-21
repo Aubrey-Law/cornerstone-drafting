@@ -67,8 +67,8 @@ describe('picking a checklist from the practice area', () => {
     expect(slaTemplateForPracticeArea('EP-LP')).toBe(ESTATE_PLANNING_SLA_V3)
   })
 
-  it('skips probate, which still has no template of its own', () => {
-    expect(slaTemplateForPracticeArea('Probate')).toBeNull()
+  it('uses the dedicated probate administration track', () => {
+    expect(slaTemplateForPracticeArea('Probate')).toBe('probate_sla_v1')
   })
 
   it('falls back to the estate template for a missing or unrecognized area', () => {

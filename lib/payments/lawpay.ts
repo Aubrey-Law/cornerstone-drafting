@@ -17,6 +17,8 @@ export function lawpayProcessor(): PaymentProcessor {
     createCheckoutSession: () => Promise.reject(new Error(
       'LawPay checkout is not implemented yet. Set PAYMENTS_PROVIDER=stripe, or implement lib/payments/lawpay.ts.',
     )),
+    lookupProcessorFee: () => Promise.reject(new Error('LawPay is not implemented')),
+    refundPayment: () => Promise.reject(new Error('LawPay is not implemented')),
     verifySignature: () => false,
     parseEvent: () => null,
   }

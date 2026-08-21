@@ -189,6 +189,8 @@ export function RecordCommunicationsCard({
         )}
         emailComposer={recipientEmail ? (
           <div className="rounded-md border border-border">
+            {/* A seed so the recipient shows at once — the composer fetches the
+                matter's documents and extra addresses on top of it. */}
             <ManualEmailComposer
               embedded
               recordOverride={{ type: record.type, id: record.id }}

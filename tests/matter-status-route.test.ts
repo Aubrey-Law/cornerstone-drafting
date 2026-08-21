@@ -16,8 +16,8 @@ describe('matter status route', () => {
 
   it('updates the matter and logs the transition', () => {
     expect(source).toContain("import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'")
-    expect(source).toContain('.update({ status, hold_reason: holdReason })')
-    expect(source).toContain("event_type: 'status_changed'")
+    expect(source).toContain("rpc('transition_matter_status_with_closeout'")
+    expect(source).toContain('p_status: status')
   })
 
   it('only carries a hold reason while the matter is on hold', () => {
@@ -27,7 +27,11 @@ describe('matter status route', () => {
   })
 
   it('scopes the change to hired matters', () => {
-    expect(source).toContain(".eq('relationship_status', 'hired')")
+    const migration = fs.readFileSync(
+      path.join(process.cwd(), 'supabase/migrations/20261004000000_solo_practice_efficiency_billing.sql'),
+      'utf8',
+    )
+    expect(migration).toContain("relationship_status = 'hired' for update")
   })
 })
 

@@ -63,6 +63,43 @@ export function stripeProcessor(secretKey: string, webhookSecret: string): Payme
       }
     },
 
+    async lookupProcessorFee(paymentIntentId: string): Promise<number> {
+      const response = await fetch(
+        `${API}/payment_intents/${encodeURIComponent(paymentIntentId)}?expand[]=latest_charge.balance_transaction`,
+        { headers: { Authorization: `Bearer ${secretKey}` } },
+      )
+      const json = await response.json().catch(() => ({})) as {
+        latest_charge?: { balance_transaction?: { fee?: number } }
+        error?: { message?: string }
+      }
+      if (!response.ok) throw new Error(json.error?.message ?? `Stripe returned HTTP ${response.status}`)
+      const fee = Number(json.latest_charge?.balance_transaction?.fee ?? 0)
+      return Number.isInteger(fee) && fee >= 0 ? fee : 0
+    },
+
+    async refundPayment(input): Promise<{ refundId: string; status: string }> {
+      const form = new URLSearchParams({
+        payment_intent: input.paymentIntentId,
+        amount: String(input.amountCents),
+        'metadata[invoice_id]': input.invoiceId,
+      })
+      const response = await fetch(`${API}/refunds`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: form,
+      })
+      const json = await response.json().catch(() => ({})) as {
+        id?: string
+        status?: string
+        error?: { message?: string }
+      }
+      if (!response.ok || !json.id) throw new Error(json.error?.message ?? `Stripe returned HTTP ${response.status}`)
+      return { refundId: json.id, status: json.status ?? 'pending' }
+    },
+
     verifySignature(rawBody: string, headers: Headers): boolean {
       const header = headers.get('stripe-signature')
       if (!header) return false
@@ -110,6 +147,35 @@ export function stripeProcessor(secretKey: string, webhookSecret: string): Payme
       const sessionId = typeof object.id === 'string' ? object.id : null
       if (!event.id || !sessionId) return null
 
+      if (event.type === 'charge.refunded') {
+        const amount = Number(object.amount_refunded)
+        const paymentIntentId = typeof object.payment_intent === 'string' ? object.payment_intent : null
+        const refunds = object.refunds as { data?: Array<{ id?: string; reason?: string | null }> } | undefined
+        const refund = refunds?.data?.at(-1)
+        if (!paymentIntentId || !Number.isInteger(amount) || amount <= 0) return null
+        return {
+          type: 'payment.adjustment', eventId: event.id, paymentIntentId,
+          externalReference: refund?.id ?? sessionId, amountCents: amount,
+          kind: 'refund', balanceEffect: 'debit', reason: refund?.reason ?? null,
+          metadata: { stripe_event: event.type },
+        }
+      }
+
+      if (event.type === 'charge.dispute.created' || event.type === 'charge.dispute.closed') {
+        const amount = Number(object.amount)
+        const paymentIntentId = typeof object.payment_intent === 'string' ? object.payment_intent : null
+        const status = typeof object.status === 'string' ? object.status : 'unknown'
+        if (!paymentIntentId || !Number.isInteger(amount) || amount <= 0) return null
+        return {
+          type: 'payment.adjustment', eventId: event.id, paymentIntentId,
+          externalReference: `${sessionId}:${event.type === 'charge.dispute.created' ? 'opened' : 'closed'}`,
+          amountCents: amount, kind: 'dispute',
+          balanceEffect: event.type === 'charge.dispute.created' ? 'debit' : status === 'won' ? 'credit' : null,
+          reason: typeof object.reason === 'string' ? object.reason : null,
+          metadata: { stripe_event: event.type, status },
+        }
+      }
+
       if (event.type === 'checkout.session.completed') {
         const amount = Number(object.amount_total)
         if (!Number.isInteger(amount) || amount <= 0) return null
@@ -119,9 +185,8 @@ export function stripeProcessor(secretKey: string, webhookSecret: string): Payme
           sessionId,
           paymentIntentId: typeof object.payment_intent === 'string' ? object.payment_intent : null,
           amountCents: amount,
-          // The fee lives on the balance transaction, a second API call away.
-          // It is recorded, never subtracted, so leaving it at zero costs
-          // accuracy in reporting and nothing in what the client owes.
+          // The webhook route resolves this from the balance transaction
+          // before recording the payment.
           processorFeeCents: 0,
           receivedAt: new Date().toISOString(),
         }
