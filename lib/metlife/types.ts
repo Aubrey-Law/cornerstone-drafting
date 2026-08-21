@@ -9,10 +9,10 @@ export const METLIFE_PLAN_TYPES = [
 export type MetlifePlanType = (typeof METLIFE_PLAN_TYPES)[number]
 
 export const METLIFE_PLAN_TYPE_LABEL: Record<MetlifePlanType, string> = {
-  separate_trust: 'Separate Trusts — Married',
-  joint_trust: 'Joint Trust — Married',
-  will_couple: 'Will-Based Plan — Married',
-  will_individual: 'Will-Based Plan — Individual',
+  separate_trust: 'Couple Separate Trusts',
+  joint_trust: 'Couple Joint Trust',
+  will_couple: 'Couple Will',
+  will_individual: 'Individual Will',
   individual_trust: 'Individual Trust',
 }
 
