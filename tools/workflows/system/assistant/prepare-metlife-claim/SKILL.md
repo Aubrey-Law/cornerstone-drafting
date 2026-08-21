@@ -58,7 +58,7 @@ Always bill under MetLife terminology, never the Aubrey Law internal name:
 |---|---|---|
 | Will | $150 | $185 |
 | Trust (No-Tax Planning) | $325 | $400 |
-| Advanced Medical Directive | $45 | $65 |
+| Advanced Medical Directive | $45 | $60 |
 | Power of Attorney (Financial) | $60 | $85 |
 | Power of Attorney (Medical) | $60 | $85 |
 | Power of Attorney (HIPAA) | $60 | $85 |
@@ -66,5 +66,12 @@ Always bill under MetLife terminology, never the Aubrey Law internal name:
 | Deed | $90 | $90 |
 
 All three powers of attorney bill at the same rate per MetLife guidelines.
+
+These rates use the Massachusetts fee schedule, location code 20907. Claim
+comments include the applicable CT code: Wills and Estates CT 200, 220, 230,
+and 260; Deed CT 420; and the individually prepared stand-alone Affidavit rate
+under CT 700. Probate (CT 250) and Inheritance Rights (CT 270) are available in
+the Billing fee selector because their amounts depend on the service or matter
+value rather than the estate-planning document package.
 
 In a `separate_trust` plan each pour-over will bills at the member rate of $150, not the couple rate of $185, because the wills are non-reciprocal.

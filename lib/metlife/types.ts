@@ -28,6 +28,7 @@ export type MetlifeServiceType =
 /** One billable row. Fees are integer cents so section totals never drift. */
 export interface MetlifeLineItem {
   document: string
+  serviceCode: string
   serviceType: MetlifeServiceType
   feeCents: number
   comment: string
@@ -102,6 +103,7 @@ export interface MetlifeAssemblyResult {
 export interface MetlifeSubmissionRow {
   index: number
   document: string
+  serviceCode: string
   serviceType: MetlifeServiceType
   fee: string
   comment: string
