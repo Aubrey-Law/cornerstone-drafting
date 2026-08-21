@@ -1,5 +1,5 @@
 import { normalizeMatterBillingType } from '@/lib/billing/billingType'
-import { feeCents, SERVICE_TYPE_BY_FEE } from '@/lib/metlife/pricing'
+import { feeCents, SERVICE_CODE_BY_FEE, SERVICE_TYPE_BY_FEE } from '@/lib/metlife/pricing'
 import {
   METLIFE_PLAN_TYPES,
   type MetlifeAssemblyResult,
@@ -54,7 +54,14 @@ function line(
   rate: 'member' | 'couple',
   comment: string,
 ): MetlifeLineItem {
-  return { document, serviceType: SERVICE_TYPE_BY_FEE[fee], feeCents: feeCents(fee, rate), comment }
+  const serviceCode = SERVICE_CODE_BY_FEE[fee]
+  return {
+    document,
+    serviceCode,
+    serviceType: SERVICE_TYPE_BY_FEE[fee],
+    feeCents: feeCents(fee, rate),
+    comment: `CT ${serviceCode} — ${comment}`,
+  }
 }
 
 function section(title: string, items: MetlifeLineItem[]): MetlifeSection {

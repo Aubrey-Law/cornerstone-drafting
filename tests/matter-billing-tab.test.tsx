@@ -433,11 +433,13 @@ describe('MatterBillingTab', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Start a claim' }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByLabelText('Type'))
-    await user.click(await screen.findByRole('option', { name: 'Legal Plan Claim' }))
+    expect(within(dialog).getByLabelText('Type').textContent).toContain('Legal Plan Claim')
+    expect(within(dialog).getByLabelText('Legal plan').textContent).toContain('MetLife')
+    await user.click(within(dialog).getByLabelText('MetLife fee schedule item'))
+    await user.click(await screen.findByRole('option', { name: 'CT 420 — Deed' }))
 
-    await user.type(within(dialog).getByLabelText('Description'), 'MetLife claim')
-    await user.type(within(dialog).getByLabelText('Amount'), '1275')
+    expect((within(dialog).getByLabelText('Description') as HTMLInputElement).value).toBe('CT 420 — Deed')
+    expect((within(dialog).getByLabelText('Amount') as HTMLInputElement).value).toBe('90.00')
     await user.click(within(dialog).getByRole('button', { name: 'Add charge' }))
 
     await waitFor(() => {
@@ -445,7 +447,8 @@ describe('MatterBillingTab', () => {
       expect(JSON.parse(post![1].body)).toMatchObject({
         kind: 'plan_claim',
         plan: 'metlife',
-        amountBilled: 127_500,
+        label: 'CT 420 — Deed',
+        amountBilled: 9_000,
       })
     })
   })

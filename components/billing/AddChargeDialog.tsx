@@ -25,6 +25,12 @@ import {
   type AddableBillingKind,
   type BillingPlan,
 } from '@/lib/billing/types'
+import {
+  calculateMetlifeScheduleAmount,
+  METLIFE_FEE_SCHEDULE_SOURCE,
+  METLIFE_SCHEDULE_ITEMS,
+  metlifeScheduleLabel,
+} from '@/lib/metlife/pricing'
 
 export interface BillingMatterOption {
   id: string
@@ -104,6 +110,8 @@ export function AddChargeDialog({
   matterId,
   matters,
   matterIdsWithLegalFee,
+  defaultKind = 'flat_fee',
+  defaultPlan = 'metlife',
   editing,
   saving,
   returnFocusRef,
@@ -117,6 +125,10 @@ export function AddChargeDialog({
   matters?: BillingMatterOption[]
   /** Matters that already carry a legal fee, so a second one can be warned about. */
   matterIdsWithLegalFee?: readonly string[]
+  /** Initial type for a new entry, such as the matter tab's Start a claim action. */
+  defaultKind?: AddableBillingKind
+  /** Initial carrier for a new legal-plan claim. */
+  defaultPlan?: BillingPlan
   /** Seeds the form from an existing charge and switches to editing it. */
   editing?: EditableCharge
   saving: boolean
@@ -129,6 +141,8 @@ export function AddChargeDialog({
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
   const [plan, setPlan] = useState<BillingPlan>('metlife')
+  const [metlifeFeeKey, setMetlifeFeeKey] = useState('custom')
+  const [metlifeFeeInput, setMetlifeFeeInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const targetMatter = matterId ?? selectedMatter
@@ -145,12 +159,45 @@ export function AddChargeDialog({
   useEffect(() => {
     if (!open) return
     setSelectedMatter(matterId ?? matters?.[0]?.id ?? '')
-    setKind(editing?.kind ?? 'flat_fee')
+    setKind(editing?.kind ?? defaultKind)
     setLabel(editing?.label ?? '')
     setAmount(editing ? (editing.amountBilled / 100).toFixed(2) : '')
-    setPlan(editing?.plan ?? 'metlife')
+    setPlan(editing?.plan ?? defaultPlan)
+    setMetlifeFeeKey('custom')
+    setMetlifeFeeInput('')
     setError(null)
-  }, [open, matterId, matters, editing])
+  }, [open, matterId, matters, editing, defaultKind, defaultPlan])
+
+  const selectedMetlifeFee = METLIFE_SCHEDULE_ITEMS.find(item => item.key === metlifeFeeKey)
+
+  function applyMetlifeFee(key: string, rawInput = '') {
+    setMetlifeFeeKey(key)
+    setMetlifeFeeInput(rawInput)
+    const item = METLIFE_SCHEDULE_ITEMS.find(candidate => candidate.key === key)
+    if (!item) {
+      setLabel('')
+      setAmount('')
+      return
+    }
+    setLabel(metlifeScheduleLabel(item))
+    const numericInput = rawInput === '' ? undefined : Number(rawInput)
+    const cents = calculateMetlifeScheduleAmount(item, numericInput)
+    setAmount(cents === null ? '' : (cents / 100).toFixed(2))
+  }
+
+  function changeKind(value: AddableBillingKind) {
+    setKind(value)
+    if (value !== 'plan_claim' && metlifeFeeKey !== 'custom') {
+      applyMetlifeFee('custom')
+    }
+  }
+
+  function changePlan(value: BillingPlan) {
+    setPlan(value)
+    if (value !== 'metlife' && metlifeFeeKey !== 'custom') {
+      applyMetlifeFee('custom')
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -220,7 +267,7 @@ export function AddChargeDialog({
               <Label htmlFor="charge-kind">Type</Label>
               <Select
                 value={kind}
-                onValueChange={value => setKind(value as AddableBillingKind)}
+                onValueChange={value => changeKind(value as AddableBillingKind)}
               >
                 <SelectTrigger id="charge-kind" className="min-h-11 w-full">
                   <SelectValue />
@@ -234,19 +281,64 @@ export function AddChargeDialog({
             </div>
 
             {kind === 'plan_claim' && (
-              <div className="space-y-2">
-                <Label htmlFor="charge-plan">Legal plan</Label>
-                <Select value={plan} onValueChange={value => setPlan(value as BillingPlan)}>
-                  <SelectTrigger id="charge-plan" className="min-h-11 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {billingPlans.map(value => (
-                      <SelectItem key={value} value={value}>{planLabels[value]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="charge-plan">Legal plan</Label>
+                  <Select value={plan} onValueChange={value => changePlan(value as BillingPlan)}>
+                    <SelectTrigger id="charge-plan" className="min-h-11 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {billingPlans.map(value => (
+                        <SelectItem key={value} value={value}>{planLabels[value]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {plan === 'metlife' && !editing && (
+                  <div className="space-y-2">
+                    <Label htmlFor="metlife-fee-item">MetLife fee schedule item</Label>
+                    <Select value={metlifeFeeKey} onValueChange={value => applyMetlifeFee(value)}>
+                      <SelectTrigger id="metlife-fee-item" className="min-h-11 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="custom">Custom or combined claim</SelectItem>
+                        {METLIFE_SCHEDULE_ITEMS.map(item => (
+                          <SelectItem key={item.key} value={item.key}>
+                            {metlifeScheduleLabel(item)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Massachusetts schedule · location {METLIFE_FEE_SCHEDULE_SOURCE.locationCode}
+                    </p>
+                  </div>
+                )}
+
+                {selectedMetlifeFee?.input && plan === 'metlife' && !editing && (
+                  <div className="space-y-2">
+                    <Label htmlFor="metlife-fee-input">{selectedMetlifeFee.inputLabel}</Label>
+                    <Input
+                      id="metlife-fee-input"
+                      type="number"
+                      min="0"
+                      step={selectedMetlifeFee.input === 'probate_assets' ? '0.01' : '0.25'}
+                      inputMode="decimal"
+                      value={metlifeFeeInput}
+                      onChange={event => applyMetlifeFee(metlifeFeeKey, event.target.value)}
+                      className="min-h-11 tabular-nums"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {selectedMetlifeFee.input === 'probate_assets'
+                        ? '1.5% through $100,000 (minimum $450), then 1% over $100,000; maximum $4,000.'
+                        : '$1,000 through 10 hours, then $100 per additional hour; maximum $2,000.'}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             {duplicateLegalFee && (
@@ -269,6 +361,7 @@ export function AddChargeDialog({
                 maxLength={200}
                 className="min-h-11"
                 autoFocus
+                readOnly={kind === 'plan_claim' && Boolean(selectedMetlifeFee) && plan === 'metlife' && !editing}
               />
             </div>
 
@@ -283,6 +376,7 @@ export function AddChargeDialog({
                 value={amount}
                 onChange={event => setAmount(event.target.value)}
                 className="min-h-11 tabular-nums"
+                readOnly={kind === 'plan_claim' && Boolean(selectedMetlifeFee) && plan === 'metlife' && !editing}
               />
             </div>
 

@@ -33,6 +33,7 @@ import type {
   BillingLedgerRow,
   BillingPaymentMethod,
   BillingPlan,
+  AddableBillingKind,
 } from '@/lib/billing/types'
 import { formatFirmDate } from '@/lib/format'
 import type { MatterDetailsRow } from '@/types/matter-details'
@@ -310,6 +311,7 @@ export function MatterBillingTab({
   const [paymentItemId, setPaymentItemId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [chargeOpen, setChargeOpen] = useState(false)
+  const [defaultChargeKind, setDefaultChargeKind] = useState<AddableBillingKind>('flat_fee')
   const [chargeSaving, setChargeSaving] = useState(false)
   const [editingCharge, setEditingCharge] = useState<BillingLedgerRow | null>(null)
   const [selectedCharges, setSelectedCharges] = useState<Record<string, boolean>>({})
@@ -383,10 +385,11 @@ export function MatterBillingTab({
     await send(path, 'POST', body)
   }
 
-  function openCharge() {
+  function openCharge(kind: AddableBillingKind = 'flat_fee') {
     chargeOpenerRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null
     setEditingCharge(null)
+    setDefaultChargeKind(kind)
     setChargeOpen(true)
   }
 
@@ -534,12 +537,12 @@ export function MatterBillingTab({
               details={details}
               onSaveField={onSaveField}
               hasLedgerClaim={rows.some(row => row.kind === 'plan_claim')}
-              onStartClaim={openCharge}
+              onStartClaim={() => openCharge('plan_claim')}
             />
             <FeesChargesCard
               rows={rows}
               selected={selectedCharges}
-              onAddCharge={openCharge}
+              onAddCharge={() => openCharge()}
               onToggleRow={(id, checked) =>
                 setSelectedCharges(current => ({ ...current, [id]: checked }))}
               onToggleAll={checked =>
@@ -632,6 +635,8 @@ export function MatterBillingTab({
         matterIdsWithLegalFee={
           rows.some(row => row.kind === 'flat_fee') ? [matterId] : []
         }
+        defaultKind={defaultChargeKind}
+        defaultPlan={view?.legalPlan ?? 'metlife'}
         editing={editingInput}
         saving={chargeSaving}
         returnFocusRef={chargeOpenerRef}
