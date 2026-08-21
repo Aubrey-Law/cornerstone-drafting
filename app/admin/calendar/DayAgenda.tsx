@@ -187,7 +187,11 @@ function AgendaRow({
                   {' '}
                   · <span className={`rounded-full px-1.5 py-0.5 ${availabilityClass(appointment.calendarShowAsBusy)} text-[10px]`}>{availabilityLabel(appointment.calendarShowAsBusy)}</span>
                 </span>
-                {!appointment.outlookSynced && appointment.status === 'scheduled' ? ' · ⚠ not on Outlook' : ''}
+                {appointment.source === 'calendly'
+                  ? ' · Calendly'
+                  : !appointment.outlookSynced && appointment.status === 'scheduled'
+                    ? ' · ⚠ not on Outlook'
+                    : ''}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -224,7 +228,7 @@ function AgendaRow({
               <Button size="sm" variant="ghost" onClick={onOpen}>
                 <FileText className="mr-1 h-3 w-3" /> Prep pack
               </Button>
-              {!past && (
+              {!past && appointment.source !== 'calendly' && (
                 <Button size="sm" variant="ghost" onClick={onReschedule}>
                   <RotateCcw className="mr-1 h-3 w-3" /> Reschedule
                 </Button>

@@ -84,7 +84,13 @@ export function EventPrepDrawer({
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
                 {appointment.onlineMeetingUrl && <Button asChild size="sm"><a href={appointment.onlineMeetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />Join</a></Button>}
-                <Button size="sm" variant="outline" onClick={() => onReschedule(appointment)}>Reschedule</Button>
+                {appointment.source === 'calendly' ? (
+                  <span className="rounded-full bg-card/80 px-2 py-1 text-[11px] font-medium text-foreground">
+                    Managed in Calendly
+                  </span>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => onReschedule(appointment)}>Reschedule</Button>
+                )}
                 {appointment.linkedMatterId && <Button asChild size="sm" variant="outline"><Link href={`/admin/matters/${appointment.linkedMatterId}`}>Open matter</Link></Button>}
               </div>
             </SheetHeader>

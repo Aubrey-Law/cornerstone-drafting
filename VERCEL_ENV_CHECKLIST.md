@@ -338,9 +338,9 @@ Runs alongside the Cal.com path during the migration; both providers mirror into
 **Calendly setup (requires Standard plan or above):**
 
 1. Create a Personal Access Token (Integrations → API & Webhooks).
-2. `GET https://api.calendly.com/event_types?organization=<org uri>` — collect the UUID of each event type and build `CALENDLY_EVENT_TYPE_MAP`. Without the map, event types fall back to case-insensitive name matching against the meeting-type labels ("Discovery Call", "Peace of Mind Planning Session", …); unmatched bookings still mirror but skip lead auto-creation.
+2. `GET https://api.calendly.com/event_types?organization=<org uri>` — collect the UUID of each event type and build `CALENDLY_EVENT_TYPE_MAP`. Without the map, event types fall back to case-insensitive name matching against the meeting-type labels ("Discovery Call", "Peace of Mind Planning Session", …). Unmatched bookings still appear on the calendar under the neutral Client Call type, while preserving the actual Calendly label.
 3. `POST https://api.calendly.com/webhook_subscriptions` with `{ "url": "https://<production-host>/api/webhooks/calendly", "events": ["invitee.created", "invitee.canceled"], "organization": "<org uri>", "scope": "organization" }` — record the returned signing key (shown once) as `CALENDLY_WEBHOOK_SIGNING_KEY`.
 4. Set both variables in Vercel and redeploy.
 5. Local dev: tunnel to `http://localhost:3002` (e.g. ngrok or cloudflared).
 
-Lead/matter hints can be passed on scheduling links via `utm_content=leadId:<uuid>` or `utm_content=matterId:<uuid>`; otherwise matching falls back to invitee email, with lead auto-creation for discovery/PMPS event types (same behavior as Cal.com).
+Lead/matter hints can be passed on scheduling links via `utm_content=leadId:<uuid>` or `utm_content=matterId:<uuid>`; otherwise matching falls back to invitee email. On every new Calendly booking, Cornerstone refreshes the matched contact (without replacing an existing legal name), updates its CRM opportunity through the existing intake sync, or creates a new contact/opportunity when no match exists. The booking is mirrored into the Cornerstone calendar and remains read-only there; cancellations and reschedules must be made in Calendly and arrive through the webhook.

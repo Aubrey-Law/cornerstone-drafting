@@ -587,7 +587,10 @@ export function CalendarClient() {
                           >
                             {availabilityLabel(a)}
                           </span>
-                          {!a.outlookSynced && a.status === 'scheduled' && (
+                          {a.source === 'calendly' && (
+                            <span className="ml-2 text-primary">Calendly</span>
+                          )}
+                          {a.source !== 'calendly' && !a.outlookSynced && a.status === 'scheduled' && (
                             <span className="ml-2 text-amber-700">⚠ not on Outlook calendar</span>
                           )}
                         </p>
@@ -603,7 +606,7 @@ export function CalendarClient() {
                         </Link>
                       ) : null}
                     </div>
-                    {a.status === 'scheduled' && (
+                    {a.status === 'scheduled' && a.source !== 'calendly' && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         {confirmingId === a.id ? (
                           <>

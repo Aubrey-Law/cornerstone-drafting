@@ -26,7 +26,10 @@ const routeMocks = vi.hoisted(() => {
         id: 'lead-1',
         first_name: 'Avery',
         last_name: 'Stone',
+        full_name: 'Avery Stone',
         email: 'avery@example.com',
+        phone: null,
+        lead_source: null,
         lead_status: 'lead',
       },
     }
@@ -84,6 +87,15 @@ const routeMocks = vi.hoisted(() => {
       if (table === 'matters') {
         const id = filters.id as string | undefined
         return { data: id ? { id } : null, error: null }
+      }
+      if (table === 'appointment_types') {
+        return {
+          data: {
+            id: `appointment-type-${String(filters.key ?? 'client_call')}`,
+            location_type: 'phone',
+          },
+          error: null,
+        }
       }
       return { data: null, error: null }
     })
@@ -184,6 +196,7 @@ function calendlyBody(input: {
   rescheduled?: boolean
   oldInvitee?: string
   utmContent?: string
+  phone?: string
 }): Record<string, unknown> {
   const inviteeUuid = input.inviteeUuid ?? 'inv-1'
   return {
@@ -208,6 +221,9 @@ function calendlyBody(input: {
         event_type: `https://api.calendly.com/event_types/${input.eventTypeUuid ?? 'et-signing'}`,
       },
       tracking: input.utmContent ? { utm_content: input.utmContent } : {},
+      questions_and_answers: input.phone
+        ? [{ question: 'Phone number', answer: input.phone }]
+        : [],
     },
   }
 }
@@ -297,6 +313,16 @@ describe('Calendly webhook sync', () => {
       table: 'matter_details',
       values: { client_id: MATTER_ID, scheduled_signing_date: '2026-06-10T14:00:00.000Z' },
     }))
+    expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
+      table: 'appointments',
+      values: expect.objectContaining({
+        source: 'calendly',
+        external_booking_uid: 'inv-1',
+        status: 'scheduled',
+        linked_matter_id: MATTER_ID,
+      }),
+      options: { onConflict: 'source,external_booking_uid' },
+    }))
     expect(routeMocks.state.inserts).toContainEqual(expect.objectContaining({
       table: 'matter_notes',
       values: expect.objectContaining({
@@ -304,6 +330,30 @@ describe('Calendly webhook sync', () => {
         note_type: 'internal',
         author: 'System',
         calcom_booking_uid: 'inv-1',
+      }),
+    }))
+  })
+
+  it('refreshes an existing contact and thereby updates its CRM opportunity', async () => {
+    await postWebhook(calendlyBody({
+      inviteeUuid: 'inv-contact-refresh',
+      eventTypeUuid: 'et-discovery',
+      eventName: 'Discovery Call',
+      phone: '617-555-0142',
+    }))
+
+    expect(routeMocks.state.updates).toContainEqual(expect.objectContaining({
+      table: 'client_intake',
+      values: {
+        phone: '(617) 555-0142',
+        lead_source: 'calendly',
+      },
+    }))
+    expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
+      table: 'appointments',
+      values: expect.objectContaining({
+        attendee_phone: '(617) 555-0142',
+        linked_lead_id: 'lead-1',
       }),
     }))
   })
@@ -351,6 +401,7 @@ describe('Calendly webhook sync', () => {
       eventName: 'Discovery Call',
       oldInvitee: 'inv-old',
       startTime: '2026-06-12T16:00:00.000000Z',
+      endTime: '2026-06-12T16:30:00.000000Z',
     }))
 
     expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
@@ -362,7 +413,7 @@ describe('Calendly webhook sync', () => {
         linked_lead_id: 'lead-1',
       }),
     }))
-    // Reschedules never auto-create leads (parity with Cal.com BOOKING_CREATED-only).
+    // The existing email match is refreshed instead of creating a duplicate lead.
     expect(routeMocks.state.inserts.some(item => item.table === 'client_intake')).toBe(false)
     expect(routeMocks.state.inserts).toContainEqual(expect.objectContaining({
       table: 'lead_activity',
@@ -424,7 +475,7 @@ describe('Calendly webhook sync', () => {
     expect(routeMocks.state.inserts.some(item => item.table === 'client_intake')).toBe(false)
   })
 
-  it('stores unmatched matter-style bookings without creating leads', async () => {
+  it('creates a contact and opportunity for any unmatched newly scheduled event', async () => {
     await postWebhook(calendlyBody({
       inviteeUuid: 'inv-4',
       email: 'unknown@example.com',
@@ -435,13 +486,27 @@ describe('Calendly webhook sync', () => {
       table: 'external_bookings',
       values: expect.objectContaining({
         booking_uid: 'inv-4',
-        linked_lead_id: null,
+        linked_lead_id: 'client_intake-1',
         linked_matter_id: null,
-        unresolved_reason: 'no_match',
+        unresolved_reason: null,
       }),
     }))
-    expect(routeMocks.state.inserts.some(item => item.table === 'client_intake')).toBe(false)
-    expect(routeMocks.state.inserts.some(item => item.table === 'lead_activity')).toBe(false)
+    expect(routeMocks.state.inserts).toContainEqual(expect.objectContaining({
+      table: 'client_intake',
+      values: expect.objectContaining({
+        email: 'unknown@example.com',
+        lead_source: 'calendly',
+        lead_status: 'lead',
+      }),
+    }))
+    expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
+      table: 'appointments',
+      values: expect.objectContaining({
+        source: 'calendly',
+        external_booking_uid: 'inv-4',
+        linked_lead_id: 'client_intake-1',
+      }),
+    }))
   })
 
   it('resolves the meeting type by event name when the map env is unset', async () => {

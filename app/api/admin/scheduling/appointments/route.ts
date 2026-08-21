@@ -262,6 +262,12 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const appointment = data as AppointmentRow | null
   if (!appointment) return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
+  if (appointment.source === 'calendly') {
+    return NextResponse.json(
+      { error: 'This appointment is managed in Calendly. Reschedule or cancel it there.' },
+      { status: 409 },
+    )
+  }
 
   const type = (await listAppointmentTypes()).find(t => t.id === appointment.appointment_type_id)
   if (!type) return NextResponse.json({ error: 'Unknown appointment type' }, { status: 404 })

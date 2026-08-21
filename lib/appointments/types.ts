@@ -16,7 +16,7 @@ export function isAppointmentLocationType(value: unknown): value is AppointmentL
   return value === 'phone' || value === 'teams' || value === 'in_person'
 }
 export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled' | 'no_show'
-export type AppointmentSource = 'public' | 'portal' | 'admin'
+export type AppointmentSource = 'public' | 'portal' | 'admin' | 'calendly'
 
 export interface SchedulingSettings {
   timezone: string
@@ -103,6 +103,7 @@ export interface AppointmentRow {
   reminder_sent_at: string | null
   online_meeting_url: string | null
   source: AppointmentSource
+  external_booking_uid?: string | null
   created_at: string
   updated_at: string
 }

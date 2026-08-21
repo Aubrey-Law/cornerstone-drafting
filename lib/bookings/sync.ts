@@ -11,6 +11,7 @@ import {
 } from '@/lib/bookings/link'
 import { formatAppointmentDate, splitAttendeeName } from '@/lib/bookings/normalize'
 import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
+import { formatPhoneForStorage } from '@/lib/phone'
 
 type AdminClient = ReturnType<typeof getAdminClient>
 
@@ -45,9 +46,59 @@ export interface ProcessBookingInput {
   status: BookingStatus
 }
 
-function shouldCreateLead(action: BookingAction, eventKey: MeetingTypeKey | null): boolean {
+function shouldCreateLead(
+  provider: BookingProvider,
+  action: BookingAction,
+  eventKey: MeetingTypeKey | null,
+): boolean {
+  // Calendly is the CRM intake source for every newly scheduled event. Cal.com
+  // keeps its narrower legacy rule so this integration does not broaden that
+  // provider's existing behaviour.
+  if (provider === 'calendly') return action === 'created' || action === 'rescheduled'
   if (action !== 'created') return false
   return eventKey === 'discovery_call' || eventKey === 'pmps'
+}
+
+function usefulNamePart(value: string | null | undefined): boolean {
+  const normalized = value?.trim().toLowerCase()
+  return Boolean(normalized && normalized !== 'unknown' && normalized !== 'tbd')
+}
+
+/**
+ * Calendly is often the freshest source for a prospect's phone number. Update
+ * that value, while only filling missing names so a casual booking name cannot
+ * overwrite a more complete legal name already in the intake record. Updating
+ * client_intake also drives the existing CRM person/opportunity sync trigger.
+ */
+async function refreshLeadFromBooking(input: {
+  admin: AdminClient
+  lead: LeadLookupRow
+  leadSource: string
+  attendeeEmail: string
+  attendeeName: string | null
+  attendeePhone: string | null
+}): Promise<LeadLookupRow> {
+  const { admin, lead, leadSource, attendeeEmail, attendeeName, attendeePhone } = input
+  const patch: Record<string, string> = {}
+  const { firstName, lastName } = splitAttendeeName(attendeeName, attendeeEmail)
+  const fullName = attendeeName?.replace(/\s+/g, ' ').trim() ?? ''
+  const phone = formatPhoneForStorage(attendeePhone)
+
+  if (!usefulNamePart(lead.first_name) && usefulNamePart(firstName)) patch.first_name = firstName
+  if (!usefulNamePart(lead.last_name) && usefulNamePart(lastName)) patch.last_name = lastName
+  if (!usefulNamePart(lead.full_name) && fullName) patch.full_name = fullName
+  if (phone && phone !== lead.phone) patch.phone = phone
+  if (!lead.lead_source?.trim()) patch.lead_source = leadSource
+
+  if (Object.keys(patch).length === 0) return lead
+
+  const { error } = await admin
+    .from('client_intake')
+    .update(patch)
+    .eq('id', lead.id)
+  if (error) throw error
+
+  return { ...lead, ...patch }
 }
 
 async function createLeadFromBooking(input: {
@@ -97,7 +148,7 @@ async function createLeadFromBooking(input: {
       intake_link_created_at: new Date().toISOString(),
       intake_link_revoked_at: null,
     })
-    .select('id, lead_status')
+    .select('id, lead_status, first_name, last_name, full_name, email, phone, lead_source')
     .single()
 
   if (error) throw error
@@ -114,6 +165,92 @@ async function createLeadFromBooking(input: {
   })
 
   return lead
+}
+
+async function syncCalendlyAppointment(input: {
+  admin: AdminClient
+  action: BookingAction
+  bookingUid: string
+  attendeeEmail: string
+  attendeeName: string
+  attendeePhone: string | null
+  eventKey: MeetingTypeKey | null
+  eventLabel: string
+  startTime: string | null
+  endTime: string | null
+  leadId: string | null
+  matterId: string | null
+}): Promise<void> {
+  const {
+    admin,
+    action,
+    bookingUid,
+    attendeeEmail,
+    attendeeName,
+    attendeePhone,
+    eventKey,
+    eventLabel,
+    startTime,
+    endTime,
+    leadId,
+    matterId,
+  } = input
+
+  const startMs = startTime ? Date.parse(startTime) : NaN
+  const endMs = endTime ? Date.parse(endTime) : NaN
+  if (!attendeeEmail || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    throw new Error(`Calendly booking ${bookingUid} is missing attendee or calendar time data`)
+  }
+
+  const requestedTypeKey = eventKey ?? 'client_call'
+  const typeResult = await admin
+    .from('appointment_types')
+    .select('id, location_type')
+    .eq('key', requestedTypeKey)
+    .maybeSingle()
+  if (typeResult.error) throw typeResult.error
+  let appointmentType = typeResult.data
+
+  // An unmapped Calendly type still belongs on the calendar. Client Call is the
+  // neutral native type; raw.taskTypeLabel preserves Calendly's actual label.
+  if (!appointmentType && requestedTypeKey !== 'client_call') {
+    const fallback = await admin
+      .from('appointment_types')
+      .select('id, location_type')
+      .eq('key', 'client_call')
+      .maybeSingle()
+    if (fallback.error) throw fallback.error
+    appointmentType = fallback.data
+  }
+  if (!appointmentType) throw new Error('Client Call appointment type is not configured')
+
+  const status = action === 'cancelled' || action === 'superseded'
+    ? 'cancelled'
+    : 'scheduled'
+
+  const { error } = await admin.from('appointments').upsert({
+    appointment_type_id: appointmentType.id,
+    start_time: new Date(startMs).toISOString(),
+    end_time: new Date(endMs).toISOString(),
+    status,
+    attendee_name: attendeeName || attendeeEmail,
+    attendee_email: attendeeEmail,
+    attendee_phone: formatPhoneForStorage(attendeePhone),
+    notes: 'Managed in Calendly.',
+    location_type: appointmentType.location_type,
+    linked_lead_id: leadId,
+    linked_matter_id: matterId,
+    source: 'calendly',
+    external_booking_uid: bookingUid,
+    raw: {
+      managedExternally: true,
+      provider: 'calendly',
+      providerBookingUid: bookingUid,
+      taskTypeLabel: eventLabel || 'Calendly event',
+      calendarShowAsBusy: true,
+    },
+  }, { onConflict: 'source,external_booking_uid' })
+  if (error) throw error
 }
 
 async function syncLeadBooking(input: {
@@ -153,7 +290,6 @@ async function syncLeadBooking(input: {
 
 async function syncMatterBooking(input: {
   admin: AdminClient
-  providerLabel: string
   action: BookingAction
   matterId: string
   bookingUid: string
@@ -161,7 +297,7 @@ async function syncMatterBooking(input: {
   eventLabel: string
   startTime: string | null
 }) {
-  const { admin, providerLabel, action, matterId, bookingUid, eventKey, eventLabel, startTime } = input
+  const { admin, action, matterId, bookingUid, eventKey, eventLabel, startTime } = input
 
   if ((action === 'created' || action === 'rescheduled') && startTime) {
     const startTimestamp = new Date(startTime).toISOString()
@@ -220,7 +356,7 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
   try {
     if (metadataLeadId) lead = await findLeadById(admin, metadataLeadId)
     if (!lead && attendeeEmail) lead = await findLeadByEmail(admin, attendeeEmail)
-    if (!lead && attendeeEmail && shouldCreateLead(action, eventKey)) {
+    if (!lead && attendeeEmail && shouldCreateLead(provider, action, eventKey)) {
       lead = await createLeadFromBooking({
         admin,
         providerLabel,
@@ -233,8 +369,22 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
         startTime,
       })
     }
+    if (provider === 'calendly' && lead && (action === 'created' || action === 'rescheduled')) {
+      lead = await refreshLeadFromBooking({
+        admin,
+        lead,
+        leadSource,
+        attendeeEmail,
+        attendeeName,
+        attendeePhone,
+      })
+    }
   } catch (err) {
     console.error(`[${provider}] error matching lead for`, attendeeEmail, err)
+    // A new Calendly booking must not be acknowledged until its CRM contact and
+    // opportunity have been created/updated. Releasing the webhook claim lets
+    // Calendly retry a transient database failure.
+    if (provider === 'calendly' && (action === 'created' || action === 'rescheduled')) throw err
   }
 
   try {
@@ -247,7 +397,7 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
   const now = new Date().toISOString()
   const unresolvedReason = lead || matterId ? null : 'no_match'
 
-  await admin.from('external_bookings').upsert({
+  const { error: bookingError } = await admin.from('external_bookings').upsert({
     provider,
     booking_uid: bookingUid,
     booking_id: bookingId,
@@ -266,6 +416,24 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
     raw_payload: rawBody,
     updated_at: now,
   }, { onConflict: 'provider,booking_uid' })
+  if (bookingError) throw bookingError
+
+  if (provider === 'calendly') {
+    await syncCalendlyAppointment({
+      admin,
+      action,
+      bookingUid,
+      attendeeEmail,
+      attendeeName,
+      attendeePhone,
+      eventKey,
+      eventLabel,
+      startTime,
+      endTime,
+      leadId: lead?.id ?? null,
+      matterId,
+    })
+  }
 
   // A superseded booking was replaced by a reschedule; the paired 'created'
   // delivery carries the real state, so no notes/activity/date updates here.
@@ -292,7 +460,6 @@ export async function processBookingEvent(input: ProcessBookingInput): Promise<v
     try {
       await syncMatterBooking({
         admin,
-        providerLabel,
         action,
         matterId,
         bookingUid,

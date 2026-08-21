@@ -5,7 +5,16 @@ type AdminClient = ReturnType<typeof getAdminClient>
 export interface LeadLookupRow {
   id: string
   lead_status: string | null
+  first_name: string | null
+  last_name: string | null
+  full_name: string | null
+  email: string | null
+  phone: string | null
+  lead_source: string | null
 }
+
+const LEAD_LOOKUP_COLUMNS =
+  'id, lead_status, first_name, last_name, full_name, email, phone, lead_source'
 
 export async function findMatterIdByEmail(
   admin: AdminClient,
@@ -89,7 +98,7 @@ export async function findLeadById(
 ): Promise<LeadLookupRow | null> {
   const { data, error } = await admin
     .from('client_intake')
-    .select('id, lead_status')
+    .select(LEAD_LOOKUP_COLUMNS)
     .eq('id', leadId)
     .not('lead_status', 'is', null)
     .maybeSingle()
@@ -103,7 +112,7 @@ export async function findLeadByEmail(
 ): Promise<LeadLookupRow | null> {
   const { data, error } = await admin
     .from('client_intake')
-    .select('id, lead_status')
+    .select(LEAD_LOOKUP_COLUMNS)
     .ilike('email', attendeeEmail)
     .not('lead_status', 'is', null)
     .order('created_at', { ascending: false })
