@@ -25,6 +25,7 @@ export function buildSubmissionRows(data: MetlifeClaimData): MetlifeSubmissionRo
       rows.push({
         index: rows.length + 1,
         document: item.document,
+        serviceCode: item.serviceCode,
         serviceType: item.serviceType,
         fee: formatFee(item.feeCents),
         comment: item.comment,

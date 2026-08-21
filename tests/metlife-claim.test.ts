@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DraftPayload } from '@/lib/draftPayload/types'
 import { assembleMetlifeClaim, deriveMetlifePlanType } from '@/lib/metlife/assemble'
 import { buildSubmissionRows, generateMetlifeArtifact, metlifeClaimFilename, submissionCsv } from '@/lib/metlife/generate'
-import { METLIFE_FEES } from '@/lib/metlife/pricing'
+import {
+  calculateMetlifeScheduleAmount,
+  METLIFE_FEES,
+  METLIFE_SCHEDULE_ITEMS,
+  metlifeInheritanceLitigationFeeCents,
+  metlifeProbateFeeCents,
+} from '@/lib/metlife/pricing'
 import type { MetlifeMatterDetails, MetlifeRunInput } from '@/lib/metlife/types'
 
 const DOCUMENTS = {
@@ -81,13 +87,13 @@ describe('MetLife claim totals', () => {
     expect(result.data?.grandTotalCents).toBe(
       SHARED_COUPLE + METLIFE_FEES.will.couple + METLIFE_FEES.trust.couple + METLIFE_FEES.affidavit.member,
     )
-    expect(result.data?.grandTotalCents).toBe(97_000)
+    expect(result.data?.grandTotalCents).toBe(96_500)
   })
 
   it('bills separate-trust pour-over wills at the member rate, not the couple rate', () => {
     const result = claim({ trust: { separate_trusts: true } as DraftPayload['trust'] })
     expect(result.data?.planType).toBe('separate_trust')
-    expect(result.data?.grandTotalCents).toBe(140_000)
+    expect(result.data?.grandTotalCents).toBe(139_500)
     const wills = result.data!.sections.flatMap(section => section.items).filter(item => item.serviceType === 'Will')
     expect(wills).toHaveLength(2)
     expect(wills.every(item => item.feeCents === METLIFE_FEES.will.member)).toBe(true)
@@ -125,6 +131,8 @@ describe('MetLife claim totals', () => {
     const guardian = result.data!.sections[0].items.find(item => item.document === 'Temporary Guardian Affidavit')
     expect(guardian?.feeCents).toBe(METLIFE_FEES.affidavit.member)
     expect(guardian?.serviceType).toBe('Affidavit')
+    expect(guardian?.serviceCode).toBe('700')
+    expect(guardian?.comment).toContain('CT 700')
   })
 
   it('sums every section total from its own line items', () => {
@@ -182,6 +190,7 @@ describe('Portal submission table', () => {
     expect(rows.map(row => row.index)).toEqual(rows.map((_, index) => index + 1))
     expect(rows.every(row => row.complete === 'Yes')).toBe(true)
     expect(rows[0].fee).toBe('$85.00')
+    expect(rows[0].serviceCode).toBe('220')
   })
 
   it('renders a CSV with a header row and quoted fields', () => {
@@ -189,6 +198,30 @@ describe('Portal submission table', () => {
     const lines = csv.split('\n')
     expect(lines[0]).toBe('"#","Document","Service Type","Fee","Comment","Complete"')
     expect(lines).toHaveLength(buildSubmissionRows(claim().data!).length + 1)
+  })
+})
+
+describe('MetLife Massachusetts fee schedule', () => {
+  it('uses the attached fixed fees and CT codes', () => {
+    expect(METLIFE_FEES.advancedMedicalDirective).toEqual({ member: 4_500, couple: 6_000 })
+    expect(METLIFE_SCHEDULE_ITEMS.find(item => item.key === 'deed')).toMatchObject({ code: '420', amountCents: 9_000 })
+    expect(METLIFE_SCHEDULE_ITEMS.find(item => item.key === 'affidavit_prepared')).toMatchObject({ code: '700', amountCents: 6_500 })
+  })
+
+  it('calculates CT 250 probate fees with the minimum, breakpoint, and cap', () => {
+    expect(metlifeProbateFeeCents(1_000_000)).toBe(45_000)
+    expect(metlifeProbateFeeCents(10_000_000)).toBe(150_000)
+    expect(metlifeProbateFeeCents(20_000_000)).toBe(250_000)
+    expect(metlifeProbateFeeCents(100_000_000)).toBe(400_000)
+    expect(metlifeProbateFeeCents(-1)).toBeNull()
+  })
+
+  it('calculates CT 270 inheritance litigation fees through the case cap', () => {
+    expect(metlifeInheritanceLitigationFeeCents(10)).toBe(100_000)
+    expect(metlifeInheritanceLitigationFeeCents(12.5)).toBe(125_000)
+    expect(metlifeInheritanceLitigationFeeCents(25)).toBe(200_000)
+    const item = METLIFE_SCHEDULE_ITEMS.find(candidate => candidate.key === 'inheritance_litigation')!
+    expect(calculateMetlifeScheduleAmount(item, 12.5)).toBe(125_000)
   })
 })
 
