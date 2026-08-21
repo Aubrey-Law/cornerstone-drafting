@@ -70,6 +70,11 @@ export async function GET(req: Request) {
       ])
       if (pipeline.error) throw new Error(pipeline.error.message)
       if (!pipeline.data) return NextResponse.json({ context: null })
+      // A failed document read used to look exactly like a matter with nothing
+      // filed yet, which is the wrong story to tell the operator.
+      if (documents.error) {
+        console.error('compose-context: could not read matter documents', documents.error)
+      }
 
       const spouseEmail = (pipeline.data.spouse_email as string | null)?.trim() || null
       const spouseName = (pipeline.data.spouse_name as string | null)?.trim() || null

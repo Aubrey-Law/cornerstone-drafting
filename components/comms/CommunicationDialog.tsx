@@ -125,6 +125,8 @@ export function CommunicationDialog({
               {[recipientEmail, recipientName].filter(Boolean).join(' · ')}
             </DialogDescription>
           </DialogHeader>
+          {/* A seed so the recipient shows at once — the composer fetches the
+              matter's documents and extra addresses on top of it. */}
           <ManualEmailComposer
             embedded
             recordOverride={{ type: target.type, id: target.id }}

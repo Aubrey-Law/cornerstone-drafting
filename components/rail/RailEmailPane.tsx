@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { CalendarClock, CalendarPlus, Eye, FileText, Loader2, Paperclip, Send, Trash2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
@@ -89,6 +89,13 @@ interface ScheduledEmailItem {
 
 /** Mirrors MAX_TOTAL_ATTACHMENT_BYTES on the server. */
 const MAX_TOTAL_BYTES = 10 * 1024 * 1024
+/**
+ * Uploads from the operator's computer ride inside the request body, which the
+ * hosting platform caps at 4.5MB — past that the send is rejected before the
+ * route ever runs, with no error message of its own. Matter documents are sent
+ * by id and read server-side, so they only count against MAX_TOTAL_BYTES.
+ */
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 const ONE_OFF = 'none'
 const VARIABLE_OPTIONS = MANUAL_EMAIL_VARIABLES
 const UNRESOLVED_RE = /\{\{\s*[a-zA-Z0-9_.-]+\s*\}\}/g
@@ -287,6 +294,15 @@ export function ManualEmailComposer({
   const record = recordOverride === undefined ? railRecordForPath(pathname) : recordOverride
   const token = useAccessToken()
 
+  // Callers build `initialContext` inline, so its identity changes on every
+  // parent render. Pin it by value or the effects below re-run — and re-fetch —
+  // for the rest of the pane's life.
+  const seedJson = initialContext ? JSON.stringify(initialContext) : null
+  const seedContext = useMemo<ComposeContext | null>(
+    () => (seedJson ? (JSON.parse(seedJson) as ComposeContext) : null),
+    [seedJson],
+  )
+
   const [context, setContext] = useState<ComposeContext | null>(null)
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [templateId, setTemplateId] = useState(ONE_OFF)
@@ -317,7 +333,10 @@ export function ManualEmailComposer({
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleInput)
   const [scheduling, setScheduling] = useState(false)
   const [scheduledEmails, setScheduledEmails] = useState<ScheduledEmailItem[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Unique per instance: the rail pane and a dialog composer can be mounted
+  // at the same time, and a duplicated id would point the label at the wrong
+  // input.
+  const fileInputId = `${useId()}-files`
   const draftExistedRef = useRef(false)
   const defaultRecipientRef = useRef('')
 
@@ -361,20 +380,19 @@ export function ManualEmailComposer({
   }
 
   useEffect(() => {
-    if (initialContext) {
-      setContext(initialContext)
-      defaultRecipientRef.current = initialContext.recipientEmail ?? ''
-      setTo(value => value || initialContext.recipientEmail || '')
-      return
+    // A seed gets the recipient on screen immediately, but it is only a
+    // starting point: callers pass the name and address they already have and
+    // leave the document list empty, so the fetch below still has to run or
+    // the attachment picker would report a matter has no documents at all.
+    if (seedContext) {
+      setContext(seedContext)
+      defaultRecipientRef.current = seedContext.recipientEmail ?? ''
+      setTo(value => value || seedContext.recipientEmail || '')
     }
     // Only leads and matters have a compose context to fetch; a contact-scoped
-    // pane is always given one via `initialContext`.
-    if (recordType !== 'matter' && recordType !== 'lead') {
-      setContext(null)
-      return
-    }
-    if (!recordId) {
-      setContext(null)
+    // pane has nothing behind it but the seed.
+    if ((recordType !== 'matter' && recordType !== 'lead') || !recordId) {
+      if (!seedContext) setContext(null)
       return
     }
     let cancelled = false
@@ -388,9 +406,16 @@ export function ManualEmailComposer({
         if (cancelled || !body.context) return
         setContext(body.context)
         defaultRecipientRef.current = body.context.recipientEmail ?? ''
-        // Always re-derive: the pane stays mounted across records, so a stale
-        // `to` from the last matter would otherwise stick to the next one.
-        setTo(body.context.recipientEmail ?? '')
+        if (seedContext) {
+          // A seeded pane is opened against one record and stays there, so
+          // whatever is already in the field — the seed, or a typed address —
+          // wins over the fetch.
+          setTo(value => value || body.context!.recipientEmail || '')
+        } else {
+          // Always re-derive: the pane stays mounted across records, so a stale
+          // `to` from the last matter would otherwise stick to the next one.
+          setTo(body.context.recipientEmail ?? '')
+        }
       } catch {
         /* the pane still works as a blank one-off */
       }
@@ -398,7 +423,7 @@ export function ManualEmailComposer({
     return () => {
       cancelled = true
     }
-  }, [initialContext, recordType, recordId, token])
+  }, [seedContext, recordType, recordId, token])
 
   useEffect(() => {
     if (!token) return
@@ -496,7 +521,7 @@ export function ManualEmailComposer({
       }
     })
     return () => { cancelled = true }
-  }, [draftQuery, initialContext?.recipientEmail, token])
+  }, [draftQuery, seedContext?.recipientEmail, token])
 
   // Switching records swaps the recipients and clears anything record-scoped.
   // Subject and body are the operator's own words, so they survive the move.
@@ -590,10 +615,11 @@ export function ManualEmailComposer({
     [context, selectedDocumentIds],
   )
 
+  const uploadBytes = files.reduce((sum, file) => sum + file.size, 0)
   const totalBytes =
-    files.reduce((sum, file) => sum + file.size, 0) +
-    selectedDocuments.reduce((sum, doc) => sum + (doc.size ?? 0), 0)
-  const overLimit = totalBytes > MAX_TOTAL_BYTES
+    uploadBytes + selectedDocuments.reduce((sum, doc) => sum + (doc.size ?? 0), 0)
+  const overUploadLimit = uploadBytes > MAX_UPLOAD_BYTES
+  const overLimit = totalBytes > MAX_TOTAL_BYTES || overUploadLimit
   const attachmentCount = files.length + selectedDocuments.length
 
   const ccList = useMemo(() => parseAddressList(cc), [cc])
@@ -777,7 +803,17 @@ export function ManualEmailComposer({
         body: form,
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string; status?: string }
-      if (!res.ok) throw new Error(body.error || 'Could not send the email')
+      if (!res.ok) {
+        // A body over the platform limit never reaches the route, so there is
+        // no JSON error to read — say what actually happened instead of the
+        // generic failure.
+        if (!body.error && res.status === 413) {
+          throw new Error(
+            `The attached files are too large to upload — keep them under ${formatBytes(MAX_UPLOAD_BYTES)} in total.`,
+          )
+        }
+        throw new Error(body.error || 'Could not send the email')
+      }
       if (body.status !== 'sent' && body.status !== 'redirected') {
         setSentNotice(`Email was ${body.status ?? 'not sent'}; the draft was retained.`)
         return
@@ -1049,25 +1085,31 @@ export function ManualEmailComposer({
                 From documents
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium hover:bg-muted"
+            {/*
+              A label, not a button calling input.click(): label activation is
+              native, so it does not depend on a programmatic click reaching a
+              display:none input — which is the fragile part when the composer
+              is rendered inside a modal dialog. `sr-only` rather than `hidden`
+              keeps the input focusable for the keyboard.
+            */}
+            <label
+              htmlFor={fileInputId}
+              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 text-[11px] font-medium hover:bg-muted focus-within:ring-2 focus-within:ring-ring"
             >
               <Upload className="h-3.5 w-3.5" />
               From computer
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              aria-label="Attach files from your computer"
-              onChange={event => {
-                setFiles(prev => [...prev, ...Array.from(event.target.files ?? [])])
-                event.target.value = ''
-              }}
-            />
+              <input
+                id={fileInputId}
+                type="file"
+                multiple
+                className="sr-only"
+                aria-label="Attach files from your computer"
+                onChange={event => {
+                  setFiles(prev => [...prev, ...Array.from(event.target.files ?? [])])
+                  event.target.value = ''
+                }}
+              />
+            </label>
           </div>
 
           {showDocumentPicker && context?.recordType === 'matter' && (
@@ -1146,11 +1188,18 @@ export function ManualEmailComposer({
             </ul>
           )}
 
-          {overLimit && (
+          {overUploadLimit ? (
+            <p role="alert" className="text-[11px] text-destructive">
+              Files from this computer total {formatBytes(uploadBytes)} — the upload limit is{' '}
+              {formatBytes(MAX_UPLOAD_BYTES)}.
+              {context?.recordType === 'matter' &&
+                ' Add the larger ones to the matter\u2019s documents and attach them from there.'}
+            </p>
+          ) : overLimit ? (
             <p role="alert" className="text-[11px] text-destructive">
               Attachments total {formatBytes(totalBytes)} — the limit is {formatBytes(MAX_TOTAL_BYTES)}.
             </p>
-          )}
+          ) : null}
           {files.length > 0 && (
             <p className="text-[10px] text-muted-foreground">
               Files from this computer must be reattached after a refresh. Linked matter documents are restored.
