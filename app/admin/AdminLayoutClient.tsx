@@ -57,20 +57,29 @@ function isIconRailRoute(pathname: string): boolean {
   return ICON_RAIL_ROUTES.some(pattern => pattern.test(pathname))
 }
 
-export const adminNavItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[] = [
+export type AdminNavGroup = 'Daily' | 'Clients' | 'Work' | 'Finance' | 'Tools'
+export const adminNavItems: {
+  href: string
+  label: string
+  icon: React.ElementType
+  group: AdminNavGroup
+  exact?: boolean
+}[] = [
   // exact: '/admin' is a prefix of every admin route, so it only highlights on itself.
-  { href: '/admin', label: 'Today', icon: Sun, exact: true },
-  { href: '/admin/crm', label: 'CRM', icon: Send },
-  { href: '/admin/inbox', label: 'Inbox', icon: Mail },
-  { href: '/admin/matters', label: 'Matters', icon: Briefcase },
-  { href: '/admin/billing', label: 'Billing', icon: ReceiptText },
-  { href: '/admin/tasks', label: 'Tasks', icon: ListTodo },
-  { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine },
-  { href: '/admin/assistant', label: 'Assistant', icon: Sparkles },
-  { href: '/admin/works', label: 'Library', icon: BookOpen },
-  { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/admin/settings', label: 'Settings', icon: Settings },
+  { href: '/admin', label: 'Today', icon: Sun, group: 'Daily', exact: true },
+  { href: '/admin/inbox', label: 'Inbox', icon: Mail, group: 'Daily' },
+  { href: '/admin/crm', label: 'CRM', icon: Send, group: 'Clients' },
+  { href: '/admin/matters', label: 'Matters', icon: Briefcase, group: 'Clients' },
+  { href: '/admin/drafting', label: 'Drafting', icon: FilePenLine, group: 'Work' },
+  { href: '/admin/tasks', label: 'Tasks', icon: ListTodo, group: 'Work' },
+  { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays, group: 'Work' },
+  { href: '/admin/billing', label: 'Billing', icon: ReceiptText, group: 'Finance' },
+  { href: '/admin/assistant', label: 'Assistant', icon: Sparkles, group: 'Tools' },
+  { href: '/admin/works', label: 'Library', icon: BookOpen, group: 'Tools' },
+  { href: '/admin/settings', label: 'Settings', icon: Settings, group: 'Tools' },
 ]
+
+const ADMIN_NAV_GROUPS: AdminNavGroup[] = ['Daily', 'Clients', 'Work', 'Finance', 'Tools']
 
 interface AdminLayoutClientProps {
   children: React.ReactNode
@@ -170,8 +179,15 @@ export default function AdminLayoutClient({
   }
 
   const nav = (compact: boolean) => (
-    <nav className="flex flex-col gap-1 p-2">
-      {adminNavItems.map(item => {
+    <nav className="flex flex-col p-2">
+      {ADMIN_NAV_GROUPS.map(group => (
+        <div key={group} className={cn('flex flex-col gap-1', compact ? 'py-1' : 'pb-2')}>
+          {!compact ? (
+            <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+              {group}
+            </p>
+          ) : null}
+          {adminNavItems.filter(item => item.group === group).map(item => {
         const active = pathname === item.href || (!item.exact && pathname.startsWith(`${item.href}/`))
         const Icon = item.icon
         const badge = getNavBadge(item.href, badgeCounts)
@@ -222,7 +238,9 @@ export default function AdminLayoutClient({
             )}
           </Link>
         )
-      })}
+          })}
+        </div>
+      ))}
     </nav>
   )
 

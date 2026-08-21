@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   CalendarCheck,
   ChevronDown,
@@ -8,6 +9,7 @@ import {
   ListChecks,
   PauseCircle,
   PlayCircle,
+  ReceiptText,
   Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -145,12 +147,14 @@ function DaysRemaining({ progress }: { progress: SlaProgress }) {
 }
 
 function PlanTaskRow({
+  matterId,
   task,
   busy,
   onStatus,
   onNotes,
   onPause,
 }: {
+  matterId: string
   task: PlanTask
   busy: boolean
   onStatus: (status: PlanStatusChoice) => void
@@ -196,12 +200,19 @@ function PlanTaskRow({
             )}
             {task.conditional && <Badge variant="outline">conditional</Badge>}
             {task.pauses_clock && <Badge variant="outline">pauses clock</Badge>}
-            {task.skill && (
+            {task.skill === 'cornerstone-billing' ? (
+              <Badge variant="outline" asChild>
+                <Link href={`/admin/billing?matter=${matterId}`}>
+                  <ReceiptText className="size-3" aria-hidden />
+                  Open billing
+                </Link>
+              </Badge>
+            ) : task.skill ? (
               <Badge variant="outline" className="font-mono text-[10px]" title="Cowork skill">
                 <Sparkles className="size-3" aria-hidden />
                 {task.skill}
               </Badge>
-            )}
+            ) : null}
             {task.status === 'blocked' && <Badge variant="destructive">blocked</Badge>}
             {skipped && <Badge variant="secondary">skipped</Badge>}
           </div>
@@ -587,6 +598,7 @@ export function TaskPlanView({ matterId, enabled, onTasksChanged }: TaskPlanView
                       {phaseTasks.map(task => (
                         <PlanTaskRow
                           key={task.id}
+                          matterId={matterId}
                           task={task}
                           busy={busyId === task.id}
                           onStatus={status => void patchTask(task.id, { status })}

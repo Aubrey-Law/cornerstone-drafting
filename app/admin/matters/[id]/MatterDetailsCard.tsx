@@ -67,7 +67,7 @@ function taxDecision(value: boolean | null | undefined) {
 }
 
 function paymentStatus(details: MatterDetailsRow | null) {
-  if (details?.fee_payment_status === 'deposit') return 'Deposit'
+  if (details?.fee_payment_status === 'deposit') return 'Partial payment'
   if (details?.fee_payment_status === 'paid_in_full' || details?.fee_collected) return 'Paid in full'
   return 'Unpaid'
 }
@@ -235,7 +235,7 @@ export function MatterDetailsCard({
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="unpaid">Unpaid</SelectItem>
-              <SelectItem value="deposit">Deposit</SelectItem>
+              <SelectItem value="deposit">Partial payment</SelectItem>
               <SelectItem value="paid_in_full">Paid in full</SelectItem>
             </SelectContent>
           </Select>

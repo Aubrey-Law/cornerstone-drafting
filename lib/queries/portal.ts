@@ -1,5 +1,6 @@
 import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { firmTodayKey } from '@/lib/firmDate'
+import { adjustedInvoiceBalance, type InvoiceBalanceAdjustment } from '@/lib/billing/invoices'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import type { MatterDocument } from '@/types/database'
 
@@ -225,7 +226,7 @@ export async function fetchPortalAccount(
 
   const { data, error } = await admin
     .from('invoices')
-    .select('id, number, issue_date, due_date, subtotal_cents, payment_link, pdf_document_id, docx_document_id, status')
+    .select('id, number, issue_date, due_date, subtotal_cents, payment_link, pdf_document_id, docx_document_id, status, kind')
     .eq('matter_id', matterId)
     .not('issued_at', 'is', null)
     .neq('status', 'void')
@@ -246,14 +247,16 @@ export async function fetchPortalAccount(
     pdf_document_id: string | null
     docx_document_id: string | null
     status: string
+    kind: string
   }
   const rows = (data ?? []) as Row[]
   if (rows.length === 0) return { invoices: [], balanceCents: 0, nextDueDate: null }
 
-  const paymentResult = await admin
-    .from('billing_payments')
-    .select('invoice_id, amount')
-    .in('invoice_id', rows.map(row => row.id))
+  const [paymentResult, adjustmentResult] = await Promise.all([
+    admin.from('billing_payments').select('invoice_id, amount').in('invoice_id', rows.map(row => row.id)),
+    admin.from('billing_adjustments').select('invoice_id, amount_cents, balance_effect, status')
+      .in('invoice_id', rows.map(row => row.id)),
+  ])
   if (paymentResult.error) {
     console.error('fetchPortalAccount payments error:', paymentResult.error)
   }
@@ -265,7 +268,14 @@ export async function fetchPortalAccount(
 
   const invoices: PortalInvoice[] = rows.map(row => {
     const collectedCents = collected.get(row.id) ?? 0
-    const balanceCents = Math.max(0, row.subtotal_cents - collectedCents)
+    const balanceCents = row.kind === 'credit_note' ? 0 : adjustedInvoiceBalance(
+      row.subtotal_cents,
+      collectedCents,
+      adjustmentResult.error
+        ? []
+        : (adjustmentResult.data as Array<InvoiceBalanceAdjustment & { status: string }>)
+            .filter(item => item.invoice_id === row.id && item.status === 'posted'),
+    )
     return {
       id: row.id,
       number: row.number ?? '',

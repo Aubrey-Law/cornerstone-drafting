@@ -18,8 +18,8 @@ describe('matter stage route', () => {
     const source = fs.readFileSync(routePath, 'utf8')
 
     expect(source).toContain("import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'")
-    expect(source).toContain(".update({ stage })")
-    expect(source).toContain("event_type: 'stage_changed'")
+    expect(source).toContain("rpc('transition_matter_stage_with_jobs'")
+    expect(source).toContain('p_stage: stage')
   })
 })
 

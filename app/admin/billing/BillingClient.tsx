@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
-import { billingCsv, filterBillingRows } from '@/lib/billing/metrics'
+import { filterBillingRows } from '@/lib/billing/metrics'
 import { planBatchInvoices } from '@/lib/billing/invoices'
 import type {
   BillingFilter,
@@ -57,16 +57,6 @@ function validFilter(value: string | null): BillingFilter {
   return value === 'all' || value === 'to_invoice' || value === 'overdue' || value === 'paid'
     ? value
     : 'open'
-}
-
-function downloadCsv(rows: BillingLedgerRow[], month: string) {
-  const blob = new Blob([billingCsv(rows)], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `cornerstone-billing-${month}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
 }
 
 export default function BillingClient({
@@ -169,6 +159,21 @@ export default function BillingClient({
     return {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+  }
+
+  async function downloadAccountingCsv() {
+    try {
+      const response = await fetch(`/api/admin/billing/export?month=${month}`, { headers: headers() })
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? 'Export failed')
+      const url = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `cornerstone-accounting-${month}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not export billing data')
     }
   }
 
@@ -475,7 +480,7 @@ export default function BillingClient({
               type="button"
               variant="outline"
               className="min-h-11"
-              onClick={() => downloadCsv(rows, month)}
+              onClick={() => void downloadAccountingCsv()}
             >
               <Download className="size-4" aria-hidden />
               Export CSV

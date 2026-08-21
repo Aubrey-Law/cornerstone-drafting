@@ -1,6 +1,6 @@
 # Cornerstone Lite
 
-A Next.js practice app for estate-planning **intake**, **matters**, **document sharing**, **aging**, **communications**, and **drafting**.
+A Next.js practice app for estate-planning **intake**, **CRM**, **matters**, **communications**, **tasks**, **calendar**, **billing**, and **drafting**.
 
 Drafting (design sheet → generate → review) lives in this repo and is the source of truth. Do **not** port drafting code from `aubrey-law-app` without explicit approval.
 
@@ -33,13 +33,19 @@ Dev server: [http://localhost:3002](http://localhost:3002)
 
 | Route | Purpose |
 |-------|---------|
+| `/admin` | Today exception queue and daily command center |
+| `/admin/inbox` | The only staff communications inbox (email, SMS, portal messages, and call triage) |
+| `/admin/crm` | Leads, contacts, households, and follow-up |
 | `/admin/matters` | Create and manage matters |
-| `/admin/matters/[id]` | Overview, documents, contacts, communications |
+| `/admin/matters/[id]` | Overview, documents, contacts, tasks, and billing |
 | `/admin/drafting` | Drafting next-action queue |
 | `/admin/drafting/[matterId]` | Design → Generate → Review workspace |
-| `/admin/pipeline/aging` | Matter-only SLA aging dashboard |
-| `/admin/calls` | Unassigned call triage |
-| `/admin/settings` | Models, API keys, Outlook, Stage SLA |
+| `/admin/tasks` | Unified work queue and recurring work |
+| `/admin/calendar` | Cornerstone appointments and Outlook calendar |
+| `/admin/billing` | Charges, invoices, payments, claims, and accounting export |
+| `/admin/assistant` | Firm assistant |
+| `/admin/works` | Workflow and reference library |
+| `/admin/settings` | Firm, models, email, Outlook, scheduling, and SLA settings |
 
 ### Client portal
 
@@ -47,6 +53,7 @@ Dev server: [http://localhost:3002](http://localhost:3002)
 |-------|---------|
 | `/intake` | Full guided intake questionnaire (parity with aubrey-law-app) |
 | `/documents` | Shared PDFs + client uploads |
+| `/account` | All invoices, balances, payment links, and paid-invoice receipts |
 | `/messages` | Matter messaging with the firm |
 | `/dashboard` | Thin portal home |
 
@@ -99,7 +106,14 @@ deployment workflow.
 npm run typecheck
 npm test
 npm run build:next
+npm run audit:render-matrix
 ```
+
+## Billing and durable-workflow rollout
+
+Migration `20261004000000_solo_practice_efficiency_billing.sql` is additive and does not convert historical billing. New direct-pay fee schedules, durable workflow jobs, and the probate track are separately gated by the singleton `firm_settings` flags `billing_milestones_enabled`, `durable_workflow_jobs_enabled`, and `probate_track_enabled`; all default to `false`. Enable them only after applying the migration and completing the local/staging verification in `OPERATIONS_RUNBOOK.md`.
+
+Direct-pay estate-planning and college-preparation schedules use two due-on-receipt phase fees: 50% at completed engagement and 50% at `drafts_approved`, with any odd cent allocated to the second phase. Legal-plan claims remain carrier-facing. Probate schedules require attorney-entered opening, administration, and closing phase amounts. Advance cost deposits are not supported.
 
 ## Environment
 

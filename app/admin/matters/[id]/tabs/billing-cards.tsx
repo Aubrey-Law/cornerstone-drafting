@@ -291,12 +291,15 @@ export interface CloseOutGate {
  * stays disabled until all of them are — a matter closed with an unsubmitted
  * claim is money the firm never collects.
  */
-export function buildCloseOutGates(details: MatterDetailsRow | null): CloseOutGate[] {
+export function buildCloseOutGates(
+  details: MatterDetailsRow | null,
+  financial?: { directBalance: number; uninvoicedDirectCount: number },
+): CloseOutGate[] {
   const isPlan = isLegalPlanBilling(details?.billing_type)
   const stamp = (value: string | null | undefined) =>
     value ? formatFirmDate(value) : 'Not recorded'
 
-  return [
+  const gates: CloseOutGate[] = [
     {
       key: 'work_finished',
       label: 'Work finished recorded',
@@ -324,6 +327,17 @@ export function buildCloseOutGates(details: MatterDetailsRow | null): CloseOutGa
       detail: isPlan ? stamp(details?.reimbursement_received_date) : 'Not applicable — flat fee',
     },
   ]
+  if (financial) gates.push({
+    key: 'billing_resolved',
+    label: 'Client billing resolved',
+    met: financial.directBalance === 0 && financial.uninvoicedDirectCount === 0,
+    detail: financial.directBalance > 0
+      ? `${billingMoney(financial.directBalance)} outstanding`
+      : financial.uninvoicedDirectCount > 0
+        ? `${financial.uninvoicedDirectCount} charge${financial.uninvoicedDirectCount === 1 ? '' : 's'} still need an invoice`
+        : 'No client balance or uninvoiced charges',
+  })
+  return gates
 }
 
 export function CloseOutCard({
@@ -332,14 +346,18 @@ export function CloseOutCard({
   onCloseMatter,
   closing,
   alreadyClosed,
+  directBalance,
+  uninvoicedDirectCount,
 }: {
   details: MatterDetailsRow | null
   onSaveField: SaveDetailField
   onCloseMatter: () => void
   closing: boolean
   alreadyClosed: boolean
+  directBalance: number
+  uninvoicedDirectCount: number
 }) {
-  const gates = buildCloseOutGates(details)
+  const gates = buildCloseOutGates(details, { directBalance, uninvoicedDirectCount })
   const ready = gates.every(gate => gate.met)
 
   return (
@@ -386,7 +404,7 @@ export function CloseOutCard({
         </Button>
         {!ready && !alreadyClosed && (
           <p className="text-xs text-muted-foreground">
-            All four have to be true before this matter can close.
+            Resolve every close-out item, including billing, before this matter can close.
           </p>
         )}
       </CardContent>

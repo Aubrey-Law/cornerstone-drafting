@@ -34,47 +34,26 @@ export async function PATCH(req: Request, { params }: Params) {
     const admin = getAdminClient()
     const matterId = await resolveMatterId(rawId, admin)
 
-    const { data: existing, error: fetchError } = await admin
-      .from('matters')
-      .select('id, status, relationship_status')
-      .eq('id', matterId)
-      .eq('relationship_status', 'hired')
-      .maybeSingle()
-
-    if (fetchError) throw new Error(fetchError.message)
-    if (!existing) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
-
-    const previousStatus = existing.status as MatterStatus
-    if (previousStatus === status) {
-      return NextResponse.json({ matterId, status, unchanged: true })
-    }
-
     const holdReason =
       status === 'on_hold' && typeof body?.holdReason === 'string' && body.holdReason.trim()
         ? body.holdReason.trim()
         : null
 
-    const { error: updateError } = await admin
-      .from('matters')
-      .update({ status, hold_reason: holdReason })
-      .eq('id', matterId)
-
-    if (updateError) throw new Error(updateError.message)
-
     const actorName = (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? null
-
-    await admin.from('matter_activity').insert({
-      matter_id: matterId,
-      event_type: 'status_changed',
-      title: `Matter ${matterStatusLabel(status).toLowerCase()}`,
-      detail: `From ${matterStatusLabel(previousStatus)} to ${matterStatusLabel(status)}`,
-      metadata: { from: previousStatus, to: status, hold_reason: holdReason },
-      actor_id: userId,
-      actor_email: user?.email ?? null,
-      actor_name: actorName,
+    const { data, error } = await admin.rpc('transition_matter_status_with_closeout', {
+      p_matter_id: matterId,
+      p_status: status,
+      p_hold_reason: holdReason,
+      p_status_label: matterStatusLabel(status),
+      p_actor_id: userId,
+      p_actor_email: user?.email ?? null,
+      p_actor_name: actorName,
     })
-
-    return NextResponse.json({ matterId, status, previousStatus })
+    if (error) {
+      const code = error.code === 'P0002' ? 404 : error.code === 'P0001' ? 409 : 500
+      return NextResponse.json({ error: error.message }, { status: code })
+    }
+    return NextResponse.json(data)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Could not update status'
     return NextResponse.json({ error: message }, { status: 500 })

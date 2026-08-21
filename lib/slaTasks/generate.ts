@@ -27,6 +27,7 @@ import {
 export const ESTATE_PLANNING_SLA = 'estate_planning_sla'
 export const ESTATE_PLANNING_SLA_V3 = 'estate_planning_sla_v3'
 export const COLLEGE_PREP_SLA_V1 = 'college_prep_sla_v1'
+export const PROBATE_SLA_V1 = 'probate_sla_v1'
 
 /**
  * The checklist a practice area runs, or null when it has none.
@@ -36,12 +37,12 @@ export const COLLEGE_PREP_SLA_V1 = 'college_prep_sla_v1'
  * Trust this plan never produces, and never asks the two questions that govern a
  * college plan — whether the student has turned 18, and when move-in is.
  *
- * Probate still has no template. It returns null and is skipped rather than
- * handed a checklist for work it does not do.
+ * Probate has a dedicated administration track rather than inheriting an
+ * estate-planning checklist.
  */
 export function slaTemplateForPracticeArea(practiceArea: unknown): string | null {
   const area = normalizePracticeArea(practiceArea)
-  if (area === 'Probate') return null
+  if (area === 'Probate') return PROBATE_SLA_V1
   if (area === 'CP') return COLLEGE_PREP_SLA_V1
   return ESTATE_PLANNING_SLA_V3
 }
@@ -260,6 +261,11 @@ export async function ensureMatterSlaTasks(
   options: { practiceArea?: unknown; startDate?: string; retemplate?: boolean } = {},
 ): Promise<void> {
   try {
+    if (normalizePracticeArea(options.practiceArea) === 'Probate') {
+      const { data: settings } = await getAdminClient().from('firm_settings')
+        .select('probate_track_enabled').eq('id', 1).maybeSingle()
+      if (settings?.probate_track_enabled !== true) return
+    }
     const templateName = slaTemplateForPracticeArea(options.practiceArea)
     if (!templateName) return
     const result = await generateMatterTasks(getAdminClient(), {
@@ -303,10 +309,11 @@ export async function ensureLeadSlaTasks(
   options: { practiceArea?: unknown } = {},
 ): Promise<void> {
   try {
-    // A probate lead keeps the estate checklist it has always been given: there
-    // is still no probate template, and an unqualified lead with no next action
-    // on it is worse than one carrying a checklist of roughly the right shape.
-    // A probate *matter* is still skipped, exactly as before.
+    if (normalizePracticeArea(options.practiceArea) === 'Probate') {
+      const { data: settings } = await getAdminClient().from('firm_settings')
+        .select('probate_track_enabled').eq('id', 1).maybeSingle()
+      if (settings?.probate_track_enabled !== true) return
+    }
     const templateName = slaTemplateForPracticeArea(options.practiceArea) ?? ESTATE_PLANNING_SLA_V3
     const result = await generateMatterTasks(getAdminClient(), {
       matterId,
@@ -359,6 +366,10 @@ export async function resyncMatterSlaTemplate(
   practiceArea: unknown,
 ): Promise<SlaTemplateResync> {
   try {
+    // Existing Probate matters are not silently converted. The dedicated
+    // track is opt-in for newly opened matters; an attorney may migrate an old
+    // checklist deliberately after reviewing work already performed.
+    if (normalizePracticeArea(practiceArea) === 'Probate') return 'skipped'
     const templateName = slaTemplateForPracticeArea(practiceArea)
     if (!templateName) return 'skipped'
 

@@ -308,7 +308,7 @@ describe('MatterFactsPanel', () => {
     const select = await screen.findByLabelText('Fee status')
     expect([...select.querySelectorAll('option')].map(option => option.textContent)).toEqual([
       'Unpaid',
-      'Deposit',
+      'Partial payment',
       'Paid in full',
     ])
     expect([...select.querySelectorAll('option')].map(option => option.getAttribute('value'))).toEqual([

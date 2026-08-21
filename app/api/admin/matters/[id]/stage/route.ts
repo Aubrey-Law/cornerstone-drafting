@@ -26,53 +26,40 @@ export async function PATCH(req: Request, { params }: Params) {
     const admin = getAdminClient()
     const matterId = await resolveMatterId(rawId, admin)
 
-    const { data: existing, error: fetchError } = await admin
-      .from('matters')
-      .select('id, stage, relationship_status')
-      .eq('id', matterId)
-      .eq('relationship_status', 'hired')
-      .maybeSingle()
-
-    if (fetchError) throw new Error(fetchError.message)
-    if (!existing) return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
-
-    const previousStage = existing.stage as MatterStage
-    if (previousStage === stage) {
-      return NextResponse.json({ matterId, stage, unchanged: true })
-    }
-
-    const { error: updateError } = await admin
-      .from('matters')
-      .update({ stage })
-      .eq('id', matterId)
-
-    if (updateError) throw new Error(updateError.message)
-
     const actorName =
       (user?.user_metadata?.full_name as string | undefined)
       ?? user?.email
       ?? null
-
-    await admin.from('matter_activity').insert({
-      matter_id: matterId,
-      event_type: 'stage_changed',
-      title: `Stage changed to ${stageLabel(stage as MatterStage)}`,
-      detail: previousStage
-        ? `From ${stageLabel(previousStage)} to ${stageLabel(stage as MatterStage)}`
-        : null,
-      metadata: { from: previousStage, to: stage },
-      actor_id: userId,
-      actor_email: user?.email ?? null,
-      actor_name: actorName,
+    const { data, error } = await admin.rpc('transition_matter_stage_with_jobs', {
+      p_matter_id: matterId,
+      p_stage: stage,
+      p_stage_label: stageLabel(stage as MatterStage),
+      p_actor_id: userId,
+      p_actor_email: user?.email ?? null,
+      p_actor_name: actorName,
     })
-
-    try {
-      await fireEngineStageTask(admin, { matterId, matterStage: stage })
-    } catch (fireErr) {
-      console.error('[stage] fireEngineStageTask failed:', fireErr)
+    if (error) {
+      if (error.code === 'P0002') return NextResponse.json({ error: 'Matter not found' }, { status: 404 })
+      throw new Error(error.message)
     }
 
-    return NextResponse.json({ matterId, stage, previousStage })
+    const result = data as {
+      matterId: string
+      stage: MatterStage
+      previousStage: MatterStage
+      unchanged: boolean
+      durableJobs: boolean
+    }
+    // Feature-flag fallback preserves current behavior until durable processing
+    // is explicitly enabled in firm settings.
+    if (!result.unchanged && !result.durableJobs) {
+      try {
+        await fireEngineStageTask(admin, { matterId, matterStage: stage })
+      } catch (fireErr) {
+        console.error('[stage] fireEngineStageTask failed:', fireErr)
+      }
+    }
+    return NextResponse.json(result)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Could not update stage'
     return NextResponse.json({ error: message }, { status: 500 })

@@ -484,6 +484,9 @@ export interface AssetItem {
   institution: string
   estimated_value: number | null
   notes: string
+  current_owner?: string
+  target_owner?: string
+  beneficiary_designation?: string
   /** Set when synced from asset_intake; replaced on each intake sync. */
   from_intake?: boolean
 }
