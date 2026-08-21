@@ -87,6 +87,7 @@ const telnyxSdk = vi.hoisted(() => {
 
   class FakeTelnyxRTC {
     static latest: FakeTelnyxRTC | null = null
+    static instances = 0
     handlers = new Map<string, Handler[]>()
     options: { login_token: string }
     remoteElement: HTMLAudioElement | null = null
@@ -97,6 +98,7 @@ const telnyxSdk = vi.hoisted(() => {
     constructor(options: { login_token: string }) {
       this.options = options
       FakeTelnyxRTC.latest = this
+      FakeTelnyxRTC.instances += 1
     }
 
     on(event: string, handler: Handler) {
@@ -122,6 +124,7 @@ const telnyxSdk = vi.hoisted(() => {
     },
     reset: () => {
       FakeTelnyxRTC.latest = null
+      FakeTelnyxRTC.instances = 0
       lastCall = null
     },
   }
@@ -258,6 +261,41 @@ afterEach(() => {
 })
 
 describe('softphone rail pane', () => {
+  it('keeps one Telnyx device when the phone directory finishes loading', async () => {
+    mockFetch({ provider: 'telnyx' })
+    renderPhone()
+
+    expect(await screen.findByText('Ready')).toBeTruthy()
+    await userEvent.type(screen.getByLabelText('Search the firm directory'), 'whitfield')
+    expect(await screen.findByText('Margaret Whitfield')).toBeTruthy()
+    expect(telnyxSdk.FakeTelnyxRTC.instances).toBe(1)
+    expect(telnyxSdk.FakeTelnyxRTC.latest?.disconnect).not.toHaveBeenCalled()
+  })
+
+  it('shows the Telnyx error message and only takes the line offline for fatal errors', async () => {
+    mockFetch({ provider: 'telnyx' })
+    renderPhone()
+    expect(await screen.findByText('Ready')).toBeTruthy()
+
+    await act(async () => {
+      telnyxSdk.FakeTelnyxRTC.latest?.emit('telnyx.error', {
+        error: { message: 'Microphone access denied', fatal: false },
+      })
+    })
+
+    expect(screen.getByRole('alert').textContent).toContain('Microphone access denied')
+    expect(screen.getByText('Ready')).toBeTruthy()
+
+    await act(async () => {
+      telnyxSdk.FakeTelnyxRTC.latest?.emit('telnyx.error', {
+        error: { message: 'Invalid credentials', fatal: true },
+      })
+    })
+
+    expect(screen.getByRole('alert').textContent).toContain('Invalid credentials')
+    expect(screen.getByText('Offline')).toBeTruthy()
+  })
+
   it('opens the closed assistant rail to Answer and Decline an incoming Telnyx call', async () => {
     mockFetch({ provider: 'telnyx' })
     render(<RailHarness />)

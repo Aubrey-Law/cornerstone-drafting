@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Device, Call as TwilioCall } from '@twilio/voice-sdk'
-import { TelnyxRTC, type Call as TelnyxCall } from '@telnyx/webrtc'
+import {
+  TelnyxRTC,
+  type Call as TelnyxCall,
+  type ITelnyxErrorEvent,
+} from '@telnyx/webrtc'
 import {
   Delete,
   Mic,
@@ -188,6 +192,11 @@ export default function Softphone() {
   }, [wrapUpNotes, wrapUpOutcome])
 
   const { entries, lookup } = usePhoneDirectory()
+  const lookupRef = useRef(lookup)
+
+  useEffect(() => {
+    lookupRef.current = lookup
+  }, [lookup])
 
   const dialedEntry = useMemo(() => {
     const digits = last10(number)
@@ -240,7 +249,7 @@ export default function Softphone() {
         participantNumber: participantRef.current,
         direction: directionRef.current,
         externalCallId: externalCallId(callRef.current, providerRef.current),
-        entry: digits ? lookup(digits) : null,
+        entry: digits ? lookupRef.current(digits) : null,
       })
       setWrapUpBriefing(briefingRef.current)
       setWrapUpNotes('')
@@ -257,7 +266,7 @@ export default function Softphone() {
     setIncomingFrom('')
     callRef.current = null
     setStatus(deviceRef.current ? STATUS.IDLE : STATUS.OFFLINE)
-  }, [lookup, stopTimer])
+  }, [stopTimer])
 
   const markConnected = useCallback(() => {
     connectedRef.current = true
@@ -312,13 +321,21 @@ export default function Softphone() {
           const telnyx = new TelnyxRTC({ login_token: auth.token })
           device = telnyx
           if (remoteAudioRef.current) telnyx.remoteElement = remoteAudioRef.current
-          telnyx.on('telnyx.ready', () => setStatus(STATUS.IDLE))
-          telnyx.on('telnyx.error', (e: Error) => {
-            setError(e?.message || 'Device error')
-            setStatus(STATUS.OFFLINE)
+          telnyx.on('telnyx.ready', () => {
+            if (cancelled) return
+            setError(null)
+            setStatus(STATUS.IDLE)
           })
-          telnyx.on('telnyx.socket.close', () => setStatus(STATUS.OFFLINE))
+          telnyx.on('telnyx.error', (event: ITelnyxErrorEvent) => {
+            if (cancelled) return
+            setError(event.error?.message || 'Softphone connection error')
+            if (event.error?.fatal) setStatus(STATUS.OFFLINE)
+          })
+          telnyx.on('telnyx.socket.close', () => {
+            if (!cancelled) setStatus(STATUS.OFFLINE)
+          })
           telnyx.on('telnyx.notification', (notification) => {
+            if (cancelled) return
             if (notification.type !== 'callUpdate' || !notification.call) return
             const call = notification.call
             callRef.current = call
