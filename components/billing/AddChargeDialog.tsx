@@ -194,7 +194,7 @@ export function AddChargeDialog({
             <DialogDescription>
               {editing
                 ? 'Correct the type, description or amount. Payments already logged stay with the charge, and the amount cannot fall below them.'
-                : 'Add a legal fee, a legal plan claim, or a pass-through cost. It starts awaiting invoice.'}
+                : 'Add a legal fee, a legal plan claim, or a cost already incurred. Advance cost deposits are not accepted.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-5">

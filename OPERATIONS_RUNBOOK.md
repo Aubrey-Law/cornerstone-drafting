@@ -349,7 +349,29 @@ supabase db reset
 
 ---
 
-## Part 5 — Twilio softphone (browser Voice + call logging)
+## Part 5 — Billing milestones and durable workflow jobs
+
+The solo-practice billing migration is additive. Do not apply it to the linked firm database without explicit approval, and do not backfill existing matters automatically.
+
+Rollout order:
+
+1. Replay migrations locally and run `npm test`, `npm run typecheck`, `npm run lint`, `npm run build:next`, and `npm run audit:render-matrix`.
+2. Verify the direct-pay, legal-plan, College Preparation, and Probate fixtures in an authenticated browser.
+3. Apply the migration in an approved staging environment and leave all three new `firm_settings` flags off.
+4. Enable `durable_workflow_jobs_enabled`; verify `/api/cron/workflow-jobs` claims, retries, and exposes terminal failures on Today.
+5. Enable `probate_track_enabled`; open a test Probate matter and confirm the dedicated checklist.
+6. Enable `billing_milestones_enabled`; accept a new direct-pay test matter and confirm the exact two-phase split. Existing charges and invoices must remain unchanged.
+
+Operational rules:
+
+- Stripe is the only supported online processor. `PAYMENTS_PROVIDER=lawpay` is rejected until LawPay checkout, webhooks, refunds, and funds-handling policy are complete.
+- The workflow cron runs every five minutes and requires `CRON_SECRET`. Failed jobs stop after their configured retry count and require the authenticated manual retry endpoint.
+- Overdue reminders are drafts only. A staff user must approve each reminder; no cron path sends them.
+- Matter close-out is rejected server-side while direct-pay balances, ready milestones, open legal-plan claims, or payment exceptions remain. A financial exception requires an attorney-authored reason.
+- Cost items represent incurred costs only. The operating-account workflow does not accept advance cost deposits or trust funds.
+- Paid portal invoices serve as downloadable receipts on `/account`; verified Stripe payments also trigger a receipt email.
+
+## Part 6 — Twilio softphone (browser Voice + call logging)
 
 ### Telnyx replacement and rollback
 

@@ -157,6 +157,25 @@ export interface InvoiceTotals {
   lineCount: number
 }
 
+export interface InvoiceBalanceAdjustment {
+  invoice_id: string
+  amount_cents: number
+  balance_effect: 'credit' | 'debit'
+}
+
+/** Credits reduce what is owed; refunds, chargebacks, and corrections can restore it. */
+export function adjustedInvoiceBalance(
+  subtotalCents: number,
+  collectedCents: number,
+  adjustments: Pick<InvoiceBalanceAdjustment, 'amount_cents' | 'balance_effect'>[] = [],
+): number {
+  const adjustment = adjustments.reduce(
+    (sum, row) => sum + (row.balance_effect === 'credit' ? -row.amount_cents : row.amount_cents),
+    0,
+  )
+  return Math.max(0, subtotalCents - collectedCents + adjustment)
+}
+
 /**
  * The composer's live preview total. Pure and synchronous so typing stays
  * instant — the server route exists only for the first paint.

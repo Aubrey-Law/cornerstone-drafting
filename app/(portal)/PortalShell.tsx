@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  ReceiptText,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/intake', label: 'Intake', icon: ClipboardList },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
+  { href: '/account', label: 'Account', icon: ReceiptText },
   { href: '/messages', label: 'Messages', icon: MessageSquare },
   { href: '/schedule', label: 'Schedule', icon: CalendarClock },
 ]

@@ -89,6 +89,12 @@ export interface TodayBilling {
   /** Issued invoices past their due date with a balance, worst first. */
   overdueInvoices: TodayOverdueInvoice[]
   overdueCents: number
+  milestonesReadyCount?: number
+  reminderDraftCount?: number
+  failedWorkflowJobCount?: number
+  paymentExceptionCount?: number
+  claimsAwaitingSubmissionCount?: number
+  claimsAwaitingReimbursementCount?: number
 }
 
 const ACTION_LABEL: Record<MatterNextActionKind, string> = {
@@ -300,6 +306,12 @@ const EMPTY_BILLING: TodayBilling = {
   unbilledCents: 0,
   overdueInvoices: [],
   overdueCents: 0,
+  milestonesReadyCount: 0,
+  reminderDraftCount: 0,
+  failedWorkflowJobCount: 0,
+  paymentExceptionCount: 0,
+  claimsAwaitingSubmissionCount: 0,
+  claimsAwaitingReimbursementCount: 0,
 }
 
 /**
@@ -339,9 +351,24 @@ async function fetchTodayBilling(
       due_date: string
     }[]
 
+    const supplemental = { ...EMPTY_BILLING }
+    const [milestones, reminders, jobs, exceptions, claims] = await Promise.all([
+      admin.from('matter_fee_milestones').select('id', { count: 'exact', head: true }).eq('state', 'ready'),
+      admin.from('invoice_reminders').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
+      admin.from('workflow_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+      admin.from('billing_adjustments').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      admin.from('billing_items').select('status').eq('kind', 'plan_claim').neq('status', 'paid'),
+    ])
+    supplemental.milestonesReadyCount = milestones.error ? 0 : milestones.count ?? 0
+    supplemental.reminderDraftCount = reminders.error ? 0 : reminders.count ?? 0
+    supplemental.failedWorkflowJobCount = jobs.error ? 0 : jobs.count ?? 0
+    supplemental.paymentExceptionCount = exceptions.error ? 0 : exceptions.count ?? 0
+    supplemental.claimsAwaitingSubmissionCount = claims.error ? 0 : (claims.data ?? []).filter(row => row.status === 'to_invoice').length
+    supplemental.claimsAwaitingReimbursementCount = claims.error ? 0 : (claims.data ?? []).filter(row => row.status !== 'to_invoice').length
+
     if (invoices.length === 0) {
       return {
-        ...EMPTY_BILLING,
+        ...supplemental,
         unbilledCount: charges.length,
         unbilledCents: charges.reduce((sum, row) => sum + row.amount_billed, 0),
       }
@@ -397,6 +424,12 @@ async function fetchTodayBilling(
       unbilledCents: charges.reduce((sum, row) => sum + row.amount_billed, 0),
       overdueInvoices,
       overdueCents: overdueInvoices.reduce((sum, invoice) => sum + invoice.balanceCents, 0),
+      milestonesReadyCount: supplemental.milestonesReadyCount,
+      reminderDraftCount: supplemental.reminderDraftCount,
+      failedWorkflowJobCount: supplemental.failedWorkflowJobCount,
+      paymentExceptionCount: supplemental.paymentExceptionCount,
+      claimsAwaitingSubmissionCount: supplemental.claimsAwaitingSubmissionCount,
+      claimsAwaitingReimbursementCount: supplemental.claimsAwaitingReimbursementCount,
     }
   } catch {
     return EMPTY_BILLING

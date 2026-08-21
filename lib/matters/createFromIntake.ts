@@ -7,6 +7,7 @@ import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesig
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { applySlaAnchor, ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
 import { firmDateKey } from '@/lib/firmDate'
+import { durableWorkflowJobsEnabled, enqueueWorkflowJob } from '@/lib/workflowJobs'
 
 /**
  * Hire the opportunity matter linked to an intake, carrying over the quoted
@@ -94,10 +95,24 @@ export async function createMatterFromIntake(
   const matterId = conversion.matter_id as string
   const resolvedMatterNumber = (conversion.matter_number as string | null) ?? matterNumber
 
-  try {
-    await ensureDesignSheetSeededFromIntake(matterId)
-  } catch (e) {
-    console.warn('design sheet seed on lead conversion skipped:', e)
+  const durableJobs = await durableWorkflowJobsEnabled()
+  if (durableJobs) {
+    await Promise.all([
+      enqueueWorkflowJob({
+        type: 'seed_design_sheet', dedupeKey: `design-sheet-seed:${matterId}`,
+        matterId, actorId: options.actorId ?? null,
+      }),
+      enqueueWorkflowJob({
+        type: 'ensure_sla_plan', dedupeKey: `sla-plan:${matterId}:${practiceArea}`,
+        matterId, payload: { practiceArea, retemplate: true }, actorId: options.actorId ?? null,
+      }),
+    ])
+  } else {
+    try {
+      await ensureDesignSheetSeededFromIntake(matterId)
+    } catch (e) {
+      console.warn('design sheet seed on lead conversion skipped:', e)
+    }
   }
 
   // The engagement being signed is what starts the SLA clock, and this is the
@@ -109,7 +124,7 @@ export async function createMatterFromIntake(
   // carrying the estate checklist, and this is the moment to swap it — before
   // anyone has worked it, and while the CP checklist's own pre-engagement tasks
   // can still be dated off the discovery call the lead already had.
-  await ensureMatterSlaTasks(matterId, { practiceArea, retemplate: true })
+  if (!durableJobs) await ensureMatterSlaTasks(matterId, { practiceArea, retemplate: true })
 
   // Day 0. A lead already carries its checklist, so the tasks above are a no-op
   // and the 28-day plan is still undated — replaying the engagement anchor is

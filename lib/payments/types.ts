@@ -18,6 +18,11 @@ export interface CheckoutSession {
   expiresAt: string | null
 }
 
+export interface RefundResult {
+  refundId: string
+  status: string
+}
+
 /**
  * The events we act on. Anything else parses to null and is acknowledged
  * without processing — a provider sends far more than an invoice cares about,
@@ -38,6 +43,17 @@ export type PaymentWebhookEvent =
     eventId: string
     sessionId: string
   }
+  | {
+    type: 'payment.adjustment'
+    eventId: string
+    paymentIntentId: string
+    externalReference: string
+    amountCents: number
+    kind: 'refund' | 'dispute'
+    balanceEffect: 'credit' | 'debit' | null
+    reason: string | null
+    metadata: Record<string, string>
+  }
 
 /**
  * One payment processor behind one interface.
@@ -48,6 +64,8 @@ export type PaymentWebhookEvent =
 export interface PaymentProcessor {
   readonly id: PaymentProvider
   createCheckoutSession(input: CheckoutSessionInput): Promise<CheckoutSession>
+  lookupProcessorFee?(paymentIntentId: string): Promise<number>
+  refundPayment?(input: { paymentIntentId: string; amountCents: number; invoiceId: string }): Promise<RefundResult>
   /** Verified against the raw request body — never a re-serialized object. */
   verifySignature(rawBody: string, headers: Headers): boolean
   parseEvent(rawBody: string): PaymentWebhookEvent | null

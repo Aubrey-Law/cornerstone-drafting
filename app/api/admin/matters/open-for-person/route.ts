@@ -5,6 +5,7 @@ import { normalizePracticeArea, practiceAreaLabel } from '@/lib/practiceArea'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
+import { durableWorkflowJobsEnabled, enqueueWorkflowJob } from '@/lib/workflowJobs'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -84,12 +85,20 @@ export async function POST(req: Request) {
 
     const row = Array.isArray(data) ? data[0] : data
     if (!error && row?.matter_id) {
-      try {
-        await ensureDesignSheetSeededFromIntake(row.matter_id)
-      } catch (e) {
-        console.warn('design sheet seed on open-for-person skipped:', e)
+      const durableJobs = await durableWorkflowJobsEnabled()
+      if (durableJobs) {
+        await Promise.all([
+          enqueueWorkflowJob({ type: 'seed_design_sheet', dedupeKey: `design-sheet-seed:${row.matter_id}`, matterId: row.matter_id, actorId: userId }),
+          enqueueWorkflowJob({ type: 'ensure_sla_plan', dedupeKey: `sla-plan:${row.matter_id}:${practiceArea}`, matterId: row.matter_id, payload: { practiceArea }, actorId: userId }),
+        ])
+      } else {
+        try {
+          await ensureDesignSheetSeededFromIntake(row.matter_id)
+        } catch (e) {
+          console.warn('design sheet seed on open-for-person skipped:', e)
+        }
+        await ensureMatterSlaTasks(row.matter_id, { practiceArea })
       }
-      await ensureMatterSlaTasks(row.matter_id, { practiceArea })
 
       return NextResponse.json({
         matterId: row.matter_id,

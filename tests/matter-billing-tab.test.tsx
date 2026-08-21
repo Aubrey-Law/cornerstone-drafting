@@ -330,15 +330,15 @@ describe('MatterBillingTab', () => {
     expect(screen.queryByRole('button', { name: 'Start a claim' })).toBeNull()
   })
 
-  it('gates Close matter on all four close-out conditions', async () => {
+  it('gates Close matter on work, delivery, and resolved billing', async () => {
     respondWith({ rows: [row()] })
     const { rerender } = renderTab()
 
     const closeButton = await screen.findByRole('button', { name: 'Close matter' })
     expect(closeButton.hasAttribute('disabled')).toBe(true)
 
-    // Flat fee, so the two claim gates are satisfied by definition; recording
-    // the work-finished and closing-package dates is all that remains.
+    // Work and delivery are complete, but the partially paid fee still blocks
+    // close-out. The server enforces the same rule even if UI state is stale.
     rerender(
       <Tabs value="billing">
         <MatterBillingTab
@@ -354,7 +354,7 @@ describe('MatterBillingTab', () => {
         />
       </Tabs>,
     )
-    expect(screen.getByRole('button', { name: 'Close matter' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Close matter' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('surfaces a load failure with a retry', async () => {

@@ -2,6 +2,8 @@ import 'server-only'
 
 import {
   invoiceOverdue,
+  adjustedInvoiceBalance,
+  type InvoiceBalanceAdjustment,
   type Invoice,
   type InvoiceDetail,
   type InvoiceLine,
@@ -165,6 +167,7 @@ function withBalances(
   invoices: Invoice[],
   payments: InvoicePaymentRow[],
   todayKey: string,
+  adjustments: InvoiceBalanceAdjustment[] = [],
 ): InvoiceListRow[] {
   const collectedByInvoice = new Map<string, number>()
   for (const payment of payments) {
@@ -176,7 +179,11 @@ function withBalances(
   }
   return invoices.map(invoice => {
     const collected = collectedByInvoice.get(invoice.id) ?? 0
-    const balance = Math.max(0, invoice.subtotalCents - collected)
+    const balance = invoice.kind === 'credit_note' ? 0 : adjustedInvoiceBalance(
+      invoice.subtotalCents,
+      collected,
+      adjustments.filter(row => row.invoice_id === invoice.id),
+    )
     return {
       ...invoice,
       collected,
@@ -203,16 +210,21 @@ export async function fetchInvoices(
   const invoices = await attachContext(rows)
   if (rows.length === 0) return []
 
-  const paymentResult = await admin
-    .from('billing_payments')
-    .select('id, invoice_id, payment_group_id, amount, method, note, received_at, external_reference')
-    .in('invoice_id', rows.map(row => row.id))
+  const [paymentResult, adjustmentResult] = await Promise.all([
+    admin.from('billing_payments')
+      .select('id, invoice_id, payment_group_id, amount, method, note, received_at, external_reference')
+      .in('invoice_id', rows.map(row => row.id)),
+    admin.from('billing_adjustments').select('invoice_id, amount_cents, balance_effect, status')
+      .in('invoice_id', rows.map(row => row.id)),
+  ])
   if (paymentResult.error) throw new Error(paymentResult.error.message)
 
   return withBalances(
     invoices,
     (paymentResult.data ?? []) as InvoicePaymentRow[],
     firmTodayKey(now),
+    adjustmentResult.error ? [] : (adjustmentResult.data as Array<InvoiceBalanceAdjustment & { status: string }>)
+      .filter(row => row.status === 'posted'),
   )
 }
 
@@ -233,7 +245,7 @@ export async function fetchInvoice(
   const row = data as InvoiceRow
   const [invoice] = await attachContext([row])
 
-  const [lineResult, paymentResult] = await Promise.all([
+  const [lineResult, paymentResult, adjustmentResult] = await Promise.all([
     admin
       .from('invoice_items')
       .select('id, invoice_id, billing_item_id, position, kind, description, amount_cents')
@@ -243,13 +255,20 @@ export async function fetchInvoice(
       .from('billing_payments')
       .select('id, invoice_id, payment_group_id, amount, method, note, received_at, external_reference')
       .eq('invoice_id', invoiceId),
+    admin.from('billing_adjustments').select('invoice_id, amount_cents, balance_effect, status')
+      .eq('invoice_id', invoiceId),
   ])
   if (lineResult.error) throw new Error(lineResult.error.message)
   if (paymentResult.error) throw new Error(paymentResult.error.message)
 
   const payments = (paymentResult.data ?? []) as InvoicePaymentRow[]
   const collected = payments.reduce((sum, payment) => sum + payment.amount, 0)
-  const balance = Math.max(0, invoice.subtotalCents - collected)
+  const balance = invoice.kind === 'credit_note' ? 0 : adjustedInvoiceBalance(
+    invoice.subtotalCents,
+    collected,
+    adjustmentResult.error ? [] : (adjustmentResult.data as Array<InvoiceBalanceAdjustment & { status: string }>)
+      .filter(row => row.status === 'posted'),
+  )
 
   const lines: InvoiceLine[] = ((lineResult.data ?? []) as InvoiceItemRow[]).map(line => ({
     id: line.id,

@@ -6,6 +6,7 @@ import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesig
 import { reconcileMatterIntakeTrack } from '@/lib/intake/reconcileMatterIntakeTrack'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
+import { durableWorkflowJobsEnabled, enqueueWorkflowJob } from '@/lib/workflowJobs'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -93,17 +94,20 @@ export async function POST(req: Request) {
       // an estate design sheet too. Must run before the seed.
       await reconcileMatterIntakeTrack(admin, row.matter_id, practiceArea)
 
-      // Best-effort and idempotent; a failure here must not fail the request or
-      // roll back a matter that already exists.
-      try {
-        await ensureDesignSheetSeededFromIntake(row.matter_id)
-      } catch (e) {
-        console.warn('design sheet seed on create skipped:', e)
+      const durableJobs = await durableWorkflowJobsEnabled()
+      if (durableJobs) {
+        await Promise.all([
+          enqueueWorkflowJob({ type: 'seed_design_sheet', dedupeKey: `design-sheet-seed:${row.matter_id}`, matterId: row.matter_id, actorId: userId }),
+          enqueueWorkflowJob({ type: 'ensure_sla_plan', dedupeKey: `sla-plan:${row.matter_id}:${practiceArea}`, matterId: row.matter_id, payload: { practiceArea }, actorId: userId }),
+        ])
+      } else {
+        try {
+          await ensureDesignSheetSeededFromIntake(row.matter_id)
+        } catch (e) {
+          console.warn('design sheet seed on create skipped:', e)
+        }
+        await ensureMatterSlaTasks(row.matter_id, { practiceArea })
       }
-
-      // Kick off the SLA checklist. Also best-effort and idempotent — a retry
-      // of the same submission must not double-generate it.
-      await ensureMatterSlaTasks(row.matter_id, { practiceArea })
 
       return NextResponse.json({
         matterId: row.matter_id,

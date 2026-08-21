@@ -114,7 +114,7 @@ const URGENCY_OPTIONS = [
 
 const FEE_STATUS_OPTIONS = [
   { value: 'unpaid', label: 'Unpaid' },
-  { value: 'deposit', label: 'Deposit' },
+  { value: 'deposit', label: 'Partial payment' },
   { value: 'paid_in_full', label: 'Paid in full' },
 ]
 
