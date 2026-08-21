@@ -55,13 +55,26 @@ export async function GET(
     // tab needs both to explain why something is still unscheduled.
     const { data: matter } = await admin
       .from('matters')
-      .select('discovery_call_at, pmps_at, recommendations_sent_at, engagement_signed_at, fit_decision')
+      // One string literal, not a concatenation: PostgREST infers the row type
+      // from the literal, and splitting it collapses the result to GenericStringError.
+      .select('id, name, client_name, discovery_call_at, pmps_at, recommendations_sent_at, engagement_signed_at, fit_decision')
       .eq('id', matterId)
       .maybeSingle()
 
     return NextResponse.json({
       tasks,
       progress: summarizeSlaProgress(allTasks, { targetDays }),
+      // Which matter the plan belongs to. The plan is reachable from a lead as
+      // well as from the matter itself — a lead's plan hangs off the `matters`
+      // row it owns — so the rows have to be able to say whose plan this is and
+      // link back to it.
+      matter: {
+        id: matterId,
+        name:
+          ((matter?.client_name as string | null) || '').trim() ||
+          ((matter?.name as string | null) || '').trim() ||
+          null,
+      },
       anchors: {
         discoveryCallAt: firmDateKey(matter?.discovery_call_at ?? null),
         pmpsAt: firmDateKey(matter?.pmps_at ?? null),

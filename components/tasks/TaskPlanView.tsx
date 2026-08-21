@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
+  Briefcase,
   CalendarCheck,
   ChevronDown,
   ChevronRight,
@@ -50,12 +51,26 @@ import { cn } from '@/lib/utils'
  */
 type PlanStatusChoice = 'open' | 'in_progress' | 'done' | 'skipped' | 'blocked'
 
+/** The matter a plan belongs to, as the plan API reports it. */
+interface PlanMatter {
+  id: string
+  name: string | null
+}
+
 interface TaskPlanViewProps {
   matterId: string
   /** False until the view is first opened, so its data loads lazily. */
   enabled: boolean
   /** Called after any change, so the tab badge and queue can refresh. */
   onTasksChanged?: () => void
+  /**
+   * Show which matter each task belongs to, linked. On by default. A plan is
+   * reachable from a lead as well as from the matter that owns it, and from the
+   * lead nothing else on the row says whose plan this is. The link targets the
+   * matter record rather than this view, so it is a real move even when the
+   * plan is already open on that matter.
+   */
+  showMatter?: boolean
 }
 
 const OWNER_LABEL: Record<string, string> = {
@@ -148,6 +163,8 @@ function DaysRemaining({ progress }: { progress: SlaProgress }) {
 
 function PlanTaskRow({
   matterId,
+  matterName,
+  showMatter,
   task,
   busy,
   onStatus,
@@ -155,6 +172,8 @@ function PlanTaskRow({
   onPause,
 }: {
   matterId: string
+  matterName: string | null
+  showMatter: boolean
   task: PlanTask
   busy: boolean
   onStatus: (status: PlanStatusChoice) => void
@@ -218,6 +237,19 @@ function PlanTaskRow({
           </div>
 
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+            {showMatter && (
+              <>
+                <Link
+                  href={`/admin/matters/${matterId}`}
+                  className="inline-flex max-w-[16rem] items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
+                  title={matterName ? `Open ${matterName}` : 'Open the matter'}
+                >
+                  <Briefcase className="size-3 shrink-0" aria-hidden />
+                  <span className="truncate">{matterName ?? 'Matter'}</span>
+                </Link>
+                <span aria-hidden className="text-muted-foreground">·</span>
+              </>
+            )}
             <span className={TONE_CLASS[tone]}>
               {task.due_date ? `Due ${dayLabel(task.due_date)}` : 'Not scheduled yet'}
             </span>
@@ -395,7 +427,12 @@ function KeyDatesCard({
  * It is now a second view of the Tasks tab — one store, two ways of looking at
  * it: the queue answers "what is due", the plan answers "where is this matter".
  */
-export function TaskPlanView({ matterId, enabled, onTasksChanged }: TaskPlanViewProps) {
+export function TaskPlanView({
+  matterId,
+  enabled,
+  onTasksChanged,
+  showMatter = true,
+}: TaskPlanViewProps) {
   const token = useAccessToken()
   const [tasks, setTasks] = useState<PlanTask[]>([])
   const [progress, setProgress] = useState<SlaProgress | null>(null)
@@ -403,6 +440,7 @@ export function TaskPlanView({ matterId, enabled, onTasksChanged }: TaskPlanView
   const [busyId, setBusyId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [anchors, setAnchors] = useState<SlaAnchors | null>(null)
+  const [matter, setMatter] = useState<PlanMatter | null>(null)
   const [savingAnchors, setSavingAnchors] = useState(false)
 
   const authHeaders = useMemo(
@@ -420,6 +458,7 @@ export function TaskPlanView({ matterId, enabled, onTasksChanged }: TaskPlanView
       setTasks(body.tasks ?? [])
       setProgress(body.progress ?? null)
       setAnchors(body.anchors ?? null)
+      setMatter(body.matter ?? null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not load the plan')
     } finally {
@@ -444,6 +483,7 @@ export function TaskPlanView({ matterId, enabled, onTasksChanged }: TaskPlanView
         const body = await res.json()
         if (!res.ok) throw new Error(body?.error ?? 'Could not save the key dates')
         setAnchors(body.anchors ?? null)
+      setMatter(body.matter ?? null)
         toast.success(
           body.rescheduled > 0
             ? `Saved — ${body.rescheduled} task${body.rescheduled === 1 ? '' : 's'} scheduled`
@@ -599,6 +639,8 @@ export function TaskPlanView({ matterId, enabled, onTasksChanged }: TaskPlanView
                         <PlanTaskRow
                           key={task.id}
                           matterId={matterId}
+                          matterName={matter?.name ?? null}
+                          showMatter={showMatter}
                           task={task}
                           busy={busyId === task.id}
                           onStatus={status => void patchTask(task.id, { status })}
