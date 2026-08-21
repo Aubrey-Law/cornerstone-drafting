@@ -89,22 +89,46 @@ async function attachDisplayNames(rows: TaskRow[]): Promise<TaskRow[]> {
   const leadIds = [...new Set(rows.map(r => r.lead_id).filter((id): id is string => Boolean(id)))]
   const userIds = [...new Set(rows.map(r => r.assignee_id).filter((id): id is string => Boolean(id)))]
 
-  const [matters, leads, users] = await Promise.all([
-    matterIds.length
-      ? admin.from('matters').select('id, client_name, name').in('id', matterIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; client_name: string | null; name: string | null }> }),
-    leadIds.length
-      ? admin.from('client_intake').select('id, full_name, first_name, last_name, email').in('id', leadIds)
-      : Promise.resolve({ data: [] as Array<Record<string, string | null>> }),
+  // `matters` has no client name of its own — `v_matter_pipeline` builds one by
+  // joining `client_intake` on `client_intake_id`, and this does the same. The
+  // view is not used directly because it drops archived matters, and a task on
+  // an archived matter should still say which matter it is.
+  const matterRows = await (async () => {
+    if (matterIds.length === 0) return []
+    const { data, error } = await admin
+      .from('matters')
+      .select('id, name, client_intake_id')
+      .in('id', matterIds)
+    if (error) {
+      console.error('attachDisplayNames matters:', error.message)
+      return []
+    }
+    return (data ?? []) as Array<{ id: string; name: string | null; client_intake_id: string | null }>
+  })()
+
+  // One lookup for both the leads tasks point at directly and the people behind
+  // the matters, so a matter-linked task costs no extra round trip.
+  const intakeIds = [
+    ...new Set([
+      ...leadIds,
+      ...matterRows.map(m => m.client_intake_id).filter((id): id is string => Boolean(id)),
+    ]),
+  ]
+
+  const [leads, users] = await Promise.all([
+    intakeIds.length
+      ? admin.from('client_intake').select('id, full_name, first_name, last_name, email').in('id', intakeIds)
+      : Promise.resolve({ data: [] as Array<Record<string, string | null>>, error: null }),
     userIds.length
       ? admin.from('users').select('id, display_name, email').in('id', userIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; display_name: string | null; email: string | null }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; display_name: string | null; email: string | null }>, error: null }),
   ])
 
-  const matterNames = new Map<string, string | null>()
-  for (const m of (matters.data ?? []) as Array<{ id: string; client_name: string | null; name: string | null }>) {
-    matterNames.set(m.id, m.client_name ?? m.name ?? null)
-  }
+  // Logged rather than swallowed: selecting a column that does not exist blanks
+  // every label at once and looks exactly like "these tasks have no matter",
+  // which is how a bad `matters.client_name` select went unnoticed.
+  if (leads.error) console.error('attachDisplayNames client_intake:', leads.error.message)
+  if (users.error) console.error('attachDisplayNames users:', users.error.message)
 
   const leadNames = new Map<string, string | null>()
   for (const l of (leads.data ?? []) as Array<Record<string, string | null>>) {
@@ -113,6 +137,14 @@ async function attachDisplayNames(rows: TaskRow[]): Promise<TaskRow[]> {
       || l.email
       || null
     leadNames.set(l.id as string, full)
+  }
+
+  const matterNames = new Map<string, string | null>()
+  for (const m of matterRows) {
+    const person = m.client_intake_id ? leadNames.get(m.client_intake_id) : null
+    // `||`, not `??`: the view's client name is a trimmed concat that comes back
+    // as '' when the intake row carries no first or last name.
+    matterNames.set(m.id, (person || '').trim() || (m.name || '').trim() || null)
   }
 
   const userNames = new Map<string, string | null>()
