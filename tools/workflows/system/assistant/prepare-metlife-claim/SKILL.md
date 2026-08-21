@@ -1,7 +1,7 @@
 ---
 name: Prepare MetLife Claim
 description: Prepare the MetLife Legal Plan reimbursement claim checklist and portal submission table from approved Massachusetts estate-planning matter facts.
-version: 1.0.0
+version: 1.1.0
 type: assistant
 execution_mode: run
 practice: Estate Planning
@@ -20,7 +20,7 @@ PREPARE METLIFE CLAIM: Generate the reimbursement claim checklist and the portal
 - Treat a requested run input as an attorney confirmation only when the attorney supplied it explicitly for that run.
 - Mark missing or contradictory required information as `[UNKNOWN]`; block generation instead of guessing.
 - Never infer legal-plan coverage, member eligibility, member ID, or the service window.
-- Bill only documents the design sheet actually includes. Never add a line item for work the matter does not contain.
+- Auto-populate the approved core charge rows from the selected or derived plan composition. Optional deed, realty-trust, and affidavit work must still come from approved matter or run facts.
 - Every section total and the grand total are computed from the line items. Never state a total that was not summed.
 - Keep the generated Word document isolated from the matter until the attorney reviews it and confirms the run.
 - Do not submit anything to the MetLife attorney portal, share documents with a client, or change any other matter record.
@@ -37,6 +37,20 @@ The matter's documents determine which of the five MetLife plan compositions app
 - `individual_trust` — single person, individual revocable trust
 
 A Realty Trust and Deed section repeats once per property when the matter includes a real estate transfer.
+
+## Auto-populated estate-planning charges
+
+Keep the rows in this order. Couple wills are two individual CT 200 charges,
+not one reciprocal-will charge. HIPAA and trust affidavits are not core-package
+charges.
+
+| Plan composition | Auto-populated rows |
+|---|---|
+| `joint_trust` | CT 200 individual will — Member; CT 200 individual will — Spouse; CT 220 Financial POA — Member and Spouse; CT 220 Health Care POA — Member and Spouse; CT 230 Living Will — Member and Spouse; CT 260 Trust — Member and Spouse |
+| `separate_trust` | CT 200 individual will — Member; CT 200 individual will — Spouse; CT 220 Financial POA — Member and Spouse; CT 220 Health Care POA — Member and Spouse; CT 230 Living Will — Member and Spouse; CT 260 individual trust — Member; CT 260 individual trust — Spouse |
+| `will_couple` | CT 200 individual will — Member; CT 200 individual will — Spouse; CT 220 Financial POA — Member and Spouse; CT 220 Health Care POA — Member and Spouse; CT 230 Living Will — Member and Spouse |
+| `individual_trust` | CT 200 individual will — Member; CT 220 Financial POA — Member; CT 220 Health Care POA — Member; CT 230 Living Will — Member; CT 260 individual trust — Member |
+| `will_individual` | CT 200 individual will — Member; CT 220 Financial POA — Member; CT 220 Health Care POA — Member; CT 230 Living Will — Member |
 
 ## MetLife billing names
 

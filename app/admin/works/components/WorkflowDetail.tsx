@@ -272,11 +272,11 @@ export function WorkflowDetail({ skill, onEdit, onShare, onChanged }: WorkflowDe
               <label className="text-xs font-medium">Plan composition
                 <select className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={metlifePlanType} onChange={event => setMetlifePlanType(event.target.value)}>
                   <option value="">Derive from the design sheet</option>
-                  <option value="separate_trust">Separate trusts — married</option>
-                  <option value="joint_trust">Joint trust — married</option>
-                  <option value="will_couple">Will-based — married</option>
-                  <option value="will_individual">Will-based — individual</option>
-                  <option value="individual_trust">Individual trust</option>
+                  <option value="joint_trust">Couple Joint Trust</option>
+                  <option value="separate_trust">Couple Separate Trusts</option>
+                  <option value="will_couple">Couple Will</option>
+                  <option value="individual_trust">Individual Trust</option>
+                  <option value="will_individual">Individual Will</option>
                 </select>
               </label>
               <label className="text-xs font-medium">Member ID
