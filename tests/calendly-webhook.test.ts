@@ -159,12 +159,14 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 }))
 
 const originalSigningKey = process.env.CALENDLY_WEBHOOK_SIGNING_KEY
+const originalWebhookSecret = process.env.CALENDLY_WEBHOOK_SECRET
 const originalEventTypeMap = process.env.CALENDLY_EVENT_TYPE_MAP
 
 beforeEach(() => {
   routeMocks.resetState()
   routeMocks.getAdminClient.mockClear()
   process.env.CALENDLY_WEBHOOK_SIGNING_KEY = 'test-signing-key'
+  process.env.CALENDLY_WEBHOOK_SECRET = 'test-webhook-secret'
   process.env.CALENDLY_EVENT_TYPE_MAP = JSON.stringify({
     'et-signing': 'signing_appointment',
     'et-discovery': 'discovery_call',
@@ -176,6 +178,11 @@ afterEach(() => {
     delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY
   } else {
     process.env.CALENDLY_WEBHOOK_SIGNING_KEY = originalSigningKey
+  }
+  if (originalWebhookSecret === undefined) {
+    delete process.env.CALENDLY_WEBHOOK_SECRET
+  } else {
+    process.env.CALENDLY_WEBHOOK_SECRET = originalWebhookSecret
   }
   if (originalEventTypeMap === undefined) {
     delete process.env.CALENDLY_EVENT_TYPE_MAP
@@ -260,8 +267,9 @@ async function postWebhook(
 }
 
 describe('Calendly webhook sync', () => {
-  it('returns 503 when the signing key is not configured', async () => {
+  it('returns 503 when webhook authentication is not configured', async () => {
     delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY
+    delete process.env.CALENDLY_WEBHOOK_SECRET
     vi.resetModules()
     const { POST } = await import('../app/api/webhooks/calendly/route')
     const response = await POST(new Request('http://localhost/api/webhooks/calendly', {
@@ -269,6 +277,33 @@ describe('Calendly webhook sync', () => {
       body: JSON.stringify(calendlyBody({})),
     }))
     expect(response.status).toBe(503)
+  })
+
+  it('accepts the subscribed callback secret without an HMAC signature', async () => {
+    delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY
+    vi.resetModules()
+    const { POST } = await import('../app/api/webhooks/calendly/route')
+    const response = await POST(new Request(
+      'http://localhost/api/webhooks/calendly?token=test-webhook-secret',
+      { method: 'POST', body: JSON.stringify(calendlyBody({})) },
+    ))
+    expect(response.status).toBe(200)
+    expect(routeMocks.state.upserts).toContainEqual(expect.objectContaining({
+      table: 'external_bookings',
+      values: expect.objectContaining({ provider: 'calendly', booking_uid: 'inv-1' }),
+    }))
+  })
+
+  it('rejects an incorrect callback secret without an HMAC signature', async () => {
+    delete process.env.CALENDLY_WEBHOOK_SIGNING_KEY
+    vi.resetModules()
+    const { POST } = await import('../app/api/webhooks/calendly/route')
+    const response = await POST(new Request(
+      'http://localhost/api/webhooks/calendly?token=wrong-secret',
+      { method: 'POST', body: JSON.stringify(calendlyBody({})) },
+    ))
+    expect(response.status).toBe(401)
+    expect(routeMocks.state.upserts).toHaveLength(0)
   })
 
   it('rejects requests without a signature', async () => {

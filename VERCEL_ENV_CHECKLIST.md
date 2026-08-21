@@ -332,15 +332,17 @@ Runs alongside the Cal.com path during the migration; both providers mirror into
 
 | Variable | Purpose |
 |----------|---------|
-| `CALENDLY_WEBHOOK_SIGNING_KEY` | HMAC key for `Calendly-Webhook-Signature` verification on `/api/webhooks/calendly` |
+| `CALENDLY_WEBHOOK_SECRET` | High-entropy shared secret placed in the subscribed callback URL's `token` query parameter and verified by `/api/webhooks/calendly` |
+| `CALENDLY_WEBHOOK_SIGNING_KEY` | Optional legacy/future HMAC key if Calendly sends `Calendly-Webhook-Signature`; not used by current API v2 subscriptions |
 | `CALENDLY_EVENT_TYPE_MAP` | JSON map of Calendly event-type UUID → meeting type key, e.g. `{"<uuid>":"discovery_call","<uuid>":"pmps","<uuid>":"draft_review","<uuid>":"client_call","<uuid>":"signing_appointment"}` |
 
 **Calendly setup (requires Standard plan or above):**
 
-1. Create a Personal Access Token (Integrations → API & Webhooks).
+1. Create a Personal Access Token (Integrations → API & Webhooks) with `scheduled_events:read`, `webhooks:read`, and `webhooks:write` scopes.
 2. `GET https://api.calendly.com/event_types?organization=<org uri>` — collect the UUID of each event type and build `CALENDLY_EVENT_TYPE_MAP`. Without the map, event types fall back to case-insensitive name matching against the meeting-type labels ("Discovery Call", "Peace of Mind Planning Session", …). Unmatched bookings still appear on the calendar under the neutral Client Call type, while preserving the actual Calendly label.
-3. `POST https://api.calendly.com/webhook_subscriptions` with `{ "url": "https://<production-host>/api/webhooks/calendly", "events": ["invitee.created", "invitee.canceled"], "organization": "<org uri>", "scope": "organization" }` — record the returned signing key (shown once) as `CALENDLY_WEBHOOK_SIGNING_KEY`.
-4. Set both variables in Vercel and redeploy.
-5. Local dev: tunnel to `http://localhost:3002` (e.g. ngrok or cloudflared).
+3. Generate a high-entropy `CALENDLY_WEBHOOK_SECRET` (at least 32 random bytes) and set it as a Sensitive Vercel variable.
+4. `POST https://api.calendly.com/webhook_subscriptions` with `{ "url": "https://<production-host>/api/webhooks/calendly?token=<CALENDLY_WEBHOOK_SECRET>", "events": ["invitee.created", "invitee.canceled"], "organization": "<org uri>", "scope": "organization" }`. Calendly API v2 does not return a signing key or document an HMAC signature header, so the callback secret is required.
+5. Set `CALENDLY_EVENT_TYPE_MAP` in Vercel and redeploy after either variable changes.
+6. Local dev: set the same callback secret locally and tunnel to `http://localhost:3002` (e.g. ngrok or cloudflared).
 
 Lead/matter hints can be passed on scheduling links via `utm_content=leadId:<uuid>` or `utm_content=matterId:<uuid>`; otherwise matching falls back to invitee email. On every new Calendly booking, Cornerstone refreshes the matched contact (without replacing an existing legal name), updates its CRM opportunity through the existing intake sync, or creates a new contact/opportunity when no match exists. The booking is mirrored into the Cornerstone calendar and remains read-only there; cancellations and reschedules must be made in Calendly and arrive through the webhook.

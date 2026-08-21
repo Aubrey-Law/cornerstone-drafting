@@ -9,6 +9,18 @@ function safeEqualHex(a: string, b: string): boolean {
   }
 }
 
+/** Compare the high-entropy secret embedded in the subscribed callback URL. */
+export function verifyCalendlyWebhookSecret(
+  expectedSecret: string,
+  suppliedSecret: string | null,
+): boolean {
+  if (!expectedSecret || !suppliedSecret) return false
+  const expected = Buffer.from(expectedSecret, 'utf8')
+  const supplied = Buffer.from(suppliedSecret, 'utf8')
+  if (expected.length !== supplied.length) return false
+  return timingSafeEqual(expected, supplied)
+}
+
 /**
  * Verify Calendly webhook authenticity.
  * Header: `Calendly-Webhook-Signature` = `t=<unix seconds>,v1=<hex>` where

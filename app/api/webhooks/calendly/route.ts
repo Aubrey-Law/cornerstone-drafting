@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { parseCalendlyWebhook } from '@/lib/calendly/normalize'
 import { processCalendlyWebhook } from '@/lib/calendly/sync'
-import { verifyCalendlySignature } from '@/lib/calendly/verify'
+import { verifyCalendlySignature, verifyCalendlyWebhookSecret } from '@/lib/calendly/verify'
 import { CALENDLY_EVENTS, type CalendlyWebhookBody } from '@/lib/calendly/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
@@ -9,20 +9,27 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
+  const webhookSecret = process.env.CALENDLY_WEBHOOK_SECRET?.trim()
   const signingKey = process.env.CALENDLY_WEBHOOK_SIGNING_KEY?.trim()
-  if (!signingKey) {
-    console.error('[calendly] missing CALENDLY_WEBHOOK_SIGNING_KEY')
+  if (!webhookSecret && !signingKey) {
+    console.error('[calendly] missing webhook authentication configuration')
     return NextResponse.json({ error: 'webhook not configured' }, { status: 503 })
   }
 
   const rawBody = await req.text()
   const signature = req.headers.get('calendly-webhook-signature')
+  const suppliedSecret = new URL(req.url).searchParams.get('token')
 
-  // Unlike Cal.com, both subscribed Calendly events mutate state, so a valid
-  // signature is required unconditionally. The signed timestamp also bounds
-  // replays to the tolerance window.
-  if (!verifyCalendlySignature(rawBody, signingKey, signature)) {
-    return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
+  // Calendly API v2 webhook subscriptions do not currently expose a signing
+  // key or send a documented HMAC header. Authenticate the high-entropy token
+  // embedded in the subscribed callback URL. Retain HMAC support for legacy or
+  // future signed deliveries without weakening the shared-secret path.
+  const authenticated = Boolean(
+    (webhookSecret && verifyCalendlyWebhookSecret(webhookSecret, suppliedSecret))
+    || (signingKey && verifyCalendlySignature(rawBody, signingKey, signature)),
+  )
+  if (!authenticated) {
+    return NextResponse.json({ error: 'invalid webhook authentication' }, { status: 401 })
   }
 
   let body: CalendlyWebhookBody
