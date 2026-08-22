@@ -141,6 +141,10 @@ export function TaskMetaLine({ task, showRecord = true }: { task: TaskRow; showR
 interface TaskRowProps {
   task: TaskRow
   focused?: boolean
+  /** Held in a multi-row selection. Distinct from `focused`, which is the one
+   *  row the keyboard is pointing at — a selection can be many rows wide and
+   *  outlives the cursor moving on. */
+  selected?: boolean
   pending?: boolean
   showRecord?: boolean
   onComplete: () => void
@@ -157,6 +161,7 @@ interface TaskRowProps {
 export function TaskListRow({
   task,
   focused = false,
+  selected = false,
   pending = false,
   showRecord = true,
   onComplete,
@@ -170,9 +175,16 @@ export function TaskListRow({
   return (
     <li
       id={`task-row-${task.id}`}
+      data-selected={selected || undefined}
+      aria-selected={selected || undefined}
       className={cn(
         'transition-colors hover:bg-muted/50',
         focused && 'bg-muted shadow-[inset_3px_0_0] shadow-primary',
+        // Deliberately a different channel from focus: focus is a left edge
+        // bar, selection is the row's own fill. Both can be true at once and
+        // have to stay legible together.
+        selected && 'bg-blue-bg hover:bg-blue-bg',
+        selected && focused && 'shadow-[inset_3px_0_0] shadow-primary',
         pending && 'opacity-60',
       )}
     >
