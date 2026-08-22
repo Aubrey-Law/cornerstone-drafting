@@ -158,6 +158,41 @@ export function useTaskActions(onChanged?: () => void) {
     [headers, markPending, onChanged],
   )
 
+  /**
+   * Reassign a selection in one write. The queue spans every matter, so triage
+   * is a judgement made across rows; sending one PATCH per row would mean N
+   * round trips and N chances to end up half-applied.
+   */
+  const assignMany = useCallback(
+    async (ids: string[], assigneeId: string | null, assigneeName: string): Promise<TaskRow[] | null> => {
+      if (ids.length === 0) return []
+      const res = await fetch('/api/admin/tasks/bulk', {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ ids, assignee_id: assigneeId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error ?? 'Could not reassign those tasks')
+        return null
+      }
+      const updated = json.updated as number
+      const count = `${updated} task${updated === 1 ? '' : 's'}`
+      toast.success(assigneeId ? `${count} assigned to ${assigneeName}` : `${count} unassigned`)
+      // A selection can go stale while it is held — another tab completes a
+      // task, a sweep archives it — so say so rather than let the count read
+      // as a silent partial success.
+      const missing = (json.missing ?? []) as string[]
+      if (missing.length > 0) {
+        toast.warning(`${missing.length} of them no longer exist and were skipped`)
+      }
+      invalidateSidebarCountsClient()
+      onChanged?.()
+      return (json.tasks ?? []) as TaskRow[]
+    },
+    [headers, onChanged],
+  )
+
   const applyTemplate = useCallback(
     async (templateId: string, record: { matter_id?: string | null; lead_id?: string | null }) => {
       const res = await fetch('/api/admin/task-templates/apply', {
@@ -187,6 +222,7 @@ export function useTaskActions(onChanged?: () => void) {
     reopen,
     toggleChecklistItem,
     snooze,
+    assignMany,
     create,
     remove,
     applyTemplate,

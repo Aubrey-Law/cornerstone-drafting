@@ -160,6 +160,9 @@ export function TasksClient({
   const [laterOpen, setLaterOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [assignMenuOpen, setAssignMenuOpen] = useState(false)
+  const [assigning, setAssigning] = useState(false)
   const [snoozeMenuId, setSnoozeMenuId] = useState<string | null>(null)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [templateList, setTemplateList] = useState(templates)
@@ -206,6 +209,38 @@ export function TasksClient({
       if (updated) applyUpdate(updated)
     },
     [actions, applyUpdate],
+  )
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const assignSelection = useCallback(
+    async (assigneeId: string | null, assigneeName: string) => {
+      const ids = [...selectedIds]
+      if (ids.length === 0) return
+      setAssignMenuOpen(false)
+      setAssigning(true)
+      try {
+        const updated = await actions.assignMany(ids, assigneeId, assigneeName)
+        // Only on success: a failed call leaves the selection intact so the
+        // same keystroke retries it, rather than making the user rebuild it.
+        if (updated) {
+          updated.forEach(applyUpdate)
+          clearSelection()
+        }
+      } finally {
+        setAssigning(false)
+      }
+    },
+    [actions, applyUpdate, clearSelection, selectedIds],
   )
 
   const toggleSubtask = useCallback(
@@ -273,12 +308,25 @@ export function TasksClient({
     [groupBy, recordGroups, groups, laterOpen, doneOpen, doneTodayScoped],
   )
 
+  // A filter can hide a row that is still selected, and "6 selected" over a
+  // list showing three is the kind of lie that makes people stop trusting the
+  // count. The selection is pruned to what is on screen rather than silently
+  // carrying rows nobody can see.
+  useEffect(() => {
+    setSelectedIds(prev => {
+      if (prev.size === 0) return prev
+      const visible = new Set(focusOrder.map(task => task.id))
+      const next = new Set([...prev].filter(id => visible.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [focusOrder])
+
   useEffect(() => {
     function handler(event: KeyboardEvent) {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       // Never steal keys from inputs, dialogs or the rail.
-      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], aside')) return
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"], aside')) return
       if (document.querySelector('[role="dialog"][data-state="open"]')) return
 
       const index = focusOrder.findIndex(t => t.id === focusId)
@@ -313,16 +361,33 @@ export function TasksClient({
         case 's': case 'S':
           if (focused) { event.preventDefault(); setSnoozeMenuId(focused.id) }
           break
-        case '1': event.preventDefault(); setScope('mine'); setFocusId(null); break
-        case '2': event.preventDefault(); setScope('team'); setFocusId(null); break
-        case '3': event.preventDefault(); setScope('unassigned'); setFocusId(null); break
-        case 'Escape': setFocusId(null); break
+        case ' ':
+          // Selection is deliberately separate from `x`: `x` finishes a task,
+          // space only marks it, and confusing the two costs real work.
+          if (focused) { event.preventDefault(); toggleSelected(focused.id) }
+          break
+        case 'a': case 'A':
+          event.preventDefault()
+          // Falls back to the focused row so the key means the same thing
+          // whether or not a selection has been built up yet.
+          if (selectedIds.size > 0) setAssignMenuOpen(true)
+          else if (focused) { toggleSelected(focused.id); setAssignMenuOpen(true) }
+          break
+        case '1': event.preventDefault(); setScope('mine'); setFocusId(null); clearSelection(); break
+        case '2': event.preventDefault(); setScope('team'); setFocusId(null); clearSelection(); break
+        case '3': event.preventDefault(); setScope('unassigned'); setFocusId(null); clearSelection(); break
+        case 'Escape':
+          // Two stages, widest first: a selection is the more surprising state
+          // to be left holding, so it goes before the cursor does.
+          if (selectedIds.size > 0) clearSelection()
+          else setFocusId(null)
+          break
         default: break
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [focusId, focusOrder, router, toggleTask])
+  }, [clearSelection, focusId, focusOrder, router, selectedIds, toggleSelected, toggleTask])
 
   // ⌘⇧T opens quick capture from anywhere on this page.
   useEffect(() => {
@@ -349,6 +414,7 @@ export function TasksClient({
       key={task.id}
       task={task}
       focused={focusId === task.id}
+      selected={selectedIds.has(task.id)}
       pending={actions.isPending(task.id)}
       onComplete={() => void toggleTask(task)}
       onToggleSubtask={(index, done) => void toggleSubtask(task, index, done)}
@@ -435,7 +501,7 @@ export function TasksClient({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={scope} onValueChange={value => { setScope(value as ScopeKey); setFocusId(null) }}>
+          <Tabs value={scope} onValueChange={value => { setScope(value as ScopeKey); setFocusId(null); clearSelection() }}>
             <TabsList>
               <TabsTrigger value="mine">Mine ({scopeCounts.mine})</TabsTrigger>
               <TabsTrigger value="team">Team ({scopeCounts.team})</TabsTrigger>
@@ -517,6 +583,12 @@ export function TasksClient({
             <span aria-hidden>·</span>
             <kbd className="rounded border border-border bg-muted px-1">X</kbd>
             complete
+            <span aria-hidden>·</span>
+            <kbd className="rounded border border-border bg-muted px-1">Space</kbd>
+            select
+            <span aria-hidden>·</span>
+            <kbd className="rounded border border-border bg-muted px-1">A</kbd>
+            assign
           </span>
         </div>
       </div>
@@ -568,6 +640,19 @@ export function TasksClient({
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <SelectionBar
+          count={selectedIds.size}
+          assignees={assignees}
+          viewerId={viewerId}
+          busy={assigning}
+          menuOpen={assignMenuOpen}
+          onMenuOpenChange={setAssignMenuOpen}
+          onAssign={(id, name) => void assignSelection(id, name)}
+          onClear={clearSelection}
+        />
+      )}
+
       <TaskTemplateSheet
         open={templatesOpen}
         onOpenChange={setTemplatesOpen}
@@ -594,6 +679,83 @@ export function TasksClient({
           router.refresh()
         }}
       />
+    </div>
+  )
+}
+
+/**
+ * The one thing on this page that only exists while a selection does.
+ *
+ * Selection built by keyboard is otherwise invisible state — you can hold six
+ * rows and have nothing on screen say so, and nothing say how to act on them.
+ * The bar is the selection's receipt: the count, the action, and the way out.
+ */
+function SelectionBar({
+  count,
+  assignees,
+  viewerId,
+  busy,
+  menuOpen,
+  onMenuOpenChange,
+  onAssign,
+  onClear,
+}: {
+  count: number
+  assignees: Assignee[]
+  viewerId: string | null
+  busy: boolean
+  menuOpen: boolean
+  onMenuOpenChange: (open: boolean) => void
+  onAssign: (assigneeId: string | null, assigneeName: string) => void
+  onClear: () => void
+}) {
+  const me = assignees.find(person => person.id === viewerId)
+  const others = assignees.filter(person => person.id !== viewerId)
+
+  return (
+    <div className="sticky bottom-4 z-20 flex justify-center">
+      <div
+        role="status"
+        className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg"
+      >
+        <span className="text-sm font-medium">
+          {count} selected
+        </span>
+        <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" size="sm" className="h-7 text-xs" disabled={busy}>
+              {busy ? 'Assigning…' : 'Assign'}
+              <ChevronDown className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="center" className="w-52">
+            <DropdownMenuLabel className="text-xs">Assign {count} to</DropdownMenuLabel>
+            {me && (
+              <DropdownMenuItem onSelect={() => onAssign(me.id, me.name)}>
+                Me ({me.name})
+              </DropdownMenuItem>
+            )}
+            {others.map(person => (
+              <DropdownMenuItem key={person.id} onSelect={() => onAssign(person.id, person.name)}>
+                {person.name}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem onSelect={() => onAssign(null, 'nobody')}>
+              Nobody — leave unassigned
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-muted-foreground"
+          onClick={onClear}
+        >
+          <X className="size-3.5" aria-hidden />
+          Clear
+        </Button>
+      </div>
     </div>
   )
 }
