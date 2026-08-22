@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { EmptyState } from '@/components/EmptyState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
@@ -106,6 +106,51 @@ function closeoutTitle(reason: string | null): string {
   if (reason === 'lead_lost') return 'Archived automatically when the lead was marked lost'
   if (reason === 'lead_declined') return 'Archived automatically when the lead was declined'
   return 'Skipped — not applicable'
+}
+
+/**
+ * The stage-level "not applicable".
+ *
+ * Shows nothing once a stage is finished — there is no such thing as work that
+ * was done and also did not apply. It offers the restore only when everything
+ * outstanding in the stage is skipped, so a stage with one hand-skipped task in
+ * it still reads as work to do.
+ */
+function StageSkipButton({
+  tasks,
+  busy,
+  onSkip,
+  onRestore,
+}: {
+  tasks: PlanTask[]
+  busy: boolean
+  onSkip: () => void
+  onRestore: () => void
+}) {
+  // The closeout sweep's rows are the matter's business, not the stage's, so
+  // they neither block the skip nor come back with the restore.
+  const skippedHere = tasks.filter(task => isTaskSkipped(task) && !task.closeout_reason)
+  const outstanding = tasks.filter(task => task.status !== 'done' && !isTaskSkipped(task))
+
+  if (outstanding.length === 0 && skippedHere.length === 0) return null
+
+  const restoring = outstanding.length === 0
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={busy}
+      onClick={restoring ? onRestore : onSkip}
+      className="h-7 text-xs text-muted-foreground hover:text-foreground"
+      title={
+        restoring
+          ? `Reopen the ${skippedHere.length} skipped task${skippedHere.length === 1 ? '' : 's'} in this stage`
+          : `Skip the ${outstanding.length} task${outstanding.length === 1 ? '' : 's'} still open in this stage. Completed work is left alone.`
+      }
+    >
+      {busy ? 'Saving…' : restoring ? 'Restore stage' : 'Not applicable'}
+    </Button>
+  )
 }
 
 function dayLabel(dateKey: string): string {
@@ -455,6 +500,7 @@ export function TaskPlanView({
   const [progress, setProgress] = useState<SlaProgress | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [busyPhase, setBusyPhase] = useState<SlaPhase | 'unphased' | null>(null)
   const [generating, setGenerating] = useState(false)
   const [anchors, setAnchors] = useState<SlaAnchors | null>(null)
   const [matter, setMatter] = useState<PlanMatter | null>(null)
@@ -515,6 +561,40 @@ export function TaskPlanView({
       }
     },
     [authHeaders, matterId, load],
+  )
+
+  /**
+   * A whole stage at once. Skipping "Design" on a will-only matter is one
+   * decision, and making it ten times over is how a plan stops being kept up.
+   */
+  const patchPhase = useCallback(
+    async (phase: SlaPhase | 'unphased', status: 'skipped' | 'open') => {
+      if (!authHeaders) return
+      setBusyPhase(phase)
+      try {
+        const res = await fetch(`/api/matters/${matterId}/tasks/phase`, {
+          method: 'PATCH',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phase, status }),
+        })
+        const body = await res.json()
+        if (!res.ok) throw new Error(body?.error ?? 'Could not update the stage')
+        const label = phase === 'unphased' ? 'No stage' : SLA_PHASE_LABEL[phase]
+        const count = `${body.updated} task${body.updated === 1 ? '' : 's'}`
+        toast.success(
+          status === 'skipped'
+            ? `${label} marked not applicable — ${count} skipped`
+            : `${label} restored — ${count} reopened`,
+        )
+        await load()
+        onTasksChanged?.()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not update the stage')
+      } finally {
+        setBusyPhase(null)
+      }
+    },
+    [authHeaders, load, matterId, onTasksChanged],
   )
 
   const patchTask = useCallback(
@@ -649,6 +729,14 @@ export function TaskPlanView({
                       {phaseTasks.filter(task => task.status === 'done').length} of{' '}
                       {phaseTasks.length} complete
                     </p>
+                    <CardAction>
+                      <StageSkipButton
+                        tasks={phaseTasks}
+                        busy={busyPhase === phase}
+                        onSkip={() => void patchPhase(phase, 'skipped')}
+                        onRestore={() => void patchPhase(phase, 'open')}
+                      />
+                    </CardAction>
                   </CardHeader>
                   <CardContent className="px-0">
                     <ul className="divide-y divide-border">
