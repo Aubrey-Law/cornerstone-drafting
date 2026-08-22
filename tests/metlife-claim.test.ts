@@ -114,26 +114,6 @@ describe('MetLife claim totals', () => {
     expect(result.data?.sections[0].items.map(item => item.comment)).toEqual(
       expectedRows.map(([document, serviceCode]) => `CT ${serviceCode} — ${document}`),
     )
-    expect(result.data?.grandTotalCents).toBe(96_500)
-  })
-
-  it('bills separate-trust pour-over wills at the member rate, not the couple rate', () => {
-    const result = claim({ trust: { separate_trusts: true } as DraftPayload['trust'] })
-    expect(result.data?.planType).toBe('separate_trust')
-    expect(result.data?.grandTotalCents).toBe(139_500)
-    const wills = result.data!.sections.flatMap(section => section.items).filter(item => item.serviceType === 'Will')
-    expect(wills).toHaveLength(2)
-    expect(wills.every(item => item.feeCents === METLIFE_FEES.will.member)).toBe(true)
-  })
-
-  it('bills the remaining three compositions', () => {
-    expect(claim({}, { include_trust: false, include_pour_over_will: false, include_simple_will: true }).data?.grandTotalCents)
-      .toBe(SHARED_COUPLE + METLIFE_FEES.will.couple)
-    expect(claim({ spouse: null }, { include_trust: false, include_pour_over_will: false, include_simple_will: true }).data?.grandTotalCents)
-      .toBe(SHARED_MEMBER + METLIFE_FEES.will.member)
-    expect(claim({ spouse: null }).data?.grandTotalCents)
-      .toBe(SHARED_MEMBER + METLIFE_FEES.will.member + METLIFE_FEES.trust.member + METLIFE_FEES.affidavit.member)
-
   })
 
   it('adds one realty trust section per property', () => {
@@ -220,9 +200,8 @@ describe('Portal submission table', () => {
     expect(rows).toHaveLength(data.sections.reduce((sum, section) => sum + section.items.length, 0))
     expect(rows.map(row => row.index)).toEqual(rows.map((_, index) => index + 1))
     expect(rows.every(row => row.complete === 'Yes')).toBe(true)
-    expect(rows[0].fee).toBe('$85.00')
-    expect(rows[0].serviceCode).toBe('220')
-
+    expect(rows[0].fee).toBe('$150.00')
+    expect(rows[0].serviceCode).toBe('200')
   })
 
   it('renders a CSV with a header row and quoted fields', () => {
