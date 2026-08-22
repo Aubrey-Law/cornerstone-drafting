@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isEsignConfigured } from '@/lib/esign/firma'
 import type { LeadSpouseRecord } from '@/lib/leads/viewTypes'
 import { loadMatterContactsForMatters } from '@/lib/contacts/loadMatterContacts'
+import { scoringAppointmentAt } from '@/lib/leads/score'
 import { LeadsClient, type LeadRow } from './LeadsClient'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +25,9 @@ export default async function LeadsPage() {
     .select(
       // The record side panel edits the same fields as the lead detail rail, so
       // the list loads the full detail shape rather than adding a lead API.
-      'id, full_name, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth, address_line1, address_line2, city, state, zip, county, marital_status, qualification_notes, has_minor_children, lead_source, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, lead_urgency, taxable_estate, lead_next_action_snoozed_until, user_id, client_user_id, created_at, updated_at',
+      // `billing_type` is loaded for lead scoring: a legal plan member with no
+      // fee quoted still carries a covered engagement.
+      'id, full_name, first_name, middle_name, last_name, preferred_name, email, phone, date_of_birth, address_line1, address_line2, city, state, zip, county, marital_status, qualification_notes, has_minor_children, lead_source, practice_area, status, lead_status, matter_id, intake_sent_at, intake_completed_at, engagement_status, engagement_sent_at, engagement_signed_at, engagement_fee_quoted, billing_type, lead_urgency, taxable_estate, lead_next_action_snoozed_until, user_id, client_user_id, created_at, updated_at',
     )
     .not('lead_status', 'is', null)
     .order('created_at', { ascending: false })
@@ -43,9 +46,22 @@ export default async function LeadsPage() {
 
   const candidateLeads = data ?? []
   const matterIds = candidateLeads.map(lead => lead.matter_id).filter((id): id is string => Boolean(id))
+  // The meeting anchors ride along for lead scoring: a lead with a call on the
+  // calendar outranks one without, and both anchors live on the matter.
   const { data: opportunities } = matterIds.length
-    ? await admin.from('matters').select('id, relationship_status, status').in('id', matterIds)
-    : { data: [] as Array<{ id: string; relationship_status: string; status: string }> }
+    ? await admin
+      .from('matters')
+      .select('id, relationship_status, status, discovery_call_at, pmps_at')
+      .in('id', matterIds)
+    : {
+      data: [] as Array<{
+        id: string
+        relationship_status: string
+        status: string
+        discovery_call_at: string | null
+        pmps_at: string | null
+      }>,
+    }
   const opportunityById = new Map((opportunities ?? []).map(row => [row.id, row]))
   const leads = candidateLeads
     .map(lead => ({ ...lead, lead_status: opportunityById.get(lead.matter_id ?? '')?.relationship_status ?? lead.lead_status }))
@@ -92,10 +108,14 @@ export default async function LeadsPage() {
     }
   }
 
-  const leadsWithActivity = leads.map(lead => ({
-    ...lead,
-    last_activity_at: latestActivity.get(lead.id) ?? null,
-  }))
+  const leadsWithActivity = leads.map(lead => {
+    const opportunity = opportunityById.get(lead.matter_id ?? '')
+    return {
+      ...lead,
+      last_activity_at: latestActivity.get(lead.id) ?? null,
+      next_appointment_at: scoringAppointmentAt(opportunity?.discovery_call_at, opportunity?.pmps_at),
+    }
+  })
 
   return (
     <div className="space-y-4">

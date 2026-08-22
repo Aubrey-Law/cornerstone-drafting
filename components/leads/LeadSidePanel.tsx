@@ -23,6 +23,8 @@ import { leadListName } from '@/components/leads/LeadsTable'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import type { LeadEditableField } from '@/lib/leads/details'
 import { computeNextAction } from '@/lib/leads/nextAction'
+import { LeadScoreBadge } from '@/components/leads/LeadScoreBadge'
+import { computeLeadScore, leadScoreInputFromRow, leadScoreIsActive } from '@/lib/leads/score'
 import { calendarDayDifference, cn, FIRM_TIMEZONE } from '@/lib/utils'
 import type { LeadDetailRecord, LeadListRow, LeadSpouseRecord } from '@/lib/leads/viewTypes'
 
@@ -128,6 +130,8 @@ export function LeadSidePanel({
     ? Math.max(0, calendarDayDifference(Date.now(), lead.created_at, FIRM_TIMEZONE) ?? 0)
     : 0
 
+  const leadScore = computeLeadScore(leadScoreInputFromRow(lead))
+
   const nextAction = computeNextAction({
     leadStatus: lead.lead_status ?? 'lead',
     intakeSentAt: lead.intake_sent_at,
@@ -162,6 +166,11 @@ export function LeadSidePanel({
         <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
           Lead · day {leadDay}
         </span>
+        <LeadScoreBadge
+          score={leadScore}
+          muted={!leadScoreIsActive(lead.lead_status)}
+          className="shrink-0"
+        />
         <Button
           type="button"
           size="sm"

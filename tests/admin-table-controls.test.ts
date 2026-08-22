@@ -19,7 +19,10 @@ const leads: LeadTableRow[] = [
   { id: 'intake-done', full_name: 'Intake Done', first_name: 'Intake', last_name: 'Done', email: 'done@example.com', phone: '617-555-0102', practice_area: 'Elder Law', status: 'completed', intake_sent_at: '2026-07-23T00:00:00Z', intake_completed_at: null, engagement_status: null, engagement_sent_at: null, engagement_fee_quoted: 3000, created_at: '2026-07-23T00:00:00Z', last_activity_at: '2026-07-24T00:00:00Z' },
   { id: 'agreement-sent', full_name: 'Agreement Sent', first_name: 'Agreement', last_name: 'Sent', email: 'agreement@example.com', phone: '617-555-0103', practice_area: 'Estate Planning', status: 'completed', intake_sent_at: '2026-07-20T00:00:00Z', intake_completed_at: '2026-07-21T00:00:00Z', engagement_status: 'sent', engagement_sent_at: '2026-07-22T00:00:00Z', engagement_fee_quoted: 4000, created_at: '2026-07-20T00:00:00Z', last_activity_at: '2026-07-22T00:00:00Z' },
   { id: 'signed', full_name: 'Signed Agreement', first_name: 'Signed', last_name: 'Agreement', email: 'signed@example.com', phone: '617-555-0104', practice_area: 'Probate', status: 'completed', intake_sent_at: '2026-07-17T00:00:00Z', intake_completed_at: '2026-07-18T00:00:00Z', engagement_status: 'signed', engagement_sent_at: '2026-07-19T00:00:00Z', engagement_fee_quoted: 5000, created_at: '2026-07-17T00:00:00Z', last_activity_at: '2026-07-19T00:00:00Z' },
-  { id: 'smith', full_name: null, first_name: 'Sam', last_name: 'Smith', email: 'smith@example.com', phone: '617-555-0105', practice_area: 'Estate Planning', status: 'lost', intake_sent_at: null, intake_completed_at: null, engagement_status: null, engagement_sent_at: null, engagement_fee_quoted: 6000, created_at: '2026-07-15T00:00:00Z', last_activity_at: '2026-07-16T00:00:00Z' },
+  // `status` is the intake's own status column, so it holds intake lifecycle
+  // values only. A lost lead is marked on `lead_status`, which the caller's
+  // status chips filter before this table ever sees the row.
+  { id: 'smith', full_name: null, first_name: 'Sam', last_name: 'Smith', email: 'smith@example.com', phone: '617-555-0105', practice_area: 'Estate Planning', status: 'in_progress', intake_sent_at: null, intake_completed_at: null, engagement_status: null, engagement_sent_at: null, engagement_fee_quoted: 6000, created_at: '2026-07-15T00:00:00Z', last_activity_at: '2026-07-16T00:00:00Z' },
 ]
 
 const canonicalPracticeLeads: LeadTableRow[] = [
@@ -73,6 +76,7 @@ const sortFixtures = {
   name_desc: [sortRow('alpha', { full_name: 'Alpha' }), sortRow('zulu', { full_name: 'Zulu' }), sortRow('missing', {})],
   fee_desc: [sortRow('high', { engagement_fee_quoted: 9000 }), sortRow('low', { engagement_fee_quoted: 1000 }), sortRow('missing', {})],
   last_activity: [sortRow('recent', { last_activity_at: '2026-07-03T00:00:00Z' }), sortRow('stale', { last_activity_at: '2026-07-01T00:00:00Z' }), sortRow('missing', {})],
+  score_desc: [sortRow('hot', { score: 82 }), sortRow('cool', { score: 31 }), sortRow('missing', {})],
 } satisfies Record<string, LeadTableRow[]>
 
 describe('lead table controls', () => {
@@ -92,7 +96,7 @@ describe('lead table controls', () => {
   })
 
   it.each([
-    ['intake_not_sent', ['new']],
+    ['intake_not_sent', ['smith', 'new']],
     ['intake_pending', ['intake-sent']],
     ['intake_complete', ['intake-done', 'agreement-sent', 'signed']],
     ['engagement_pending', ['agreement-sent']],
@@ -111,8 +115,19 @@ describe('lead table controls', () => {
     ['name_desc', ['zulu', 'alpha', 'missing']],
     ['fee_desc', ['high', 'low', 'missing']],
     ['last_activity', ['recent', 'stale', 'missing']],
+    ['score_desc', ['hot', 'cool', 'missing']],
   ] as const)('sorts leads by %s with missing values last (catches wrong direction and missing values promoted above real values)', (sort, want) => {
     expect(ids(filterAndSortLeads(sortFixtures[sort], EMPTY_LEAD_TABLE_FILTERS, sort))).toEqual(want)
+  })
+
+  it('filters progress from intake state alone, ignoring lead lifecycle (catches the dead lost-status branch returning)', () => {
+    // `status` never holds 'lost' — lifecycle is `lead_status`, filtered by the
+    // caller. A progress filter must not silently drop rows on that basis.
+    const stray = sortRow('stray', { status: 'lost' })
+    expect(ids(filterAndSortLeads([stray], {
+      ...EMPTY_LEAD_TABLE_FILTERS,
+      progress: 'intake_not_sent',
+    }, 'newest'))).toEqual(['stray'])
   })
 
   it('does not mutate the input lead array (catches in-place .sort() mutation)', () => {

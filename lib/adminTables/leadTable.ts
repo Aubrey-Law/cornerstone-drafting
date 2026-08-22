@@ -18,6 +18,8 @@ export interface LeadTableRow {
   engagement_fee_quoted: number | null
   created_at: string | null
   last_activity_at: string | null
+  /** Decorated by the caller from `computeLeadScore`; absent on narrower rows. */
+  score?: number | null
 }
 
 export type LeadProgressFilter =
@@ -34,7 +36,14 @@ export type LeadTableFilters = {
   progress: LeadProgressFilter
 }
 
-export type LeadSortKey = 'newest' | 'oldest' | 'name_asc' | 'name_desc' | 'fee_desc' | 'last_activity'
+export type LeadSortKey =
+  | 'newest'
+  | 'oldest'
+  | 'name_asc'
+  | 'name_desc'
+  | 'fee_desc'
+  | 'last_activity'
+  | 'score_desc'
 
 export const EMPTY_LEAD_TABLE_FILTERS: LeadTableFilters = {
   search: '',
@@ -88,7 +97,10 @@ function matchesSearch(lead: LeadTableRow, search: string): boolean {
 
 function matchesProgress(lead: LeadTableRow, progress: LeadProgressFilter): boolean {
   if (progress === 'all') return true
-  if (lead.status === 'lost') return false
+  // Lifecycle (lead_status lost/declined) is filtered by the caller's status
+  // chips. `status` here is the intake's own status and never holds 'lost', so
+  // testing it dropped nothing and excluding lost leads a second time would
+  // empty the Lost tab whenever a progress filter was also applied.
   const intakeComplete = Boolean(lead.intake_completed_at) || lead.status === 'completed'
   if (progress === 'intake_not_sent') return !intakeComplete && !lead.intake_sent_at
   if (progress === 'intake_pending') return !intakeComplete && Boolean(lead.intake_sent_at)
@@ -103,6 +115,7 @@ function compareLeads(left: LeadTableRow, right: LeadTableRow, sortKey: LeadSort
   if (sortKey === 'name_asc') return compareNullable(displayNameValue(left), displayNameValue(right), (a, b) => a.localeCompare(b))
   if (sortKey === 'name_desc') return compareNullable(displayNameValue(left), displayNameValue(right), (a, b) => b.localeCompare(a))
   if (sortKey === 'fee_desc') return compareNullable(left.engagement_fee_quoted, right.engagement_fee_quoted, (a, b) => b - a)
+  if (sortKey === 'score_desc') return compareNullable(left.score ?? null, right.score ?? null, (a, b) => b - a)
   return compareNullable(timestamp(left.last_activity_at), timestamp(right.last_activity_at), (a, b) => b - a)
 }
 

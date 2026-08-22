@@ -17,6 +17,13 @@ import { formatCurrency } from '@/lib/format'
 import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
 import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
+import { LeadScoreBadge } from '@/components/leads/LeadScoreBadge'
+import {
+  computeLeadScore,
+  leadScoreInputFromRow,
+  leadScoreIsActive,
+  type LeadScore,
+} from '@/lib/leads/score'
 
 export type NextStep =
   | { key: 'send_intake'; label: string; primary: true }
@@ -65,8 +72,14 @@ export function nextStep(lead: LeadListRow, esignEnabled: boolean): NextStep {
   return { key: 'hire_matter', label: 'Hire matter', primary: false }
 }
 
+/**
+ * The list decorates rows with their score so sorting and rendering agree on
+ * one computation. Narrower callers may omit it, and the cell computes its own.
+ */
+export type ScorableLeadRow = LeadListRow & { scoreDetail?: LeadScore }
+
 interface LeadsTableProps {
-  leads: LeadListRow[]
+  leads: ScorableLeadRow[]
   hasAnyLeads: boolean
   selected: Record<string, boolean>
   allSelected: boolean
@@ -134,6 +147,7 @@ export function LeadsTable({
             <TableHead>Email</TableHead>
             <TableHead>Practice</TableHead>
             <TableHead>Fee</TableHead>
+            <TableHead>Score</TableHead>
             <TableHead>Progress</TableHead>
             <TableHead className="text-right">Next step</TableHead>
             <TableHead className="w-10" aria-label="More actions" />
@@ -178,6 +192,13 @@ export function LeadsTable({
                 <TableCell className="text-muted-foreground">{lead.email}</TableCell>
                 <TableCell>{practiceAreaLabel(lead.practice_area)}</TableCell>
                 <TableCell>{formatCurrency(lead.engagement_fee_quoted) || '—'}</TableCell>
+                <TableCell>
+                  <LeadScoreBadge
+                    score={lead.scoreDetail ?? computeLeadScore(leadScoreInputFromRow(lead))}
+                    muted={!leadScoreIsActive(lead.lead_status)}
+                    showLabel={false}
+                  />
+                </TableCell>
                 <TableCell><LeadProgress lead={lead} /></TableCell>
                 <TableCell className="text-right">
                   {step.key === 'view_matter' && lead.matter_id ? (

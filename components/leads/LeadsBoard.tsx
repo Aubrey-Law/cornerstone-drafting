@@ -20,11 +20,14 @@ import { formatCurrency } from '@/lib/format'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import { cn } from '@/lib/utils'
 import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
+import { LeadScoreBadge } from '@/components/leads/LeadScoreBadge'
+import type { ScorableLeadRow } from '@/components/leads/LeadsTable'
+import { computeLeadScore, leadScoreInputFromRow, leadScoreIsActive } from '@/lib/leads/score'
 
 const DRAG_TYPE = 'text/lead-id'
 
 interface LeadsBoardProps {
-  leads: LeadListRow[]
+  leads: ScorableLeadRow[]
   hasAnyLeads: boolean
   busyLeadId: string | null
   esignEnabled: boolean
@@ -214,7 +217,7 @@ function BoardCard({
   onDragStart,
   onDragEnd,
 }: {
-  lead: LeadListRow
+  lead: ScorableLeadRow
   active: boolean
   busy: boolean
   dragging: boolean
@@ -235,6 +238,7 @@ function BoardCard({
   const chip = stateChip(lead)
   const attention = lead.lead_status === 'lead' && needsAttention(lead)
   const fee = formatCurrency(lead.engagement_fee_quoted)
+  const score = lead.scoreDetail ?? computeLeadScore(leadScoreInputFromRow(lead))
   const runStep = () => {
     if (step.key === 'send_intake' || step.key === 'remind_intake') onSendIntake(lead)
     else if (step.key === 'send_engagement' || step.key === 'resend_engagement') onSendEngagement(lead)
@@ -304,6 +308,12 @@ function BoardCard({
         </div>
 
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+          <LeadScoreBadge
+            score={score}
+            muted={!leadScoreIsActive(lead.lead_status)}
+            showLabel={false}
+            className="px-1.5 py-0 text-[10px]"
+          />
           <span>{practiceAreaLabel(lead.practice_area)}</span>
           {fee && (
             <>
