@@ -217,7 +217,7 @@ export const PLAN_TASK_COLUMNS =
   'due_offset_days, nudge_offset_days, escalation_offset_days, nudge_at, nudge_tier, ' +
   'escalation_at, escalation_tier, nudge_sent_at, escalation_sent_at, pauses_clock, paused_at, ' +
   'total_paused_days, pre_engagement, auto, conditional, gate, variant, extends_target_days, ' +
-  'recurring_interval_days, triggers_day_zero, skipped_at'
+  'recurring_interval_days, triggers_day_zero, skipped_at, closeout_reason'
 
 export function isSlaPhase(value: unknown): value is SlaPhase {
   return typeof value === 'string' && (SLA_PHASES as readonly string[]).includes(value)

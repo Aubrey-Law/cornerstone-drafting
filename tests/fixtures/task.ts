@@ -67,6 +67,7 @@ export function taskFixture(overrides: Partial<TaskRow> = {}): TaskRow {
     recurring_interval_days: null,
     triggers_day_zero: false,
     skipped_at: null,
+    closeout_reason: null,
 
     ...overrides,
   }

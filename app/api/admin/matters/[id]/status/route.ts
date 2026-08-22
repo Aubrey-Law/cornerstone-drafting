@@ -3,6 +3,10 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { MATTER_STATUSES, matterStatusLabel, type MatterStatus } from '@/types/database'
+import {
+  archiveTasksForClosedRecord,
+  restoreTasksForReopenedRecord,
+} from '@/lib/tasks/closeout'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -53,6 +57,17 @@ export async function PATCH(req: Request, { params }: Params) {
       const code = error.code === 'P0002' ? 404 : error.code === 'P0001' ? 409 : 500
       return NextResponse.json({ error: error.message }, { status: code })
     }
+
+    // Only after the transition has committed. `on_hold` is deliberately not
+    // here: a paused matter still has work coming, and the SLA already knows
+    // how to stop its clock.
+    const actor = { id: userId, email: user?.email ?? null, name: actorName }
+    if (status === 'closed' || status === 'archived') {
+      await archiveTasksForClosedRecord(admin, { matterId }, 'matter_closed', actor)
+    } else if (status === 'active') {
+      await restoreTasksForReopenedRecord(admin, { matterId }, actor)
+    }
+
     return NextResponse.json(data)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Could not update status'

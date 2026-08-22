@@ -35,7 +35,11 @@ vi.mock('@/lib/supabaseAdmin', () => ({
   ADMIN_EMAIL: 'admin@example.invalid',
 }))
 
-const { fetchTasks } = await import('@/lib/queries/tasks')
+// Imported lazily so the vi.mock above is in place first — a static import
+// would be hoisted ahead of it, and a top-level await is not valid under this
+// project's module target.
+const fetchTasks: typeof import('@/lib/queries/tasks').fetchTasks = async options =>
+  (await import('@/lib/queries/tasks')).fetchTasks(options)
 
 const MATTER = 'm-1'
 const INTAKE = 'ci-1'
