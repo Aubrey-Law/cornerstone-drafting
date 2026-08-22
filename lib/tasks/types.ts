@@ -295,12 +295,20 @@ export const TASK_SOURCE_LABEL: Record<TaskSource, string> = {
   sla: 'Plan',
 }
 
+/**
+ * Each pill pairs a background token with a text token of the same hue. Note
+ * that a `-bg` token's partner is never `--accent`: that is a *surface* colour
+ * (what a row goes when you hover it), and using it as text is how the Plan
+ * pill spent months at a 1.15:1 contrast ratio — grey on grey, invisible in
+ * both themes. lib/theme/contrast.ts and the test over this map now hold every
+ * pair to AA.
+ */
 export const TASK_SOURCE_PILL: Record<TaskSource, string> = {
   stage: 'bg-stage-work-bg text-stage-work-text',
   manual: 'bg-muted text-foreground',
   template: 'bg-blue-bg text-blue',
   cadence: 'bg-stage-active-bg text-stage-active-text',
-  sla: 'bg-teal-bg text-accent',
+  sla: 'bg-green-bg text-green',
 }
 
 export const TASK_PRIORITY_DOT: Record<TaskPriority, string> = {
