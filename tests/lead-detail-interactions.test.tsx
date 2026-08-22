@@ -277,7 +277,9 @@ describe('lead detail page', () => {
     expect(within(header()).getByRole('button', { name: 'More actions' })).toBeTruthy()
     expect(within(header()).getByRole('button', { name: 'Toggle details rail' })).toBeTruthy()
     expect(within(header()).queryByRole('combobox')).toBeNull()
-    expect(screen.queryByText(/Last touch/)).toBeNull()
+    // Scoped to the header: the subtitle is what this guards. The lead score
+    // card states its own "Last touch …" as a scoring reason further down.
+    expect(within(header()).queryByText(/Last touch/)).toBeNull()
 
     await openOverflow(user)
     expect(screen.getByRole('menuitem', { name: 'Hire matter' })).toBeTruthy()

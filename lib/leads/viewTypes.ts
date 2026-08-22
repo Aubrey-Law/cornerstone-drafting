@@ -35,6 +35,9 @@ export interface LeadListRow {
   qualification_notes?: string | null
   has_minor_children?: boolean | null
   lead_source?: string | null
+  billing_type?: string | null
+  /** Soonest upcoming (else most recent past) discovery call or PMPS. */
+  next_appointment_at?: string | null
   intake_status?: string | null
   lead_next_action_snoozed_until?: string | null
   user_id?: string | null

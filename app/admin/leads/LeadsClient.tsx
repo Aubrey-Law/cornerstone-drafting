@@ -36,6 +36,7 @@ import { SearchField } from '@/components/SearchField'
 import { PageHeader } from '@/components/PageHeader'
 import { FilterChip } from '@/components/FilterChip'
 import type { LeadListRow, LeadSpouseRecord, MutableLeadStatus } from '@/lib/leads/viewTypes'
+import { computeLeadScore, leadScoreInputFromRow, type LeadScore } from '@/lib/leads/score'
 import { LeadSidePanel } from '@/components/leads/LeadSidePanel'
 import { apiRequest } from '@/lib/clientApi'
 import { LeadsTable, leadListName as leadName } from '@/components/leads/LeadsTable'
@@ -60,6 +61,13 @@ import {
 } from '@/components/ui/select'
 
 export type LeadRow = LeadListRow
+
+/**
+ * A lead carrying its computed score. The score is derived at render rather
+ * than stored: it moves every time the lead is touched, so a persisted copy
+ * would be stale before it was read.
+ */
+export type ScoredLeadRow = LeadRow & { score: number; scoreDetail: LeadScore }
 
 type LeadFilter = 'open' | 'lost' | 'declined' | 'all'
 type LeadView = 'table' | 'board'
@@ -89,6 +97,7 @@ const LEAD_SORT_OPTIONS: { value: LeadSortKey; label: string }[] = [
   { value: 'name_desc', label: 'Name Z-A' },
   { value: 'fee_desc', label: 'Highest fee' },
   { value: 'last_activity', label: 'Last activity' },
+  { value: 'score_desc', label: 'Lead score' },
 ]
 
 function matchesFilter(lead: LeadRow, filter: LeadFilter): boolean {
@@ -132,12 +141,17 @@ export function LeadsClient({
 
   const baseLeads = useMemo(
     () =>
-      initialLeads.filter(l => {
-        if (!matchesFilter(l, filter)) return false
-        if (cardFilter === 'attention') return isOpenLead(l) && needsAttention(l)
-        if (cardFilter === 'agreements') return isOpenLead(l) && hasPendingAgreement(l)
-        return true
-      }),
+      initialLeads
+        .filter(l => {
+          if (!matchesFilter(l, filter)) return false
+          if (cardFilter === 'attention') return isOpenLead(l) && needsAttention(l)
+          if (cardFilter === 'agreements') return isOpenLead(l) && hasPendingAgreement(l)
+          return true
+        })
+        .map(lead => {
+          const scoreDetail = computeLeadScore(leadScoreInputFromRow(lead))
+          return { ...lead, score: scoreDetail.score, scoreDetail }
+        }),
     [initialLeads, filter, cardFilter],
   )
 

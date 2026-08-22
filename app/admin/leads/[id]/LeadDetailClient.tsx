@@ -49,6 +49,9 @@ import type { ContactChannel } from '@/lib/contacts/additionalChannels'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
+import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
+import { computeLeadScore, leadScoreInputFromRow } from '@/lib/leads/score'
+import { computeLeadReadiness } from '@/lib/leads/readiness'
 import { LeadDocumentsTab, useLeadDocuments } from '@/components/leads/LeadDocumentsTab'
 import { LeadTopActions } from '@/components/leads/LeadTopActions'
 import { provisionalLeadNumber } from '@/components/leads/LeadsTable'
@@ -665,6 +668,13 @@ export function LeadDetailClient({
   ])
   const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
   const lastMeetingAt = newestTimestamp(initialMeetingNotes.map(note => note.date || note.createdAt))
+  // The record page knows more than the list does — readiness and the meeting
+  // anchors — so its score is computed from the fuller input.
+  const leadScore = computeLeadScore(leadScoreInputFromRow(lead, {
+    lastTouchAt: effectiveLastTouchAt,
+    nextAppointmentAt,
+    readinessPercent: computeLeadReadiness(lead, spouse).percent,
+  }))
   const computedAction = computeNextAction({
     leadStatus: lead.lead_status,
     intakeSentAt: lead.intake_sent_at ?? null,
@@ -834,7 +844,12 @@ export function LeadDetailClient({
               <TabsTrigger value="notes">Notes ({initialNotes.length})</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="plan" className="mt-4">
+            <TabsContent value="plan" className="mt-4 space-y-4">
+              <LeadScoreCard
+                leadId={lead.id}
+                score={leadScore}
+                leadStatus={lead.lead_status}
+              />
               <LeadPlanTab
                 lead={lead}
                 spouse={spouse}
