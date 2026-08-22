@@ -99,6 +99,12 @@ export interface TaskRow {
   triggers_day_zero: boolean
   /** Set alongside status 'archived' when the task is skipped as N/A. */
   skipped_at: string | null
+  /**
+   * Why an automatic sweep archived this task — its matter closed, or its lead
+   * went lost or declined. Null on a task the user skipped by hand, which is
+   * what keeps the reopen path from un-skipping it. See lib/tasks/closeout.ts.
+   */
+  closeout_reason: string | null
 
   /** Joined for display — the matter/lead this task hangs off. */
   record_name?: string | null

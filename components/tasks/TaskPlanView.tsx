@@ -95,6 +95,19 @@ const STATUS_ACTIONS: { status: PlanStatusChoice; label: string }[] = [
   { status: 'open', label: 'Reset to open' },
 ]
 
+/**
+ * A task the user skipped and a task the closeout sweep archived look identical
+ * in the data — both are `archived` with a skip stamp. The reason is the only
+ * thing that tells them apart, and saying "skipped" for work the firm never
+ * chose to drop reads as a decision nobody made.
+ */
+function closeoutTitle(reason: string | null): string {
+  if (reason === 'matter_closed') return 'Archived automatically when the matter closed'
+  if (reason === 'lead_lost') return 'Archived automatically when the lead was marked lost'
+  if (reason === 'lead_declined') return 'Archived automatically when the lead was declined'
+  return 'Skipped — not applicable'
+}
+
 function dayLabel(dateKey: string): string {
   // Date keys are calendar days with no timezone; anchor at midday UTC so the
   // firm-timezone formatter cannot roll them back a day.
@@ -233,7 +246,11 @@ function PlanTaskRow({
               </Badge>
             ) : null}
             {task.status === 'blocked' && <Badge variant="destructive">blocked</Badge>}
-            {skipped && <Badge variant="secondary">skipped</Badge>}
+            {skipped && (
+              <Badge variant="secondary" title={closeoutTitle(task.closeout_reason)}>
+                {task.closeout_reason ? 'closed out' : 'skipped'}
+              </Badge>
+            )}
           </div>
 
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">

@@ -45,7 +45,8 @@ function harness({
   readErrors?:Record<string,{message:string}>
   postReadErrors?:Record<string,{message:string}>
 }={}) {
-  const calls:{rpc:any[];updates:any[];deletes:string[]}={rpc:[],updates:[],deletes:[]}
+  const calls:{rpc:any[];updates:any[];deletes:string[];filters:any[];inserts:any[]}=
+    {rpc:[],updates:[],deletes:[],filters:[],inserts:[]}
   const maybeSingleCounts:Record<string,number>={}
   const admin={
     rpc:vi.fn(async (name:string,args:any)=>{calls.rpc.push([name,args]);return {data:rpcData ?? {...lead,lead_status:args.p_details?.status ?? lead?.lead_status},error:rpcError}}),
@@ -70,6 +71,14 @@ function harness({
         }),
         update:(value:any)=>{calls.updates.push([table,value]);return chain},
         delete:()=>{calls.deletes.push(table);return chain},
+        // The task-closeout sweep filters and inserts activity; see
+        // lib/tasks/closeout.ts. `filters` is what its assertions read.
+        in:(...args:any[])=>{calls.filters.push([table,'in',...args]);return chain},
+        or:(...args:any[])=>{calls.filters.push([table,'or',...args]);return chain},
+        not:(...args:any[])=>{calls.filters.push([table,'not',...args]);return chain},
+        is:()=>chain,
+        insert:async(value:any)=>{calls.inserts.push([table,value]);return {data:null,error:null}},
+        then:(resolve:(v:any)=>unknown)=>Promise.resolve({data:[],error:null}).then(resolve),
       }
       return chain
     }),
@@ -140,7 +149,11 @@ describe('lead details PATCH handler',()=>{
     ])
     expect(statusResponse.status).toBe(200)
     expect(fieldResponse.status).toBe(200)
-    expect(admin.from).not.toHaveBeenCalled()
+    // The lead's own tables are still untouched — everything about the lead
+    // goes through the transactional RPC. `tasks` is the one direct write: the
+    // closeout sweep, which runs on a different table after the transition has
+    // committed. See lib/tasks/closeout.ts.
+    expect(admin.from.mock.calls.map(([table]:[string])=>table)).toEqual(['tasks'])
     expect(calls.rpc).toEqual([
       ['update_lead_opportunity_status',{
         p_lead_id:'l1',
@@ -164,7 +177,11 @@ describe('lead details PATCH handler',()=>{
     ])
     expect(statusResponse.status).toBe(200)
     expect(spouseResponse.status).toBe(200)
-    expect(admin.from).not.toHaveBeenCalled()
+    // The lead's own tables are still untouched — everything about the lead
+    // goes through the transactional RPC. `tasks` is the one direct write: the
+    // closeout sweep, which runs on a different table after the transition has
+    // committed. See lib/tasks/closeout.ts.
+    expect(admin.from.mock.calls.map(([table]:[string])=>table)).toEqual(['tasks'])
     expect(calls.rpc).toEqual([
       ['update_lead_opportunity_status',{
         p_lead_id:'l1',
@@ -374,6 +391,44 @@ describe('lead editing surfaces', () => {
         { p_lead_id: 'l1', p_status: status, p_actor_id: 'u1' },
       ])
     }
+  })
+
+  it.each([
+    ['lost', 'lead_lost'],
+    ['declined', 'lead_declined'],
+  ] as const)('archives the open tasks of a lead marked %s', async (status, reason) => {
+    const { calls } = harness({ rpcData: { lead: snapshotLead, spouse: null, activity: null } })
+
+    const res = await PATCH(request({ status }), params)
+
+    expect(res.status).toBe(200)
+    expect(calls.updates).toEqual([
+      ['tasks', expect.objectContaining({ status: 'archived', closeout_reason: reason })],
+    ])
+    // Both columns a lead's tasks can hang off: the plan is generated against
+    // the matter behind the opportunity, hand-added tasks carry the lead id.
+    expect(calls.filters).toContainEqual(['tasks', 'or', 'matter_id.eq.m1,lead_id.eq.l1'])
+  })
+
+  it('puts the tasks back when a lead is returned to play', async () => {
+    const { calls } = harness({ rpcData: { lead: snapshotLead, spouse: null, activity: null } })
+
+    const res = await PATCH(request({ status: 'lead' }), params)
+
+    expect(res.status).toBe(200)
+    expect(calls.updates).toEqual([
+      ['tasks', expect.objectContaining({ status: 'open', skipped_at: null, closeout_reason: null })],
+    ])
+    // Only what the sweep marked — a task skipped by hand stays skipped.
+    expect(calls.filters).toContainEqual(['tasks', 'not', 'closeout_reason', 'is', null])
+  })
+
+  it('leaves the checklist alone when a lead converts', async () => {
+    const { calls } = harness({ finalLead: { id: 'l1', matter_id: 'm1', lead_status: 'hired' } })
+
+    await PATCH(request({ ...valid, status: 'hired' }), params)
+
+    expect(calls.updates.filter(([table]: [string]) => table === 'tasks')).toEqual([])
   })
 
   it('still refuses a status the lifecycle does not allow to be set directly', async () => {

@@ -41,6 +41,10 @@ function statusStamps(status: PlanStatusInput, now: string) {
     status: skipped ? 'archived' : status,
     completed_at: status === 'done' ? now : null,
     skipped_at: skipped ? now : null,
+    // Any hand-set status makes this the user's decision, not the closeout
+    // sweep's. Leaving a stale marker on the row would let a later reopen drag
+    // a completed task back to open. See lib/tasks/closeout.ts.
+    closeout_reason: null,
   }
 }
 
@@ -108,6 +112,7 @@ export async function PATCH(
     update.status = 'blocked'
     update.completed_at = null
     update.skipped_at = null
+    update.closeout_reason = null
   } else if (body.paused === false) {
     update.paused_at = null
     // Resuming charges the days the task sat parked — unless this same call

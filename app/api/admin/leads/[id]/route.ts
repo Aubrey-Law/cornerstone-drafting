@@ -7,6 +7,11 @@ import { validateLeadDetails, validateLeadFieldPatch } from '@/lib/leads/details
 import type { ValidatedLeadDetails } from '@/lib/leads/details'
 import { z, ZodError } from 'zod'
 import { loadSpouseContact } from '@/lib/contacts/loadSpouseContact'
+import {
+  archiveTasksForClosedRecord,
+  restoreTasksForReopenedRecord,
+  type CloseoutReason,
+} from '@/lib/tasks/closeout'
 
 const snoozeRequestSchema = z.object({
   nextActionSnoozedUntil: z.union([
@@ -38,6 +43,30 @@ function validationError(error: unknown) {
 
 function hasOwn(value: unknown, key: string): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && Object.prototype.hasOwnProperty.call(value, key)
+}
+
+/**
+ * A lead that stops being a live opportunity stops needing its checklist, and
+ * one that comes back needs it again. Both directions run off the status the
+ * lead just moved to; anything else (including 'hired', which converts and
+ * keeps its plan) leaves the tasks alone.
+ */
+const CLOSEOUT_BY_LEAD_STATUS: Record<string, CloseoutReason> = {
+  lost: 'lead_lost',
+  declined: 'lead_declined',
+}
+
+async function syncLeadTasksToStatus(
+  admin: ReturnType<typeof getAdminClient>,
+  leadId: string,
+  matterId: string | null,
+  status: string,
+  actor: { id: string | null },
+): Promise<void> {
+  const target = { leadId, matterId }
+  const reason = CLOSEOUT_BY_LEAD_STATUS[status]
+  if (reason) await archiveTasksForClosedRecord(admin, target, reason, actor)
+  else if (status === 'lead') await restoreTasksForReopenedRecord(admin, target, actor)
 }
 
 function atomicUpdateErrorStatus(error: { code?: string | null; message: string }) {
@@ -94,7 +123,8 @@ export async function PATCH(
     try { statusChange = statusRequestSchema.parse(body) }
     catch (error) { return validationError(error) }
 
-    const { data, error } = await getAdminClient().rpc('update_lead_opportunity_status', {
+    const admin = getAdminClient()
+    const { data, error } = await admin.rpc('update_lead_opportunity_status', {
       p_lead_id: intakeId,
       p_status: statusChange.status,
       p_actor_id: userId,
@@ -105,6 +135,10 @@ export async function PATCH(
         { status: atomicUpdateErrorStatus(error) },
       )
     }
+    // The RPC returns the lead it just wrote, which is where the matter behind
+    // this opportunity — and so its generated plan — hangs off.
+    const matterId = (data as { lead?: { matter_id?: string | null } } | null)?.lead?.matter_id ?? null
+    await syncLeadTasksToStatus(admin, intakeId, matterId, statusChange.status, { id: userId })
     return NextResponse.json(data)
   }
 
@@ -198,7 +232,18 @@ export async function PATCH(
     }
     matterId = converted.matterId
   }
-  if (details.status === 'lost') { /* retained as a lead; the RPC persisted lost */ }
+  // The lead form can move status too, so the same sweep runs here. Read from
+  // what was persisted, not from `details`: hiring rewrites the status on its
+  // way to conversion, and that matter keeps its plan.
+  if (!requestedHired) {
+    await syncLeadTasksToStatus(
+      admin,
+      intakeId,
+      (lead.matter_id as string | null) ?? null,
+      persistedDetails.status,
+      { id: userId },
+    )
+  }
   const [persistedLeadResult, persistedSpouseResult] = await Promise.all([
     admin.from('client_intake').select('*').eq('id', intakeId).single(),
     // The just-converted matter when conversion happened, otherwise the lead's

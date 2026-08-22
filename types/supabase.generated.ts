@@ -7421,6 +7421,7 @@ export type Database = {
           auto: boolean
           batch_tag: string | null
           checklist: Json
+          closeout_reason: string | null
           completed_at: string | null
           completed_by: string | null
           conditional: boolean
@@ -7479,6 +7480,7 @@ export type Database = {
           auto?: boolean
           batch_tag?: string | null
           checklist?: Json
+          closeout_reason?: string | null
           completed_at?: string | null
           completed_by?: string | null
           conditional?: boolean
@@ -7537,6 +7539,7 @@ export type Database = {
           auto?: boolean
           batch_tag?: string | null
           checklist?: Json
+          closeout_reason?: string | null
           completed_at?: string | null
           completed_by?: string | null
           conditional?: boolean
