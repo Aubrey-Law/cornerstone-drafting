@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCrmDashboard, isConverted } from '@/lib/crm/dashboard'
+import { buildCrmDashboard, isConverted, isPipelinePerson } from '@/lib/crm/dashboard'
 import type { CrmPeopleRow, CrmStageRow } from '@/lib/queries/cornerstoneCrm'
 
 const NOW = new Date('2026-08-06T16:00:00.000Z')
@@ -26,6 +26,7 @@ const stages: CrmStageRow[] = [
 function person(overrides: Partial<CrmPeopleRow> & { id: string }): CrmPeopleRow {
   return {
     sourceSystem: 'cornerstone',
+    personKind: 'primary',
     name: 'Person',
     email: null,
     phone: null,
@@ -131,5 +132,54 @@ describe('crm dashboard', () => {
     expect(snapshot().recentPeople.map(entry => entry.id)).toEqual([
       'p3', 'p2', 'p1', 'p6', 'p5', 'p4',
     ])
+  })
+})
+
+describe('crm dashboard funnel scope', () => {
+  // The contact sync writes a person for every spouse, child and fiduciary,
+  // pinned at the first stage and never advanced. Counting them as leads put
+  // people who cannot convert into the denominator.
+  const related = [
+    person({ id: 'spouse', personKind: 'related', stageId: 'stage-new' }),
+    person({ id: 'child', personKind: 'related', stageId: 'stage-new' }),
+    person({ id: 'trustee', personKind: 'related', stageId: 'stage-new' }),
+    person({ id: 'walk-in', personKind: 'standalone', stageId: 'stage-new' }),
+  ]
+  const withRelated = () => buildCrmDashboard({ people: [...people, ...related], stages, now: NOW })
+
+  it('identifies which people can move through the pipeline', () => {
+    expect(isPipelinePerson(people[0])).toBe(true)
+    expect(isPipelinePerson(related[0])).toBe(false)
+    expect(isPipelinePerson(related[3])).toBe(false)
+  })
+
+  it('keeps related contacts out of the conversion rate (catches a denominator diluted by spouses and fiduciaries)', () => {
+    // Same two conversions over the same six leads as without the contacts.
+    expect(withRelated().conversion).toEqual({ percent: 33, converted: 2, total: 6 })
+  })
+
+  it('keeps related contacts out of the active pipeline', () => {
+    expect(withRelated().activePipeline.count).toBe(4)
+  })
+
+  it('keeps related contacts out of stage occupancy', () => {
+    const newInquiry = withRelated().pipeline.find(entry => entry.label === 'New Inquiry')
+    expect(newInquiry?.count).toBe(1)
+  })
+
+  it('keeps related contacts out of lead sources', () => {
+    const sources = withRelated().leadSources
+    expect(sources.reduce((sum, slice) => sum + slice.count, 0)).toBe(people.length)
+  })
+
+  it('still counts every contact in the people total and follow-ups', () => {
+    // "Total people" is the contact base, not the funnel — related rows belong.
+    expect(withRelated().people.count).toBe(10)
+    expect(withRelated().recentPeople.length).toBeGreaterThan(people.length)
+  })
+
+  it('reports zero rather than dividing by zero when no leads exist', () => {
+    const contactsOnly = buildCrmDashboard({ people: related, stages, now: NOW })
+    expect(contactsOnly.conversion).toEqual({ percent: 0, converted: 0, total: 0 })
   })
 })
