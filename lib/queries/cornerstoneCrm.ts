@@ -55,9 +55,6 @@ type CrmPersonRow = {
   next_follow_up_at: string | null
   last_engagement_at: string | null
   campaign_opt_out: boolean | null
-  twenty_contact_id: string | null
-  sync_state: string | null
-  last_synced_at: string | null
   stage_id: string | null
   stage_entered_at: string | null
   created_at: string
@@ -168,16 +165,13 @@ export interface CrmPeopleRow {
   nextFollowUpAt: string | null
   lastEngagementAt: string | null
   campaignOptOut: boolean | null
-  syncState: CrmPersonRow['sync_state']
   stageId: string | null
   stageName: string | null
   stageSlug: string | null
   stageEnteredAt: string | null
-  twentyContactId: string | null
   sourceRecordId: string | null
   sourceRecordHref: string | null
   sourceRecordLabel: string | null
-  lastSyncedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -391,16 +385,13 @@ export async function fetchCrmPeople(limit = 200): Promise<{ people: CrmPeopleRo
         nextFollowUpAt: person.next_follow_up_at,
         lastEngagementAt: person.last_engagement_at,
         campaignOptOut: person.campaign_opt_out,
-        syncState: person.sync_state,
         stageId: person.stage_id,
         stageName: stage?.name ?? null,
         stageSlug: stage?.slug ?? null,
         stageEnteredAt: person.stage_entered_at ?? null,
-        twentyContactId: person.twenty_contact_id,
         sourceRecordId: person.lead_id ?? person.cornerstone_matter_id,
         sourceRecordHref: sourceHref,
         sourceRecordLabel: sourceLabel,
-        lastSyncedAt: person.last_synced_at,
         createdAt: person.created_at,
         updatedAt: person.updated_at,
       }
