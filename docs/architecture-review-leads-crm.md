@@ -163,10 +163,48 @@ The score is computed at render (`lib/leads/score.ts`) and stored nowhere:
   anything touches the lead.
 - Writing the mirror directly means entering the bidirectional trigger loop in §2.
 
-`confidence_score` remains the right slot **if** scores ever need to be queried
-in SQL — a "hot leads" digest, or server-side ranking over more than the 200
-rows the list loads. At that point the write belongs in the lead PATCH route,
-not in a new trigger.
+`confidence_score` was the obvious slot, and it is now gone with the rest of the
+mirror (§5a). If scores ever need to be queried in SQL — a "hot leads" digest,
+or server-side ranking over more than the 200 rows the list loads — the column
+belongs on `client_intake` alongside the other lead fields, written by the lead
+PATCH route rather than by a trigger.
+
+## 5a. The mirror is retired
+
+`20261008000000_retire_crm_opportunity_mirror.sql` stops
+`cornerstone_crm_opportunities` being written and stops it writing back. This
+also closes out §2: with the mirror inert, the bidirectional trigger loop is
+gone and `client_intake` / `matters` are the only writers of lead lifecycle.
+
+What the investigation established before anything was changed:
+
+- **One** application read existed (`lib/queries/crmHub.ts`, the CRM activities
+  page), using the mirror for a display label and an intake id. Both come from
+  `cornerstone_crm_people` via `person_id`, so the read was re-pointed and the
+  rendered column is unchanged.
+- **Zero** application writes. Every row was trigger-produced.
+- The write-back was a **loop, not an inbound path** — nothing outside the
+  database wrote the mirror, so it could only echo values the sync triggers had
+  just derived from `client_intake` and `matters`. It was also already inert:
+  27 production rows sat with a NULL `lead_status` against a `hired` matter and
+  a `won` opportunity, and the app ran fine on them.
+- The `opportunity.*` outbox has no consumer; 415 rows sit `held`.
+
+One trap was worth the whole investigation. `sync_crm_activity_from_lead_activity()`
+returned early when no opportunity row existed, so stopping the mirror without
+touching it would have silently stopped mirroring **every new lead's** timeline
+into the CRM activities page while old leads kept working — a failure that looks
+like nothing at all. Verified against a scratch Postgres running the full
+migration chain: with the old guard the activity does not land; with the guard
+relaxed to require only `person_id`, it does.
+
+**The table itself still exists**, deliberately. Code and schema deploy in no
+guaranteed order, so the release before this migration must keep finding it.
+Dropping it is a follow-up, and not a one-liner: `cornerstone_crm_activities.opportunity_id`
+holds an `ON DELETE CASCADE` FK that would take all 235 activity rows with it,
+and `v_cornerstone_crm_opportunities` and `v_cornerstone_crm_parity` are hard
+`DROP` blockers. The order is recorded in the migration header and in the
+table's own `COMMENT`.
 
 ## 6. Truncation limits are invisible to the reader
 
@@ -213,9 +251,9 @@ Not scheduled; ordered by value per unit of risk.
 1. ~~**Fix the CRM conversion rate.**~~ Done — see §4a. The cause was not the
    one this review first named; the denominator counted contacts who cannot
    convert, rather than the numerator reading a dead column.
-2. **Retire or adopt the CRM mirror** (§5). It is carrying schema, triggers and
-   RLS policies for no reader. Either point the Opportunities UI at it or drop
-   it to a view over the tables that are actually authoritative.
+2. ~~**Retire or adopt the CRM mirror.**~~ Retired — see §5a. The remaining step
+   is the physical `DROP TABLE`, which needs its own migration once the release
+   that still reads the old shape is gone; §5a records the required order.
 3. **Add a stage-history table** (§7), the way relationship status already has
    one. Stage is the field the practice manages by, and it has no record.
 4. **Assert the stage vocabularies agree** (§3), the way
