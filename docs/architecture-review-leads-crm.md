@@ -479,7 +479,10 @@ migration deploy. Pull requests get the credential-free structural check only.
 Regenerating needs credentials that a development container has neither of:
 `--db-url` and `--local` need Docker, `--linked` and `--project-id` need an
 access token. So the workflow that finds the drift can also fix it — dispatched
-with `open_pr`, it regenerates and raises the pull request itself.
+with `open_pr`, it regenerates and raises the pull request itself. That path is
+a separate job rather than a conditional permission, because `permissions:`
+takes no expressions: an expression there does not fail the step, it
+invalidates the whole workflow file.
 
 ## Ranked recommendations
 

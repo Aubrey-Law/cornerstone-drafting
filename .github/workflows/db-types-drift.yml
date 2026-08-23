@@ -25,10 +25,12 @@ name: Database types drift
 # same event. A types check racing it would report drift that is a few seconds
 # old rather than real.
 #
-# FIXING DRIFT. Regenerating needs credentials, so it cannot be done from a
-# development container that has neither Docker nor an access token. Dispatch
-# this workflow with `open_pr` to have it regenerate and open the pull request
-# itself.
+# WHY TWO JOBS. Regenerating needs credentials that a development container has
+# neither of: `--db-url` and `--local` need Docker, `--linked` and
+# `--project-id` need an access token. So the workflow that finds drift can also
+# fix it — but only that path may write, and `permissions:` takes no
+# expressions, so the writing path is a separate job rather than a conditional
+# permission on one.
 
 on:
   pull_request:
@@ -38,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       open_pr:
-        description: 'Open a pull request with the regenerated types if they differ'
+        description: 'Regenerate and open a pull request instead of just failing on drift'
         type: boolean
         default: false
 
@@ -52,12 +54,13 @@ concurrency:
 jobs:
   types-drift:
     name: Generated types match the database
+    # The regenerate job below covers this same ground when it runs, and would
+    # otherwise fail the run it is meant to fix.
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.open_pr) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only the dispatch path writes, and only to its own branch.
     permissions:
-      contents: ${{ (github.event_name == 'workflow_dispatch' && inputs.open_pr) && 'write' || 'read' }}
-      pull-requests: ${{ (github.event_name == 'workflow_dispatch' && inputs.open_pr) && 'write' || 'read' }}
+      contents: read
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -80,7 +83,8 @@ jobs:
 
       # Same reasoning as db-migrate-deploy.yml: read the version npm actually
       # installed rather than the caret range's floor, so the CLI here is the
-      # one the repo is pinned to.
+      # one the repo is pinned to. A different CLI generates a different file,
+      # which would read as drift.
       - name: Resolve the pinned CLI version
         id: cli
         if: github.event_name != 'pull_request' && env.SUPABASE_ACCESS_TOKEN != '' && env.SUPABASE_URL != ''
@@ -110,33 +114,89 @@ jobs:
         if: steps.cli.outputs.version != ''
         run: npm run db:types:linked
 
-      - name: Compare against the checked-in file
-        id: compare
+      - name: Fail on drift, printing it
         if: steps.cli.outputs.version != ''
         run: |
           if git diff --quiet -- types/supabase.generated.ts; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Generated types match the database."
             exit 0
           fi
-          echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "::group::Drift"
           git --no-pager diff --stat -- types/supabase.generated.ts
           git --no-pager diff -- types/supabase.generated.ts | head -400
           echo "::endgroup::"
+          echo "::error::types/supabase.generated.ts does not match the database. Re-run this workflow from the Actions tab with 'open_pr' checked and it will raise the pull request itself."
+          exit 1
 
-      # The dispatch path exists because regenerating needs credentials that a
-      # development container does not have: fixing drift by hand is not an
-      # option, so the workflow that finds it can also propose the fix.
+  regenerate:
+    name: Regenerate the types and open a pull request
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.open_pr }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # Fails rather than warns: this path was asked for explicitly, and one
+      # that quietly regenerates nothing would look like "no drift".
+      - name: Require credentials
+        run: |
+          missing=
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -n "$SUPABASE_URL" ] || missing="$missing SUPABASE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — types cannot be regenerated. Add them under Settings → Secrets and variables → Actions, then re-run."
+            exit 1
+          fi
+
+      - name: Resolve the pinned CLI version
+        id: cli
+        run: |
+          version=$(node -p "require('./package-lock.json').packages['node_modules/supabase']?.version || require('./package.json').devDependencies.supabase.replace(/^[^0-9]*/, '')")
+          echo "Using Supabase CLI $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ steps.cli.outputs.version }}
+
+      - name: Link the project
+        run: |
+          ref=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://([^.]+)\..*$#\1#')
+          case "$ref" in
+            "" | *[!a-z0-9]* )
+              echo "::error::Could not read a project ref out of SUPABASE_URL. Expected https://<ref>.supabase.co."
+              exit 1
+              ;;
+          esac
+          supabase link --project-ref "$ref"
+
+      - name: Regenerate types from the database
+        run: npm run db:types:linked
+
       - name: Open a pull request with the regenerated types
-        if: steps.compare.outputs.changed == 'true' && github.event_name == 'workflow_dispatch' && inputs.open_pr
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if git diff --quiet -- types/supabase.generated.ts; then
+            echo "Generated types already match the database; nothing to open."
+            exit 0
+          fi
+          git --no-pager diff --stat -- types/supabase.generated.ts
           branch="chore/regenerate-supabase-types-${GITHUB_RUN_ID}"
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git checkout -b "$branch"
+          # Only the generated file: never a stray change from the run.
           git add types/supabase.generated.ts
           git commit -m 'Regenerate Supabase types from the database'
           git push -u origin "$branch"
@@ -144,10 +204,4 @@ jobs:
             --base "${GITHUB_REF_NAME}" \
             --head "$branch" \
             --title 'Regenerate Supabase types from the database' \
-            --body 'Generated by the Database types drift workflow. `types/supabase.generated.ts` no longer described the deployed schema; this is `npm run db:types:linked` run against it, unedited.'
-
-      - name: Fail on drift
-        if: steps.compare.outputs.changed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.open_pr)
-        run: |
-          echo "::error::types/supabase.generated.ts does not match the database. Run 'npm run db:types:linked' with Supabase credentials, or dispatch this workflow with open_pr to have it raise the pull request."
-          exit 1
+            --body 'Opened by the Database types drift workflow. `types/supabase.generated.ts` no longer described the deployed schema; this is `npm run db:types:linked` run against it, unedited.'
