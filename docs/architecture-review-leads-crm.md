@@ -143,8 +143,23 @@ it. Below 500 total people the numbers are exact. See §6.
 - `expected_close_date` is never written. `expected_value` is only ever a
   trigger copy of `engagement_fee_quoted`. `practice_area` and `service_type`
   hold the same value in two columns.
-- `twenty_opportunity_id`, `twenty_contact_id`, `twenty_company_id`,
-  `sync_state`, `last_synced_at` are leftovers of an abandoned CRM sync.
+- ~~`twenty_opportunity_id`, `twenty_contact_id`, `twenty_company_id`,
+  `sync_state`, `last_synced_at` are leftovers of an abandoned CRM sync.~~
+  **Dropped.** `twenty_opportunity_id` went with the mirror (§5b); the other
+  four went in `20261013000000_drop_twenty_sync_columns.sql`. Verified dead
+  against production first: of 221 people, none carried a Twenty contact or
+  company id and none had ever been synced. `sync_state` read `'pending'` on
+  every row — the triggers wrote that literal on insert and nothing ever
+  advanced it, so a column with one value across the whole table was telling a
+  reader a sync was queued when none existed.
+
+  Two mechanics worth keeping, both learned the hard way here: the person-sync
+  triggers named `sync_state` in their INSERT lists, so the same
+  execution-time-resolution trap as §5b applied and both were rewritten first;
+  and `create or replace view` can only *append* columns, so
+  `v_cornerstone_crm_people` had to be dropped and recreated rather than
+  replaced. `cornerstone_crm_sync_events` is untouched — it is the outbox
+  itself, not a Twenty artefact, and the CRM sync page reads it.
 - `/admin/crm/opportunities` re-exports the leads pages, which read
   `client_intake` + `matters`. The opportunities table and
   `v_cornerstone_crm_opportunities` are effectively write-only.
