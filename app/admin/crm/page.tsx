@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'CRM' }
 
 export default async function AdminCrmPage() {
   const auth = await getCachedClaims()
-  const { snapshot, tasks, error } = await fetchCrmDashboard(auth?.id ?? null)
+  const { snapshot, tasks, truncated, peopleCeiling, error } = await fetchCrmDashboard(auth?.id ?? null)
 
   return (
     <div className="space-y-4">
@@ -29,6 +29,13 @@ export default async function AdminCrmPage() {
         >
           CRM data could not be fully loaded: {error}
         </div>
+      )}
+
+      {truncated && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Counts cover the {peopleCeiling.toLocaleString('en-US')} most recent contacts. The book is
+          larger than that, so these are a sample rather than a total.
+        </p>
       )}
 
       <CrmStatCards snapshot={snapshot} />

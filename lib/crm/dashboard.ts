@@ -1,5 +1,9 @@
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
-import type { CrmPeopleRow, CrmStageRow } from '@/lib/queries/cornerstoneCrm'
+import type {
+  CrmDashboardPersonRow,
+  CrmPeopleRow,
+  CrmStageRow,
+} from '@/lib/queries/cornerstoneCrm'
 
 /** A headline count plus how it moved against the prior month. */
 export interface CrmTotal {
@@ -49,7 +53,7 @@ function share(part: number, whole: number): number {
   return whole > 0 ? Math.round((part / whole) * 100) : 0
 }
 
-function total(rows: CrmPeopleRow[], months: { current: string; prior: string }): CrmTotal {
+function total(rows: CrmDashboardPersonRow[], months: { current: string; prior: string }): CrmTotal {
   const created = rows.map(row => firmDateKey(row.createdAt)?.slice(0, 7) ?? null)
   const newThisMonth = created.filter(key => key === months.current).length
   const newPriorMonth = created.filter(key => key === months.prior).length
@@ -71,12 +75,12 @@ function total(rows: CrmPeopleRow[], months: { current: string; prior: string })
  * matter once matter contacts sync — which understated conversion and inflated
  * the active-pipeline and stage-occupancy counts.
  */
-export function isPipelinePerson(person: CrmPeopleRow): boolean {
+export function isPipelinePerson(person: CrmDashboardPersonRow): boolean {
   return person.personKind === 'primary'
 }
 
 /** A person is converted once their lifecycle says so or a matter exists. */
-export function isConverted(person: CrmPeopleRow, wonStageIds: Set<string>): boolean {
+export function isConverted(person: CrmDashboardPersonRow, wonStageIds: Set<string>): boolean {
   if (person.lifecycleStatus && CONVERTED_LIFECYCLES.has(person.lifecycleStatus.toLowerCase())) {
     return true
   }
@@ -95,7 +99,7 @@ function titleCase(value: string): string {
  * Lead volume by acquisition source, largest first. Anything past the top five
  * collapses into "Other" so the legend stays readable on a small card.
  */
-function buildLeadSources(rows: CrmPeopleRow[], limit = 5): CrmSlice[] {
+function buildLeadSources(rows: CrmDashboardPersonRow[], limit = 5): CrmSlice[] {
   const counts = new Map<string, number>()
   for (const row of rows) {
     const raw = row.leadSource?.trim() || row.referralSource?.trim() || ''
@@ -119,7 +123,7 @@ function buildLeadSources(rows: CrmPeopleRow[], limit = 5): CrmSlice[] {
 }
 
 /** Stage occupancy in the firm's configured stage order. */
-function buildPipeline(rows: CrmPeopleRow[], stages: CrmStageRow[]): CrmPipelineStage[] {
+function buildPipeline(rows: CrmDashboardPersonRow[], stages: CrmStageRow[]): CrmPipelineStage[] {
   const active = [...stages]
     .filter(stage => stage.is_active)
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -135,9 +139,17 @@ function buildPipeline(rows: CrmPeopleRow[], stages: CrmStageRow[]): CrmPipeline
   })
 }
 
+/**
+ * Every count here is over `input.people`, which is now the whole contact base
+ * rather than the first 500 rows of it — see `fetchCrmDashboardPeople()`. The
+ * rows carry only the columns these counts read; the eight rows the "recent
+ * people" table renders are read separately, because that table needs names,
+ * stages and links that a count does not.
+ */
 export function buildCrmDashboard(input: {
-  people: CrmPeopleRow[]
+  people: CrmDashboardPersonRow[]
   stages: CrmStageRow[]
+  recent?: CrmPeopleRow[]
   now?: Date
   recentLimit?: number
 }): CrmDashboardSnapshot {
@@ -175,7 +187,7 @@ export function buildCrmDashboard(input: {
       dueToday: followUpKeys.filter(key => key === today).length,
       upcoming: followUpKeys.filter(key => key > today).length,
     },
-    recentPeople: [...people]
+    recentPeople: [...(input.recent ?? [])]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, input.recentLimit ?? 8),
   }

@@ -55,14 +55,17 @@ function person(overrides: Partial<CrmPeopleRow> & { id: string }): CrmPeopleRow
   }
 }
 
-const snapshot = buildCrmDashboard({
-  now: NOW,
-  stages,
-  people: [
+const dashboardPeople = [
     person({ id: 'p1', name: 'Chen, Marcus' }),
     person({ id: 'p2', name: 'Okafor, Ada', stageId: 'stage-won', lifecycleStatus: 'converted' }),
     person({ id: 'p3', name: 'Park, Sun', leadSource: null, createdAt: '2026-07-02T12:00:00.000Z' }),
-  ],
+]
+
+const snapshot = buildCrmDashboard({
+  now: NOW,
+  stages,
+  people: dashboardPeople,
+  recent: dashboardPeople,
 })
 
 const task: TaskRow = taskFixture({

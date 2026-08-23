@@ -275,8 +275,8 @@ that guarantee with it, so the migration restores it as
 ## 6. Truncation limits are invisible to the reader
 
 - ~~`app/admin/leads/page.tsx` loads at most 200 leads and 2,000 activity rows.~~
-- `fetchCrmPeople(500)` in `lib/queries/crmDashboard.ts`;
-  `.limit(5000)` in `lib/queries/crmOperations.ts`.
+- ~~`fetchCrmPeople(500)` in `lib/queries/crmDashboard.ts`;
+  `.limit(5000)` in `lib/queries/crmOperations.ts`.~~
 
 Every filter, sort and insight card — including the lead score — was computed
 client-side over that truncated set. At the volume this was written at (56 lead
@@ -298,7 +298,22 @@ than the loaded page, deliberately: the cards are how the reader sees what a
 filter or a page boundary is hiding, so counting the page would have made them
 agree with the list by construction.
 
-The CRM dashboard's two limits are unchanged and still truncate silently.
+**Fixed for the CRM dashboard:** the overview counted the first 500 rows of
+`cornerstone_crm_people` and presented the result as the firm's whole book. At
+221 contacts that was already 44% of the cap, and the contact sync adds several
+rows per matter — a spouse, children, fiduciaries — so it was the limit closest
+to biting. `fetchCrmDashboardPeople()` now reads the whole contact base in
+narrow pages (only the seven columns the counts read, ordered on a unique pair
+so pages partition rather than overlap), and the eight rows the recent-people
+table renders are read separately with the joins that table needs. A ceiling
+remains at 25,000 contacts, but reaching it renders a line on the page saying
+the counts are a sample — the objection to the old cap was never the number,
+it was the silence.
+
+`lib/queries/crmOperations.ts` and `app/admin/crm/CrmActionQueue.tsx` were
+deleted rather than fixed: nothing rendered the action queue, so those
+`.limit(5000)` reads never ran. A dead reader with a lurking limit is worse
+than no reader — it reads as covered.
 
 ## 7. Audit-trail gaps
 
