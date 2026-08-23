@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { fetchMatterAgingSummary, fetchMatterEstateSnapshot } from '@/lib/queries/matterOverview'
+import { fetchMatterStageHistory } from '@/lib/queries/matterStageHistory'
 import { fetchDesignSheet, fetchIntakeForMatter } from '@/lib/queries'
 import { fetchUnreviewedUploadCounts } from '@/lib/matter/unreviewedUploads'
 import { isSmsConfigured } from '@/lib/communications/config'
@@ -257,6 +258,7 @@ export default async function MatterDetailPage({ params }: Params) {
     designSheet,
     intakeSnapshot,
     matterActivity,
+    stageHistory,
   ] = await Promise.all([
     loadMatterShell(admin, id),
     admin.from('matter_details').select('*').eq('client_id', id).maybeSingle(),
@@ -264,6 +266,7 @@ export default async function MatterDetailPage({ params }: Params) {
     fetchDesignSheet(id),
     loadIntakeSnapshotOptional(id),
     loadMatterActivity(admin, id),
+    fetchMatterStageHistory(id),
   ])
 
   const coreLoadError = detailsError
@@ -346,6 +349,7 @@ export default async function MatterDetailPage({ params }: Params) {
         ...leadMeetingNotes.map(row => ({ id: row.id, lead_id: intakeId!, body: `${row.title}\n\n${row.body}`, created_at: row.meeting_date, note_type: 'system' as const })),
       ]}
       initialActivity={initialActivity}
+      initialStageHistory={stageHistory.entries}
       designSheetSeeded={designSheetSeeded}
       reviewFlags={reviewFlags}
       resyncPreviewCount={resyncPreviewCount}

@@ -261,13 +261,29 @@ with a null `from_stage`. Earlier transitions were never recorded anywhere and
 cannot be recovered, so the timeline starts from today rather than inventing
 history; the table `COMMENT` says how to tell a seeded row from an observed one.
 
-**It has no reader yet, and that is not the mirror mistake in §5a.** The mirror
-duplicated *live* state that was authoritative elsewhere and wrote back into it —
-redundancy that could disagree with its source. A history table records *past
-transitions that exist nowhere else*: it is the only copy, and its value is that
-the record exists when a question is asked of it. Surfacing it (a stage timeline
-on the matter page, or real time-in-stage on the aging board) is the natural
-follow-up.
+**It is surfaced on the matter page.** `MatterStageHistoryCard` sits in the
+Overview stack beneath `MatterProgressTimeline`: that rail shows where a matter
+is, this shows how it got there and how long each stage took. Rows are read by
+`fetchMatterStageHistory` (`lib/queries/matterStageHistory.ts`) and shaped into
+intervals by `buildStageTimeline` (`lib/matters/stageTimeline.ts`) — the stored
+rows are transitions, and the duration of a stage is derived from when the next
+one began.
+
+Three details the card has to respect, all consequences of the table's design:
+
+- The earliest row is a **starting point, not an observed move** — either the
+  matter's creation or the seeded backfill row — so it reads "Recorded from …"
+  rather than inventing a stage it moved out of.
+- Stage keys are unconstrained, so `historicalStageLabel` falls back to
+  title-casing anything no longer in `STAGES`; a renamed stage still renders.
+- Durations come from `entered_at`, the business date, never `created_at`.
+
+`buildStageTimeline` lives outside the `server-only` query module so the client
+card and the server reader share one definition of the shape.
+
+Still open: real time-in-stage on the aging board, which today derives business
+days from `v_matter_aging` for the *current* stage only and has no history to
+draw on for past ones.
 
 ## 8. Typing
 
@@ -288,8 +304,8 @@ Not scheduled; ordered by value per unit of risk.
 2. ~~**Retire or adopt the CRM mirror.**~~ Retired — see §5a. The remaining step
    is the physical `DROP TABLE`, which needs its own migration once the release
    that still reads the old shape is gone; §5a records the required order.
-3. ~~**Add a stage-history table.**~~ Done — see §7a. Surfacing it on the matter
-   page or the aging board is the natural follow-up.
+3. ~~**Add a stage-history table.**~~ Done and surfaced on the matter page — see
+   §7a. Real time-in-stage on the aging board remains open.
 4. **Assert the stage vocabularies agree** (§3), the way
    `tests/stage-engine-keys.test.ts` already does for engine keys.
 5. **Server-side ranking and pagination for leads** (§6), before volume makes

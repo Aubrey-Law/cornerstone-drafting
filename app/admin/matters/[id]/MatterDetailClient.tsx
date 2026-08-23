@@ -79,6 +79,8 @@ import { MatterAssetsTabContent } from './MatterOverviewAssets'
 import { MatterMeetingNotesCard } from './MatterMeetingNotesCard'
 import { IntakeSyncStatusCard } from './IntakeSyncStatusCard'
 import { MatterProgressTimeline } from './MatterProgressTimeline'
+import { MatterStageHistoryCard } from './MatterStageHistoryCard'
+import type { MatterStageHistoryEntry } from '@/lib/matters/stageTimeline'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
 import { MatterPeopleTab } from './MatterPeopleTab'
 import { MatterDocumentsTab } from './MatterDocumentsTab'
@@ -147,6 +149,7 @@ interface MatterDetailClientProps {
   initialLeadNotes?: Array<{ id: string; lead_id: string; body: string; created_at: string; note_type: 'internal' | 'system' }>
   initialMatterLinkedNotes?: LinkedMatterNote[]
   initialActivity?: MatterActivity[]
+  initialStageHistory?: MatterStageHistoryEntry[]
   designSheetSeeded?: boolean
   reviewFlags?: IntakeReadinessFlag[]
   resyncPreviewCount?: number
@@ -199,6 +202,7 @@ function MatterDetailClientInner({
   initialLeadNotes = [],
   initialMatterLinkedNotes = [],
   initialActivity = [],
+  initialStageHistory = [],
   designSheetSeeded = false,
   reviewFlags = [],
   resyncPreviewCount = 0,
@@ -963,6 +967,9 @@ function MatterDetailClientInner({
                   details={matterDetails}
                   intakeCompletedAt={clientIntakeRow?.intake_completed_at ?? null}
                 />
+                {/* The milestone rail above shows where the matter is; this shows
+                    how it got there and how long each stage took. */}
+                <MatterStageHistoryCard entries={initialStageHistory} />
                 {/* Matter details leads the tab: the standing facts come before
                     the next action that depends on them. */}
                 <MatterDetailsCard
