@@ -224,16 +224,50 @@ pagination is the fix whenever the firm's lead count approaches that bound.
   insert-only. Its CHECK omitted `'declined'` when v3 introduced that state;
   **this was already corrected** in `20260824000000_matter_lifecycle_v3.sql`
   (lines 30–38). Verified during this review, no action needed.
-- There is **no stage-change history** for `matters.stage` or for
-  `cornerstone_crm_opportunities.stage_id` — only a best-effort
-  `opportunity_stage_changed` row in `cornerstone_crm_activities`.
-- That activity row's idempotency key is `id || ':' || epoch(updated_at)`, so
-  two stage changes landing in the same second collide and the second is
-  dropped by `on conflict do nothing`. Left as accepted debt: the table nothing
-  currently reads (§5) makes the loss inconsequential today, and the fix means
-  copying a 40-line trigger body for a mirror with no reader.
+- ~~There is **no stage-change history** for `matters.stage`.~~ **Fixed** by
+  `20261009000000_matter_stage_history.sql` — see §7a.
+- The `opportunity_stage_changed` activity's idempotency key was
+  `id || ':' || epoch(updated_at)`, so two stage changes in the same second
+  collided and the second was dropped. Moot as of §5a: the trigger that wrote
+  it is gone, and `matter_stage_history` now records stage transitions properly.
 - Field-level edits emit one generic `details_updated` activity carrying no
   before/after values.
+
+## 7a. Stage history
+
+`matter_stage_history` records every `matters.stage` transition — insert-only,
+staff-read, written by a trigger on the column so no caller can forget it. It
+answers what nothing could before: how long a matter actually sat in Drafting,
+whether it was walked backwards, and who moved it.
+
+Two deliberate departures from the `matter_relationship_status_history`
+precedent it otherwise copies:
+
+- **The stage columns carry no CHECK.** That precedent is the cautionary tale:
+  its CHECK was written with three states, lifecycle v3 added `declined`, and
+  the constraint was left behind until `20260824000000` caught it. Stage has a
+  much larger vocabulary that has already moved more than once — `discovery_call`
+  added, `design_input` split, `revision` reordered. A history table records what
+  happened; pinning it to today's vocabulary means the next stage change either
+  breaks the audit insert or silently blocks a legitimate transition. The
+  constraint belongs on `matters.stage` itself, which is where §3 put it.
+- **`entered_at` is separate from `created_at`.** Since `20260910000000` a caller
+  can pin `stage_entered_at` — the discovery anchor sets it to the date of the
+  call, not the date of the write — so the business date and the write moment are
+  different facts and a duration computed from the wrong one would be wrong.
+
+The backfill seeds one row per existing matter from its own `stage_entered_at`,
+with a null `from_stage`. Earlier transitions were never recorded anywhere and
+cannot be recovered, so the timeline starts from today rather than inventing
+history; the table `COMMENT` says how to tell a seeded row from an observed one.
+
+**It has no reader yet, and that is not the mirror mistake in §5a.** The mirror
+duplicated *live* state that was authoritative elsewhere and wrote back into it —
+redundancy that could disagree with its source. A history table records *past
+transitions that exist nowhere else*: it is the only copy, and its value is that
+the record exists when a question is asked of it. Surfacing it (a stage timeline
+on the matter page, or real time-in-stage on the aging board) is the natural
+follow-up.
 
 ## 8. Typing
 
@@ -254,8 +288,8 @@ Not scheduled; ordered by value per unit of risk.
 2. ~~**Retire or adopt the CRM mirror.**~~ Retired — see §5a. The remaining step
    is the physical `DROP TABLE`, which needs its own migration once the release
    that still reads the old shape is gone; §5a records the required order.
-3. **Add a stage-history table** (§7), the way relationship status already has
-   one. Stage is the field the practice manages by, and it has no record.
+3. ~~**Add a stage-history table.**~~ Done — see §7a. Surfacing it on the matter
+   page or the aging board is the natural follow-up.
 4. **Assert the stage vocabularies agree** (§3), the way
    `tests/stage-engine-keys.test.ts` already does for engine keys.
 5. **Server-side ranking and pagination for leads** (§6), before volume makes
