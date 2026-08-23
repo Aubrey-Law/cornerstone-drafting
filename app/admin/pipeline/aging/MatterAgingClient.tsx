@@ -74,22 +74,35 @@ function SummaryTile({
  * Total time in the current stage across every visit to it.
  *
  * `days_in_stage` measures from `stage_entered_at`, which resets on re-entry, so
- * a matter cycling through the revision loop looks new each time it comes back
- * and never ages into red. Shown only when the stage has genuinely been
- * re-entered, so the common case stays uncluttered.
+ * a matter cycling through the revision loop looks new each time it comes back.
+ * That total now counts against `cumulative_sla_days`, so this line also has to
+ * say when it is the reason a row is red — the SLA bar above shows only the
+ * current visit and would otherwise look perfectly healthy next to it.
  */
 function StageChurn({ row }: { row: MatterAgingRow }) {
-  const visits = row.stage_visits ?? 0
-  const total = row.stage_total_days ?? 0
-  if (visits < 2) return null
+  const visits = row.stage_visits
+  const total = row.cumulative_days
+  const breached = row.is_cumulative_overdue
+  if (visits < 2 && !breached) return null
 
+  const budget = row.cumulative_sla_days
   return (
     <p
-      className="flex items-center gap-1 text-[10px] text-muted-foreground"
-      title={`This stage has been entered ${visits} times, for ${total} business day${total === 1 ? '' : 's'} in total. The SLA above measures only the current visit.`}
+      className={cn(
+        'flex items-center gap-1 text-[10px]',
+        breached ? 'font-semibold text-red-strong' : 'text-muted-foreground',
+      )}
+      title={
+        breached
+          ? `Over the total budget for this stage: ${total} business days across ${visits} visit${visits === 1 ? '' : 's'}, against ${budget}. The bar above measures only the current visit.`
+          : `This stage has been entered ${visits} times, for ${total} business day${total === 1 ? '' : 's'} in total${budget != null ? ` of ${budget} allowed` : ''}. The bar above measures only the current visit.`
+      }
     >
       <RotateCcw aria-hidden className="h-3 w-3 shrink-0" />
-      <span className="tabular-nums">{total}d total · {visits} visits</span>
+      <span className="tabular-nums">
+        {total}
+        {breached && budget != null ? `/${budget}` : ''}d total · {visits} visit{visits === 1 ? '' : 's'}
+      </span>
     </p>
   )
 }

@@ -51,14 +51,19 @@ describe('matter stage totals view', () => {
 })
 
 describe('aging board reader', () => {
-  it('matches totals by either key and degrades without them', () => {
+  it('is consumed through the aging view rather than joined in TypeScript', () => {
     const source = read('lib/queries/pipelineAging.ts')
+    const aging = read('supabase/migrations/20261011000000_cumulative_stage_sla.sql')
 
-    expect(source).toContain("from('v_matter_stage_totals')")
-    expect(source).toContain('matter_id.in.')
-    expect(source).toContain('client_intake_id.in.')
-    // Supporting detail: the board must still render if the view is missing.
-    expect(source).toContain("console.warn('stage totals unavailable:'")
-    expect(source).toMatch(/return rows\s*\n\s*}/)
+    // 20261010000000 joined these totals in TypeScript, keyed on the aging
+    // board's `current_stage`. For matter rows that is the *engine* stage while
+    // the totals are keyed by the raw `matters.stage`, so the match silently
+    // failed across half the vocabulary. 20261011000000 moved the join into the
+    // view, which maps the raw stage onto the engine key first.
+    expect(source).not.toContain("from('v_matter_stage_totals')")
+    expect(source).not.toContain('attachStageTotals')
+    expect(aging).toContain('from public.v_matter_stage_totals t')
+    expect(aging).toContain('public.map_matter_stage_to_engine(t.stage) as stage_key')
+    expect(source).toContain('cumulative_days')
   })
 })

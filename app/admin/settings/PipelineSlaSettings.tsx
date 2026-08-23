@@ -22,7 +22,7 @@ export function PipelineSlaSettings() {
   const [rows, setRows] = useState<StageSlaRow[]>([])
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<Record<string, { sla_days: string; escalation_offset: string }>>({})
+  const [drafts, setDrafts] = useState<Record<string, { sla_days: string; escalation_offset: string; cumulative_sla_days: string }>>({})
 
   const load = useCallback(async () => {
     if (!token) return
@@ -42,6 +42,7 @@ export function PipelineSlaSettings() {
             {
               sla_days: r.sla_days == null ? '' : String(r.sla_days),
               escalation_offset: r.escalation_offset == null ? '' : String(r.escalation_offset),
+              cumulative_sla_days: r.cumulative_sla_days == null ? '' : String(r.cumulative_sla_days),
             },
           ]),
         ),
@@ -65,6 +66,8 @@ export function PipelineSlaSettings() {
 
     const slaDays = draft.sla_days.trim() === '' ? null : Number(draft.sla_days)
     const escalationOffset = draft.escalation_offset.trim() === '' ? null : Number(draft.escalation_offset)
+    const cumulativeSlaDays =
+      draft.cumulative_sla_days.trim() === '' ? null : Number(draft.cumulative_sla_days)
 
     if (slaDays != null && (!Number.isFinite(slaDays) || slaDays < 0)) {
       toast.error('SLA days must be a non-negative number or blank')
@@ -72,6 +75,10 @@ export function PipelineSlaSettings() {
     }
     if (escalationOffset != null && (!Number.isFinite(escalationOffset) || escalationOffset < 0)) {
       toast.error('Escalation offset must be a non-negative number or blank')
+      return
+    }
+    if (cumulativeSlaDays != null && (!Number.isFinite(cumulativeSlaDays) || cumulativeSlaDays < 0)) {
+      toast.error('Total days must be a non-negative number or blank')
       return
     }
 
@@ -89,6 +96,7 @@ export function PipelineSlaSettings() {
           entity: row.entity,
           sla_days: slaDays,
           escalation_offset: escalationOffset,
+          cumulative_sla_days: cumulativeSlaDays,
         }),
       })
       if (!res.ok) {
@@ -134,6 +142,7 @@ export function PipelineSlaSettings() {
             <TableHead>Owner</TableHead>
             <TableHead>SLA days</TableHead>
             <TableHead>Escalation</TableHead>
+            <TableHead>Total days</TableHead>
             <TableHead className="w-24" />
           </TableRow>
         </TableHeader>
@@ -145,7 +154,9 @@ export function PipelineSlaSettings() {
               draft &&
               (draft.sla_days !== (row.sla_days == null ? '' : String(row.sla_days)) ||
                 draft.escalation_offset !==
-                  (row.escalation_offset == null ? '' : String(row.escalation_offset)))
+                  (row.escalation_offset == null ? '' : String(row.escalation_offset)) ||
+                draft.cumulative_sla_days !==
+                  (row.cumulative_sla_days == null ? '' : String(row.cumulative_sla_days)))
 
             return (
               <TableRow key={key}>
@@ -175,6 +186,20 @@ export function PipelineSlaSettings() {
                       setDrafts(prev => ({
                         ...prev,
                         [key]: { ...prev[key], escalation_offset: e.target.value },
+                      }))
+                    }
+                    placeholder="—"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    className="h-8 w-20"
+                    inputMode="numeric"
+                    value={draft?.cumulative_sla_days ?? ''}
+                    onChange={e =>
+                      setDrafts(prev => ({
+                        ...prev,
+                        [key]: { ...prev[key], cumulative_sla_days: e.target.value },
                       }))
                     }
                     placeholder="—"

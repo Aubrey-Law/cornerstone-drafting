@@ -305,12 +305,43 @@ Two decisions worth recording:
   excludes weekends and `firm_holidays`), so the two numbers sitting side by
   side are the same unit. A calendar-day total next to a business-day SLA would
   quietly misread.
-- **Health is unchanged.** The totals are shown, not folded into the red/amber
-  calculation. How work gets prioritised is an SLA policy decision owned by
-  `stage_sla`, and worth making deliberately rather than as a side effect of
-  making the data visible. Folding cumulative time into the SLA — or giving
-  re-entry its own threshold — is the natural next question now that the number
-  exists.
+- **Health was initially left unchanged**, then folded in deliberately as a
+  separate decision — see §7c.
+
+## 7c. Cumulative time now breaches the SLA
+
+`20261011000000` makes the total count, not just display. `stage_sla` gains
+`cumulative_sla_days` — a second threshold measured across every visit, seeded
+at twice the per-visit budget and editable per stage in **Settings → SLA**
+alongside the others. `is_overdue` and `health` go red when *either* the current
+visit exceeds `sla_days` or the total exceeds `cumulative_sla_days`.
+
+Three boundaries drawn on purpose:
+
+- **`needs_outreach` is untouched.** It decides when a *client* is chased, and
+  `escalation_offset` fires before the SLA. Nudging someone over time their
+  earlier round consumed would be wrong when the current round is days old.
+- **Amber is untouched.** It warns that the current visit is nearly due, which
+  is still a per-visit question. Cumulative time only ever triggers red.
+- **A snooze still suppresses everything**, cumulative breach included.
+
+It also fixed a real defect shipped with §7b. `v_matter_stage_totals` is keyed
+by the raw `matters.stage`, but the aging board keys matter rows by the *engine*
+stage from `map_matter_stage_to_engine()`. Those differ across half the
+vocabulary — raw `revision` is engine `revisions`, and `intake` and
+`intake_review` both fold into `design_input` — so the TypeScript join matched
+nothing for exactly the revision loop it was built for. Matter rows now
+re-aggregate totals by engine key inside the view, which also correctly sums the
+two raw stages sharing one engine key, and the TypeScript join is gone rather
+than left to disagree.
+
+**One consequence worth knowing.** `TodayQueue`'s `waitingOnClient` bucket is
+`health !== 'green'`, and its "Nudge all" button emails that set. More rows
+turning red therefore widens what that button would send — still behind an
+explicit click and a preview dialog listing every recipient, but the set is
+larger than before. Nothing sends automatically: the SLA nudge cron is driven by
+`tasks.nudge_at`, not by health, and the only cron that reads health is the
+daily digest, which goes to the attorney.
 
 The view also carries `client_intake_id`, because `v_pipeline_aging` keys matter
 rows by matter id and lead rows by intake id, and the reader needs to match
