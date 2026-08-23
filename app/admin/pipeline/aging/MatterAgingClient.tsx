@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { PauseCircle, RefreshCw, Search } from 'lucide-react'
+import { PauseCircle, RefreshCw, RotateCcw, Search } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
@@ -70,6 +70,30 @@ function SummaryTile({
   )
 }
 
+/**
+ * Total time in the current stage across every visit to it.
+ *
+ * `days_in_stage` measures from `stage_entered_at`, which resets on re-entry, so
+ * a matter cycling through the revision loop looks new each time it comes back
+ * and never ages into red. Shown only when the stage has genuinely been
+ * re-entered, so the common case stays uncluttered.
+ */
+function StageChurn({ row }: { row: MatterAgingRow }) {
+  const visits = row.stage_visits ?? 0
+  const total = row.stage_total_days ?? 0
+  if (visits < 2) return null
+
+  return (
+    <p
+      className="flex items-center gap-1 text-[10px] text-muted-foreground"
+      title={`This stage has been entered ${visits} times, for ${total} business day${total === 1 ? '' : 's'} in total. The SLA above measures only the current visit.`}
+    >
+      <RotateCcw aria-hidden className="h-3 w-3 shrink-0" />
+      <span className="tabular-nums">{total}d total · {visits} visits</span>
+    </p>
+  )
+}
+
 function SlaProgress({ row }: { row: MatterAgingRow }) {
   if (row.is_snoozed) {
     return (
@@ -85,7 +109,12 @@ function SlaProgress({ row }: { row: MatterAgingRow }) {
   }
 
   if (row.sla_days === null) {
-    return <span className="text-xs text-muted-foreground">{row.days_in_stage}d (no SLA)</span>
+    return (
+      <div className="space-y-1">
+        <span className="text-xs text-muted-foreground">{row.days_in_stage}d (no SLA)</span>
+        <StageChurn row={row} />
+      </div>
+    )
   }
 
   const pct = Math.min((row.days_in_stage / row.sla_days) * 100, 100)
@@ -106,6 +135,7 @@ function SlaProgress({ row }: { row: MatterAgingRow }) {
       <div className="h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-muted">
         <div className={cn('h-full rounded-full', barColor)} style={{ width: `${pct}%` }} />
       </div>
+      <StageChurn row={row} />
     </div>
   )
 }

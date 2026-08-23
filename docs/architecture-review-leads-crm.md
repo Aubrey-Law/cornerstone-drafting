@@ -281,9 +281,40 @@ Three details the card has to respect, all consequences of the table's design:
 `buildStageTimeline` lives outside the `server-only` query module so the client
 card and the server reader share one definition of the shape.
 
-Still open: real time-in-stage on the aging board, which today derives business
-days from `v_matter_aging` for the *current* stage only and has no history to
-draw on for past ones.
+## 7b. The aging board could not see a matter churning
+
+The aging board measures from `matters.stage_entered_at`, and
+`trg_matters_stage_entered_at` resets that column to `now()` on every stage
+change. Re-entering a stage therefore restarts the clock — which is precisely
+what the revision loop does. A matter bounced from Client Review to Revision and
+back arrives in Client Review looking brand new, and can cycle for months
+without any single visit growing long enough to turn the SLA red. The board's
+whole job is surfacing what needs attention, and this was invisible to it.
+
+`matter_stage_history` holds the earlier visits, so `v_matter_stage_totals`
+(`20261010000000`) aggregates them: per matter and stage, how many times it has
+been entered and the total time spent there. The aging board now shows that
+total beneath the SLA bar whenever a stage has been entered more than once — a
+row reading "6/10d" alongside "50d total · 3 visits" is the case the SLA cannot
+otherwise catch.
+
+Two decisions worth recording:
+
+- **Business days, not calendar days.** The totals reuse the same
+  `business_days_elapsed` the board already uses (it takes an explicit end, and
+  excludes weekends and `firm_holidays`), so the two numbers sitting side by
+  side are the same unit. A calendar-day total next to a business-day SLA would
+  quietly misread.
+- **Health is unchanged.** The totals are shown, not folded into the red/amber
+  calculation. How work gets prioritised is an SLA policy decision owned by
+  `stage_sla`, and worth making deliberately rather than as a side effect of
+  making the data visible. Folding cumulative time into the SLA — or giving
+  re-entry its own threshold — is the natural next question now that the number
+  exists.
+
+The view also carries `client_intake_id`, because `v_pipeline_aging` keys matter
+rows by matter id and lead rows by intake id, and the reader needs to match
+either without a second round trip.
 
 ## 8. Typing
 
@@ -305,7 +336,7 @@ Not scheduled; ordered by value per unit of risk.
    is the physical `DROP TABLE`, which needs its own migration once the release
    that still reads the old shape is gone; §5a records the required order.
 3. ~~**Add a stage-history table.**~~ Done and surfaced on the matter page — see
-   §7a. Real time-in-stage on the aging board remains open.
+   §7a, and now feeding time-in-stage on the aging board — see §7b.
 4. **Assert the stage vocabularies agree** (§3), the way
    `tests/stage-engine-keys.test.ts` already does for engine keys.
 5. **Server-side ranking and pagination for leads** (§6), before volume makes
