@@ -94,10 +94,14 @@ describe('the two overviews stay on their own side of the lifecycle', () => {
     expect(mattersLoader).toContain("from('v_matter_pipeline')")
     expect(mattersLoader).toContain(".neq('status', 'archived')")
 
-    // Leads: intake rows still in a lead state — a hired one leaves for its matter.
-    const leadsLoader = fs.readFileSync('app/admin/leads/page.tsx', 'utf8')
-    expect(leadsLoader).toContain("const LEAD_LIST_STATUSES = new Set(['lead', 'lost', 'declined'])")
-    expect(leadsLoader).toContain('LEAD_LIST_STATUSES.has(lead.lead_status ?? \'lead\')')
+    // Leads: intake rows still in a lead state — a hired one leaves for its
+    // matter. Stated in v_lead_list since the list moved into the database.
+    const dir = 'supabase/migrations'
+    const leadListView = fs.readdirSync(dir).filter(name => name.endsWith('.sql')).sort().reverse()
+      .map(name => fs.readFileSync(`${dir}/${name}`, 'utf8'))
+      .find(sql => sql.includes('create or replace view public.v_lead_list'))
+    expect(leadListView).toMatch(/in \('lead', 'lost', 'declined'\)/)
+    expect(leadListView).toContain('coalesce(m.relationship_status, ci.lead_status) as lead_status')
 
     // Each list feeds its own insight strip from that list and nothing else.
     const mattersClient = fs.readFileSync('app/admin/matters/MattersClient.tsx', 'utf8')

@@ -32,6 +32,30 @@ afterEach(() => {
   replace.mockClear()
 })
 
+const PARAMS = {
+  status: 'open' as const, card: null, search: '', practice: 'all',
+  progress: 'all' as const, sort: 'newest' as const, show: 50,
+}
+const SUMMARY = {
+  open: 3, lost: 0, declined: 0, all: 3,
+  attention: 0, agreements: 0, awaitingIntake: 0, quotedPipeline: 0,
+}
+
+/** The list is server-ranked now, so a render needs the page it was handed. */
+function renderLeads(rows: LeadRow[], overrides: Partial<React.ComponentProps<typeof LeadsClient>> = {}) {
+  return render(
+    <LeadsClient
+      initialLeads={rows}
+      params={PARAMS}
+      total={rows.length}
+      hasMore={false}
+      summary={{ ...SUMMARY, open: rows.length, all: rows.length }}
+      esignEnabled
+      {...overrides}
+    />,
+  )
+}
+
 function leadRow(overrides: Partial<LeadRow> & Pick<LeadRow, 'id' | 'full_name'>): LeadRow {
   return {
     first_name: null, last_name: null, email: `${overrides.id}@example.com`, phone: null,
@@ -53,7 +77,7 @@ const leads: LeadRow[] = [
 describe('lead board view', () => {
   it('switches to the board from the view toggle and files each lead into its column', async () => {
     const user = userEvent.setup()
-    render(<LeadsClient initialLeads={leads} esignEnabled />)
+    renderLeads(leads)
 
     await user.click(screen.getByRole('button', { name: 'Board' }))
 
@@ -66,14 +90,14 @@ describe('lead board view', () => {
 
   it('renders the board directly when the URL asks for it', () => {
     searchParams = new URLSearchParams('view=board')
-    render(<LeadsClient initialLeads={leads} esignEnabled />)
+    renderLeads(leads)
 
     expect(screen.getByRole('button', { name: 'Board' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.queryByRole('table')).toBeNull()
   })
 
   it('keeps the table as the default view', () => {
-    render(<LeadsClient initialLeads={leads} esignEnabled />)
+    renderLeads(leads)
     expect(screen.getByRole('table')).toBeTruthy()
   })
 })

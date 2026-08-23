@@ -14,6 +14,20 @@ type LeadInsightRow = {
   last_activity_at: string | null
 }
 
+/**
+ * What the cards report. Counted over the whole pipeline in `v_lead_list`
+ * rather than over the rows the page happens to hold — the cards are how the
+ * reader sees what a filter or a page boundary is hiding, so counting the
+ * loaded rows would have made them agree with the list by construction.
+ */
+export type LeadInsightTotals = {
+  open: number
+  attention: number
+  agreements: number
+  awaitingIntake: number
+  quotedPipeline: number
+}
+
 /** Cards that narrow the table; `open` just clears back to the Open tab. */
 export type LeadCardFilter = 'open' | 'attention' | 'agreements'
 
@@ -23,6 +37,9 @@ export function isOpenLead(lead: LeadInsightRow): boolean {
   return (lead.lead_status ?? 'lead') === 'lead'
 }
 
+/**
+ * Mirrored by `needs_attention` in `v_lead_list`; the board still asks per row.
+ */
 export function needsAttention(lead: LeadInsightRow): boolean {
   const latest = lead.last_activity_at ?? lead.updated_at ?? lead.created_at
   return (
@@ -41,19 +58,15 @@ function currency(value: number) {
 }
 
 export function LeadPipelineInsights({
-  leads,
+  totals,
   activeFilter = null,
   onToggleFilter,
 }: {
-  leads: LeadInsightRow[]
+  totals: LeadInsightTotals
   activeFilter?: LeadCardFilter | null
   onToggleFilter?: (filter: LeadCardFilter) => void
 }) {
-  const open = leads.filter(isOpenLead)
-  const attentionCount = open.filter(needsAttention).length
-  const agreementsPending = open.filter(hasPendingAgreement).length
-  const awaitingIntake = open.filter(lead => !lead.intake_completed_at).length
-  const quotedPipeline = open.reduce((total, lead) => total + (lead.engagement_fee_quoted ?? 0), 0)
+  const { attention: attentionCount, agreements: agreementsPending, awaitingIntake, quotedPipeline } = totals
 
   const insights: {
     label: string
@@ -64,7 +77,7 @@ export function LeadPipelineInsights({
   }[] = [
     {
       label: 'Open leads',
-      value: String(open.length),
+      value: String(totals.open),
       detail: `${awaitingIntake} awaiting intake`,
       icon: UsersRound,
       filter: 'open',

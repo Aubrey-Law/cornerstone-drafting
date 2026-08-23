@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LeadsClient, type LeadRow } from '@/app/admin/leads/LeadsClient'
+import { MAX_LEAD_PAGE_SIZE } from '@/lib/leads/listParams'
 import MattersClient from '@/app/admin/matters/MattersClient'
 import type { MatterListRow } from '@/lib/queries/matters'
 
+const replace = vi.fn()
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace }),
   usePathname: () => '/admin/leads',
   useSearchParams: () => new URLSearchParams(),
 }))
@@ -23,7 +26,37 @@ if (!HTMLElement.prototype.scrollIntoView) {
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: () => undefined })
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  replace.mockClear()
+})
+
+const LEAD_PARAMS = {
+  status: 'open' as const, card: null, search: '', practice: 'all',
+  progress: 'all' as const, sort: 'newest' as const, show: 50,
+}
+
+/**
+ * The lead list is filtered, sorted and paged by the database now, so a render
+ * shows exactly the page it was handed and each control's job is to ask the
+ * server for a different one. These assert the request; what comes back is
+ * `lib/queries/leadList.ts` and `v_lead_list`.
+ */
+function renderLeads(rows: LeadRow[]) {
+  return render(
+    <LeadsClient
+      initialLeads={rows}
+      params={LEAD_PARAMS}
+      total={rows.length}
+      hasMore={false}
+      summary={{
+        open: rows.length, lost: 0, declined: 0, all: rows.length,
+        attention: 0, agreements: 0, awaitingIntake: 0, quotedPipeline: 0,
+      }}
+      esignEnabled
+    />,
+  )
+}
 
 const leadRows: LeadRow[] = [
   {
@@ -58,29 +91,96 @@ function visibleLeadNames(): string[] {
 }
 
 describe('lead list controls', () => {
-  it('searches and filters leads before applying the selected sort', async () => {
+  it('asks the server for a filtered page rather than narrowing the loaded one', async () => {
     const user = userEvent.setup()
-    render(<LeadsClient initialLeads={leadRows} esignEnabled />)
+    renderLeads(leadRows)
 
     await user.type(screen.getByRole('searchbox', { name: 'Search leads' }), 'jane')
-    expect(screen.getByRole('link', { name: 'Jane Alpha' })).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Zoe Beta' })).toBeNull()
+    // The field keeps up with typing; the query follows a beat later.
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/admin/leads?q=jane', { scroll: false }))
+    // Every row it was given stays on screen — narrowing is the server's job.
+    expect(visibleLeadNames()).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
 
+    replace.mockClear()
     await selectOption(user, 'Filter leads by progress', 'Intake pending')
-    expect(screen.queryByRole('link', { name: 'Jane Alpha' })).toBeNull()
+    await waitFor(() => expect(replace).toHaveBeenCalled())
+    expect(replace.mock.calls.at(-1)?.[0]).toContain('progress=intake_pending')
   })
 
-  it('clear filters preserves lead sort order and visible-row selection', async () => {
+  it('drops the page size when the question changes, so a narrower list starts at the top', async () => {
     const user = userEvent.setup()
-    render(<LeadsClient initialLeads={leadRows} esignEnabled />)
+    renderLeads(leadRows)
 
     await selectOption(user, 'Sort leads by', 'Name Z-A')
-    await selectOption(user, 'Filter leads by practice area', 'Estate Planning')
-    await user.click(screen.getByRole('checkbox', { name: 'Select all visible leads' }))
-    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => expect(replace).toHaveBeenCalled())
+    const url = replace.mock.calls.at(-1)?.[0] as string
+    expect(url).toContain('sort=name_desc')
+    expect(url).not.toContain('show=')
+  })
 
-    expect(visibleLeadNames()).toEqual(['Zoe Beta', 'Jane Alpha', 'Aaron Gamma'])
-    expect(screen.getByText('2 selected')).toBeTruthy()
+  it('clear filters clears every filter param at once', async () => {
+    const user = userEvent.setup()
+    render(
+      <LeadsClient
+        initialLeads={leadRows}
+        params={{ ...LEAD_PARAMS, search: 'jane', practice: 'EP', progress: 'intake_pending' }}
+        total={leadRows.length}
+        hasMore={false}
+        summary={{
+          open: 3, lost: 0, declined: 0, all: 3,
+          attention: 0, agreements: 0, awaitingIntake: 0, quotedPipeline: 0,
+        }}
+        esignEnabled
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/admin/leads', { scroll: false }))
+  })
+
+  it('reports the page against the pipeline total and offers the next page', async () => {
+    const user = userEvent.setup()
+    render(
+      <LeadsClient
+        initialLeads={leadRows}
+        params={LEAD_PARAMS}
+        total={120}
+        hasMore
+        summary={{
+          open: 120, lost: 0, declined: 0, all: 120,
+          attention: 0, agreements: 0, awaitingIntake: 0, quotedPipeline: 0,
+        }}
+        esignEnabled
+      />,
+    )
+
+    expect(screen.getByText(/Showing 3 of 120 leads/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /Load \d+ more/ }))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/admin/leads?show=53', { scroll: false }))
+  })
+
+  it('asks for a narrower question rather than a bigger page at the request ceiling', () => {
+    // 500 rows is the most one request returns, so past it "load more" would
+    // be a button that does nothing.
+    const many = Array.from({ length: MAX_LEAD_PAGE_SIZE }, (_, index) => ({
+      ...leadRows[0], id: `lead-${index}`, full_name: `Lead ${index}`,
+    }))
+    render(
+      <LeadsClient
+        initialLeads={many}
+        params={LEAD_PARAMS}
+        total={900}
+        hasMore
+        summary={{
+          open: 900, lost: 0, declined: 0, all: 900,
+          attention: 0, agreements: 0, awaitingIntake: 0, quotedPipeline: 0,
+        }}
+        esignEnabled
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: /Load \d+ more/ })).toBeNull()
+    expect(screen.getByText('Search or filter to reach the rest')).toBeTruthy()
   })
 })
 

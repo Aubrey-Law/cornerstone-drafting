@@ -1,24 +1,22 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Columns3, Plus, Table2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { PRACTICE_AREA_OPTIONS } from '@/lib/practiceArea'
+import type { LeadProgressFilter, LeadSortKey } from '@/lib/adminTables/leadTable'
 import {
-  EMPTY_LEAD_TABLE_FILTERS,
-  filterAndSortLeads,
-  type LeadSortKey,
-  type LeadTableFilters,
-} from '@/lib/adminTables/leadTable'
+  LEAD_PAGE_SIZE,
+  MAX_LEAD_PAGE_SIZE,
+  type LeadListParams,
+  type LeadListSummary,
+} from '@/lib/leads/listParams'
 import { SendEngagementDialog } from './SendEngagementDialog'
 import LawmaticsImportDialog from '../matters/LawmaticsImportDialog'
 import {
-  hasPendingAgreement,
-  isOpenLead,
   LeadPipelineInsights,
-  needsAttention,
   type LeadCardFilter,
 } from '@/components/leads/LeadPipelineInsights'
 import {
@@ -69,7 +67,7 @@ export type LeadRow = LeadListRow
  */
 export type ScoredLeadRow = LeadRow & { score: number; scoreDetail: LeadScore }
 
-type LeadFilter = 'open' | 'lost' | 'declined' | 'all'
+type LeadFilter = LeadListParams['status']
 type LeadView = 'table' | 'board'
 
 const FILTER_TABS: { value: LeadFilter; label: string }[] = [
@@ -81,7 +79,7 @@ const FILTER_TABS: { value: LeadFilter; label: string }[] = [
   { value: 'all', label: 'All' },
 ]
 
-const LEAD_PROGRESS_OPTIONS: { value: LeadTableFilters['progress']; label: string }[] = [
+const LEAD_PROGRESS_OPTIONS: { value: LeadProgressFilter; label: string }[] = [
   { value: 'all', label: 'Progress · All' },
   { value: 'intake_not_sent', label: 'Intake not sent' },
   { value: 'intake_pending', label: 'Intake pending' },
@@ -100,18 +98,21 @@ const LEAD_SORT_OPTIONS: { value: LeadSortKey; label: string }[] = [
   { value: 'score_desc', label: 'Lead score' },
 ]
 
-function matchesFilter(lead: LeadRow, filter: LeadFilter): boolean {
-  if (filter === 'all') return true
-  if (filter === 'open') return (lead.lead_status ?? 'lead') === 'lead'
-  return lead.lead_status === filter
-}
-
 export function LeadsClient({
   initialLeads,
+  params,
+  total,
+  hasMore,
+  summary,
   spouses = {},
   esignEnabled,
 }: {
+  /** One page of the server's ordering — already filtered, sorted and ranked. */
   initialLeads: LeadRow[]
+  params: LeadListParams
+  total: number
+  hasMore: boolean
+  summary: LeadListSummary
   spouses?: Record<string, LeadSpouseRecord>
   esignEnabled: boolean
 }) {
@@ -123,10 +124,7 @@ export function LeadsClient({
   const [saving, setSaving] = useState(false)
   const [busyLeadId, setBusyLeadId] = useState<string | null>(null)
   const [form, setForm] = useState<LeadEditorForm>({ name: '', email: '', phone: '', practiceArea: 'EP', fee: '' })
-  const [filter, setFilter] = useState<LeadFilter>('open')
-  const [cardFilter, setCardFilter] = useState<LeadCardFilter | null>(null)
-  const [tableFilters, setTableFilters] = useState<LeadTableFilters>(EMPTY_LEAD_TABLE_FILTERS)
-  const [sortKey, setSortKey] = useState<LeadSortKey>('newest')
+  const [pending, startTransition] = useTransition()
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null)
@@ -139,25 +137,18 @@ export function LeadsClient({
     if (searchParams?.get('create') === '1') setDialogOpen(true)
   }, [searchParams])
 
-  const baseLeads = useMemo(
-    () =>
-      initialLeads
-        .filter(l => {
-          if (!matchesFilter(l, filter)) return false
-          if (cardFilter === 'attention') return isOpenLead(l) && needsAttention(l)
-          if (cardFilter === 'agreements') return isOpenLead(l) && hasPendingAgreement(l)
-          return true
-        })
-        .map(lead => {
-          const scoreDetail = computeLeadScore(leadScoreInputFromRow(lead))
-          return { ...lead, score: scoreDetail.score, scoreDetail }
-        }),
-    [initialLeads, filter, cardFilter],
-  )
-
+  /**
+   * The rows arrive filtered, sorted and ranked by the server, so the only
+   * work left here is the score breakdown the cards and the panel render. The
+   * number itself came from `lead_score()` and the two agree — see
+   * tests/lead-score-sql-parity.test.ts — but the reasons live in TypeScript.
+   */
   const filteredLeads = useMemo(
-    () => filterAndSortLeads(baseLeads, tableFilters, sortKey),
-    [baseLeads, tableFilters, sortKey],
+    () => initialLeads.map(lead => {
+      const scoreDetail = computeLeadScore(leadScoreInputFromRow(lead))
+      return { ...lead, score: scoreDetail.score, scoreDetail }
+    }),
+    [initialLeads],
   )
 
   const [openMenuLeadId, setOpenMenuLeadId] = useState<string | null>(null)
@@ -171,13 +162,65 @@ export function LeadsClient({
     [filteredLeads, selectedLeadId],
   )
 
-  const writeParam = useCallback((key: string, value: string | null) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? '')
-    if (value) params.set(key, value)
-    else params.delete(key)
-    const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? ''), { scroll: false })
+  const writeParams = useCallback((changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams?.toString() ?? '')
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) next.set(key, value)
+      else next.delete(key)
+    }
+    const qs = next.toString()
+    // A transition so the current rows stay on screen — and readable — while
+    // the server re-runs the query behind them.
+    startTransition(() => {
+      router.replace(qs ? `${pathname}?${qs}` : (pathname ?? ''), { scroll: false })
+    })
   }, [pathname, router, searchParams])
+
+  const writeParam = useCallback(
+    (key: string, value: string | null) => writeParams({ [key]: value }),
+    [writeParams],
+  )
+
+  /**
+   * Any change to what is being asked for resets the page back to the first
+   * one. Without this, narrowing a 300-row list would keep asking for 300 rows
+   * of a set that now holds twelve.
+   */
+  const writeQuery = useCallback(
+    (changes: Record<string, string | null>) => writeParams({ ...changes, show: null }),
+    [writeParams],
+  )
+
+  const filter: LeadFilter = params.status
+  const cardFilter: LeadCardFilter | null = params.card
+  const sortKey: LeadSortKey = params.sort
+
+  const setFilter = useCallback((next: LeadFilter) => {
+    writeQuery({ status: next === 'open' ? null : next })
+  }, [writeQuery])
+
+  // The search box types faster than the server can answer, so the field holds
+  // its own value and the URL follows a beat later.
+  const [searchDraft, setSearchDraft] = useState(params.search)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => { setSearchDraft(params.search) }, [params.search])
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current) }, [])
+  const onSearchChange = useCallback((value: string) => {
+    setSearchDraft(value)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => writeQuery({ q: value.trim() || null }), 300)
+  }, [writeQuery])
+
+  const loadMore = useCallback(() => {
+    writeParams({ show: String(initialLeads.length + LEAD_PAGE_SIZE) })
+  }, [initialLeads.length, writeParams])
+
+  /**
+   * One request has a ceiling, so past it the answer is a narrower question
+   * rather than a bigger page. Saying so is the point of the whole change: the
+   * old list stopped at 200 and said nothing.
+   */
+  const atRequestCeiling = initialLeads.length >= MAX_LEAD_PAGE_SIZE
 
   const selectLead = useCallback((leadId: string | null) => {
     setSelectedLeadId(leadId)
@@ -227,33 +270,30 @@ export function LeadsClient({
   }, [navigationOrder, selectLead, selectedLead])
 
   const hasTableFilters = Boolean(
-    tableFilters.search.trim()
-    || tableFilters.practice !== 'all'
-    || tableFilters.progress !== 'all',
+    params.search.trim() || params.practice !== 'all' || params.progress !== 'all',
   )
 
-  const clearTableFilters = () => setTableFilters(EMPTY_LEAD_TABLE_FILTERS)
+  const clearTableFilters = () => {
+    setSearchDraft('')
+    writeQuery({ q: null, practice: null, progress: null })
+  }
 
   /** Cards narrow the current tab; "Open leads" just resets to the Open tab. */
   const toggleCardFilter = (next: LeadCardFilter) => {
     if (next === 'open') {
-      setCardFilter(null)
-      setFilter('open')
+      writeQuery({ card: null, status: null })
       return
     }
-    setCardFilter(current => (current === next ? null : next))
-    setFilter('open')
+    writeQuery({ card: cardFilter === next ? null : next, status: null })
   }
-  const counts = useMemo(() => {
-    const c: Record<LeadFilter, number> = { open: 0, lost: 0, declined: 0, all: initialLeads.length }
-    for (const l of initialLeads) {
-      const s = l.lead_status ?? 'lead'
-      if (s === 'lead') c.open += 1
-      else if (s === 'lost') c.lost += 1
-      else if (s === 'declined') c.declined += 1
-    }
-    return c
-  }, [initialLeads])
+  // Counted over the whole pipeline by the server, so a tab reports what it
+  // would show rather than how much of it is currently loaded.
+  const counts: Record<LeadFilter, number> = {
+    open: summary.open,
+    lost: summary.lost,
+    declined: summary.declined,
+    all: summary.all,
+  }
 
   const selectedIds = useMemo(
     () => filteredLeads.filter(l => selected[l.id]).map(l => l.id),
@@ -459,7 +499,7 @@ export function LeadsClient({
       />
 
       <LeadPipelineInsights
-        leads={initialLeads}
+        totals={summary}
         activeFilter={cardFilter}
         onToggleFilter={toggleCardFilter}
       />
@@ -499,15 +539,15 @@ export function LeadsClient({
 
       <div className="flex flex-wrap items-center gap-2">
         <SearchField
-          value={tableFilters.search}
-          onValueChange={value => setTableFilters(current => ({ ...current, search: value }))}
+          value={searchDraft}
+          onValueChange={onSearchChange}
           placeholder="Search leads…"
           aria-label="Search leads"
           containerClassName="min-w-52 flex-1 bg-card"
         />
         <Select
-          value={tableFilters.practice}
-          onValueChange={value => setTableFilters(current => ({ ...current, practice: value }))}
+          value={params.practice}
+          onValueChange={value => writeQuery({ practice: value === 'all' ? null : value })}
         >
           <SelectTrigger size="sm" className="w-48" aria-label="Filter leads by practice area">
             <SelectValue />
@@ -522,11 +562,8 @@ export function LeadsClient({
           </SelectContent>
         </Select>
         <Select
-          value={tableFilters.progress}
-          onValueChange={value => setTableFilters(current => ({
-            ...current,
-            progress: value as LeadTableFilters['progress'],
-          }))}
+          value={params.progress}
+          onValueChange={value => writeQuery({ progress: value === 'all' ? null : value })}
         >
           <SelectTrigger size="sm" className="w-48" aria-label="Filter leads by progress">
             <SelectValue />
@@ -540,7 +577,10 @@ export function LeadsClient({
           </SelectContent>
         </Select>
         <div className="ml-auto flex items-center gap-2">
-          <Select value={sortKey} onValueChange={value => setSortKey(value as LeadSortKey)}>
+          <Select
+            value={sortKey}
+            onValueChange={value => writeQuery({ sort: value === 'newest' ? null : value })}
+          >
             <SelectTrigger size="sm" className="w-40" aria-label="Sort leads by">
               <SelectValue />
             </SelectTrigger>
@@ -598,7 +638,7 @@ export function LeadsClient({
       )}
 
       <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
+        <div className={cn('min-w-0 flex-1 space-y-3', pending && 'opacity-60 transition-opacity')}>
           {view === 'board' ? (
             <LeadsBoard
               leads={filteredLeads}
@@ -640,6 +680,29 @@ export function LeadsClient({
               onHire={setConvertTarget}
               onArchive={setDeleteTarget}
             />
+          )}
+          {/*
+            The list is a page of the server's ordering, so it has to say so.
+            The old list truncated at 200 silently, which meant a ranked
+            subset read exactly like the whole pipeline.
+          */}
+          {total > 0 && (
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <p className="text-[11px] text-muted-foreground" aria-live="polite">
+                Showing {filteredLeads.length} of {total} {total === 1 ? 'lead' : 'leads'}
+                {hasTableFilters || cardFilter ? ' matching these filters' : ''}
+                {sortKey === 'score_desc' ? ' — highest score first' : ''}
+              </p>
+              {hasMore && (atRequestCeiling ? (
+                <span className="text-[11px] text-muted-foreground">
+                  Search or filter to reach the rest
+                </span>
+              ) : (
+                <Button type="button" variant="outline" size="sm" onClick={loadMore} disabled={pending}>
+                  {pending ? 'Loading…' : `Load ${Math.min(LEAD_PAGE_SIZE, total - filteredLeads.length)} more`}
+                </Button>
+              ))}
+            </div>
           )}
         </div>
         {selectedLead && (

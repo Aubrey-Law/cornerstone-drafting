@@ -67,7 +67,9 @@ const people: CrmPeopleRow[] = [
 ]
 
 function snapshot() {
-  return buildCrmDashboard({ people, stages, now: NOW })
+  // `recent` is read separately now: the counts run over the whole contact
+  // base in narrow rows, and the recent-people table gets its own eight.
+  return buildCrmDashboard({ people, recent: people, stages, now: NOW })
 }
 
 describe('crm dashboard', () => {
@@ -142,7 +144,12 @@ describe('crm dashboard funnel scope', () => {
     person({ id: 'trustee', personKind: 'related', stageId: 'stage-new' }),
     person({ id: 'walk-in', personKind: 'standalone', stageId: 'stage-new' }),
   ]
-  const withRelated = () => buildCrmDashboard({ people: [...people, ...related], stages, now: NOW })
+  const withRelated = () => buildCrmDashboard({
+    people: [...people, ...related],
+    recent: [...people, ...related],
+    stages,
+    now: NOW,
+  })
 
   it('identifies which people can move through the pipeline', () => {
     expect(isPipelinePerson(people[0])).toBe(true)
@@ -176,7 +183,7 @@ describe('crm dashboard funnel scope', () => {
   })
 
   it('reports zero rather than dividing by zero when no leads exist', () => {
-    const contactsOnly = buildCrmDashboard({ people: related, stages, now: NOW })
+    const contactsOnly = buildCrmDashboard({ people: related, recent: related, stages, now: NOW })
     expect(contactsOnly.conversion).toEqual({ percent: 0, converted: 0, total: 0 })
   })
 })

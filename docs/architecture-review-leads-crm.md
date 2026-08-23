@@ -274,15 +274,46 @@ that guarantee with it, so the migration restores it as
 
 ## 6. Truncation limits are invisible to the reader
 
-- `app/admin/leads/page.tsx` loads at most 200 leads and 2,000 activity rows.
-- `fetchCrmPeople(500)` in `lib/queries/crmDashboard.ts`;
-  `.limit(5000)` in `lib/queries/crmOperations.ts`.
+- ~~`app/admin/leads/page.tsx` loads at most 200 leads and 2,000 activity rows.~~
+- ~~`fetchCrmPeople(500)` in `lib/queries/crmDashboard.ts`;
+  `.limit(5000)` in `lib/queries/crmOperations.ts`.~~
 
-Every filter, sort and insight card — now including the lead score — is computed
-client-side over that truncated set. At current volume this is correct; past 200
-open leads the list silently ranks a subset, and the dashboard's counts become a
-sample rather than a total. Nothing in the UI says so. Server-side ranking and
-pagination is the fix whenever the firm's lead count approaches that bound.
+Every filter, sort and insight card — including the lead score — was computed
+client-side over that truncated set. At the volume this was written at (56 lead
+rows) it was correct and invisible; past 200 open leads the list would have
+ranked a subset while still reading as the whole pipeline.
+
+**Fixed for the leads list:** `v_lead_list` and `lead_score()`
+(`20261014000000_lead_list_ranking.sql`) moved filtering, searching, sorting and
+ranking into the database, and `lib/queries/leadList.ts` returns one page of
+that ordering with an exact count. The list says which page it is showing and
+of how many, and "Load more" asks for the next — so the bound is now stated
+rather than hidden. Ranking by lead score is why the score had to exist in SQL
+too: ordering by a number computed in the browser can only rank what the
+browser already holds. `tests/lead-score-sql-parity.test.ts` holds the two
+definitions together.
+
+The tab counts and the insight cards are counted over the whole pipeline rather
+than the loaded page, deliberately: the cards are how the reader sees what a
+filter or a page boundary is hiding, so counting the page would have made them
+agree with the list by construction.
+
+**Fixed for the CRM dashboard:** the overview counted the first 500 rows of
+`cornerstone_crm_people` and presented the result as the firm's whole book. At
+221 contacts that was already 44% of the cap, and the contact sync adds several
+rows per matter — a spouse, children, fiduciaries — so it was the limit closest
+to biting. `fetchCrmDashboardPeople()` now reads the whole contact base in
+narrow pages (only the seven columns the counts read, ordered on a unique pair
+so pages partition rather than overlap), and the eight rows the recent-people
+table renders are read separately with the joins that table needs. A ceiling
+remains at 25,000 contacts, but reaching it renders a line on the page saying
+the counts are a sample — the objection to the old cap was never the number,
+it was the silence.
+
+`lib/queries/crmOperations.ts` and `app/admin/crm/CrmActionQueue.tsx` were
+deleted rather than fixed: nothing rendered the action queue, so those
+`.limit(5000)` reads never ran. A dead reader with a lurking limit is worse
+than no reader — it reads as covered.
 
 ## 7. Audit-trail gaps
 
@@ -437,6 +468,6 @@ Not scheduled; ordered by value per unit of risk.
 4. ~~**Assert the stage vocabularies agree**~~ (§3). Done —
    `tests/stage-vocabulary-parity.test.ts`, the way
    `tests/stage-engine-keys.test.ts` already does for engine keys.
-5. **Server-side ranking and pagination for leads** (§6), before volume makes
-   the truncation matter.
+5. ~~**Server-side ranking and pagination for leads**~~ (§6). Done — the leads
+   list ranks and pages in the database; the CRM dashboard's limits remain.
 6. **Drop the dead Twenty-sync columns** (§5).

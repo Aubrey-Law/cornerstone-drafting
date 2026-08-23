@@ -301,12 +301,107 @@ export async function fetchCrmStages(): Promise<{ stages: CrmStageRow[]; error: 
   return { stages: (data as CrmStageRow[]) ?? [], error: null }
 }
 
-export async function fetchCrmPeople(limit = 200): Promise<{ people: CrmPeopleRow[]; error: string | null }> {
+/**
+ * Just the columns the dashboard counts by. The full row carries three joins
+ * and every contact field, which is why reading it was capped at 500 — and the
+ * cap was what turned the dashboard's totals into a sample.
+ */
+export interface CrmDashboardPersonRow {
+  personKind: CrmPersonRow['person_kind']
+  lifecycleStatus: string | null
+  stageId: string | null
+  leadSource: string | null
+  referralSource: string | null
+  nextFollowUpAt: string | null
+  createdAt: string
+}
+
+/** One PostgREST request returns at most this many rows, so the read pages. */
+const CRM_PAGE_SIZE = 1000
+
+/**
+ * A ceiling on the paged read, so a runaway contact base cannot turn the
+ * dashboard into an unbounded query. Reaching it is reported rather than
+ * hidden — that was the whole complaint about the 500-row cap.
+ */
+export const CRM_DASHBOARD_MAX_PEOPLE = 25_000
+
+export async function fetchCrmDashboardPeople(): Promise<{
+  people: CrmDashboardPersonRow[]
+  truncated: boolean
+  error: string | null
+}> {
+  const admin = getAdminClient()
+  const people: CrmDashboardPersonRow[] = []
+  let total: number | null = null
+
+  let from = 0
+  while (from < CRM_DASHBOARD_MAX_PEOPLE) {
+    const to = Math.min(from + CRM_PAGE_SIZE, CRM_DASHBOARD_MAX_PEOPLE) - 1
+    const columns =
+      'person_kind, lifecycle_status, stage_id, lead_source, referral_source, next_follow_up_at, created_at'
+    const query = from === 0
+      // The exact count comes back with the first page, so the loop knows how
+      // many rows it is chasing rather than inferring it from a short page. A
+      // PostgREST instance can cap rows per request below what was asked for,
+      // and inferring from that would stop early and call the result whole.
+      ? admin.from('cornerstone_crm_people').select(columns, { count: 'exact' })
+      : admin.from('cornerstone_crm_people').select(columns)
+
+    const { data, error, count } = await query
+      // Ordered so the pages partition the table rather than overlapping it;
+      // `created_at` alone is not unique, so `id` breaks the ties.
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to)
+    if (error) return { people: [], truncated: false, error: error.message }
+    if (typeof count === 'number') total = count
+
+    const rows = (data ?? []) as unknown as Array<{
+      person_kind: CrmPersonRow['person_kind']
+      lifecycle_status: string | null
+      stage_id: string | null
+      lead_source: string | null
+      referral_source: string | null
+      next_follow_up_at: string | null
+      created_at: string
+    }>
+    for (const row of rows) {
+      people.push({
+        personKind: row.person_kind,
+        lifecycleStatus: row.lifecycle_status,
+        stageId: row.stage_id,
+        leadSource: row.lead_source,
+        referralSource: row.referral_source,
+        nextFollowUpAt: row.next_follow_up_at,
+        createdAt: row.created_at,
+      })
+    }
+
+    // An empty page is the end of the table whatever the count claimed; without
+    // this a stale or missing count would spin the loop to the ceiling.
+    if (rows.length === 0) break
+    // Advanced by what came back rather than by what was asked for, so a
+    // server-side row cap makes the read slower, not incomplete.
+    from += rows.length
+    if (total !== null && people.length >= Math.min(total, CRM_DASHBOARD_MAX_PEOPLE)) break
+  }
+
+  const truncated = total !== null
+    ? total > CRM_DASHBOARD_MAX_PEOPLE
+    : people.length >= CRM_DASHBOARD_MAX_PEOPLE
+  return { people, truncated, error: null }
+}
+
+export async function fetchCrmPeople(
+  limit = 200,
+  options: { orderBy?: 'updated_at' | 'created_at' } = {},
+): Promise<{ people: CrmPeopleRow[]; error: string | null }> {
   const admin = getAdminClient()
   const { data: rawPeople, error: peopleError } = await admin
     .from('cornerstone_crm_people')
     .select('*')
-    .order('updated_at', { ascending: false })
+    .order(options.orderBy ?? 'updated_at', { ascending: false })
     .limit(Math.max(1, Math.min(limit, CRMCACHE_MAX)))
 
   if (peopleError) return { people: [], error: peopleError.message }

@@ -6,11 +6,25 @@ function read(relPath: string): string {
   return fs.readFileSync(path.join(process.cwd(), relPath), 'utf8')
 }
 
+/** The live definition of the list, which is a view rather than a page loader. */
+const LEAD_LIST_VIEW = (() => {
+  const dir = path.join(process.cwd(), 'supabase/migrations')
+  for (const name of fs.readdirSync(dir).filter(file => file.endsWith('.sql')).sort().reverse()) {
+    const sql = fs.readFileSync(path.join(dir, name), 'utf8')
+    if (sql.includes('create or replace view public.v_lead_list')) return sql
+  }
+  throw new Error('v_lead_list is not defined in any migration')
+})()
+
 describe('lead tracking source shape', () => {
   it('leads page lists lead-flow intakes', () => {
     const source = read('app/admin/leads/page.tsx')
-    expect(source).toContain("not('lead_status', 'is', null)")
+    // The list is ranked and paged in the database now (20261014000000), so
+    // which rows are lead-flow rows is stated once, in the view.
+    expect(source).toContain('fetchLeadListPage')
     expect(source).toContain('isEsignConfigured')
+    expect(read('lib/queries/leadList.ts')).toContain("from('v_lead_list')")
+    expect(LEAD_LIST_VIEW).toContain('where ci.lead_status is not null')
   })
 
   it('lead creation inserts a standalone client_intake', () => {
@@ -120,11 +134,10 @@ describe('lead edit and delete source shape', () => {
 
 describe('lead status pipeline source shape', () => {
   it('shows compact pipeline insights based on existing lead and activity data', () => {
-    const page = read('app/admin/leads/page.tsx')
     const client = read('app/admin/leads/LeadsClient.tsx')
     const insights = read('components/leads/LeadPipelineInsights.tsx')
-    expect(page).toContain("from('lead_activity')")
-    expect(page).toContain('last_activity_at')
+    expect(LEAD_LIST_VIEW).toContain('from public.lead_activity')
+    expect(LEAD_LIST_VIEW).toContain('last_activity_at')
     expect(client).toContain('LeadPipelineInsights')
     expect(insights).toContain('Needs attention')
     expect(insights).toContain('Quoted pipeline')
@@ -141,20 +154,18 @@ describe('lead status pipeline source shape', () => {
   })
 
   it('leads page filters to lead-flow rows only', () => {
-    const source = read('app/admin/leads/page.tsx')
-    expect(source).toContain("not('lead_status', 'is', null)")
-    expect(source).toContain('matter_id')
+    expect(LEAD_LIST_VIEW).toContain('where ci.lead_status is not null')
+    expect(LEAD_LIST_VIEW).toContain('left join public.matters m on m.id = ci.matter_id')
   })
 
   it('keeps declined leads on the list and gives them their own tab', () => {
     // A declined opportunity used to be dropped by the list filter, so it could
     // not be reviewed or reopened from anywhere in the app.
-    const page = read('app/admin/leads/page.tsx')
-    expect(page).toContain('LEAD_LIST_STATUSES')
-    expect(page).toMatch(/'lead',\s*'lost',\s*'declined'/)
+    expect(LEAD_LIST_VIEW).toMatch(/in \('lead', 'lost', 'declined'\)/)
     const client = read('app/admin/leads/LeadsClient.tsx')
     expect(client).toContain("{ value: 'declined', label: 'Declined' }")
-    expect(client).toContain('declined: 0')
+    // Its tab count comes from the server summary, over the whole pipeline.
+    expect(client).toContain('declined: summary.declined')
   })
 
   it('lead creation defaults to the lead status', () => {
