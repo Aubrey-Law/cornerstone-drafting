@@ -42,33 +42,32 @@ export async function fetchCrmActivities(limit = 500): Promise<{ rows: CrmActivi
   const admin = getAdminClient()
   const { data, error } = await admin
     .from('cornerstone_crm_activities')
-    .select('id, person_id, opportunity_id, performed_by_user_id, type, event_type, channel, direction, subject, body, source, status, created_at')
+    .select('id, person_id, performed_by_user_id, type, event_type, channel, direction, subject, body, source, status, created_at')
     .order('created_at', { ascending: false })
     .limit(Math.max(1, Math.min(limit, 1000)))
   if (error) return { rows: [], error: error.message }
 
   const activities = data ?? []
   const personIds = uniqueIds(activities.map(row => row.person_id))
-  const opportunityIds = uniqueIds(activities.map(row => row.opportunity_id))
   const actorIds = uniqueIds(activities.map(row => row.performed_by_user_id))
-  const [peopleResult, opportunitiesResult, actorsResult] = await Promise.all([
+  // The opportunity column is resolved through the person rather than the
+  // `cornerstone_crm_opportunities` mirror, which is being retired. The person
+  // carries the same intake id the mirror did, and its name is what the
+  // mirror's title was built from, so the rendered column is unchanged.
+  const [peopleResult, actorsResult] = await Promise.all([
     personIds.length
-      ? admin.from('v_cornerstone_crm_people').select('id, name').in('id', personIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string | null }>, error: null }),
-    opportunityIds.length
-      ? admin.from('cornerstone_crm_opportunities').select('id, title, client_intake_id').in('id', opportunityIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; title: string | null; client_intake_id: string | null }>, error: null }),
+      ? admin.from('v_cornerstone_crm_people').select('id, name, client_intake_id').in('id', personIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string | null; client_intake_id: string | null }>, error: null }),
     actorIds.length
       ? admin.from('users').select('id, display_name, email').in('id', actorIds)
       : Promise.resolve({ data: [] as Array<{ id: string; display_name: string | null; email: string | null }>, error: null }),
   ])
-  if (peopleResult.error || opportunitiesResult.error || actorsResult.error) {
-    return { rows: [], error: peopleResult.error?.message ?? opportunitiesResult.error?.message ?? actorsResult.error?.message ?? 'Could not load CRM references' }
+  if (peopleResult.error || actorsResult.error) {
+    return { rows: [], error: peopleResult.error?.message ?? actorsResult.error?.message ?? 'Could not load CRM references' }
   }
 
-  const people = new Map((peopleResult.data ?? []).map(row => [row.id, row.name as string | null]))
-  const opportunities = new Map((opportunitiesResult.data ?? []).map(row => [row.id, {
-    title: row.title as string | null,
+  const people = new Map((peopleResult.data ?? []).map(row => [row.id, {
+    name: row.name as string | null,
     intakeId: row.client_intake_id as string | null,
   }]))
   const actors = new Map((actorsResult.data ?? []).map(row => [row.id, row.display_name || row.email || 'Staff member']))
@@ -76,9 +75,13 @@ export async function fetchCrmActivities(limit = 500): Promise<{ rows: CrmActivi
     rows: activities.map(row => ({
       id: row.id,
       personId: row.person_id,
-      personName: row.person_id ? people.get(row.person_id) ?? null : null,
-      opportunityId: row.opportunity_id ? opportunities.get(row.opportunity_id)?.intakeId ?? null : null,
-      opportunityName: row.opportunity_id ? opportunities.get(row.opportunity_id)?.title ?? null : null,
+      personName: row.person_id ? people.get(row.person_id)?.name ?? null : null,
+      // Only a person backed by an intake has a lead page to link to; a spouse
+      // or other related contact resolves to no opportunity, as before.
+      opportunityId: row.person_id ? people.get(row.person_id)?.intakeId ?? null : null,
+      opportunityName: row.person_id && people.get(row.person_id)?.intakeId
+        ? people.get(row.person_id)?.name ?? null
+        : null,
       actorId: row.performed_by_user_id,
       actorName: row.performed_by_user_id ? actors.get(row.performed_by_user_id) ?? 'Staff member' : null,
       type: row.type,
