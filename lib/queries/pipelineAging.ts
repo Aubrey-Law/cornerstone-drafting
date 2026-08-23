@@ -25,6 +25,13 @@ export interface MatterAgingRow {
   snoozed_until: string | null
   snooze_reason: string | null
   is_snoozed: boolean
+  /**
+   * Times this row has entered its current stage, and the total business days
+   * across all of them. Absent when no history is recorded yet — `days_in_stage`
+   * measures only the latest visit, so these differ once a stage is re-entered.
+   */
+  stage_visits?: number
+  stage_total_days?: number
 }
 
 export interface MatterAgingTiles {
@@ -92,7 +99,60 @@ export async function fetchMatterAging(): Promise<{
   }
 
   const rows = sortRows((data ?? []).map(r => normalizeRow(r as Record<string, unknown>)))
-  return { rows, tiles: buildTiles(rows) }
+  return { rows: await attachStageTotals(admin, rows), tiles: buildTiles(rows) }
+}
+
+/**
+ * Adds the total time each row has spent in its current stage, across every
+ * visit to it.
+ *
+ * `stage_entered_at` resets whenever the stage changes, so the board's
+ * `days_in_stage` only ever measures the latest visit. A matter cycling through
+ * the revision loop therefore looks new on every return and can churn for
+ * months without an SLA ever catching it. `v_matter_stage_totals`
+ * (20261010000000) is the record of the earlier visits.
+ *
+ * Totals are supporting detail: if the view is unavailable the rows come back
+ * unannotated rather than the board failing.
+ */
+async function attachStageTotals(
+  admin: ReturnType<typeof getAdminClient>,
+  rows: MatterAgingRow[],
+): Promise<MatterAgingRow[]> {
+  if (rows.length === 0) return rows
+
+  const ids = [...new Set(rows.map(row => row.id))]
+  const { data, error } = await admin
+    .from('v_matter_stage_totals')
+    .select('matter_id, client_intake_id, stage, visits, business_days')
+    // Matter rows are keyed by the matter id and lead rows by the intake id —
+    // `v_pipeline_aging` unions the two — so both are matched in one trip.
+    .or(`matter_id.in.(${ids.join(',')}),client_intake_id.in.(${ids.join(',')})`)
+
+  if (error) {
+    console.warn('stage totals unavailable:', error.message)
+    return rows
+  }
+
+  const totals = new Map<string, { visits: number; businessDays: number }>()
+  for (const entry of data ?? []) {
+    const record = entry as Record<string, unknown>
+    const value = {
+      visits: Number(record.visits) || 0,
+      businessDays: Number(record.business_days) || 0,
+    }
+    const stage = String(record.stage ?? '')
+    for (const key of [record.matter_id, record.client_intake_id]) {
+      if (typeof key === 'string' && key) totals.set(`${key}:${stage}`, value)
+    }
+  }
+
+  return rows.map(row => {
+    const total = totals.get(`${row.id}:${row.current_stage}`)
+    return total
+      ? { ...row, stage_visits: total.visits, stage_total_days: total.businessDays }
+      : row
+  })
 }
 
 export async function fetchMatterAgingTiles(): Promise<MatterAgingTiles> {
