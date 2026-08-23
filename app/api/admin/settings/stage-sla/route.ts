@@ -24,6 +24,7 @@ export async function PATCH(req: Request) {
     entity = 'matter',
     sla_days: slaDays,
     escalation_offset: escalationOffset,
+    cumulative_sla_days: cumulativeSlaDays,
   } = body ?? {}
 
   if (!stageKey || !track || (entity !== 'matter' && entity !== 'lead')) {
@@ -46,6 +47,15 @@ export async function PATCH(req: Request) {
     }
     patch.escalation_offset = escalationOffset
   }
+  if ('cumulative_sla_days' in body) {
+    if (cumulativeSlaDays !== null && (typeof cumulativeSlaDays !== 'number' || cumulativeSlaDays < 0)) {
+      return NextResponse.json(
+        { error: 'cumulative_sla_days must be null or a non-negative number' },
+        { status: 400 },
+      )
+    }
+    patch.cumulative_sla_days = cumulativeSlaDays
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
@@ -58,7 +68,7 @@ export async function PATCH(req: Request) {
     .eq('stage_key', stageKey)
     .eq('track', track)
     .eq('entity', entity)
-    .select('stage_key, track, entity, owner, sla_days, escalation_offset, stage_order')
+    .select('stage_key, track, entity, owner, sla_days, escalation_offset, cumulative_sla_days, stage_order')
     .maybeSingle()
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
