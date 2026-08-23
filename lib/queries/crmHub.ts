@@ -50,10 +50,10 @@ export async function fetchCrmActivities(limit = 500): Promise<{ rows: CrmActivi
   const activities = data ?? []
   const personIds = uniqueIds(activities.map(row => row.person_id))
   const actorIds = uniqueIds(activities.map(row => row.performed_by_user_id))
-  // The opportunity column is resolved through the person rather than the
-  // `cornerstone_crm_opportunities` mirror, which is being retired. The person
-  // carries the same intake id the mirror did, and its name is what the
-  // mirror's title was built from, so the rendered column is unchanged.
+  // The opportunity column is resolved through the person. The
+  // `cornerstone_crm_opportunities` mirror it used to come from was dropped in
+  // 20261012000000; the person carries the same intake id, and its name is what
+  // the mirror's title was built from, so the rendered column is unchanged.
   const [peopleResult, actorsResult] = await Promise.all([
     personIds.length
       ? admin.from('v_cornerstone_crm_people').select('id, name, client_intake_id').in('id', personIds)

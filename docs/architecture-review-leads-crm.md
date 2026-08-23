@@ -198,13 +198,48 @@ like nothing at all. Verified against a scratch Postgres running the full
 migration chain: with the old guard the activity does not land; with the guard
 relaxed to require only `person_id`, it does.
 
-**The table itself still exists**, deliberately. Code and schema deploy in no
-guaranteed order, so the release before this migration must keep finding it.
-Dropping it is a follow-up, and not a one-liner: `cornerstone_crm_activities.opportunity_id`
-holds an `ON DELETE CASCADE` FK that would take all 235 activity rows with it,
-and `v_cornerstone_crm_opportunities` and `v_cornerstone_crm_parity` are hard
-`DROP` blockers. The order is recorded in the migration header and in the
-table's own `COMMENT`.
+**The table was left in place** at the time, deliberately: code and schema deploy
+in no guaranteed order, so the release before that migration had to keep finding
+it. It has since been dropped — see §5b.
+
+## 5b. The mirror is gone
+
+`20261012000000_drop_crm_opportunity_mirror.sql` removes the table, its dependent
+view, the `opportunity_id` column on `cornerstone_crm_activities`, and the 415
+dead `opportunity.*` outbox rows. No snapshot was kept: every value in those 85
+rows was derived by trigger from `client_intake` and `matters`, so there was
+nothing in them that those tables do not still hold.
+
+**A correction to §5a.** That section, the #316 migration header and the table's
+`COMMENT` all warned that a bare `drop table ... cascade` would destroy all 235
+CRM activity rows through the `ON DELETE CASCADE` foreign key. **That is wrong.**
+`ON DELETE CASCADE` is a row-level referential action that fires on `DELETE`; it
+does nothing on `DROP TABLE`, which simply drops the constraint and leaves the
+referencing rows alone. Verified directly: after a bare `drop table ... cascade`
+on a scratch copy, `cornerstone_crm_activities` still held every row.
+
+Two real hazards remained, and the ordering still matters for them:
+
+- A bare cascade **drops `v_cornerstone_crm_parity` outright** — all four arms,
+  three of which never touched the mirror. It is rebuilt here without the
+  `opportunities` arm instead.
+- It leaves `opportunity_id` behind as a column of dangling ids pointing at a
+  table that no longer exists.
+
+And one hazard nothing had recorded, which is the one that would actually have
+caused an outage: **two trigger functions still named `opportunity_id` in their
+INSERT column lists.** plpgsql resolves columns at execution, so dropping the
+column without rewriting `sync_crm_person_from_intake` and
+`sync_crm_activity_from_lead_activity` would not fail the migration — it would
+fail *every* `client_intake` and `lead_activity` write from that moment on. It
+surfaced only because the migration was exercised against a real Postgres; the
+first run broke lead creation outright.
+
+One more consequence worth recording: `cornerstone_crm_activities` had a CHECK of
+`person_id is not null or opportunity_id is not null`, and Postgres drops any
+constraint involving a dropped column. Removing `opportunity_id` silently took
+that guarantee with it, so the migration restores it as
+`person_id set not null` — the only form that still means anything.
 
 ## 6. Truncation limits are invisible to the reader
 
