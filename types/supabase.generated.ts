@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -145,6 +147,7 @@ export type Database = {
           booked_by_user_id: string | null
           created_at: string
           end_time: string
+          external_booking_uid: string | null
           id: string
           linked_lead_id: string | null
           linked_matter_id: string | null
@@ -171,6 +174,7 @@ export type Database = {
           booked_by_user_id?: string | null
           created_at?: string
           end_time: string
+          external_booking_uid?: string | null
           id?: string
           linked_lead_id?: string | null
           linked_matter_id?: string | null
@@ -197,6 +201,7 @@ export type Database = {
           booked_by_user_id?: string | null
           created_at?: string
           end_time?: string
+          external_booking_uid?: string | null
           id?: string
           linked_lead_id?: string | null
           linked_matter_id?: string | null
@@ -228,6 +233,13 @@ export type Database = {
             columns: ["linked_lead_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_linked_lead_id_fkey"
+            columns: ["linked_lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
           {
@@ -293,6 +305,13 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_intake_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
         ]
@@ -1412,6 +1431,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contact_roles_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "contact_roles_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
@@ -1582,6 +1608,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contacts_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "contacts_merged_into_id_fkey"
             columns: ["merged_into_id"]
             isOneToOne: false
@@ -1616,9 +1649,8 @@ export type Database = {
           external_event_id: string | null
           id: string
           metadata: Json
-          opportunity_id: string | null
           performed_by_user_id: string | null
-          person_id: string | null
+          person_id: string
           source: string
           source_id: string | null
           source_type: string | null
@@ -1638,9 +1670,8 @@ export type Database = {
           external_event_id?: string | null
           id?: string
           metadata?: Json
-          opportunity_id?: string | null
           performed_by_user_id?: string | null
-          person_id?: string | null
+          person_id: string
           source?: string
           source_id?: string | null
           source_type?: string | null
@@ -1660,9 +1691,8 @@ export type Database = {
           external_event_id?: string | null
           id?: string
           metadata?: Json
-          opportunity_id?: string | null
           performed_by_user_id?: string | null
-          person_id?: string | null
+          person_id?: string
           source?: string
           source_id?: string | null
           source_type?: string | null
@@ -1672,20 +1702,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "cornerstone_crm_activities_opportunity_id_fkey"
-            columns: ["opportunity_id"]
-            isOneToOne: false
-            referencedRelation: "cornerstone_crm_opportunities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_activities_opportunity_id_fkey"
-            columns: ["opportunity_id"]
-            isOneToOne: false
-            referencedRelation: "v_cornerstone_crm_opportunities"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "cornerstone_crm_activities_performed_by_user_id_fkey"
             columns: ["performed_by_user_id"]
@@ -2049,161 +2065,6 @@ export type Database = {
           },
         ]
       }
-      cornerstone_crm_opportunities: {
-        Row: {
-          assigned_to_user_id: string | null
-          client_intake_id: string | null
-          close_reason: string | null
-          closed_at: string | null
-          confidence_score: number | null
-          cornerstone_matter_id: string | null
-          created_at: string
-          expected_close_date: string | null
-          expected_value: number | null
-          id: string
-          lead_source: string | null
-          next_follow_up_at: string | null
-          notes: string | null
-          owner_user_id: string | null
-          person_id: string
-          practice_area: string | null
-          service_type: string | null
-          source_system: string
-          stage_entered_at: string | null
-          stage_id: string
-          status: string
-          title: string
-          twenty_opportunity_id: string | null
-          updated_at: string
-          updated_by_user_id: string | null
-        }
-        Insert: {
-          assigned_to_user_id?: string | null
-          client_intake_id?: string | null
-          close_reason?: string | null
-          closed_at?: string | null
-          confidence_score?: number | null
-          cornerstone_matter_id?: string | null
-          created_at?: string
-          expected_close_date?: string | null
-          expected_value?: number | null
-          id?: string
-          lead_source?: string | null
-          next_follow_up_at?: string | null
-          notes?: string | null
-          owner_user_id?: string | null
-          person_id: string
-          practice_area?: string | null
-          service_type?: string | null
-          source_system?: string
-          stage_entered_at?: string | null
-          stage_id: string
-          status?: string
-          title: string
-          twenty_opportunity_id?: string | null
-          updated_at?: string
-          updated_by_user_id?: string | null
-        }
-        Update: {
-          assigned_to_user_id?: string | null
-          client_intake_id?: string | null
-          close_reason?: string | null
-          closed_at?: string | null
-          confidence_score?: number | null
-          cornerstone_matter_id?: string | null
-          created_at?: string
-          expected_close_date?: string | null
-          expected_value?: number | null
-          id?: string
-          lead_source?: string | null
-          next_follow_up_at?: string | null
-          notes?: string | null
-          owner_user_id?: string | null
-          person_id?: string
-          practice_area?: string | null
-          service_type?: string | null
-          source_system?: string
-          stage_entered_at?: string | null
-          stage_id?: string
-          status?: string
-          title?: string
-          twenty_opportunity_id?: string | null
-          updated_at?: string
-          updated_by_user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_assigned_to_user_id_fkey"
-            columns: ["assigned_to_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_client_intake_id_fkey"
-            columns: ["client_intake_id"]
-            isOneToOne: false
-            referencedRelation: "client_intake"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_cornerstone_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_cornerstone_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
-            isOneToOne: false
-            referencedRelation: "v_matter_pipeline"
-            referencedColumns: ["matter_id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_cornerstone_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
-            isOneToOne: false
-            referencedRelation: "v_matter_pipeline_all"
-            referencedColumns: ["matter_id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_owner_user_id_fkey"
-            columns: ["owner_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "cornerstone_crm_people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "v_cornerstone_crm_people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_stage_id_fkey"
-            columns: ["stage_id"]
-            isOneToOne: false
-            referencedRelation: "cornerstone_crm_stages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_updated_by_user_id_fkey"
-            columns: ["updated_by_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       cornerstone_crm_people: {
         Row: {
           assigned_to_user_id: string | null
@@ -2225,7 +2086,6 @@ export type Database = {
           job_title: string | null
           last_engagement_at: string | null
           last_name: string | null
-          last_synced_at: string | null
           lead_id: string | null
           lead_source: string | null
           lifecycle_status: string
@@ -2245,10 +2105,7 @@ export type Database = {
           stage_entered_at: string | null
           stage_id: string
           state: string | null
-          sync_state: string
           topic_preferences: Json
-          twenty_company_id: string | null
-          twenty_contact_id: string | null
           unsubscribed_at: string | null
           updated_at: string
         }
@@ -2272,7 +2129,6 @@ export type Database = {
           job_title?: string | null
           last_engagement_at?: string | null
           last_name?: string | null
-          last_synced_at?: string | null
           lead_id?: string | null
           lead_source?: string | null
           lifecycle_status?: string
@@ -2292,10 +2148,7 @@ export type Database = {
           stage_entered_at?: string | null
           stage_id: string
           state?: string | null
-          sync_state?: string
           topic_preferences?: Json
-          twenty_company_id?: string | null
-          twenty_contact_id?: string | null
           unsubscribed_at?: string | null
           updated_at?: string
         }
@@ -2319,7 +2172,6 @@ export type Database = {
           job_title?: string | null
           last_engagement_at?: string | null
           last_name?: string | null
-          last_synced_at?: string | null
           lead_id?: string | null
           lead_source?: string | null
           lifecycle_status?: string
@@ -2339,10 +2191,7 @@ export type Database = {
           stage_entered_at?: string | null
           stage_id?: string
           state?: string | null
-          sync_state?: string
           topic_preferences?: Json
-          twenty_company_id?: string | null
-          twenty_contact_id?: string | null
           unsubscribed_at?: string | null
           updated_at?: string
         }
@@ -2359,6 +2208,13 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cornerstone_crm_people_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
           {
@@ -2415,6 +2271,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: true
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cornerstone_crm_people_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
           {
@@ -2954,6 +2817,13 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_sheets_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
           {
@@ -3612,6 +3482,13 @@ export type Database = {
             referencedRelation: "client_intake"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "email_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
         ]
       }
       email_settings: {
@@ -3857,6 +3734,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "engagement_agreements_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
           {
@@ -4400,6 +4284,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "calcom_bookings_linked_lead_id_fkey"
+            columns: ["linked_lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "calcom_bookings_linked_matter_id_fkey"
             columns: ["linked_matter_id"]
             isOneToOne: false
@@ -4695,6 +4586,13 @@ export type Database = {
             referencedRelation: "client_intake"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intake_documents_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
         ]
       }
       intake_invite_audit: {
@@ -4728,6 +4626,13 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_invite_audit_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
         ]
@@ -5110,6 +5015,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "lead_activity_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "lead_activity_source_matter_activity_id_fkey"
             columns: ["source_matter_activity_id"]
             isOneToOne: false
@@ -5166,6 +5078,13 @@ export type Database = {
             referencedRelation: "client_intake"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lead_meeting_notes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
         ]
       }
       lead_notes: {
@@ -5199,6 +5118,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_notes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
         ]
@@ -6388,6 +6314,58 @@ export type Database = {
           },
         ]
       }
+      matter_stage_history: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          entered_at: string
+          from_stage: string | null
+          id: number
+          matter_id: string
+          to_stage: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          entered_at?: string
+          from_stage?: string | null
+          id?: number
+          matter_id: string
+          to_stage: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          entered_at?: string
+          from_stage?: string | null
+          id?: number
+          matter_id?: string
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_stage_history_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_stage_history_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_stage_history_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
       matter_stage_rules: {
         Row: {
           created_at: string
@@ -6709,6 +6687,13 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matters_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
         ]
@@ -7188,10 +7173,18 @@ export type Database = {
             referencedRelation: "client_intake"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sms_messages_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
         ]
       }
       stage_sla: {
         Row: {
+          cumulative_sla_days: number | null
           entity: string
           escalation_offset: number | null
           owner: string
@@ -7201,6 +7194,7 @@ export type Database = {
           track: string
         }
         Insert: {
+          cumulative_sla_days?: number | null
           entity?: string
           escalation_offset?: number | null
           owner: string
@@ -7210,6 +7204,7 @@ export type Database = {
           track?: string
         }
         Update: {
+          cumulative_sla_days?: number | null
           entity?: string
           escalation_offset?: number | null
           owner?: string
@@ -7627,6 +7622,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
           {
@@ -8255,116 +8257,6 @@ export type Database = {
         }
         Relationships: []
       }
-      v_cornerstone_crm_opportunities: {
-        Row: {
-          assigned_to_user_id: string | null
-          client_intake_id: string | null
-          close_reason: string | null
-          closed_at: string | null
-          confidence_score: number | null
-          cornerstone_matter_id: string | null
-          created_at: string | null
-          expected_close_date: string | null
-          expected_value: number | null
-          id: string | null
-          lead_source: string | null
-          matter_number: string | null
-          next_follow_up_at: string | null
-          notes: string | null
-          owner_user_id: string | null
-          person_email: string | null
-          person_id: string | null
-          person_kind: string | null
-          person_name: string | null
-          person_phone: string | null
-          practice_area: string | null
-          service_type: string | null
-          source_system: string | null
-          stage_entered_at: string | null
-          stage_id: string | null
-          stage_name: string | null
-          stage_slug: string | null
-          status: string | null
-          title: string | null
-          twenty_opportunity_id: string | null
-          updated_at: string | null
-          updated_by_user_id: string | null
-          workspace_relationship_status: string | null
-          workspace_status: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_assigned_to_user_id_fkey"
-            columns: ["assigned_to_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_client_intake_id_fkey"
-            columns: ["client_intake_id"]
-            isOneToOne: false
-            referencedRelation: "client_intake"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_cornerstone_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_cornerstone_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
-            isOneToOne: false
-            referencedRelation: "v_matter_pipeline"
-            referencedColumns: ["matter_id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_cornerstone_matter_id_fkey"
-            columns: ["cornerstone_matter_id"]
-            isOneToOne: false
-            referencedRelation: "v_matter_pipeline_all"
-            referencedColumns: ["matter_id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_owner_user_id_fkey"
-            columns: ["owner_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "cornerstone_crm_people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "v_cornerstone_crm_people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_stage_id_fkey"
-            columns: ["stage_id"]
-            isOneToOne: false
-            referencedRelation: "cornerstone_crm_stages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cornerstone_crm_opportunities_updated_by_user_id_fkey"
-            columns: ["updated_by_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       v_cornerstone_crm_parity: {
         Row: {
           crm_count: number | null
@@ -8411,9 +8303,7 @@ export type Database = {
           stage_name: string | null
           stage_slug: string | null
           state: string | null
-          sync_state: string | null
           topic_preferences: Json | null
-          twenty_contact_id: string | null
           updated_at: string | null
         }
         Relationships: [
@@ -8467,6 +8357,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contacts_client_intake_id_fkey"
+            columns: ["related_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cornerstone_crm_people_assigned_to_user_id_fkey"
             columns: ["assigned_to_user_id"]
             isOneToOne: false
@@ -8478,6 +8375,13 @@ export type Database = {
             columns: ["client_intake_id"]
             isOneToOne: false
             referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cornerstone_crm_people_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
             referencedColumns: ["id"]
           },
           {
@@ -8509,6 +8413,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cornerstone_crm_people_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cornerstone_crm_people_owner_user_id_fkey"
             columns: ["owner_user_id"]
             isOneToOne: false
@@ -8524,11 +8435,87 @@ export type Database = {
           },
         ]
       }
+      v_lead_list: {
+        Row: {
+          address_line1: string | null
+          address_line2: string | null
+          awaiting_intake: boolean | null
+          billing_type: string | null
+          city: string | null
+          client_user_id: string | null
+          county: string | null
+          created_at: string | null
+          date_of_birth: string | null
+          display_name: string | null
+          email: string | null
+          engagement_fee_quoted: number | null
+          engagement_pending: boolean | null
+          engagement_sent_at: string | null
+          engagement_signed_at: string | null
+          engagement_status: string | null
+          first_name: string | null
+          full_name: string | null
+          has_minor_children: boolean | null
+          has_pending_agreement: boolean | null
+          id: string | null
+          intake_complete: boolean | null
+          intake_completed_at: string | null
+          intake_sent_at: string | null
+          is_open: boolean | null
+          last_activity_at: string | null
+          last_name: string | null
+          lead_next_action_snoozed_until: string | null
+          lead_source: string | null
+          lead_status: string | null
+          lead_urgency: string | null
+          marital_status: string | null
+          matter_id: string | null
+          middle_name: string | null
+          needs_attention: boolean | null
+          next_appointment_at: string | null
+          phone: string | null
+          practice_area: string | null
+          preferred_name: string | null
+          qualification_notes: string | null
+          score: number | null
+          state: string | null
+          status: string | null
+          taxable_estate: number | null
+          updated_at: string | null
+          user_id: string | null
+          zip: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_intake_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_intake_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "client_intake_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+        ]
+      }
       v_matter_aging: {
         Row: {
           client_email: string | null
           client_name: string | null
           client_phone: string | null
+          cumulative_days: number | null
+          cumulative_sla_days: number | null
           current_stage: string | null
           days_in_stage: number | null
           days_over_sla: number | null
@@ -8536,6 +8523,7 @@ export type Database = {
           escalation_offset: number | null
           health: string | null
           id: string | null
+          is_cumulative_overdue: boolean | null
           is_overdue: boolean | null
           is_snoozed: boolean | null
           needs_outreach: boolean | null
@@ -8547,6 +8535,7 @@ export type Database = {
           snoozed_until: string | null
           stage_entered_at: string | null
           stage_order: number | null
+          stage_visits: number | null
           track: string | null
         }
         Relationships: []
@@ -8631,11 +8620,61 @@ export type Database = {
         }
         Relationships: []
       }
+      v_matter_stage_totals: {
+        Row: {
+          business_days: number | null
+          client_intake_id: string | null
+          first_entered_at: string | null
+          last_entered_at: string | null
+          matter_id: string | null
+          stage: string | null
+          visits: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_stage_history_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_stage_history_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matter_stage_history_matter_id_fkey"
+            columns: ["matter_id"]
+            isOneToOne: false
+            referencedRelation: "v_matter_pipeline_all"
+            referencedColumns: ["matter_id"]
+          },
+          {
+            foreignKeyName: "matters_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "client_intake"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matters_client_intake_id_fkey"
+            columns: ["client_intake_id"]
+            isOneToOne: false
+            referencedRelation: "v_lead_list"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_pipeline_aging: {
         Row: {
           client_email: string | null
           client_name: string | null
           client_phone: string | null
+          cumulative_days: number | null
+          cumulative_sla_days: number | null
           current_stage: string | null
           days_in_stage: number | null
           days_over_sla: number | null
@@ -8643,6 +8682,7 @@ export type Database = {
           escalation_offset: number | null
           health: string | null
           id: string | null
+          is_cumulative_overdue: boolean | null
           is_overdue: boolean | null
           is_snoozed: boolean | null
           needs_outreach: boolean | null
@@ -8654,6 +8694,7 @@ export type Database = {
           snoozed_until: string | null
           stage_entered_at: string | null
           stage_order: number | null
+          stage_visits: number | null
           track: string | null
         }
         Relationships: []
@@ -9400,6 +9441,29 @@ export type Database = {
       jsonb_replace_id: {
         Args: { doc: Json; from_id: string; to_id: string }
         Returns: Json
+      }
+      lead_score: {
+        Args: {
+          p_billing_type: string
+          p_engagement_sent_at: string
+          p_engagement_signed_at: string
+          p_engagement_status: string
+          p_fee_quoted: number
+          p_has_minor_children: boolean
+          p_intake_completed_at: string
+          p_intake_sent_at: string
+          p_intake_status: string
+          p_last_touch_at: string
+          p_lead_source: string
+          p_next_appointment_at: string
+          p_taxable_estate: number
+          p_urgency: string
+        }
+        Returns: number
+      }
+      lead_scoring_appointment_at: {
+        Args: { p_discovery_call_at: string; p_pmps_at: string }
+        Returns: string
       }
       legal_plan_display_name: {
         Args: { p_billing_type: string }
