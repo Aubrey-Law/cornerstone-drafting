@@ -83,9 +83,18 @@ rows cannot fail a deploy).
 Two live consequences:
 
 - **`lifecycle_status` is never updated by the sync triggers**, so every
-  trigger-created person sits at `'new'` forever — and `lib/crm/dashboard.ts`
-  computes the CRM conversion rate from that column. The number it reports is
-  not a conversion rate.
+  trigger-created person sits at `'new'` forever, and no application code
+  writes it. It remains readable in the People table and usable as a campaign
+  audience filter, where it is close to meaningless.
+
+  _Correction (this review's first draft got this wrong):_ the first draft said
+  the CRM conversion rate was computed from that dead column and was therefore
+  not a conversion rate. That overstated it. `isConverted` checks
+  `lifecycle_status` **first** but falls back to the person's stage against the
+  won stages, and `stage_id` **is** maintained — `crm_stage_slug_for_intake`
+  returns `converted` for a hired lead and that stage carries `is_won`. So the
+  numerator was right all along; the dead branch is merely unreachable.
+  The real defect was in the denominator — see §4a.
 - **Fixed alongside this review:** `matchesProgress` in
   `lib/adminTables/leadTable.ts` tested `lead.status === 'lost'` — reading the
   *intake* status for a *lifecycle* value it can never hold. The branch was
@@ -93,6 +102,38 @@ Two live consequences:
   client already filters lifecycle through its own status chips, so a
   second exclusion would have emptied the Lost tab whenever a progress filter
   was also applied. The dead line was removed and a regression test added.
+
+## 4a. The CRM funnel counted people who cannot convert — fixed
+
+`cornerstone_crm_people` is the whole contact base, not a lead list. The
+contact sync writes a person row for every spouse, and since
+`20260925000000_matter_contacts_join.sql` for every matter contact too —
+children, successor trustees, health-care agents. Those rows are inserted at
+`new_inquiry` and their `stage_id` is never advanced (the `on conflict do
+update` deliberately omits it), so they are permanently open and never won.
+
+`buildCrmDashboard` computed every funnel metric over all of them. The
+consequences, all in the same direction:
+
+- **Conversion rate understated.** The denominator carried every spouse and
+  fiduciary. For an estate-planning practice — where most leads are couples and
+  a funded trust names several fiduciaries — that is several unconvertible rows
+  per matter. The regression test models six leads with two conversions plus
+  four related contacts: 33% correct, 20% as it was computed.
+- **Active pipeline inflated**, since `new_inquiry` is not a closed stage.
+- **Stage occupancy skewed**, with a growing pile parked in the first column.
+- **Lead sources skewed**, as contacts carry no `lead_source` and inflated
+  "Unattributed".
+
+Fixed by scoping the funnel to `person_kind = 'primary'` (`isPipelinePerson` in
+`lib/crm/dashboard.ts`). "Total people" and the follow-up buckets still cover
+the whole contact base, which is what those two are asking about.
+
+**Still true after the fix:** the dashboard reads at most 500 people
+(`fetchCrmPeople(500)`, ordered by `updated_at`), so once the contact base
+exceeds that, the funnel is computed over a truncated and recency-biased sample
+of leads — and contacts consume slots in that window without contributing to
+it. Below 500 total people the numbers are exact. See §6.
 
 ## 5. Dormant columns and unread surfaces
 
@@ -169,9 +210,9 @@ value without anything objecting.
 
 Not scheduled; ordered by value per unit of risk.
 
-1. **Fix the CRM conversion rate** (§4). It reports a number derived from a
-   column nothing maintains. Either maintain `lifecycle_status` in the sync
-   triggers or compute the rate from `relationship_status`.
+1. ~~**Fix the CRM conversion rate.**~~ Done — see §4a. The cause was not the
+   one this review first named; the denominator counted contacts who cannot
+   convert, rather than the numerator reading a dead column.
 2. **Retire or adopt the CRM mirror** (§5). It is carrying schema, triggers and
    RLS policies for no reader. Either point the Opportunities UI at it or drop
    it to a view over the tables that are actually authoritative.

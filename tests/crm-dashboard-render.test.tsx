@@ -24,6 +24,7 @@ const stages: CrmStageRow[] = [
 function person(overrides: Partial<CrmPeopleRow> & { id: string }): CrmPeopleRow {
   return {
     sourceSystem: 'cornerstone',
+    personKind: 'primary',
     name: 'Person',
     email: 'person@example.com',
     phone: null,

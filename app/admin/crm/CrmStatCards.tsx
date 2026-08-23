@@ -84,8 +84,8 @@ export function CrmStatCards({ snapshot }: { snapshot: CrmDashboardSnapshot }) {
               </span>
             </div>
             <p className="min-w-0 text-xs leading-relaxed text-muted-foreground">
-              {NUMBER.format(conversion.converted)} of {NUMBER.format(conversion.total)} people have
-              converted to a matter.
+              {NUMBER.format(conversion.converted)} of {NUMBER.format(conversion.total)} lead
+              {conversion.total === 1 ? '' : 's'} have converted to a matter.
             </p>
           </div>
         </CardContent>
@@ -107,7 +107,7 @@ export function CrmStatCards({ snapshot }: { snapshot: CrmDashboardSnapshot }) {
         icon={UserCheck}
         label="Converted"
         value={snapshot.converted}
-        caption={`${snapshot.conversion.percent}% of all people`}
+        caption={`${snapshot.conversion.percent}% of leads`}
       />
     </div>
   )

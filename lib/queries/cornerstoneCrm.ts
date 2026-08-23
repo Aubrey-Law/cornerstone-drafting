@@ -33,6 +33,8 @@ export type CrmStageRow = {
 type CrmPersonRow = {
   id: string
   source_system: string
+  /** Constrained by `cornerstone_crm_people_person_kind_check` to these three. */
+  person_kind: 'primary' | 'related' | 'standalone'
   lead_id: string | null
   cornerstone_matter_id: string | null
   first_name: string | null
@@ -142,6 +144,13 @@ interface CrmCampaignDbRow {
 export interface CrmPeopleRow {
   id: string
   sourceSystem: CrmPersonRow['source_system']
+  /**
+   * `primary` is the lead or client themself; `related` is a spouse, child or
+   * fiduciary synced from a matter contact, and `standalone` a contact with no
+   * matter. Only a primary person can move through the pipeline, so the funnel
+   * metrics count those and nothing else.
+   */
+  personKind: CrmPersonRow['person_kind']
   name: string
   email: string | null
   phone: string | null
@@ -364,6 +373,7 @@ export async function fetchCrmPeople(limit = 200): Promise<{ people: CrmPeopleRo
       return {
         id: person.id,
         sourceSystem: person.source_system,
+        personKind: person.person_kind,
         name: resolveName(person),
         email: person.email,
         phone: person.phone ? formatPhoneDisplay(person.phone) : null,

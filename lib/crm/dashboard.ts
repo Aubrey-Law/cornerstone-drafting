@@ -24,7 +24,7 @@ export interface CrmDashboardSnapshot {
   people: CrmTotal
   activePipeline: CrmTotal
   converted: CrmTotal
-  /** Share of known people that reached a converted or won state. */
+  /** Share of leads that reached a converted or won state. */
   conversion: { percent: number; converted: number; total: number }
   leadSources: CrmSlice[]
   pipeline: CrmPipelineStage[]
@@ -59,6 +59,20 @@ function total(rows: CrmPeopleRow[], months: { current: string; prior: string })
     newPriorMonth,
     deltaPercent: percentDelta(newThisMonth, newPriorMonth),
   }
+}
+
+/**
+ * Whether a person can move through the lead pipeline at all.
+ *
+ * `cornerstone_crm_people` holds the whole contact base, not just leads: the
+ * contact sync writes a row for every spouse, child, fiduciary and standalone
+ * contact, pinned at `new_inquiry` and never advanced. Counting those in the
+ * funnel put people who cannot convert into the denominator — several per
+ * matter once matter contacts sync — which understated conversion and inflated
+ * the active-pipeline and stage-occupancy counts.
+ */
+export function isPipelinePerson(person: CrmPeopleRow): boolean {
+  return person.personKind === 'primary'
 }
 
 /** A person is converted once their lifecycle says so or a matter exists. */
@@ -135,8 +149,11 @@ export function buildCrmDashboard(input: {
   )
   const wonStageIds = new Set(input.stages.filter(stage => stage.is_won).map(stage => stage.id))
 
-  const open = people.filter(person => person.stageId === null || !closedStageIds.has(person.stageId))
-  const converted = people.filter(person => isConverted(person, wonStageIds))
+  // Funnel metrics count leads; the People total and follow-ups cover the whole
+  // contact base, which is what those two are asking about.
+  const leads = people.filter(isPipelinePerson)
+  const open = leads.filter(person => person.stageId === null || !closedStageIds.has(person.stageId))
+  const converted = leads.filter(person => isConverted(person, wonStageIds))
 
   const followUpKeys = people
     .map(person => (person.nextFollowUpAt ? firmDateKey(person.nextFollowUpAt) : null))
@@ -147,12 +164,12 @@ export function buildCrmDashboard(input: {
     activePipeline: total(open, months),
     converted: total(converted, months),
     conversion: {
-      percent: share(converted.length, people.length),
+      percent: share(converted.length, leads.length),
       converted: converted.length,
-      total: people.length,
+      total: leads.length,
     },
-    leadSources: buildLeadSources(people),
-    pipeline: buildPipeline(people, input.stages),
+    leadSources: buildLeadSources(leads),
+    pipeline: buildPipeline(leads, input.stages),
     followUps: {
       overdue: followUpKeys.filter(key => key < today).length,
       dueToday: followUpKeys.filter(key => key === today).length,
