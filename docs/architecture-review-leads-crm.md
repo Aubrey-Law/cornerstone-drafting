@@ -453,6 +453,34 @@ type-checks whether or not the field exists. That is what allows
 that table* — to flow through the detail record as an optimistic client-only
 value without anything objecting.
 
+## 8a. The generated types described a schema that no longer existed
+
+`types/supabase.generated.ts` is produced by `npm run db:types:linked` and
+checked in, and nothing ever verified it. By the end of this review it was four
+merged migrations out of date in both directions: still declaring
+`cornerstone_crm_opportunities`, its view, and the three Twenty sync columns —
+all dropped — while knowing nothing about `matter_stage_history`,
+`v_matter_stage_totals`, `stage_sla.cumulative_sla_days` or `v_lead_list`.
+
+Nothing broke, and that is the point. Nearly all database code runs through the
+permissive compatibility `Database` in `types/supabase.ts`, where every column
+access type-checks whether or not the column exists (§8). Only three call sites
+use the real generated types — `lib/workflowJobs.ts`, `lib/billing/schedules.ts`
+and the matter-type route — and they were being checked against a schema the
+database had moved on from.
+
+**Fixed:** `.github/workflows/db-types-drift.yml`. The comparison against the
+deployed database runs on a schedule rather than on pull requests, because a
+branch that adds a migration is *supposed* to carry types the database does not
+have yet — the same reason `db-migration-drift.yml` keeps `--strict` off its
+pull-request run. It also stays off `push` to `main`, where it would race the
+migration deploy. Pull requests get the credential-free structural check only.
+
+Regenerating needs credentials that a development container has neither of:
+`--db-url` and `--local` need Docker, `--linked` and `--project-id` need an
+access token. So the workflow that finds the drift can also fix it — dispatched
+with `open_pr`, it regenerates and raises the pull request itself.
+
 ## Ranked recommendations
 
 Not scheduled; ordered by value per unit of risk.
@@ -469,5 +497,9 @@ Not scheduled; ordered by value per unit of risk.
    `tests/stage-vocabulary-parity.test.ts`, the way
    `tests/stage-engine-keys.test.ts` already does for engine keys.
 5. ~~**Server-side ranking and pagination for leads**~~ (§6). Done — the leads
-   list ranks and pages in the database; the CRM dashboard's limits remain.
-6. **Drop the dead Twenty-sync columns** (§5).
+   list ranks and pages in the database, and the CRM dashboard counts the whole
+   contact base.
+6. ~~**Drop the dead Twenty-sync columns**~~ (§5). Done —
+   `20261013000000_drop_twenty_sync_columns.sql`.
+7. ~~**Keep the generated database types honest**~~ (§8a). Done — a scheduled
+   check compares them against the deployed schema.
