@@ -200,8 +200,17 @@ jobs:
           git add types/supabase.generated.ts
           git commit -m 'Regenerate Supabase types from the database'
           git push -u origin "$branch"
-          gh pr create \
+
+          # The branch is pushed before this, so a repo that forbids Actions
+          # from opening pull requests loses the work only if the failure is
+          # illegible. Name the setting and print the link rather than exiting
+          # on a bare GraphQL error.
+          if ! gh pr create \
             --base "${GITHUB_REF_NAME}" \
             --head "$branch" \
             --title 'Regenerate Supabase types from the database' \
             --body 'Opened by the Database types drift workflow. `types/supabase.generated.ts` no longer described the deployed schema; this is `npm run db:types:linked` run against it, unedited.'
+          then
+            echo "::error::Regenerated types are pushed to '$branch', but the pull request could not be opened. If the reason above is \"GitHub Actions is not permitted to create or approve pull requests\", enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests'. Until then, open it here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${GITHUB_REF_NAME}...${branch}?expand=1"
+            exit 1
+          fi

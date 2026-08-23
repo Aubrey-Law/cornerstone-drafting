@@ -92,6 +92,16 @@ describe('what the check does about drift', () => {
     expect(WORKFLOW).toMatch(/^permissions:\s*\n\s*contents: read$/m)
   })
 
+  it('keeps the pushed branch usable when the repo forbids Actions from opening pull requests', () => {
+    // The push happens first, so the work survives; what has to survive with
+    // it is a reason a reader can act on. A bare GraphQL error is not one.
+    const pr = step('Open a pull request with the regenerated types')
+    expect(pr).toContain('Allow GitHub Actions to create and approve pull requests')
+    expect(pr).toContain('/compare/${GITHUB_REF_NAME}...${branch}?expand=1')
+    // And it still fails: a run that could not open the PR has not finished.
+    expect(pr).toContain('exit 1')
+  })
+
   it('refuses to regenerate without credentials rather than reporting no drift', () => {
     // A regenerate run that quietly generated nothing would leave the file
     // unchanged, which reads exactly like "the types are fine".

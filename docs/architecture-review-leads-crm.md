@@ -484,6 +484,12 @@ a separate job rather than a conditional permission, because `permissions:`
 takes no expressions: an expression there does not fail the step, it
 invalidates the whole workflow file.
 
+Opening the pull request needs one repository setting — Settings → Actions →
+General → Workflow permissions → *Allow GitHub Actions to create and approve
+pull requests*. With it off, the regenerated branch is still pushed and the
+step prints the setting to change and a compare link, rather than a bare
+GraphQL error.
+
 ## Ranked recommendations
 
 Not scheduled; ordered by value per unit of risk.
