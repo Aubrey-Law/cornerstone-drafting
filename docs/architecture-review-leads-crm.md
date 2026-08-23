@@ -45,11 +45,12 @@ directly. Write the source table and let the trigger mirror it.
 
 ## 3. Three parallel stage vocabularies
 
-The same pipeline is spelled three ways, and nothing asserts they agree:
+The same pipeline is spelled three ways, and until this review nothing asserted
+they agree:
 
-1. `cornerstone_crm_stages.slug` — 8 seeded values (`new_inquiry`, `intake_sent`,
-   `intake_complete`, `engagement`, `converted`, `closed_lost`, `declined`,
-   `needs_review`).
+1. `cornerstone_crm_stages.slug` — 9 seeded values (`new_inquiry`,
+   `discovery_call`, `intake_sent`, `intake_complete`, `engagement`,
+   `converted`, `closed_lost`, `declined`, `needs_review`).
 2. `matters.stage` — 5 lead stages plus the 12 matter stages in
    `types/database.ts` STAGES.
 3. `LEAD_BOARD_COLUMNS` (`lib/leads/board.ts`) — 7 columns derived at render
@@ -59,12 +60,27 @@ A fourth vocabulary, the stage-*engine* keys in `stage_sla`
 (`design_input`, `revisions`, `approved`, `closeout`, `matter_closed`), is
 mapped onto by `map_matter_stage_to_engine()` — that one at least has a test
 (`tests/stage-engine-keys.test.ts`) asserting the SQL and TS agree. The
-intake→CRM-slug mapping has the same duplication (SQL
+intake→CRM-slug mapping had the same duplication (SQL
 `crm_stage_slug_for_intake` and TS `leadBoardColumn`) with no equivalent test.
 
-**Fixed alongside this review:** `matters.stage` had no CHECK constraint, so a
-typo or retired key wrote cleanly and then failed the `stage_sla` inner join
-inside `v_pipeline_aging` — dropping the matter off the aging board silently
+**Fixed alongside this review — the test:**
+`tests/stage-vocabulary-parity.test.ts` parses the live SQL — the CHECK's stage
+list, the `stage_sla` seeds, the CRM stage seeds and the
+`crm_stage_slug_for_intake` ladder — and holds it against the TypeScript. It asserts the CHECK permits exactly the lead stages plus
+`types/database.ts` STAGES; that every stage it permits reaches a `stage_sla`
+row (directly for a lead, through `PIPELINE_TO_ENGINE` for a matter), with
+`matter_closed` asserted to have *no* row since both aging views exclude it
+before the join; that every slug the SQL can return has a seeded
+`cornerstone_crm_stages` row, so the mirror's lookup cannot silently set
+`stage_id` to null; and that the SQL ladder and `leadBoardColumn()` place the
+same lead in corresponding buckets, in the same order of precedence. The
+correspondence is written out rather than derived, because it is not one to
+one — the board has no discovery or needs-review column — so a new arm on
+either side has to be placed deliberately.
+
+**Fixed alongside this review — the constraint:** `matters.stage` had no CHECK,
+so a typo or retired key wrote cleanly and then failed the `stage_sla` inner
+join inside `v_pipeline_aging` — dropping the matter off the aging board silently
 rather than showing it wrong. `20261007000000_matters_stage_check.sql`
 constrains the column (NOT VALID, then validated in a guarded block so legacy
 rows cannot fail a deploy).
@@ -418,7 +434,8 @@ Not scheduled; ordered by value per unit of risk.
    that still reads the old shape is gone; §5a records the required order.
 3. ~~**Add a stage-history table.**~~ Done and surfaced on the matter page — see
    §7a, and now feeding time-in-stage on the aging board — see §7b.
-4. **Assert the stage vocabularies agree** (§3), the way
+4. ~~**Assert the stage vocabularies agree**~~ (§3). Done —
+   `tests/stage-vocabulary-parity.test.ts`, the way
    `tests/stage-engine-keys.test.ts` already does for engine keys.
 5. **Server-side ranking and pagination for leads** (§6), before volume makes
    the truncation matter.
