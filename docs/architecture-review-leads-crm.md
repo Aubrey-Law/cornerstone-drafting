@@ -740,6 +740,45 @@ production data behind every other row in that table and still shipped a
 recommendation — "generate them or remove the surfaces" — that would have added
 tasks to a pipeline drowning in them.
 
+### 9f. The stage named after a meeting aged while the meeting was ahead — fixed
+
+§9b fixed half of this. `is_scheduled` was `stage_entered_at > now()`, which
+catches a discovery call because `ensure_lead_matter()` stamps the stage clock
+with it. The other meeting in the lead funnel is the Peace of Mind Planning
+Session, which lives in `matters.pmps_at` and never touches `stage_entered_at` —
+so a lead sat in `intake_completed`, the stage the board labels **Planning
+Session**, ageing against a two-day SLA while the session it is named after was
+a fortnight away.
+
+On 2026-08-24 all **10** leads in that stage read red. Nine had held the session
+already; the tenth was red for a meeting **nine days out**.
+
+**Fixed** in `20261018000000_lead_meeting_pauses_clock.sql`. The stage's own
+meeting anchors its clock — `discovery_call` on `discovery_call_at`,
+`intake_completed` on `pmps_at` — and only ever moves it forward, so a stage
+entered after its meeting is not rewound to it. The other three lead stages wait
+on a person rather than a date and keep the clock they have: a lead is not
+"scheduled" for a form.
+
+The second half matters as much as the first. Reading green while the meeting is
+ahead, with the clock still running from stage entry underneath, would take the
+row from green to a fortnight late the morning after the session. Measured from
+the meeting, the SLA says what it means — two days to act once the session has
+happened. The cumulative total is displaced with it, or the same row would turn
+red through the other door.
+
+A date can now be wrong in a second direction, so `stage_clock_suspect` widens
+to match: a meeting more than a year out is ignored the way §9c's 1969 date is,
+rather than parking the lead as permanently scheduled and taking it off the
+board for good.
+
+**Still open, and not this migration's to fix**: `stage_sla` gives
+`intake_completed` `sla_days = 2` and `escalation_offset = 1`, and the red arm
+for escalation is tested before the amber arm — so the row is red one business
+day after the session while `is_overdue` is still false and `days_over_sla`
+reads -1. The colour and the numbers disagree, and the SLA table is a firm
+decision rather than a view bug.
+
 ## Ranked recommendations
 
 Not scheduled; ordered by value per unit of risk.
