@@ -18,9 +18,13 @@
  * exactly these and leaves a hand-skipped task skipped. Hand-added tasks carry
  * no phase and are never matched.
  *
- * Usage (reads the hosted credentials from the env files):
- *   set -a; source .env; source .env.local; set +a
- *   npx tsx scripts/holdBackUnsoldLeadTasks.ts [--apply]
+ * Usage (reads the hosted credentials from .env.local, which is where
+ * OPERATIONS_RUNBOOK.md and AGENTS.md put SUPABASE_SERVICE_ROLE_KEY):
+ *   DOTENV_CONFIG_PATH=.env.local npx tsx -r dotenv/config scripts/holdBackUnsoldLeadTasks.ts [--apply]
+ *
+ * Loaded through dotenv rather than `set -a; source ...`, because a fresh
+ * checkout has no `.env` to source: the shell reports that failure first, and
+ * the real question — whether the key is in .env.local at all — arrives second.
  *
  * Without --apply it reports what it would archive and writes nothing.
  */
@@ -42,7 +46,15 @@ interface LeadMatter {
 
 function requireEnv(name: string): string {
   const value = process.env[name]
-  if (!value) throw new Error(`${name} is not set — source .env and .env.local first`)
+  if (!value) {
+    // Names .env.local, the way OPERATIONS_RUNBOOK.md does. The old message
+    // said to source `.env` too, which does not exist in a fresh checkout — so
+    // it answered a question nobody asked and buried the one that matters.
+    throw new Error(
+      `${name} is not set. It lives in .env.local — run this as `
+      + `DOTENV_CONFIG_PATH=.env.local npx tsx -r dotenv/config scripts/holdBackUnsoldLeadTasks.ts`,
+    )
+  }
   return value
 }
 

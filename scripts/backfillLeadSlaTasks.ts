@@ -10,9 +10,13 @@
  * wait on the discovery call and the PMPS date, and the Day-0 tasks wait on the
  * engagement signature. Setting those anchors is what fills the dates in.
  *
- * Usage (reads the hosted credentials from the env files):
- *   set -a; source .env; source .env.local; set +a
- *   npx tsx scripts/backfillLeadSlaTasks.ts [--apply]
+ * Usage (reads the hosted credentials from .env.local, which is where
+ * OPERATIONS_RUNBOOK.md and AGENTS.md put SUPABASE_SERVICE_ROLE_KEY):
+ *   DOTENV_CONFIG_PATH=.env.local npx tsx -r dotenv/config scripts/backfillLeadSlaTasks.ts [--apply]
+ *
+ * Loaded through dotenv rather than `set -a; source ...`, because a fresh
+ * checkout has no `.env` to source: the shell reports that failure first, and
+ * the real question — whether the key is in .env.local at all — arrives second.
  *
  * Without --apply it reports what it would do and writes nothing.
  */
