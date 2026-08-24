@@ -45,6 +45,8 @@ function agingRow(overrides: Partial<MatterAgingRow> = {}): MatterAgingRow {
     cumulative_days: 6,
     cumulative_sla_days: 10,
     is_cumulative_overdue: false,
+    is_scheduled: false,
+    stage_clock_suspect: false,
     ...overrides,
   }
 }
@@ -144,5 +146,51 @@ describe('cumulative SLA breach', () => {
     const note = screen.getByTitle(/entered 3 times/)
     expect(note.textContent).toContain('30d total · 3 visits')
     expect(note.getAttribute('title')).not.toContain('allowed')
+  })
+})
+
+describe('a lead whose clock has not started', () => {
+  /**
+   * Both rows are green, and green is what the default "Needs attention" view
+   * exists to hide — which is the point of the change, so the test looks where
+   * a healthy row actually lives.
+   */
+  async function onTrack(row: MatterAgingRow) {
+    const user = userEvent.setup()
+    board(row)
+    await user.click(screen.getByText('On track'))
+  }
+
+  it('shows the date and no SLA bar for a booked call', async () => {
+    // Twelve rows sat amber at zero days in stage because the discovery clock
+    // starts at the scheduled call. A booked meeting is not a lead going cold.
+    await onTrack(agingRow({
+      entity: 'lead',
+      current_stage: 'discovery_call',
+      is_scheduled: true,
+      health: 'green',
+      days_in_stage: 0,
+      sla_days: 1,
+      stage_entered_at: '2026-09-09T12:00:00Z',
+    }))
+
+    expect(screen.getByText('Scheduled — clock starts then')).toBeTruthy()
+    expect(screen.queryByText('0/1d')).toBeNull()
+  })
+
+  it('asks for the date to be checked when the milestone predates the record', async () => {
+    // One lead's discovery call is recorded as 1969-09-02, which reported
+    // 14,864 days in stage. Measuring from creation stops it dominating the
+    // board; saying so is what gets the date fixed.
+    await onTrack(agingRow({
+      entity: 'lead',
+      current_stage: 'intake_completed',
+      stage_clock_suspect: true,
+      health: 'green',
+      days_in_stage: 0,
+    }))
+
+    expect(screen.getByText('Check the date')).toBeTruthy()
+    expect(screen.getByText(/measured from creation instead/)).toBeTruthy()
   })
 })

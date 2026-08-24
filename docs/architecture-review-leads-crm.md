@@ -315,6 +315,127 @@ deleted rather than fixed: nothing rendered the action queue, so those
 `.limit(5000)` reads never ran. A dead reader with a lurking limit is worse
 than no reader — it reads as covered.
 
+## 6a. The same limit was hiding the day's work — fixed
+
+§6 caught the truncation in the leads list. The identical pattern was live on
+the Today page and had already crossed its cap: `fetchTodayData()` read
+`fetchTasks({ status: 'open', limit: 500 })` and picked the overdue and
+due-today rows out in JavaScript.
+
+Measured on 2026-08-24: **1,024 open firm tasks**, of which 27 are overdue and 1
+is due today. A PostgREST read with a `limit` and no `order` returns an
+arbitrary 500 of the 1,024 — in heap order the first 500 held **1 of the 27**.
+So the page said "1 task overdue" and listed one row.
+
+The nav badge did not agree with it. `fetchTaskCounts()` reads the same tasks at
+`limit(2000)`, which still covers the whole table, so the badge said 27. Two
+counts of the same thing, 26 apart, with nothing on screen to say which was
+right — and the queue, the surface that exists to be worked top to bottom, was
+the one that was wrong.
+
+**Fixed:** `fetchDueTasks()` asks the database for the due window instead of
+slicing an unordered read — a three-branch filter mirroring `effectiveDueAt`'s
+precedence (`due_at`, then `soft_due_at`, then `hard_due_at`), bounded at the
+end of today in the firm's timezone. It returns 28 rows today rather than 500,
+and it is a filter, so nothing falls off the end of it. The 500-row cap stays as
+a backstop and now logs when it is reached, because the defect being fixed was a
+silent truncation, not a small one.
+
+The predicate was checked against all 1,024 production rows: it selects exactly
+the same set as `coalesce(due_at, soft_due_at, hard_due_at) <= end of today`,
+with zero disagreements. `tests/today-due-tasks.test.ts` evaluates the filter
+string itself against `effectiveDueAt` over every combination of the three
+columns, so a test restating the branches cannot agree with a wrong version of
+them.
+
+### 6b. The other five reads — fixed
+
+The same capped read stood behind five more surfaces, each past its cap, and
+each has been given the read it was actually asking for:
+
+| Surface | Was | Is |
+|---|---|---|
+| `app/admin/tasks/page.tsx` | An arbitrary 500 of 1,024 | Every open task, read in pages ordered on `(created_at, id)` |
+| `app/api/admin/calendar/plan/route.ts` | An arbitrary 1,000 of 1,024 | The due window through the end of the plan range, plus a second read for undated work carrying an estimate |
+| `app/api/cron/calendar-week-review/route.ts` | An arbitrary 500, filtered to overdue | The due window |
+| `lib/adminChat/calendarTools.ts` (two tools) | An arbitrary 500, filtered to overdue | The due window |
+| `lib/calendarAttention.ts` | An arbitrary 500, filtered by matter and by title | Tasks on the matters that appear on the day's calendar, and a title-filtered read for the follow-up rail |
+
+The Tasks page is the one that had to be paged rather than filtered: it is the
+firm's whole open queue and its scope, source and assignee filters run over
+whatever it was handed, so a cap there does not shorten the list so much as
+choose an arbitrary part of it to filter. Paging needs a total order —
+`created_at` alone is not one, so the read orders on `(created_at, id)`. The
+20,000-row ceiling is a runaway guard rather than a display limit, and reaching
+it is logged.
+
+`fetchTasks` gained the plain-column filters those reads needed — `matterIds`,
+`undated`, `hasEstimate`, `titleLike` — deliberately none of which spend the
+one `or=` parameter a PostgREST request can carry, since `recordId` already
+owns it. The title filter is a `title ilike any (…)` superset that the caller's
+regex still narrows; checked against production, it returns all 75 rows the
+regex matches and misses none.
+
+### 6c. The due date the database can sort on — fixed
+
+The five reads above are each exactly expressible without a schema change, and
+were written that way. Two were not, because they do not want a *subset* — they
+want the most urgent N, which is an ordering question:
+
+- `lib/queries/crmDashboard.ts` takes 5 rows for the CRM Tasks card, which was
+  an arbitrary 5 of 1,024.
+- `lib/queries/stageTasks.ts` read at the 500 default and kept whichever rows
+  carried a `stage_key`. No open task carries one today, so it returned nothing
+  either way — the kind of read that stays wrong quietly once that changes.
+
+PostgREST orders by columns, not expressions, and the app's working due date is
+`coalesce(due_at, soft_due_at, hard_due_at)`. So
+`20261016000000_task_effective_due.sql` stores it:
+
+```sql
+alter table public.tasks
+  add column effective_due_at timestamptz
+    generated always as (coalesce(due_at, soft_due_at, hard_due_at)) stored;
+```
+
+Generated and stored, so nothing can write a different value into it and the
+sort can be indexed — Postgres rejects an insert that names the column, which
+is what keeps it from drifting the way a trigger-maintained column would.
+`tests/task-effective-due-parity.test.ts` holds the SQL to `effectiveDueAt()`
+the way `tests/lead-score-sql-parity.test.ts` holds `lead_score()` to
+`computeLeadScore()`; verified on the scratch database over all 27 combinations
+of the three columns being early, late, or absent, with one all-null row
+yielding null and an update to `due_at` moving the stored value with it.
+
+**Every read is now ordered, not just the paged ones.** An unordered `limit` is
+what made a capped read arbitrary, so `fetchTasks` orders on
+`(effective_due_at nulls last, id)` on every path: a cap now keeps the most
+urgent rows and drops the furthest-off ones, and paging has the total order it
+needs — `effective_due_at` is null on 831 of the 1,024, so the `id` tiebreak is
+load-bearing rather than decorative. `fetchDueTasks` is a single `lte` on the
+column instead of a three-branch filter over the raw columns.
+
+The index leads on `owner` rather than `status`:
+
+```sql
+create index tasks_open_effective_due on public.tasks (owner, effective_due_at)
+  where status <> 'done';
+```
+
+Every queue read fixes `owner` — a client's "sign the engagement agreement" is
+not the attorney's work — and takes a *range* of statuses, and a leading column
+under an inequality cannot order what follows it. Checked on 3,000 seeded rows:
+the plan is an index scan with `Presorted Key: effective_due_at`, so the sort
+comes from the index. `tasks_open_due`, which indexed the same expression as an
+expression for the same sort, is dropped in the same migration: the planner
+will not match a column reference to it, so it would cost every write and serve
+no read.
+
+**One consequence to schedule:** a new column drifts
+`types/supabase.generated.ts` (§8a) until it is regenerated. The scheduled
+check will flag it after this merges; running **Database types drift** from the
+Actions tab with `open_pr` raises the regeneration itself.
+
 ## 7. Audit-trail gaps
 
 - `matter_relationship_status_history` records relationship transitions and is
@@ -490,6 +611,79 @@ pull requests*. With it off, the regenerated branch is still pushed and the
 step prints the setting to change and a compare link, rather than a bare
 GraphQL error.
 
+## 9. The pipeline had no working priority signal — second review
+
+The first eight sections are about whether the data is right. This one is about
+whether the reader can act on it, and the answer was no: every mechanism built
+to say "work this lead next" was saying the same thing about nearly every lead.
+Measured against production on 2026-08-24, 35 open leads:
+
+| Signal | What it said | Why it said nothing |
+|---|---|---|
+| Aging board, lead rows | 27 red, 12 amber, **0 green** | A board that is never green has no foreground |
+| `new_lead` | 13 rows, all red, avg **12 days** against a **1-day** SLA | An SLA missed 13 times out of 13 is a wall, not a queue |
+| `discovery_call` | 12 rows **amber at 0 days** | The clock starts at the *scheduled* call, so a booking reads as aging |
+| `intake_completed` | 10 red, avg **1,498 days**, max **14,864** | One lead's milestone is dated **1969-09-02** |
+| Score bands | **0 hot**, 2 warm, 20 cool, 13 cold; best 63 | "Hot" was unreachable — see §9a |
+| Lead tasks | **0**, ever | The Tasks tab, the SLA plan and half the Today queue are empty for the whole pre-engagement pipeline |
+
+### 9a. The score banded against points a lead cannot earn — fixed
+
+`computeLeadScore()` bands at hot ≥ 70 of 100, but 45 of those 100 points are
+for questions nobody asks before the planning session. Of 35 open leads, 1 has a
+fee quoted, 3 an estate value, 2 an urgency; readiness is always absent on a
+list row. The best real lead scored 63, so no lead was ever hot and nearly every
+badge read Cool or Cold — the pipeline looked worthless rather than sorted.
+
+**Fixed:** the band now reads the share of the points a lead could actually
+earn. Each component carries `available`, and both sides of the fraction read
+the same components. The distinction that matters is between an answer and
+silence: "no intake sent yet" and "no meeting booked" are answers and stay in
+the denominator; "no fee quoted" pre-engagement is silence and leaves. The raw
+0–100 score is untouched, because the list orders by it and `lead_score()` in
+SQL mirrors it (`tests/lead-score-sql-parity.test.ts`).
+
+### 9b. A booked call read as a lead going cold — fixed
+
+`ensure_lead_matter()` sets a lead's `stage_entered_at` to the milestone behind
+its stage, which for `discovery_call` is the scheduled call — often days ahead.
+`business_days_elapsed()` returns 0 for a future start, and the amber rule
+(`days >= sla_days - 1`) fires at 0 when the SLA is one day, so every booked
+call sat amber from the moment it was booked.
+
+**Fixed** in `20261015000000_lead_scheduled_not_aging.sql`: a lead whose clock
+has not started is `is_scheduled`, reads green, and owes nothing — the board
+shows the date instead of a colour. Amber now requires `sla_days > 1`, because a
+one-day budget has no approach to it, only inside or outside. The Today queue
+needed no change: it filters on `health !== 'green'`, so scheduled leads leave
+it on their own, and the booked call already appears under appointments.
+
+### 9c. One typo ran a clock for forty years — surfaced
+
+A lead carries `discovery_call_at = 1969-09-02`, which became its stage clock
+and reported 14,864 days. The same date reached the row twice — once as the
+clock, once through the stage-history row it wrote, where it totalled 14,860
+business days and turned the row red by the cumulative rule instead. Both paths
+are now guarded: a milestone predating its own record by more than a year is
+measured from creation, and the row is flagged `stage_clock_suspect` so the
+board asks for the date to be checked. Deliberately *surfaced* rather than
+corrected — a silently fixed date never gets fixed at source.
+
+### 9d. Left for a decision
+
+- **The `new_lead` SLA is one business day and was missed on all 13 leads**
+  (avg 12 days, worst 30). Whether to change the promise or the staffing is a
+  firm decision, and quietly relaxing the SLA to match performance would be
+  moving the goalposts, so nothing here touches it.
+- **No lead has ever had a task.** Matters get stage tasks; leads get none, so
+  the lead Tasks tab, the SLA plan view and the task half of the Today queue are
+  permanently empty. Generate them or remove the surfaces.
+- **34 of 35 open leads have no fee quoted**, so "Quoted pipeline" reads $0.
+- **22 of 35 have no lead source**, so the sources donut is mostly Unattributed.
+- **One object, five names**: nav "CRM", page header "Opportunities", route
+  `/admin/leads`, detail URL `/admin/crm/opportunities/{id}`, dashboard
+  "People".
+
 ## Ranked recommendations
 
 Not scheduled; ordered by value per unit of risk.
@@ -512,3 +706,11 @@ Not scheduled; ordered by value per unit of risk.
    `20261013000000_drop_twenty_sync_columns.sql`.
 7. ~~**Keep the generated database types honest**~~ (§8a). Done — a scheduled
    check compares them against the deployed schema.
+8. ~~**Give the pipeline a working priority signal**~~ (§9). Done for the score
+   bands, the scheduled-call clock and the impossible-date guard; §9d lists what
+   was deliberately left for a decision.
+9. ~~**Finish the truncation sweep for tasks**~~ (§6a–§6c). Done: Today, the
+   Tasks page, the calendar plan route, the calendar attention read, the
+   weekly-review cron, the admin chat tools, the CRM Tasks card and the
+   stage-task read. `tasks.effective_due_at` gives every capped read an
+   ordering, so a cap keeps the most urgent rows instead of arbitrary ones.

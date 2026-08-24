@@ -43,6 +43,8 @@ export async function fetchCrmDashboard(viewerId: string | null): Promise<CrmDas
     fetchCrmDashboardPeople(),
     fetchCrmPeople(RECENT_PEOPLE, { orderBy: 'created_at' }),
     fetchCrmStages(),
+    // The five most urgent, now that the read is ordered by the stored due
+    // date — this was an arbitrary five of 1,024 open tasks.
     fetchTasks({ scope: 'all', status: 'open', viewerId, limit: 5 }).catch(() => [] as TaskRow[]),
   ])
 

@@ -362,6 +362,7 @@ export function TodayQueue({
   const token = useAccessToken()
   const [tab, setTab] = useState<TabKey>('you')
   const [queueExpanded, setQueueExpanded] = useState(false)
+  const [overdueExpanded, setOverdueExpanded] = useState(false)
   const [clientsExpanded, setClientsExpanded] = useState(false)
   const [laterOpen, setLaterOpen] = useState(false)
   const [nudgePreviewOpen, setNudgePreviewOpen] = useState(false)
@@ -617,6 +618,13 @@ export function TodayQueue({
     ? remainingQueue
     : remainingQueue.slice(0, QUEUE_PREVIEW_COUNT)
   const queueHidden = remainingQueue.length - queueShown.length
+  // Overdue work used to render every row, which was survivable while a
+  // truncated read showed one of them. It is the whole backlog now — 27 rows on
+  // 2026-08-24 — so it previews like every other long group on this page.
+  const overdueShown = overdueExpanded
+    ? remainingOverdueTasks
+    : remainingOverdueTasks.slice(0, QUEUE_PREVIEW_COUNT)
+  const overdueHidden = remainingOverdueTasks.length - overdueShown.length
   const laterCount = remainingQueue.length + remainingIntakeToSend.length + clientRows.length
 
   // Fresh server rows already exclude what was completed, so the optimistic
@@ -1033,7 +1041,18 @@ export function TodayQueue({
             <>
               <GroupHeader title="Overdue work" count={remainingOverdueTasks.length} />
               <ul className="divide-y divide-border rounded-lg border border-border border-l-[3px] border-l-destructive bg-card">
-                {remainingOverdueTasks.map(taskRow)}
+                {overdueShown.map(taskRow)}
+                {overdueHidden > 0 && (
+                  <li>
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      onClick={() => setOverdueExpanded(true)}
+                    >
+                      Show {overdueHidden} more
+                    </button>
+                  </li>
+                )}
               </ul>
             </>
           )}

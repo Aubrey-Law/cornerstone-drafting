@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { PauseCircle, RefreshCw, RotateCcw, Search } from 'lucide-react'
+import { AlertTriangle, CalendarCheck, PauseCircle, RefreshCw, RotateCcw, Search } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { invalidateSidebarCountsClient } from '@/lib/sidebarCountsClient'
@@ -117,6 +117,35 @@ function SlaProgress({ row }: { row: MatterAgingRow }) {
         {row.snooze_reason && (
           <p className="max-w-[140px] truncate text-[10px] text-muted-foreground">{row.snooze_reason}</p>
         )}
+      </div>
+    )
+  }
+
+  // A lead whose next step is a meeting that has not happened yet owes nobody
+  // anything. Saying when it is beats colouring it — twelve rows sat amber at
+  // zero days in stage before 20261015000000.
+  if (row.is_scheduled) {
+    return (
+      <div className="space-y-1">
+        <Badge variant="outline" className="border-green/30 bg-green-bg text-[10px] text-green">
+          <CalendarCheck aria-hidden className="mr-1 h-3 w-3 shrink-0" />
+          {formatDate(row.stage_entered_at)}
+        </Badge>
+        <p className="text-[10px] text-muted-foreground">Scheduled — clock starts then</p>
+      </div>
+    )
+  }
+
+  if (row.stage_clock_suspect) {
+    return (
+      <div className="space-y-1">
+        <Badge variant="outline" className="border-amber-border bg-amber-bg text-[10px] text-amber">
+          <AlertTriangle aria-hidden className="mr-1 h-3 w-3 shrink-0" />
+          Check the date
+        </Badge>
+        <p className="max-w-[150px] text-[10px] leading-snug text-muted-foreground">
+          The recorded milestone predates the record; measured from creation instead.
+        </p>
       </div>
     )
   }

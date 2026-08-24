@@ -192,3 +192,50 @@ describe('lead record panel width', () => {
     expect(screen.getByRole('button', { name: 'Collapse record panel' })).toBeTruthy()
   })
 })
+
+describe('what a board card is scanned for', () => {
+  it('shows when, where it used to show a derived identifier', async () => {
+    // The second line was the provisional lead number — a synthetic id for a
+    // record with no matter yet, and nothing anyone can act on.
+    searchParams = new URLSearchParams('view=board')
+    renderLeads([leadRow({
+      id: 'booked',
+      full_name: 'Booked Bella',
+      next_appointment_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+    })])
+
+    expect(screen.getByText(/Meeting in \d+ days/)).toBeTruthy()
+    expect(screen.queryByText(/^\d{4}-EP-/)).toBeNull()
+  })
+
+  it('names why a lead needs attention instead of just flagging it', () => {
+    // "Needs attention" was true of 16 of 35 leads, which told the reader
+    // nothing about which one to open.
+    searchParams = new URLSearchParams('view=board')
+    renderLeads([leadRow({
+      id: 'urgent',
+      full_name: 'Urgent Uma',
+      lead_urgency: 'high',
+      last_activity_at: new Date().toISOString(),
+    })])
+
+    // Scoped to the card: "Needs attention" is also the name of a filter chip
+    // in the insights strip above the board, which stays.
+    const card = screen.getByRole('article')
+    expect(within(card).getByText('High urgency')).toBeTruthy()
+    expect(within(card).queryByText('Needs attention')).toBeNull()
+  })
+
+  it('falls back to the plan when no fee has been quoted', () => {
+    // One lead in thirty-five had a fee; thirteen had a carrier.
+    searchParams = new URLSearchParams('view=board')
+    renderLeads([leadRow({
+      id: 'plan',
+      full_name: 'Plan Pat',
+      engagement_fee_quoted: null,
+      billing_type: 'metlife',
+    })])
+
+    expect(screen.getByText('MetLife')).toBeTruthy()
+  })
+})
