@@ -772,12 +772,8 @@ to match: a meeting more than a year out is ignored the way §9c's 1969 date is,
 rather than parking the lead as permanently scheduled and taking it off the
 board for good.
 
-**Still open, and not this migration's to fix**: `stage_sla` gives
-`intake_completed` `sla_days = 2` and `escalation_offset = 1`, and the red arm
-for escalation is tested before the amber arm — so the row is red one business
-day after the session while `is_overdue` is still false and `days_over_sla`
-reads -1. The colour and the numbers disagree, and the SLA table is a firm
-decision rather than a view bug.
+**The colour after the session was still wrong**, and that turned out not to
+be the SLA table at all — see §9h.
 
 ### 9g. The record page could not see its own meeting — fixed
 
@@ -808,6 +804,47 @@ timestamp, never which meeting it is; it said "discovery call" because that was
 the only anchor the page could see. On a lead whose call is already behind it,
 that named a planning session as a discovery call, so the wording is now
 "Meeting is …".
+
+### 9h. Red meant two different things, and amber meant nothing — fixed
+
+Chasing §9f's leftover: `intake_completed` reads `sla_days = 2` and
+`escalation_offset = 1`, so a lead went red the morning after its planning
+session while `is_overdue` was false and `days_over_sla` read `-1`. The obvious
+suspect was the stage's numbers. They were not the problem — `sla_days - 1` is
+the house pattern, on **ten of the twelve** stages carrying an SLA
+(`intake_sent` 5→4, `revisions` 3→2, `closeout` 3→2, and so on).
+
+`escalation_offset` is the *nudge*: the column it feeds is called
+`needs_outreach`, and it is set a day before the deadline so someone reaches
+out before the promise breaks. The health `case` painted it **red**, and tested
+it above the amber arm. Two consequences, on every stage following the pattern:
+
+- A row went red a business day **before** its SLA was breached, so the colour
+  and the numbers beside it disagreed.
+- **Amber was unreachable.** Where `escalation_offset = sla_days - 1`, the red
+  arm fires on exactly the threshold the amber arm was written for and sits
+  above it. The board carried **zero amber rows** across 79 leads and matters
+  on 2026-08-24 — a two-colour board that had been given three.
+
+**Fixed** in `20261019000000_escalation_is_amber.sql`: the escalation arm is
+amber, in both entities. Red keeps one meaning — the promise is broken, past
+`sla_days` in the stage or past the cumulative budget. `needs_outreach` and
+`is_overdue` are untouched; only the colour the marker paints changed, and both
+the board and the Today queue already rendered amber.
+
+The ladder now reads, for a two-day stage nudged at one:
+
+| business days | `is_overdue` | `days_over_sla` | colour |
+|---|---|---|---|
+| 0 | false | -2 | green |
+| 1 | false | -1 | amber |
+| 2 | false | 0 | amber |
+| 3 | true | 1 | red |
+
+Small on today's data, which is the point: **57 of the 58 red rows are red
+because they really are past their SLA**, and exactly one becomes amber. The
+board was not crying wolf about the wrong records — it was spending its loudest
+colour on a warning, and had no quieter one left to spend.
 
 ## Ranked recommendations
 
