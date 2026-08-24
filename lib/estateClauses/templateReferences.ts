@@ -46,6 +46,7 @@ const DOCUMENT_TYPES_BY_ID: Readonly<Record<string, readonly EstateDocumentType[
   'certificate-of-trust': ['ancillary'],
   'estate-plan-design-summary': ['ancillary'],
   'estate-plan-design-worksheet': ['ancillary'],
+  'estate-plan-interview-worksheet': ['ancillary'],
   'estate-plan-summary': ['ancillary'],
   // Education records, not health information — the release shares no clause
   // language with the HIPAA authorization.

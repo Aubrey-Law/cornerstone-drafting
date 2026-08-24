@@ -22,7 +22,11 @@ import {
 import { applyDocxReplacements, extractDocxParagraphText } from '@/lib/templateBuilder/docxEdit'
 
 const MAX_TEXT_CHARS = 16000
-const MAX_FIELD_RESULTS = 400
+// Headroom over the full catalog: an unfiltered `list_template_fields` has to
+// return everything, or whole blocks silently vanish from the assistant's
+// view. Raise this whenever a new template pushes the catalog past it —
+// tests/template-builder.test.ts asserts the unfiltered listing is complete.
+const MAX_FIELD_RESULTS = 800
 const MAX_USED_IN = 3
 
 interface DictionaryEntry {

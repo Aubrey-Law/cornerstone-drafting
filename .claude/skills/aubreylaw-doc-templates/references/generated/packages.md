@@ -90,6 +90,17 @@ Client-facing estate plan design summary export: the pre-meeting design workshee
 
 Required fields: `client.full_name`
 
+## design-summary-separate
+
+Design sheet export for a reciprocal (separate) living-trust matter: the client-facing plan summary plus the two-settlor interview worksheet.
+
+| Document | Template | Output |
+|---|---|---|
+| Estate Plan Design Summary | `templates/design-summary-detailed.docx` | `01-estate-plan-design-summary.docx` |
+| Estate Plan Interview Worksheet | `templates/design-summary-worksheet-separate.docx` | `02-estate-plan-interview-worksheet.docx` |
+
+Required fields: `client.full_name`
+
 ## estate-plan-summary
 
 Client-facing estate plan summary for individual and married-couple draft packages.
@@ -344,4 +355,4 @@ How `deriveEstateGeneratorPackages()` (lib/estateGenerator/toGeneratorData.ts) t
 | `include_will_cp` | `will-cp` | College Preparation Plan sheets, when the simple will is elected (`college_prep.will_include`); the estate will packages never select on this track |
 | `include_estate_plan_summary` | `estate-plan-summary` | appended whenever any other package generates, unless explicitly `false` |
 
-Manifests never selected by `deriveEstateGeneratorPackages()`: `core-estate`, `design-summary` (`design-summary` is generated from its own design-sheet action; `core-estate` is legacy and not in `NODE_SUPPORTED_PACKAGES`).
+Manifests never selected by `deriveEstateGeneratorPackages()`: `core-estate`, `design-summary`, `design-summary-separate` (`design-summary` is generated from its own design-sheet action; `core-estate` is legacy and not in `NODE_SUPPORTED_PACKAGES`).

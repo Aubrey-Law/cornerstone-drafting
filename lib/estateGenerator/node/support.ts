@@ -2,6 +2,7 @@ import type { NodeEstatePackageName } from '@/lib/estateGenerator/node/types'
 
 export const NODE_SUPPORTED_PACKAGES = new Set<NodeEstatePackageName>([
   'design-summary',
+  'design-summary-separate',
   'estate-plan-summary',
   'pourover-will',
   'trust-individual-single',
