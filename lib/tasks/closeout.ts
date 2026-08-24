@@ -23,7 +23,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 /** Statuses that represent work still outstanding. Mirrors OPEN_STATUSES. */
 const OPEN_STATUSES = ['open', 'in_progress', 'blocked']
 
-export const CLOSEOUT_REASONS = ['matter_closed', 'lead_lost', 'lead_declined'] as const
+export const CLOSEOUT_REASONS = [
+  'matter_closed',
+  'lead_lost',
+  'lead_declined',
+  /** Post-engagement work on a lead that has not converted — see below. */
+  'not_engaged',
+] as const
 
 export type CloseoutReason = (typeof CLOSEOUT_REASONS)[number]
 
@@ -46,12 +52,21 @@ export interface CloseoutOptions {
    * ago would say something untrue about when the tasks were dropped.
    */
   logActivity?: boolean
+  /**
+   * Restrict the sweep to these `phase` values. Used by the pre-engagement
+   * sweep, which archives a lead's post-engagement plan and leaves the work
+   * that is genuinely live. Hand-added tasks carry no phase and are never
+   * matched by it, which is the intended behaviour: nobody's own task should
+   * vanish because the record has not been engaged.
+   */
+  phases?: readonly string[]
 }
 
 const REASON_LABEL: Record<CloseoutReason, string> = {
   matter_closed: 'the matter closed',
   lead_lost: 'the lead was marked lost',
   lead_declined: 'the lead was declined',
+  not_engaged: 'the engagement has not been signed yet',
 }
 
 /**
@@ -83,7 +98,7 @@ export async function archiveTasksForClosedRecord(
   if (clauses.length === 0) return 0
 
   const now = new Date().toISOString()
-  const { data, error } = await admin
+  let query = admin
     .from('tasks')
     .update({
       status: 'archived',
@@ -95,7 +110,10 @@ export async function archiveTasksForClosedRecord(
     })
     .in('status', OPEN_STATUSES)
     .or(clauses.join(','))
-    .select('id')
+
+  if (options.phases) query = query.in('phase', options.phases)
+
+  const { data, error } = await query.select('id')
 
   if (error) {
     console.error('archiveTasksForClosedRecord:', error.message)
@@ -119,13 +137,20 @@ export async function restoreTasksForReopenedRecord(
   admin: SupabaseClient,
   target: CloseoutTarget,
   actor: CloseoutActor = {},
-  options: CloseoutOptions = {},
+  options: CloseoutOptions & {
+    /**
+     * Restore only what this sweep archived. Conversion passes 'not_engaged'
+     * so it releases the plan it was holding back without also reviving a
+     * checklist that was archived because the lead had gone lost.
+     */
+    reason?: CloseoutReason
+  } = {},
 ): Promise<number | null> {
   const clauses = recordFilter(target)
   if (clauses.length === 0) return 0
 
   const now = new Date().toISOString()
-  const { data, error } = await admin
+  let query = admin
     .from('tasks')
     .update({
       status: 'open',
@@ -133,9 +158,12 @@ export async function restoreTasksForReopenedRecord(
       closeout_reason: null,
       updated_at: now,
     })
-    .not('closeout_reason', 'is', null)
     .or(clauses.join(','))
-    .select('id')
+
+  if (options.reason) query = query.eq('closeout_reason', options.reason)
+  else query = query.not('closeout_reason', 'is', null)
+
+  const { data, error } = await query.select('id')
 
   if (error) {
     console.error('restoreTasksForReopenedRecord:', error.message)

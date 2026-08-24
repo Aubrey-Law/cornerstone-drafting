@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   CLOSEOUT_REASONS,
@@ -253,10 +253,21 @@ describe('a task the user takes back by hand', () => {
 })
 
 describe('the closeout reasons', () => {
-  const migration = readFileSync(
-    'supabase/migrations/20261006000000_task_closeout_archive.sql',
-    'utf8',
-  )
+  /**
+   * The CHECK is redefined whenever a reason is added — 20261017000000 added
+   * `not_engaged` — so this reads the last migration that defines it rather
+   * than the one that introduced it. Pinning the original file passed until
+   * the constraint moved on, and then failed for the wrong reason.
+   */
+  const migration = (() => {
+    const dir = 'supabase/migrations'
+    const defining = readdirSync(dir)
+      .filter(file => file.endsWith('.sql'))
+      .sort()
+      .filter(file => readFileSync(`${dir}/${file}`, 'utf8').includes('add constraint tasks_closeout_reason_check'))
+    expect(defining.length).toBeGreaterThan(0)
+    return readFileSync(`${dir}/${defining[defining.length - 1]}`, 'utf8')
+  })()
 
   it('are the same set the database will accept', () => {
     for (const reason of CLOSEOUT_REASONS) {

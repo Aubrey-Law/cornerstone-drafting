@@ -625,7 +625,7 @@ Measured against production on 2026-08-24, 35 open leads:
 | `discovery_call` | 12 rows **amber at 0 days** | The clock starts at the *scheduled* call, so a booking reads as aging |
 | `intake_completed` | 10 red, avg **1,498 days**, max **14,864** | One lead's milestone is dated **1969-09-02** |
 | Score bands | **0 hot**, 2 warm, 20 cool, 13 cold; best 63 | "Hot" was unreachable — see §9a |
-| Lead tasks | **0**, ever | The Tasks tab, the SLA plan and half the Today queue are empty for the whole pre-engagement pipeline |
+| Lead tasks | **0**, ever ⚠️ **wrong — see §9e** | Measured on `tasks.lead_id`, which nothing writes. A lead's tasks hang off its `matters` row, and there were 1,021 of them |
 
 ### 9a. The score banded against points a lead cannot earn — fixed
 
@@ -675,14 +675,70 @@ corrected — a silently fixed date never gets fixed at source.
   (avg 12 days, worst 30). Whether to change the promise or the staffing is a
   firm decision, and quietly relaxing the SLA to match performance would be
   moving the goalposts, so nothing here touches it.
-- **No lead has ever had a task.** Matters get stage tasks; leads get none, so
-  the lead Tasks tab, the SLA plan view and the task half of the Today queue are
-  permanently empty. Generate them or remove the surfaces.
+- ~~**No lead has ever had a task.**~~ **This was wrong — see §9e.** Leads carry
+  more tasks than matters do; the row above was measured on the wrong column.
 - **34 of 35 open leads have no fee quoted**, so "Quoted pipeline" reads $0.
 - **22 of 35 have no lead source**, so the sources donut is mostly Unattributed.
 - **One object, five names**: nav "CRM", page header "Opportunities", route
   `/admin/leads`, detail URL `/admin/crm/opportunities/{id}`, dashboard
   "People".
+
+### 9e. The lead-task finding was wrong, and the truth was the opposite — fixed
+
+§9 reported "0 lead tasks, ever" and recommended generating them or removing the
+surfaces. Both the finding and the recommendation were wrong, and the mistake is
+worth recording because of how it was made: the count was
+`tasks.lead_id is not null`, which is **0 across all 1,469 rows** — nothing has
+ever written that column. A lead's plan is generated against the `matters` row
+`ensure_lead_matter()` creates for it, so its tasks carry `matter_id`.
+`lib/tasks/closeout.ts` had this right all along and matched both columns; the
+measurement did not.
+
+Read the other way, on 2026-08-24:
+
+| | leads | matters |
+|---|---|---|
+| Active records | 39 | 38 |
+| Open tasks | **1,021** | 227 |
+
+**Leads hold 1,021 of the firm's 1,024 open tasks** — about 43 each. That is not
+a pipeline being worked; it is `ensureLeadSlaTasks` generating the whole
+48-task estate-planning template on the day a lead is created. Only 11 of those
+templates are pre-engagement. The rest is drafting, signing, funding and
+post-execution work for a plan nobody has bought: **783 such tasks across 25
+leads**, 709 of them firm-owned, and **24 leads carrying post-execution tasks**.
+It is most of what filled the Today queue and the Tasks page in §6a.
+
+Two separate defects, both fixed:
+
+**The lead Tasks tab could not see them.** `fetchTasksForLead(intakeId)` filtered
+`matter_id.eq.{intakeId},lead_id.eq.{intakeId}`, and the intake id is never a
+matter id — so the tab and its count badge read zero on a record holding 43 open
+tasks. (The Plan view worked: it is handed `lead.matter_id` directly.) The read
+now resolves a lead's matter the way the closeout sweep always did.
+
+**The unsold half is held back.** `ensureLeadSlaTasks` still generates the plan
+whole — the dated plan is what the Plan view reads, and generating less would
+mean reconciling at conversion — and then archives everything from the `intake`
+phase onward behind `closeout_reason = 'not_engaged'`
+(`20261017000000_task_not_engaged_closeout.sql`). Conversion releases exactly
+those rows, scoped to that reason so converting a lead that had gone lost does
+not also revive what the lost sweep archived. It reuses the mechanism
+20261006000000 already built rather than growing a second one, which means the
+hold-back is reversible and a hand-added task — which carries no phase — is
+never touched.
+
+The boundary is read as an index into `SLA_PHASES` rather than restated as a
+second list: that list is "lead stages, then matter stages", and `intake` is the
+first stage a signed engagement reaches. `scripts/holdBackUnsoldLeadTasks.ts`
+clears the existing backlog through the same helper the live path uses, dry by
+default.
+
+**What this says about the review.** A count of zero is the easiest wrong answer
+to believe, because it looks like an absence rather than a mistake. §9 had
+production data behind every other row in that table and still shipped a
+recommendation — "generate them or remove the surfaces" — that would have added
+tasks to a pipeline drowning in them.
 
 ## Ranked recommendations
 

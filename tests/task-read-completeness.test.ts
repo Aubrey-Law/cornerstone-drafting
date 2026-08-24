@@ -20,8 +20,13 @@ const calls: Call[] = []
 let pages: unknown[][] = []
 let pageIndex = 0
 
+let leadMatterId: string | null = null
+
 function builder() {
   const chain: Record<string, unknown> = {}
+  // The lead-matter lookup ends in maybeSingle rather than a page read.
+  chain.maybeSingle = () =>
+    Promise.resolve({ data: leadMatterId ? { id: leadMatterId } : null, error: null })
   for (const method of ['select', 'in', 'eq', 'or', 'neq', 'is', 'not', 'ilikeAnyOf', 'order']) {
     chain[method] = (...args: unknown[]) => {
       calls.push({ method, args })
@@ -47,6 +52,7 @@ afterEach(() => {
   calls.length = 0
   pages = []
   pageIndex = 0
+  leadMatterId = null
   vi.restoreAllMocks()
 })
 
@@ -140,6 +146,41 @@ describe('reading a subset', () => {
     expect(filters('or')).toHaveLength(0)
     const ilike = filters('ilikeAnyOf')[0]
     expect(ilike?.args).toEqual(['title', ['%follow%', '%call%']])
+  })
+})
+
+describe('reading one record', () => {
+  it('reaches the matter a lead\'s plan actually hangs off', async () => {
+    // `ensure_lead_matter` gives every lead a matters row, and the plan is
+    // generated against it — so those tasks carry the matter's id, not the
+    // intake id the lead is known by. Filtering on the intake id alone matched
+    // nothing: on 2026-08-24 the lead Tasks tab and its badge read zero on
+    // records holding 43 open tasks each.
+    leadMatterId = 'matter-of-the-lead'
+    pages = [[]]
+    await fetchTasks({ status: 'open', recordId: '11111111-2222-3333-4444-555555555555' })
+
+    const or = filters('or')[0]
+    expect(or?.args[0]).toContain('matter_id.eq.matter-of-the-lead')
+    // The intake id stays in the filter: a hand-added lead task carries it as
+    // `lead_id`, and closeout has always matched both.
+    expect(or?.args[0]).toContain('lead_id.eq.11111111-2222-3333-4444-555555555555')
+  })
+
+  it('asks for a record that is a matter without inventing a second clause', async () => {
+    leadMatterId = null
+    pages = [[]]
+    await fetchTasks({ status: 'open', recordId: '11111111-2222-3333-4444-555555555555' })
+
+    const or = filters('or')[0]
+    expect(String(or?.args[0]).split(',')).toHaveLength(2)
+  })
+
+  it('refuses a record id that is not an id, rather than interpolating it', async () => {
+    // The clauses go into a PostgREST filter string by interpolation.
+    pages = [page(3, 'never-read')]
+    expect(await fetchTasks({ status: 'open', recordId: 'not-a-uuid' })).toEqual([])
+    expect(calls).toHaveLength(0)
   })
 })
 

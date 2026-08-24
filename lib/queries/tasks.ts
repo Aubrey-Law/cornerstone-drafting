@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { parseRecurrence } from '@/lib/tasks/recurrence'
 import {
@@ -182,6 +183,30 @@ async function attachDisplayNames(rows: TaskRow[]): Promise<TaskRow[]> {
 }
 
 /**
+ * Every clause that means "this record" for a task read.
+ *
+ * A lead's plan is generated against the `matters` row `ensure_lead_matter`
+ * creates for it, so those tasks carry that matter's id — not the intake id the
+ * lead is known by everywhere else. `fetchTasksForLead` passed the intake id and
+ * matched nothing: on 2026-08-24 the lead Tasks tab and its count badge read
+ * zero on records carrying 43 open tasks each. `lib/tasks/closeout.ts` already
+ * knew this and matched both columns; the read side did not.
+ */
+async function recordClauses(admin: SupabaseClient, recordId: string): Promise<string[]> {
+  const clauses = [`matter_id.eq.${recordId}`, `lead_id.eq.${recordId}`]
+  // One extra lookup, and only when a record is named. A matter id matches
+  // nothing here, so this costs a miss on the matter path and fixes the lead one.
+  const { data } = await admin
+    .from('matters')
+    .select('id')
+    .eq('client_intake_id', recordId)
+    .maybeSingle()
+  const leadMatterId = (data as { id: string } | null)?.id
+  if (leadMatterId) clauses.push(`matter_id.eq.${leadMatterId}`)
+  return clauses
+}
+
+/**
  * The one query behind every task surface. Callers narrow it with scope,
  * source, status and record filters; the sort is always by effective due date.
  */
@@ -209,6 +234,7 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
   if (recordId && !isUuid(recordId)) return []
 
   const admin = getAdminClient()
+  const recordFilter = recordId ? (await recordClauses(admin, recordId)).join(',') : null
 
   // Rebuilt per page: a PostgREST builder is spent once it is awaited.
   const buildQuery = () => {
@@ -226,7 +252,7 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
     else if (scope === 'unassigned') query = query.is('assignee_id', null)
     else if (scope === 'team' && viewerId) query = query.neq('assignee_id', viewerId)
 
-    if (recordId) query = query.or(`matter_id.eq.${recordId},lead_id.eq.${recordId}`)
+    if (recordFilter) query = query.or(recordFilter)
     if (matterIds) query = query.in('matter_id', matterIds)
 
     // The three columns `effectiveDueAt` reads, so "no due date" here means the
