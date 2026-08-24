@@ -3,6 +3,8 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
+import { archiveTasksForClosedRecord } from '@/lib/tasks/closeout'
+import { POST_ENGAGEMENT_PHASES } from './types'
 import { normalizePracticeArea } from '@/lib/practiceArea'
 import { planDateColumns, planTimestamp, toPlanTasks } from './plan'
 import { fetchPlanTasks } from './queries'
@@ -315,13 +317,31 @@ export async function ensureLeadSlaTasks(
       if (settings?.probate_track_enabled !== true) return
     }
     const templateName = slaTemplateForPracticeArea(options.practiceArea) ?? ESTATE_PLANNING_SLA_V3
-    const result = await generateMatterTasks(getAdminClient(), {
+    const admin = getAdminClient()
+    const result = await generateMatterTasks(admin, {
       matterId,
       templateName,
       startDate: firmTodayKey(),
     })
     if (!result.ok) {
       console.warn('[sla-tasks] lead generation skipped for matter', matterId, result.error)
+      return
+    }
+    // The plan is generated whole and the unsold half is held back. A lead is
+    // 11 pre-engagement tasks and 37 that depend on an engagement nobody has
+    // signed; generating all 48 into the queue is what put 709 undoable tasks
+    // across 39 leads on 2026-08-24. Archived rather than never created, so the
+    // dated plan the Plan view reads stays whole and conversion is a restore
+    // rather than a second generation that would have to reconcile.
+    const held = await archiveTasksForClosedRecord(
+      admin,
+      { matterId },
+      'not_engaged',
+      {},
+      { phases: POST_ENGAGEMENT_PHASES, logActivity: false },
+    )
+    if (held === null) {
+      console.warn('[sla-tasks] post-engagement hold-back failed for matter', matterId)
     }
   } catch (e) {
     console.warn('[sla-tasks] lead generation failed for matter', matterId, e)

@@ -6,6 +6,7 @@ import { isCollegePrepIntake } from '@/lib/intakeTrack'
 import { ensureDesignSheetSeededFromIntake } from '@/lib/designSheet/ensureDesignSheetSeeded'
 import { generateUniqueMatterNumber } from '@/lib/matterNumber'
 import { applySlaAnchor, ensureMatterSlaTasks } from '@/lib/slaTasks/generate'
+import { restoreTasksForReopenedRecord } from '@/lib/tasks/closeout'
 import { firmDateKey } from '@/lib/firmDate'
 import { durableWorkflowJobsEnabled, enqueueWorkflowJob } from '@/lib/workflowJobs'
 
@@ -125,6 +126,23 @@ export async function createMatterFromIntake(
   // anyone has worked it, and while the CP checklist's own pre-engagement tasks
   // can still be dated off the discovery call the lead already had.
   if (!durableJobs) await ensureMatterSlaTasks(matterId, { practiceArea, retemplate: true })
+
+  // Release the plan the lead was holding back. `ensureLeadSlaTasks` archives
+  // the post-engagement half behind `not_engaged` so it stays out of the queue
+  // while nobody has signed; this is the moment it becomes real work. Scoped to
+  // that reason so converting a lead that had gone lost does not also revive
+  // the checklist the lost sweep archived.
+  try {
+    const released = await restoreTasksForReopenedRecord(
+      admin,
+      { matterId },
+      { id: options.actorId ?? null },
+      { reason: 'not_engaged' },
+    )
+    if (released === null) console.warn('[sla-tasks] post-engagement release failed', matterId)
+  } catch (e) {
+    console.warn('[sla-tasks] post-engagement release failed for matter', matterId, e)
+  }
 
   // Day 0. A lead already carries its checklist, so the tasks above are a no-op
   // and the 28-day plan is still undated — replaying the engagement anchor is

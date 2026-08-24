@@ -44,6 +44,35 @@ export const SLA_PHASES = [
 
 export type SlaPhase = (typeof SLA_PHASES)[number]
 
+/**
+ * Where the lead stages end and the matter stages begin.
+ *
+ * The list above is "lead stages, then matter stages", and `intake` is the
+ * first stage a signed engagement reaches. Read as an index rather than
+ * restated as a second list, so a phase added to either half is classified by
+ * where it sits rather than by anyone remembering to update a copy.
+ */
+const ENGAGEMENT_BOUNDARY = SLA_PHASES.indexOf('intake')
+
+/**
+ * Work that happens before anyone has been engaged.
+ *
+ * The estate-planning checklist is 48 tasks and a lead is generated the whole
+ * thing on the day it is created. Only 11 of those are pre-engagement; the rest
+ * are drafting, signing, funding and post-execution work for a plan nobody has
+ * bought. On 2026-08-24 that put 709 unsold tasks in the firm queue across 39
+ * leads — 24 of which were carrying post-execution tasks.
+ */
+export function isPreEngagementPhase(phase: string | null | undefined): boolean {
+  if (!phase) return false
+  const index = SLA_PHASES.indexOf(phase as SlaPhase)
+  return index >= 0 && index < ENGAGEMENT_BOUNDARY
+}
+
+/** The phases a lead's plan holds back until it converts. */
+export const POST_ENGAGEMENT_PHASES: readonly string[] =
+  SLA_PHASES.slice(ENGAGEMENT_BOUNDARY)
+
 export const SLA_PHASE_LABEL: Record<SlaPhase, string> = {
   new_lead: 'Discovery',
   intake_sent: 'Organizer Sent',
