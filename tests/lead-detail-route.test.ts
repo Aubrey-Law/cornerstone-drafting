@@ -335,7 +335,13 @@ describe('lead detail workflow loader contract', () => {
   it('passes the hydrated whole intake row and workflow timestamps to the client', () => {
     const page = source('app/admin/leads/[id]/page.tsx')
     expect(page).toMatch(/lead=\{hydratedLead\}/)
-    expect(page).toMatch(/nextAppointmentAt=\{appointment\?\.start_time \?\? null\}/)
+    expect(page).toMatch(/nextAppointmentAt=\{nextAppointmentAt\}/)
+    // A booking wins; the matter's milestones are the fallback, picked the way
+    // v_lead_list picks them. tests/lead-detail-loader.test.ts holds the
+    // behaviour — this holds the wiring.
+    expect(page).toMatch(
+      /appointment\?\.start_time[\s\S]{0,80}\?\? scoringAppointmentAt\(anchorRow\?\.discovery_call_at, anchorRow\?\.pmps_at\)/,
+    )
     expect(page).toMatch(/lastTouchAt=\{lastTouchAt\}/)
     expect(page).not.toMatch(/lastTouchAt=\{lead\.updated_at\}/)
   })
