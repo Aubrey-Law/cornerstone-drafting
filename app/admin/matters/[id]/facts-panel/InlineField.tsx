@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Pencil } from 'lucide-react'
+import { isSettledDateEntry } from '@/lib/firmDate'
 import { cn } from '@/lib/utils'
 
 const ROW = 'flex items-center justify-between gap-2.5 rounded-md px-1.5 py-1'
@@ -220,15 +221,21 @@ export function InlineDate({
         // Keyed on the value so a derived date re-renders when its anchor moves.
         key={value}
         defaultValue={value}
-        // A date input only reports a change once the whole date is there (or
-        // it has been cleared), so saving here — rather than waiting for the
-        // field to lose focus — records a picked date immediately without ever
-        // persisting a half-typed one.
+        // Saving on change — rather than waiting for the field to lose focus —
+        // records a picked date immediately. It has to wait for a settled one
+        // though: the browser reports a complete date while the year is still
+        // being typed (0002, 0020, 0202 on the way to 2026), and reports "" for
+        // every segment before that. Saving either would overwrite a good date
+        // with a half-typed one. Blur is what commits a genuine clear, and it
+        // stands down when the control says the entry is unfinished.
         onChange={event => {
-          if (event.target.value !== value) void onSave(event.target.value)
+          const next = event.target.value
+          if (isSettledDateEntry(next) && next !== value) void onSave(next)
         }}
         onBlur={event => {
-          if (event.target.value !== value) void onSave(event.target.value)
+          if (event.target.validity?.badInput) return
+          const next = event.target.value
+          if (next !== value && (next === '' || isSettledDateEntry(next))) void onSave(next)
         }}
         className={cn(
           'h-7 rounded-md border border-transparent bg-transparent px-1.5 text-[12.5px] tabular-nums hover:border-input hover:bg-background focus:border-ring focus:outline-none',
