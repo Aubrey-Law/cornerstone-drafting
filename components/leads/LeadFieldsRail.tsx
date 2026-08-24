@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MatterAssistantQuickPrompts } from '@/app/admin/components/MatterAssistantQuickPrompts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { isSettledDateEntry } from '@/lib/firmDate'
 import { formatPhoneInput } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import { LeadReadinessDial } from '@/components/leads/LeadReadinessDial'
@@ -333,10 +334,13 @@ export function LeadFieldsRail({
     }
 
     if (field.input === 'date') {
-      // A date input reports every segment edit, and reads back as "" until all
-      // three are filled. Saving on any change therefore closed the row the
-      // moment a month was typed — the whole date never got in. Only a complete
-      // date commits here; clearing one still works, through blur or Enter.
+      // A date input reads back as "" until all three segments are filled, so a
+      // blank here is mid-entry rather than a cleared date, and must not commit.
+      // Nor may every non-blank value: the browser reports a complete date the
+      // instant the segments are populated, so a year still being typed arrives
+      // as 0002, then 0020, then 0202. Committing those closed the row after
+      // one segment and persisted the first of them — `isSettledDateEntry`
+      // waits for the whole year. Clearing still works, through blur or Enter.
       return (
         <div {...sharedContainerProps}>
           <Input
@@ -349,7 +353,7 @@ export function LeadFieldsRail({
             onChange={event => {
               const next = event.target.value
               setDraft(next)
-              if (next) void commitField(field.key, next)
+              if (isSettledDateEntry(next)) void commitField(field.key, next)
             }}
           />
         </div>
@@ -585,8 +589,15 @@ export function LeadFieldsRail({
                   defaultValue={keyDates[field.key] ?? ''}
                   key={`${field.key}-${keyDates[field.key] ?? ''}`}
                   onChange={event => {
+                    // Not merely non-empty: the browser reports a complete date
+                    // while the year is still arriving (0002, 0020, 0202 on the
+                    // way to 2026). Saving the first of those is how this field
+                    // wrote a 1969 discovery call, and why the date had to be
+                    // entered one segment per attempt. Blur below still clears.
                     const next = event.target.value
-                    if (next && next !== keyDates[field.key]) void onSaveKeyDate(field.key, next)
+                    if (isSettledDateEntry(next) && next !== keyDates[field.key]) {
+                      void onSaveKeyDate(field.key, next)
+                    }
                   }}
                   onBlur={event => {
                     const next = event.target.value
