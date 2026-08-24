@@ -50,6 +50,8 @@ export interface FetchTasksOptions {
   hasEstimate?: boolean
   /** Case-insensitive substrings, any of which may appear in the title. */
   titleLike?: string[] | null
+  /** Only rows the stage engine drives — the ones carrying a `stage_key`. */
+  hasStageKey?: boolean
   /**
    * Read every matching row in pages instead of the first `limit` of them.
    *
@@ -195,6 +197,7 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
     undated = false,
     hasEstimate = false,
     titleLike = null,
+    hasStageKey = false,
     all = false,
     owner = 'firm',
     includeArchived = false,
@@ -232,14 +235,20 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
       query = query.is('due_at', null).is('soft_due_at', null).is('hard_due_at', null)
     }
     if (hasEstimate) query = query.not('estimate_minutes', 'is', null)
+    if (hasStageKey) query = query.not('stage_key', 'is', null)
     // `ilikeAnyOf` rather than an `or=` string: `recordId` already owns the one
     // `or=` parameter a request can carry, and two would collide.
     if (titleLike && titleLike.length > 0) {
       query = query.ilikeAnyOf('title', titleLike.map(term => `%${term}%`))
     }
 
-    // Paging needs a total order, and `created_at` alone is not one.
-    return all ? query.order('created_at', { ascending: true }).order('id') : query
+    // Ordered on every path, not just the paged one. An unordered `limit` is
+    // what made a capped read arbitrary in the first place; ordering by the
+    // stored due date means a cap keeps the most urgent rows and drops the
+    // furthest-off ones. `id` makes it a total order, which paging needs —
+    // two tasks can share a due date, and `effective_due_at` is null on most
+    // of them.
+    return query.order('effective_due_at', { nullsFirst: false }).order('id')
   }
 
   const rows: RawTaskRow[] = []
@@ -272,22 +281,6 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
   return named.sort(compareTasks)
 }
 
-/**
- * Everything that could be due by `through`, read in `effectiveDueAt`'s order
- * of precedence: `due_at` decides on its own when it is set, and each later
- * column only speaks for the tasks whose earlier columns are null.
- *
- * Exported so the predicate can be read and tested as one string rather than
- * inferred from a chain of builder calls.
- */
-export function dueTaskFilter(through: string): string {
-  return [
-    `due_at.lte.${through}`,
-    `and(due_at.is.null,soft_due_at.lte.${through})`,
-    `and(due_at.is.null,soft_due_at.is.null,hard_due_at.lte.${through})`,
-  ].join(',')
-}
-
 /** Far above the ~30 rows a day's queue holds; a breach means something is wrong. */
 export const DUE_TASK_LIMIT = 500
 
@@ -310,7 +303,9 @@ export const TASK_READ_CEILING = 20_000
  * disagreed by 26 with nothing to show the reader which was right.
  *
  * Asking the database for the due window instead makes the answer exact: it is
- * a filter, not a slice, so nothing can fall off the end of it.
+ * a filter, not a slice, so nothing can fall off the end of it. `tasks
+ * .effective_due_at` (20261016000000) is the same `coalesce` `effectiveDueAt()`
+ * reads, stored so the database can filter and sort on it.
  */
 export async function fetchDueTasks(through: string): Promise<TaskRow[]> {
   const admin = getAdminClient()
@@ -319,7 +314,8 @@ export async function fetchDueTasks(through: string): Promise<TaskRow[]> {
     .select(TASK_COLUMNS)
     .in('status', OPEN_STATUSES)
     .eq('owner', 'firm')
-    .or(dueTaskFilter(through))
+    .lte('effective_due_at', through)
+    .order('effective_due_at')
     .limit(DUE_TASK_LIMIT)
 
   if (error) {

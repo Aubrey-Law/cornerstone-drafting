@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { effectiveDueAt, taskDueGroup } from '@/lib/tasks/types'
 import { taskFixture } from './fixtures/task'
 // Static: vi.mock is hoisted above it, so the module under test sees the stub.
-import { DUE_TASK_LIMIT, dueTaskFilter, fetchDueTasks } from '@/lib/queries/tasks'
+import { DUE_TASK_LIMIT, fetchDueTasks } from '@/lib/queries/tasks'
 
 /**
  * The Today queue read an unordered `limit(500)` over every open task and
@@ -18,7 +18,7 @@ const calls: Array<{ method: string; args: unknown[] }> = []
 
 function builder(rows: unknown[]) {
   const chain: Record<string, unknown> = {}
-  for (const method of ['select', 'in', 'eq', 'or', 'neq', 'is']) {
+  for (const method of ['select', 'in', 'eq', 'or', 'neq', 'is', 'lte', 'order']) {
     chain[method] = (...args: unknown[]) => {
       calls.push({ method, args })
       return chain
@@ -46,79 +46,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-type DueColumns = Record<'due_at' | 'soft_due_at' | 'hard_due_at', string | null>
-
-/** Split on commas that are not inside an `and(...)` group. */
-function splitTerms(filter: string): string[] {
-  const terms: string[] = []
-  let depth = 0
-  let current = ''
-  for (const character of filter) {
-    if (character === '(') depth += 1
-    if (character === ')') depth -= 1
-    if (character === ',' && depth === 0) {
-      terms.push(current)
-      current = ''
-      continue
-    }
-    current += character
-  }
-  if (current) terms.push(current)
-  return terms
-}
-
-/** Enough of PostgREST's filter grammar to run the one predicate under test. */
-function evaluatePostgrestOr(filter: string, row: DueColumns): boolean {
-  return splitTerms(filter).some(term => {
-    if (term.startsWith('and(')) {
-      return splitTerms(term.slice(4, -1)).every(inner => evaluateCondition(inner, row))
-    }
-    return evaluateCondition(term, row)
-  })
-}
-
-function evaluateCondition(condition: string, row: DueColumns): boolean {
-  const [column, operator, ...rest] = condition.split('.')
-  const value = row[column as keyof DueColumns]
-  const operand = rest.join('.')
-  if (operator === 'is' && operand === 'null') return value === null
-  if (operator === 'lte') return value !== null && value <= operand
-  throw new Error(`unhandled PostgREST condition: ${condition}`)
-}
-
 const THROUGH = '2026-08-25T06:00:00.000Z'
 
-describe('the due-task filter', () => {
-  it('reads the three date columns in effectiveDueAt order of precedence', () => {
-    expect(dueTaskFilter(THROUGH)).toBe(
-      [
-        `due_at.lte.${THROUGH}`,
-        `and(due_at.is.null,soft_due_at.lte.${THROUGH})`,
-        `and(due_at.is.null,soft_due_at.is.null,hard_due_at.lte.${THROUGH})`,
-      ].join(','),
-    )
-  })
+describe('the due window', () => {
+  it('is a filter on the stored due date, not a slice of an unordered read', async () => {
+    tableRows = { tasks: [] }
+    await fetchDueTasks(THROUGH)
 
-  it('selects exactly the rows effectiveDueAt puts inside the window', () => {
-    // Evaluated from the filter string itself rather than from a second copy
-    // of the rule: a test that restates the branches would agree with any
-    // wrong version of them. Every combination of the three columns being
-    // inside the window, outside it, or absent.
-    const EARLY = '2026-08-20T12:00:00.000Z'
-    const LATE = '2026-09-20T12:00:00.000Z'
-    const values = [EARLY, LATE, null]
-
-    for (const due_at of values) {
-      for (const soft_due_at of values) {
-        for (const hard_due_at of values) {
-          const row = { due_at, soft_due_at, hard_due_at }
-          const effective = effectiveDueAt(taskFixture(row))
-          expect(evaluatePostgrestOr(dueTaskFilter(THROUGH), row), JSON.stringify(row)).toBe(
-            effective !== null && effective <= THROUGH,
-          )
-        }
-      }
-    }
+    const bound = calls.find(call => call.method === 'lte')
+    expect(bound?.args).toEqual(['effective_due_at', THROUGH])
+    // Nothing left to compose a window out of the three raw columns, so
+    // nothing can disagree with `effectiveDueAt` about which column wins.
+    // tests/task-effective-due-parity.test.ts holds the column to it.
+    expect(calls.filter(call => call.method === 'or')).toHaveLength(0)
+    expect(calls.find(call => call.method === 'order')?.args[0]).toBe('effective_due_at')
   })
 })
 
@@ -126,9 +67,6 @@ describe('fetchDueTasks', () => {
   it('asks the database for the window instead of slicing an unordered read', async () => {
     tableRows = { tasks: [] }
     await fetchDueTasks(THROUGH)
-
-    const or = calls.find(call => call.method === 'or')
-    expect(or?.args[0]).toBe(dueTaskFilter(THROUGH))
 
     // The cap stays as a backstop, but it must sit far above the window it
     // bounds — the bug was a limit doing the filtering.

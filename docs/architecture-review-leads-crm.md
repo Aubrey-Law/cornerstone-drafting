@@ -376,22 +376,65 @@ owns it. The title filter is a `title ilike any (…)` superset that the caller'
 regex still narrows; checked against production, it returns all 75 rows the
 regex matches and misses none.
 
-**Two capped reads remain, both small and neither on the day's critical path:**
+### 6c. The due date the database can sort on — fixed
 
-- `lib/queries/crmDashboard.ts` takes `limit: 5` for the CRM Tasks card, which
-  is an arbitrary 5 of 1,024 rather than the 5 most urgent. Ordering by urgency
-  needs a due date the database can sort on — see below.
-- `lib/queries/stageTasks.ts` reads at the 500 default and filters to rows
-  carrying a `stage_key`. No open task carries one today, so it returns nothing
-  either way; the filter belongs in the query before that changes.
+The five reads above are each exactly expressible without a schema change, and
+were written that way. Two were not, because they do not want a *subset* — they
+want the most urgent N, which is an ordering question:
 
-**The option not taken.** A stored generated column
-(`effective_due_at = coalesce(due_at, soft_due_at, hard_due_at)`) would let any
-capped read be ordered by urgency instead of arbitrarily, and would reduce the
-due-window filter to a single `lte`. It was not done here because every surface
-above is exactly expressible without it, and a new column means the checked-in
-generated types drift until someone regenerates them (§8a). It is the right
-move the moment a read needs "the most urgent N".
+- `lib/queries/crmDashboard.ts` takes 5 rows for the CRM Tasks card, which was
+  an arbitrary 5 of 1,024.
+- `lib/queries/stageTasks.ts` read at the 500 default and kept whichever rows
+  carried a `stage_key`. No open task carries one today, so it returned nothing
+  either way — the kind of read that stays wrong quietly once that changes.
+
+PostgREST orders by columns, not expressions, and the app's working due date is
+`coalesce(due_at, soft_due_at, hard_due_at)`. So
+`20261016000000_task_effective_due.sql` stores it:
+
+```sql
+alter table public.tasks
+  add column effective_due_at timestamptz
+    generated always as (coalesce(due_at, soft_due_at, hard_due_at)) stored;
+```
+
+Generated and stored, so nothing can write a different value into it and the
+sort can be indexed — Postgres rejects an insert that names the column, which
+is what keeps it from drifting the way a trigger-maintained column would.
+`tests/task-effective-due-parity.test.ts` holds the SQL to `effectiveDueAt()`
+the way `tests/lead-score-sql-parity.test.ts` holds `lead_score()` to
+`computeLeadScore()`; verified on the scratch database over all 27 combinations
+of the three columns being early, late, or absent, with one all-null row
+yielding null and an update to `due_at` moving the stored value with it.
+
+**Every read is now ordered, not just the paged ones.** An unordered `limit` is
+what made a capped read arbitrary, so `fetchTasks` orders on
+`(effective_due_at nulls last, id)` on every path: a cap now keeps the most
+urgent rows and drops the furthest-off ones, and paging has the total order it
+needs — `effective_due_at` is null on 831 of the 1,024, so the `id` tiebreak is
+load-bearing rather than decorative. `fetchDueTasks` is a single `lte` on the
+column instead of a three-branch filter over the raw columns.
+
+The index leads on `owner` rather than `status`:
+
+```sql
+create index tasks_open_effective_due on public.tasks (owner, effective_due_at)
+  where status <> 'done';
+```
+
+Every queue read fixes `owner` — a client's "sign the engagement agreement" is
+not the attorney's work — and takes a *range* of statuses, and a leading column
+under an inequality cannot order what follows it. Checked on 3,000 seeded rows:
+the plan is an index scan with `Presorted Key: effective_due_at`, so the sort
+comes from the index. `tasks_open_due`, which indexed the same expression as an
+expression for the same sort, is dropped in the same migration: the planner
+will not match a column reference to it, so it would cost every write and serve
+no read.
+
+**One consequence to schedule:** a new column drifts
+`types/supabase.generated.ts` (§8a) until it is regenerated. The scheduled
+check will flag it after this merges; running **Database types drift** from the
+Actions tab with `open_pr` raises the regeneration itself.
 
 ## 7. Audit-trail gaps
 
@@ -666,8 +709,8 @@ Not scheduled; ordered by value per unit of risk.
 8. ~~**Give the pipeline a working priority signal**~~ (§9). Done for the score
    bands, the scheduled-call clock and the impossible-date guard; §9d lists what
    was deliberately left for a decision.
-9. ~~**Finish the truncation sweep for tasks**~~ (§6a, §6b). Done for Today, the
+9. ~~**Finish the truncation sweep for tasks**~~ (§6a–§6c). Done: Today, the
    Tasks page, the calendar plan route, the calendar attention read, the
-   weekly-review cron and the admin chat tools. Two small reads remain, listed
-   in §6b along with the generated column that would let a capped read be
-   ordered by urgency rather than arbitrarily.
+   weekly-review cron, the admin chat tools, the CRM Tasks card and the
+   stage-task read. `tasks.effective_due_at` gives every capped read an
+   ordering, so a cap keeps the most urgent rows instead of arbitrary ones.

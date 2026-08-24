@@ -21,7 +21,12 @@ function withStageKey(tasks: TaskRow[]): StageTaskRow[] {
 }
 
 export async function fetchOpenStageTasks(): Promise<StageTaskRow[]> {
-  return withStageKey(await fetchTasks({ status: 'open' }))
+  // Filtered in the query rather than after a capped read: at the 500 default
+  // this returned an arbitrary slice of every open task and kept whichever of
+  // them happened to carry a stage_key. No open task carries one today, so it
+  // returned nothing either way — which is exactly the kind of read that stays
+  // wrong quietly once that changes.
+  return withStageKey(await fetchTasks({ status: 'open', hasStageKey: true, all: true }))
 }
 
 export async function fetchOpenStageTasksForMatter(matterId: string): Promise<StageTaskRow[]> {

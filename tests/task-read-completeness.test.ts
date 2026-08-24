@@ -81,10 +81,21 @@ describe('reading every open task', () => {
     pages = [page(2, 'a')]
     await fetchTasks({ status: 'open', all: true })
 
-    // created_at alone is not a total order — two tasks created in the same
-    // millisecond could land on both pages or neither.
+    // By the stored due date, so a capped read keeps the most urgent rows —
+    // and then by id, because effective_due_at is null on most tasks and a
+    // partial order would let a row land on two pages or neither.
     const ordered = filters('order').map(call => call.args[0])
-    expect(ordered).toEqual(['created_at', 'id'])
+    expect(ordered).toEqual(['effective_due_at', 'id'])
+  })
+
+  it('orders the capped reads too — an unordered limit is the whole bug', async () => {
+    pages = [page(5, 'a')]
+    await fetchTasks({ status: 'open', limit: 5 })
+
+    const ordered = filters('order')
+    expect(ordered.map(call => call.args[0])).toEqual(['effective_due_at', 'id'])
+    // Undated work sorts last: it is not urgent, and there are 831 of it.
+    expect(ordered[0]!.args[1]).toEqual({ nullsFirst: false })
   })
 
   it('says so rather than returning a silently short list at the ceiling', async () => {
