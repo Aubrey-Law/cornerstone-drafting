@@ -6,7 +6,7 @@ import { AvailabilityUnavailableError, fetchAllBusy } from '@/lib/appointments/g
 import { getSchedulingSettings, listAppointmentTypes } from '@/lib/appointments/settings'
 import { effectiveWeeklyHours } from '@/lib/appointments/types'
 import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
-import { fetchTasks } from '@/lib/queries/tasks'
+import { fetchDueTasks, fetchTasks } from '@/lib/queries/tasks'
 import {
   isUuid,
   TASK_COLUMNS,
@@ -582,7 +582,9 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
     {
       tool: definitions.list_overdue_followups,
       execute: async () => {
-        const tasks = await fetchTasks({ status: 'open', limit: 500 })
+        // Overdue is a due-window question; the old read took an arbitrary 500
+        // of every open task and filtered that, so it answered from a sample.
+        const tasks = await fetchDueTasks(new Date().toISOString())
         return { content: JSON.stringify(tasks.filter(task => taskDueGroup(task) === 'overdue' && /follow.?up|call|email|note/i.test(task.title)).slice(0, 50)) }
       },
     },
@@ -595,7 +597,7 @@ export function calendarPlanningToolExecutors(context: CalendarPlanningContext =
         const [appointments, stages, tasks] = await Promise.all([
           admin.from('appointments').select('status, linked_matter_id').gte('start_time', from.toISOString()).lt('start_time', to.toISOString()),
           admin.from('matter_activity').select('matter_id').eq('event_type', 'stage_changed').gte('created_at', from.toISOString()),
-          fetchTasks({ status: 'open', limit: 500 }),
+          fetchDueTasks(to.toISOString()),
         ])
         return { content: JSON.stringify({
           meetings: (appointments.data ?? []).filter(row => row.status === 'scheduled').length,

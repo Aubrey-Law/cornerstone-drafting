@@ -10,7 +10,11 @@ export default async function AdminTasksPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const [openTasks, doneTasks, assignees, templates] = await Promise.all([
-    fetchTasks({ status: 'open', limit: 500 }),
+    // Every open task, not the first 500 of them: this page is the firm's
+    // whole queue, its filters run over what it was handed, and a cap here
+    // does not shorten the list so much as pick an arbitrary part of it.
+    fetchTasks({ status: 'open', all: true }),
+    // Done is only ever read for what was cleared today, a few rows.
     fetchTasks({ status: 'done', limit: 200 }),
     fetchTaskAssignees(),
     fetchTaskTemplates(),

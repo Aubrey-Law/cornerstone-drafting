@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sendEmail } from '@/lib/email/send'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
-import { fetchTasks } from '@/lib/queries/tasks'
+import { fetchDueTasks } from '@/lib/queries/tasks'
 import { taskDueGroup } from '@/lib/tasks/types'
 import { ADMIN_EMAIL, getAdminClient } from '@/lib/supabaseAdmin'
 import { appUrl } from '@/lib/urls'
@@ -30,7 +30,9 @@ export async function GET(req: Request) {
   const [appointmentsResult, stagesResult, tasks] = await Promise.all([
     admin.from('appointments').select('status, linked_matter_id').gte('start_time', from.toISOString()).lt('start_time', to.toISOString()),
     admin.from('matter_activity').select('matter_id').eq('event_type', 'stage_changed').gte('created_at', from.toISOString()),
-    fetchTasks({ status: 'open', limit: 500 }),
+    // What slipped is by definition already due, so read the due window
+    // rather than an arbitrary 500 of every open task.
+    fetchDueTasks(to.toISOString()),
   ])
   const appointments = appointmentsResult.data ?? []
   const slipped = tasks.filter(task => taskDueGroup(task) === 'overdue').slice(0, 8)

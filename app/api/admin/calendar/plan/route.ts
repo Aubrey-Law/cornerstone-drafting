@@ -4,7 +4,7 @@ import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graph
 import { aggregateWorkload, nextWorkingDateKeys } from '@/lib/calendarProductivity'
 import type { CalendarWorkEvent } from '@/lib/calendarProductivity'
 import { FIRM_TIMEZONE, firmTodayKey } from '@/lib/firmDate'
-import { fetchTasks } from '@/lib/queries/tasks'
+import { fetchDueTasks, fetchTasks } from '@/lib/queries/tasks'
 import { effectiveDueAt, taskDueGroup } from '@/lib/tasks/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { loadFirmSettings } from '@/lib/firmSettings'
@@ -23,13 +23,18 @@ export async function GET(req: NextRequest) {
   const lastWeekFrom = new Date(rangeFrom.getTime() - 7 * 86_400_000)
   const admin = getAdminClient()
 
-  const [appointmentResult, tasks, firmSettings, lastWeekResult, stageResult] = await Promise.all([
+  const [appointmentResult, tasks, undatedTasks, firmSettings, lastWeekResult, stageResult] = await Promise.all([
     admin
       .from('appointments')
       .select('id, start_time, end_time, status, linked_matter_id, appointment_type_id, microsoft_event_id')
       .gte('start_time', rangeFrom.toISOString())
       .lte('start_time', rangeTo.toISOString()),
-    fetchTasks({ status: 'open', limit: 1000 }),
+    // Two exact reads where one capped read used to stand in for both: the
+    // deadlines and what slipped are due on or before the end of the window,
+    // and the unscheduled work is the tasks with an estimate and no date at
+    // all. 1,000 was already below the 1,024 open tasks this read walked.
+    fetchDueTasks(rangeTo.toISOString()),
+    fetchTasks({ status: 'open', undated: true, hasEstimate: true, all: true }),
     loadFirmSettings(),
     admin
       .from('appointments')
@@ -75,7 +80,7 @@ export async function GET(req: NextRequest) {
       leadId: task.lead_id,
       durationMinutes: task.estimate_minutes ?? 30,
     }))
-  const unscheduledTasks = tasks
+  const unscheduledTasks = undatedTasks
     .filter(task => task.estimate_minutes && !effectiveDueAt(task))
     .map(task => ({
       id: task.id,

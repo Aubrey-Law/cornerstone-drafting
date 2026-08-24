@@ -24,6 +24,9 @@ interface AppointmentContext {
   linked_lead_id: string | null
 }
 
+/** What reads as a follow-up on the calendar rail. */
+const FOLLOW_UP_TITLE = /follow.?up|call|email|note/i
+
 export async function deriveCalendarAttention(dateKey: string): Promise<{
   items: AttentionItem[]
   rail: CalendarRailData
@@ -39,7 +42,10 @@ export async function deriveCalendarAttention(dateKey: string): Promise<{
       .eq('status', 'scheduled'),
     admin.from('appointment_types').select('id, label'),
     admin.from('v_matter_pipeline').select(PIPELINE_MATTER_COLUMNS).neq('status', 'archived'),
-    fetchTasks({ status: 'open', limit: 500 }),
+    // A deliberate superset of FOLLOW_UP_TITLE below — the database narrows
+    // 1,024 open tasks to the few dozen the rail could show, and the regex
+    // still decides. The old read took an arbitrary 500 and filtered those.
+    fetchTasks({ status: 'open', titleLike: ['follow', 'call', 'email', 'note'], all: true }),
   ])
   const appointments = ((appointmentsResult.data ?? []) as AppointmentContext[])
     .filter(item => firmDateKey(item.start_time) === dateKey)
@@ -52,13 +58,17 @@ export async function deriveCalendarAttention(dateKey: string): Promise<{
     .map(item => item.linked_matter_id)
     .filter((id): id is string => Boolean(id)))]
 
-  const [matterRowsResult, activityResult] = await Promise.all([
+  const [matterRowsResult, activityResult, matterTasks] = await Promise.all([
     matterIds.length
       ? admin.from('matters').select('id, client_intake_id').in('id', matterIds)
       : Promise.resolve({ data: [] }),
     matterIds.length
       ? admin.from('matter_activity').select('matter_id, event_type, created_at').in('matter_id', matterIds)
       : Promise.resolve({ data: [] }),
+    // Only the matters on today's calendar, so the signing check reads every
+    // task on the handful of matters it is about rather than some of every
+    // task in the firm.
+    fetchTasks({ status: 'open', matterIds, all: true }),
   ])
   const intakeIdByMatter = new Map(
     ((matterRowsResult.data ?? []) as Array<{ id: string; client_intake_id: string | null }>)
@@ -122,7 +132,7 @@ export async function deriveCalendarAttention(dateKey: string): Promise<{
     }
 
     const signingTasks = /signing/i.test(typeLabel)
-      ? tasks.filter(task =>
+      ? matterTasks.filter(task =>
         task.matter_id === matterId
         && (task.status === 'blocked' || /sign|witness|notary|third party/i.test(task.title)),
       )
@@ -163,7 +173,7 @@ export async function deriveCalendarAttention(dateKey: string): Promise<{
       matterId: matter.matter_id,
     }))
   const followUps = tasks
-    .filter(task => /follow.?up|call|email|note/i.test(task.title))
+    .filter(task => FOLLOW_UP_TITLE.test(task.title))
     .slice(0, 8)
     .map(task => ({
       id: task.id,

@@ -42,6 +42,22 @@ export interface FetchTasksOptions {
   status?: 'open' | 'done' | 'all' | null
   /** A matter id or lead (client_intake) id — matches either relation. */
   recordId?: string | null
+  /** Restrict to these matters — a day's appointments, say. An empty list matches nothing. */
+  matterIds?: string[] | null
+  /** Only rows with no due date at all: the complement of `fetchDueTasks`. */
+  undated?: boolean
+  /** Only rows carrying an estimate, for the surfaces that schedule work. */
+  hasEstimate?: boolean
+  /** Case-insensitive substrings, any of which may appear in the title. */
+  titleLike?: string[] | null
+  /**
+   * Read every matching row in pages instead of the first `limit` of them.
+   *
+   * For the surfaces that mean "all of it" — the Tasks page shows the firm's
+   * whole open queue, and a `limit` there does not shorten the list so much as
+   * pick an arbitrary part of it.
+   */
+  all?: boolean
   limit?: number
 }
 
@@ -175,40 +191,84 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
     source = null,
     status = 'open',
     recordId = null,
+    matterIds = null,
+    undated = false,
+    hasEstimate = false,
+    titleLike = null,
+    all = false,
     owner = 'firm',
     includeArchived = false,
     limit = 500,
   } = options
 
+  if (matterIds && matterIds.length === 0) return []
+  // Interpolated into a PostgREST filter string, so it has to be a real id.
+  if (recordId && !isUuid(recordId)) return []
+
   const admin = getAdminClient()
-  let query = admin.from('tasks').select(TASK_COLUMNS)
 
-  if (!includeArchived) query = query.neq('status', 'archived')
-  if (status === 'open') query = query.in('status', OPEN_STATUSES)
-  else if (status === 'done') query = query.eq('status', 'done')
+  // Rebuilt per page: a PostgREST builder is spent once it is awaited.
+  const buildQuery = () => {
+    let query = admin.from('tasks').select(TASK_COLUMNS)
 
-  if (source && source !== 'all') query = query.eq('source', source)
-  if (owner !== 'all') query = query.eq('owner', owner)
+    if (!includeArchived) query = query.neq('status', 'archived')
+    if (status === 'open') query = query.in('status', OPEN_STATUSES)
+    else if (status === 'done') query = query.eq('status', 'done')
 
-  if (assignee) query = query.eq('assignee_id', assignee)
-  else if (scope === 'mine' && viewerId) query = query.eq('assignee_id', viewerId)
-  else if (scope === 'unassigned') query = query.is('assignee_id', null)
-  else if (scope === 'team' && viewerId) query = query.neq('assignee_id', viewerId)
+    if (source && source !== 'all') query = query.eq('source', source)
+    if (owner !== 'all') query = query.eq('owner', owner)
 
-  if (recordId) {
-    // Interpolated into a PostgREST filter string, so it has to be a real id.
-    if (!isUuid(recordId)) return []
-    query = query.or(`matter_id.eq.${recordId},lead_id.eq.${recordId}`)
+    if (assignee) query = query.eq('assignee_id', assignee)
+    else if (scope === 'mine' && viewerId) query = query.eq('assignee_id', viewerId)
+    else if (scope === 'unassigned') query = query.is('assignee_id', null)
+    else if (scope === 'team' && viewerId) query = query.neq('assignee_id', viewerId)
+
+    if (recordId) query = query.or(`matter_id.eq.${recordId},lead_id.eq.${recordId}`)
+    if (matterIds) query = query.in('matter_id', matterIds)
+
+    // The three columns `effectiveDueAt` reads, so "no due date" here means the
+    // same thing it means everywhere else.
+    if (undated) {
+      query = query.is('due_at', null).is('soft_due_at', null).is('hard_due_at', null)
+    }
+    if (hasEstimate) query = query.not('estimate_minutes', 'is', null)
+    // `ilikeAnyOf` rather than an `or=` string: `recordId` already owns the one
+    // `or=` parameter a request can carry, and two would collide.
+    if (titleLike && titleLike.length > 0) {
+      query = query.ilikeAnyOf('title', titleLike.map(term => `%${term}%`))
+    }
+
+    // Paging needs a total order, and `created_at` alone is not one.
+    return all ? query.order('created_at', { ascending: true }).order('id') : query
   }
 
-  const { data, error } = await query.limit(limit)
-  if (error) {
-    console.error('fetchTasks:', error.message)
-    return []
+  const rows: RawTaskRow[] = []
+  if (all) {
+    for (let offset = 0; offset < TASK_READ_CEILING; offset += TASK_PAGE_SIZE) {
+      const { data, error } = await buildQuery().range(offset, offset + TASK_PAGE_SIZE - 1)
+      if (error) {
+        console.error('fetchTasks:', error.message)
+        return []
+      }
+      const page = (data ?? []) as unknown as RawTaskRow[]
+      rows.push(...page)
+      if (page.length < TASK_PAGE_SIZE) break
+      if (offset + TASK_PAGE_SIZE >= TASK_READ_CEILING) {
+        console.error(
+          `fetchTasks: stopped at the ${TASK_READ_CEILING}-row ceiling, so this list is incomplete.`,
+        )
+      }
+    }
+  } else {
+    const { data, error } = await buildQuery().limit(limit)
+    if (error) {
+      console.error('fetchTasks:', error.message)
+      return []
+    }
+    rows.push(...((data ?? []) as unknown as RawTaskRow[]))
   }
 
-  const rows = ((data ?? []) as unknown as RawTaskRow[]).map(normalizeRow)
-  const named = await attachDisplayNames(rows)
+  const named = await attachDisplayNames(rows.map(normalizeRow))
   return named.sort(compareTasks)
 }
 
@@ -230,6 +290,12 @@ export function dueTaskFilter(through: string): string {
 
 /** Far above the ~30 rows a day's queue holds; a breach means something is wrong. */
 export const DUE_TASK_LIMIT = 500
+
+/** One page of a `fetchTasks({ all: true })` read. */
+export const TASK_PAGE_SIZE = 500
+
+/** A runaway guard on paged reads, not a display limit; reaching it is logged. */
+export const TASK_READ_CEILING = 20_000
 
 /**
  * The firm's open tasks that are already due — the only ones the Today queue

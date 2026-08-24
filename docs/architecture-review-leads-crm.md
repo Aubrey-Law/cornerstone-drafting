@@ -348,19 +348,50 @@ string itself against `effectiveDueAt` over every combination of the three
 columns, so a test restating the branches cannot agree with a wrong version of
 them.
 
-**Still capped, and worth a decision.** The same `fetchTasks({ status: 'open',
-limit: 500 })` call reads an arbitrary 500 of the 1,024 open tasks in four more
-places, and each is now past its cap:
+### 6b. The other five reads — fixed
 
-- `app/admin/tasks/page.tsx` — the Tasks page itself
-- `lib/calendarAttention.ts`
-- `app/api/cron/calendar-week-review/route.ts`
-- `lib/adminChat/calendarTools.ts` (two call sites)
+The same capped read stood behind five more surfaces, each past its cap, and
+each has been given the read it was actually asking for:
 
-Today was fixed because it is the surface the day is run from; the others are
-left deliberately rather than widened into one change. They need the same
-treatment: a filter for what the surface actually asks for, or paging with the
-bound stated on screen.
+| Surface | Was | Is |
+|---|---|---|
+| `app/admin/tasks/page.tsx` | An arbitrary 500 of 1,024 | Every open task, read in pages ordered on `(created_at, id)` |
+| `app/api/admin/calendar/plan/route.ts` | An arbitrary 1,000 of 1,024 | The due window through the end of the plan range, plus a second read for undated work carrying an estimate |
+| `app/api/cron/calendar-week-review/route.ts` | An arbitrary 500, filtered to overdue | The due window |
+| `lib/adminChat/calendarTools.ts` (two tools) | An arbitrary 500, filtered to overdue | The due window |
+| `lib/calendarAttention.ts` | An arbitrary 500, filtered by matter and by title | Tasks on the matters that appear on the day's calendar, and a title-filtered read for the follow-up rail |
+
+The Tasks page is the one that had to be paged rather than filtered: it is the
+firm's whole open queue and its scope, source and assignee filters run over
+whatever it was handed, so a cap there does not shorten the list so much as
+choose an arbitrary part of it to filter. Paging needs a total order —
+`created_at` alone is not one, so the read orders on `(created_at, id)`. The
+20,000-row ceiling is a runaway guard rather than a display limit, and reaching
+it is logged.
+
+`fetchTasks` gained the plain-column filters those reads needed — `matterIds`,
+`undated`, `hasEstimate`, `titleLike` — deliberately none of which spend the
+one `or=` parameter a PostgREST request can carry, since `recordId` already
+owns it. The title filter is a `title ilike any (…)` superset that the caller's
+regex still narrows; checked against production, it returns all 75 rows the
+regex matches and misses none.
+
+**Two capped reads remain, both small and neither on the day's critical path:**
+
+- `lib/queries/crmDashboard.ts` takes `limit: 5` for the CRM Tasks card, which
+  is an arbitrary 5 of 1,024 rather than the 5 most urgent. Ordering by urgency
+  needs a due date the database can sort on — see below.
+- `lib/queries/stageTasks.ts` reads at the 500 default and filters to rows
+  carrying a `stage_key`. No open task carries one today, so it returns nothing
+  either way; the filter belongs in the query before that changes.
+
+**The option not taken.** A stored generated column
+(`effective_due_at = coalesce(due_at, soft_due_at, hard_due_at)`) would let any
+capped read be ordered by urgency instead of arbitrarily, and would reduce the
+due-window filter to a single `lte`. It was not done here because every surface
+above is exactly expressible without it, and a new column means the checked-in
+generated types drift until someone regenerates them (§8a). It is the right
+move the moment a read needs "the most urgent N".
 
 ## 7. Audit-trail gaps
 
@@ -635,6 +666,8 @@ Not scheduled; ordered by value per unit of risk.
 8. ~~**Give the pipeline a working priority signal**~~ (§9). Done for the score
    bands, the scheduled-call clock and the impossible-date guard; §9d lists what
    was deliberately left for a decision.
-9. **Finish the truncation sweep for tasks** (§6a). Today is fixed; the Tasks
-   page, the calendar attention read, the weekly-review cron and the admin chat
-   tools all still slice an arbitrary 500 of 1,024 open tasks.
+9. ~~**Finish the truncation sweep for tasks**~~ (§6a, §6b). Done for Today, the
+   Tasks page, the calendar plan route, the calendar attention read, the
+   weekly-review cron and the admin chat tools. Two small reads remain, listed
+   in §6b along with the generated column that would let a capped read be
+   ordered by urgency rather than arbitrarily.
