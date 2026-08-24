@@ -208,3 +208,32 @@ describe('Today decision queue', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ matterId: 'eligible' })
   })
 })
+
+describe('a backlog of overdue work', () => {
+  it('previews it like every other long group instead of rendering all of it', async () => {
+    // The group used to render every row, which was survivable only because a
+    // truncated read showed one of them: the firm had 27 overdue tasks and
+    // Today listed 1. Now that all of them arrive, the list previews.
+    const user = userEvent.setup()
+    renderQueue({
+      overdueTasks: Array.from({ length: 13 }, (_, index) =>
+        task({
+          id: `overdue-${index}`,
+          title: `Overdue task ${index}`,
+          due_at: `2026-08-${String(index + 1).padStart(2, '0')}T12:00:00.000Z`,
+        }),
+      ),
+    })
+
+    // One goes to "Do this next", ten preview, and the rest are behind a click.
+    expect(screen.getByText('Overdue task 0')).toBeTruthy()
+    expect(screen.getByText('Overdue task 10')).toBeTruthy()
+    expect(screen.queryByText('Overdue task 11')).toBeNull()
+    expect(screen.queryByText('Overdue task 12')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Show 2 more' }))
+
+    expect(screen.getByText('Overdue task 11')).toBeTruthy()
+    expect(screen.getByText('Overdue task 12')).toBeTruthy()
+  })
+})

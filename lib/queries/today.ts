@@ -4,7 +4,7 @@ import { PIPELINE_MATTER_COLUMNS } from '@/lib/queries/matterCore'
 import { computeMatterNextAction, type MatterNextActionKind } from '@/lib/matterNextAction'
 import { firmDateKey, firmTodayKey } from '@/lib/firmDate'
 import { invoiceOverdue } from '@/lib/billing/invoices'
-import { fetchTasks } from '@/lib/queries/tasks'
+import { fetchDueTasks } from '@/lib/queries/tasks'
 import { taskDueGroup, type TaskRow } from '@/lib/tasks/types'
 import { listCalendarView, mapGraphCalendarView } from '@/lib/appointments/graphEvents'
 import type { PipelineMatter } from '@/types/database'
@@ -64,8 +64,12 @@ export interface TodayData {
   activeMatterCount: number
   /** Rows the attorney can act on — never counts client-owned aging rows. */
   needsYou: number
-  /** Non-snoozed rows with red health. */
+  /** Non-snoozed rows with red health, across both arms of the aging view. */
   overdueCount: number
+  /** The matter half of `overdueCount`; the rest are leads. */
+  overdueMatterCount: number
+  /** The lead half of `overdueCount`. */
+  overdueLeadCount: number
   /**
    * Money the attorney can clear today. Deliberately a short action list, not
    * a second finance dashboard — the Billing page is that.
@@ -130,8 +134,13 @@ export async function fetchTodayData(): Promise<TodayData> {
   const firmNoonUtc = Date.parse(`${todayKey}T12:00:00Z`)
   const calendarFrom = new Date(firmNoonUtc - 18 * 60 * 60 * 1000).toISOString()
   const calendarTo = new Date(firmNoonUtc + 18 * 60 * 60 * 1000).toISOString()
+  // The same margin, for the same reason: firm noon plus 18 hours is past the
+  // end of today at either UTC offset, and `taskDueGroup` does the exact
+  // grouping below. Erring wide costs a handful of rows the grouping drops;
+  // erring narrow would hide a task that is due.
+  const dueThrough = calendarTo
 
-  const [aging, mattersRes, unreadRes, openTasks, appointmentsRes, billing] = await Promise.all([
+  const [aging, mattersRes, unreadRes, dueTasks, appointmentsRes, billing] = await Promise.all([
     fetchMatterAging(),
     admin
       .from('v_matter_pipeline')
@@ -144,7 +153,7 @@ export async function fetchTodayData(): Promise<TodayData> {
       .select('matter_id, created_at')
       .eq('sender_role', 'client')
       .is('read_at', null),
-    fetchTasks({ status: 'open', limit: 500 }),
+    fetchDueTasks(dueThrough),
     admin
       .from('appointments')
       .select('id, start_time, status, attendee_name, linked_matter_id, microsoft_event_id, appointment_type_id')
@@ -278,8 +287,11 @@ export async function fetchTodayData(): Promise<TodayData> {
   }
   appointmentsToday.sort((a, b) => a.next_appointment.localeCompare(b.next_appointment))
 
-  const overdueTasks = openTasks.filter(task => taskDueGroup(task) === 'overdue')
-  const tasksDueToday = openTasks.filter(task => taskDueGroup(task) === 'today')
+  // `dueTasks` is already bounded at the end of today, so these two groups
+  // between them are the whole read — anything else the boundary let through
+  // is due tomorrow and belongs to neither.
+  const overdueTasks = dueTasks.filter(task => taskDueGroup(task) === 'overdue')
+  const tasksDueToday = dueTasks.filter(task => taskDueGroup(task) === 'today')
 
   return {
     atRisk,
@@ -297,6 +309,10 @@ export async function fetchTodayData(): Promise<TodayData> {
       overdueTasks.length + tasksDueToday.length + waitingOnYou.length + unreadThreads.length
       + intakeReview.length + intakeToSend.length,
     overdueCount: atRisk.filter(r => r.health === 'red').length,
+    // Split because the page reported the total as "N matters over SLA" while
+    // over a third of it was leads: 59 red rows on 2026-08-24, 27 of them leads.
+    overdueMatterCount: atRisk.filter(r => r.health === 'red' && r.entity === 'matter').length,
+    overdueLeadCount: atRisk.filter(r => r.health === 'red' && r.entity === 'lead').length,
     billing,
   }
 }

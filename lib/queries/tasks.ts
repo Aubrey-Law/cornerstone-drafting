@@ -212,6 +212,67 @@ export async function fetchTasks(options: FetchTasksOptions = {}): Promise<TaskR
   return named.sort(compareTasks)
 }
 
+/**
+ * Everything that could be due by `through`, read in `effectiveDueAt`'s order
+ * of precedence: `due_at` decides on its own when it is set, and each later
+ * column only speaks for the tasks whose earlier columns are null.
+ *
+ * Exported so the predicate can be read and tested as one string rather than
+ * inferred from a chain of builder calls.
+ */
+export function dueTaskFilter(through: string): string {
+  return [
+    `due_at.lte.${through}`,
+    `and(due_at.is.null,soft_due_at.lte.${through})`,
+    `and(due_at.is.null,soft_due_at.is.null,hard_due_at.lte.${through})`,
+  ].join(',')
+}
+
+/** Far above the ~30 rows a day's queue holds; a breach means something is wrong. */
+export const DUE_TASK_LIMIT = 500
+
+/**
+ * The firm's open tasks that are already due — the only ones the Today queue
+ * can show.
+ *
+ * Today used to read `fetchTasks({ status: 'open', limit: 500 })` and pick the
+ * due ones out in JavaScript. That works while the firm has fewer than 500 open
+ * tasks and silently stops working after: on 2026-08-24 there were 1,024, an
+ * unordered `limit` returned an arbitrary 500 of them, and **26 of the 27
+ * overdue tasks never reached the page**. The nav badge counted the same tasks
+ * through `fetchTaskCounts` (limit 2,000) and said 27, so the two surfaces
+ * disagreed by 26 with nothing to show the reader which was right.
+ *
+ * Asking the database for the due window instead makes the answer exact: it is
+ * a filter, not a slice, so nothing can fall off the end of it.
+ */
+export async function fetchDueTasks(through: string): Promise<TaskRow[]> {
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('tasks')
+    .select(TASK_COLUMNS)
+    .in('status', OPEN_STATUSES)
+    .eq('owner', 'firm')
+    .or(dueTaskFilter(through))
+    .limit(DUE_TASK_LIMIT)
+
+  if (error) {
+    console.error('fetchDueTasks:', error.message)
+    return []
+  }
+
+  const rows = ((data ?? []) as unknown as RawTaskRow[]).map(normalizeRow)
+  // The bug this function exists to fix was a silent truncation. If the cap is
+  // ever reached, say so rather than shipping a short queue that looks complete.
+  if (rows.length === DUE_TASK_LIMIT) {
+    console.error(
+      `fetchDueTasks: hit the ${DUE_TASK_LIMIT}-row cap, so the Today queue is incomplete. Raise DUE_TASK_LIMIT or page this read.`,
+    )
+  }
+  const named = await attachDisplayNames(rows)
+  return named.sort(compareTasks)
+}
+
 export async function fetchTasksForMatter(matterId: string, status: 'open' | 'done' | 'all' = 'all') {
   return fetchTasks({ recordId: matterId, status, limit: 200 })
 }

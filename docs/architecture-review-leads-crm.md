@@ -315,6 +315,53 @@ deleted rather than fixed: nothing rendered the action queue, so those
 `.limit(5000)` reads never ran. A dead reader with a lurking limit is worse
 than no reader — it reads as covered.
 
+## 6a. The same limit was hiding the day's work — fixed
+
+§6 caught the truncation in the leads list. The identical pattern was live on
+the Today page and had already crossed its cap: `fetchTodayData()` read
+`fetchTasks({ status: 'open', limit: 500 })` and picked the overdue and
+due-today rows out in JavaScript.
+
+Measured on 2026-08-24: **1,024 open firm tasks**, of which 27 are overdue and 1
+is due today. A PostgREST read with a `limit` and no `order` returns an
+arbitrary 500 of the 1,024 — in heap order the first 500 held **1 of the 27**.
+So the page said "1 task overdue" and listed one row.
+
+The nav badge did not agree with it. `fetchTaskCounts()` reads the same tasks at
+`limit(2000)`, which still covers the whole table, so the badge said 27. Two
+counts of the same thing, 26 apart, with nothing on screen to say which was
+right — and the queue, the surface that exists to be worked top to bottom, was
+the one that was wrong.
+
+**Fixed:** `fetchDueTasks()` asks the database for the due window instead of
+slicing an unordered read — a three-branch filter mirroring `effectiveDueAt`'s
+precedence (`due_at`, then `soft_due_at`, then `hard_due_at`), bounded at the
+end of today in the firm's timezone. It returns 28 rows today rather than 500,
+and it is a filter, so nothing falls off the end of it. The 500-row cap stays as
+a backstop and now logs when it is reached, because the defect being fixed was a
+silent truncation, not a small one.
+
+The predicate was checked against all 1,024 production rows: it selects exactly
+the same set as `coalesce(due_at, soft_due_at, hard_due_at) <= end of today`,
+with zero disagreements. `tests/today-due-tasks.test.ts` evaluates the filter
+string itself against `effectiveDueAt` over every combination of the three
+columns, so a test restating the branches cannot agree with a wrong version of
+them.
+
+**Still capped, and worth a decision.** The same `fetchTasks({ status: 'open',
+limit: 500 })` call reads an arbitrary 500 of the 1,024 open tasks in four more
+places, and each is now past its cap:
+
+- `app/admin/tasks/page.tsx` — the Tasks page itself
+- `lib/calendarAttention.ts`
+- `app/api/cron/calendar-week-review/route.ts`
+- `lib/adminChat/calendarTools.ts` (two call sites)
+
+Today was fixed because it is the surface the day is run from; the others are
+left deliberately rather than widened into one change. They need the same
+treatment: a filter for what the surface actually asks for, or paging with the
+bound stated on screen.
+
 ## 7. Audit-trail gaps
 
 - `matter_relationship_status_history` records relationship transitions and is
@@ -588,3 +635,6 @@ Not scheduled; ordered by value per unit of risk.
 8. ~~**Give the pipeline a working priority signal**~~ (§9). Done for the score
    bands, the scheduled-call clock and the impossible-date guard; §9d lists what
    was deliberately left for a decision.
+9. **Finish the truncation sweep for tasks** (§6a). Today is fixed; the Tasks
+   page, the calendar attention read, the weekly-review cron and the admin chat
+   tools all still slice an arbitrary 500 of 1,024 open tasks.

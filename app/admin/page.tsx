@@ -54,7 +54,9 @@ export default async function AdminTodayPage() {
           {' · '}
           {today.tasksDueToday.length} due today
           {' · '}
-          {today.overdueCount} matter{today.overdueCount === 1 ? '' : 's'} over SLA
+          {today.overdueMatterCount} matter{today.overdueMatterCount === 1 ? '' : 's'}
+          {' · '}
+          {today.overdueLeadCount} lead{today.overdueLeadCount === 1 ? '' : 's'} over SLA
           {' · '}
           {today.appointmentsToday.length} appointment{today.appointmentsToday.length === 1 ? '' : 's'}
           </>
