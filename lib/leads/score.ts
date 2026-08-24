@@ -12,6 +12,7 @@
  * reader cannot account for.
  */
 import { calendarDayDifference, FIRM_TIMEZONE } from '@/lib/utils'
+import type { LeadEditableField } from '@/lib/leads/details'
 import type { LeadDetailRecord, LeadListRow } from '@/lib/leads/viewTypes'
 
 export type LeadScoreBand = 'hot' | 'warm' | 'cool' | 'cold'
@@ -371,4 +372,59 @@ export function leadScoreInputFromRow(
     nextAppointmentAt: extras.nextAppointmentAt ?? nullableText(row.next_appointment_at),
     readinessPercent: extras.readinessPercent ?? null,
   }
+}
+
+/**
+ * A question nobody has asked this lead yet, and the one move that answers it.
+ *
+ * These are the components scored `available: false` — points the lead cannot
+ * earn until someone fills a field. Across the 35 open leads when this was
+ * written, 34 had no fee quoted, 33 no urgency, 32 no estate value and 22 no
+ * source, so the card that listed them greyed out was describing the most
+ * common and most fixable state in the pipeline while offering nothing to do
+ * about it.
+ *
+ * This is deliberately *not* a second `computeNextAction()`. That one owns the
+ * pipeline step — send the intake, quote the fee, draft the engagement. This
+ * says what the firm does not know. The caller drops any gap the pipeline step
+ * already covers, so the two never say the same thing twice.
+ */
+export type LeadScoreGap = {
+  key: LeadScoreComponentKey
+  /** Imperative, because it is rendered on a button. */
+  label: string
+  /** What answering it is worth — the component's whole ceiling. */
+  points: number
+  /** The record field that closes it, where one does. */
+  field?: LeadEditableField
+  /** For a gap no field can close: an intent for `handleNextAction`. */
+  intent?: string
+}
+
+const GAP_REMEDIES: Partial<Record<LeadScoreComponentKey, Omit<LeadScoreGap, 'key' | 'points'>>> = {
+  fee: { label: 'Quote the fee', field: 'fee' },
+  estate: { label: 'Record the estate value', field: 'estimatedEstateValue' },
+  // Not a field: the record is silent because nobody has spoken to them.
+  recency: { label: 'Log a call or email', intent: 'email' },
+  urgency: { label: 'Set the urgency', field: 'urgency' },
+  source: { label: 'Record where they came from', field: 'source' },
+  // `readiness` is deliberately absent. It is computed from the record as a
+  // whole, so there is no single field to send anyone to, and the detail page
+  // always supplies it anyway.
+}
+
+/**
+ * Unanswered questions, richest first — the order the card truncates by, so a
+ * lead missing everything is asked for the 15-point answers, not whichever
+ * three happen to be declared first.
+ */
+export function leadScoreGaps(score: LeadScore): LeadScoreGap[] {
+  return score.components
+    .filter(component => !component.available)
+    .map(component => {
+      const remedy = GAP_REMEDIES[component.key]
+      return remedy ? { key: component.key, points: component.max, ...remedy } : null
+    })
+    .filter((gap): gap is LeadScoreGap => gap !== null)
+    .sort((left, right) => right.points - left.points)
 }

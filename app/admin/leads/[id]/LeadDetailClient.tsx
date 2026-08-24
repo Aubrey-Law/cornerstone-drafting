@@ -849,6 +849,14 @@ export function LeadDetailClient({
                 leadId={lead.id}
                 score={leadScore}
                 leadStatus={lead.lead_status}
+                onFillField={setActiveField}
+                onIntent={intent => void handleNextAction(intent)}
+                /*
+                 * The banner above already owns the pipeline step. When it is
+                 * telling the reader to quote the fee, the card must not say
+                 * the same thing one panel lower.
+                 */
+                coveredByNextAction={visibleAction && availableAction.key === 'quote_fee' ? 'fee' : null}
               />
               <LeadPlanTab
                 lead={lead}

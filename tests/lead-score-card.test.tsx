@@ -38,6 +38,26 @@ function card(overrides: Partial<LeadScoreInput> = {}) {
   return score
 }
 
+/** The card as the lead page renders it, with the handlers wired. */
+function actionableCard(
+  overrides: Partial<LeadScoreInput> = {},
+  props: Partial<React.ComponentProps<typeof LeadScoreCard>> = {},
+) {
+  const onFillField = vi.fn()
+  const onIntent = vi.fn()
+  render(
+    <LeadScoreCard
+      leadId="lead-1"
+      score={computeLeadScore({ ...BASE, ...overrides })}
+      leadStatus="lead"
+      onFillField={onFillField}
+      onIntent={onIntent}
+      {...props}
+    />,
+  )
+  return { onFillField, onIntent }
+}
+
 describe('the lead score card', () => {
   it('leads with the score and why, not with eight bars', () => {
     // Eight factors, each with a bar and a sentence, is most of a side panel
@@ -76,5 +96,79 @@ describe('the lead score card', () => {
 
     expect(screen.getAllByText('not asked').length).toBeGreaterThan(0)
     expect(screen.getByText(/points on offer so far/)).toBeTruthy()
+  })
+})
+
+describe('what would raise this score', () => {
+  it('offers the unanswered questions, richest first, capped at three', async () => {
+    // A bare lead is missing five; five asks on one card is nagging.
+    actionableCard()
+
+    const asks = screen.getAllByRole('button').map(button => button.textContent ?? '')
+      .filter(text => text.includes('+'))
+    expect(asks).toHaveLength(3)
+    expect(asks[0]).toContain('Quote the fee')
+    expect(asks[0]).toContain('+15')
+    // Estate and recency are also worth 15; urgency and source (10) fall off.
+    expect(asks.join(' ')).not.toContain('Set the urgency')
+  })
+
+  it('sends a field gap to the field editor', async () => {
+    const user = userEvent.setup()
+    const { onFillField } = actionableCard()
+
+    await user.click(screen.getByRole('button', { name: /Quote the fee/ }))
+
+    expect(onFillField).toHaveBeenCalledWith('fee')
+  })
+
+  it('sends a gap no field can close to an intent instead', async () => {
+    const user = userEvent.setup()
+    // Silence in the record is not a blank field — nobody has spoken to them.
+    const { onIntent, onFillField } = actionableCard({ feeQuoted: 4000, taxableEstate: 900000 })
+
+    await user.click(screen.getByRole('button', { name: /Log a call or email/ }))
+
+    expect(onIntent).toHaveBeenCalledWith('email')
+    expect(onFillField).not.toHaveBeenCalled()
+  })
+
+  it('drops the gap the next-action banner is already showing', () => {
+    // Two panels telling the reader to quote the same fee is one too many.
+    actionableCard({}, { coveredByNextAction: 'fee' })
+
+    expect(screen.queryByRole('button', { name: /Quote the fee/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Record the estate value/ })).toBeTruthy()
+  })
+
+  it('says nothing when the lead has answered everything it can', () => {
+    actionableCard({
+      feeQuoted: 4000,
+      taxableEstate: 900_000,
+      urgency: 'high',
+      leadSource: 'Referral',
+      lastTouchAt: new Date().toISOString(),
+      readinessPercent: 80,
+    })
+
+    expect(screen.queryByText('What would raise this score')).toBeNull()
+  })
+
+  it('stays quiet on a card with no handlers, and on a closed lead', () => {
+    // The card is also rendered read-only, and a lost lead's blank fee is not
+    // a task anyone should be nudged towards.
+    card()
+    expect(screen.queryByText('What would raise this score')).toBeNull()
+    cleanup()
+
+    render(
+      <LeadScoreCard
+        leadId="lead-1"
+        score={computeLeadScore(BASE)}
+        leadStatus="lost"
+        onFillField={vi.fn()}
+      />,
+    )
+    expect(screen.queryByText('What would raise this score')).toBeNull()
   })
 })

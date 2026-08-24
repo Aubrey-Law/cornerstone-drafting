@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   computeLeadScore,
+  leadScoreGaps,
   LEAD_SCORE_BANDS,
   leadScoreBand,
   leadScoreInputFromRow,
@@ -467,5 +468,60 @@ describe('the band reads what the lead could earn, not the whole 100', () => {
     const fee = score.components.find(component => component.key === 'fee')
     expect(meeting).toMatchObject({ points: 0, available: true })
     expect(fee).toMatchObject({ points: 0, available: false })
+  })
+})
+
+describe('the questions nobody has asked', () => {
+  const bare: LeadScoreInput = {
+    leadStatus: 'lead',
+    intakeSentAt: null,
+    intakeCompletedAt: null,
+    intakeStatus: null,
+    engagementStatus: null,
+    engagementSentAt: null,
+    engagementSignedAt: null,
+    feeQuoted: null,
+    billingType: null,
+    taxableEstate: null,
+    hasMinorChildren: null,
+    urgency: null,
+    leadSource: null,
+    lastTouchAt: null,
+    createdAt: null,
+    nextAppointmentAt: null,
+    readinessPercent: null,
+  }
+
+  it('orders by what answering is worth, not by how the score declares them', () => {
+    // The card shows three, so the order decides which two fall off. Declared
+    // order is fee, estate, urgency, recency, source — sorting has to lift
+    // recency (15) above urgency and source (10), which is the whole point.
+    expect(leadScoreGaps(computeLeadScore(bare)).map(gap => `${gap.key}:${gap.points}`))
+      .toEqual(['fee:15', 'estate:15', 'recency:15', 'urgency:10', 'source:10'])
+  })
+
+  it('sends each gap somewhere that can close it', () => {
+    const gaps = leadScoreGaps(computeLeadScore(bare))
+    expect(gaps.find(gap => gap.key === 'fee')).toMatchObject({ field: 'fee' })
+    expect(gaps.find(gap => gap.key === 'estate')).toMatchObject({ field: 'estimatedEstateValue' })
+    expect(gaps.find(gap => gap.key === 'source')).toMatchObject({ field: 'source' })
+    // Silence in the record is not a blank field; it is a call nobody made.
+    expect(gaps.find(gap => gap.key === 'recency')).toMatchObject({ intent: 'email' })
+  })
+
+  it('never asks for readiness, which no single field answers', () => {
+    expect(leadScoreGaps(computeLeadScore(bare)).some(gap => gap.key === 'readiness')).toBe(false)
+  })
+
+  it('is empty once the lead has answered everything it can', () => {
+    expect(leadScoreGaps(computeLeadScore({
+      ...bare,
+      feeQuoted: 4000,
+      taxableEstate: 900_000,
+      urgency: 'high',
+      leadSource: 'Referral',
+      lastTouchAt: new Date().toISOString(),
+      readinessPercent: 80,
+    }))).toEqual([])
   })
 })

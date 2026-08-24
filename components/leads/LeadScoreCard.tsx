@@ -13,9 +13,11 @@ import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { apiRequest } from '@/lib/clientApi'
 import {
   leadScoreBandLabel,
+  leadScoreGaps,
   leadScoreIsActive,
   type LeadScore,
 } from '@/lib/leads/score'
+import type { LeadEditableField } from '@/lib/leads/details'
 import { cn } from '@/lib/utils'
 
 /**
@@ -47,15 +49,29 @@ const bandAccent = {
   cold: 'text-muted-foreground',
 }
 
+/** At most this many gaps: a bare lead has five, and five asks is nagging. */
+const MAX_GAPS = 3
+
 export function LeadScoreCard({
   leadId,
   score,
   leadStatus,
+  onFillField,
+  onIntent,
+  /**
+   * The pipeline step the next-action banner is already showing. The gap it
+   * covers is dropped, so a card under "Quote the engagement fee" does not
+   * also say "Quote the fee".
+   */
+  coveredByNextAction,
   className,
 }: {
   leadId: string
   score: LeadScore
   leadStatus: string | null | undefined
+  onFillField?: (field: LeadEditableField) => void
+  onIntent?: (intent: string) => void
+  coveredByNextAction?: LeadEditableField | null
   className?: string
 }) {
   const token = useAccessToken()
@@ -69,6 +85,14 @@ export function LeadScoreCard({
   // unasked questions (4 for unset urgency, 2 for an unrecorded source) score
   // points but say nothing about the lead, and headlining "Urgency not set"
   // would be worse than saying nothing.
+  // Only offered where something can be done about them, and only while the
+  // lead is still in play — a lost lead's blank fee is not a task.
+  const gaps = active && (onFillField || onIntent)
+    ? leadScoreGaps(score)
+      .filter(gap => !(gap.field && gap.field === coveredByNextAction))
+      .slice(0, MAX_GAPS)
+    : []
+
   const drivers = score.components
     .filter(component => component.available && component.points > 0)
     .sort((left, right) => right.points - left.points)
@@ -121,6 +145,32 @@ export function LeadScoreCard({
           {score.percent}% of the {score.attainable} points on offer so far —{' '}
           {score.components.filter(component => !component.available).length} not yet asked
         </p>
+      )}
+
+      {gaps.length > 0 && (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="text-[11px] font-medium text-muted-foreground">What would raise this score</p>
+          <ul className="mt-1.5 space-y-1">
+            {gaps.map(gap => (
+              <li key={gap.key}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (gap.field && onFillField) onFillField(gap.field)
+                    else if (gap.intent && onIntent) onIntent(gap.intent)
+                  }}
+                  disabled={gap.field ? !onFillField : !onIntent}
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-muted disabled:pointer-events-none disabled:opacity-60"
+                >
+                  <span className="min-w-0 truncate">{gap.label}</span>
+                  <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
+                    +{gap.points}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/*
