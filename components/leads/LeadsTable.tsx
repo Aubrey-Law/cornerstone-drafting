@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table'
 import { EmptyState } from '@/components/EmptyState'
 import { LeadProgress, isLeadIntakeComplete } from '@/components/leads/LeadProgress'
-import { formatCurrency } from '@/lib/format'
+import { leadValueLabel, leadWaitingLabel } from '@/lib/leads/cardFacts'
 import { clientNameMatterSlug } from '@/lib/matterNumber'
 import { practiceAreaLabel, practiceAreaMatterCode } from '@/lib/practiceArea'
 import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
@@ -146,7 +146,7 @@ export function LeadsTable({
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Practice</TableHead>
-            <TableHead>Fee</TableHead>
+            <TableHead>Fee / plan</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Progress</TableHead>
             <TableHead className="text-right">Next step</TableHead>
@@ -191,7 +191,12 @@ export function LeadsTable({
                 </TableCell>
                 <TableCell className="text-muted-foreground">{lead.email}</TableCell>
                 <TableCell>{practiceAreaLabel(lead.practice_area)}</TableCell>
-                <TableCell>{formatCurrency(lead.engagement_fee_quoted) || '—'}</TableCell>
+                {/*
+                  A quoted fee where there is one — there was exactly one
+                  across 35 open leads — else the plan that will carry it,
+                  which is recorded far earlier and on 13 of them.
+                */}
+                <TableCell>{leadValueLabel(lead) ?? '—'}</TableCell>
                 <TableCell>
                   <LeadScoreBadge
                     score={lead.scoreDetail ?? computeLeadScore(leadScoreInputFromRow(lead))}
@@ -199,7 +204,11 @@ export function LeadsTable({
                     showLabel={false}
                   />
                 </TableCell>
-                <TableCell><LeadProgress lead={lead} /></TableCell>
+                <TableCell>
+                  <LeadProgress lead={lead} />
+                  {/* How long it has been waiting, or when its meeting is. */}
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{leadWaitingLabel(lead)}</p>
+                </TableCell>
                 <TableCell className="text-right">
                   {step.key === 'view_matter' && lead.matter_id ? (
                     <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" asChild>

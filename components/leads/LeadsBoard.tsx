@@ -7,7 +7,6 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/EmptyState'
 import { LeadActionsMenu } from '@/components/leads/LeadActionsMenu'
-import { needsAttention } from '@/components/leads/LeadPipelineInsights'
 import { leadListName, nextStep, provisionalLeadNumber } from '@/components/leads/LeadsTable'
 import {
   groupLeadsByBoardColumn,
@@ -16,13 +15,13 @@ import {
   resolveBoardDrop,
   type LeadBoardColumnKey,
 } from '@/lib/leads/board'
-import { formatCurrency } from '@/lib/format'
 import { practiceAreaLabel } from '@/lib/practiceArea'
 import { cn } from '@/lib/utils'
 import type { LeadListRow, MutableLeadStatus } from '@/lib/leads/viewTypes'
 import { LeadScoreBadge } from '@/components/leads/LeadScoreBadge'
 import type { ScorableLeadRow } from '@/components/leads/LeadsTable'
 import { computeLeadScore, leadScoreInputFromRow, leadScoreIsActive } from '@/lib/leads/score'
+import { leadAttentionReason, leadValueLabel, leadWaitingLabel } from '@/lib/leads/cardFacts'
 
 const DRAG_TYPE = 'text/lead-id'
 
@@ -236,8 +235,11 @@ function BoardCard({
 }) {
   const step = nextStep(lead, esignEnabled)
   const chip = stateChip(lead)
-  const attention = lead.lead_status === 'lead' && needsAttention(lead)
-  const fee = formatCurrency(lead.engagement_fee_quoted)
+  // Named rather than boolean: "Needs attention" was true of 16 of 35 leads
+  // and told the reader nothing about which one to open.
+  const attention = leadAttentionReason(lead)
+  const value = leadValueLabel(lead)
+  const waiting = leadWaitingLabel(lead)
   const score = lead.scoreDetail ?? computeLeadScore(leadScoreInputFromRow(lead))
   const runStep = () => {
     if (step.key === 'send_intake' || step.key === 'remind_intake') onSendIntake(lead)
@@ -274,8 +276,17 @@ function BoardCard({
             }}
           >
             <p className="truncate text-sm font-semibold hover:underline">{leadListName(lead)}</p>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {provisionalLeadNumber(lead)}
+            {/*
+              This line used to carry the provisional lead number — a derived
+              identifier for a record with no matter yet, and nothing anyone
+              can act on. The card is scanned for when, so it says when. The
+              number stays reachable as the row's title.
+            */}
+            <p
+              className="mt-0.5 truncate text-[11px] text-muted-foreground"
+              title={provisionalLeadNumber(lead)}
+            >
+              {waiting ?? provisionalLeadNumber(lead)}
             </p>
           </Link>
           <LeadActionsMenu
@@ -302,7 +313,7 @@ function BoardCard({
           )}
           {attention && (
             <span className="rounded-full bg-red-bg px-2 py-0.5 text-[10px] font-medium text-red">
-              Needs attention
+              {attention}
             </span>
           )}
         </div>
@@ -315,10 +326,11 @@ function BoardCard({
             className="px-1.5 py-0 text-[10px]"
           />
           <span>{practiceAreaLabel(lead.practice_area)}</span>
-          {fee && (
+          {value && (
             <>
               <span aria-hidden>·</span>
-              <span className="tabular-nums">{fee}</span>
+              {/* The quoted fee where there is one, else the plan carrying it. */}
+              <span className="tabular-nums">{value}</span>
             </>
           )}
         </div>
