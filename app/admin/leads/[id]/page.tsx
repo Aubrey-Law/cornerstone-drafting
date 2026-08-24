@@ -6,6 +6,7 @@ import { hydrateIntakeWithContacts } from '@/lib/intakeContactHydration'
 import { getSchedulingSettings } from '@/lib/appointments/settings'
 import { isSmsConfigured } from '@/lib/communications/config'
 import { newestTimestamp } from '@/lib/leads/timeline'
+import { scoringAppointmentAt } from '@/lib/leads/score'
 import { fetchTasksForLead } from '@/lib/queries/tasks'
 import { fetchMatter, fetchMatterContacts } from '@/lib/queries/matterCore'
 import { standingIntakeUrl } from '@/lib/intake/standingLinks'
@@ -176,6 +177,17 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         pmpsAt: anchorRow?.pmps_at ? firmDateKey(anchorRow.pmps_at) : null,
       }
     : null
+  // The `appointments` table holds a booking made through the scheduler, and
+  // most of the firm's meetings are not: 15 of 37 active leads carry a
+  // discovery call or planning session on the matter row and no appointment
+  // row at all. `v_lead_list` has always read the anchors — through
+  // `lead_scoring_appointment_at()`, the SQL mirror of `scoringAppointmentAt()`
+  // — so a lead whose meeting lives only there read "Meeting in 9 days" on its
+  // card and "No meeting on the calendar" on its own page, and scored ten
+  // points lower there. Same rule on both surfaces now; a real booking still
+  // wins, because the query above only returns one that is ahead.
+  const nextAppointmentAt = (appointment?.start_time as string | undefined)
+    ?? scoringAppointmentAt(anchorRow?.discovery_call_at, anchorRow?.pmps_at)
   const { data: agreement } = lead.matter_id
     ? await admin.from('engagement_agreements').select('id').eq('matter_id', lead.matter_id).in('status', ['draft', 'ready', 'failed']).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null }
@@ -192,7 +204,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       initialMeetingNotes={meetingRows.map(mapMeeting)}
       actorNames={actorNames}
       firmTimezone={schedulingSettings.timezone}
-      nextAppointmentAt={appointment?.start_time ?? null}
+      nextAppointmentAt={nextAppointmentAt}
       lastTouchAt={lastTouchAt}
       actorError={actorResult.error?.message ?? null}
       activeAgreement={agreement}

@@ -69,6 +69,13 @@ function formatDate(iso: string, timeZone: string) {
   }).format(new Date(iso))
 }
 
+/**
+ * The banner only ever holds a timestamp, never which meeting it is. It said
+ * "discovery call" because that was the only anchor the detail page could see;
+ * now that the page falls back to the matter's milestones, the same slot can
+ * hold a planning session, and naming it a discovery call would be wrong on
+ * the leads whose call is already behind them.
+ */
 function initialIntakeAction(
   appointmentAt: string | null,
   appointmentDays: number | null,
@@ -77,9 +84,9 @@ function initialIntakeAction(
 ): NextAction {
   return {
     key: 'send_intake',
-    title: soon ? 'Send intake before the discovery call' : 'Send intake to get the facts',
+    title: soon ? 'Send intake before the meeting' : 'Send intake to get the facts',
     detail: soon
-      ? `Discovery call is ${formatDate(appointmentAt!, timeZone)} (${appointmentDays} days out). Intake has never been sent.`
+      ? `Meeting is ${formatDate(appointmentAt!, timeZone)} (${appointmentDays} days out). Intake has never been sent.`
       : 'Intake has never been sent.',
     actions: [
       { label: 'Send intake', kind: 'primary', intent: 'send_intake' },
@@ -94,7 +101,7 @@ function unansweredIntakeAction(appointmentAt: string, appointmentDays: number, 
   return {
     key: 'send_intake',
     title: 'Resend intake — still unanswered',
-    detail: `Discovery call is ${formatDate(appointmentAt, timeZone)} (${appointmentDays} days out). Intake was sent but has not been completed.`,
+    detail: `Meeting is ${formatDate(appointmentAt, timeZone)} (${appointmentDays} days out). Intake was sent but has not been completed.`,
     actions: [
       { label: 'Resend intake', kind: 'primary', intent: 'send_intake' },
       { label: 'Fill it myself', kind: 'secondary', intent: 'fill_intake' },

@@ -779,6 +779,36 @@ day after the session while `is_overdue` is still false and `days_over_sla`
 reads -1. The colour and the numbers disagree, and the SLA table is a firm
 decision rather than a view bug.
 
+### 9g. The record page could not see its own meeting — fixed
+
+`v_lead_list` derives `next_appointment_at` from the milestones on the matter
+row, through `lead_scoring_appointment_at()` — the SQL mirror of
+`scoringAppointmentAt()`. The detail page read the `appointments` table
+instead, which only ever holds a booking made through the scheduler. Most of
+the firm's meetings are not: on 2026-08-24, **15 of 37 active leads** carried a
+discovery call or planning session on the matter row and no appointment row at
+all.
+
+So the same lead read **"Meeting in 9 days"** on its card and **"No meeting on
+the calendar"** on its own page, and scored ten points lower there — Ruth
+Lawler 27 on the list, 18 on the record. `scoringAppointmentAt`'s own doc
+comment names this as the thing it exists to prevent: "every caller must pick
+the same way or the same lead scores differently by surface." The detail page
+was not a caller. Nor was this a design choice — `LeadDetailClient` already
+said the page "knows more than the list does — readiness and the meeting
+anchors."
+
+**Fixed** in `app/admin/leads/[id]/page.tsx`: a real booking still wins, and
+the anchors are the fallback. Ruth's record now reads "Meeting scheduled in 9
+days", 10/10 on that component, 28 against the list's 27 — the remaining point
+is the readiness component the SQL deliberately omits.
+
+The banner copy moved with it. `computeNextAction` only ever holds a
+timestamp, never which meeting it is; it said "discovery call" because that was
+the only anchor the page could see. On a lead whose call is already behind it,
+that named a planning session as a discovery call, so the wording is now
+"Meeting is …".
+
 ## Ranked recommendations
 
 Not scheduled; ordered by value per unit of risk.

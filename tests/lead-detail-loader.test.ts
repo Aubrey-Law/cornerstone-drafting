@@ -1,4 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+/** Relative to the run, so the "still ahead" cases stay ahead. */
+const FUTURE = new Date(Date.now() + 9 * 86_400_000).toISOString()
+const PAST = new Date(Date.now() - 7 * 86_400_000).toISOString()
+const OLDER_PAST = new Date(Date.now() - 30 * 86_400_000).toISOString()
 
 const harness = vi.hoisted(() => {
   const rawLead = {
@@ -6,7 +11,8 @@ const harness = vi.hoisted(() => {
     first_name: 'Jane',
     last_name: 'Doe',
     lead_status: 'lead',
-    matter_id: null,
+    // Set by the meeting cases below, which need the lead to have a matter.
+    matter_id: null as string | null,
   }
   const hydratedLead = {
     ...rawLead,
@@ -72,6 +78,8 @@ const harness = vi.hoisted(() => {
           return chain
         },
         maybeSingle: async () => result(),
+        // A lead with a matter reaches fetchMatter, which ends in `.single()`.
+        single: async () => result(),
         then: (
           resolve: (value: ReturnType<typeof result>) => unknown,
           reject: (reason: unknown) => unknown,
@@ -167,5 +175,70 @@ describe('LeadDetailPage intake loader', () => {
       column: 'id',
       values: expect.arrayContaining(['current-user']),
     })
+  })
+})
+
+/**
+ * The detail page read `appointments`, which only ever holds a booking made
+ * through the scheduler. `v_lead_list` reads the milestone anchors on the
+ * matter row instead — `lead_scoring_appointment_at()`, the SQL mirror of
+ * `scoringAppointmentAt()` — so on 2026-08-24, with 15 of 37 active leads
+ * carrying a meeting and no appointment row, the same lead read "Meeting in 9
+ * days" on its card and "No meeting on the calendar" on its own page, and
+ * scored ten points lower there.
+ */
+describe('the meeting the detail page can see', () => {
+  beforeEach(() => {
+    harness.rawLead.matter_id = 'matter-1'
+    harness.rows.matters = { discovery_call_at: null, pmps_at: null }
+    harness.rows.appointments = null
+  })
+
+  afterEach(() => {
+    harness.rawLead.matter_id = null
+    delete harness.rows.matters
+    harness.rows.appointments = { start_time: '2026-07-30T14:00:00Z' }
+  })
+
+  it('falls back to the planning session the matter row carries', async () => {
+    harness.rows.matters = { discovery_call_at: null, pmps_at: FUTURE }
+
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+
+    expect(page.props).toMatchObject({ nextAppointmentAt: FUTURE })
+  })
+
+  it('prefers a real booking, which is the calendar and is always ahead', async () => {
+    harness.rows.appointments = { start_time: '2026-07-30T14:00:00Z' }
+    harness.rows.matters = { discovery_call_at: null, pmps_at: FUTURE }
+
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+
+    expect(page.props).toMatchObject({ nextAppointmentAt: '2026-07-30T14:00:00Z' })
+  })
+
+  it('takes the soonest meeting still ahead when both anchors are set', async () => {
+    // The rule `scoringAppointmentAt` states and the list already applies: a
+    // held discovery call must not outrank a session still to come.
+    harness.rows.matters = { discovery_call_at: PAST, pmps_at: FUTURE }
+
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+
+    expect(page.props).toMatchObject({ nextAppointmentAt: FUTURE })
+  })
+
+  it('reports the most recent meeting held when none is ahead', async () => {
+    // Not "no meeting": the score credits a call already held, at half.
+    harness.rows.matters = { discovery_call_at: OLDER_PAST, pmps_at: PAST }
+
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+
+    expect(page.props).toMatchObject({ nextAppointmentAt: PAST })
+  })
+
+  it('stays null for a lead with neither a booking nor a milestone', async () => {
+    const page = await LeadDetailPage({ params: Promise.resolve({ id: 'lead-1' }) })
+
+    expect(page.props).toMatchObject({ nextAppointmentAt: null })
   })
 })

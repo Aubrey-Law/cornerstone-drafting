@@ -30,8 +30,8 @@ describe('computeNextAction', () => {
       nextAppointmentAt: '2026-08-08T16:00:00Z',
     })).toEqual({
       key: 'send_intake',
-      title: 'Send intake before the discovery call',
-      detail: 'Discovery call is August 8, 2026 (14 days out). Intake has never been sent.',
+      title: 'Send intake before the meeting',
+      detail: 'Meeting is August 8, 2026 (14 days out). Intake has never been sent.',
       actions: [
         { label: 'Send intake', kind: 'primary', intent: 'send_intake' },
         { label: 'Fill it myself', kind: 'secondary', intent: 'fill_intake' },
@@ -63,7 +63,7 @@ describe('computeNextAction', () => {
     })).toEqual({
       key: 'send_intake',
       title: 'Resend intake — still unanswered',
-      detail: 'Discovery call is July 28, 2026 (3 days out). Intake was sent but has not been completed.',
+      detail: 'Meeting is July 28, 2026 (3 days out). Intake was sent but has not been completed.',
       actions: [
         { label: 'Resend intake', kind: 'primary', intent: 'send_intake' },
         { label: 'Fill it myself', kind: 'secondary', intent: 'fill_intake' },
@@ -180,8 +180,8 @@ describe('computeNextAction', () => {
       nextAppointmentAt: '2026-11-08T05:30:00Z', // Nov 8, 00:30 EST
       timeZone: 'America/New_York',
     })).toMatchObject({
-      title: 'Send intake before the discovery call',
-      detail: 'Discovery call is November 8, 2026 (14 days out). Intake has never been sent.',
+      title: 'Send intake before the meeting',
+      detail: 'Meeting is November 8, 2026 (14 days out). Intake has never been sent.',
     })
   })
 
@@ -207,7 +207,7 @@ describe('computeNextAction', () => {
       nextAppointmentAt: '2026-07-26T01:00:00Z',
       timeZone: 'America/New_York',
     })).toMatchObject({
-      detail: 'Discovery call is July 25, 2026 (0 days out). Intake has never been sent.',
+      detail: 'Meeting is July 25, 2026 (0 days out). Intake has never been sent.',
     })
   })
 })
