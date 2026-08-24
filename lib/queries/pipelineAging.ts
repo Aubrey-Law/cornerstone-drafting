@@ -36,6 +36,18 @@ export interface MatterAgingRow {
   cumulative_sla_days: number | null
   /** Red because of time across visits, even when the current one is inside its SLA. */
   is_cumulative_overdue: boolean
+  /**
+   * A lead whose stage clock is an appointment still ahead — a booked call is
+   * not a lead going stale, and before 20261015000000 every one of them sat
+   * amber from the moment it was booked.
+   */
+  is_scheduled: boolean
+  /**
+   * The recorded milestone date predates the row by more than a year, so the
+   * clock runs from creation instead. Surfaced rather than swallowed: one
+   * typo'd year was reporting 14,864 days in stage.
+   */
+  stage_clock_suspect: boolean
 }
 
 export interface MatterAgingTiles {
@@ -50,7 +62,7 @@ export interface MatterAgingTiles {
 const HEALTH_RANK: Record<MatterAgingHealth, number> = { red: 0, amber: 1, green: 2 }
 
 const AGING_SELECT =
-  'entity, id, client_name, client_email, client_phone, track, current_stage, stage_order, owner, stage_entered_at, days_in_stage, sla_days, escalation_offset, is_overdue, needs_outreach, health, raw_health, days_over_sla, snooze_id, snoozed_until, snooze_reason, is_snoozed, stage_visits, cumulative_days, cumulative_sla_days, is_cumulative_overdue'
+  'entity, id, client_name, client_email, client_phone, track, current_stage, stage_order, owner, stage_entered_at, days_in_stage, sla_days, escalation_offset, is_overdue, needs_outreach, health, raw_health, days_over_sla, snooze_id, snoozed_until, snooze_reason, is_snoozed, stage_visits, cumulative_days, cumulative_sla_days, is_cumulative_overdue, is_scheduled, stage_clock_suspect'
 
 /**
  * How far past its budget a row is, by whichever rule it broke.

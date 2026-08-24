@@ -490,6 +490,79 @@ pull requests*. With it off, the regenerated branch is still pushed and the
 step prints the setting to change and a compare link, rather than a bare
 GraphQL error.
 
+## 9. The pipeline had no working priority signal — second review
+
+The first eight sections are about whether the data is right. This one is about
+whether the reader can act on it, and the answer was no: every mechanism built
+to say "work this lead next" was saying the same thing about nearly every lead.
+Measured against production on 2026-08-24, 35 open leads:
+
+| Signal | What it said | Why it said nothing |
+|---|---|---|
+| Aging board, lead rows | 27 red, 12 amber, **0 green** | A board that is never green has no foreground |
+| `new_lead` | 13 rows, all red, avg **12 days** against a **1-day** SLA | An SLA missed 13 times out of 13 is a wall, not a queue |
+| `discovery_call` | 12 rows **amber at 0 days** | The clock starts at the *scheduled* call, so a booking reads as aging |
+| `intake_completed` | 10 red, avg **1,498 days**, max **14,864** | One lead's milestone is dated **1969-09-02** |
+| Score bands | **0 hot**, 2 warm, 20 cool, 13 cold; best 63 | "Hot" was unreachable — see §9a |
+| Lead tasks | **0**, ever | The Tasks tab, the SLA plan and half the Today queue are empty for the whole pre-engagement pipeline |
+
+### 9a. The score banded against points a lead cannot earn — fixed
+
+`computeLeadScore()` bands at hot ≥ 70 of 100, but 45 of those 100 points are
+for questions nobody asks before the planning session. Of 35 open leads, 1 has a
+fee quoted, 3 an estate value, 2 an urgency; readiness is always absent on a
+list row. The best real lead scored 63, so no lead was ever hot and nearly every
+badge read Cool or Cold — the pipeline looked worthless rather than sorted.
+
+**Fixed:** the band now reads the share of the points a lead could actually
+earn. Each component carries `available`, and both sides of the fraction read
+the same components. The distinction that matters is between an answer and
+silence: "no intake sent yet" and "no meeting booked" are answers and stay in
+the denominator; "no fee quoted" pre-engagement is silence and leaves. The raw
+0–100 score is untouched, because the list orders by it and `lead_score()` in
+SQL mirrors it (`tests/lead-score-sql-parity.test.ts`).
+
+### 9b. A booked call read as a lead going cold — fixed
+
+`ensure_lead_matter()` sets a lead's `stage_entered_at` to the milestone behind
+its stage, which for `discovery_call` is the scheduled call — often days ahead.
+`business_days_elapsed()` returns 0 for a future start, and the amber rule
+(`days >= sla_days - 1`) fires at 0 when the SLA is one day, so every booked
+call sat amber from the moment it was booked.
+
+**Fixed** in `20261015000000_lead_scheduled_not_aging.sql`: a lead whose clock
+has not started is `is_scheduled`, reads green, and owes nothing — the board
+shows the date instead of a colour. Amber now requires `sla_days > 1`, because a
+one-day budget has no approach to it, only inside or outside. The Today queue
+needed no change: it filters on `health !== 'green'`, so scheduled leads leave
+it on their own, and the booked call already appears under appointments.
+
+### 9c. One typo ran a clock for forty years — surfaced
+
+A lead carries `discovery_call_at = 1969-09-02`, which became its stage clock
+and reported 14,864 days. The same date reached the row twice — once as the
+clock, once through the stage-history row it wrote, where it totalled 14,860
+business days and turned the row red by the cumulative rule instead. Both paths
+are now guarded: a milestone predating its own record by more than a year is
+measured from creation, and the row is flagged `stage_clock_suspect` so the
+board asks for the date to be checked. Deliberately *surfaced* rather than
+corrected — a silently fixed date never gets fixed at source.
+
+### 9d. Left for a decision
+
+- **The `new_lead` SLA is one business day and was missed on all 13 leads**
+  (avg 12 days, worst 30). Whether to change the promise or the staffing is a
+  firm decision, and quietly relaxing the SLA to match performance would be
+  moving the goalposts, so nothing here touches it.
+- **No lead has ever had a task.** Matters get stage tasks; leads get none, so
+  the lead Tasks tab, the SLA plan view and the task half of the Today queue are
+  permanently empty. Generate them or remove the surfaces.
+- **34 of 35 open leads have no fee quoted**, so "Quoted pipeline" reads $0.
+- **22 of 35 have no lead source**, so the sources donut is mostly Unattributed.
+- **One object, five names**: nav "CRM", page header "Opportunities", route
+  `/admin/leads`, detail URL `/admin/crm/opportunities/{id}`, dashboard
+  "People".
+
 ## Ranked recommendations
 
 Not scheduled; ordered by value per unit of risk.
@@ -512,3 +585,6 @@ Not scheduled; ordered by value per unit of risk.
    `20261013000000_drop_twenty_sync_columns.sql`.
 7. ~~**Keep the generated database types honest**~~ (§8a). Done — a scheduled
    check compares them against the deployed schema.
+8. ~~**Give the pipeline a working priority signal**~~ (§9). Done for the score
+   bands, the scheduled-call clock and the impossible-date guard; §9d lists what
+   was deliberately left for a decision.

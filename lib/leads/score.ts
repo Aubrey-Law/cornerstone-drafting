@@ -33,10 +33,25 @@ export type LeadScoreComponent = {
   /** Ceiling for this component; the maxima across all components sum to 100. */
   max: number
   reason: string
+  /**
+   * Whether the lead answered this question at all.
+   *
+   * A component scores 0 for two different reasons, and the band has to tell
+   * them apart. "No intake sent yet" is an answer — the lead is at the start of
+   * the funnel. "No fee quoted" is silence: pre-engagement, one lead in
+   * thirty-five has a fee, so judging every other lead as though it failed that
+   * test is what made `hot` unreachable.
+   */
+  available: boolean
 }
 
 export type LeadScore = {
+  /** 0-100 across every component, whether or not the lead could answer it. */
   score: number
+  /** The points on offer for the questions this lead did answer. */
+  attainable: number
+  /** `score` as a share of `attainable` — what the band reads. */
+  percent: number
   band: LeadScoreBand
   components: LeadScoreComponent[]
 }
@@ -73,6 +88,11 @@ export const LEAD_SCORE_BANDS: { key: LeadScoreBand; label: string; min: number 
 
 const LEGAL_PLAN_BILLING_TYPES = ['metlife', 'legalease', 'arag', 'hyatt', 'legalshield', 'other_legal_plan']
 
+/**
+ * The band for a percentage. Kept on the 0-100 scale it always used, but what
+ * is handed to it changed: `computeLeadScore()` now passes the share of the
+ * points a lead could actually earn, not the share of all 100.
+ */
 export function leadScoreBand(score: number): LeadScoreBand {
   return LEAD_SCORE_BANDS.find(band => score >= band.min)?.key ?? 'cold'
 }
@@ -94,19 +114,16 @@ function progressComponent(input: LeadScoreInput): LeadScoreComponent {
   const engagementStatus = text(input.engagementStatus)
   const intakeComplete = Boolean(input.intakeCompletedAt) || text(input.intakeStatus) === 'completed'
 
-  if (input.engagementSignedAt || engagementStatus === 'signed') {
-    return { key: 'progress', label: 'Pipeline progress', points: max, max, reason: 'Engagement agreement signed' }
-  }
-  if (input.engagementSentAt || engagementStatus === 'sent') {
-    return { key: 'progress', label: 'Pipeline progress', points: 16, max, reason: 'Engagement agreement sent' }
-  }
-  if (intakeComplete) {
-    return { key: 'progress', label: 'Pipeline progress', points: 12, max, reason: 'Intake completed' }
-  }
-  if (input.intakeSentAt) {
-    return { key: 'progress', label: 'Pipeline progress', points: 6, max, reason: 'Intake sent, awaiting the client' }
-  }
-  return { key: 'progress', label: 'Pipeline progress', points: 0, max, reason: 'No intake sent yet' }
+  // Always available: where a lead stands in the funnel is knowable even when
+  // the answer is "nowhere yet".
+  const at = (points: number, reason: string): LeadScoreComponent =>
+    ({ key: 'progress', label: 'Pipeline progress', points, max, reason, available: true })
+
+  if (input.engagementSignedAt || engagementStatus === 'signed') return at(max, 'Engagement agreement signed')
+  if (input.engagementSentAt || engagementStatus === 'sent') return at(16, 'Engagement agreement sent')
+  if (intakeComplete) return at(12, 'Intake completed')
+  if (input.intakeSentAt) return at(6, 'Intake sent, awaiting the client')
+  return at(0, 'No intake sent yet')
 }
 
 function feeComponent(input: LeadScoreInput): LeadScoreComponent {
@@ -116,12 +133,14 @@ function feeComponent(input: LeadScoreInput): LeadScoreComponent {
 
   if (fee !== null && fee > 0) {
     const points = fee >= 5000 ? 15 : fee >= 3000 ? 12 : fee >= 1500 ? 8 : 5
-    return { key: 'fee', label, points, max, reason: `Fee quoted at ${money(fee)}` }
+    return { key: 'fee', label, points, max, reason: `Fee quoted at ${money(fee)}`, available: true }
   }
   if (LEGAL_PLAN_BILLING_TYPES.includes(text(input.billingType))) {
-    return { key: 'fee', label, points: 7, max, reason: 'Legal plan member — benefit covers the work' }
+    return { key: 'fee', label, points: 7, max, reason: 'Legal plan member — benefit covers the work', available: true }
   }
-  return { key: 'fee', label, points: 0, max, reason: 'No fee quoted' }
+  // Unavailable rather than failed: the fee is quoted after the planning
+  // session, so before it there is nothing to judge.
+  return { key: 'fee', label, points: 0, max, reason: 'No fee quoted', available: false }
 }
 
 function estateComponent(input: LeadScoreInput): LeadScoreComponent {
@@ -142,22 +161,23 @@ function estateComponent(input: LeadScoreInput): LeadScoreComponent {
       points: Math.min(max, base + bump),
       max,
       reason: minorChildren ? `${reason}; minor children` : reason,
+      available: true,
     }
   }
   if (minorChildren) {
-    return { key: 'estate', label, points: bump, max, reason: 'Minor children; no estate value recorded' }
+    return { key: 'estate', label, points: bump, max, reason: 'Minor children; no estate value recorded', available: true }
   }
-  return { key: 'estate', label, points: 0, max, reason: 'No estate value recorded' }
+  return { key: 'estate', label, points: 0, max, reason: 'No estate value recorded', available: false }
 }
 
 function urgencyComponent(input: LeadScoreInput): LeadScoreComponent {
   const max = 10
   const label = 'Urgency'
   const urgency = text(input.urgency)
-  if (urgency === 'high') return { key: 'urgency', label, points: 10, max, reason: 'Marked high urgency' }
-  if (urgency === 'normal') return { key: 'urgency', label, points: 5, max, reason: 'Normal urgency' }
-  if (urgency === 'low') return { key: 'urgency', label, points: 0, max, reason: 'Marked low urgency' }
-  return { key: 'urgency', label, points: 4, max, reason: 'Urgency not set' }
+  if (urgency === 'high') return { key: 'urgency', label, points: 10, max, reason: 'Marked high urgency', available: true }
+  if (urgency === 'normal') return { key: 'urgency', label, points: 5, max, reason: 'Normal urgency', available: true }
+  if (urgency === 'low') return { key: 'urgency', label, points: 0, max, reason: 'Marked low urgency', available: true }
+  return { key: 'urgency', label, points: 4, max, reason: 'Urgency not set', available: false }
 }
 
 function recencyComponent(input: LeadScoreInput, timeZone: string): LeadScoreComponent {
@@ -167,27 +187,28 @@ function recencyComponent(input: LeadScoreInput, timeZone: string): LeadScoreCom
     ? calendarDayDifference(Date.now(), input.lastTouchAt, timeZone)
     : null
 
-  if (days === null) return { key: 'recency', label, points: 0, max, reason: 'No recorded touch' }
+  if (days === null) return { key: 'recency', label, points: 0, max, reason: 'No recorded touch', available: false }
 
   const ago = days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
   const points = days <= 3 ? 15 : days <= 7 ? 11 : days <= 14 ? 6 : days <= 30 ? 2 : 0
   const reason = days > 30 ? `Last touch ${ago} — gone cold` : `Last touch ${ago}`
-  return { key: 'recency', label, points, max, reason }
+  return { key: 'recency', label, points, max, reason, available: true }
 }
 
 function appointmentComponent(input: LeadScoreInput, timeZone: string): LeadScoreComponent {
   const max = 10
   const label = 'Meeting'
+  // Always available: an empty calendar is an answer, not a gap in the record.
   if (!input.nextAppointmentAt) {
-    return { key: 'appointment', label, points: 0, max, reason: 'No meeting on the calendar' }
+    return { key: 'appointment', label, points: 0, max, reason: 'No meeting on the calendar', available: true }
   }
   const days = calendarDayDifference(input.nextAppointmentAt, Date.now(), timeZone)
   if (days === null) {
-    return { key: 'appointment', label, points: 0, max, reason: 'No meeting on the calendar' }
+    return { key: 'appointment', label, points: 0, max, reason: 'No meeting on the calendar', available: true }
   }
   return days >= 0
-    ? { key: 'appointment', label, points: 10, max, reason: days === 0 ? 'Meeting scheduled today' : `Meeting scheduled in ${days} days` }
-    : { key: 'appointment', label, points: 5, max, reason: `Met ${Math.abs(days)} days ago` }
+    ? { key: 'appointment', label, points: 10, max, available: true, reason: days === 0 ? 'Meeting scheduled today' : `Meeting scheduled in ${days} days` }
+    : { key: 'appointment', label, points: 5, max, available: true, reason: `Met ${Math.abs(days)} days ago` }
 }
 
 function sourceComponent(input: LeadScoreInput): LeadScoreComponent {
@@ -195,15 +216,15 @@ function sourceComponent(input: LeadScoreInput): LeadScoreComponent {
   const label = 'Lead source'
   const source = text(input.leadSource)
 
-  if (!source) return { key: 'source', label, points: 2, max, reason: 'Source not recorded' }
-  if (source.includes('referral')) return { key: 'source', label, points: 10, max, reason: 'Referral' }
+  if (!source) return { key: 'source', label, points: 2, max, reason: 'Source not recorded', available: false }
+  if (source.includes('referral')) return { key: 'source', label, points: 10, max, reason: 'Referral', available: true }
   if (LEGAL_PLAN_BILLING_TYPES.some(plan => source.includes(plan))) {
-    return { key: 'source', label, points: 8, max, reason: 'Legal plan referral' }
+    return { key: 'source', label, points: 8, max, reason: 'Legal plan referral', available: true }
   }
   if (['website', 'web', 'google'].some(term => source.includes(term))) {
-    return { key: 'source', label, points: 5, max, reason: 'Inbound web search' }
+    return { key: 'source', label, points: 5, max, reason: 'Inbound web search', available: true }
   }
-  return { key: 'source', label, points: 4, max, reason: `Source: ${input.leadSource}` }
+  return { key: 'source', label, points: 4, max, reason: `Source: ${input.leadSource}`, available: true }
 }
 
 function readinessComponent(input: LeadScoreInput): LeadScoreComponent {
@@ -211,7 +232,7 @@ function readinessComponent(input: LeadScoreInput): LeadScoreComponent {
   const label = 'Record readiness'
   const percent = input.readinessPercent
   if (percent === null || !Number.isFinite(percent)) {
-    return { key: 'readiness', label, points: 0, max, reason: 'Readiness not computed' }
+    return { key: 'readiness', label, points: 0, max, reason: 'Readiness not computed', available: false }
   }
   const clamped = Math.min(100, Math.max(0, percent))
   return {
@@ -220,6 +241,7 @@ function readinessComponent(input: LeadScoreInput): LeadScoreComponent {
     points: Math.min(max, Math.round(clamped / 20)),
     max,
     reason: `Record ${Math.round(clamped)}% complete`,
+    available: true,
   }
 }
 
@@ -238,7 +260,30 @@ export function computeLeadScore(input: LeadScoreInput): LeadScore {
 
   const total = components.reduce((sum, component) => sum + component.points, 0)
   const score = Math.min(100, Math.max(0, total))
-  return { score, band: leadScoreBand(score), components }
+
+  /*
+   * Banding against the whole 100 described a pipeline that does not exist.
+   * Before the planning session a lead has no fee, usually no estate value, no
+   * urgency and no readiness — 45 of the 100 points are for questions nobody
+   * has asked yet — so the best real lead reached 63 and `hot` (70) was
+   * unreachable. Judged instead on the questions it did answer, a lead that is
+   * as far along as a lead gets reads as hot, which is the whole point of a
+   * band.
+   *
+   * `score` is untouched: it is what the list orders by, and `lead_score()` in
+   * SQL mirrors it (tests/lead-score-sql-parity.test.ts).
+   */
+  // Both sides of the fraction read the same components. An unanswered
+  // question still contributes its hedge to `score` — urgency nobody set is
+  // worth 4, an unrecorded source 2, because a blank is not a bad answer — but
+  // counting those points against a denominator that excludes them would have
+  // rated a lead with nothing recorded at 20%.
+  const answered = components.filter(component => component.available)
+  const attainable = answered.reduce((sum, component) => sum + component.max, 0)
+  const earned = answered.reduce((sum, component) => sum + component.points, 0)
+  const percent = attainable > 0 ? Math.round((earned / attainable) * 100) : 0
+
+  return { score, attainable, percent, band: leadScoreBand(percent), components }
 }
 
 /** Components that earned points, richest first — the "why" behind a score. */

@@ -49,6 +49,8 @@ function agingRow(overrides: Partial<TodayQueueRow> = {}): TodayQueueRow {
     cumulative_days: 0,
     cumulative_sla_days: null,
     is_cumulative_overdue: false,
+    is_scheduled: false,
+    stage_clock_suspect: false,
     action: { kind: 'draft', label: 'Draft', href: '/admin/drafting/matter-1' },
     nudge_matter_id: null,
     ...overrides,

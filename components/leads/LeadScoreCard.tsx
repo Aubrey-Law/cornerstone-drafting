@@ -92,6 +92,17 @@ export function LeadScoreCard({
         <span className="ml-1 text-sm font-normal text-muted-foreground">/ 100</span>
         <span className="ml-2 text-sm font-medium">{leadScoreBandLabel(score.band)}</span>
       </p>
+      {/*
+        The band reads the share of what this lead could earn, not of 100 — a
+        lead with no fee quoted is not judged on a question nobody has asked it
+        yet. Saying so here keeps a "57 · Hot" from looking like a mistake.
+      */}
+      {score.attainable < 100 && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {score.percent}% of the {score.attainable} points on offer so far —{' '}
+          {score.components.filter(component => !component.available).length} not yet asked
+        </p>
+      )}
 
       <ul className="mt-3 space-y-1.5">
         {score.components.map(component => {
@@ -103,7 +114,7 @@ export function LeadScoreCard({
                   {component.label}
                 </span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {component.points}/{component.max}
+                  {component.available ? `${component.points}/${component.max}` : 'not asked'}
                 </span>
               </div>
               <div

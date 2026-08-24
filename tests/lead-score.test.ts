@@ -394,3 +394,78 @@ describe('leadScoreInputFromRow', () => {
     expect(input.lastTouchAt).toBe('2026-07-02T16:00:00Z')
   })
 })
+
+describe('the band reads what the lead could earn, not the whole 100', () => {
+  const bare: LeadScoreInput = {
+    leadStatus: 'lead',
+    intakeSentAt: null,
+    intakeCompletedAt: null,
+    intakeStatus: null,
+    engagementStatus: null,
+    engagementSentAt: null,
+    engagementSignedAt: null,
+    feeQuoted: null,
+    billingType: null,
+    taxableEstate: null,
+    hasMinorChildren: null,
+    urgency: null,
+    leadSource: null,
+    lastTouchAt: null,
+    createdAt: null,
+    nextAppointmentAt: null,
+    readinessPercent: null,
+  }
+
+  it('counts only the components the lead answered', () => {
+    // Progress and the calendar are always answerable; the rest are silence.
+    const score = computeLeadScore(bare)
+    expect(score.components.filter(component => component.available).map(component => component.key))
+      .toEqual(['progress', 'appointment'])
+    expect(score.attainable).toBe(30)
+  })
+
+  it('lets a lead as far along as a lead gets read as hot', () => {
+    // This is the case that made the change necessary: before it, the best
+    // real lead in the book scored 63 of 100 and no lead was ever hot.
+    const strong = computeLeadScore({
+      ...bare,
+      intakeCompletedAt: new Date().toISOString(),
+      leadSource: 'Client referral',
+      urgency: 'high',
+      lastTouchAt: new Date().toISOString(),
+      nextAppointmentAt: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+    })
+    // 12 progress + 10 urgency + 15 recency + 10 meeting + 10 source = 57 raw,
+    // out of the 65 points those five questions carry.
+    expect(strong.score).toBe(57)
+    expect(strong.attainable).toBe(65)
+    expect(strong.percent).toBe(88)
+    expect(strong.band).toBe('hot')
+  })
+
+  it('still calls a neglected lead cold', () => {
+    expect(computeLeadScore(bare).band).toBe('cold')
+    expect(computeLeadScore(bare).percent).toBe(0)
+  })
+
+  it('leaves the raw score alone, because the list orders by it', () => {
+    // The SQL mirror computes this number; see lead-score-sql-parity. It still
+    // includes the hedges for the questions nobody asked — 4 for unset
+    // urgency, 2 for an unrecorded source.
+    const quoted = computeLeadScore({ ...bare, feeQuoted: 5000 })
+    expect(quoted.score).toBe(15 + 4 + 2)
+    expect(quoted.attainable).toBe(45)
+    // The band ignores those hedges: 15 of the 45 points actually on offer.
+    expect(quoted.percent).toBe(33)
+  })
+
+  it('treats an empty calendar as an answer, not a gap', () => {
+    // "No meeting booked" is a real signal about a lead; "no fee quoted"
+    // pre-engagement is not, and the two must not be scored the same way.
+    const score = computeLeadScore(bare)
+    const meeting = score.components.find(component => component.key === 'appointment')
+    const fee = score.components.find(component => component.key === 'fee')
+    expect(meeting).toMatchObject({ points: 0, available: true })
+    expect(fee).toMatchObject({ points: 0, available: false })
+  })
+})
