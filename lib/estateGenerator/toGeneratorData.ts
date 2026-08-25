@@ -642,6 +642,14 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       include_young_adult_estate_plan: docs.include_young_adult_estate_plan,
       include_ferpa_release: docs.include_ferpa_release,
       include_education_poa: docs.include_education_poa,
+      // Ancillary inclusions the design sheet already tracks. The interview
+      // worksheet prints them as document check boxes, so they have to reach
+      // the templates rather than stopping at package selection.
+      include_certificate_of_trust: docs.include_certificate_of_trust ?? false,
+      include_assignment_of_personal_property: docs.include_assignment_of_personal_property ?? false,
+      include_funding_instructions: docs.include_funding_instructions ?? false,
+      include_homestead_trustee: docs.include_homestead_trustee ?? false,
+      include_estate_plan_summary: docs.include_estate_plan_summary ?? false,
       spouse_docs: docs.spouse_docs,
       client_goals: payload.goals_notes ?? null,
       client_concerns: payload.concerns ?? null,
@@ -659,6 +667,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         distribution_method: payload.will_provisions.tangible_property_distribution ?? 'children_then_descendants',
         named_individual: person(payload.will_provisions.tangible_property_named_individual),
       },
+      pr_powers: { ...payload.will_provisions.pr_powers },
       pet_care: petCareProvision(payload),
     },
     trust: compactObject({
@@ -807,6 +816,20 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         co_primary: testamentaryCoTrustee(payload),
         successor: fiduciaryPerson(fiduciaryDetails?.trustee.successor, payload.fiduciaries.trustee_successor),
         co_trustees_action: testamentaryCoTrusteesAction(payload.will_provisions.cotrustee_decision_standard),
+      },
+      // The spouse's own trustee set. On a separate-trusts matter each spouse
+      // has their own trust, and the design sheet keeps the second set in
+      // `spouse_trustee_slots`; `spouse_testamentary_trustee` reads the same
+      // slots for the will's testamentary trust and stays as it was.
+      spouse_trustee: {
+        primary: fiduciaryPerson(
+          undefined,
+          payload.fiduciaries.spouse_trustee_primary ?? payload.fiduciaries.spouse_trustee_successor,
+        ),
+        co_primary: person(payload.fiduciaries.spouse_trustee_co),
+        successor: payload.fiduciaries.spouse_trustee_primary
+          ? fiduciaryPerson(undefined, payload.fiduciaries.spouse_trustee_successor)
+          : person(null),
       },
       spouse_testamentary_trustee: {
         // Legacy payloads carried the primary in spouse_trustee_successor;

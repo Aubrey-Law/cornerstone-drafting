@@ -12,6 +12,10 @@ const ZIP_CONTENT_TYPE = 'application/zip'
 // Both client-facing summaries (detailed plan summary + pre-meeting worksheet)
 // live in this generator package. See packages/design-summary.json.
 const DESIGN_SUMMARY_PACKAGE = 'design-summary' as const
+// A reciprocal (separate) living-trust matter swaps the worksheet for the
+// two-settlor interview form, which asks each trust's questions once per
+// settlor. See packages/design-summary-separate.json.
+const DESIGN_SUMMARY_SEPARATE_PACKAGE = 'design-summary-separate' as const
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -57,7 +61,9 @@ export async function GET(req: NextRequest, { params }: Params) {
 
     const result = await generateNodeEstatePackage({
       data,
-      packageName: DESIGN_SUMMARY_PACKAGE,
+      packageName: payload.trust?.separate_trusts
+        ? DESIGN_SUMMARY_SEPARATE_PACKAGE
+        : DESIGN_SUMMARY_PACKAGE,
       state,
       allowDraft: true,
     })

@@ -1324,5 +1324,795 @@
     "type": "string",
     "required": false,
     "description": "Organs or purposes named when the donation election is specific."
+  },
+  "planning.include_certificate_of_trust": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a certificate of trust."
+  },
+  "planning.include_assignment_of_personal_property": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes an assignment of personal property."
+  },
+  "planning.include_funding_instructions": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes the trust funding instructions and checklist."
+  },
+  "planning.include_homestead_trustee": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a trustee declaration of homestead."
+  },
+  "planning.include_estate_plan_summary": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes the client-facing estate plan summary."
+  },
+  "will.pr_powers.allow_pay_taxes_debts_expenses": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the will grants the personal representative power to pay taxes, debts, and expenses."
+  },
+  "will.pr_powers.allow_manage_digital_assets": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the will grants the personal representative power over digital assets."
+  },
+  "will.pr_powers.include_distribution_cash_or_kind": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the will includes the \"distribution in cash or kind\" power."
+  },
+  "fiduciaries.spouse_trustee.primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Initial trustee of the spouse's own trust. Separate-trusts matters only — on a joint trust both spouses share fiduciaries.trustee."
+  },
+  "fiduciaries.spouse_trustee.co_primary.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Initial co-trustee of the spouse's own trust."
+  },
+  "fiduciaries.spouse_trustee.successor.full_name": {
+    "type": "string",
+    "required": "conditional",
+    "description": "Successor trustee of the spouse's own trust."
+  },
+  "assets.items": {
+    "type": "array",
+    "required": false,
+    "description": "Asset rows. Each item carries .description, .institution, .category, .category_label, .estimated_value, .gross_value, .net_value, .notes, and .from_intake."
+  },
+  "client.email": {
+    "type": "string",
+    "required": false,
+    "description": "Client's email address."
+  },
+  "client.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Client's phone number, formatted for display."
+  },
+  "dpoa.additional_limitations": {
+    "type": "string",
+    "required": false,
+    "description": "Free-text limitations on the agent's authority."
+  },
+  "dpoa.additional_powers": {
+    "type": "string",
+    "required": false,
+    "description": "Free-text additional powers the attorney granted the agent."
+  },
+  "dpoa.agent_compensation": {
+    "type": "string",
+    "required": false,
+    "description": "Agent compensation basis: prevailing_professional, reasonable, or none."
+  },
+  "dpoa.all_basic_powers": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether every statutory basic power is granted. When true, treat each dpoa.basic_powers.* key as granted."
+  },
+  "dpoa.allow_gifts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may make gifts."
+  },
+  "dpoa.basic_powers.banking": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants banking and other financial institution transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.business_operating": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants business operating transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.claims_litigation": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants claims and litigation. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.commodities_options": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants commodity and option transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.estate_trust_beneficiary": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants estate, trust, and other beneficiary transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.government_benefits": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants government benefits (Social Security, Medicare, Medicaid, civil or military service). Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.insurance_annuity": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants insurance and annuity transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.personal_family_maintenance": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants personal and family maintenance. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.real_property": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants real property transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.retirement_plans": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants retirement plan transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.stocks_bonds": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants stock and bond transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.tangible_personal_property": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants tangible personal property transactions. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.basic_powers.tax_matters": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney grants tax matters. Also granted when dpoa.all_basic_powers is true."
+  },
+  "dpoa.coagent_serving": {
+    "type": "string",
+    "required": false,
+    "description": "Whether co-agents serve jointly, separately, or the document stays silent."
+  },
+  "dpoa.special_powers.allow_delegation": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may delegate authority."
+  },
+  "dpoa.special_powers.allow_medical_information_access": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may access medical information."
+  },
+  "dpoa.special_powers.allow_self_designation_beneficiary": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may name themselves on beneficiary designations."
+  },
+  "dpoa.special_powers.power_529_plans": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may manage §529 educational savings plans."
+  },
+  "dpoa.special_powers.power_digital_assets": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may control digital assets and devices."
+  },
+  "dpoa.special_powers.prohibit_arbitration": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether arbitration of disputes is prohibited."
+  },
+  "dpoa.specific_businesses": {
+    "type": "string",
+    "required": false,
+    "description": "Businesses named in the power of attorney."
+  },
+  "dpoa.trust_powers.agent_may_create_medicaid_trusts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may create Medicaid planning trusts."
+  },
+  "dpoa.trust_powers.agent_may_create_trusts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may create trusts."
+  },
+  "dpoa.trust_powers.agent_may_create_trusts_for_dependents": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may create trusts for the principal’s dependents."
+  },
+  "dpoa.trust_powers.agent_may_modify_joint_trusts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may modify joint trusts."
+  },
+  "dpoa.trust_powers.agent_may_modify_sole_settlor_trusts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may modify the principal’s sole-settlor trusts."
+  },
+  "dpoa.trust_powers.allow_agent_as_trustee": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the agent may serve as trustee of a trust they create."
+  },
+  "family.disinherit_issue": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a disinherited person's issue are disinherited too."
+  },
+  "family.disinherited": {
+    "type": "array",
+    "required": false,
+    "description": "People disinherited by name. Each entry carries .full_name and .relationship."
+  },
+  "family.include_afterborn_children": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether children born after signing are included."
+  },
+  "family.include_expectant_children": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether posthumous or expectant children are included."
+  },
+  "family.include_general_disinheritance": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the general disinheritance clause is included."
+  },
+  "family.omissions_intentional": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether omissions from the plan are intentional."
+  },
+  "fiduciaries.agent.primary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the client's attorney-in-fact. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.agent.primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the client's attorney-in-fact. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.agent.primary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the client's attorney-in-fact. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.agent.primary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the client's attorney-in-fact to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.agent.successor.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the client's backup attorney-in-fact. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.agent.successor.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the client's backup attorney-in-fact. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.agent.successor.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the client's backup attorney-in-fact. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.agent.successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the client's backup attorney-in-fact to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.executor.primary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the personal representative. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.executor.primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the personal representative. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.executor.primary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the personal representative. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.executor.primary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the personal representative to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.executor.successor.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the successor personal representative. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.executor.successor.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the successor personal representative. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.executor.successor.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the successor personal representative. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.executor.successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the successor personal representative to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.spouse_agent.primary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the spouse's attorney-in-fact. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.spouse_agent.primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the spouse's attorney-in-fact. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.spouse_agent.primary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the spouse's attorney-in-fact. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.spouse_agent.primary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the spouse's attorney-in-fact to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.spouse_agent.successor.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the spouse's backup attorney-in-fact. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.spouse_agent.successor.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the spouse's backup attorney-in-fact. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.spouse_agent.successor.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the spouse's backup attorney-in-fact. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.spouse_agent.successor.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the spouse's backup attorney-in-fact to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.trustee.co_primary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the initial co-trustee. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.trustee.co_primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the initial co-trustee. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.trustee.co_primary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the initial co-trustee. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.trustee.co_primary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the initial co-trustee to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.trustee.primary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the initial trustee. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.trustee.primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the initial trustee. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.trustee.primary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the initial trustee. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.trustee.primary.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the initial trustee to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "fiduciaries.trustee.second_successor.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the second successor trustee. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.trustee.second_successor.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the second successor trustee. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.trustee.second_successor.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the second successor trustee. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciaries.trustee.successor.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the successor trustee. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "fiduciaries.trustee.successor.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the successor trustee. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "fiduciaries.trustee.successor.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the successor trustee. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "fiduciary_display.show_address": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether fiduciary addresses print in documents."
+  },
+  "fiduciary_display.show_dob": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether fiduciary dates of birth print in documents."
+  },
+  "fiduciary_display.show_email": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether fiduciary email addresses print in documents."
+  },
+  "fiduciary_display.show_phone": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether fiduciary phone numbers print in documents."
+  },
+  "fiduciary_display.show_relationship": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether fiduciary relationships print in documents."
+  },
+  "guardians.primary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the nominated guardian. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "guardians.primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the nominated guardian. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "guardians.primary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the nominated guardian. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "guardians.successor.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the successor guardian. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "guardians.successor.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the successor guardian. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "guardians.successor.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the successor guardian. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "healthcare.agent.alternate.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the client's backup health care agent. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "healthcare.agent.co_alternate.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the client's backup co-health care agent."
+  },
+  "healthcare.agent.co_primary.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the client's co-health care agent."
+  },
+  "healthcare.agent.primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the client's health care agent. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "healthcare.client_anatomical_gift": {
+    "type": "string",
+    "required": false,
+    "description": "Client's anatomical gift preference: yes, defer, or no."
+  },
+  "healthcare.spouse_agent.alternate.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the spouse's backup health care agent. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "healthcare.spouse_agent.alternate.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the spouse's backup health care agent. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "healthcare.spouse_agent.alternate.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the spouse's backup health care agent. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "healthcare.spouse_agent.alternate.relationship": {
+    "type": "string",
+    "required": false,
+    "description": "Relationship of the spouse's backup health care agent to the client. Printed only when `fiduciary_display.show_relationship` is set."
+  },
+  "healthcare.spouse_agent.co_alternate.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the spouse's backup co-health care agent."
+  },
+  "healthcare.spouse_agent.co_primary.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the spouse's co-health care agent."
+  },
+  "healthcare.spouse_agent.primary.address": {
+    "type": "string",
+    "required": false,
+    "description": "Address for the spouse's health care agent. Printed only when `fiduciary_display.show_address` is set."
+  },
+  "healthcare.spouse_agent.primary.email": {
+    "type": "string",
+    "required": false,
+    "description": "Email address for the spouse's health care agent. Printed only when `fiduciary_display.show_email` is set."
+  },
+  "healthcare.spouse_agent.primary.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number for the spouse's health care agent. Printed only when `fiduciary_display.show_phone` is set."
+  },
+  "healthcare.spouse_anatomical_gift": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's anatomical gift preference: yes, defer, or no."
+  },
+  "healthcare.spouse_anatomical_restrictions": {
+    "type": "string",
+    "required": false,
+    "description": "Restrictions the spouse placed on anatomical gifts."
+  },
+  "hipaa.client_additional_agents": {
+    "type": "array",
+    "required": false,
+    "description": "Extra people authorized on the client's HIPAA release. Each carries .full_name, .relationship, .phone, .email, .address, .date_of_birth."
+  },
+  "hipaa.include_poa": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the financial power of attorney is named in the HIPAA authorization."
+  },
+  "hipaa.spouse_additional_agents": {
+    "type": "array",
+    "required": false,
+    "description": "Extra people authorized on the spouse's HIPAA release; same shape as hipaa.client_additional_agents."
+  },
+  "planning.include_parental_appointment": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a parental guardian appointment."
+  },
+  "spouse.email": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's email address."
+  },
+  "spouse.phone": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's phone number, formatted for display."
+  },
+  "trust.provisions.allow_distributions_to_dependents_if_incapacitated": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may support the settlor's dependents during incapacity."
+  },
+  "trust.provisions.allow_special_trustee": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a special trustee may act on conflicted transactions."
+  },
+  "trust.provisions.allow_trustee_change_situs": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may change the trust situs."
+  },
+  "trust.provisions.hold_distributions_for_young_beneficiaries": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may hold a young beneficiary’s distribution in trust."
+  },
+  "trust.provisions.include_arts_education": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether arts education counts as an approved educational expense."
+  },
+  "trust.provisions.include_contingent_snt": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust includes contingent special needs trust provisions."
+  },
+  "trust.provisions.include_creditor_divorce_provisions": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust includes creditor claim and divorce provisions."
+  },
+  "trust.provisions.include_disappearance_definition": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust defines disappearance."
+  },
+  "trust.provisions.include_discretionary_distribution_definition": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust defines discretionary distributions in detail."
+  },
+  "trust.provisions.include_education_expenses_definition": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust defines education expenses in detail."
+  },
+  "trust.provisions.include_homeschooling": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether homeschooling counts as an approved educational expense."
+  },
+  "trust.provisions.include_no_contest_clause": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust and pour-over will include a no-contest clause."
+  },
+  "trust.provisions.include_substance_abuse": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust includes substance abuse provisions."
+  },
+  "trust.provisions.include_vocational_training": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether vocational training counts as an approved educational expense."
+  },
+  "trust.provisions.name_people_in_no_contest_clause": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the no-contest clause names specific people."
+  },
+  "trust.provisions.power_529_plans": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may manage §529 educational savings plans."
+  },
+  "trust.provisions.power_closely_held_businesses": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may manage closely held businesses."
+  },
+  "trust.provisions.power_farms_ranches": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may manage farms and ranches."
+  },
+  "trust.provisions.power_professional_corporations": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may manage professional corporations."
+  },
+  "trust.provisions.prorate_estate_taxes": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether estate taxes are apportioned among beneficiaries rather than paid from the trust."
+  },
+  "trust.provisions.protect_us_trust_status": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust includes language protecting its U.S. trust status."
+  },
+  "trust.provisions.require_mandatory_arbitration": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether trust disputes go to mandatory arbitration."
+  },
+  "trust.provisions.special_trustee_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "The attorney's instructions for the special trustee."
+  },
+  "trust.provisions.subchapter_s_provisions": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust carries Subchapter S stock provisions."
+  },
+  "trust.remote_beneficiaries.method": {
+    "type": "string",
+    "required": false,
+    "description": "Remote beneficiary selection: heirs_at_law, half_heirs_spouse, or named."
+  },
+  "trust.representation_type": {
+    "type": "string",
+    "required": false,
+    "description": "Representation standard: by_representation, per_stirpes, or per_capita_each_generation."
+  },
+  "trust.residuary_after_death": {
+    "type": "string",
+    "required": false,
+    "description": "How the residue passes after the settlor's death."
+  },
+  "trust.restatement": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust restates an existing trust."
+  },
+  "trust.spouse_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the spouse's own trust. Separate-trusts matters only."
+  },
+  "trust.successor_trustee_vacancy": {
+    "type": "string",
+    "required": false,
+    "description": "How a trustee vacancy is filled: income_beneficiaries_any, income_beneficiaries_professional, resigning_neutral, resigning_professional, or settlor_or_court."
+  },
+  "trust.survivorship_requirement_days": {
+    "type": "string",
+    "required": false,
+    "description": "Days a beneficiary must survive the settlor to take."
+  },
+  "trust.tangible_personal_property.named_individual.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Individual who takes tangible personal property first, when the distribution method names one."
+  },
+  "trust.trust_protector_requested": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust includes trust protector provisions."
+  },
+  "trust.trust_protector.full_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the trust protector."
+  },
+  "trust.trustee_compensation": {
+    "type": "string",
+    "required": false,
+    "description": "Trustee compensation basis: prevailing_corporate, prevailing_professional, reasonable, based_on_trustee_type, or none."
   }
 }

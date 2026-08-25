@@ -1,0 +1,211 @@
+{
+  "client": {
+    "full_name": "Jordan Coupleton",
+    "aka": "Jordy",
+    "date_of_birth": "January 1, 1970",
+    "street_address": "12 Oak Street",
+    "city": "Boston",
+    "county": "Suffolk",
+    "state": "MA",
+    "zip": "02118",
+    "phone": "(617) 555-0143",
+    "email": "jordan@example.com"
+  },
+  "spouse": {
+    "exists": true,
+    "full_name": "Riley Coupleton",
+    "aka": "Riley Former",
+    "date_of_birth": "February 2, 1972",
+    "phone": "(617) 555-0144",
+    "email": "riley@example.com"
+  },
+  "marriage": { "date": "June 15, 2001" },
+  "children": [
+    { "full_name": "Sam Coupleton", "relationship": "Child", "date_of_birth": "March 3, 2010", "minor": true },
+    { "full_name": "Casey Coupleton", "relationship": "Child", "date_of_birth": "April 4, 2002", "minor": false }
+  ],
+  "family": {
+    "include_afterborn_children": true,
+    "include_expectant_children": true,
+    "omissions_intentional": true,
+    "include_general_disinheritance": true,
+    "disinherit_issue": false,
+    "additional_disinheritance_language": "No provision is made for my brother Morgan Coupleton.",
+    "disinherited": [
+      { "full_name": "Morgan Coupleton", "relationship": "Brother" }
+    ]
+  },
+  "planning": {
+    "include_trust": true,
+    "include_pour_over_will": true,
+    "include_dpoa": true,
+    "include_hcp": true,
+    "include_ahd": true,
+    "include_hipaa": true,
+    "include_ppm": true,
+    "include_certificate_of_trust": true,
+    "include_assignment_of_personal_property": true,
+    "include_funding_instructions": true,
+    "include_estate_plan_summary": true,
+    "include_parental_appointment": true,
+    "spouse_docs": true
+  },
+  "trust": {
+    "name": "The Jordan Coupleton Revocable Trust",
+    "spouse_name": "The Riley Coupleton Revocable Trust",
+    "display_date": "June 1, 2026",
+    "restatement": false,
+    "trustee_compensation": "reasonable",
+    "successor_trustee_vacancy": "income_beneficiaries_any",
+    "representation_type": "per_stirpes",
+    "survivorship_requirement_days": 30,
+    "special_distributions_age": 25,
+    "include_common_trust_for_children": true,
+    "trust_protector_requested": true,
+    "trust_protector": { "full_name": "Quinn Advisor" },
+    "provisions": {
+      "protect_us_trust_status": true,
+      "allow_special_trustee": true,
+      "special_trustee_instructions": "The special trustee may act on any conflicted transaction.",
+      "power_529_plans": true,
+      "include_substance_abuse": true,
+      "include_creditor_divorce_provisions": true,
+      "include_contingent_snt": true,
+      "include_no_contest_clause": true,
+      "include_education_expenses_definition": true,
+      "include_discretionary_distribution_definition": true,
+      "prorate_estate_taxes": true
+    },
+    "residual_beneficiary": "Descendants, per stirpes",
+    "residuary_after_death": "descendants_shares_all_trusts",
+    "descendants_distribution": { "method": "staged", "stage_1_age": 25, "stage_2_age": 30, "stage_3_age": 35 },
+    "contingent_beneficiary": { "full_name": "Pat Coupleton" },
+    "tangible_personal_property": { "distribution_method": "children_then_descendants" },
+    "remote_beneficiaries": {
+      "method": "named",
+      "individuals": [{ "full_name": "Alex Friend" }],
+      "charity": { "name": "Local Animal Shelter" }
+    }
+  },
+  "will": {
+    "pr_structure": "spouse_first",
+    "bond": "no_bond",
+    "include_self_proving_affidavit": true,
+    "include_disclaimer_article": false,
+    "pr_powers": {
+      "allow_pay_taxes_debts_expenses": true,
+      "allow_manage_digital_assets": true,
+      "include_distribution_cash_or_kind": true
+    }
+  },
+  "dpoa": {
+    "agent_compensation": "reasonable",
+    "coagent_serving": "separately",
+    "allow_gifts": true,
+    "all_basic_powers": true,
+    "basic_powers": {},
+    "include_entity_powers": true,
+    "include_extended_personal_care": true,
+    "additional_powers": "Manage the family photography business.",
+    "specific_businesses": "Coupleton Photography LLC",
+    "additional_limitations": "No gifts above the annual exclusion amount.",
+    "trust_powers": {
+      "agent_may_create_trusts": true,
+      "allow_agent_as_trustee": true,
+      "agent_may_modify_sole_settlor_trusts": true
+    },
+    "special_powers": {
+      "allow_delegation": true,
+      "power_529_plans": true,
+      "allow_medical_information_access": true,
+      "power_digital_assets": true
+    }
+  },
+  "fiduciaries": {
+    "trustee": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "co_primary": { "full_name": "Riley Coupleton" },
+      "co_trustees_action": "joint",
+      "successor": { "full_name": "Alex Friend" },
+      "second_successor": { "full_name": "Jamie Friend" }
+    },
+    "spouse_trustee": {
+      "primary": { "full_name": "Riley Coupleton" },
+      "co_primary": { "full_name": "Jordan Coupleton" },
+      "successor": { "full_name": "Alex Friend" }
+    },
+    "executor": {
+      "primary": { "full_name": "Riley Coupleton" },
+      "successor": { "full_name": "Alex Friend" },
+      "second_successor": { "full_name": "Jamie Friend" }
+    },
+    "spouse_executor": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "successor": { "full_name": "Jamie Friend" }
+    },
+    "agent": {
+      "primary": { "full_name": "Riley Coupleton", "phone": "(617) 555-0144" },
+      "successor": { "full_name": "Alex Friend" }
+    },
+    "spouse_agent": {
+      "primary": { "full_name": "Jordan Coupleton" },
+      "successor": { "full_name": "Jamie Friend" }
+    }
+  },
+  "fiduciary_display": {
+    "show_phone": true,
+    "show_address": false,
+    "show_email": false,
+    "show_dob": false,
+    "show_relationship": true
+  },
+  "healthcare": {
+    "agent": {
+      "primary": { "full_name": "Riley Coupleton", "relationship": "Spouse" },
+      "alternate": { "full_name": "Alex Friend" }
+    },
+    "spouse_agent": {
+      "primary": { "full_name": "Jordan Coupleton", "relationship": "Spouse" },
+      "alternate": { "full_name": "Jamie Friend" }
+    },
+    "client_anatomical_gift": "yes",
+    "spouse_anatomical_gift": "defer",
+    "anatomical_specified": "Corneas and skin only.",
+    "spouse_anatomical_restrictions": "No restrictions.",
+    "client_advance_directive": "do_not_prolong_life",
+    "spouse_advance_directive": "prolong_life"
+  },
+  "hipaa": {
+    "psychotherapy_notes": "authorize",
+    "include_poa": true,
+    "include_trustees": true,
+    "list_fiduciaries_by_name": "by_name",
+    "client_additional_agents": [{ "full_name": "Nina Neighbor", "relationship": "Neighbor" }],
+    "spouse_additional_agents": [{ "full_name": "Owen Neighbor", "relationship": "Neighbor" }]
+  },
+  "guardians": {
+    "primary": { "full_name": "Alex Friend" },
+    "successor": { "full_name": "Jamie Friend" },
+    "second_successor": { "full_name": "Pat Coupleton" },
+    "temporary": { "full_name": "Nina Neighbor" },
+    "temporary_successor": { "full_name": "Owen Neighbor" }
+  },
+  "specific_gifts": [
+    { "beneficiary_name": "Local Animal Shelter", "description": "$5,000", "trigger": "upon my death", "notes": "in memory of our family dog" }
+  ],
+  "owns_real_property": true,
+  "assets": {
+    "real_property": true,
+    "total_gross_value": "$1,000,000",
+    "items": [
+      { "description": "Primary residence", "institution": "—", "category_label": "Real Estate", "estimated_value": "$750,000" },
+      { "description": "Joint checking", "institution": "Needham Bank", "category_label": "Bank Accounts", "estimated_value": "$250,000" }
+    ]
+  },
+  "execution": {
+    "signing_scheduled": true,
+    "signing_county": "Norfolk",
+    "display_doc_date": "June 1, 2026",
+    "display_signing_county": "Norfolk"
+  }
+}

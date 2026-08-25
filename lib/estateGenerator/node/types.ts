@@ -4,6 +4,7 @@ import type { EstateDocumentType } from '@/lib/estateClauses/types'
 export type NodeEstatePackageName =
   | 'core-estate'
   | 'design-summary'
+  | 'design-summary-separate'
   | 'estate-plan-summary'
   | 'incapacity-documents'
   | 'indv-disclaimer-trust'

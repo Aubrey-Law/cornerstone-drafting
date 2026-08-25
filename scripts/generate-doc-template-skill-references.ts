@@ -86,8 +86,14 @@ const SELECTION_RULES: SelectionRule[] = [
 ]
 
 // Packages that exist as manifests but are never emitted by
-// deriveEstateGeneratorPackages(). Keep in sync deliberately.
-const UNREACHABLE_PACKAGES = new Set(['core-estate', 'design-summary'])
+// deriveEstateGeneratorPackages(). Keep in sync deliberately. The two
+// design-summary packages are reached by the design-sheet export route, which
+// picks between them on `trust.separate_trusts`, not by inclusion keys.
+const UNREACHABLE_PACKAGES = new Set([
+  'core-estate',
+  'design-summary',
+  'design-summary-separate',
+])
 
 function crossCheckSelectionRules(repoRoot: string, packageNames: string[]): void {
   const source = fs.readFileSync(path.join(repoRoot, 'lib/estateGenerator/toGeneratorData.ts'), 'utf8')

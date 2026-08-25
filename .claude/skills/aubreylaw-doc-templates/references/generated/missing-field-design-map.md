@@ -7,6 +7,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | Field path | Label | Design-sheet section | Target column |
 |---|---|---|---|
 | `assets` | Assets | Estate Plan Design | (section) |
+| `assets.items` | Asset schedule | Asset Schedules | (section) |
 | `assets.total_gross_value` | Total Gross Value | Asset Schedules | (section) |
 | `assets.total_net_value` | Total Net Value | Asset Schedules | (section) |
 | `charitable_gifts` | Charitable Gifts | Estate Plan Design | (section) |
@@ -21,8 +22,10 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `client.city` | City | Client Information | `city` |
 | `client.county` | County | Client Information | `county` |
 | `client.date_of_birth` | Date of birth | Client Information | `client_dob` |
+| `client.email` | Email | Client Information | (section) |
 | `client.first_name` | First Name | Client Information | (section) |
 | `client.full_name` | Client legal name | Client Information | `client_name` |
+| `client.phone` | Phone | Client Information | (section) |
 | `client.pronoun_object` | Pronoun Object | Client Information | (section) |
 | `client.pronoun_possessive` | Pronouns | Client Information | `client_pronouns` |
 | `client.pronoun_subject` | Pronouns | Client Information | `client_pronouns` |
@@ -60,12 +63,44 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `college.organ_donation` | Organ Donation | College Preparation Plan | (section) |
 | `college.organ_donation_notes` | Organ Donation Notes | College Preparation Plan | (section) |
 | `college.ventilation` | Ventilation | College Preparation Plan | (section) |
+| `dpoa.additional_limitations` | Additional Limitations | Estate Plan Design | (section) |
+| `dpoa.additional_powers` | Additional Powers | Estate Plan Design | (section) |
+| `dpoa.agent_compensation` | Agent Compensation | Estate Plan Design | (section) |
+| `dpoa.all_basic_powers` | All Basic Powers | Estate Plan Design | (section) |
+| `dpoa.allow_gifts` | Allow Gifts | Estate Plan Design | (section) |
+| `dpoa.basic_powers.banking` | Banking | Estate Plan Design | (section) |
+| `dpoa.basic_powers.business_operating` | Business Operating | Estate Plan Design | (section) |
+| `dpoa.basic_powers.claims_litigation` | Claims Litigation | Estate Plan Design | (section) |
+| `dpoa.basic_powers.commodities_options` | Commodities Options | Estate Plan Design | (section) |
+| `dpoa.basic_powers.estate_trust_beneficiary` | Estate Trust Beneficiary | Estate Plan Design | (section) |
+| `dpoa.basic_powers.government_benefits` | Government Benefits | Estate Plan Design | (section) |
+| `dpoa.basic_powers.insurance_annuity` | Insurance Annuity | Estate Plan Design | (section) |
+| `dpoa.basic_powers.personal_family_maintenance` | Personal Family Maintenance | Estate Plan Design | (section) |
+| `dpoa.basic_powers.real_property` | Real Property | Estate Plan Design | (section) |
+| `dpoa.basic_powers.retirement_plans` | Retirement Plans | Estate Plan Design | (section) |
+| `dpoa.basic_powers.stocks_bonds` | Stocks Bonds | Estate Plan Design | (section) |
+| `dpoa.basic_powers.tangible_personal_property` | Tangible Personal Property | Estate Plan Design | (section) |
+| `dpoa.basic_powers.tax_matters` | Tax Matters | Estate Plan Design | (section) |
+| `dpoa.coagent_serving` | Coagent Serving | Estate Plan Design | (section) |
 | `dpoa.include_advanced_trust_gifting` | Include Advanced Trust Gifting | Estate Plan Design | (section) |
 | `dpoa.include_entity_powers` | Include Entity Powers | Estate Plan Design | (section) |
 | `dpoa.include_extended_personal_care` | Include Extended Personal Care | Estate Plan Design | (section) |
 | `dpoa.include_section_l` | Include Section L | Estate Plan Design | (section) |
 | `dpoa.self_dealing_reviewer_alt.full_name` | Dpoa Self Dealing Reviewer Alt | Estate Plan Design | (section) |
 | `dpoa.self_dealing_reviewer.full_name` | Dpoa Self Dealing Reviewer | Estate Plan Design | (section) |
+| `dpoa.special_powers.allow_delegation` | Allow Delegation | Estate Plan Design | (section) |
+| `dpoa.special_powers.allow_medical_information_access` | Allow Medical Information Access | Estate Plan Design | (section) |
+| `dpoa.special_powers.allow_self_designation_beneficiary` | Allow Self Designation Beneficiary | Estate Plan Design | (section) |
+| `dpoa.special_powers.power_529_plans` | Power 529 Plans | Estate Plan Design | (section) |
+| `dpoa.special_powers.power_digital_assets` | Power Digital Assets | Estate Plan Design | (section) |
+| `dpoa.special_powers.prohibit_arbitration` | Prohibit Arbitration | Estate Plan Design | (section) |
+| `dpoa.specific_businesses` | Specific Businesses | Estate Plan Design | (section) |
+| `dpoa.trust_powers.agent_may_create_medicaid_trusts` | Agent May Create Medicaid Trusts | Estate Plan Design | (section) |
+| `dpoa.trust_powers.agent_may_create_trusts` | Agent May Create Trusts | Estate Plan Design | (section) |
+| `dpoa.trust_powers.agent_may_create_trusts_for_dependents` | Agent May Create Trusts For Dependents | Estate Plan Design | (section) |
+| `dpoa.trust_powers.agent_may_modify_joint_trusts` | Agent May Modify Joint Trusts | Estate Plan Design | (section) |
+| `dpoa.trust_powers.agent_may_modify_sole_settlor_trusts` | Agent May Modify Sole Settlor Trusts | Estate Plan Design | (section) |
+| `dpoa.trust_powers.allow_agent_as_trustee` | Allow Agent As Trustee | Estate Plan Design | (section) |
 | `execution.display_doc_date` | Display Doc Date | Estate Plan Design | (section) |
 | `execution.display_notary_commission` | Display Notary Commission | Estate Plan Design | (section) |
 | `execution.display_ordinal_doc_date` | Display Ordinal Doc Date | Estate Plan Design | (section) |
@@ -77,6 +112,12 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `execution.signing_county` | Signing county | Estate Plan Design | `signing_county` |
 | `execution.signing_scheduled` | Signing Scheduled | Estate Plan Design | (section) |
 | `family.additional_disinheritance_language` | Additional Disinheritance Language | Estate Plan Design | (section) |
+| `family.disinherit_issue` | Disinherit Issue | Estate Plan Design | (section) |
+| `family.disinherited` | Disinherited | Estate Plan Design | (section) |
+| `family.include_afterborn_children` | Include Afterborn Children | Estate Plan Design | (section) |
+| `family.include_expectant_children` | Include Expectant Children | Estate Plan Design | (section) |
+| `family.include_general_disinheritance` | Include General Disinheritance | Estate Plan Design | (section) |
+| `family.omissions_intentional` | Omissions Intentional | Estate Plan Design | (section) |
 | `ferpa.all_records` | All Records | College Preparation Plan | (section) |
 | `ferpa.includes_health_center` | Includes Health Center | College Preparation Plan | (section) |
 | `ferpa.recipients` | Who may receive school records | College Preparation Plan | `college_prep.ferpa_recipients` |
@@ -91,51 +132,103 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `ferpa.student_id` | Student ID | College Preparation Plan | `college_prep.student_id` |
 | `fiduciaries.agent.co_agents_action` | Co Agents Action | Fiduciary Role Assignment | (section) |
 | `fiduciaries.agent.co_primary.full_name` | Co-agent (POA) | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.primary.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.agent.primary.full_name` | Financial agent (POA) | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.primary.phone` | Phone | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.primary.relationship` | Relationship | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.successor.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.successor.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.agent.successor.full_name` | Successor financial agent (POA) | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.successor.phone` | Phone | Fiduciary Role Assignment | (section) |
+| `fiduciaries.agent.successor.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.co_primary` | Co Primary | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.co_primary.full_name` | Co-Executor / Co-Personal Representative | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.co_second_successor` | Co Second Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.co_second_successor.full_name` | Executor Co Second Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.co_successor` | Co Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.co_successor.full_name` | Executor Co Successor | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.primary.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.primary.full_name` | Executor / Personal Representative | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.primary.phone` | Phone | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.primary.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.second_successor` | Second Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.second_successor.full_name` | Executor Second Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.successor` | Successor | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.successor.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.successor.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.executor.successor.full_name` | Successor Personal Representative | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.successor.phone` | Phone | Fiduciary Role Assignment | (section) |
+| `fiduciaries.executor.successor.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `fiduciaries.spouse_agent.co_primary.full_name` | Co-spouse attorney-in-fact | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.primary.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.spouse_agent.primary.full_name` | Spouse attorney-in-fact | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.primary.phone` | Phone | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.primary.relationship` | Relationship | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.successor.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.successor.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.spouse_agent.successor.full_name` | Spouse successor attorney-in-fact | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.successor.phone` | Phone | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_agent.successor.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `fiduciaries.spouse_executor.co_primary.full_name` | Spouse Executor Co Primary | Fiduciary Role Assignment | (section) |
 | `fiduciaries.spouse_executor.primary.full_name` | Spouse Executor Primary | Fiduciary Role Assignment | (section) |
 | `fiduciaries.spouse_executor.successor.full_name` | Spouse Executor Successor | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_trustee.co_primary.full_name` | Spouse Trustee Co Primary | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_trustee.primary.full_name` | Spouse Trustee Primary | Fiduciary Role Assignment | (section) |
+| `fiduciaries.spouse_trustee.successor.full_name` | Spouse Trustee Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.testamentary_trustee.co_primary.full_name` | Co-testamentary trustee | Fiduciary Role Assignment | (section) |
 | `fiduciaries.testamentary_trustee.co_trustees_action` | Co Trustees Action | Fiduciary Role Assignment | (section) |
 | `fiduciaries.testamentary_trustee.primary.full_name` | Testamentary trustee | Fiduciary Role Assignment | (section) |
 | `fiduciaries.testamentary_trustee.successor.full_name` | Testamentary Trustee Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_primary` | Co Primary | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.co_primary.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.co_primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_primary.full_name` | Co-trustee | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.co_primary.phone` | Phone | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_primary.pronoun_subject` | Pronoun Subject | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.co_primary.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_second_successor` | Co Second Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_second_successor.full_name` | Trustee Co Second Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_successor` | Co Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_successor.full_name` | Co-successor trustee | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_trustees_action` | Co-trustee decision standard | Trust Details | `cotrustee_decision_standard` |
+| `fiduciaries.trustee.primary.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.primary.full_name` | Trustee | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.primary.phone` | Phone | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.primary.relationship` | Relationship | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.second_successor.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.second_successor.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.second_successor.full_name` | Second successor trustee | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.second_successor.phone` | Phone | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.second_successor.relationship` | Relationship | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.successor.address` | Address | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.successor.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.successor.full_name` | Successor trustee | Fiduciary Role Assignment | (section) |
+| `fiduciaries.trustee.successor.phone` | Phone | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.successor.relationship` | Relationship | Fiduciary Role Assignment | (section) |
+| `fiduciary_display.show_address` | Show Address | Estate Plan Design | (section) |
+| `fiduciary_display.show_dob` | Show Dob | Estate Plan Design | (section) |
+| `fiduciary_display.show_email` | Show Email | Estate Plan Design | (section) |
+| `fiduciary_display.show_phone` | Show Phone | Estate Plan Design | (section) |
+| `fiduciary_display.show_relationship` | Show Relationship | Estate Plan Design | (section) |
 | `funding_plan.checklist_items` | Checklist Items | Estate Plan Design | (section) |
 | `funding_plan.narrative` | Narrative | Estate Plan Design | (section) |
 | `guardians.excluded` | Excluded | Fiduciary Role Assignment | (section) |
 | `guardians.excluded[].full_name` | Guardians Excluded | Fiduciary Role Assignment | (section) |
+| `guardians.primary.address` | Address | Fiduciary Role Assignment | (section) |
+| `guardians.primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `guardians.primary.full_name` | Guardian for minor children | Fiduciary Role Assignment | (section) |
+| `guardians.primary.phone` | Phone | Fiduciary Role Assignment | (section) |
 | `guardians.primary.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `guardians.second_successor.full_name` | Guardians Second Successor | Fiduciary Role Assignment | (section) |
 | `guardians.second_successor.relationship` | Relationship | Fiduciary Role Assignment | (section) |
+| `guardians.successor.address` | Address | Fiduciary Role Assignment | (section) |
+| `guardians.successor.email` | Email | Fiduciary Role Assignment | (section) |
 | `guardians.successor.full_name` | Successor guardian | Fiduciary Role Assignment | (section) |
+| `guardians.successor.phone` | Phone | Fiduciary Role Assignment | (section) |
 | `guardians.successor.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `guardians.temporary_co.full_name` | Guardians Temporary Co | Fiduciary Role Assignment | (section) |
 | `guardians.temporary_successor.address` | Address | Fiduciary Role Assignment | (section) |
@@ -146,11 +239,15 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `guardians.temporary.phone` | Phone | Fiduciary Role Assignment | (section) |
 | `guardians.temporary.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `healthcare.agent.alternate.address` | Address | Fiduciary Role Assignment | (section) |
+| `healthcare.agent.alternate.email` | Email | Fiduciary Role Assignment | (section) |
 | `healthcare.agent.alternate.full_name` | Alternate health care agent | Fiduciary Role Assignment | (section) |
 | `healthcare.agent.alternate.phone` | Phone | Fiduciary Role Assignment | (section) |
 | `healthcare.agent.alternate.relationship` | Relationship | Fiduciary Role Assignment | (section) |
+| `healthcare.agent.co_alternate.full_name` | Co alternate health care agent | Fiduciary Role Assignment | (section) |
+| `healthcare.agent.co_primary.full_name` | Co-health care agent | Fiduciary Role Assignment | (section) |
 | `healthcare.agent.primary.address` | Health care agent address | Contacts & Fiduciaries | (section) |
 | `healthcare.agent.primary.city` | City | Fiduciary Role Assignment | (section) |
+| `healthcare.agent.primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `healthcare.agent.primary.full_name` | Health care agent | Fiduciary Role Assignment | (section) |
 | `healthcare.agent.primary.phone` | Health care agent phone | Contacts & Fiduciaries | (section) |
 | `healthcare.agent.primary.relationship` | Health care agent relationship | Contacts & Fiduciaries | (section) |
@@ -161,11 +258,26 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.agent.second_alternate.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `healthcare.anatomical_gift` | Anatomical Gift | Health Care & Directives | (section) |
 | `healthcare.anatomical_specified` | Anatomical Specified | Health Care & Directives | (section) |
+| `healthcare.client_anatomical_gift` | Client Anatomical Gift | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.alternate.address` | Address | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.alternate.email` | Email | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.alternate.full_name` | Spouse Agent Alternate | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.alternate.phone` | Phone | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.alternate.relationship` | Relationship | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.co_alternate.full_name` | Spouse Agent Co Alternate | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.co_primary.full_name` | Spouse Agent Co Primary | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.primary.address` | Address | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.primary.email` | Email | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.primary.full_name` | Spouse Agent Primary | Health Care & Directives | (section) |
+| `healthcare.spouse_agent.primary.phone` | Phone | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.primary.relationship` | Relationship | Health Care & Directives | (section) |
+| `healthcare.spouse_anatomical_gift` | Spouse Anatomical Gift | Health Care & Directives | (section) |
+| `healthcare.spouse_anatomical_restrictions` | Spouse Anatomical Restrictions | Health Care & Directives | (section) |
+| `hipaa.client_additional_agents` | Client Additional Agents | Estate Plan Design | (section) |
+| `hipaa.include_poa` | Include Poa | Estate Plan Design | (section) |
 | `hipaa.include_trustees` | Include Trustees | Estate Plan Design | (section) |
 | `hipaa.psychotherapy_notes` | Psychotherapy Notes | Estate Plan Design | (section) |
+| `hipaa.spouse_additional_agents` | Spouse Additional Agents | Estate Plan Design | (section) |
 | `homestead.beneficiary_names` | Homestead beneficiaries | Transfers & Assignments | (section) |
 | `homestead.beneficiary_pronoun_possessive` | Beneficiary Pronoun Possessive | Transfers & Assignments | (section) |
 | `homestead.certificate_number` | Certificate Number | Transfers & Assignments | (section) |
@@ -185,9 +297,15 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `outright_will.residuary.disposition` | Disposition | Will Details | (section) |
 | `outright_will.residuary.named.full_name` | Named residuary beneficiary | Will Details | `outright_residuary_named` |
 | `planning.include_ahd` | Include Ahd | Estate Plan Design | (section) |
+| `planning.include_assignment_of_personal_property` | Include Assignment Of Personal Property | Estate Plan Design | (section) |
+| `planning.include_certificate_of_trust` | Include Certificate Of Trust | Estate Plan Design | (section) |
 | `planning.include_dpoa` | Include Dpoa | Estate Plan Design | (section) |
+| `planning.include_estate_plan_summary` | Include Estate Plan Summary | Estate Plan Design | (section) |
+| `planning.include_funding_instructions` | Include Funding Instructions | Estate Plan Design | (section) |
 | `planning.include_hcp` | Include Hcp | Estate Plan Design | (section) |
 | `planning.include_hipaa` | Include Hipaa | Estate Plan Design | (section) |
+| `planning.include_homestead_trustee` | Include Homestead Trustee | Estate Plan Design | (section) |
+| `planning.include_parental_appointment` | Include Parental Appointment | Estate Plan Design | (section) |
 | `planning.include_pour_over_will` | Include Pour Over Will | Estate Plan Design | (section) |
 | `planning.include_ppm` | Include Ppm | Estate Plan Design | (section) |
 | `planning.include_simple_will` | Include Simple Will | Estate Plan Design | (section) |
@@ -199,9 +317,11 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `specific_gifts[]` | Specific Gifts | Estate Plan Design | (section) |
 | `spouse.aka` | Aka | Client Information | (section) |
 | `spouse.date_of_birth` | Date Of Birth | Client Information | (section) |
+| `spouse.email` | Email | Client Information | (section) |
 | `spouse.exists` | Exists | Client Information | (section) |
 | `spouse.first_name` | First Name | Client Information | (section) |
 | `spouse.full_name` | Spouse legal name | Client Information | `spouse_name` |
+| `spouse.phone` | Phone | Client Information | (section) |
 | `spouse.pronoun_object` | Pronoun Object | Client Information | (section) |
 | `spouse.pronoun_possessive` | Pronoun Possessive | Client Information | (section) |
 | `spouse.pronoun_subject` | Pronoun Subject | Client Information | (section) |
@@ -240,16 +360,51 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.display_name` | Trust name | Trust Details | `trust_name` |
 | `trust.include_common_trust_for_children` | Include Common Trust For Children | Trust Details | (section) |
 | `trust.name` | Trust name | Trust Details | `trust_name` |
+| `trust.provisions.allow_distributions_to_dependents_if_incapacitated` | Allow Distributions To Dependents If Incapacitated | Trust Details | (section) |
+| `trust.provisions.allow_special_trustee` | Allow Special Trustee | Trust Details | (section) |
+| `trust.provisions.allow_trustee_change_situs` | Allow Trustee Change Situs | Trust Details | (section) |
+| `trust.provisions.hold_distributions_for_young_beneficiaries` | Hold Distributions For Young Beneficiaries | Trust Details | (section) |
+| `trust.provisions.include_arts_education` | Include Arts Education | Trust Details | (section) |
+| `trust.provisions.include_contingent_snt` | Include Contingent Snt | Trust Details | (section) |
+| `trust.provisions.include_creditor_divorce_provisions` | Include Creditor Divorce Provisions | Trust Details | (section) |
+| `trust.provisions.include_disappearance_definition` | Include Disappearance Definition | Trust Details | (section) |
+| `trust.provisions.include_discretionary_distribution_definition` | Include Discretionary Distribution Definition | Trust Details | (section) |
+| `trust.provisions.include_education_expenses_definition` | Include Education Expenses Definition | Trust Details | (section) |
+| `trust.provisions.include_homeschooling` | Include Homeschooling | Trust Details | (section) |
+| `trust.provisions.include_no_contest_clause` | Include No Contest Clause | Trust Details | (section) |
+| `trust.provisions.include_substance_abuse` | Include Substance Abuse | Trust Details | (section) |
+| `trust.provisions.include_vocational_training` | Include Vocational Training | Trust Details | (section) |
+| `trust.provisions.name_people_in_no_contest_clause` | Name People In No Contest Clause | Trust Details | (section) |
+| `trust.provisions.power_529_plans` | Power 529 Plans | Trust Details | (section) |
+| `trust.provisions.power_closely_held_businesses` | Power Closely Held Businesses | Trust Details | (section) |
+| `trust.provisions.power_farms_ranches` | Power Farms Ranches | Trust Details | (section) |
+| `trust.provisions.power_professional_corporations` | Power Professional Corporations | Trust Details | (section) |
+| `trust.provisions.prorate_estate_taxes` | Prorate Estate Taxes | Trust Details | (section) |
+| `trust.provisions.protect_us_trust_status` | Protect Us Trust Status | Trust Details | (section) |
+| `trust.provisions.require_mandatory_arbitration` | Require Mandatory Arbitration | Trust Details | (section) |
+| `trust.provisions.special_trustee_instructions` | Special Trustee Instructions | Trust Details | (section) |
+| `trust.provisions.subchapter_s_provisions` | Subchapter S Provisions | Trust Details | (section) |
 | `trust.remote_beneficiaries.charity.name` | Name | Trust Details | (section) |
 | `trust.remote_beneficiaries.individuals` | Remote beneficiaries | Last Will and Testament | `remote_beneficiary` |
 | `trust.remote_beneficiaries.individuals[]` | Individuals | Trust Details | (section) |
+| `trust.remote_beneficiaries.method` | Method | Trust Details | (section) |
+| `trust.representation_type` | Representation Type | Trust Details | (section) |
 | `trust.residual_beneficiary` | Residual Beneficiary | Trust Details | (section) |
+| `trust.residuary_after_death` | Residuary After Death | Trust Details | (section) |
+| `trust.restatement` | Restatement | Trust Details | (section) |
 | `trust.special_distributions_age` | Special Distributions Age | Trust Details | (section) |
+| `trust.spouse_name` | Spouse Name | Trust Details | (section) |
+| `trust.successor_trustee_vacancy` | Successor Trustee Vacancy | Trust Details | (section) |
+| `trust.survivorship_requirement_days` | Survivorship Requirement Days | Trust Details | (section) |
 | `trust.tangible_personal_property.beneficiaries` | Beneficiaries | Trust Details | (section) |
 | `trust.tangible_personal_property.beneficiaries[]` | Beneficiaries | Trust Details | (section) |
 | `trust.tangible_personal_property.distribution_method` | Tangible property distribution | Estate Plan Design | `tangible_property_distribution` |
+| `trust.tangible_personal_property.named_individual.full_name` | Tangible Personal Property Named Individual | Trust Details | (section) |
 | `trust.tangible_personal_property.priority_beneficiaries` | Priority Beneficiaries | Trust Details | (section) |
 | `trust.tangible_personal_property.priority_beneficiaries[]` | Priority Beneficiaries | Trust Details | (section) |
+| `trust.trust_protector_requested` | Trust Protector Requested | Trust Details | (section) |
+| `trust.trust_protector.full_name` | Trust Trust Protector | Trust Details | (section) |
+| `trust.trustee_compensation` | Trustee Compensation | Trust Details | (section) |
 | `will_cp.parent1.full_name` | Parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent1_name` |
 | `will_cp.parent2.full_name` | Second parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent2_name` |
 | `will.bond` | Bond | Will Details | (section) |
@@ -263,6 +418,9 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `will.pet_care.primary_caretaker.full_name` | Pet Care Primary Caretaker | Will Details | (section) |
 | `will.pet_care.remainder_beneficiary.full_name` | Pet Care Remainder Beneficiary | Will Details | (section) |
 | `will.pet_care.successor_caretaker.full_name` | Pet Care Successor Caretaker | Will Details | (section) |
+| `will.pr_powers.allow_manage_digital_assets` | Allow Manage Digital Assets | Will Details | (section) |
+| `will.pr_powers.allow_pay_taxes_debts_expenses` | Allow Pay Taxes Debts Expenses | Will Details | (section) |
+| `will.pr_powers.include_distribution_cash_or_kind` | Include Distribution Cash Or Kind | Will Details | (section) |
 | `will.pr_structure` | Pr Structure | Will Details | (section) |
 | `will.simultaneous_death` | Simultaneous Death | Will Details | (section) |
 | `will.supervision` | Supervision | Will Details | (section) |

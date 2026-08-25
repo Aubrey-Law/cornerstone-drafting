@@ -16,6 +16,21 @@ describe('design sheet Word export', () => {
     expect(route).toContain('Content-Disposition')
   })
 
+  it('exports the two-settlor interview worksheet for a separate-trusts matter', () => {
+    const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/design-sheet/export/route.ts'), 'utf8')
+
+    expect(route).toContain("'design-summary-separate'")
+    expect(route).toContain('payload.trust?.separate_trusts')
+
+    const manifest = JSON.parse(fs.readFileSync(
+      path.join(process.cwd(), 'tools/aubreylaw-docgeneration/packages/design-summary-separate.json'),
+      'utf8',
+    )) as { documents: Array<{ template: string }> }
+    expect(manifest.documents.map(document => document.template)).toContain(
+      'templates/design-summary-worksheet-separate.docx',
+    )
+  })
+
   it('wires the design sheet screen button to save first and then download the Word export', () => {
     const shell = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'), 'utf8')
     const state = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/useDesignSheetState.ts'), 'utf8')

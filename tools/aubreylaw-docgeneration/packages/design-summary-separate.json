@@ -1,0 +1,21 @@
+{
+  "name": "design-summary-separate",
+  "description": "Design sheet export for a reciprocal (separate) living-trust matter: the client-facing plan summary plus the two-settlor interview worksheet.",
+  "required_fields": [
+    "client.full_name"
+  ],
+  "documents": [
+    {
+      "id": "estate-plan-design-summary",
+      "title": "Estate Plan Design Summary",
+      "template": "templates/design-summary-detailed.docx",
+      "output": "01-estate-plan-design-summary.docx"
+    },
+    {
+      "id": "estate-plan-interview-worksheet",
+      "title": "Estate Plan Interview Worksheet",
+      "template": "templates/design-summary-worksheet-separate.docx",
+      "output": "02-estate-plan-interview-worksheet.docx"
+    }
+  ]
+}
