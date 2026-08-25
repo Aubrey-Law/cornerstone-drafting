@@ -242,6 +242,26 @@ describe('design-summary-separate package', () => {
     expect(text).not.toMatch(/\{\{|\{%|\[\[ MISSING/)
   })
 
+  it('closes the last three unbound worksheet questions', async () => {
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+
+    expect(text).toMatch(/How should parent-child relationships be defined\?[\s\S]{0,60}☒ Custom Definition/)
+
+    // Both are per settlor, and the example answers them opposite ways round —
+    // so a block wired to the wrong party fails here rather than looking right.
+    const sameAsTrustees = text.match(/Make executors the same as the trustees:[\s\S]{0,24}?(☒ Yes|☒ No)/g)
+    expect(sameAsTrustees).toEqual([
+      expect.stringContaining('☒ Yes'),
+      expect.stringContaining('☒ No'),
+    ])
+    const powerOfAppointment = text.match(/Exercise a testamentary power of appointment:[\s\S]{0,24}?(☒ Yes|☒ No)/g)
+    expect(powerOfAppointment).toEqual([
+      expect.stringContaining('☒ No'),
+      expect.stringContaining('☒ Yes'),
+    ])
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

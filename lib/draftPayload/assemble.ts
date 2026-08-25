@@ -27,6 +27,7 @@ import {
 } from '@/lib/draftPayload/helpers'
 import { effectiveDpoaTrustPowers, getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
 import { getWillPersonalRepresentativePowers } from '@/lib/designSheetWillPowers'
+import { getDesignSheetWillProvisions } from '@/lib/designSheet/willProvisions'
 import { draftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import {
   draftPayloadTrustProvisions,
@@ -358,7 +359,16 @@ export async function buildDraftPayload(
 
   // ── Will / DPOA / HCP / HIPAA provisions ──────────────────────────────────
 
+  const decisionWillProvisions = getDesignSheetWillProvisions({
+    decisions: designSheet.decisions ?? null,
+  })
   const will_provisions: DraftPayload['will_provisions'] = {
+    executors_same_as_trustees: designSheet.executor_same_as_trustee === true,
+    spouse_executors_same_as_trustees: designSheet.spouse_executor_same_as_trustee === true,
+    exercise_testamentary_power_of_appointment:
+      decisionWillProvisions.exercise_testamentary_power_of_appointment,
+    spouse_exercise_testamentary_power_of_appointment:
+      decisionWillProvisions.spouse_exercise_testamentary_power_of_appointment,
     pr_structure: (designSheet.pr_structure as DraftPayload['will_provisions']['pr_structure']) ?? null,
     trustee_structure: (designSheet.trustee_structure as DraftPayload['will_provisions']['trustee_structure']) ?? null,
     cotrustee_decision_standard: (designSheet.cotrustee_decision_standard as DraftPayload['will_provisions']['cotrustee_decision_standard']) ?? null,

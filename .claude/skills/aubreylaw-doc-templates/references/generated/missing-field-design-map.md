@@ -482,6 +482,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.provisions.include_vocational_training` | Include Vocational Training | Trust Details | (section) |
 | `trust.provisions.limit_duty_to_account` | Limit Duty To Account | Trust Details | (section) |
 | `trust.provisions.name_people_in_no_contest_clause` | Name People In No Contest Clause | Trust Details | (section) |
+| `trust.provisions.parent_child_relationship_definition` | Parent Child Relationship Definition | Trust Details | (section) |
 | `trust.provisions.power_529_plans` | Power 529 Plans | Trust Details | (section) |
 | `trust.provisions.power_closely_held_businesses` | Power Closely Held Businesses | Trust Details | (section) |
 | `trust.provisions.power_farms_ranches` | Power Farms Ranches | Trust Details | (section) |
@@ -519,6 +520,8 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `will_cp.parent1.full_name` | Parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent1_name` |
 | `will_cp.parent2.full_name` | Second parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent2_name` |
 | `will.bond` | Bond | Will Details | (section) |
+| `will.executors_same_as_trustees` | Executors Same As Trustees | Will Details | (section) |
+| `will.exercise_testamentary_power_of_appointment` | Exercise Testamentary Power Of Appointment | Will Details | (section) |
 | `will.include_disclaimer_article` | Include Disclaimer Article | Will Details | (section) |
 | `will.include_self_proving_affidavit` | Include Self Proving Affidavit | Will Details | (section) |
 | `will.no_contest_clause` | No Contest Clause | Will Details | (section) |
@@ -534,6 +537,8 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `will.pr_powers.include_distribution_cash_or_kind` | Include Distribution Cash Or Kind | Will Details | (section) |
 | `will.pr_structure` | Pr Structure | Will Details | (section) |
 | `will.simultaneous_death` | Simultaneous Death | Will Details | (section) |
+| `will.spouse_executors_same_as_trustees` | Spouse Executors Same As Trustees | Will Details | (section) |
+| `will.spouse_exercise_testamentary_power_of_appointment` | Spouse Exercise Testamentary Power Of Appointment | Will Details | (section) |
 | `will.supervision` | Supervision | Will Details | (section) |
 | `will.tangible_personal_property.distribution_method` | Distribution Method | Will Details | (section) |
 | `will.tangible_personal_property.named_individual.full_name` | Tangible Personal Property Named Individual | Will Details | (section) |

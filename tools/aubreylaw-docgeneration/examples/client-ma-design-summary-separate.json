@@ -151,7 +151,8 @@
       "asset_schedule_signature_block": true,
       "asset_schedule_catchall": true,
       "asset_schedule_non_trust": false,
-      "asset_schedule_format": "table"
+      "asset_schedule_format": "table",
+      "parent_child_relationship_definition": "custom"
     },
     "residual_beneficiary": "Descendants, per stirpes",
     "residuary_after_death": "descendants_shares_all_trusts",
@@ -190,7 +191,11 @@
       "allow_manage_digital_assets": true,
       "include_distribution_cash_or_kind": true
     },
-    "title": "pour_over_will"
+    "title": "pour_over_will",
+    "executors_same_as_trustees": true,
+    "spouse_executors_same_as_trustees": false,
+    "exercise_testamentary_power_of_appointment": false,
+    "spouse_exercise_testamentary_power_of_appointment": true
   },
   "dpoa": {
     "agent_compensation": "reasonable",

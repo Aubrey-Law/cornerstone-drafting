@@ -68,6 +68,22 @@ nav group — see the Family Information guide.
 statutory powers: `allow_pay_taxes_debts_expenses`, `allow_manage_digital_assets`,
 `include_distribution_cash_or_kind`.
 
+### `decisions.will_provisions` (jsonb)
+
+Will provisions that are decisions rather than columns. Distinct from
+`will_pr_powers`, which is specifically the personal representative's statutory
+powers — these are provisions of the will itself. Every other will provision above is
+a real column because they predate the decisions blob; new ones go here.
+
+| Field | Type |
+| --- | --- |
+| `exercise_testamentary_power_of_appointment` | boolean |
+| `spouse_exercise_testamentary_power_of_appointment` | boolean |
+
+Per settlor, because one spouse may hold a power the other does not. The control is a
+"Testamentary Power of Appointment" block in `WillProvisionsSection`; the spouse row
+appears only when spouse documents are included.
+
 ## Generator mapping
 
 | Design sheet | DraftPayload | EstateGeneratorData |
@@ -82,6 +98,8 @@ statutory powers: `allow_pay_taxes_debts_expenses`, `allow_manage_digital_assets
 | Excluded guardian | `client.excluded_guardian` | `guardians.excluded[]` (single entry) |
 | PR powers | `will_provisions.pr_powers` | `will.pr_powers` (the whole record) |
 | `estate_plan_design.will_title` | `documents.will_title` | `will.title` |
+| `executor_same_as_trustee` (column) | `will_provisions.executors_same_as_trustees` | `will.executors_same_as_trustees` (+ `spouse_` variant) |
+| `will_provisions.exercise_testamentary_power_of_appointment` | same name | `will.exercise_testamentary_power_of_appointment` (+ `spouse_` variant) |
 
 ### Pour-over alternate disposition text
 
@@ -148,5 +166,5 @@ Map: `tools/aubreylaw-docgeneration/docs/pourover-will-placeholder-map.md`
 | --- | --- |
 | **Multi excluded guardians** | Wired: `guardians.excluded[]` with `reason`; falls back to `client.excluded_guardian`. Loop `{% for excluded in guardians.excluded %}` and include the reason when present. |
 | **`will_pr_powers`** | Wired to `will.pr_powers`; no template branches on it yet |
-| **Executors same as trustees** | The interview worksheet asks it per settlor; the design sheet has `executor_same_as_trustee` as a *copy shortcut*, not a recorded answer, so the worksheet box stays blank |
-| **Testamentary power of appointment** | The interview worksheet asks whether one is exercised, per settlor. Not captured. |
+| **Executors same as trustees** | Wired. `executor_same_as_trustee` / `spouse_executor_same_as_trustee` are persisted columns — a recorded answer, not just a copy button — and now reach `will.executors_same_as_trustees` / `will.spouse_executors_same_as_trustees` |
+| **Testamentary power of appointment** | Wired to `will.exercise_testamentary_power_of_appointment` / the spouse variant, from `decisions.will_provisions`. No template drafts the article yet. |

@@ -223,6 +223,14 @@ export interface DraftPayload {
     no_contest_clause: 'omit' | 'include'
     include_disclaimer_article: boolean
     include_self_proving_affidavit: boolean
+    /** Copy shortcuts that are also recorded answers: the interview worksheet
+     *  asks whether the executors are the trustees, per settlor. Optional so
+     *  stored legacy payloads without them stay type-valid. */
+    executors_same_as_trustees?: boolean
+    spouse_executors_same_as_trustees?: boolean
+    /** From `decisions.will_provisions`. Optional for the same reason. */
+    exercise_testamentary_power_of_appointment?: boolean
+    spouse_exercise_testamentary_power_of_appointment?: boolean
     tangible_property_distribution: string | null
     tangible_property_named_individual: string | null
     pour_over_alternate_disposition: string | null
@@ -477,6 +485,8 @@ export interface DesignSheetRow {
   utma_age?: number | null
   no_contest_clause?: string | null
   include_disclaimer_article?: boolean | null
+  executor_same_as_trustee?: boolean | null
+  spouse_executor_same_as_trustee?: boolean | null
   include_self_proving_affidavit?: boolean | null
   tangible_property_distribution?: string | null
   tangible_property_named_individual?: string | null

@@ -1,6 +1,11 @@
 'use client'
 
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
+import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import {
+  getDesignSheetWillProvisions,
+  setDesignSheetWillProvisions,
+} from '@/lib/designSheet/willProvisions'
 import {
   AttorneyDateInput,
   AttorneyInput,
@@ -26,6 +31,13 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
   const isTestamentary = sheet.plan_type === 'testamentary_trust'
   // Default the toggle on when a reviewer was already captured (pre-toggle data).
   const includeSelfDealing = sheet.dpoa_include_self_dealing ?? Boolean(sheet.dpoa_self_dealing_reviewer)
+  const spouseDocs = isMarried && getDocumentInclusions(sheet).spouse_docs
+  const willProvisions = getDesignSheetWillProvisions(sheet)
+  const updateWillProvisions = (
+    patch: Parameters<typeof setDesignSheetWillProvisions>[1],
+  ) => {
+    onChange('decisions', previous => setDesignSheetWillProvisions(previous, patch))
+  }
 
 
   return (
@@ -149,6 +161,34 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
           { value: 'yes', label: 'Include (default)' },
           { value: 'no', label: 'Omit' },
         ]} onChange={v => onChange('include_self_proving_affidavit', v === 'yes')} />
+      </SectionBlock>
+      )}
+
+      {(scope === 'all' || scope === 'will') && (
+      <SectionBlock
+        title="Testamentary Power of Appointment"
+        subtitle="Whether the will exercises a power of appointment held under someone else's instrument. Asked per settlor — one spouse may hold a power the other does not."
+      >
+        <DecisionRow
+          question={spouseDocs ? 'Client exercises a power' : 'Exercise a power of appointment'}
+          fieldName="will_provisions.exercise_testamentary_power_of_appointment"
+          value={willProvisions.exercise_testamentary_power_of_appointment ? 'yes' : 'no'}
+          options={YES_NO}
+          onChange={v => updateWillProvisions({
+            exercise_testamentary_power_of_appointment: v === 'yes',
+          })}
+        />
+        {spouseDocs && (
+          <DecisionRow
+            question="Spouse exercises a power"
+            fieldName="will_provisions.spouse_exercise_testamentary_power_of_appointment"
+            value={willProvisions.spouse_exercise_testamentary_power_of_appointment ? 'yes' : 'no'}
+            options={YES_NO}
+            onChange={v => updateWillProvisions({
+              spouse_exercise_testamentary_power_of_appointment: v === 'yes',
+            })}
+          />
+        )}
       </SectionBlock>
       )}
 

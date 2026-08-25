@@ -138,4 +138,4 @@ When married and any child has `parentage` of `client` or `spouse`:
 | Child name shapes | Intake may seed `first/middle/last`; generator normalizes via `childFullName()` |
 | `is_minor` vs DOB | Minor flag is a sheet boolean, not recomputed from DOB at generation |
 | Disinheritance reasons | `disinheritances[].reason` is collected but not passed to the generator — only name + relationship |
-| Parent-child relationship definition | The interview worksheet asks "State Probate Code / Custom Definition"; the design sheet does not capture it |
+| Parent-child relationship definition | Captured as `trust_details.parent_child_relationship_definition` → `trust.provisions.parent_child_relationship_definition`. Its control sits in Trust Details → Definitions, because that is the article it is drafted into — see the Trust Details guide. A custom definition has no accompanying free-text field; the worksheet does not ask for one either. |

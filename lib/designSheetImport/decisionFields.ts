@@ -51,6 +51,7 @@ import {
   TRUSTEE_INCAPACITY_DETERMINERS,
   setTrustDetails,
   type InitialTrusteeNomination,
+  type ParentChildRelationshipDefinition,
   type RepresentationType,
   type ResiduaryAfterDeath,
   type SuccessorTrusteeVacancy,
@@ -70,6 +71,10 @@ import {
   type ExecutionMechanics,
 } from '@/lib/designSheet/executionMechanics'
 import {
+  setDesignSheetWillProvisions,
+  type DesignSheetWillProvisions,
+} from '@/lib/designSheet/willProvisions'
+import {
   setSettlorFacts,
   SETTLOR_GENDERS,
   SURVIVOR_DESIGNATIONS,
@@ -85,6 +90,7 @@ export type DecisionNamespace =
   | 'will_pr_powers'
   | 'execution_mechanics'
   | 'settlor_facts'
+  | 'will_provisions'
 
 export type DecisionFieldKind = 'string' | 'boolean' | 'number'
 
@@ -95,6 +101,7 @@ export const DECISION_NAMESPACES = [
   'will_pr_powers',
   'execution_mechanics',
   'settlor_facts',
+  'will_provisions',
 ] as const satisfies readonly DecisionNamespace[]
 
 export interface DecisionFieldMeta {
@@ -179,6 +186,11 @@ const HIPAA_FIDUCIARY_LISTINGS = [
   'general_language',
 ] as const satisfies readonly HipaaFiduciaryListing[]
 
+const PARENT_CHILD_DEFINITIONS = [
+  'state_probate_code',
+  'custom',
+] as const satisfies readonly ParentChildRelationshipDefinition[]
+
 const TRUST = 'Trust'
 const WILL = 'Will'
 const DPOA = 'Durable Power of Attorney'
@@ -220,6 +232,13 @@ function executionField(
   options?: readonly string[],
 ): DecisionFieldMeta {
   return { namespace: 'execution_mechanics', key, section: EXECUTION, label, kind, options }
+}
+
+function willProvisionField(
+  key: keyof DesignSheetWillProvisions,
+  label: string,
+): DecisionFieldMeta {
+  return { namespace: 'will_provisions', key, section: WILL, label, kind: 'boolean' }
 }
 
 function settlorField(
@@ -316,6 +335,7 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'trust_details.asset_schedule_non_trust': trustField('asset_schedule_non_trust', 'Schedule of non-trust assets', 'boolean'),
   'trust_details.settlor_incapacity_determined_by': trustField('settlor_incapacity_determined_by', 'Settlor incapacity determined by', 'string', SETTLOR_INCAPACITY_DETERMINERS),
   'trust_details.trustee_incapacity_determined_by': trustField('trustee_incapacity_determined_by', 'Trustee incapacity determined by', 'string', TRUSTEE_INCAPACITY_DETERMINERS),
+  'trust_details.parent_child_relationship_definition': trustField('parent_child_relationship_definition', 'Parent-child relationship definition', 'string', PARENT_CHILD_DEFINITIONS),
   'trust_details.asset_schedule_format': trustField('asset_schedule_format', 'Asset schedule format', 'string', ASSET_SCHEDULE_FORMATS),
   'trust_details.include_marital_deduction_savings_language': trustField('include_marital_deduction_savings_language', 'Marital deduction savings language', 'boolean'),
   'trust_details.include_contingent_snt': trustField('include_contingent_snt', 'Contingent special needs trust', 'boolean'),
@@ -434,6 +454,10 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'settlor_facts.survivor_designation': settlorField('survivor_designation', 'Survivor designation', 'string', SURVIVOR_DESIGNATIONS),
   'settlor_facts.settlors_live_together': settlorField('settlors_live_together', 'Settlors live together', 'boolean'),
   'settlor_facts.disabled_veteran': settlorField('disabled_veteran', 'Disabled veteran', 'boolean'),
+
+  // --- decisions.will_provisions -----------------------------------------------
+  'will_provisions.exercise_testamentary_power_of_appointment': willProvisionField('exercise_testamentary_power_of_appointment', 'Exercise a testamentary power of appointment'),
+  'will_provisions.spouse_exercise_testamentary_power_of_appointment': willProvisionField('spouse_exercise_testamentary_power_of_appointment', 'Spouse exercises a testamentary power of appointment'),
 } satisfies Record<string, DecisionFieldMeta>
 
 export type DesignSheetDecisionField = keyof typeof DESIGN_SHEET_DECISION_FIELDS
@@ -522,6 +546,7 @@ export function applyDecisionFieldValues(
   const willPowersPatch: Record<string, unknown> = {}
   const executionPatch: Record<string, unknown> = {}
   const settlorPatch: Record<string, unknown> = {}
+  const willProvisionsPatch: Record<string, unknown> = {}
 
   for (const [field, value] of Object.entries(values)) {
     const meta = decisionFieldMeta(field)
@@ -545,6 +570,10 @@ export function applyDecisionFieldValues(
     }
     if (meta.namespace === 'settlor_facts') {
       settlorPatch[meta.key] = value
+      continue
+    }
+    if (meta.namespace === 'will_provisions') {
+      willProvisionsPatch[meta.key] = value
       continue
     }
     // dpoa_provisions — the only namespace with a nested key.
@@ -603,6 +632,13 @@ export function applyDecisionFieldValues(
 
   if (Object.keys(settlorPatch).length > 0) {
     updates.push(current => setSettlorFacts(current, settlorPatch as Partial<SettlorFacts>))
+  }
+
+  if (Object.keys(willProvisionsPatch).length > 0) {
+    updates.push(current => setDesignSheetWillProvisions(
+      current,
+      willProvisionsPatch as Partial<DesignSheetWillProvisions>,
+    ))
   }
 
   if (updates.length === 0) return isRecord(sheet.decisions) ? { ...sheet.decisions } : {}
