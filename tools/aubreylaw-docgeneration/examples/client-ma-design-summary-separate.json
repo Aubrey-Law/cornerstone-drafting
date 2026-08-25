@@ -196,7 +196,13 @@
       "power_529_plans": true,
       "allow_medical_information_access": true,
       "power_digital_assets": true
-    }
+    },
+    "include_notice_page": true,
+    "preserve_existing_bank_powers": true,
+    "effective": "immediate",
+    "authority_after_capacity_regained": "continue",
+    "incapacity_determination": "default",
+    "acceptance_of_appointment": "include"
   },
   "fiduciaries": {
     "trustee": {

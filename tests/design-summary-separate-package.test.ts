@@ -152,6 +152,19 @@ describe('design-summary-separate package', () => {
     expect(text).toContain('Buried beside my parents.')
   })
 
+  it('gives both settlors the couple\u2019s one power-of-attorney policy', async () => {
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+
+    expect(text).toMatch(/Include Notice Page:[\s\S]{0,40}☒ Yes/)
+    expect(text).toMatch(/Incapacity determination provision:[\s\S]{0,50}☒ Default/)
+    expect(text).toContain('☒ Include Acceptance of Appointment')
+    // Deliberately shared, not per-settlor: both POA sections read the same
+    // answer, so the couple gets one policy rather than two that can drift.
+    expect(text.match(/☒ Immediate/g)).toHaveLength(2)
+    expect(text.match(/☒ Continue until revoked or terminated/g)).toHaveLength(2)
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

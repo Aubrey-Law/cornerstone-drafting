@@ -68,11 +68,13 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `college.organ_donation` | Organ Donation | College Preparation Plan | (section) |
 | `college.organ_donation_notes` | Organ Donation Notes | College Preparation Plan | (section) |
 | `college.ventilation` | Ventilation | College Preparation Plan | (section) |
+| `dpoa.acceptance_of_appointment` | Acceptance Of Appointment | Estate Plan Design | (section) |
 | `dpoa.additional_limitations` | Additional Limitations | Estate Plan Design | (section) |
 | `dpoa.additional_powers` | Additional Powers | Estate Plan Design | (section) |
 | `dpoa.agent_compensation` | Agent Compensation | Estate Plan Design | (section) |
 | `dpoa.all_basic_powers` | All Basic Powers | Estate Plan Design | (section) |
 | `dpoa.allow_gifts` | Allow Gifts | Estate Plan Design | (section) |
+| `dpoa.authority_after_capacity_regained` | Authority After Capacity Regained | Estate Plan Design | (section) |
 | `dpoa.basic_powers.banking` | Banking | Estate Plan Design | (section) |
 | `dpoa.basic_powers.business_operating` | Business Operating | Estate Plan Design | (section) |
 | `dpoa.basic_powers.claims_litigation` | Claims Litigation | Estate Plan Design | (section) |
@@ -87,10 +89,14 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `dpoa.basic_powers.tangible_personal_property` | Tangible Personal Property | Estate Plan Design | (section) |
 | `dpoa.basic_powers.tax_matters` | Tax Matters | Estate Plan Design | (section) |
 | `dpoa.coagent_serving` | Coagent Serving | Estate Plan Design | (section) |
+| `dpoa.effective` | Effective | Estate Plan Design | (section) |
+| `dpoa.incapacity_determination` | Incapacity Determination | Estate Plan Design | (section) |
 | `dpoa.include_advanced_trust_gifting` | Include Advanced Trust Gifting | Estate Plan Design | (section) |
 | `dpoa.include_entity_powers` | Include Entity Powers | Estate Plan Design | (section) |
 | `dpoa.include_extended_personal_care` | Include Extended Personal Care | Estate Plan Design | (section) |
+| `dpoa.include_notice_page` | Include Notice Page | Estate Plan Design | (section) |
 | `dpoa.include_section_l` | Include Section L | Estate Plan Design | (section) |
+| `dpoa.preserve_existing_bank_powers` | Preserve Existing Bank Powers | Estate Plan Design | (section) |
 | `dpoa.self_dealing_reviewer_alt.full_name` | Dpoa Self Dealing Reviewer Alt | Estate Plan Design | (section) |
 | `dpoa.self_dealing_reviewer.full_name` | Dpoa Self Dealing Reviewer | Estate Plan Design | (section) |
 | `dpoa.special_powers.allow_delegation` | Allow Delegation | Estate Plan Design | (section) |

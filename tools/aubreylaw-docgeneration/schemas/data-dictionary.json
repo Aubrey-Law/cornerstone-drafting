@@ -2489,5 +2489,35 @@
     "type": "string",
     "required": false,
     "description": "What should happen to the spouse’s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
+  },
+  "dpoa.include_notice_page": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney carries the statutory notice to the principal and agent."
+  },
+  "dpoa.preserve_existing_bank_powers": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether institution-specific powers of attorney already on file stay in force rather than being revoked."
+  },
+  "dpoa.effective": {
+    "type": "string",
+    "required": false,
+    "description": "When the power of attorney takes effect: springing (on a determination of incapacity) or immediate."
+  },
+  "dpoa.authority_after_capacity_regained": {
+    "type": "string",
+    "required": false,
+    "description": "What becomes of the agent's authority once the principal regains capacity: continue or suspend."
+  },
+  "dpoa.incapacity_determination": {
+    "type": "string",
+    "required": false,
+    "description": "Whether incapacity is determined by the document's default provision or a custom one: default or custom."
+  },
+  "dpoa.acceptance_of_appointment": {
+    "type": "string",
+    "required": false,
+    "description": "Whether each agent signs an acceptance of appointment: include or omit."
   }
 }

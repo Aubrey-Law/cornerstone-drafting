@@ -7,6 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
   coagentMannerFromServing,
+  type DpoaAcceptanceOfAppointment,
+  type DpoaAuthorityAfterCapacity,
+  type DpoaEffective,
+  type DpoaIncapacityDetermination,
   DPOA_BASIC_POWER_KEYS,
   DPOA_BASIC_POWER_LABELS,
   getDesignSheetDpoaProvisions,
@@ -125,6 +129,78 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           Note: This form allows you to designate co-agents. However, banks may not accept co-agents as a matter of policy.
         </p>
+      </SectionBlock>
+
+      <SectionBlock title="When the Power of Attorney Takes Effect">
+        <DecisionRow
+          question="When should the power of attorney be effective?"
+          fieldName="dpoa_provisions.effective"
+          value={provisions.effective ?? ''}
+          options={[
+            { value: 'springing', label: 'Springing', description: 'Effective only on a documented determination of incapacity.' },
+            { value: 'immediate', label: 'Immediate', description: 'Effective on signing, before any incapacity.' },
+          ]}
+          onChange={value => updateProvisions({ effective: (value || null) as DpoaEffective | null })}
+        />
+        <div className="mt-6">
+          <DecisionRow
+            question="After capacity returns, what happens to the agent's authority?"
+            fieldName="dpoa_provisions.authority_after_capacity_regained"
+            value={provisions.authority_after_capacity_regained ?? ''}
+            options={[
+              { value: 'continue', label: 'Continue until revoked or terminated' },
+              { value: 'suspend', label: 'Suspend until a later incapacity' },
+            ]}
+            onChange={value => updateProvisions({
+              authority_after_capacity_regained: (value || null) as DpoaAuthorityAfterCapacity | null,
+            })}
+          />
+        </div>
+        <div className="mt-6">
+          <DecisionRow
+            question="Incapacity determination provision"
+            fieldName="dpoa_provisions.incapacity_determination"
+            value={provisions.incapacity_determination ?? ''}
+            options={[
+              { value: 'default', label: 'Default', description: "The document's standard incapacity provision." },
+              { value: 'custom', label: 'Custom', description: 'A provision drafted for this matter.' },
+            ]}
+            onChange={value => updateProvisions({
+              incapacity_determination: (value || null) as DpoaIncapacityDetermination | null,
+            })}
+          />
+        </div>
+      </SectionBlock>
+
+      <SectionBlock title="Document Options">
+        <div className="mt-6 space-y-3">
+          <DesignSheetCheckboxOption
+            label="Include Notice Page"
+            description="Prepends the statutory notice to the principal and the agent."
+            checked={provisions.include_notice_page}
+            onChange={checked => updateProvisions({ include_notice_page: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Preserve any existing bank and institutional powers of attorney"
+            description="Keeps institution-specific forms already on file in force rather than revoking them."
+            checked={provisions.preserve_existing_bank_powers}
+            onChange={checked => updateProvisions({ preserve_existing_bank_powers: checked })}
+          />
+        </div>
+        <div className="mt-6">
+          <DecisionRow
+            question="Acceptance of Agent Signature Page"
+            fieldName="dpoa_provisions.acceptance_of_appointment"
+            value={provisions.acceptance_of_appointment ?? ''}
+            options={[
+              { value: 'include', label: 'Include Acceptance of Appointment' },
+              { value: 'omit', label: 'Do Not Include Acceptance of Appointment' },
+            ]}
+            onChange={value => updateProvisions({
+              acceptance_of_appointment: (value || null) as DpoaAcceptanceOfAppointment | null,
+            })}
+          />
+        </div>
       </SectionBlock>
 
       <SectionBlock title="Gifting Powers">

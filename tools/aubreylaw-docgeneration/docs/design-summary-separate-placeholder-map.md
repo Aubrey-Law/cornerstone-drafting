@@ -69,6 +69,8 @@ without the empty halves.
 | Distributions | `trust.descendants_distribution.method` and `stage_1..3_age`, `trust.residuary_after_death`, `trust.contingent_beneficiary.full_name`, `trust.remote_beneficiaries.method` / `individuals[]` / `charity.name` |
 | Tangible personal property | `trust.tangible_personal_property.distribution_method` / `named_individual.full_name` |
 | Asset schedule | `has_assets`, `assets.items[]`, `assets.total_gross_value` |
+| POA document options | `dpoa.include_notice_page`, `dpoa.preserve_existing_bank_powers`, `dpoa.incapacity_determination`, `dpoa.acceptance_of_appointment` |
+| POA effectiveness | `dpoa.effective`, `dpoa.authority_after_capacity_regained` — **shared across the couple**, so both settlors' POA sections print the same answer |
 | POA provisions | `dpoa.agent_compensation`, `dpoa.coagent_serving`, `dpoa.allow_gifts`, `dpoa.trust_powers.*`, `dpoa.special_powers.*`, `dpoa.include_entity_powers`, `dpoa.include_extended_personal_care` |
 | Attorney-in-fact powers | `dpoa.all_basic_powers`, `dpoa.basic_powers.<key>`, `dpoa.additional_powers`, `dpoa.specific_businesses`, `dpoa.additional_limitations` |
 | Advanced-illness treatment | `hcp_client_advance_prolong_life` / `_dnr` / `_do_not_prolong`, and the `hcp_spouse_advance_*` trio |

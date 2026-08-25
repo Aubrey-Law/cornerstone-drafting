@@ -22,7 +22,11 @@
  * healthcare keeps the legacy shared HIPAA agent list in sync with the client one).
  */
 import {
+  DPOA_ACCEPTANCE_OPTIONS,
+  DPOA_AUTHORITY_AFTER_CAPACITY_OPTIONS,
   DPOA_BASIC_POWER_KEYS,
+  DPOA_EFFECTIVE_OPTIONS,
+  DPOA_INCAPACITY_DETERMINATIONS,
   DPOA_BASIC_POWER_LABELS,
   DPOA_TRUST_POWER_KEYS,
   setDesignSheetDpoaProvisions,
@@ -291,6 +295,12 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'trust_details.include_disappearance_definition': trustField('include_disappearance_definition', 'Disappearance definition', 'boolean'),
 
   // --- decisions.dpoa_provisions ---------------------------------------------
+  'dpoa_provisions.include_notice_page': dpoaField('include_notice_page', 'Power of attorney notice page', 'boolean'),
+  'dpoa_provisions.preserve_existing_bank_powers': dpoaField('preserve_existing_bank_powers', 'Preserve existing bank powers of attorney', 'boolean'),
+  'dpoa_provisions.incapacity_determination': dpoaField('incapacity_determination', 'Incapacity determination provision', 'string', DPOA_INCAPACITY_DETERMINATIONS),
+  'dpoa_provisions.acceptance_of_appointment': dpoaField('acceptance_of_appointment', 'Acceptance of appointment page', 'string', DPOA_ACCEPTANCE_OPTIONS),
+  'dpoa_provisions.effective': dpoaField('effective', 'When the power of attorney takes effect', 'string', DPOA_EFFECTIVE_OPTIONS),
+  'dpoa_provisions.authority_after_capacity_regained': dpoaField('authority_after_capacity_regained', 'Agent authority after capacity returns', 'string', DPOA_AUTHORITY_AFTER_CAPACITY_OPTIONS),
   'dpoa_provisions.agent_compensation': dpoaField('agent_compensation', 'Agent compensation', 'string', DPOA_AGENT_COMPENSATIONS),
   'dpoa_provisions.coagent_serving': dpoaField('coagent_serving', 'Co-agent serving manner', 'string', DPOA_COAGENT_SERVING),
   'dpoa_provisions.include_entity_powers': dpoaField('include_entity_powers', 'Entity powers', 'boolean'),

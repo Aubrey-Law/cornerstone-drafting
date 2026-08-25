@@ -1,3 +1,4 @@
+import { readAllowedValue } from '@/lib/designSheet/decisionReaders'
 import type { DesignSheet, StaggeredTier } from '@/types/database'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -294,21 +295,6 @@ function readString<T extends string>(raw: Record<string, unknown>, key: string,
   return typeof value === 'string' ? (value as T) : fallback
 }
 
-/**
- * A choice the attorney has not made reads back as null, and a stored value
- * outside the allowed list reads as null too rather than as a bogus enum. That
- * keeps "undecided" distinguishable from "decided", which `readBoolean` cannot
- * do — see the completion engine's `isFieldOpen`.
- */
-function readOptionalString<T extends string>(
-  raw: Record<string, unknown>,
-  key: string,
-  allowed: readonly T[],
-): T | null {
-  const value = raw[key]
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : null
-}
-
 function readNumber(raw: Record<string, unknown>, key: string, fallback: number | null): number | null {
   const value = raw[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -424,9 +410,9 @@ export function getTrustDetails(sheet: Pick<DesignSheet, 'decisions'>): TrustDet
     asset_schedule_signature_block: readBoolean(raw, 'asset_schedule_signature_block', DEFAULT_TRUST_DETAILS.asset_schedule_signature_block),
     asset_schedule_catchall: readBoolean(raw, 'asset_schedule_catchall', DEFAULT_TRUST_DETAILS.asset_schedule_catchall),
     asset_schedule_non_trust: readBoolean(raw, 'asset_schedule_non_trust', DEFAULT_TRUST_DETAILS.asset_schedule_non_trust),
-    settlor_incapacity_determined_by: readOptionalString(raw, 'settlor_incapacity_determined_by', SETTLOR_INCAPACITY_DETERMINERS),
-    trustee_incapacity_determined_by: readOptionalString(raw, 'trustee_incapacity_determined_by', TRUSTEE_INCAPACITY_DETERMINERS),
-    asset_schedule_format: readOptionalString(raw, 'asset_schedule_format', ASSET_SCHEDULE_FORMATS),
+    settlor_incapacity_determined_by: readAllowedValue(raw, 'settlor_incapacity_determined_by', SETTLOR_INCAPACITY_DETERMINERS),
+    trustee_incapacity_determined_by: readAllowedValue(raw, 'trustee_incapacity_determined_by', TRUSTEE_INCAPACITY_DETERMINERS),
+    asset_schedule_format: readAllowedValue(raw, 'asset_schedule_format', ASSET_SCHEDULE_FORMATS),
   }
 }
 

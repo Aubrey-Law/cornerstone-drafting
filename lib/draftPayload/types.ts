@@ -228,6 +228,12 @@ export interface DraftPayload {
     include_entity_powers: boolean
     include_advanced_trust_gifting: boolean
     include_extended_personal_care: boolean
+    include_notice_page: boolean
+    preserve_existing_bank_powers: boolean
+    incapacity_determination: 'default' | 'custom' | null
+    acceptance_of_appointment: 'include' | 'omit' | null
+    effective: 'springing' | 'immediate' | null
+    authority_after_capacity_regained: 'continue' | 'suspend' | null
     agent_compensation: 'prevailing_professional' | 'reasonable' | 'none' | null
     coagent_serving: 'jointly' | 'separately' | 'silent' | null
     allow_gifts: boolean

@@ -1,3 +1,4 @@
+import { readAllowedValue } from '@/lib/designSheet/decisionReaders'
 import type { DesignSheet } from '@/types/database'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -6,6 +7,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export type DpoaAgentCompensation = 'prevailing_professional' | 'reasonable' | 'none'
 export type DpoaCoagentServing = 'jointly' | 'separately' | 'silent'
+
+/** Whether the power of attorney springs on incapacity or is effective at once. */
+export type DpoaEffective = 'springing' | 'immediate'
+export const DPOA_EFFECTIVE_OPTIONS: readonly DpoaEffective[] = ['springing', 'immediate'] as const
+
+/** What becomes of the agent's authority once the principal regains capacity. */
+export type DpoaAuthorityAfterCapacity = 'continue' | 'suspend'
+export const DPOA_AUTHORITY_AFTER_CAPACITY_OPTIONS: readonly DpoaAuthorityAfterCapacity[] =
+  ['continue', 'suspend'] as const
+
+/** Whether incapacity is determined by the document's default or a custom provision. */
+export type DpoaIncapacityDetermination = 'default' | 'custom'
+export const DPOA_INCAPACITY_DETERMINATIONS: readonly DpoaIncapacityDetermination[] =
+  ['default', 'custom'] as const
+
+/** Whether each agent signs an acceptance of appointment. */
+export type DpoaAcceptanceOfAppointment = 'include' | 'omit'
+export const DPOA_ACCEPTANCE_OPTIONS: readonly DpoaAcceptanceOfAppointment[] =
+  ['include', 'omit'] as const
 
 export const DPOA_BASIC_POWER_KEYS = [
   'real_property',
@@ -54,6 +74,14 @@ export const DPOA_BASIC_POWER_LABELS: Record<DpoaBasicPowerKey, string> = {
 
 export interface DesignSheetDpoaProvisions {
   include_entity_powers: boolean
+  /** Document-level options. Shared across the couple: both spouses' powers of
+   *  attorney are drafted from one answer. */
+  include_notice_page: boolean
+  preserve_existing_bank_powers: boolean
+  incapacity_determination: DpoaIncapacityDetermination | null
+  acceptance_of_appointment: DpoaAcceptanceOfAppointment | null
+  effective: DpoaEffective | null
+  authority_after_capacity_regained: DpoaAuthorityAfterCapacity | null
   include_advanced_trust_gifting: boolean
   include_extended_personal_care: boolean
   agent_compensation: DpoaAgentCompensation | null
@@ -85,6 +113,12 @@ const DEFAULT_BASIC_POWERS = Object.fromEntries(
 
 const DEFAULT_DPOA_PROVISIONS: DesignSheetDpoaProvisions = {
   include_entity_powers: false,
+  include_notice_page: false,
+  preserve_existing_bank_powers: false,
+  incapacity_determination: null,
+  acceptance_of_appointment: null,
+  effective: null,
+  authority_after_capacity_regained: null,
   include_advanced_trust_gifting: false,
   include_extended_personal_care: false,
   agent_compensation: 'reasonable',
@@ -192,6 +226,12 @@ export function getDesignSheetDpoaProvisions(
 
   return {
     include_entity_powers: readBoolean(raw, 'include_entity_powers', DEFAULT_DPOA_PROVISIONS.include_entity_powers),
+    include_notice_page: readBoolean(raw, 'include_notice_page', DEFAULT_DPOA_PROVISIONS.include_notice_page),
+    preserve_existing_bank_powers: readBoolean(raw, 'preserve_existing_bank_powers', DEFAULT_DPOA_PROVISIONS.preserve_existing_bank_powers),
+    incapacity_determination: readAllowedValue(raw, 'incapacity_determination', DPOA_INCAPACITY_DETERMINATIONS),
+    acceptance_of_appointment: readAllowedValue(raw, 'acceptance_of_appointment', DPOA_ACCEPTANCE_OPTIONS),
+    effective: readAllowedValue(raw, 'effective', DPOA_EFFECTIVE_OPTIONS),
+    authority_after_capacity_regained: readAllowedValue(raw, 'authority_after_capacity_regained', DPOA_AUTHORITY_AFTER_CAPACITY_OPTIONS),
     include_advanced_trust_gifting: readBoolean(raw, 'include_advanced_trust_gifting', DEFAULT_DPOA_PROVISIONS.include_advanced_trust_gifting),
     include_extended_personal_care: readBoolean(raw, 'include_extended_personal_care', DEFAULT_DPOA_PROVISIONS.include_extended_personal_care),
     agent_compensation: readCompensation(raw),

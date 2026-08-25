@@ -1,3 +1,4 @@
+import { readAllowedValue } from '@/lib/designSheet/decisionReaders'
 import type { DesignSheet } from '@/types/database'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -163,19 +164,6 @@ function readHipaaListing(raw: Record<string, unknown>): HipaaFiduciaryListing |
   return null
 }
 
-/**
- * A choice the attorney has not made reads back as null, and a stored value
- * outside the allowed list reads as null too rather than as a bogus enum.
- */
-function readAllowed<T extends string>(
-  raw: Record<string, unknown>,
-  key: string,
-  allowed: readonly T[],
-): T | null {
-  const value = raw[key]
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : null
-}
-
 function readContactIdList(raw: Record<string, unknown>, key: string): string[] {
   const value = raw[key]
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
@@ -239,8 +227,8 @@ export function getDesignSheetHealthcareProvisions(
     client_funeral_instructions: readString(raw, 'client_funeral_instructions'),
     client_preneed_arrangements: readString(raw, 'client_preneed_arrangements'),
     client_other_disposition_instructions: readString(raw, 'client_other_disposition_instructions'),
-    client_coagent_disagreement_resolution: readAllowed(raw, 'client_coagent_disagreement_resolution', COAGENT_DISAGREEMENT_RESOLUTIONS),
-    client_disposition_of_remains: readAllowed(raw, 'client_disposition_of_remains', DISPOSITIONS_OF_REMAINS),
+    client_coagent_disagreement_resolution: readAllowedValue(raw, 'client_coagent_disagreement_resolution', COAGENT_DISAGREEMENT_RESOLUTIONS),
+    client_disposition_of_remains: readAllowedValue(raw, 'client_disposition_of_remains', DISPOSITIONS_OF_REMAINS),
     spouse_leave_instructions_blank: readBoolean(raw, 'spouse_leave_instructions_blank', DEFAULT_HEALTHCARE_PROVISIONS.spouse_leave_instructions_blank),
     spouse_receive_comfort_care: readBoolean(raw, 'spouse_receive_comfort_care', DEFAULT_HEALTHCARE_PROVISIONS.spouse_receive_comfort_care),
     spouse_wish_to_die_at_home: readBoolean(raw, 'spouse_wish_to_die_at_home', DEFAULT_HEALTHCARE_PROVISIONS.spouse_wish_to_die_at_home),
@@ -257,8 +245,8 @@ export function getDesignSheetHealthcareProvisions(
     spouse_funeral_instructions: readString(raw, 'spouse_funeral_instructions'),
     spouse_preneed_arrangements: readString(raw, 'spouse_preneed_arrangements'),
     spouse_other_disposition_instructions: readString(raw, 'spouse_other_disposition_instructions'),
-    spouse_coagent_disagreement_resolution: readAllowed(raw, 'spouse_coagent_disagreement_resolution', COAGENT_DISAGREEMENT_RESOLUTIONS),
-    spouse_disposition_of_remains: readAllowed(raw, 'spouse_disposition_of_remains', DISPOSITIONS_OF_REMAINS),
+    spouse_coagent_disagreement_resolution: readAllowedValue(raw, 'spouse_coagent_disagreement_resolution', COAGENT_DISAGREEMENT_RESOLUTIONS),
+    spouse_disposition_of_remains: readAllowedValue(raw, 'spouse_disposition_of_remains', DISPOSITIONS_OF_REMAINS),
   }
 }
 
