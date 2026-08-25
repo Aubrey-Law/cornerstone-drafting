@@ -1,15 +1,19 @@
 # Asset Schedules
 
-**Section ID:** `asset-schedules`  
-**UI:** `app/admin/drafting/[matterId]/design/sections/AssetsSection.tsx`  
-**Visibility:** `document_inclusions.trust === true`  
-**Source files:** `lib/assets/syncAssetIntakeToDesignSheet.ts`, `lib/estateGenerator/toGeneratorData.ts`
+**Section ID:** `asset-schedules`
+**UI:** `app/admin/drafting/[matterId]/design/sections/AssetsSection.tsx`
+**Visibility:** `document_inclusions.trust === true`
+**Source files:** `lib/assets/syncAssetIntakeToDesignSheet.ts`, `lib/draftPayload/assets.ts`, `lib/draftPayload/fundingPlan.ts`, `lib/estateGenerator/toGeneratorData.ts`
+
+Section blocks: **Asset Inventory**, **Schedule A Options**, **Trust Funding Roadmap**.
 
 ## Design sheet fields
 
 | Field | Storage | Shape |
 | --- | --- | --- |
 | `assets[]` | column | `AssetItem` per row |
+| `trust_details.asset_schedule_*` | `decisions` | How each settlor's schedule is drafted (see below) |
+| `decisions.funding_plan` | `decisions` | Narrative + prioritized checklist for the funding-plan document |
 
 ### AssetItem
 
@@ -19,84 +23,103 @@
 | `category` | enum | `real_property`, `financial`, `retirement`, `life_insurance`, `business`, `other` |
 | `description` | string | Primary label |
 | `institution` | string | Bank/custodian |
-| `estimated_value` | number | Optional |
+| `estimated_value` | number \| null | Optional |
 | `notes` | string | Attorney notes |
-| `from_intake` | boolean | Synced from intake/matter assets |
+| `current_owner` | string? | Who owns it today |
+| `target_owner` | string? | Who should own it after funding |
+| `beneficiary_designation` | string? | For accounts that pass by designation |
+| `from_intake` | boolean? | Synced from intake/matter assets; replaced on each sync |
 
 Intake sync: `syncAssetIntakeToDesignSheet`, matter assets tab import.
 
+### Schedule A options (`decisions.trust_details`)
+
+| Field | Values |
+| --- | --- |
+| `asset_schedule_format` | `table` \| `paragraph` |
+| `asset_schedule_signature_block` | boolean — include a signature block on the schedule |
+| `asset_schedule_catchall` | boolean — include catch-all "and all other property" language |
+| `asset_schedule_non_trust` | boolean — include a schedule of assets deliberately left out of the trust |
+
+These reach templates under `trust.provisions.*` like every other `trust_details` key.
+
 ## Generator mapping
 
-**Minimal today.** `buildDraftPayload()` does not include the full `assets[]` array in `DraftPayload`.
+`draftPayloadAssets()` → `payload.assets[]` → `EstateGeneratorData.assets`:
 
-`toEstateGeneratorData()` sets:
-
-```typescript
-assets: {
-  real_property: false,  // hardcoded — not derived from sheet
+```json
+{
+  "assets": {
+    "real_property": true,
+    "total_gross_value": "$1,250,000",
+    "total_net_value": "$1,250,000",
+    "items": [
+      {
+        "category": "real_property",
+        "category_label": "Real Property",
+        "description": "12 Oak Street",
+        "institution": "",
+        "owner": "Joint",
+        "target_owner": "Trust",
+        "beneficiary_designation": "",
+        "estimated_value": "$650,000",
+        "gross_value": "$650,000",
+        "net_value": "$650,000",
+        "notes": "",
+        "from_intake": true
+      }
+    ]
+  }
 }
 ```
 
-Context flag `owns_real_property` in `buildNodeEstateContext()` reads `assets.real_property` — always false unless payload extended.
+`assets.real_property` is derived by `draftPayloadHasRealProperty()`, so the
+`owns_real_property` context flag reflects the sheet. `has_assets` follows the item
+count.
 
-| Intended use | Current status |
-| --- | --- |
-| Schedule A / asset schedule attachment | No generator package |
-| `owns_real_property` conditional | Not wired to design sheet |
-| Estate plan summary asset list | May use separate summary template script |
-| Asset spreadsheet ancillary doc | `estate_plan_design.ancillary_documents.include_asset_spreadsheet` — not generator-backed |
+`decisions.funding_plan` → `payload.funding_plan` → `funding_plan.narrative` and
+`funding_plan.checklist_items[]`.
 
 ## Template placeholders
 
-No canonical placeholders in `data-dictionary.json` for per-asset rows. Legacy Supabase flat merge (`lib/drafting/projectDesignSheet.ts`) may map some asset fields for older templates.
-
-If adding asset schedules to Node generator:
-
 ```text
 {% for asset in assets.items %}
-  {{ asset.category }}: {{ asset.description }} — {{ asset.estimated_value }}
+  {{ asset.category_label }}: {{ asset.description }} — {{ asset.gross_value }}
+  {{ asset.owner | optional }} → {{ asset.target_owner | optional }}
 {% endfor %}
+
+{{ assets.total_gross_value }}
+{% if owns_real_property %}...{% endif %}
+{% if trust.provisions.asset_schedule_catchall %}...{% endif %}
+
+{{ funding_plan.narrative | optional }}
+{% for item in funding_plan.checklist_items %}{{ item }}{% endfor %}
 ```
-
-## Conditional logic (current)
-
-| Flag | Intended trigger | Actual |
-| --- | --- | --- |
-| `owns_real_property` | any `category === 'real_property'` | Always false |
 
 ## Trust funding plan (hybrid)
 
-The firm's **Trust Funding Recommendations** (`trust-funding-plan.docx`) is distinct from **Funding Instructions** (`funding-instructions_cv1.docx`):
+The firm's **Trust Funding Recommendations** (`trust-funding-plan.docx`) is distinct
+from **Funding Instructions** (`funding-instructions_cv1.docx`):
 
 | Document | Generator package | Content |
 | --- | --- | --- |
 | Funding Instructions | `funding-instructions` | Static education + generic asset-type checklist |
 | Trust Funding Plan | `trust-funding-plan` | Client-specific inventory + attorney narrative + prioritized checklist |
 
-**Recommended approach:** hybrid template (Phase 1 scaffold in repo). Asset inventory rows merge from `assets[]`; narrative and checklist merge from `decisions.funding_plan` (typically AI-assisted, attorney-reviewed). See `tools/aubreylaw-docgeneration/docs/trust-funding-plan-placeholder-map.md`.
-
-### Data model gaps for full fidelity
-
-| Field on firm spreadsheet | Design sheet today |
-| --- | --- |
-| Current owner (Joint / Primary / Spouse) | Missing — add to `AssetItem` or derive from intake |
-| Gross vs net value | Only `estimated_value` |
-| Per-asset funding recommendation | Belongs in `decisions.funding_plan`, not static template |
-
-### Phased rollout
-
-1. **Now:** inventory table + empty narrative/checklist slots; `funding_recommendation` ancillary toggle wires package
-2. **Next:** matter-assistant tool or funding-plan route using `lib/fundingPlan/prompt.ts`; persist to `decisions.funding_plan`
-3. **Later:** extend `AssetItem` with `owner`, `gross_value`, `net_value`; preflight when narrative missing
+Asset inventory rows merge from `assets.items[]`; narrative and checklist merge from
+`decisions.funding_plan` (typically AI-assisted, attorney-reviewed). See
+`tools/aubreylaw-docgeneration/docs/trust-funding-plan-placeholder-map.md`.
 
 ## Related sections
 
 - **Transfers & Assignments** — real property deeds use `decisions.real_estate_transfer`, not `assets[]` directly
-- **Estate Plan Design** — `include_asset_spreadsheet` ancillary toggle
+- **Estate Plan Design** — `include_asset_spreadsheet` ancillary toggle (`planning.include_asset_spreadsheet`)
+- **Trust Details** — the `asset_schedule_*` options above live in `decisions.trust_details`
 
-## Recent updates & template gaps
+## Known gaps
 
-| Item | Payload / generator status | Template action |
-| --- | --- | --- |
-| **Full assets array** | Wired: `assets.items[]`, `assets.real_property`, `has_assets` flag | Trust Funding Plan inventory table (`trust-funding-plan` package); Schedule A article still TBD |
-| **Bulk assets entry** | Matter assets tab may outpace design sheet | Confirm sync before generation |
+| Item | Status |
+| --- | --- |
+| **Gross vs net value** | `AssetItem` carries one `estimated_value`; `gross_value` and `net_value` are both derived from it, so they are always equal. A real split needs new fields on `AssetItem`. |
+| **Schedule A article** | The options are captured and reach templates, but no trust template branches on `asset_schedule_format` yet. |
+| **Bulk assets entry** | The matter assets tab can outpace the design sheet — confirm the sync ran before generating. |

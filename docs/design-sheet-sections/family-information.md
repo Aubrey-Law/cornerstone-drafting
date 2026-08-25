@@ -1,25 +1,43 @@
 # Family Information
 
-**Section ID:** `family-information`  
-**UI:** `app/admin/drafting/[matterId]/design/sections/FamilySection.tsx`  
+**Nav label:** Last Will and Testament (`DESIGN_SHEET_GROUP_IDS.family`)
+**Section ID:** `family-information`
+**UI:** `app/admin/drafting/[matterId]/design/sections/FamilySection.tsx`
 **Source files:** `lib/draftPayload/familyProvisions.ts`, `lib/draftPayload/helpers.ts` (`draftPayloadChildren`), `lib/estateGenerator/toGeneratorData.ts`
+
+> **This section is one question.** `FamilySection.tsx` renders a single "Will title"
+> `DecisionRow` and nothing else. The family data this guide describes is *collected*
+> in two other places — see the table below — but it still reaches the generator
+> through `family.*` and `children[]`, so the mapping is documented here.
+
+## Where the family fields actually live
+
+| Data | Section that collects it | Component |
+| --- | --- | --- |
+| Will title | Last Will and Testament | `FamilySection.tsx` |
+| `children[]` (add / edit / remove, minor flags, disinherited-child checkboxes) | Client Information | `PersonalSection.tsx` (`ClientInformationSection`) |
+| Child option toggles, disinherited heirs, additional beneficiaries | Estate Plan Design | `PlanStructureFactsSection.tsx` (rendered inside `PlanDesignSection`) |
+
+`PlanStructureFactsSection` blocks: **Children Options**, **Disinherited Heirs**,
+**Additional Beneficiaries**.
 
 ## Design sheet fields
 
-| Field | Storage | Notes |
-| --- | --- | --- |
-| `children[]` | column | `DesignSheetChild`: name, gender, dob, deceased, parentage, relationship, `is_minor` |
-| `include_child_gender_markers` | column | yes/no |
-| `include_afterborn_children` | column | yes/no (default yes in payload) |
-| `include_expectant_children` | column | yes/no (default yes) |
-| `omissions_intentional` | column | yes/no |
-| `disinherited_children[]` | column | string names |
-| `disinheritances[]` | column | `{ name, relationship, reason }` |
-| `include_general_disinheritance` | column | yes/no (default yes) |
-| `disinherit_issue` | column | yes/no |
-| `additional_disinheritance_language` | column | free text |
-| `include_additional_beneficiaries` | column | UI flag |
-| `additional_beneficiaries[]` | column | Not in generator JSON today |
+| Field | Storage | Collected in | Notes |
+| --- | --- | --- | --- |
+| `children[]` | column | Client Information | `DesignSheetChild`: name, gender, dob, deceased, parentage, relationship, `is_minor` |
+| `include_child_gender_markers` | column | Estate Plan Design | yes/no |
+| `include_afterborn_children` | column | Estate Plan Design | yes/no (default yes in payload) |
+| `include_expectant_children` | column | Estate Plan Design | yes/no (default yes). Labelled "Include posthumous children" in the UI |
+| `omissions_intentional` | column | Estate Plan Design | yes/no |
+| `disinherited_children[]` | column | Client Information | string names, kept in step when a child is renamed |
+| `disinheritances[]` | column | Estate Plan Design | `{ name, relationship, reason }` |
+| `include_general_disinheritance` | column | Estate Plan Design | yes/no (default yes) |
+| `disinherit_issue` | column | Estate Plan Design | yes/no |
+| `additional_disinheritance_language` | column | Estate Plan Design | free text |
+| `include_additional_beneficiaries` | column | Estate Plan Design | UI flag |
+| `additional_beneficiaries[]` | column | Estate Plan Design | `{ full_name, kind, relationship }` |
+| `estate_plan_design.will_title` | `decisions` | **this section** | `last_will` \| `pour_over_will` |
 
 ## Generator mapping
 
@@ -53,6 +71,13 @@ Minor children drive `matter.minor_children`, `planning.has_minor_children`, and
 | `disinherit_issue` | `family.disinherit_issue`, `trust.disinherit_issue` |
 | `additional_disinheritance_language` | `family.additional_disinheritance_language` |
 | disinherited lists | `family.disinherited[]`, `trust.disinherited[]` |
+| `additional_beneficiaries[]` | `family.additional_beneficiaries[]` — `full_name`, `kind`, `relationship` |
+
+### Will title
+
+`estate_plan_design.will_title` → `documents.will_title` → `will.title`
+(`last_will` / `pour_over_will`). The interview worksheet ticks its "Will Title"
+options from this path.
 
 ### Blended family
 
@@ -66,6 +91,11 @@ When married and any child has `parentage` of `client` or `spouse`:
 ```text
 {% for child in children %}
   {{ child.full_name | name }}{% if not loop.last %}, {% endif %}
+{% endfor %}
+
+{{ will.title }}
+{% for beneficiary in family.additional_beneficiaries %}
+  {{ beneficiary.full_name | name }} — {{ beneficiary.relationship | optional }}
 {% endfor %}
 
 {% if has_children %}...{% endif %}
@@ -101,11 +131,11 @@ When married and any child has `parentage` of `client` or `spouse`:
 | Minor children | `temporary-delegation-parental-powers` (if `include_temp_delegation`) |
 | Young adult child (age 17.5–25) + inclusion toggle | `young-adult-estate-plan` |
 
-## Recent updates & template gaps
+## Known gaps
 
-| Gap | Action needed |
+| Gap | Notes |
 | --- | --- |
-| `additional_beneficiaries[]` | No payload mapping — add if templates need non-child beneficiaries |
 | Child name shapes | Intake may seed `first/middle/last`; generator normalizes via `childFullName()` |
-| `is_minor` vs DOB | Minor flag is sheet boolean, not recomputed from DOB at generation |
-| Disinheritance reasons | `disinheritances[].reason` not passed to generator — only name + relationship |
+| `is_minor` vs DOB | Minor flag is a sheet boolean, not recomputed from DOB at generation |
+| Disinheritance reasons | `disinheritances[].reason` is collected but not passed to the generator — only name + relationship |
+| Parent-child relationship definition | The interview worksheet asks "State Probate Code / Custom Definition"; the design sheet does not capture it |
