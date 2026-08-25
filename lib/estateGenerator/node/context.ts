@@ -210,9 +210,13 @@ export function buildNodeEstateContext({ data, state, root }: BuildNodeEstateCon
     hcp_client_advance_prolong_life: clientAdvanceDirective === 'prolong_life',
     hcp_client_advance_dnr: clientAdvanceDirective === 'do_not_resuscitate',
     hcp_client_advance_do_not_prolong: clientAdvanceDirective === 'do_not_prolong_life',
+    // `other` means the three named directions are all false and the drafted
+    // language has to come from `healthcare.client_advance_directive_other`.
+    hcp_client_advance_other: clientAdvanceDirective === 'other',
     hcp_spouse_advance_prolong_life: spouseAdvanceDirective === 'prolong_life',
     hcp_spouse_advance_dnr: spouseAdvanceDirective === 'do_not_resuscitate',
     hcp_spouse_advance_do_not_prolong: spouseAdvanceDirective === 'do_not_prolong_life',
+    hcp_spouse_advance_other: spouseAdvanceDirective === 'other',
     hipaa_psychotherapy_authorized: hipaaPsychotherapyNotes === 'authorize',
     hipaa_include_poa: Boolean(hipaa.include_poa),
     hipaa_include_trustees: Boolean(hipaa.include_trustees),

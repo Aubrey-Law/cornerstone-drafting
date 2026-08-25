@@ -96,6 +96,11 @@ const SPOUSAL_TRUST_FUNDING_OPTIONS: { value: TrustPlanningType; label: string; 
     label: 'Clayton Election',
     description: 'Uses a Clayton QTIP election for the marital share with a family/bypass trust for the balance.',
   },
+  {
+    value: 'not_to_spouse',
+    label: 'Do Not Distribute to Spouse/Partner',
+    description: 'The residuary skips the surviving spouse and passes under the descendants distribution.',
+  },
 ]
 
 function SectionHelp({ children }: { children: ReactNode }) {

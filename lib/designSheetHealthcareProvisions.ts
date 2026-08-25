@@ -6,7 +6,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export type AnatomicalGiftPreference = 'yes' | 'defer' | 'no'
-export type AdvanceDirectiveChoice = 'prolong_life' | 'do_not_resuscitate' | 'do_not_prolong_life'
+/**
+ * `other` is the escape hatch the interview form has always offered and the
+ * design sheet could not record. It carries no meaning on its own — the
+ * instructions live in `{party}_advance_directive_other`, and a template that
+ * branches on the three named directions must fall through to that text.
+ */
+export const ADVANCE_DIRECTIVE_CHOICES = [
+  'prolong_life', 'do_not_resuscitate', 'do_not_prolong_life', 'other',
+] as const
+
+export type AdvanceDirectiveChoice =
+  | 'prolong_life'
+  | 'do_not_resuscitate'
+  | 'do_not_prolong_life'
+  | 'other'
 export type HipaaFiduciaryListing = 'by_name' | 'general_language'
 
 /** How co-agents settle a disagreement over a health care decision. */
@@ -33,6 +47,10 @@ export interface DesignSheetHealthcareProvisions {
   spouse_anatomical_restrictions: string | null
   client_advance_directive: AdvanceDirectiveChoice | null
   spouse_advance_directive: AdvanceDirectiveChoice | null
+  /** Free text for the `other` direction. Meaningless unless the matching
+   *  `*_advance_directive` is `other`. */
+  client_advance_directive_other: string | null
+  spouse_advance_directive_other: string | null
   hipaa_include_poa: boolean
   hipaa_include_trustees: boolean
   hipaa_list_fiduciaries_by_name: HipaaFiduciaryListing | null
@@ -86,6 +104,8 @@ const DEFAULT_HEALTHCARE_PROVISIONS: DesignSheetHealthcareProvisions = {
   spouse_anatomical_restrictions: null,
   client_advance_directive: null,
   spouse_advance_directive: null,
+  client_advance_directive_other: null,
+  spouse_advance_directive_other: null,
   hipaa_include_poa: false,
   hipaa_include_trustees: false,
   hipaa_list_fiduciaries_by_name: null,
@@ -153,9 +173,7 @@ function readAnatomicalGift(raw: Record<string, unknown>, key: string): Anatomic
 }
 
 function readAdvanceDirective(raw: Record<string, unknown>, key: string): AdvanceDirectiveChoice | null {
-  const value = raw[key]
-  if (value === 'prolong_life' || value === 'do_not_resuscitate' || value === 'do_not_prolong_life') return value
-  return null
+  return readAllowedValue(raw, key, ADVANCE_DIRECTIVE_CHOICES)
 }
 
 function readHipaaListing(raw: Record<string, unknown>): HipaaFiduciaryListing | null {
@@ -203,6 +221,8 @@ export function getDesignSheetHealthcareProvisions(
     spouse_anatomical_restrictions: readString(raw, 'spouse_anatomical_restrictions'),
     client_advance_directive: readAdvanceDirective(raw, 'client_advance_directive'),
     spouse_advance_directive: readAdvanceDirective(raw, 'spouse_advance_directive'),
+    client_advance_directive_other: readString(raw, 'client_advance_directive_other'),
+    spouse_advance_directive_other: readString(raw, 'spouse_advance_directive_other'),
     hipaa_include_poa: readBoolean(raw, 'hipaa_include_poa', DEFAULT_HEALTHCARE_PROVISIONS.hipaa_include_poa),
     hipaa_include_trustees: readBoolean(raw, 'hipaa_include_trustees', DEFAULT_HEALTHCARE_PROVISIONS.hipaa_include_trustees),
     hipaa_list_fiduciaries_by_name: readHipaaListing(raw),

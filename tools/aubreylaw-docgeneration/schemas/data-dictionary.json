@@ -2303,7 +2303,7 @@
   "trust.spousal_funding": {
     "type": "string",
     "required": false,
-    "description": "How the trust funds the surviving spouse: outright_to_spouse, disclaimer, or clayton_election. Answers the worksheet\u2019s \"Distribution to Spouse/Partner\" question."
+    "description": "How the residuary reaches the surviving spouse: outright_to_spouse, disclaimer, clayton_election, or not_to_spouse (the residuary skips the spouse). Only disclaimer changes package selection."
   },
   "healthcare.include_hcp_notice_page": {
     "type": "boolean",
@@ -2699,5 +2699,25 @@
     "type": "boolean",
     "required": false,
     "description": "Whether the spouse's will exercises a testamentary power of appointment held under another instrument."
+  },
+  "healthcare.client_advance_directive_other": {
+    "type": "string",
+    "required": false,
+    "description": "Custom advance directive instructions for the client. Meaningful only when client_advance_directive is 'other'."
+  },
+  "healthcare.spouse_advance_directive_other": {
+    "type": "string",
+    "required": false,
+    "description": "Custom advance directive instructions for the spouse. Meaningful only when spouse_advance_directive is 'other'."
+  },
+  "healthcare.client_advance_directive": {
+    "type": "string",
+    "required": false,
+    "description": "Client's life-support direction: prolong_life, do_not_resuscitate, do_not_prolong_life, or other (see client_advance_directive_other)."
+  },
+  "healthcare.spouse_advance_directive": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's life-support direction: prolong_life, do_not_resuscitate, do_not_prolong_life, or other (see spouse_advance_directive_other)."
   }
 }

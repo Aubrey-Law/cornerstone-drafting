@@ -114,7 +114,7 @@ party (`client` / `spouse`):
 | `trust_name` + date + format | `trust.name`, `trust.display_name`, `trust.date` |
 | `spouse_trust_name` + format | `trust.spouse_name`, `trust.spouse_display_name` |
 | `restatement` | `trust.restatement` |
-| `trust_planning_type` | `trust.spousal_funding` |
+| `trust_planning_type` | `trust.spousal_funding` — `outright_to_spouse`, `disclaimer`, `clayton_election`, or `not_to_spouse` (the residuary skips the surviving spouse). Only `disclaimer` changes package selection. |
 | `trust_details.*` | `trust.initial_trustee_nomination`, `trust.provisions.*`, etc. |
 | `co_trustee_decision` | `fiduciaries.trustee.co_trustees_action` |
 | Distribution fields | `trust.descendants_distribution.method`, `stage_*_age` |
