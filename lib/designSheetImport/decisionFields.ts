@@ -179,6 +179,7 @@ const ADVANCE_DIRECTIVES = [
   'prolong_life',
   'do_not_resuscitate',
   'do_not_prolong_life',
+  'other',
 ] as const satisfies readonly AdvanceDirectiveChoice[]
 
 const HIPAA_FIDUCIARY_LISTINGS = [
@@ -421,6 +422,8 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'healthcare_provisions.spouse_anatomical_restrictions': healthcareField('spouse_anatomical_restrictions', 'Spouse anatomical gift restrictions', 'string'),
   'healthcare_provisions.client_advance_directive': healthcareField('client_advance_directive', 'Client advance directive', 'string', ADVANCE_DIRECTIVES),
   'healthcare_provisions.spouse_advance_directive': healthcareField('spouse_advance_directive', 'Spouse advance directive', 'string', ADVANCE_DIRECTIVES),
+  'healthcare_provisions.client_advance_directive_other': healthcareField('client_advance_directive_other', 'Client custom advance directive instructions', 'string'),
+  'healthcare_provisions.spouse_advance_directive_other': healthcareField('spouse_advance_directive_other', 'Spouse custom advance directive instructions', 'string'),
   'healthcare_provisions.hipaa_include_poa': healthcareField('hipaa_include_poa', 'HIPAA includes attorney-in-fact', 'boolean'),
   'healthcare_provisions.hipaa_include_trustees': healthcareField('hipaa_include_trustees', 'HIPAA includes trustees', 'boolean'),
   'healthcare_provisions.hipaa_list_fiduciaries_by_name': healthcareField('hipaa_list_fiduciaries_by_name', 'HIPAA fiduciary listing', 'string', HIPAA_FIDUCIARY_LISTINGS),

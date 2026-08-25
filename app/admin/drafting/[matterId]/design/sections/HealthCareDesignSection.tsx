@@ -111,10 +111,14 @@ function AdvanceDirectiveBlock({
   title,
   value,
   onChange,
+  otherInstructions,
+  onOtherInstructionsChange,
 }: {
   title: string
   value: AdvanceDirectiveChoice | null
   onChange: (value: AdvanceDirectiveChoice) => void
+  otherInstructions: string
+  onOtherInstructionsChange: (value: string | null) => void
 }) {
   return (
     <SectionBlock title={title}>
@@ -139,9 +143,25 @@ function AdvanceDirectiveBlock({
             label: 'Do Not Prolong Life',
             description: 'Do not prolong life, only provide medical care for pain, anxiety, and comfort.',
           },
+          {
+            value: 'other' as const,
+            label: 'Other / Custom Instructions',
+            description: 'None of the three standard directions. The drafted language comes from the instructions below.',
+          },
         ]}
         onChange={onChange}
       />
+      {value === 'other' && (
+        <div className="mt-4">
+          <FieldLabel>Custom advance directive instructions</FieldLabel>
+          <Textarea
+            value={otherInstructions}
+            onChange={event => onOtherInstructionsChange(event.target.value || null)}
+            placeholder="What the directive should say instead of one of the three standard directions"
+            rows={3}
+          />
+        </div>
+      )}
     </SectionBlock>
   )
 }
@@ -467,6 +487,8 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
         title={`${clientFirst || 'Client'}'s Advance Health Directive`}
         value={provisions.client_advance_directive}
         onChange={value => updateProvisions({ client_advance_directive: value })}
+        otherInstructions={provisions.client_advance_directive_other ?? ''}
+        onOtherInstructionsChange={value => updateProvisions({ client_advance_directive_other: value })}
       />
 
       {spouseDocs && (
@@ -474,6 +496,8 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
           title={`${spouseFirst || 'Spouse'}'s Advance Health Directive`}
           value={provisions.spouse_advance_directive}
           onChange={value => updateProvisions({ spouse_advance_directive: value })}
+          otherInstructions={provisions.spouse_advance_directive_other ?? ''}
+          onOtherInstructionsChange={value => updateProvisions({ spouse_advance_directive_other: value })}
         />
       )}
 

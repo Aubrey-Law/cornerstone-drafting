@@ -985,6 +985,8 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       spouse_anatomical_restrictions: hcpProvisions.spouse_anatomical_restrictions,
       client_advance_directive: hcpProvisions.client_advance_directive,
       spouse_advance_directive: hcpProvisions.spouse_advance_directive,
+      client_advance_directive_other: healthcareProvisions?.client_advance_directive_other ?? '',
+      spouse_advance_directive_other: healthcareProvisions?.spouse_advance_directive_other ?? '',
       include_hcp_notice_page: healthcareProvisions?.include_hcp_notice_page ?? false,
       client_leave_instructions_blank: healthcareProvisions?.client_leave_instructions_blank ?? false,
       client_receive_comfort_care: healthcareProvisions?.client_receive_comfort_care ?? false,

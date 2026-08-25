@@ -71,9 +71,11 @@ These names are available in templates *in addition to* the data-dictionary fiel
 | `hcp_anatomical_specified` | `false` |  |
 | `hcp_client_advance_dnr` | `false` |  |
 | `hcp_client_advance_do_not_prolong` | `false` |  |
+| `hcp_client_advance_other` | `false` |  |
 | `hcp_client_advance_prolong_life` | `false` |  |
 | `hcp_spouse_advance_dnr` | `false` |  |
 | `hcp_spouse_advance_do_not_prolong` | `false` |  |
+| `hcp_spouse_advance_other` | `false` |  |
 | `hcp_spouse_advance_prolong_life` | `false` |  |
 | `hipaa_include_poa` | `false` |  |
 | `hipaa_include_trustees` | `false` |  |

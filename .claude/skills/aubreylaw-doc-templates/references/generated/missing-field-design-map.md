@@ -289,6 +289,8 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.agent.second_alternate.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `healthcare.anatomical_gift` | Anatomical Gift | Health Care & Directives | (section) |
 | `healthcare.anatomical_specified` | Anatomical Specified | Health Care & Directives | (section) |
+| `healthcare.client_advance_directive` | Client Advance Directive | Health Care & Directives | (section) |
+| `healthcare.client_advance_directive_other` | Client Advance Directive Other | Health Care & Directives | (section) |
 | `healthcare.client_agent_effective_immediately` | Client Agent Effective Immediately | Health Care & Directives | (section) |
 | `healthcare.client_agent_limits_after_death` | Client Agent Limits After Death | Health Care & Directives | (section) |
 | `healthcare.client_agent_limits_while_living` | Client Agent Limits While Living | Health Care & Directives | (section) |
@@ -309,6 +311,8 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.client_receive_comfort_care` | Client Receive Comfort Care | Health Care & Directives | (section) |
 | `healthcare.client_wish_to_die_at_home` | Client Wish To Die At Home | Health Care & Directives | (section) |
 | `healthcare.include_hcp_notice_page` | Include Hcp Notice Page | Health Care & Directives | (section) |
+| `healthcare.spouse_advance_directive` | Spouse Advance Directive | Health Care & Directives | (section) |
+| `healthcare.spouse_advance_directive_other` | Spouse Advance Directive Other | Health Care & Directives | (section) |
 | `healthcare.spouse_agent_effective_immediately` | Spouse Agent Effective Immediately | Health Care & Directives | (section) |
 | `healthcare.spouse_agent_limits_after_death` | Spouse Agent Limits After Death | Health Care & Directives | (section) |
 | `healthcare.spouse_agent_limits_while_living` | Spouse Agent Limits While Living | Health Care & Directives | (section) |

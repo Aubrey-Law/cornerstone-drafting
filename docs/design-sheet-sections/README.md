@@ -80,7 +80,7 @@ mirror would overwrite newer writes on save.
 | Namespace | Keys | Guide |
 | --- | --- | --- |
 | `trust_details` | 58 | [trust-details.md](./trust-details.md) |
-| `healthcare_provisions` | 48 | [healthcare-directives.md](./healthcare-directives.md) |
+| `healthcare_provisions` | 50 | [healthcare-directives.md](./healthcare-directives.md) |
 | `dpoa_provisions` | 30 | [financial-poa.md](./financial-poa.md) |
 | `execution_mechanics` | 14 | [estate-plan-design.md](./estate-plan-design.md) |
 | `settlor_facts` | 7 | [client-information.md](./client-information.md) |
@@ -88,7 +88,7 @@ mirror would overwrite newer writes on save.
 | `will_provisions` | 2 | [will-details.md](./will-details.md) |
 | `estate_plan_design` | 13 + 17 ancillary flags | [estate-plan-design.md](./estate-plan-design.md) |
 
-`lib/designSheetImport/decisionFields.ts` registers **171** of these keys for AI
+`lib/designSheetImport/decisionFields.ts` registers **173** of these keys for AI
 autofill, DOCX import and the printed meeting worksheet. Every key in that registry
 must also appear in `listDesignSheetImportFieldNames()` — a test enforces it.
 
@@ -127,25 +127,22 @@ generating.
 
 `design-summary-separate` swaps in the firm's reciprocal-trust interview worksheet
 (`templates/design-summary-worksheet-separate.docx`) for separate-trust matters. As of
-the Phase 7 work, **527 of its check boxes tick from design-sheet data and 28 still
-print blank.**
+**531 of its check boxes tick from design-sheet data. The 24 still printing blank are
+all packaging, letters and presentation** — table of contents, cover page and letter,
+invoice, client acknowledgment, consent to dual representation, letter to clinician,
+the two "how should this be summarized" option groups, summary of client information,
+and summary of fiduciary designations. They describe how a package is assembled, and
+the generator produces no such documents.
 
-**24 of the 28 are the packaging, letters and presentation questions deliberately left
-out of scope** — table of contents, cover page and letter, invoice, client
-acknowledgment, consent to dual representation, letter to clinician, the two "how
-should this be summarized" option groups, summary of client information, and summary
-of fiduciary designations. They describe how a package is assembled, and the generator
-produces no such documents.
+**Every substantive question on the form binds to design-sheet data.**
 
-**The other 4 are two options whose unions have no matching value.** Each renders once
-per settlor, so each accounts for two boxes:
+Two of them took a widened union to get there, and both were safe because neither
+value is ever `switch`ed on exhaustively — only compared with `===`:
 
-| Worksheet option | Why it cannot tick |
-| --- | --- |
-| "Do not distribute to spouse/partner" | `trust_planning_type` is `outright_to_spouse` \| `disclaimer` \| `clayton_election` — there is no "none". Its two siblings bind. Adding a value here also changes package selection, so it is a deliberate decision rather than a widening. |
-| "Other / Custom Instructions" (medical treatment for advanced illness) | `AdvanceDirectiveChoice` is `prolong_life` \| `do_not_resuscitate` \| `do_not_prolong_life`. Its three siblings bind. A fourth value needs somewhere to put the custom text. |
-
-Every other question on the form binds to design-sheet data.
+| Value | Where it goes | What it did *not* break |
+| --- | --- | --- |
+| `trust_planning_type: 'not_to_spouse'` | The residuary skips the surviving spouse | Package selection branches only on `disclaimer`, so this falls through to `trust-individual-single` exactly as `outright_to_spouse` does. It changes what the documents say, not which are produced. |
+| `AdvanceDirectiveChoice: 'other'` | Custom life-support instructions, with the text in `{party}_advance_directive_other` | The three `hcp_*_advance_*` context flags all go false, which is correct — a template branching on them must fall through to the text. |
 
 Templates still need `{% if %}` branches and clause updates to consume most of the
 newer fields — see each section guide.

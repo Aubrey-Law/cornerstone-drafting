@@ -5,8 +5,8 @@
 **Visibility:** `document_inclusions.healthcare === true`
 **Source files:** `lib/designSheetHealthcareProvisions.ts`, `lib/draftPayload/healthcare.ts`, `lib/estateGenerator/toGeneratorData.ts`, `lib/designSheetReadiness.ts`
 
-`decisions.healthcare_provisions` holds **48 keys**; the Health Care Documents section
-registers **45** decision fields for import and autofill (the three contact-ID arrays
+`decisions.healthcare_provisions` holds **50 keys**; the Health Care Documents section
+registers **47** decision fields for import and autofill (the three contact-ID arrays
 are resolved from contacts, not imported as values).
 
 **Most of these are per settlor.** `HealthCareDesignSection` renders a
@@ -43,7 +43,8 @@ the two halves of the rendered interview worksheet separately to catch it.
 | --- | --- |
 | `{party}_anatomical_gift` | `yes`, `defer`, `no` |
 | `spouse_anatomical_restrictions` | free text (client uses the legacy column) |
-| `{party}_advance_directive` | `prolong_life`, `do_not_resuscitate`, `do_not_prolong_life` |
+| `{party}_advance_directive` | `prolong_life`, `do_not_resuscitate`, `do_not_prolong_life`, `other` |
+| `{party}_advance_directive_other` | free text — the instructions for `other`, meaningless otherwise |
 | `{party}_leave_instructions_blank` | boolean |
 | `{party}_receive_comfort_care` | boolean |
 | `{party}_wish_to_die_at_home` | boolean |
@@ -137,6 +138,7 @@ relationship appear when the matching `fiduciary_display.show_*` toggle is on.
 | `hcp_anatomical_none` | `anatomical_gift === 'none'` | No gift language |
 | `hipaa_psychotherapy_authorized` | `psychotherapy_notes === 'authorize'` | Psychotherapy notes authorization |
 | `hcp_client_advance_*` / `hcp_spouse_advance_*` | per-party advance directive | Life-support branches |
+| `hcp_{party}_advance_other` | directive is `other` | The other three flags are all false; the drafted language comes from `healthcare.{party}_advance_directive_other` |
 
 Document flags from estate plan design: `planning.include_hcp`, `include_hipaa`,
 `include_ahd` — all tied to the `healthcare` inclusion toggle. The health care
@@ -155,4 +157,5 @@ Clauses: `healthcare.agent_appointment.json`, `hipaa.authorization.json`
 | --- | --- |
 | **Template consumption** | The whole per-settlor set reaches templates; most of it has no clause branch yet. The interview worksheet prints all of it, the drafted documents consume a subset. |
 | **Post-death choices** | Captured in full (disposition of remains, funeral, pre-need, donations preference, AI replicas, disposition-agent acceptance). No template drafts a final-disposition document — `planning.include_final_disposition` is record-only. |
+| **`other` directive has no template** | The value and its text reach `healthcare.*`, and `hcp_{party}_advance_other` is available, but no clause branches on it yet — a directive set to `other` currently drafts none of the three standard directions and no substitute |
 | **Client anatomical restrictions** | Only the spouse has a `spouse_anatomical_restrictions` key; the client's restrictions still come from the `hcp_anatomical_specified` column. |

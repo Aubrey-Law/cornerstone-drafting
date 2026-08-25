@@ -321,7 +321,7 @@
     "anatomical_specified": "Corneas and skin only.",
     "spouse_anatomical_restrictions": "No restrictions.",
     "client_advance_directive": "do_not_prolong_life",
-    "spouse_advance_directive": "prolong_life",
+    "spouse_advance_directive": "other",
     "include_hcp_notice_page": true,
     "client_leave_instructions_blank": false,
     "client_receive_comfort_care": true,
@@ -358,7 +358,9 @@
     "spouse_preference_for_donations": false,
     "spouse_prohibit_ai_replicas": true,
     "spouse_disposition_agents_same_as_healthcare": true,
-    "spouse_include_disposition_agent_acceptance": true
+    "spouse_include_disposition_agent_acceptance": true,
+    "spouse_advance_directive_other": "Continue treatment while any reasonable prospect of recovery remains, as judged by the attending physician in consultation with Riley's health care agent.",
+    "client_advance_directive_other": ""
   },
   "hipaa": {
     "psychotherapy_notes": "authorize",

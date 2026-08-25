@@ -262,6 +262,32 @@ describe('design-summary-separate package', () => {
     ])
   })
 
+  it('binds the two options whose unions had no matching value', async () => {
+    // Advance directive: the example gives one settlor a standard direction and
+    // the other the custom one, so this proves both the new value and that the
+    // per-party split still holds.
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+
+    const directives = text.match(/Medical Treatment for Advanced Illness[\s\S]*?[☒☐] Other \/ Custom Instructions/g)
+    expect(directives).toHaveLength(2)
+    expect(directives![0]).toContain('☒ Do Not Prolong Life')
+    expect(directives![0]).toContain('☐ Other / Custom Instructions')
+    expect(directives![1]).toContain('☒ Other / Custom Instructions')
+    // The custom text prints only for the settlor who chose it.
+    expect(text).toContain('Continue treatment while any reasonable prospect of recovery remains')
+
+    // Spousal funding: the example is a disclaimer plan, so exercise the new
+    // value on a variant rather than making the example unrepresentative.
+    const skipsSpouse = loadExample() as unknown as Record<string, any>
+    skipsSpouse.trust.spousal_funding = 'not_to_spouse'
+    const skipText = visibleText((await render(skipsSpouse as never)).files[1].buffer)
+
+    expect(skipText.match(/☒ Do not distribute to spouse\/partner/g)).toHaveLength(2)
+    expect(skipText).not.toContain('☒ Distribute outright')
+    expect(skipText).not.toMatch(/\{\{|\{%|\[\[ MISSING/)
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

@@ -184,12 +184,22 @@ export type TrustPlanningType =
   | 'outright_to_spouse'
   | 'disclaimer'
   | 'clayton_election'
+  /**
+   * The residuary skips the surviving spouse entirely. Package selection only
+   * branches on `disclaimer`, so this falls through to `trust-individual-single`
+   * exactly as `outright_to_spouse` does — the difference is in how the trust
+   * disposes the residuary, which `trust.descendants_distribution` already
+   * carries. Adding this value therefore changes what the documents say, not
+   * which documents are produced.
+   */
+  | 'not_to_spouse'
 
 export function getTrustPlanningType(sheet: Pick<DesignSheet, 'decisions'>): TrustPlanningType {
   const decisions = isRecord(sheet.decisions) ? sheet.decisions : {}
   const value = decisions.trust_planning_type
   if (value === 'disclaimer') return 'disclaimer'
   if (value === 'clayton_election') return 'clayton_election'
+  if (value === 'not_to_spouse') return 'not_to_spouse'
   // Legacy persisted value before spousal funding options expanded.
   if (value === 'standard') return 'outright_to_spouse'
   return 'outright_to_spouse'

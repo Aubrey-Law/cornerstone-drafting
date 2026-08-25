@@ -110,9 +110,9 @@ Standing choices. Most matters take the firm default unless the client raises so
 
 The client’s own elections. Never presumed from the firm’s standards.
 
-- Client advance directive (prolong_life / do_not_resuscitate / do_not_prolong_life):
+- Client advance directive (prolong_life / do_not_resuscitate / do_not_prolong_life / other):
 - Client anatomical gift (yes / defer / no):
-- Spouse advance directive (prolong_life / do_not_resuscitate / do_not_prolong_life):
+- Spouse advance directive (prolong_life / do_not_resuscitate / do_not_prolong_life / other):
 - Spouse anatomical gift (yes / defer / no):
 
 ### Signing & Notes
