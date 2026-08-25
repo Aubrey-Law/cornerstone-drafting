@@ -388,7 +388,7 @@
     "items": [
       {
         "description": "Primary residence",
-        "institution": "—",
+        "institution": "\u2014",
         "category_label": "Real Estate",
         "estimated_value": "$750,000",
         "owner": "Joint (tenants by the entirety)",
@@ -411,6 +411,20 @@
     "signing_county": "Norfolk",
     "display_doc_date": "June 1, 2026",
     "display_signing_county": "Norfolk",
-    "signing_type": "attorney_supervised"
+    "signing_type": "attorney_supervised",
+    "signing_city": "Newton",
+    "notary_name": "Alexandra P. Reyes",
+    "trust_acknowledgment": "both",
+    "poa_acknowledgment": "notary",
+    "ahd_acknowledgment": "witnesses",
+    "healthcare_authorization_acknowledgment": "witnesses",
+    "final_disposition_execution": "witnesses_and_notary",
+    "combine_settlor_trustee_signatures": true,
+    "healthcare_signed_in_nursing_home": false,
+    "include_witness_phones": true,
+    "witness_1_address": "18 Chestnut Street, Newton, MA 02458",
+    "witness_1_phone": "(617) 555-0142",
+    "witness_2_address": "44 Beacon Street, Boston, MA 02108",
+    "witness_2_phone": "(617) 555-0177"
   }
 }

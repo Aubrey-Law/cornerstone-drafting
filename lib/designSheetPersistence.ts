@@ -26,6 +26,7 @@ const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
   'extras',
   'excluded_guardians',
   'excluded_person',
+  'execution_mechanics',
   'fiduciary_contact_details',
   'fiduciary_display_options',
   'fiduciary_document_inclusions',

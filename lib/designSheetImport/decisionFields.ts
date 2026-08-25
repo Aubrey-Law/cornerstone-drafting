@@ -62,6 +62,13 @@ import {
   setWillPersonalRepresentativePowers,
   type WillPersonalRepresentativePowers,
 } from '@/lib/designSheetWillPowers'
+import {
+  setExecutionMechanics,
+  DOCUMENT_ACKNOWLEDGMENTS,
+  FINAL_DISPOSITION_EXECUTIONS,
+  TRUST_ACKNOWLEDGMENTS,
+  type ExecutionMechanics,
+} from '@/lib/designSheet/executionMechanics'
 import { mergeDecisionUpdates } from '@/lib/designSheetDocumentInclusions'
 import type { DesignSheet } from '@/types/database'
 
@@ -70,6 +77,7 @@ export type DecisionNamespace =
   | 'dpoa_provisions'
   | 'healthcare_provisions'
   | 'will_pr_powers'
+  | 'execution_mechanics'
 
 export type DecisionFieldKind = 'string' | 'boolean' | 'number'
 
@@ -78,6 +86,7 @@ export const DECISION_NAMESPACES = [
   'dpoa_provisions',
   'healthcare_provisions',
   'will_pr_powers',
+  'execution_mechanics',
 ] as const satisfies readonly DecisionNamespace[]
 
 export interface DecisionFieldMeta {
@@ -166,6 +175,7 @@ const TRUST = 'Trust'
 const WILL = 'Will'
 const DPOA = 'Durable Power of Attorney'
 const HEALTHCARE = 'Health Care Documents'
+const EXECUTION = 'Signing and Execution'
 
 function trustField(
   key: keyof TrustDetailsProvisions,
@@ -192,6 +202,15 @@ function healthcareField(
   options?: readonly string[],
 ): DecisionFieldMeta {
   return { namespace: 'healthcare_provisions', key, section: HEALTHCARE, label, kind, options }
+}
+
+function executionField(
+  key: keyof ExecutionMechanics,
+  label: string,
+  kind: DecisionFieldKind,
+  options?: readonly string[],
+): DecisionFieldMeta {
+  return { namespace: 'execution_mechanics', key, section: EXECUTION, label, kind, options }
 }
 
 function willPowerField(
@@ -372,6 +391,22 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'will_pr_powers.allow_pay_taxes_debts_expenses': willPowerField('allow_pay_taxes_debts_expenses', 'PR may pay taxes, debts and expenses'),
   'will_pr_powers.allow_manage_digital_assets': willPowerField('allow_manage_digital_assets', 'PR may manage digital assets'),
   'will_pr_powers.include_distribution_cash_or_kind': willPowerField('include_distribution_cash_or_kind', 'PR may distribute in cash or in kind'),
+
+  // --- decisions.execution_mechanics ------------------------------------------
+  'execution_mechanics.trust_acknowledgment': executionField('trust_acknowledgment', 'Trust acknowledgment', 'string', TRUST_ACKNOWLEDGMENTS),
+  'execution_mechanics.poa_acknowledgment': executionField('poa_acknowledgment', 'Power of attorney acknowledgment', 'string', DOCUMENT_ACKNOWLEDGMENTS),
+  'execution_mechanics.ahd_acknowledgment': executionField('ahd_acknowledgment', 'Advance health care directive acknowledgment', 'string', DOCUMENT_ACKNOWLEDGMENTS),
+  'execution_mechanics.healthcare_authorization_acknowledgment': executionField('healthcare_authorization_acknowledgment', 'Health care authorization acknowledgment', 'string', DOCUMENT_ACKNOWLEDGMENTS),
+  'execution_mechanics.final_disposition_execution': executionField('final_disposition_execution', 'Final disposition execution', 'string', FINAL_DISPOSITION_EXECUTIONS),
+  'execution_mechanics.combine_settlor_trustee_signatures': executionField('combine_settlor_trustee_signatures', 'Combine settlor and trustee signature lines', 'boolean'),
+  'execution_mechanics.healthcare_signed_in_nursing_home': executionField('healthcare_signed_in_nursing_home', 'Health care documents signed in a nursing home', 'boolean'),
+  'execution_mechanics.signing_city': executionField('signing_city', 'Signing city', 'string'),
+  'execution_mechanics.notary_name': executionField('notary_name', 'Notary name', 'string'),
+  'execution_mechanics.include_witness_phones': executionField('include_witness_phones', 'Include witness phone numbers', 'boolean'),
+  'execution_mechanics.witness_1_address': executionField('witness_1_address', 'Witness 1 address', 'string'),
+  'execution_mechanics.witness_1_phone': executionField('witness_1_phone', 'Witness 1 phone', 'string'),
+  'execution_mechanics.witness_2_address': executionField('witness_2_address', 'Witness 2 address', 'string'),
+  'execution_mechanics.witness_2_phone': executionField('witness_2_phone', 'Witness 2 phone', 'string'),
 } satisfies Record<string, DecisionFieldMeta>
 
 export type DesignSheetDecisionField = keyof typeof DESIGN_SHEET_DECISION_FIELDS
@@ -458,6 +493,7 @@ export function applyDecisionFieldValues(
   const basicPowersPatch: Partial<Record<DpoaBasicPowerKey, boolean>> = {}
   const healthcarePatch: Record<string, unknown> = {}
   const willPowersPatch: Record<string, unknown> = {}
+  const executionPatch: Record<string, unknown> = {}
 
   for (const [field, value] of Object.entries(values)) {
     const meta = decisionFieldMeta(field)
@@ -473,6 +509,10 @@ export function applyDecisionFieldValues(
     }
     if (meta.namespace === 'will_pr_powers') {
       willPowersPatch[meta.key] = value
+      continue
+    }
+    if (meta.namespace === 'execution_mechanics') {
+      executionPatch[meta.key] = value
       continue
     }
     // dpoa_provisions — the only namespace with a nested key.
@@ -519,6 +559,13 @@ export function applyDecisionFieldValues(
     updates.push(current => setWillPersonalRepresentativePowers(
       current,
       willPowersPatch as Partial<WillPersonalRepresentativePowers>,
+    ))
+  }
+
+  if (Object.keys(executionPatch).length > 0) {
+    updates.push(current => setExecutionMechanics(
+      current,
+      executionPatch as Partial<ExecutionMechanics>,
     ))
   }
 

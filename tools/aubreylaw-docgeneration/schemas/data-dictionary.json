@@ -312,7 +312,7 @@
   "guardians.temporary.full_name": {
     "type": "string",
     "required": "conditional",
-    "description": "Temporary agent for parental delegation under MGL c.190B §5-103."
+    "description": "Temporary agent for parental delegation under MGL c.190B \u00a75-103."
   },
   "guardians.temporary.address": {
     "type": "string",
@@ -733,7 +733,7 @@
     "type": "string",
     "required": false,
     "populated": false,
-    "description": "Co-trustee subject pronoun for notary blocks. NOT POPULATED — the pipeline carries no pronouns for fiduciaries, so certificate-of-trust.docx falls back with `| default(client.pronoun_subject)`."
+    "description": "Co-trustee subject pronoun for notary blocks. NOT POPULATED \u2014 the pipeline carries no pronouns for fiduciaries, so certificate-of-trust.docx falls back with `| default(client.pronoun_subject)`."
   },
   "fiduciaries.trustee.co_successor.full_name": {
     "type": "string",
@@ -953,7 +953,7 @@
   "will_cp.parent1.full_name": {
     "type": "string",
     "required": "conditional",
-    "description": "College Preparation Plan will: first parent taking the residue of the student's estate. One parent is enough — the template drops to a single-parent residue clause."
+    "description": "College Preparation Plan will: first parent taking the residue of the student's estate. One parent is enough \u2014 the template drops to a single-parent residue clause."
   },
   "will_cp.parent2.full_name": {
     "type": "string",
@@ -1078,7 +1078,7 @@
   "funding_plan.narrative": {
     "type": "string",
     "required": false,
-    "description": "Trust funding plan prose, section by section. Contains markup — render it with the `| safe` filter."
+    "description": "Trust funding plan prose, section by section. Contains markup \u2014 render it with the `| safe` filter."
   },
   "funding_plan.checklist_items": {
     "type": "array",
@@ -1368,7 +1368,7 @@
   "fiduciaries.spouse_trustee.primary.full_name": {
     "type": "string",
     "required": "conditional",
-    "description": "Initial trustee of the spouse's own trust. Separate-trusts matters only — on a joint trust both spouses share fiduciaries.trustee."
+    "description": "Initial trustee of the spouse's own trust. Separate-trusts matters only \u2014 on a joint trust both spouses share fiduciaries.trustee."
   },
   "fiduciaries.spouse_trustee.co_primary.full_name": {
     "type": "string",
@@ -1508,7 +1508,7 @@
   "dpoa.special_powers.power_529_plans": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the agent may manage §529 educational savings plans."
+    "description": "Whether the agent may manage \u00a7529 educational savings plans."
   },
   "dpoa.special_powers.power_digital_assets": {
     "type": "boolean",
@@ -1538,7 +1538,7 @@
   "dpoa.trust_powers.agent_may_create_trusts_for_dependents": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the agent may create trusts for the principal’s dependents."
+    "description": "Whether the agent may create trusts for the principal\u2019s dependents."
   },
   "dpoa.trust_powers.agent_may_modify_joint_trusts": {
     "type": "boolean",
@@ -1548,7 +1548,7 @@
   "dpoa.trust_powers.agent_may_modify_sole_settlor_trusts": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the agent may modify the principal’s sole-settlor trusts."
+    "description": "Whether the agent may modify the principal\u2019s sole-settlor trusts."
   },
   "dpoa.trust_powers.allow_agent_as_trustee": {
     "type": "boolean",
@@ -1958,7 +1958,7 @@
   "trust.provisions.hold_distributions_for_young_beneficiaries": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the trustee may hold a young beneficiary’s distribution in trust."
+    "description": "Whether the trustee may hold a young beneficiary\u2019s distribution in trust."
   },
   "trust.provisions.include_arts_education": {
     "type": "boolean",
@@ -2018,7 +2018,7 @@
   "trust.provisions.power_529_plans": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the trustee may manage §529 educational savings plans."
+    "description": "Whether the trustee may manage \u00a7529 educational savings plans."
   },
   "trust.provisions.power_closely_held_businesses": {
     "type": "boolean",
@@ -2178,7 +2178,7 @@
   "assets.items[].target_owner": {
     "type": "string",
     "required": false,
-    "description": "Who should own the asset once the plan is funded — usually a trust name."
+    "description": "Who should own the asset once the plan is funded \u2014 usually a trust name."
   },
   "assets.items[].beneficiary_designation": {
     "type": "string",
@@ -2288,7 +2288,7 @@
   "trust.provisions.settlor_incapacity_determined_by": {
     "type": "string",
     "required": false,
-    "description": "Who determines that a settlor is incapacitated — e.g. attending_and_second_physician, single_physician, trust_protector, court, custom. Absent until the attorney chooses."
+    "description": "Who determines that a settlor is incapacitated \u2014 e.g. attending_and_second_physician, single_physician, trust_protector, court, custom. Absent until the attorney chooses."
   },
   "trust.provisions.trustee_incapacity_determined_by": {
     "type": "string",
@@ -2303,7 +2303,7 @@
   "trust.spousal_funding": {
     "type": "string",
     "required": false,
-    "description": "How the trust funds the surviving spouse: outright_to_spouse, disclaimer, or clayton_election. Answers the worksheet’s \"Distribution to Spouse/Partner\" question."
+    "description": "How the trust funds the surviving spouse: outright_to_spouse, disclaimer, or clayton_election. Answers the worksheet\u2019s \"Distribution to Spouse/Partner\" question."
   },
   "healthcare.include_hcp_notice_page": {
     "type": "boolean",
@@ -2393,12 +2393,12 @@
   "healthcare.client_coagent_disagreement_resolution": {
     "type": "string",
     "required": false,
-    "description": "How the client’s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
+    "description": "How the client\u2019s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
   },
   "healthcare.client_disposition_of_remains": {
     "type": "string",
     "required": false,
-    "description": "What should happen to the client’s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
+    "description": "What should happen to the client\u2019s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
   },
   "healthcare.spouse_leave_instructions_blank": {
     "type": "boolean",
@@ -2483,12 +2483,12 @@
   "healthcare.spouse_coagent_disagreement_resolution": {
     "type": "string",
     "required": false,
-    "description": "How the spouse’s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
+    "description": "How the spouse\u2019s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
   },
   "healthcare.spouse_disposition_of_remains": {
     "type": "string",
     "required": false,
-    "description": "What should happen to the spouse’s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
+    "description": "What should happen to the spouse\u2019s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
   },
   "dpoa.include_notice_page": {
     "type": "boolean",
@@ -2519,5 +2519,75 @@
     "type": "string",
     "required": false,
     "description": "Whether each agent signs an acceptance of appointment: include or omit."
+  },
+  "execution.signing_city": {
+    "type": "string",
+    "required": false,
+    "description": "City or town where the plan is signed."
+  },
+  "execution.notary_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the notary who will take the acknowledgments."
+  },
+  "execution.trust_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the living trust is executed: notary, witnesses, or both."
+  },
+  "execution.poa_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the power of attorney is executed: notary or witnesses."
+  },
+  "execution.ahd_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the advance health care directive is executed: notary or witnesses."
+  },
+  "execution.healthcare_authorization_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the health care authorization is executed: notary or witnesses."
+  },
+  "execution.final_disposition_execution": {
+    "type": "string",
+    "required": false,
+    "description": "How the final disposition instructions are executed: witnesses or witnesses_and_notary."
+  },
+  "execution.combine_settlor_trustee_signatures": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether one signature block covers a person signing as both settlor and trustee."
+  },
+  "execution.healthcare_signed_in_nursing_home": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the health care documents are signed in a nursing home, which adds the facility-witness language."
+  },
+  "execution.include_witness_phones": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether witness phone numbers print on the signature pages."
+  },
+  "execution.witness_1_address": {
+    "type": "string",
+    "required": false,
+    "description": "Address of the first witness, when the signing is pre-arranged."
+  },
+  "execution.witness_1_phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number of the first witness."
+  },
+  "execution.witness_2_address": {
+    "type": "string",
+    "required": false,
+    "description": "Address of the second witness, when the signing is pre-arranged."
+  },
+  "execution.witness_2_phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number of the second witness."
   }
 }

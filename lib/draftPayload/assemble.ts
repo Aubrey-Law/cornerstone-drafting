@@ -45,6 +45,7 @@ import {
   getDraftPayloadFiduciaryDisplay,
 } from '@/lib/draftPayload/fiduciaryDetails'
 import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
+import { draftPayloadExecutionMechanics } from '@/lib/draftPayload/executionMechanics'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { resolveDraftComposition } from '@/lib/matter/matterType'
 import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
@@ -453,6 +454,7 @@ export async function buildDraftPayload(
     signing_county: designSheet.signing_county ?? null,
     notary_commission_expiration: designSheet.notary_commission_expiration ?? null,
   }
+  const executionMechanics = draftPayloadExecutionMechanics(designSheet)
 
   // Attorney-defined template variables: `decisions.extras` flows straight
   // through to the Nunjucks context as `extras.*`, so a template can reference
@@ -527,6 +529,7 @@ export async function buildDraftPayload(
     goals_notes: designSheet.goals_notes ?? null,
     concerns: designSheet.concerns ?? null,
     execution,
+    execution_mechanics: executionMechanics,
     extras,
     design_sheet_id: designSheet.id || null,
     special_provisions: details?.ep_special_provisions ?? null,

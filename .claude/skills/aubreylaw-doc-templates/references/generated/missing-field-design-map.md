@@ -112,17 +112,31 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `dpoa.trust_powers.agent_may_modify_joint_trusts` | Agent May Modify Joint Trusts | Estate Plan Design | (section) |
 | `dpoa.trust_powers.agent_may_modify_sole_settlor_trusts` | Agent May Modify Sole Settlor Trusts | Estate Plan Design | (section) |
 | `dpoa.trust_powers.allow_agent_as_trustee` | Allow Agent As Trustee | Estate Plan Design | (section) |
+| `execution.ahd_acknowledgment` | Ahd Acknowledgment | Estate Plan Design | (section) |
+| `execution.combine_settlor_trustee_signatures` | Combine Settlor Trustee Signatures | Estate Plan Design | (section) |
 | `execution.display_doc_date` | Display Doc Date | Estate Plan Design | (section) |
 | `execution.display_notary_commission` | Display Notary Commission | Estate Plan Design | (section) |
 | `execution.display_ordinal_doc_date` | Display Ordinal Doc Date | Estate Plan Design | (section) |
 | `execution.display_signing_county` | Display Signing County | Estate Plan Design | (section) |
 | `execution.doc_date` | Doc Date | Estate Plan Design | (section) |
+| `execution.final_disposition_execution` | Final Disposition Execution | Estate Plan Design | (section) |
+| `execution.healthcare_authorization_acknowledgment` | Healthcare Authorization Acknowledgment | Estate Plan Design | (section) |
+| `execution.healthcare_signed_in_nursing_home` | Healthcare Signed In Nursing Home | Estate Plan Design | (section) |
 | `execution.id_type` | Client ID type | Client Information | (section) |
+| `execution.include_witness_phones` | Include Witness Phones | Estate Plan Design | (section) |
 | `execution.notary_commission` | Notary commission expiration | Estate Plan Design | `notary_commission_expiration` |
+| `execution.notary_name` | Notary Name | Estate Plan Design | (section) |
 | `execution.ordinal_doc_date` | Ordinal Doc Date | Estate Plan Design | (section) |
+| `execution.poa_acknowledgment` | Poa Acknowledgment | Estate Plan Design | (section) |
+| `execution.signing_city` | Signing City | Estate Plan Design | (section) |
 | `execution.signing_county` | Signing county | Estate Plan Design | `signing_county` |
 | `execution.signing_scheduled` | Signing Scheduled | Estate Plan Design | (section) |
 | `execution.signing_type` | Signing Type | Estate Plan Design | (section) |
+| `execution.trust_acknowledgment` | Trust Acknowledgment | Estate Plan Design | (section) |
+| `execution.witness_1_address` | Witness 1 Address | Estate Plan Design | (section) |
+| `execution.witness_1_phone` | Witness 1 Phone | Estate Plan Design | (section) |
+| `execution.witness_2_address` | Witness 2 Address | Estate Plan Design | (section) |
+| `execution.witness_2_phone` | Witness 2 Phone | Estate Plan Design | (section) |
 | `family.additional_beneficiaries` | Additional Beneficiaries | Estate Plan Design | (section) |
 | `family.additional_disinheritance_language` | Additional Disinheritance Language | Estate Plan Design | (section) |
 | `family.disinherit_issue` | Disinherit Issue | Estate Plan Design | (section) |

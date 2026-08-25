@@ -165,6 +165,29 @@ describe('design-summary-separate package', () => {
     expect(text.match(/☒ Continue until revoked or terminated/g)).toHaveLength(2)
   })
 
+  it('fills in the signing section Phase 4 added', async () => {
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+
+    // Acknowledgment method: one box per document, and the unpicked ones stay empty.
+    expect(text).toMatch(/Acknowledgment of Trust[\s\S]{0,80}☒ Both/)
+    expect(text).toMatch(/Acknowledgment of Power of Attorney:[\s\S]{0,20}☒ Notary/)
+    expect(text).toMatch(/Acknowledgment of Advance Health Care Directive:[\s\S]{0,40}☒ Two witnesses/)
+    expect(text).toMatch(/Final Disposition Execution:[\s\S]{0,60}☒ Two witnesses and notary/)
+
+    // A false answer prints as a ticked "No", not as two blank boxes — the
+    // distinction between "decided against" and "not asked yet".
+    expect(text).toMatch(/Combine settlor and trustee signatures:[\s\S]{0,20}☒ Yes/)
+    expect(text).toContain('☒ No, the healthcare directive will not be signed in a nursing home')
+
+    // Meeting details and witnesses print on their ruled lines.
+    expect(text).toContain('Signing City: Newton')
+    expect(text).toContain('Full Name of Notary: Alexandra P. Reyes')
+    expect(text).toMatch(/Include Witness Phones:[\s\S]{0,20}☒ Yes/)
+    expect(text).toContain('First Witness Phone Number: (617) 555-0142')
+    expect(text).toContain('Second Witness Address: 44 Beacon Street, Boston, MA 02108')
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

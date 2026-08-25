@@ -557,6 +557,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   const hcpProvisions = payload.hcp_provisions
   // The health care wishes and post-death choices live on the wider
   // provisions record; `hcp_provisions` only ever carried the legacy subset.
+  const executionMechanics = payload.execution_mechanics
   const healthcareProvisions = payload.healthcare_provisions
   const hipaaProvisions = payload.hipaa_provisions
   const ferpa = payload.ferpa_release ?? null
@@ -1063,6 +1064,23 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       notary_commission: notaryCommission,
       id_type: 'government-issued photo identification',
       signing_type: docs.signing_type ?? 'undecided',
+      signing_city: executionMechanics?.signing_city ?? null,
+      notary_name: executionMechanics?.notary_name ?? null,
+      trust_acknowledgment: executionMechanics?.trust_acknowledgment ?? null,
+      poa_acknowledgment: executionMechanics?.poa_acknowledgment ?? null,
+      ahd_acknowledgment: executionMechanics?.ahd_acknowledgment ?? null,
+      healthcare_authorization_acknowledgment:
+        executionMechanics?.healthcare_authorization_acknowledgment ?? null,
+      final_disposition_execution: executionMechanics?.final_disposition_execution ?? null,
+      combine_settlor_trustee_signatures:
+        executionMechanics?.combine_settlor_trustee_signatures ?? false,
+      healthcare_signed_in_nursing_home:
+        executionMechanics?.healthcare_signed_in_nursing_home ?? false,
+      include_witness_phones: executionMechanics?.include_witness_phones ?? false,
+      witness_1_address: executionMechanics?.witness_1_address ?? null,
+      witness_1_phone: executionMechanics?.witness_1_phone ?? null,
+      witness_2_address: executionMechanics?.witness_2_address ?? null,
+      witness_2_phone: executionMechanics?.witness_2_phone ?? null,
     }),
     specific_gifts: specificGifts,
     charitable_gifts: charitableGifts,

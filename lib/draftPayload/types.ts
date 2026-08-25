@@ -16,6 +16,7 @@ import type { DraftPayloadCollegePrepWill } from '@/lib/draftPayload/willCp'
 import type { DraftPayloadCollegePrep } from '@/lib/draftPayload/collegePrep'
 import type { DraftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import type { DraftPayloadTrustProvisions } from '@/lib/draftPayload/trustProvisions'
+import type { DraftPayloadExecutionMechanics } from '@/lib/draftPayload/executionMechanics'
 
 // ── Exported interface ────────────────────────────────────────────────────────
 
@@ -286,6 +287,10 @@ export interface DraftPayload {
     signing_county: string | null
     notary_commission_expiration: string | null
   }
+  /** Acknowledgment method, witnesses and meeting details from
+   *  `decisions.execution_mechanics`. Optional so stored legacy payloads
+   *  without it stay type-valid. */
+  execution_mechanics?: DraftPayloadExecutionMechanics
   /** Attorney-defined template variables (decisions.extras) exposed to templates as `extras.*`. */
   extras?: Record<string, string>
   design_sheet_id: string | null
