@@ -555,6 +555,9 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       ? [{ full_name: payload.client.excluded_guardian, reason: null }]
       : []
   const hcpProvisions = payload.hcp_provisions
+  // The health care wishes and post-death choices live on the wider
+  // provisions record; `hcp_provisions` only ever carried the legacy subset.
+  const healthcareProvisions = payload.healthcare_provisions
   const hipaaProvisions = payload.hipaa_provisions
   const ferpa = payload.ferpa_release ?? null
   const collegePrep = payload.college_prep ?? null
@@ -942,6 +945,43 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       spouse_anatomical_restrictions: hcpProvisions.spouse_anatomical_restrictions,
       client_advance_directive: hcpProvisions.client_advance_directive,
       spouse_advance_directive: hcpProvisions.spouse_advance_directive,
+      include_hcp_notice_page: healthcareProvisions?.include_hcp_notice_page ?? false,
+      client_leave_instructions_blank: healthcareProvisions?.client_leave_instructions_blank ?? false,
+      client_receive_comfort_care: healthcareProvisions?.client_receive_comfort_care ?? false,
+      client_wish_to_die_at_home: healthcareProvisions?.client_wish_to_die_at_home ?? false,
+      client_decline_autopsy: healthcareProvisions?.client_decline_autopsy ?? false,
+      client_agent_effective_immediately: healthcareProvisions?.client_agent_effective_immediately ?? false,
+      client_include_post_death_authority: healthcareProvisions?.client_include_post_death_authority ?? false,
+      client_preference_for_donations: healthcareProvisions?.client_preference_for_donations ?? false,
+      client_prohibit_ai_replicas: healthcareProvisions?.client_prohibit_ai_replicas ?? false,
+      client_disposition_agents_same_as_healthcare: healthcareProvisions?.client_disposition_agents_same_as_healthcare ?? false,
+      client_include_disposition_agent_acceptance: healthcareProvisions?.client_include_disposition_agent_acceptance ?? false,
+      client_other_healthcare_wishes: healthcareProvisions?.client_other_healthcare_wishes ?? '',
+      client_agent_limits_while_living: healthcareProvisions?.client_agent_limits_while_living ?? '',
+      client_agent_limits_after_death: healthcareProvisions?.client_agent_limits_after_death ?? '',
+      client_funeral_instructions: healthcareProvisions?.client_funeral_instructions ?? '',
+      client_preneed_arrangements: healthcareProvisions?.client_preneed_arrangements ?? '',
+      client_other_disposition_instructions: healthcareProvisions?.client_other_disposition_instructions ?? '',
+      client_coagent_disagreement_resolution: healthcareProvisions?.client_coagent_disagreement_resolution ?? undefined,
+      client_disposition_of_remains: healthcareProvisions?.client_disposition_of_remains ?? undefined,
+      spouse_leave_instructions_blank: healthcareProvisions?.spouse_leave_instructions_blank ?? false,
+      spouse_receive_comfort_care: healthcareProvisions?.spouse_receive_comfort_care ?? false,
+      spouse_wish_to_die_at_home: healthcareProvisions?.spouse_wish_to_die_at_home ?? false,
+      spouse_decline_autopsy: healthcareProvisions?.spouse_decline_autopsy ?? false,
+      spouse_agent_effective_immediately: healthcareProvisions?.spouse_agent_effective_immediately ?? false,
+      spouse_include_post_death_authority: healthcareProvisions?.spouse_include_post_death_authority ?? false,
+      spouse_preference_for_donations: healthcareProvisions?.spouse_preference_for_donations ?? false,
+      spouse_prohibit_ai_replicas: healthcareProvisions?.spouse_prohibit_ai_replicas ?? false,
+      spouse_disposition_agents_same_as_healthcare: healthcareProvisions?.spouse_disposition_agents_same_as_healthcare ?? false,
+      spouse_include_disposition_agent_acceptance: healthcareProvisions?.spouse_include_disposition_agent_acceptance ?? false,
+      spouse_other_healthcare_wishes: healthcareProvisions?.spouse_other_healthcare_wishes ?? '',
+      spouse_agent_limits_while_living: healthcareProvisions?.spouse_agent_limits_while_living ?? '',
+      spouse_agent_limits_after_death: healthcareProvisions?.spouse_agent_limits_after_death ?? '',
+      spouse_funeral_instructions: healthcareProvisions?.spouse_funeral_instructions ?? '',
+      spouse_preneed_arrangements: healthcareProvisions?.spouse_preneed_arrangements ?? '',
+      spouse_other_disposition_instructions: healthcareProvisions?.spouse_other_disposition_instructions ?? '',
+      spouse_coagent_disagreement_resolution: healthcareProvisions?.spouse_coagent_disagreement_resolution ?? undefined,
+      spouse_disposition_of_remains: healthcareProvisions?.spouse_disposition_of_remains ?? undefined,
     },
     will_cp: {
       parent1: person(payload.will_cp?.parent1_name),

@@ -130,6 +130,28 @@ describe('design-summary-separate package', () => {
     expect(text).toContain('☒ Distribute in trust')
   })
 
+  it('keeps each settlor\u2019s health care wishes and post-death choices separate', async () => {
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+    const settlor1 = text.slice(text.indexOf('HEALTH CARE PROXY (SETTLOR 1)'), text.indexOf('HEALTH CARE PROXY (SETTLOR 2)'))
+    const settlor2 = text.slice(text.indexOf('HEALTH CARE PROXY (SETTLOR 2)'), text.indexOf('HEALTHCARE FORMS'))
+
+    // The example gives the two settlors deliberately different answers, so a
+    // block wired to the wrong party would show up as both halves matching.
+    expect(settlor1).toMatch(/Wish to die at home:[\s\S]{0,40}☒ Yes/)
+    expect(settlor2).toMatch(/Wish to die at home:[\s\S]{0,40}☐ Yes {3}☒ No/)
+    expect(settlor1).toContain('☒ First-named agent has final authority')
+    expect(settlor2).toContain('☒ Majority rules')
+    expect(settlor1).toContain('Please play music I know.')
+    expect(settlor2).toContain('Defer to my spouse.')
+
+    // Post-death choices, likewise per settlor.
+    expect(text).toContain('☒ Cremation')
+    expect(text).toContain('☒ Burial')
+    expect(text).toContain('Ashes scattered at Crane Beach.')
+    expect(text).toContain('Buried beside my parents.')
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

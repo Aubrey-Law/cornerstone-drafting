@@ -2304,5 +2304,190 @@
     "type": "string",
     "required": false,
     "description": "How the trust funds the surviving spouse: outright_to_spouse, disclaimer, or clayton_election. Answers the worksheet’s \"Distribution to Spouse/Partner\" question."
+  },
+  "healthcare.include_hcp_notice_page": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether each health care proxy carries the statutory notice page."
+  },
+  "healthcare.client_leave_instructions_blank": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the proxy is signed without treatment instructions, leaving the agent to decide."
+  },
+  "healthcare.client_receive_comfort_care": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, comfort and hygiene care continue regardless of any instruction to withhold treatment."
+  },
+  "healthcare.client_wish_to_die_at_home": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, a preference to be cared for at home rather than in a facility is recorded."
+  },
+  "healthcare.client_decline_autopsy": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, an objection to autopsy is recorded, except where the law requires one."
+  },
+  "healthcare.client_agent_effective_immediately": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the health care agent's authority is effective immediately rather than springing on incapacity."
+  },
+  "healthcare.client_include_post_death_authority": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the health care agent may act after death for disposition purposes."
+  },
+  "healthcare.client_preference_for_donations": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, mourners are asked to give to a named cause rather than send flowers."
+  },
+  "healthcare.client_prohibit_ai_replicas": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, consent is withheld for synthetic recreations of voice or likeness after death."
+  },
+  "healthcare.client_disposition_agents_same_as_healthcare": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the disposition agents are the health care agents."
+  },
+  "healthcare.client_include_disposition_agent_acceptance": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, each disposition agent signs an acceptance of appointment."
+  },
+  "healthcare.client_other_healthcare_wishes": {
+    "type": "string",
+    "required": false,
+    "description": "Religious, cultural, or personal health care instructions (the client)."
+  },
+  "healthcare.client_agent_limits_while_living": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority while the principal is living (the client)."
+  },
+  "healthcare.client_agent_limits_after_death": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority after the principal's death (the client)."
+  },
+  "healthcare.client_funeral_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Funeral instructions (the client)."
+  },
+  "healthcare.client_preneed_arrangements": {
+    "type": "string",
+    "required": false,
+    "description": "Pre-need or post-death arrangements already made (the client)."
+  },
+  "healthcare.client_other_disposition_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Any further instructions for the disposition of remains (the client)."
+  },
+  "healthcare.client_coagent_disagreement_resolution": {
+    "type": "string",
+    "required": false,
+    "description": "How the client’s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
+  },
+  "healthcare.client_disposition_of_remains": {
+    "type": "string",
+    "required": false,
+    "description": "What should happen to the client’s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
+  },
+  "healthcare.spouse_leave_instructions_blank": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the proxy is signed without treatment instructions, leaving the agent to decide."
+  },
+  "healthcare.spouse_receive_comfort_care": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, comfort and hygiene care continue regardless of any instruction to withhold treatment."
+  },
+  "healthcare.spouse_wish_to_die_at_home": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, a preference to be cared for at home rather than in a facility is recorded."
+  },
+  "healthcare.spouse_decline_autopsy": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, an objection to autopsy is recorded, except where the law requires one."
+  },
+  "healthcare.spouse_agent_effective_immediately": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the health care agent's authority is effective immediately rather than springing on incapacity."
+  },
+  "healthcare.spouse_include_post_death_authority": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the health care agent may act after death for disposition purposes."
+  },
+  "healthcare.spouse_preference_for_donations": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, mourners are asked to give to a named cause rather than send flowers."
+  },
+  "healthcare.spouse_prohibit_ai_replicas": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, consent is withheld for synthetic recreations of voice or likeness after death."
+  },
+  "healthcare.spouse_disposition_agents_same_as_healthcare": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the disposition agents are the health care agents."
+  },
+  "healthcare.spouse_include_disposition_agent_acceptance": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, each disposition agent signs an acceptance of appointment."
+  },
+  "healthcare.spouse_other_healthcare_wishes": {
+    "type": "string",
+    "required": false,
+    "description": "Religious, cultural, or personal health care instructions (the spouse)."
+  },
+  "healthcare.spouse_agent_limits_while_living": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority while the principal is living (the spouse)."
+  },
+  "healthcare.spouse_agent_limits_after_death": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority after the principal's death (the spouse)."
+  },
+  "healthcare.spouse_funeral_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Funeral instructions (the spouse)."
+  },
+  "healthcare.spouse_preneed_arrangements": {
+    "type": "string",
+    "required": false,
+    "description": "Pre-need or post-death arrangements already made (the spouse)."
+  },
+  "healthcare.spouse_other_disposition_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Any further instructions for the disposition of remains (the spouse)."
+  },
+  "healthcare.spouse_coagent_disagreement_resolution": {
+    "type": "string",
+    "required": false,
+    "description": "How the spouse’s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
+  },
+  "healthcare.spouse_disposition_of_remains": {
+    "type": "string",
+    "required": false,
+    "description": "What should happen to the spouse’s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
   }
 }

@@ -265,7 +265,29 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.agent.second_alternate.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `healthcare.anatomical_gift` | Anatomical Gift | Health Care & Directives | (section) |
 | `healthcare.anatomical_specified` | Anatomical Specified | Health Care & Directives | (section) |
+| `healthcare.client_agent_effective_immediately` | Client Agent Effective Immediately | Health Care & Directives | (section) |
+| `healthcare.client_agent_limits_after_death` | Client Agent Limits After Death | Health Care & Directives | (section) |
+| `healthcare.client_agent_limits_while_living` | Client Agent Limits While Living | Health Care & Directives | (section) |
 | `healthcare.client_anatomical_gift` | Client Anatomical Gift | Health Care & Directives | (section) |
+| `healthcare.client_coagent_disagreement_resolution` | Client Coagent Disagreement Resolution | Health Care & Directives | (section) |
+| `healthcare.client_decline_autopsy` | Client Decline Autopsy | Health Care & Directives | (section) |
+| `healthcare.client_disposition_agents_same_as_healthcare` | Client Disposition Agents Same As Healthcare | Health Care & Directives | (section) |
+| `healthcare.client_disposition_of_remains` | Client Disposition Of Remains | Health Care & Directives | (section) |
+| `healthcare.client_funeral_instructions` | Client Funeral Instructions | Health Care & Directives | (section) |
+| `healthcare.client_include_disposition_agent_acceptance` | Client Include Disposition Agent Acceptance | Health Care & Directives | (section) |
+| `healthcare.client_include_post_death_authority` | Client Include Post Death Authority | Health Care & Directives | (section) |
+| `healthcare.client_leave_instructions_blank` | Client Leave Instructions Blank | Health Care & Directives | (section) |
+| `healthcare.client_other_disposition_instructions` | Client Other Disposition Instructions | Health Care & Directives | (section) |
+| `healthcare.client_other_healthcare_wishes` | Client Other Healthcare Wishes | Health Care & Directives | (section) |
+| `healthcare.client_preference_for_donations` | Client Preference For Donations | Health Care & Directives | (section) |
+| `healthcare.client_preneed_arrangements` | Client Preneed Arrangements | Health Care & Directives | (section) |
+| `healthcare.client_prohibit_ai_replicas` | Client Prohibit Ai Replicas | Health Care & Directives | (section) |
+| `healthcare.client_receive_comfort_care` | Client Receive Comfort Care | Health Care & Directives | (section) |
+| `healthcare.client_wish_to_die_at_home` | Client Wish To Die At Home | Health Care & Directives | (section) |
+| `healthcare.include_hcp_notice_page` | Include Hcp Notice Page | Health Care & Directives | (section) |
+| `healthcare.spouse_agent_effective_immediately` | Spouse Agent Effective Immediately | Health Care & Directives | (section) |
+| `healthcare.spouse_agent_limits_after_death` | Spouse Agent Limits After Death | Health Care & Directives | (section) |
+| `healthcare.spouse_agent_limits_while_living` | Spouse Agent Limits While Living | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.alternate.address` | Address | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.alternate.email` | Email | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.alternate.full_name` | Spouse Agent Alternate | Health Care & Directives | (section) |
@@ -280,6 +302,21 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.spouse_agent.primary.relationship` | Relationship | Health Care & Directives | (section) |
 | `healthcare.spouse_anatomical_gift` | Spouse Anatomical Gift | Health Care & Directives | (section) |
 | `healthcare.spouse_anatomical_restrictions` | Spouse Anatomical Restrictions | Health Care & Directives | (section) |
+| `healthcare.spouse_coagent_disagreement_resolution` | Spouse Coagent Disagreement Resolution | Health Care & Directives | (section) |
+| `healthcare.spouse_decline_autopsy` | Spouse Decline Autopsy | Health Care & Directives | (section) |
+| `healthcare.spouse_disposition_agents_same_as_healthcare` | Spouse Disposition Agents Same As Healthcare | Health Care & Directives | (section) |
+| `healthcare.spouse_disposition_of_remains` | Spouse Disposition Of Remains | Health Care & Directives | (section) |
+| `healthcare.spouse_funeral_instructions` | Spouse Funeral Instructions | Health Care & Directives | (section) |
+| `healthcare.spouse_include_disposition_agent_acceptance` | Spouse Include Disposition Agent Acceptance | Health Care & Directives | (section) |
+| `healthcare.spouse_include_post_death_authority` | Spouse Include Post Death Authority | Health Care & Directives | (section) |
+| `healthcare.spouse_leave_instructions_blank` | Spouse Leave Instructions Blank | Health Care & Directives | (section) |
+| `healthcare.spouse_other_disposition_instructions` | Spouse Other Disposition Instructions | Health Care & Directives | (section) |
+| `healthcare.spouse_other_healthcare_wishes` | Spouse Other Healthcare Wishes | Health Care & Directives | (section) |
+| `healthcare.spouse_preference_for_donations` | Spouse Preference For Donations | Health Care & Directives | (section) |
+| `healthcare.spouse_preneed_arrangements` | Spouse Preneed Arrangements | Health Care & Directives | (section) |
+| `healthcare.spouse_prohibit_ai_replicas` | Spouse Prohibit Ai Replicas | Health Care & Directives | (section) |
+| `healthcare.spouse_receive_comfort_care` | Spouse Receive Comfort Care | Health Care & Directives | (section) |
+| `healthcare.spouse_wish_to_die_at_home` | Spouse Wish To Die At Home | Health Care & Directives | (section) |
 | `hipaa.client_additional_agents` | Client Additional Agents | Estate Plan Design | (section) |
 | `hipaa.include_poa` | Include Poa | Estate Plan Design | (section) |
 | `hipaa.include_trustees` | Include Trustees | Estate Plan Design | (section) |
