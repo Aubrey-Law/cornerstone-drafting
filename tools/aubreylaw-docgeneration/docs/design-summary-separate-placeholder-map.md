@@ -47,7 +47,9 @@ without the empty halves.
 | Worksheet question | Merge field / condition |
 | --- | --- |
 | Core document check boxes | `planning.include_trust`, `include_dpoa`, `include_hcp`, `include_ahd`, `include_hipaa`, `include_pour_over_will`, `include_simple_will`, `include_ppm`, `include_certificate_of_trust`, `include_assignment_of_personal_property`, `include_funding_instructions`, `include_estate_plan_summary`, `include_parental_appointment`, `include_homestead_trustee` |
-| Settlor 1 / 2 identity, address, contact | `client.*`, `spouse.*`, `marriage.date` |
+| Presentation extras | `planning.include_trust_summary`, `include_estate_plan_signing_guide`, `include_successor_trustee_checklist`, `include_fiduciary_role_guide`, `include_flowchart`, `include_asset_spreadsheet` |
+| Will title | `will.title` (`last_will` / `pour_over_will`) |
+| Settlor 1 / 2 identity, address, contact | `client.*` (incl. `citizenship`, `domicile`), `spouse.*` (incl. `citizenship`), `marriage.date` |
 | Children table | `{% for child in children %}` |
 | Afterborn / posthumous / omissions | `family.include_afterborn_children`, `family.include_expectant_children`, `family.omissions_intentional` |
 | Disinherited heirs | `family.disinherited[]`, `family.disinherit_issue`, `family.include_general_disinheritance`, `family.additional_disinheritance_language` |
@@ -68,7 +70,9 @@ without the empty halves.
 | Anatomical gifts | `healthcare.client_anatomical_gift`, `healthcare.spouse_anatomical_gift`, `healthcare.anatomical_specified`, `healthcare.spouse_anatomical_restrictions` |
 | HIPAA | `hipaa.include_poa`, `hipaa.include_trustees`, `hipaa_list_fiduciaries_by_name`, `hipaa_list_fiduciaries_general`, `hipaa_psychotherapy_authorized`, `hipaa.client_additional_agents[]`, `hipaa.spouse_additional_agents[]` |
 | Executors and will powers | `will.pr_structure`, `will.pr_powers.*`, `will.bond`, `will.include_self_proving_affidavit`, `will.include_disclaimer_article`, `fiduciaries.executor.*`, `fiduciaries.spouse_executor.*` |
-| Signing information | `execution.signing_scheduled`, `execution.display_doc_date`, `execution.display_signing_county`, `execution.display_notary_commission`, `client.state` |
+| Signing information | `execution.signing_scheduled`, `execution.display_doc_date`, `execution.display_signing_county`, `execution.display_notary_commission`, `execution.signing_type`, `client.state` |
+| Additional beneficiaries | `family.additional_beneficiaries[]` |
+| Asset schedule ownership | `assets.items[].owner`, `.target_owner` |
 
 ## Deliberate departures from the source form
 
@@ -78,14 +82,15 @@ without the empty halves.
 | Free-form beneficiary table | Children table plus a **Specific Gifts** table | The design sheet has no free-form beneficiary roster; children and specific bequests are the recipients it does record. |
 | "Remainder of Tangible Personal Property" — six generic options | The design sheet's own four options | Those are the values `tangible_property_distribution` can hold; the generic list could never be ticked. |
 | "Default Provision" — seven generic options | The design sheet's three remote-beneficiary options | Same reason. |
-| Estate Assets table columns *Ownership* / *Schedule / Trust* | *Category* / *Institution* | `assets.items[]` carries category and institution; owner is not populated. |
+| Estate Assets table column *Schedule / Trust* | *Transfer To* | The design sheet records where an asset should end up (`assets[].target_owner`), not which schedule it lands on. |
 
 Some blocks stay entirely unticked because nothing upstream records them:
 table of contents, dementia directive, visitation authorization, final
-disposition, comprehensive transfer document, the letters and presentation
-extras, retirement-account provisions, the incapacity-determination lists,
+disposition, comprehensive transfer document, the cover page and letters,
+retirement-account provisions, the incapacity-determination lists,
 post-death choices, deeds, and transfers & assignments. They print as blank
-boxes and ruled lines for the interview.
+boxes and ruled lines for the interview. `docs/design-sheet-sections/` and the
+design-sheet plan track what it would take to capture them.
 
 ## Fields added to the pipeline for this template
 
@@ -98,6 +103,12 @@ boxes and ruled lines for the interview.
 | `planning.include_estate_plan_summary` | `documents.include_estate_plan_summary` |
 | `will.pr_powers.*` | `will_provisions.pr_powers` |
 | `fiduciaries.spouse_trustee.*` | `fiduciaries.spouse_trustee_primary` / `_co` / `_successor` (design sheet `spouse_trustee_slots`) |
+| `client.citizenship`, `client.domicile`, `spouse.citizenship` | `client_citizenship`, `client_domicile`, `spouse_citizenship` columns |
+| `planning.include_trust_summary` and the other four presentation extras | `decisions.estate_plan_design.ancillary_documents.*` |
+| `will.title`, `execution.signing_type` | `decisions.estate_plan_design.will_title` / `.signing_type` |
+| `assets.items[].owner` / `.target_owner` / `.beneficiary_designation` | `assets[].current_owner` / `.target_owner` / `.beneficiary_designation` |
+| `family.additional_beneficiaries` | `additional_beneficiaries[]` column |
+| `trust.provisions.include_marital_deduction_savings_language` | new `decisions.trust_details` key — the checkbox that used to be inert |
 
 `fiduciaries.spouse_trustee` is new because separate trusts are the only
 structure where the spouse has their own trustee set. The existing

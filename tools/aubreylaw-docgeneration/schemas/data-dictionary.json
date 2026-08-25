@@ -2114,5 +2114,85 @@
     "type": "string",
     "required": false,
     "description": "Trustee compensation basis: prevailing_corporate, prevailing_professional, reasonable, based_on_trustee_type, or none."
+  },
+  "client.citizenship": {
+    "type": "string",
+    "required": false,
+    "description": "Client's citizenship status, e.g. \"US Citizen\" or \"Permanent Resident\". Drives QDOT and non-citizen-spouse planning."
+  },
+  "client.domicile": {
+    "type": "string",
+    "required": false,
+    "description": "State the client is domiciled in. Defaults to the client's state on the design sheet."
+  },
+  "spouse.citizenship": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's citizenship status; same vocabulary as client.citizenship."
+  },
+  "planning.include_trust_summary": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes an article-by-article trust summary."
+  },
+  "planning.include_estate_plan_signing_guide": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes the estate plan signing guide."
+  },
+  "planning.include_successor_trustee_checklist": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes the successor trustee checklist."
+  },
+  "planning.include_fiduciary_role_guide": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes the fiduciary role guide."
+  },
+  "planning.include_flowchart": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes a distribution flowchart."
+  },
+  "planning.include_asset_spreadsheet": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the plan includes the asset spreadsheet."
+  },
+  "will.title": {
+    "type": "string",
+    "required": false,
+    "description": "How the will is titled: last_will or pour_over_will."
+  },
+  "execution.signing_type": {
+    "type": "string",
+    "required": false,
+    "description": "How the plan will be executed: undecided, attorney_supervised, or independent_client."
+  },
+  "assets.items[].owner": {
+    "type": "string",
+    "required": false,
+    "description": "How the asset is currently owned, e.g. \"Joint\" or \"Client individually\". Empty until the attorney records it on the asset schedule."
+  },
+  "assets.items[].target_owner": {
+    "type": "string",
+    "required": false,
+    "description": "Who should own the asset once the plan is funded — usually a trust name."
+  },
+  "assets.items[].beneficiary_designation": {
+    "type": "string",
+    "required": false,
+    "description": "Primary and contingent beneficiary designations recorded for the asset."
+  },
+  "family.additional_beneficiaries": {
+    "type": "array",
+    "required": false,
+    "description": "People, groups, and charities named beyond the immediate family. Each entry carries .full_name, .kind (individual/group/charity), and .relationship."
+  },
+  "trust.provisions.include_marital_deduction_savings_language": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the spendthrift clause carries marital deduction savings language. Disclaimer and Clayton-election structures include it automatically."
   }
 }

@@ -109,6 +109,7 @@ export interface TrustDetailsProvisions {
   hold_distributions_for_young_beneficiaries: boolean
   include_substance_abuse: boolean
   include_creditor_divorce_provisions: boolean
+  include_marital_deduction_savings_language: boolean
   include_contingent_snt: boolean
   allow_distributions_to_dependents_if_incapacitated: boolean
   include_no_contest_clause: boolean
@@ -152,6 +153,7 @@ const DEFAULT_TRUST_DETAILS: TrustDetailsProvisions = {
   hold_distributions_for_young_beneficiaries: false,
   include_substance_abuse: false,
   include_creditor_divorce_provisions: false,
+  include_marital_deduction_savings_language: false,
   include_contingent_snt: false,
   allow_distributions_to_dependents_if_incapacitated: false,
   include_no_contest_clause: false,
@@ -260,6 +262,7 @@ export function getTrustDetails(sheet: Pick<DesignSheet, 'decisions'>): TrustDet
     hold_distributions_for_young_beneficiaries: readBoolean(raw, 'hold_distributions_for_young_beneficiaries', DEFAULT_TRUST_DETAILS.hold_distributions_for_young_beneficiaries),
     include_substance_abuse: readBoolean(raw, 'include_substance_abuse', DEFAULT_TRUST_DETAILS.include_substance_abuse),
     include_creditor_divorce_provisions: readBoolean(raw, 'include_creditor_divorce_provisions', DEFAULT_TRUST_DETAILS.include_creditor_divorce_provisions),
+    include_marital_deduction_savings_language: readBoolean(raw, 'include_marital_deduction_savings_language', DEFAULT_TRUST_DETAILS.include_marital_deduction_savings_language),
     include_contingent_snt: readBoolean(raw, 'include_contingent_snt', DEFAULT_TRUST_DETAILS.include_contingent_snt),
     allow_distributions_to_dependents_if_incapacitated: readBoolean(
       raw,

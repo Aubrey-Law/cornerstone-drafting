@@ -479,6 +479,7 @@ export async function buildDraftPayload(
       aka: designSheet.client_aka ?? null,
       preferred_pronoun: designSheet.client_pronouns ?? null,
       citizenship: designSheet.client_citizenship ?? null,
+      domicile: designSheet.client_domicile ?? null,
       dob: designSheet.client_dob ?? null,
       address: clientAddress,
       city: clientCity,
