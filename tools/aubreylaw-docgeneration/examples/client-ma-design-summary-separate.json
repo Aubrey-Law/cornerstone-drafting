@@ -113,7 +113,28 @@
       "include_education_expenses_definition": true,
       "include_discretionary_distribution_definition": true,
       "prorate_estate_taxes": true,
-      "include_marital_deduction_savings_language": true
+      "include_marital_deduction_savings_language": true,
+      "require_trustee_bond": false,
+      "limit_duty_to_account": true,
+      "include_reverse_mortgage_clause": false,
+      "include_firearms_provisions": false,
+      "allow_sole_trustee_to_appoint_cotrustees": true,
+      "allow_trustee_to_designate_alternates": true,
+      "include_retirement_account_provisions": true,
+      "allow_protector_convert_conduit_trusts": true,
+      "allow_direct_distributions_to_young_or_incapacitated": true,
+      "include_slayer_provision": true,
+      "allow_charitable_giving_during_incapacity": true,
+      "forgive_all_debts": false,
+      "include_incapacity_definition": true,
+      "allow_psychologist_substitute": true,
+      "allow_pa_np_substitute": false,
+      "settlor_incapacity_determined_by": "two_physicians",
+      "trustee_incapacity_determined_by": "single_physician",
+      "asset_schedule_signature_block": true,
+      "asset_schedule_catchall": true,
+      "asset_schedule_non_trust": false,
+      "asset_schedule_format": "table"
     },
     "residual_beneficiary": "Descendants, per stirpes",
     "residuary_after_death": "descendants_shares_all_trusts",
@@ -139,7 +160,8 @@
       "charity": {
         "name": "Local Animal Shelter"
       }
-    }
+    },
+    "spousal_funding": "disclaimer"
   },
   "will": {
     "pr_structure": "spouse_first",

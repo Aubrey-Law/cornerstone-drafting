@@ -374,9 +374,21 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.display_name` | Trust name | Trust Details | `trust_name` |
 | `trust.include_common_trust_for_children` | Include Common Trust For Children | Trust Details | (section) |
 | `trust.name` | Trust name | Trust Details | `trust_name` |
+| `trust.provisions.allow_charitable_giving_during_incapacity` | Allow Charitable Giving During Incapacity | Trust Details | (section) |
+| `trust.provisions.allow_direct_distributions_to_young_or_incapacitated` | Allow Direct Distributions To Young Or Incapacitated | Trust Details | (section) |
 | `trust.provisions.allow_distributions_to_dependents_if_incapacitated` | Allow Distributions To Dependents If Incapacitated | Trust Details | (section) |
+| `trust.provisions.allow_pa_np_substitute` | Allow Pa Np Substitute | Trust Details | (section) |
+| `trust.provisions.allow_protector_convert_conduit_trusts` | Allow Protector Convert Conduit Trusts | Trust Details | (section) |
+| `trust.provisions.allow_psychologist_substitute` | Allow Psychologist Substitute | Trust Details | (section) |
+| `trust.provisions.allow_sole_trustee_to_appoint_cotrustees` | Allow Sole Trustee To Appoint Cotrustees | Trust Details | (section) |
 | `trust.provisions.allow_special_trustee` | Allow Special Trustee | Trust Details | (section) |
 | `trust.provisions.allow_trustee_change_situs` | Allow Trustee Change Situs | Trust Details | (section) |
+| `trust.provisions.allow_trustee_to_designate_alternates` | Allow Trustee To Designate Alternates | Trust Details | (section) |
+| `trust.provisions.asset_schedule_catchall` | Asset Schedule Catchall | Trust Details | (section) |
+| `trust.provisions.asset_schedule_format` | Asset Schedule Format | Trust Details | (section) |
+| `trust.provisions.asset_schedule_non_trust` | Asset Schedule Non Trust | Trust Details | (section) |
+| `trust.provisions.asset_schedule_signature_block` | Asset Schedule Signature Block | Trust Details | (section) |
+| `trust.provisions.forgive_all_debts` | Forgive All Debts | Trust Details | (section) |
 | `trust.provisions.hold_distributions_for_young_beneficiaries` | Hold Distributions For Young Beneficiaries | Trust Details | (section) |
 | `trust.provisions.include_arts_education` | Include Arts Education | Trust Details | (section) |
 | `trust.provisions.include_contingent_snt` | Include Contingent Snt | Trust Details | (section) |
@@ -384,11 +396,17 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.provisions.include_disappearance_definition` | Include Disappearance Definition | Trust Details | (section) |
 | `trust.provisions.include_discretionary_distribution_definition` | Include Discretionary Distribution Definition | Trust Details | (section) |
 | `trust.provisions.include_education_expenses_definition` | Include Education Expenses Definition | Trust Details | (section) |
+| `trust.provisions.include_firearms_provisions` | Include Firearms Provisions | Trust Details | (section) |
 | `trust.provisions.include_homeschooling` | Include Homeschooling | Trust Details | (section) |
+| `trust.provisions.include_incapacity_definition` | Include Incapacity Definition | Trust Details | (section) |
 | `trust.provisions.include_marital_deduction_savings_language` | Include Marital Deduction Savings Language | Trust Details | (section) |
 | `trust.provisions.include_no_contest_clause` | Include No Contest Clause | Trust Details | (section) |
+| `trust.provisions.include_retirement_account_provisions` | Include Retirement Account Provisions | Trust Details | (section) |
+| `trust.provisions.include_reverse_mortgage_clause` | Include Reverse Mortgage Clause | Trust Details | (section) |
+| `trust.provisions.include_slayer_provision` | Include Slayer Provision | Trust Details | (section) |
 | `trust.provisions.include_substance_abuse` | Include Substance Abuse | Trust Details | (section) |
 | `trust.provisions.include_vocational_training` | Include Vocational Training | Trust Details | (section) |
+| `trust.provisions.limit_duty_to_account` | Limit Duty To Account | Trust Details | (section) |
 | `trust.provisions.name_people_in_no_contest_clause` | Name People In No Contest Clause | Trust Details | (section) |
 | `trust.provisions.power_529_plans` | Power 529 Plans | Trust Details | (section) |
 | `trust.provisions.power_closely_held_businesses` | Power Closely Held Businesses | Trust Details | (section) |
@@ -397,8 +415,11 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.provisions.prorate_estate_taxes` | Prorate Estate Taxes | Trust Details | (section) |
 | `trust.provisions.protect_us_trust_status` | Protect Us Trust Status | Trust Details | (section) |
 | `trust.provisions.require_mandatory_arbitration` | Require Mandatory Arbitration | Trust Details | (section) |
+| `trust.provisions.require_trustee_bond` | Require Trustee Bond | Trust Details | (section) |
+| `trust.provisions.settlor_incapacity_determined_by` | Settlor Incapacity Determined By | Trust Details | (section) |
 | `trust.provisions.special_trustee_instructions` | Special Trustee Instructions | Trust Details | (section) |
 | `trust.provisions.subchapter_s_provisions` | Subchapter S Provisions | Trust Details | (section) |
+| `trust.provisions.trustee_incapacity_determined_by` | Trustee Incapacity Determined By | Trust Details | (section) |
 | `trust.remote_beneficiaries.charity.name` | Name | Trust Details | (section) |
 | `trust.remote_beneficiaries.individuals` | Remote beneficiaries | Last Will and Testament | `remote_beneficiary` |
 | `trust.remote_beneficiaries.individuals[]` | Individuals | Trust Details | (section) |
@@ -408,6 +429,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.residuary_after_death` | Residuary After Death | Trust Details | (section) |
 | `trust.restatement` | Restatement | Trust Details | (section) |
 | `trust.special_distributions_age` | Special Distributions Age | Trust Details | (section) |
+| `trust.spousal_funding` | Spousal Funding | Trust Details | (section) |
 | `trust.spouse_name` | Spouse Name | Trust Details | (section) |
 | `trust.successor_trustee_vacancy` | Successor Trustee Vacancy | Trust Details | (section) |
 | `trust.survivorship_requirement_days` | Survivorship Requirement Days | Trust Details | (section) |

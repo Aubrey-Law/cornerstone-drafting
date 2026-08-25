@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { FieldLabel, SectionBlock, type SectionProps } from './shared'
+import { DecisionRow, DesignSheetCheckboxOption, FieldLabel, SectionBlock, type SectionProps } from './shared'
+import { getTrustDetails, setTrustDetails, type AssetScheduleFormat } from '@/lib/designSheetTrustDetails'
 import type { AssetItem } from '@/types/database'
 
 const CATEGORIES: { value: AssetItem['category']; label: string; color: string }[] = [
@@ -54,6 +55,9 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
     narrative?: string | null
     checklist_items?: Array<{ number: string; action: string; trust: string; priority: string }>
   } | undefined
+  const trustDetails = getTrustDetails(sheet)
+  const updateTrustDetails = (patch: Parameters<typeof setTrustDetails>[1]) =>
+    onChange('decisions', prevSheet => setTrustDetails(prevSheet, patch))
   const [fundingNarrative, setFundingNarrative] = useState(storedFunding?.narrative ?? '')
   const [fundingItems, setFundingItems] = useState(storedFunding?.checklist_items ?? [])
 
@@ -223,6 +227,42 @@ export function AssetsSection({ sheet, onChange }: SectionProps) {
           </span>
         </footer>
       </SectionBlock>
+      <SectionBlock title="Schedule A Options" subtitle="How each settlor's schedule of trust assets is drafted">
+        <div className="mt-6 space-y-3">
+          <DesignSheetCheckboxOption
+            label="Include signature block on each settlor's Schedule A"
+            description="Adds a dated signature line to the schedule so it can be re-executed as assets change."
+            checked={trustDetails.asset_schedule_signature_block}
+            onChange={checked => updateTrustDetails({ asset_schedule_signature_block: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Include general catchall language on each settlor's Schedule A"
+            description="Sweeps in property the settlor intended to transfer but did not list by name."
+            checked={trustDetails.asset_schedule_catchall}
+            onChange={checked => updateTrustDetails({ asset_schedule_catchall: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Include a schedule of non-trust assets for each settlor"
+            description="Lists assets deliberately left outside the trust, so the omission reads as a choice."
+            checked={trustDetails.asset_schedule_non_trust}
+            onChange={checked => updateTrustDetails({ asset_schedule_non_trust: checked })}
+          />
+        </div>
+
+        <div className="mt-6">
+          <DecisionRow
+            question="Format for asset schedules"
+            fieldName="asset_schedule_format"
+            value={trustDetails.asset_schedule_format ?? ''}
+            options={[
+              { value: 'table', label: 'Assets in table format', description: 'One row per asset.' },
+              { value: 'paragraph', label: 'Assets in paragraph format', description: 'Assets described in running prose.' },
+            ]}
+            onChange={value => updateTrustDetails({ asset_schedule_format: (value || null) as AssetScheduleFormat | null })}
+          />
+        </div>
+      </SectionBlock>
+
       <SectionBlock title="Trust Funding Roadmap" subtitle="Editable instructions used by the funding-plan document">
         <FieldLabel>Client-facing funding narrative</FieldLabel>
         <Textarea

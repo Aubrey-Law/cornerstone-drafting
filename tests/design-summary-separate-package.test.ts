@@ -114,6 +114,22 @@ describe('design-summary-separate package', () => {
     expect(text).toContain('Needham Historical Society')
   })
 
+  it('ticks the trust provisions Phase 1 added', async () => {
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+
+    expect(text).toMatch(/Limit trustee's duty to account:[\s\S]{0,40}☒ Yes/)
+    expect(text).toMatch(/Require bond for trustee:[\s\S]{0,40}☐ Yes {3}☒ No/)
+    expect(text).toMatch(/Allow a sole acting trustee to appoint co-trustees:[\s\S]{0,40}☒ Yes/)
+    expect(text).toMatch(/Include definition of incapacity:[\s\S]{0,40}☒ Yes/)
+    // Exactly one option ticks in each incapacity list.
+    expect(text).toContain('☒ Two licensed physicians')
+    expect(text).toContain('☒ Single licensed physician')
+    expect(text).toContain('☒ Assets in table format')
+    // Spousal funding already answered "distribution to spouse"; no new field.
+    expect(text).toContain('☒ Distribute in trust')
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

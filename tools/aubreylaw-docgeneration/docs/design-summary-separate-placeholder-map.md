@@ -56,6 +56,11 @@ without the empty halves.
 | Fiduciary display toggles | `fiduciary_display.show_phone` / `show_address` / `show_email` / `show_dob` / `show_relationship` |
 | Fiduciaries & Key People table | One conditional row per named role — `fiduciaries.trustee.*`, `fiduciaries.executor.*`, `fiduciaries.agent.*`, `fiduciaries.spouse_agent.*`, `healthcare.agent.*`, `healthcare.spouse_agent.*`, `guardians.*` |
 | Guardians | `requires_guardian_clause`, `guardians.primary` / `successor` / `second_successor` / `temporary` |
+| Trustee administration | `trust.provisions.require_trustee_bond`, `limit_duty_to_account`, `include_reverse_mortgage_clause`, `include_firearms_provisions`, `allow_sole_trustee_to_appoint_cotrustees`, `allow_trustee_to_designate_alternates` |
+| Retirement accounts, gifts and protections | `trust.provisions.include_retirement_account_provisions`, `allow_protector_convert_conduit_trusts`, `allow_direct_distributions_to_young_or_incapacitated`, `include_slayer_provision`, `allow_charitable_giving_during_incapacity`, `forgive_all_debts` |
+| Incapacity | `trust.provisions.include_incapacity_definition`, `allow_psychologist_substitute`, `allow_pa_np_substitute`, `settlor_incapacity_determined_by`, `trustee_incapacity_determined_by` |
+| Schedule A options | `trust.provisions.asset_schedule_signature_block`, `asset_schedule_catchall`, `asset_schedule_non_trust`, `asset_schedule_format` |
+| Distribution to spouse/partner | `trust.spousal_funding` (`outright_to_spouse` / `disclaimer` / `clayton_election`) |
 | Trustee provisions, definitions, administration | `trust.trustee_compensation`, `trust.representation_type`, `trust.survivorship_requirement_days`, `trust.successor_trustee_vacancy`, `trust.special_distributions_age`, `trust.include_common_trust_for_children`, `trust.trust_protector_requested`, `trust.trust_protector.full_name`, and the `trust.provisions.*` booleans |
 | Co-trustee decisionmaking | `fiduciaries.trustee.co_trustees_action` |
 | Successor trustees, Settlor 1 | `fiduciaries.trustee.primary` / `co_primary` / `successor` / `co_successor` / `second_successor` / `co_second_successor` |
@@ -87,7 +92,6 @@ without the empty halves.
 Some blocks stay entirely unticked because nothing upstream records them:
 table of contents, dementia directive, visitation authorization, final
 disposition, comprehensive transfer document, the cover page and letters,
-retirement-account provisions, the incapacity-determination lists,
 post-death choices, deeds, and transfers & assignments. They print as blank
 boxes and ruled lines for the interview. `docs/design-sheet-sections/` and the
 design-sheet plan track what it would take to capture them.

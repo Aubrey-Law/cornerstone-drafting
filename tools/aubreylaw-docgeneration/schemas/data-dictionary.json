@@ -2194,5 +2194,115 @@
     "type": "boolean",
     "required": false,
     "description": "Whether the spendthrift clause carries marital deduction savings language. Disclaimer and Clayton-election structures include it automatically."
+  },
+  "trust.provisions.require_trustee_bond": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee must post bond."
+  },
+  "trust.provisions.limit_duty_to_account": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee's duty to account is limited to current income beneficiaries."
+  },
+  "trust.provisions.include_reverse_mortgage_clause": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may obtain, maintain, or pay off a reverse mortgage on trust real estate."
+  },
+  "trust.provisions.include_firearms_provisions": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust carries firearms handling and transfer provisions."
+  },
+  "trust.provisions.allow_sole_trustee_to_appoint_cotrustees": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a trustee serving alone may appoint a co-trustee."
+  },
+  "trust.provisions.allow_trustee_to_designate_alternates": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether an acting trustee may designate further successor trustees."
+  },
+  "trust.provisions.include_retirement_account_provisions": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust carries conduit and accumulation provisions for retirement accounts."
+  },
+  "trust.provisions.allow_protector_convert_conduit_trusts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust protector may convert a conduit retirement trust to an accumulation trust."
+  },
+  "trust.provisions.allow_direct_distributions_to_young_or_incapacitated": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may pay a young or incapacitated beneficiary through a parent, guardian, or custodian."
+  },
+  "trust.provisions.include_slayer_provision": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust disqualifies a beneficiary who feloniously and intentionally causes a settlor's death."
+  },
+  "trust.provisions.allow_charitable_giving_during_incapacity": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may continue a settlor's customary charitable giving during incapacity."
+  },
+  "trust.provisions.forgive_all_debts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether debts a beneficiary owes the settlor are forgiven rather than charged against their share."
+  },
+  "trust.provisions.include_incapacity_definition": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust defines incapacity rather than relying on the probate code default."
+  },
+  "trust.provisions.allow_psychologist_substitute": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a licensed clinical psychologist may make a determination otherwise assigned to a physician."
+  },
+  "trust.provisions.allow_pa_np_substitute": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a physician assistant or nurse practitioner may make a determination otherwise assigned to a physician."
+  },
+  "trust.provisions.asset_schedule_signature_block": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether each settlor's Schedule A carries a dated signature block."
+  },
+  "trust.provisions.asset_schedule_catchall": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether each settlor's Schedule A carries general catchall language."
+  },
+  "trust.provisions.asset_schedule_non_trust": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the package includes a schedule of assets deliberately left outside the trust."
+  },
+  "trust.provisions.settlor_incapacity_determined_by": {
+    "type": "string",
+    "required": false,
+    "description": "Who determines that a settlor is incapacitated — e.g. attending_and_second_physician, single_physician, trust_protector, court, custom. Absent until the attorney chooses."
+  },
+  "trust.provisions.trustee_incapacity_determined_by": {
+    "type": "string",
+    "required": false,
+    "description": "Who determines that a currently-acting trustee is incapacitated. Same vocabulary as settlor_incapacity_determined_by minus the options that require a settlor or successor."
+  },
+  "trust.provisions.asset_schedule_format": {
+    "type": "string",
+    "required": false,
+    "description": "How each settlor's Schedule A lists assets: table or paragraph."
+  },
+  "trust.spousal_funding": {
+    "type": "string",
+    "required": false,
+    "description": "How the trust funds the surviving spouse: outright_to_spouse, disclaimer, or clayton_election. Answers the worksheet’s \"Distribution to Spouse/Partner\" question."
   }
 }

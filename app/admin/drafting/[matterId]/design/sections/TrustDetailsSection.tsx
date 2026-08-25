@@ -25,7 +25,9 @@ import {
   type RepresentationType,
   type ResidualBeneficiaryMethod,
   type ResiduaryAfterDeath,
+  type SettlorIncapacityDeterminer,
   type SuccessorTrusteeVacancy,
+  type TrusteeIncapacityDeterminer,
   type TrustCoTrusteeDecision,
   type TrusteeCompensation,
 } from '@/lib/designSheetTrustDetails'
@@ -34,6 +36,7 @@ import DesignContactPicker, { type Contact as PickerContact } from './ContactPic
 import type { SectionProps } from './shared'
 import {
   AttorneyInput,
+  AttorneySelect,
   ClientDecisionCallout,
   DecisionRow,
   DesignSheetCheckboxOption,
@@ -161,6 +164,40 @@ function TrustNameQuickFill({
     </div>
   )
 }
+
+const SETTLOR_INCAPACITY_DETERMINER_OPTIONS = [
+  { value: 'attending_and_second_physician', label: 'Attending and second physician' },
+  { value: 'single_physician', label: 'Single licensed physician' },
+  { value: 'attending_or_any_two_physicians', label: 'Attending or any two physicians' },
+  { value: 'physician_or_psychologist', label: 'Single physician or clinical psychologist' },
+  { value: 'two_physicians', label: 'Two licensed physicians' },
+  { value: 'two_physicians_or_psychologists', label: 'Two physicians or psychologists' },
+  { value: 'physician_and_psychologist', label: 'One physician and one psychologist' },
+  { value: 'attorney_at_law', label: 'Attorney-at-law' },
+  { value: 'governmental_official', label: 'Governmental official' },
+  { value: 'trust_protector', label: 'Trust protector' },
+  { value: 'successor_trustee', label: 'Successor trustee' },
+  { value: 'majority_of_adult_children', label: 'Majority of adult children' },
+  { value: 'incapacity_panel', label: 'Incapacity panel' },
+  { value: 'court', label: 'Court of competent jurisdiction' },
+  { value: 'other_settlor_and_successor_trustee', label: 'Other settlor and successor trustee' },
+  { value: 'custom', label: 'Custom' },
+]
+
+const TRUSTEE_INCAPACITY_DETERMINER_OPTIONS = [
+  { value: 'attending_and_second_physician', label: 'Attending and second physician' },
+  { value: 'single_physician', label: 'Single licensed physician' },
+  { value: 'attending_or_any_two_physicians', label: 'Attending or any two physicians' },
+  { value: 'physician_or_psychologist', label: 'Single physician or clinical psychologist' },
+  { value: 'two_physicians', label: 'Two licensed physicians' },
+  { value: 'two_physicians_or_psychologists', label: 'Two physicians or psychologists' },
+  { value: 'physician_and_psychologist', label: 'One physician and one psychologist' },
+  { value: 'attorney_at_law', label: 'Attorney-at-law' },
+  { value: 'governmental_official', label: 'Governmental official' },
+  { value: 'trust_protector', label: 'Trust protector' },
+  { value: 'court', label: 'Court of competent jurisdiction' },
+  { value: 'custom', label: 'Custom' },
+]
 
 export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'client' | 'spouse' }) {
   const { sheet, onChange, contacts, matter, scope = 'client' } = props
@@ -513,6 +550,42 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
             description="Permits the trustee to change the trust's situs."
             checked={trustDetails.allow_trustee_change_situs}
             onChange={checked => updateTrustDetails({ allow_trustee_change_situs: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Require bond for trustee"
+            description="Requires the trustee to post bond. Most revocable trusts waive it."
+            checked={trustDetails.require_trustee_bond}
+            onChange={checked => updateTrustDetails({ require_trustee_bond: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Limit trustee's duty to account"
+            description="Limits formal accounting to the beneficiaries currently entitled to income."
+            checked={trustDetails.limit_duty_to_account}
+            onChange={checked => updateTrustDetails({ limit_duty_to_account: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Include reverse mortgage clause"
+            description="Authorises the trustee to obtain, maintain, or pay off a reverse mortgage on trust real estate."
+            checked={trustDetails.include_reverse_mortgage_clause}
+            onChange={checked => updateTrustDetails({ include_reverse_mortgage_clause: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Include firearms administration provisions"
+            description="Adds handling and transfer provisions for firearms held in the trust."
+            checked={trustDetails.include_firearms_provisions}
+            onChange={checked => updateTrustDetails({ include_firearms_provisions: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow a sole acting trustee to appoint co-trustees"
+            description="Lets a trustee serving alone add a co-trustee without a court petition."
+            checked={trustDetails.allow_sole_trustee_to_appoint_cotrustees}
+            onChange={checked => updateTrustDetails({ allow_sole_trustee_to_appoint_cotrustees: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow an acting trustee to designate alternate successor trustees"
+            description="Lets an acting trustee name further successors beyond those the settlor listed."
+            checked={trustDetails.allow_trustee_to_designate_alternates}
+            onChange={checked => updateTrustDetails({ allow_trustee_to_designate_alternates: checked })}
           />
         </div>
 
@@ -920,6 +993,93 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
             description="Specifies when someone is legally considered missing or disappeared, which can affect trust administration and distributions."
             checked={trustDetails.include_disappearance_definition}
             onChange={checked => updateTrustDetails({ include_disappearance_definition: checked })}
+          />
+        </div>
+      </SectionBlock>
+
+      <SectionBlock title="Retirement Accounts, Gifts and Protections">
+        <div className="mt-6 space-y-3">
+          <DesignSheetCheckboxOption
+            label="Include provisions for distributing retirement accounts"
+            description="Adds conduit and accumulation provisions for retirement accounts payable to the trust."
+            checked={trustDetails.include_retirement_account_provisions}
+            onChange={checked => updateTrustDetails({ include_retirement_account_provisions: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow Trust Protector to convert conduit retirement trusts"
+            description="Lets the trust protector convert a conduit retirement trust to an accumulation trust as the tax rules change."
+            checked={trustDetails.allow_protector_convert_conduit_trusts}
+            onChange={checked => updateTrustDetails({ allow_protector_convert_conduit_trusts: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow direct distributions to young or incapacitated beneficiaries"
+            description="Permits payment to a parent, guardian, or custodian rather than to the beneficiary directly."
+            checked={trustDetails.allow_direct_distributions_to_young_or_incapacitated}
+            onChange={checked => updateTrustDetails({ allow_direct_distributions_to_young_or_incapacitated: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Include slayer provision (disqualification for wrongful killing)"
+            description="Disqualifies any beneficiary who feloniously and intentionally causes a settlor\u2019s death."
+            checked={trustDetails.include_slayer_provision}
+            onChange={checked => updateTrustDetails({ include_slayer_provision: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow the trustee to continue customary charitable giving during incapacity"
+            description="Lets the trustee keep up a settlor's established pattern of charitable gifts while they are incapacitated."
+            checked={trustDetails.allow_charitable_giving_during_incapacity}
+            onChange={checked => updateTrustDetails({ allow_charitable_giving_during_incapacity: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Forgive all debts owed by any beneficiary"
+            description="Forgives outstanding debts a beneficiary owes the settlor rather than charging them against a share."
+            checked={trustDetails.forgive_all_debts}
+            onChange={checked => updateTrustDetails({ forgive_all_debts: checked })}
+          />
+        </div>
+      </SectionBlock>
+
+      <SectionBlock title="Incapacity">
+        <div className="mt-6 space-y-3">
+          <DesignSheetCheckboxOption
+            label="Include definition of incapacity"
+            description="Defines incapacity in the trust rather than relying on the probate code default."
+            checked={trustDetails.include_incapacity_definition}
+            onChange={checked => updateTrustDetails({ include_incapacity_definition: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow clinical psychologist to substitute for physician"
+            description="A licensed clinical psychologist may make a determination the trust otherwise assigns to a physician."
+            checked={trustDetails.allow_psychologist_substitute}
+            onChange={checked => updateTrustDetails({ allow_psychologist_substitute: checked })}
+          />
+          <DesignSheetCheckboxOption
+            label="Allow physician assistant or nurse practitioner to substitute for physician"
+            description="A physician assistant or nurse practitioner may make a determination the trust otherwise assigns to a physician."
+            checked={trustDetails.allow_pa_np_substitute}
+            onChange={checked => updateTrustDetails({ allow_pa_np_substitute: checked })}
+          />
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <AttorneySelect
+            fieldName="settlor_incapacity_determined_by"
+            label="Incapacity of a settlor is determined by"
+            value={trustDetails.settlor_incapacity_determined_by ?? ''}
+            placeholder="Select..."
+            options={SETTLOR_INCAPACITY_DETERMINER_OPTIONS}
+            onChange={value => updateTrustDetails({
+              settlor_incapacity_determined_by: (value || null) as SettlorIncapacityDeterminer | null,
+            })}
+          />
+          <AttorneySelect
+            fieldName="trustee_incapacity_determined_by"
+            label="Incapacity of an acting trustee is determined by"
+            value={trustDetails.trustee_incapacity_determined_by ?? ''}
+            placeholder="Select..."
+            options={TRUSTEE_INCAPACITY_DETERMINER_OPTIONS}
+            onChange={value => updateTrustDetails({
+              trustee_incapacity_determined_by: (value || null) as TrusteeIncapacityDeterminer | null,
+            })}
           />
         </div>
       </SectionBlock>

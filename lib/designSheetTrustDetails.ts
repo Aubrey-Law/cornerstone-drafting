@@ -82,6 +82,62 @@ export type ResiduaryAfterDeath =
 
 export type RepresentationType = 'by_representation' | 'per_stirpes' | 'per_capita_each_generation'
 
+/** Who decides a settlor has become incapacitated. */
+export type SettlorIncapacityDeterminer =
+  | 'attending_and_second_physician'
+  | 'single_physician'
+  | 'attending_or_any_two_physicians'
+  | 'physician_or_psychologist'
+  | 'two_physicians'
+  | 'two_physicians_or_psychologists'
+  | 'physician_and_psychologist'
+  | 'attorney_at_law'
+  | 'governmental_official'
+  | 'trust_protector'
+  | 'successor_trustee'
+  | 'majority_of_adult_children'
+  | 'incapacity_panel'
+  | 'court'
+  | 'other_settlor_and_successor_trustee'
+  | 'custom'
+
+export const SETTLOR_INCAPACITY_DETERMINERS: readonly SettlorIncapacityDeterminer[] = [
+  'attending_and_second_physician', 'single_physician', 'attending_or_any_two_physicians',
+  'physician_or_psychologist', 'two_physicians', 'two_physicians_or_psychologists',
+  'physician_and_psychologist', 'attorney_at_law', 'governmental_official', 'trust_protector',
+  'successor_trustee', 'majority_of_adult_children', 'incapacity_panel', 'court',
+  'other_settlor_and_successor_trustee', 'custom',
+] as const
+
+/** Who decides a currently-acting trustee has become incapacitated. A trustee
+ *  cannot be judged by their own successor or by the other settlor, so that
+ *  subset of the settlor list does not apply here. */
+export type TrusteeIncapacityDeterminer =
+  | 'attending_and_second_physician'
+  | 'single_physician'
+  | 'attending_or_any_two_physicians'
+  | 'physician_or_psychologist'
+  | 'two_physicians'
+  | 'two_physicians_or_psychologists'
+  | 'physician_and_psychologist'
+  | 'attorney_at_law'
+  | 'governmental_official'
+  | 'trust_protector'
+  | 'court'
+  | 'custom'
+
+export const TRUSTEE_INCAPACITY_DETERMINERS: readonly TrusteeIncapacityDeterminer[] = [
+  'attending_and_second_physician', 'single_physician', 'attending_or_any_two_physicians',
+  'physician_or_psychologist', 'two_physicians', 'two_physicians_or_psychologists',
+  'physician_and_psychologist', 'attorney_at_law', 'governmental_official', 'trust_protector',
+  'court', 'custom',
+] as const
+
+/** How each settlor's Schedule A lists the trust's assets. */
+export type AssetScheduleFormat = 'table' | 'paragraph'
+
+export const ASSET_SCHEDULE_FORMATS: readonly AssetScheduleFormat[] = ['table', 'paragraph'] as const
+
 export interface TrustNameFormat {
   date_style: TrustNameDateStyle
   append_amendments: boolean
@@ -124,6 +180,31 @@ export interface TrustDetailsProvisions {
   include_vocational_training: boolean
   include_homeschooling: boolean
   include_disappearance_definition: boolean
+  // Trustee administration
+  require_trustee_bond: boolean
+  limit_duty_to_account: boolean
+  include_reverse_mortgage_clause: boolean
+  include_firearms_provisions: boolean
+  allow_sole_trustee_to_appoint_cotrustees: boolean
+  allow_trustee_to_designate_alternates: boolean
+  // Distributions and protections
+  include_retirement_account_provisions: boolean
+  allow_protector_convert_conduit_trusts: boolean
+  allow_direct_distributions_to_young_or_incapacitated: boolean
+  include_slayer_provision: boolean
+  allow_charitable_giving_during_incapacity: boolean
+  forgive_all_debts: boolean
+  // Incapacity
+  include_incapacity_definition: boolean
+  allow_psychologist_substitute: boolean
+  allow_pa_np_substitute: boolean
+  settlor_incapacity_determined_by: SettlorIncapacityDeterminer | null
+  trustee_incapacity_determined_by: TrusteeIncapacityDeterminer | null
+  // Asset schedules
+  asset_schedule_signature_block: boolean
+  asset_schedule_catchall: boolean
+  asset_schedule_non_trust: boolean
+  asset_schedule_format: AssetScheduleFormat | null
 }
 
 const DEFAULT_TRUST_NAME_FORMAT: TrustNameFormat = {
@@ -168,6 +249,27 @@ const DEFAULT_TRUST_DETAILS: TrustDetailsProvisions = {
   include_vocational_training: false,
   include_homeschooling: false,
   include_disappearance_definition: false,
+  require_trustee_bond: false,
+  limit_duty_to_account: false,
+  include_reverse_mortgage_clause: false,
+  include_firearms_provisions: false,
+  allow_sole_trustee_to_appoint_cotrustees: false,
+  allow_trustee_to_designate_alternates: false,
+  include_retirement_account_provisions: false,
+  allow_protector_convert_conduit_trusts: false,
+  allow_direct_distributions_to_young_or_incapacitated: false,
+  include_slayer_provision: false,
+  allow_charitable_giving_during_incapacity: false,
+  forgive_all_debts: false,
+  include_incapacity_definition: false,
+  allow_psychologist_substitute: false,
+  allow_pa_np_substitute: false,
+  settlor_incapacity_determined_by: null,
+  trustee_incapacity_determined_by: null,
+  asset_schedule_signature_block: false,
+  asset_schedule_catchall: false,
+  asset_schedule_non_trust: false,
+  asset_schedule_format: null,
 }
 
 function trustDetailsRaw(sheet: Pick<DesignSheet, 'decisions'>): Record<string, unknown> {
@@ -190,6 +292,21 @@ function readBoolean(raw: Record<string, unknown>, key: string, fallback: boolea
 function readString<T extends string>(raw: Record<string, unknown>, key: string, fallback: T | null): T | null {
   const value = raw[key]
   return typeof value === 'string' ? (value as T) : fallback
+}
+
+/**
+ * A choice the attorney has not made reads back as null, and a stored value
+ * outside the allowed list reads as null too rather than as a bogus enum. That
+ * keeps "undecided" distinguishable from "decided", which `readBoolean` cannot
+ * do — see the completion engine's `isFieldOpen`.
+ */
+function readOptionalString<T extends string>(
+  raw: Record<string, unknown>,
+  key: string,
+  allowed: readonly T[],
+): T | null {
+  const value = raw[key]
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : null
 }
 
 function readNumber(raw: Record<string, unknown>, key: string, fallback: number | null): number | null {
@@ -289,6 +406,27 @@ export function getTrustDetails(sheet: Pick<DesignSheet, 'decisions'>): TrustDet
     include_vocational_training: readBoolean(raw, 'include_vocational_training', DEFAULT_TRUST_DETAILS.include_vocational_training),
     include_homeschooling: readBoolean(raw, 'include_homeschooling', DEFAULT_TRUST_DETAILS.include_homeschooling),
     include_disappearance_definition: readBoolean(raw, 'include_disappearance_definition', DEFAULT_TRUST_DETAILS.include_disappearance_definition),
+    require_trustee_bond: readBoolean(raw, 'require_trustee_bond', DEFAULT_TRUST_DETAILS.require_trustee_bond),
+    limit_duty_to_account: readBoolean(raw, 'limit_duty_to_account', DEFAULT_TRUST_DETAILS.limit_duty_to_account),
+    include_reverse_mortgage_clause: readBoolean(raw, 'include_reverse_mortgage_clause', DEFAULT_TRUST_DETAILS.include_reverse_mortgage_clause),
+    include_firearms_provisions: readBoolean(raw, 'include_firearms_provisions', DEFAULT_TRUST_DETAILS.include_firearms_provisions),
+    allow_sole_trustee_to_appoint_cotrustees: readBoolean(raw, 'allow_sole_trustee_to_appoint_cotrustees', DEFAULT_TRUST_DETAILS.allow_sole_trustee_to_appoint_cotrustees),
+    allow_trustee_to_designate_alternates: readBoolean(raw, 'allow_trustee_to_designate_alternates', DEFAULT_TRUST_DETAILS.allow_trustee_to_designate_alternates),
+    include_retirement_account_provisions: readBoolean(raw, 'include_retirement_account_provisions', DEFAULT_TRUST_DETAILS.include_retirement_account_provisions),
+    allow_protector_convert_conduit_trusts: readBoolean(raw, 'allow_protector_convert_conduit_trusts', DEFAULT_TRUST_DETAILS.allow_protector_convert_conduit_trusts),
+    allow_direct_distributions_to_young_or_incapacitated: readBoolean(raw, 'allow_direct_distributions_to_young_or_incapacitated', DEFAULT_TRUST_DETAILS.allow_direct_distributions_to_young_or_incapacitated),
+    include_slayer_provision: readBoolean(raw, 'include_slayer_provision', DEFAULT_TRUST_DETAILS.include_slayer_provision),
+    allow_charitable_giving_during_incapacity: readBoolean(raw, 'allow_charitable_giving_during_incapacity', DEFAULT_TRUST_DETAILS.allow_charitable_giving_during_incapacity),
+    forgive_all_debts: readBoolean(raw, 'forgive_all_debts', DEFAULT_TRUST_DETAILS.forgive_all_debts),
+    include_incapacity_definition: readBoolean(raw, 'include_incapacity_definition', DEFAULT_TRUST_DETAILS.include_incapacity_definition),
+    allow_psychologist_substitute: readBoolean(raw, 'allow_psychologist_substitute', DEFAULT_TRUST_DETAILS.allow_psychologist_substitute),
+    allow_pa_np_substitute: readBoolean(raw, 'allow_pa_np_substitute', DEFAULT_TRUST_DETAILS.allow_pa_np_substitute),
+    asset_schedule_signature_block: readBoolean(raw, 'asset_schedule_signature_block', DEFAULT_TRUST_DETAILS.asset_schedule_signature_block),
+    asset_schedule_catchall: readBoolean(raw, 'asset_schedule_catchall', DEFAULT_TRUST_DETAILS.asset_schedule_catchall),
+    asset_schedule_non_trust: readBoolean(raw, 'asset_schedule_non_trust', DEFAULT_TRUST_DETAILS.asset_schedule_non_trust),
+    settlor_incapacity_determined_by: readOptionalString(raw, 'settlor_incapacity_determined_by', SETTLOR_INCAPACITY_DETERMINERS),
+    trustee_incapacity_determined_by: readOptionalString(raw, 'trustee_incapacity_determined_by', TRUSTEE_INCAPACITY_DETERMINERS),
+    asset_schedule_format: readOptionalString(raw, 'asset_schedule_format', ASSET_SCHEDULE_FORMATS),
   }
 }
 
