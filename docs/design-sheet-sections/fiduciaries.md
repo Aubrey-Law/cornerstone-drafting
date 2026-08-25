@@ -17,7 +17,17 @@
 | Guardian | `guardian_slots` | — |
 | Temporary guardian | `temporary_guardian_slots` | — |
 
-Each `FiduciarySlot`: `{ id, contact_id, is_co, order }` where `order` 1=primary, 2=successor, 3=second successor; `is_co` = co-fiduciary.
+Each `FiduciarySlot`: `{ id, contact_id, is_co, order }`. `is_co` marks a co-fiduciary
+serving alongside the principal at the same rank.
+
+**`order` is a persisted sort key, not a rank.** Do not read `order === 1` as
+"primary". Line of succession is derived by
+`principalOrderByPriority(slots, priority)` in
+`lib/designSheet/fiduciarySlotOrdering.ts`, where `priority` is a **0-based index into
+the named, non-co principals sorted by `order`** — 0 = primary, 1 = successor,
+2 = second successor. Empty placeholder slots are skipped: every new sheet seeds an
+unnamed principal at order 0, and counting raw `order` made the first real appointee
+render as "2nd".
 
 ### Shortcut flags
 
@@ -31,6 +41,19 @@ Each `FiduciarySlot`: `{ id, contact_id, is_co, order }` where `order` 1=primary
 ### Legacy text columns (fallback)
 
 `executor_primary`, `executor_co`, `executor_alt1`, `poa_primary`, `hcp_primary`, `guardian_primary`, etc. — used when slot arrays empty (`applyLegacyDesignSheetFiduciaries`).
+
+### Contact detail and display toggles
+
+`buildFiduciaryRoleDetailsFromDesignSheet()` resolves each slot's `contact_id` to a
+`DraftPayloadContactDetail` (name, relationship, address, phone, email, DOB), and
+`decisions.fiduciary_document_inclusions` decides which of those print.
+`fiduciaryPerson()` in `toGeneratorData.ts` merges the two, so every
+`fiduciaries.*` / `healthcare.*` / `guardians.*` person object carries the fields the
+matching `fiduciary_display.show_*` toggle enables.
+
+| Toggle | Generator |
+| --- | --- |
+| `show_phone`, `show_address`, `show_email`, `show_dob`, `show_relationship` | `fiduciary_display.*`, and the matching key on each person object |
 
 ## Generator mapping
 
@@ -64,6 +87,10 @@ Spouse packages swap client/spouse data via `dataForNodeEstatePackage()` in the 
 {{ fiduciaries.trustee.co_trustees_action }}   {# joint | independent | ... #}
 {{ fiduciaries.agent.co_agents_action }}       {# joint | majority | separate #}
 {{ guardians.primary.full_name | name }}
+
+{# Contact detail, gated on the display toggles #}
+{% if fiduciary_display.show_relationship %}{{ fiduciaries.trustee.primary.relationship }}{% endif %}
+{% if fiduciary_display.show_phone %}{{ fiduciaries.trustee.primary.phone }}{% endif %}
 ```
 
 ## Conditional logic (current)
@@ -81,12 +108,13 @@ Spouse packages swap client/spouse data via `dataForNodeEstatePackage()` in the 
 
 `conditionalMissingFieldsForPackage()` adds required fields when `pr_structure == 'co_pr'`, guardian clause active, etc.
 
-## Recent updates & template gaps
+## Known gaps
 
-| Gap | Action needed |
+| Item | Status |
 | --- | --- |
 | Slots may live in `decisions.*_slots` on lite schema | `getDesignSlots()` reads both column and decisions — templates unaffected |
-| **Structured kinship** on contacts | Not on fiduciary JSON paths |
-| **Fiduciary display toggles** | Phone/address/email not on `fiduciaries.*` objects |
+| **Structured kinship** | Wired — `relationship_kind` reaches `fiduciary_details.*.relationship` and the HCP agent relationship |
+| **Fiduciary display toggles** | Wired — `fiduciary_display.*` plus optional phone/address/email/DOB/relationship on every person object |
 | Temporary guardian | Slots supported (primary + co + alternates); `temporary-delegation-parental-powers` uses `guardians.temporary` / `temporary_co` |
+| **Conservator** | The interview worksheet's "(Alternate) Conservator of the Estate" line has no slot and no role. Adding one means the grid, slot plumbing and payload — revisit when the grid is next opened. |
 | LP practice area | The unified section receives `lpData`; the standard EP generator path remains separate. |

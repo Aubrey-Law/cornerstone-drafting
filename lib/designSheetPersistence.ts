@@ -40,6 +40,7 @@ const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
   'trust_details',
   'trust_planning_type',
   'will_pr_powers',
+  'will_provisions',
 ])
 
 /** Postgres `date` columns — empty / non-ISO strings must become null or the update fails. */

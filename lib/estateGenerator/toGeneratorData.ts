@@ -703,6 +703,15 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         named_individual: person(payload.will_provisions.tangible_property_named_individual),
       },
       pr_powers: { ...payload.will_provisions.pr_powers },
+      // `false` is a recorded "no" on all four, so they are passed through
+      // rather than collapsed with `|| undefined`.
+      executors_same_as_trustees: payload.will_provisions.executors_same_as_trustees ?? false,
+      spouse_executors_same_as_trustees:
+        payload.will_provisions.spouse_executors_same_as_trustees ?? false,
+      exercise_testamentary_power_of_appointment:
+        payload.will_provisions.exercise_testamentary_power_of_appointment ?? false,
+      spouse_exercise_testamentary_power_of_appointment:
+        payload.will_provisions.spouse_exercise_testamentary_power_of_appointment ?? false,
       title: docs.will_title ?? 'last_will',
       pet_care: petCareProvision(payload),
     },
@@ -774,6 +783,8 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         settlor_incapacity_determined_by: trustProvisions.settlor_incapacity_determined_by ?? undefined,
         trustee_incapacity_determined_by: trustProvisions.trustee_incapacity_determined_by ?? undefined,
         asset_schedule_format: trustProvisions.asset_schedule_format ?? undefined,
+        parent_child_relationship_definition:
+          trustProvisions.parent_child_relationship_definition ?? undefined,
       }),
       contingent_beneficiary: person(payload.will_provisions.single_beneficiary_remainder),
       tangible_personal_property: {

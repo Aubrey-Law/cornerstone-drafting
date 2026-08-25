@@ -134,6 +134,16 @@ export const TRUSTEE_INCAPACITY_DETERMINERS: readonly TrusteeIncapacityDetermine
   'court', 'custom',
 ] as const
 
+/**
+ * How the documents define a parent-child relationship — the state's probate
+ * code, or a definition drafted for this family (adopted adults, stepchildren,
+ * children of assisted reproduction).
+ */
+export type ParentChildRelationshipDefinition = 'state_probate_code' | 'custom'
+
+export const PARENT_CHILD_RELATIONSHIP_DEFINITIONS: readonly ParentChildRelationshipDefinition[] =
+  ['state_probate_code', 'custom'] as const
+
 /** How each settlor's Schedule A lists the trust's assets. */
 export type AssetScheduleFormat = 'table' | 'paragraph'
 
@@ -181,6 +191,12 @@ export interface TrustDetailsProvisions {
   include_vocational_training: boolean
   include_homeschooling: boolean
   include_disappearance_definition: boolean
+  /**
+   * How the documents define who counts as a parent and child. The interview
+   * form asks it under family information; it is stored with the other
+   * definition toggles because that is the article it is drafted into.
+   */
+  parent_child_relationship_definition: ParentChildRelationshipDefinition | null
   // Trustee administration
   require_trustee_bond: boolean
   limit_duty_to_account: boolean
@@ -250,6 +266,7 @@ const DEFAULT_TRUST_DETAILS: TrustDetailsProvisions = {
   include_vocational_training: false,
   include_homeschooling: false,
   include_disappearance_definition: false,
+  parent_child_relationship_definition: null,
   require_trustee_bond: false,
   limit_duty_to_account: false,
   include_reverse_mortgage_clause: false,
@@ -392,6 +409,9 @@ export function getTrustDetails(sheet: Pick<DesignSheet, 'decisions'>): TrustDet
     include_vocational_training: readBoolean(raw, 'include_vocational_training', DEFAULT_TRUST_DETAILS.include_vocational_training),
     include_homeschooling: readBoolean(raw, 'include_homeschooling', DEFAULT_TRUST_DETAILS.include_homeschooling),
     include_disappearance_definition: readBoolean(raw, 'include_disappearance_definition', DEFAULT_TRUST_DETAILS.include_disappearance_definition),
+    parent_child_relationship_definition: readAllowedValue(
+      raw, 'parent_child_relationship_definition', PARENT_CHILD_RELATIONSHIP_DEFINITIONS,
+    ),
     require_trustee_bond: readBoolean(raw, 'require_trustee_bond', DEFAULT_TRUST_DETAILS.require_trustee_bond),
     limit_duty_to_account: readBoolean(raw, 'limit_duty_to_account', DEFAULT_TRUST_DETAILS.limit_duty_to_account),
     include_reverse_mortgage_clause: readBoolean(raw, 'include_reverse_mortgage_clause', DEFAULT_TRUST_DETAILS.include_reverse_mortgage_clause),

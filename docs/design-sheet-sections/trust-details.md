@@ -1,9 +1,19 @@
 # Trust Details
 
 **Section ID:** `trust-details`  
-**UI:** `app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx` (+ spouse variant)  
+**UI:** `app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx`  
 **Visibility:** `document_inclusions.trust === true`  
 **Source files:** `lib/draftPayload/trustProvisions.ts`, `lib/designSheetTrustDetails.ts`, `lib/estateGenerator/toGeneratorData.ts`
+
+`decisions.trust_details` holds **57 keys** — the largest namespace on the sheet, and
+the one the Trust section registers all 57 of for import and autofill. That is past
+`MAX_FIELDS_PER_BATCH` (45), so `openFieldsBySection` splits the Trust section across
+numbered autofill prompts rather than truncating it.
+
+Section blocks: **Trust Name**, **Trust Structure**, **Restatement**, **Trust
+Protector**, **Trustee Provisions**, **Tangible Personal Property**, **Pet Care
+Provisions**, **Residuary Distribution**, **Administrative Provisions**,
+**Definitions**, **Retirement Accounts, Gifts and Protections**, **Incapacity**.
 
 ## Design sheet fields
 
@@ -15,13 +25,14 @@
 | `trust_date` | Trust date; defaults to today if blank |
 | `restatement` | boolean |
 | `trust_protector`, `trust_protector_name` | boolean + name |
-| `distribution_method`, `distribution_age` | Residuary distribution |
+| `distribution_age` | Residuary distribution age |
 | `staggered_distributions`, `stagger_age_*`, `stagger_pct_*` | Staged ages |
 | `residual_beneficiary`, `residual_beneficiary_individuals` | Contact IDs resolved to names |
 | `remote_beneficiary`, `remote_beneficiary_charities` | Contingent remote beneficiaries |
 | `tangible_property_distribution`, `tangible_property_named_individual` | TPP in trust |
 | `specific_bequests` | Shared with will — see Will Details |
 | `trustee_slots`, `spouse_trustee_slots` | See Fiduciaries guide |
+| *(dropped)* `distribution_method` | Removed by migration `20260804210000_drop_design_sheets_distribution_method.sql` and moved into `decisions.trust_details`. It is listed in `DECISION_ONLY_TOP_LEVEL_KEYS` so a stale value on an old inflated row is stripped rather than folded back in. |
 | `provision_substance_abuse`, `provision_married_beneficiary` | Legacy yes/no (merged into trust_details) |
 | `beneficiary_as_cotrustee`, `beneficiary_as_sole_trustee` | Trustee structure |
 | `pet_care_option`, `pet_care_details` | Shared with will |
@@ -47,9 +58,49 @@ Key provisions from `lib/designSheetTrustDetails.ts`:
 | `include_common_trust_for_children` | boolean |
 | Business/529 powers, definition toggles | booleans |
 
-### `decisions.trust_name_format`
+**Trustee administration**
 
-Per party (`client` / `spouse`):
+| Field | Type |
+| --- | --- |
+| `require_trustee_bond`, `limit_duty_to_account` | boolean |
+| `include_reverse_mortgage_clause`, `include_firearms_provisions` | boolean |
+| `allow_sole_trustee_to_appoint_cotrustees` | boolean |
+| `allow_trustee_to_designate_alternates` | boolean |
+
+**Retirement accounts, gifts and protections**
+
+| Field | Type |
+| --- | --- |
+| `include_retirement_account_provisions` | boolean (conduit provisions) |
+| `allow_protector_convert_conduit_trusts` | boolean |
+| `allow_direct_distributions_to_young_or_incapacitated` | boolean |
+| `include_slayer_provision` | boolean |
+| `allow_charitable_giving_during_incapacity` | boolean |
+| `forgive_all_debts` | boolean |
+| `include_marital_deduction_savings_language` | boolean — forced on by some trust structures; the checkbox was previously hardcoded dead |
+
+**Incapacity**
+
+| Field | Type |
+| --- | --- |
+| `include_incapacity_definition` | boolean |
+| `allow_psychologist_substitute`, `allow_pa_np_substitute` | boolean |
+| `settlor_incapacity_determined_by` | 16 options, nullable |
+| `trustee_incapacity_determined_by` | 12 options, nullable |
+
+**Schedule A** — `asset_schedule_format` (`table` \| `paragraph`),
+`asset_schedule_signature_block`, `asset_schedule_catchall`, `asset_schedule_non_trust`.
+Their UI lives in the Asset Schedules section; see that guide.
+
+The two `*_incapacity_determined_by` fields are nullable and read through
+`readAllowedValue` (`lib/designSheet/decisionReaders.ts`) — an unset value and a value
+outside the option list both read as `null`, which is how "not decided yet" stays
+distinct from any particular answer.
+
+### `trust_name_format` (nested inside `decisions.trust_details`)
+
+Not a top-level namespace — `decisions.trust_details.trust_name_format`, keyed per
+party (`client` / `spouse`):
 
 - `date_style`: `ua_dated` (default) \| `dated_only`
 - `append_amendments`: boolean
@@ -121,12 +172,30 @@ Inline clause examples in `trust.trustee_appointment.json` branch on `fiduciarie
 
 Placeholder maps: `tools/aubreylaw-docgeneration/docs/joint-trust-placeholder-map.md`, `trust-individual-single-placeholder-map.md`, `indv-disclaimer-trust-placeholder-map.md`, `certificate-of-trust-placeholder-map.md`, `assignment-of-personal-property-placeholder-map.md`.
 
-## Recent updates & template gaps
+## Adding a field here
 
-| Gap | Action needed |
+`setTrustDetails` spreads `...raw` first, so an unrecognised stored key survives a
+write and the setter needs no edit. That makes this the easy namespace: interface,
+`DEFAULT_TRUST_DETAILS`, one reader line in the getter, a control, one registry line
+in `lib/designSheetImport/decisionFields.ts`, one line in `toGeneratorData.ts`, and a
+`data-dictionary.json` entry.
+
+`DraftPayloadTrustProvisions extends TrustDetailsProvisions`, so the payload layer
+picks new keys up for free — unlike `dpoa_provisions`, which needs four hand edits.
+
+**Three fields still dual-write a legacy column.** `include_substance_abuse`,
+`include_creditor_divorce_provisions` and `include_no_contest_clause` write both a
+namespace key and a column, and are OR-merged in `lib/draftPayload/trustProvisions.ts`.
+That is the drift pattern `distribution_method` was deleted for — new fields are
+namespace-only.
+
+## Known gaps
+
+| Gap | Notes |
 | --- | --- |
 | Many `trust_details` booleans | In `trust.provisions.*` but few clause `condition` hooks — templates may ignore new toggles |
 | `remote_beneficiary_individuals` | Contact IDs resolved in `assemble.ts` — templates should use `trust.remote_beneficiaries.individuals[]` |
 | `residuary_after_death` enum | Mapped to payload; verify joint-trust clauses cover all four values |
 | `special_trustee_instructions` | Free text in provisions — needs template placeholder |
-| Separate spouse trust section | UI `TrustDetailsSpouseSection` when `is_joint === false` — spouse trust name/format must match spouse package swap logic |
+| `TrustDetailsSpouseSection` | Exported from `TrustDetailsSection.tsx` but **not wired into `designSectionCatalog.tsx`** — `tests/design-sheet-contacts-section.test.ts` asserts the catalog does not reference it. Spouse trust name and format come from the same section, scoped `spouse`. |
+| UI density | `TrustDetailsSection.tsx` is past 1,000 lines. Prefer a new `SectionBlock` over appending, and consider splitting the file. |

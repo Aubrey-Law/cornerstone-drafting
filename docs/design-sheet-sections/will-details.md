@@ -47,13 +47,42 @@
 | `excluded_guardian_name` | column — formatted string from entries |
 | `decisions.excluded_guardians` | `[{ contact_id, reason }]` |
 
+### Will title
+
+`decisions.estate_plan_design.will_title` (`last_will` \| `pour_over_will`). Its control
+is the single question in `FamilySection.tsx`, under the **Last Will and Testament**
+nav group — see the Family Information guide.
+
 ### DPOA cross-over (will section)
 
 `dpoa_include_section_l`, `dpoa_include_self_dealing`, `dpoa_self_dealing_reviewer`, `dpoa_self_dealing_reviewer_alt`
 
+> The HIPAA psychotherapy-notes control used to live in `WillProvisionsSection`
+> behind a `scope === 'healthcare'` guard, in a section only ever rendered with
+> `scope="will"` — so it could never be answered. It now lives in
+> `HealthCareDesignSection`, with a test pinning it there.
+
 ### PR powers
 
-`decisions.will_pr_powers` via `getWillPersonalRepresentativePowers()` — granular statutory powers.
+`decisions.will_pr_powers` via `getWillPersonalRepresentativePowers()` — three granular
+statutory powers: `allow_pay_taxes_debts_expenses`, `allow_manage_digital_assets`,
+`include_distribution_cash_or_kind`.
+
+### `decisions.will_provisions` (jsonb)
+
+Will provisions that are decisions rather than columns. Distinct from
+`will_pr_powers`, which is specifically the personal representative's statutory
+powers — these are provisions of the will itself. Every other will provision above is
+a real column because they predate the decisions blob; new ones go here.
+
+| Field | Type |
+| --- | --- |
+| `exercise_testamentary_power_of_appointment` | boolean |
+| `spouse_exercise_testamentary_power_of_appointment` | boolean |
+
+Per settlor, because one spouse may hold a power the other does not. The control is a
+"Testamentary Power of Appointment" block in `WillProvisionsSection`; the spouse row
+appears only when spouse documents are included.
 
 ## Generator mapping
 
@@ -67,7 +96,10 @@
 | `specific_bequests` | `will_provisions.specific_bequests` | `specific_gifts[]`, `charitable_gifts[]` |
 | `pet_care_*` | `will_provisions.pet_care_*` | `will.pet_care.*` |
 | Excluded guardian | `client.excluded_guardian` | `guardians.excluded[]` (single entry) |
-| PR powers | `will_provisions.pr_powers` | Not fully flattened in generator JSON |
+| PR powers | `will_provisions.pr_powers` | `will.pr_powers` (the whole record) |
+| `estate_plan_design.will_title` | `documents.will_title` | `will.title` |
+| `executor_same_as_trustee` (column) | `will_provisions.executors_same_as_trustees` | `will.executors_same_as_trustees` (+ `spouse_` variant) |
+| `will_provisions.exercise_testamentary_power_of_appointment` | same name | `will.exercise_testamentary_power_of_appointment` (+ `spouse_` variant) |
 
 ### Pour-over alternate disposition text
 
@@ -92,6 +124,8 @@ Computed in `pourOverAlternateDispositionText()`:
 {{ testamentary_trust.beneficiary_structure }}
 {{ will.pet_care.option }}
 {{ will.pet_care.cash_amount }}
+{{ will.title }}
+{% if will.pr_powers.allow_manage_digital_assets %}...{% endif %}
 {% if has_specific_gifts %}{{ include_clause("will.specific_gifts") }}{% endif %}
 {% if has_pet_care %}{{ include_clause("will.pet_care") }}{% endif %}
 {% if has_simultaneous_death %}{{ include_clause("will.simultaneous_death") }}{% endif %}
@@ -126,9 +160,11 @@ Computed in `pourOverAlternateDispositionText()`:
 
 Map: `tools/aubreylaw-docgeneration/docs/pourover-will-placeholder-map.md`
 
-## Recent updates & template gaps
+## Known gaps
 
-| Item | Payload / generator status | Template action |
-| --- | --- | --- |
-| **Multi excluded guardians** | Wired: `guardians.excluded[]` with `reason`; falls back to `client.excluded_guardian` | Loop `{% for excluded in guardians.excluded %}` and include reason when present |
-| **`will_pr_powers`** | Still not in `EstateGeneratorData` | Wire for PR powers article if granular toggles needed |
+| Item | Status |
+| --- | --- |
+| **Multi excluded guardians** | Wired: `guardians.excluded[]` with `reason`; falls back to `client.excluded_guardian`. Loop `{% for excluded in guardians.excluded %}` and include the reason when present. |
+| **`will_pr_powers`** | Wired to `will.pr_powers`; no template branches on it yet |
+| **Executors same as trustees** | Wired. `executor_same_as_trustee` / `spouse_executor_same_as_trustee` are persisted columns — a recorded answer, not just a copy button — and now reach `will.executors_same_as_trustees` / `will.spouse_executors_same_as_trustees` |
+| **Testamentary power of appointment** | Wired to `will.exercise_testamentary_power_of_appointment` / the spouse variant, from `decisions.will_provisions`. No template drafts the article yet. |

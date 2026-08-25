@@ -22,6 +22,7 @@ import {
   setTrustNameFormat,
   STAGGERED_DISTRIBUTION_PRESETS,
   type InitialTrusteeNomination,
+  type ParentChildRelationshipDefinition,
   type RepresentationType,
   type ResidualBeneficiaryMethod,
   type ResiduaryAfterDeath,
@@ -993,6 +994,22 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
             description="Specifies when someone is legally considered missing or disappeared, which can affect trust administration and distributions."
             checked={trustDetails.include_disappearance_definition}
             onChange={checked => updateTrustDetails({ include_disappearance_definition: checked })}
+          />
+        </div>
+        <div className="mt-6">
+          <DecisionRow
+            question="Parent-child relationships"
+            help="How the documents decide who counts as a parent and a child. A custom definition is for families where the probate code's answer is not the one they want — adopted adults, stepchildren, children of assisted reproduction."
+            fieldName="trust_details.parent_child_relationship_definition"
+            value={trustDetails.parent_child_relationship_definition ?? ''}
+            options={[
+              { value: 'state_probate_code', label: 'State Probate Code', description: "The Massachusetts default." },
+              { value: 'custom', label: 'Custom Definition', description: 'Drafted for this family.' },
+            ]}
+            onChange={value => updateTrustDetails({
+              parent_child_relationship_definition:
+                (value || null) as ParentChildRelationshipDefinition | null,
+            })}
           />
         </div>
       </SectionBlock>

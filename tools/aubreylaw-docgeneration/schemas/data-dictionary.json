@@ -2674,5 +2674,30 @@
     "type": "string",
     "required": false,
     "description": "How the comprehensive transfer document is titled: declaration_of_trust, comprehensive_transfer_of_assets or general_assignment."
+  },
+  "trust.provisions.parent_child_relationship_definition": {
+    "type": "string",
+    "required": false,
+    "description": "How the documents define a parent-child relationship: state_probate_code or custom."
+  },
+  "will.executors_same_as_trustees": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the client's executors are the same people as the trustees."
+  },
+  "will.spouse_executors_same_as_trustees": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the spouse's executors are the same people as the trustees."
+  },
+  "will.exercise_testamentary_power_of_appointment": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the client's will exercises a testamentary power of appointment held under another instrument."
+  },
+  "will.spouse_exercise_testamentary_power_of_appointment": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the spouse's will exercises a testamentary power of appointment held under another instrument."
   }
 }
