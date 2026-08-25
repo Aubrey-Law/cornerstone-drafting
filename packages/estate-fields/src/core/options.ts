@@ -25,6 +25,8 @@ export const MARITAL_STATUS_OPTIONS: FieldOption[] = [
   { value: 'widowed', label: 'Widowed' },
   { value: 'separated', label: 'Separated' },
   { value: 'domestic_partner', label: 'Domestic partner' },
+  { value: 'civil_union', label: 'Civil union' },
+  { value: 'unmarried_partnership', label: 'Unmarried partnership' },
 ]
 
 export const CITIZENSHIP_OPTIONS: FieldOption[] = [

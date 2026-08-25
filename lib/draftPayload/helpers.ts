@@ -562,6 +562,10 @@ export function deriveDocuments(
     living_will: inclusions.healthcare,
     will_title: inclusions.trust ? 'pour_over_will' as const : 'last_will' as const,
     signing_type: 'undecided' as const,
+    healthcare_directive_title: 'state_default' as const,
+    poa_form: 'long' as const,
+    poa_title: 'durable_power_of_attorney' as const,
+    comprehensive_transfer_title: null,
     ancillary_documents: {
       certificate_of_trust: inclusions.trust,
       assignment_of_personal_property: inclusions.trust,
@@ -575,6 +579,11 @@ export function deriveDocuments(
       fiduciary_role_guide: true,
       flowchart: false,
       include_asset_spreadsheet: false,
+      dementia_directive: false,
+      visitation_authorization: false,
+      final_disposition: false,
+      comprehensive_transfer_document: false,
+      client_self_declaration_of_capacity: false,
     },
   }
 
@@ -619,8 +628,19 @@ export function deriveDocuments(
     include_fiduciary_role_guide:   isEP && setup.ancillary_documents.fiduciary_role_guide,
     include_flowchart:              isEP && setup.ancillary_documents.flowchart,
     include_asset_spreadsheet:      isEP && setup.ancillary_documents.include_asset_spreadsheet,
+    // Record-only. Nothing drafts these yet; they reach the templates so the
+    // interview worksheet prints the attorney's answer instead of a blank box.
+    include_dementia_directive:     isEP && setup.ancillary_documents.dementia_directive,
+    include_visitation_authorization: isEP && setup.ancillary_documents.visitation_authorization,
+    include_final_disposition:      isEP && setup.ancillary_documents.final_disposition,
+    include_comprehensive_transfer_document: isEP && setup.ancillary_documents.comprehensive_transfer_document,
+    include_client_self_declaration_of_capacity: isEP && setup.ancillary_documents.client_self_declaration_of_capacity,
     will_title:                     setup.will_title,
     signing_type:                   setup.signing_type,
+    healthcare_directive_title:     setup.healthcare_directive_title,
+    poa_form:                       setup.poa_form,
+    poa_title:                      setup.poa_title,
+    comprehensive_transfer_title:   setup.comprehensive_transfer_title,
     spouse_docs:                    isMarried && inclusions.spouse_docs,
     trust_planning_type:            trustPlanningType,
   }

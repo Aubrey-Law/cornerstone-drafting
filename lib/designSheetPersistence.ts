@@ -35,6 +35,7 @@ const DECISION_ONLY_TOP_LEVEL_KEYS = new Set([
   'plan_track',
   'provisions',
   'real_estate_transfer',
+  'settlor_facts',
   'staggered_ages',
   'trust_details',
   'trust_planning_type',

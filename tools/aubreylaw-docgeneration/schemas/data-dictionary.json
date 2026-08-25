@@ -2589,5 +2589,90 @@
     "type": "string",
     "required": false,
     "description": "Phone number of the second witness."
+  },
+  "client.marital_status": {
+    "type": "string",
+    "required": false,
+    "description": "Client's marital status: single, married, divorced, widowed, separated, domestic_partner, civil_union or unmarried_partnership."
+  },
+  "client.street_address_2": {
+    "type": "string",
+    "required": false,
+    "description": "Second line of the client's street address \u2014 apartment, unit or suite."
+  },
+  "client.gender": {
+    "type": "string",
+    "required": false,
+    "description": "Client's gender: male, female, nonbinary or other."
+  },
+  "client.disabled_veteran": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the client is a disabled veteran. Absent when the question has not been asked; false is a recorded \"no\"."
+  },
+  "spouse.gender": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's gender: male, female, nonbinary or other."
+  },
+  "marriage.place": {
+    "type": "string",
+    "required": false,
+    "description": "Where the marriage or partnership was celebrated or registered."
+  },
+  "marriage.survivor_designation": {
+    "type": "string",
+    "required": false,
+    "description": "Which settlor the plan designates as the survivor: settlor_1, settlor_2 or both."
+  },
+  "marriage.settlors_live_together": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the two settlors live together. Absent when the question has not been asked."
+  },
+  "planning.include_dementia_directive": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a dementia directive is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.include_visitation_authorization": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a visitation authorization is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.include_final_disposition": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether final disposition instructions are part of the plan. Record-only \u2014 no template drafts them yet."
+  },
+  "planning.include_comprehensive_transfer_document": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a comprehensive transfer document is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.include_client_self_declaration_of_capacity": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a client self-declaration of capacity is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.healthcare_directive_title": {
+    "type": "string",
+    "required": false,
+    "description": "How the health care directive is titled: state_default, advance_directive, advance_health_care_directive, health_care_directive, health_care_power_of_attorney or other."
+  },
+  "planning.poa_form": {
+    "type": "string",
+    "required": false,
+    "description": "Which power-of-attorney form the plan uses: short, long or both."
+  },
+  "planning.poa_title": {
+    "type": "string",
+    "required": false,
+    "description": "How the long-form power of attorney is titled: power_of_attorney or durable_power_of_attorney."
+  },
+  "planning.comprehensive_transfer_title": {
+    "type": "string",
+    "required": false,
+    "description": "How the comprehensive transfer document is titled: declaration_of_trust, comprehensive_transfer_of_assets or general_assignment."
   }
 }

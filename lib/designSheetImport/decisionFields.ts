@@ -69,6 +69,12 @@ import {
   TRUST_ACKNOWLEDGMENTS,
   type ExecutionMechanics,
 } from '@/lib/designSheet/executionMechanics'
+import {
+  setSettlorFacts,
+  SETTLOR_GENDERS,
+  SURVIVOR_DESIGNATIONS,
+  type SettlorFacts,
+} from '@/lib/designSheet/settlorFacts'
 import { mergeDecisionUpdates } from '@/lib/designSheetDocumentInclusions'
 import type { DesignSheet } from '@/types/database'
 
@@ -78,6 +84,7 @@ export type DecisionNamespace =
   | 'healthcare_provisions'
   | 'will_pr_powers'
   | 'execution_mechanics'
+  | 'settlor_facts'
 
 export type DecisionFieldKind = 'string' | 'boolean' | 'number'
 
@@ -87,6 +94,7 @@ export const DECISION_NAMESPACES = [
   'healthcare_provisions',
   'will_pr_powers',
   'execution_mechanics',
+  'settlor_facts',
 ] as const satisfies readonly DecisionNamespace[]
 
 export interface DecisionFieldMeta {
@@ -176,6 +184,7 @@ const WILL = 'Will'
 const DPOA = 'Durable Power of Attorney'
 const HEALTHCARE = 'Health Care Documents'
 const EXECUTION = 'Signing and Execution'
+const SETTLORS = 'Client Information'
 
 function trustField(
   key: keyof TrustDetailsProvisions,
@@ -211,6 +220,15 @@ function executionField(
   options?: readonly string[],
 ): DecisionFieldMeta {
   return { namespace: 'execution_mechanics', key, section: EXECUTION, label, kind, options }
+}
+
+function settlorField(
+  key: keyof SettlorFacts,
+  label: string,
+  kind: DecisionFieldKind,
+  options?: readonly string[],
+): DecisionFieldMeta {
+  return { namespace: 'settlor_facts', key, section: SETTLORS, label, kind, options }
 }
 
 function willPowerField(
@@ -407,6 +425,15 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'execution_mechanics.witness_1_phone': executionField('witness_1_phone', 'Witness 1 phone', 'string'),
   'execution_mechanics.witness_2_address': executionField('witness_2_address', 'Witness 2 address', 'string'),
   'execution_mechanics.witness_2_phone': executionField('witness_2_phone', 'Witness 2 phone', 'string'),
+
+  // --- decisions.settlor_facts -------------------------------------------------
+  'settlor_facts.street_address_2': settlorField('street_address_2', 'Street address line 2', 'string'),
+  'settlor_facts.client_gender': settlorField('client_gender', 'Client gender', 'string', SETTLOR_GENDERS),
+  'settlor_facts.spouse_gender': settlorField('spouse_gender', 'Spouse gender', 'string', SETTLOR_GENDERS),
+  'settlor_facts.place_of_marriage': settlorField('place_of_marriage', 'Place of marriage or registration', 'string'),
+  'settlor_facts.survivor_designation': settlorField('survivor_designation', 'Survivor designation', 'string', SURVIVOR_DESIGNATIONS),
+  'settlor_facts.settlors_live_together': settlorField('settlors_live_together', 'Settlors live together', 'boolean'),
+  'settlor_facts.disabled_veteran': settlorField('disabled_veteran', 'Disabled veteran', 'boolean'),
 } satisfies Record<string, DecisionFieldMeta>
 
 export type DesignSheetDecisionField = keyof typeof DESIGN_SHEET_DECISION_FIELDS
@@ -494,6 +521,7 @@ export function applyDecisionFieldValues(
   const healthcarePatch: Record<string, unknown> = {}
   const willPowersPatch: Record<string, unknown> = {}
   const executionPatch: Record<string, unknown> = {}
+  const settlorPatch: Record<string, unknown> = {}
 
   for (const [field, value] of Object.entries(values)) {
     const meta = decisionFieldMeta(field)
@@ -513,6 +541,10 @@ export function applyDecisionFieldValues(
     }
     if (meta.namespace === 'execution_mechanics') {
       executionPatch[meta.key] = value
+      continue
+    }
+    if (meta.namespace === 'settlor_facts') {
+      settlorPatch[meta.key] = value
       continue
     }
     // dpoa_provisions — the only namespace with a nested key.
@@ -567,6 +599,10 @@ export function applyDecisionFieldValues(
       current,
       executionPatch as Partial<ExecutionMechanics>,
     ))
+  }
+
+  if (Object.keys(settlorPatch).length > 0) {
+    updates.push(current => setSettlorFacts(current, settlorPatch as Partial<SettlorFacts>))
   }
 
   if (updates.length === 0) return isRecord(sheet.decisions) ? { ...sheet.decisions } : {}

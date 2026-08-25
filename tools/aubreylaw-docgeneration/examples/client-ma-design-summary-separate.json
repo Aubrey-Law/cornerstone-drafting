@@ -11,7 +11,11 @@
     "phone": "(617) 555-0143",
     "email": "jordan@example.com",
     "citizenship": "US Citizen",
-    "domicile": "MA"
+    "domicile": "MA",
+    "marital_status": "married",
+    "street_address_2": "Unit 4B",
+    "gender": "nonbinary",
+    "disabled_veteran": false
   },
   "spouse": {
     "exists": true,
@@ -20,10 +24,14 @@
     "date_of_birth": "February 2, 1972",
     "phone": "(617) 555-0144",
     "email": "riley@example.com",
-    "citizenship": "Permanent Resident"
+    "citizenship": "Permanent Resident",
+    "gender": "female"
   },
   "marriage": {
-    "date": "June 15, 2001"
+    "date": "June 15, 2001",
+    "place": "Boston, Massachusetts",
+    "survivor_designation": "settlor_2",
+    "settlors_live_together": true
   },
   "children": [
     {
@@ -84,7 +92,16 @@
     "include_successor_trustee_checklist": true,
     "include_fiduciary_role_guide": true,
     "include_flowchart": false,
-    "include_asset_spreadsheet": true
+    "include_asset_spreadsheet": true,
+    "include_dementia_directive": true,
+    "include_visitation_authorization": false,
+    "include_final_disposition": true,
+    "include_comprehensive_transfer_document": true,
+    "include_client_self_declaration_of_capacity": false,
+    "healthcare_directive_title": "state_default",
+    "poa_form": "long",
+    "poa_title": "durable_power_of_attorney",
+    "comprehensive_transfer_title": "general_assignment"
   },
   "trust": {
     "name": "The Jordan Coupleton Revocable Trust",

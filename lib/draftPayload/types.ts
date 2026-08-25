@@ -1,5 +1,11 @@
 import type { AdditionalBeneficiary, DesignSheetChild, RemoteCharity, StaggeredTier } from '@/types/database'
-import type { TrustPlanningType } from '@/lib/designSheetDocumentInclusions'
+import type {
+  EstatePlanComprehensiveTransferTitle,
+  EstatePlanHealthcareDirectiveTitle,
+  EstatePlanPoaForm,
+  EstatePlanPoaTitle,
+  TrustPlanningType,
+} from '@/lib/designSheetDocumentInclusions'
 import type { FiduciaryDocumentInclusions } from '@/lib/designSheet/fiduciaryDocumentInclusions'
 import type { DraftPayloadAsset } from '@/lib/draftPayload/assets'
 import type { DraftPayloadFundingPlan } from '@/lib/draftPayload/fundingPlan'
@@ -17,6 +23,7 @@ import type { DraftPayloadCollegePrep } from '@/lib/draftPayload/collegePrep'
 import type { DraftPayloadFamilyProvisions } from '@/lib/draftPayload/familyProvisions'
 import type { DraftPayloadTrustProvisions } from '@/lib/draftPayload/trustProvisions'
 import type { DraftPayloadExecutionMechanics } from '@/lib/draftPayload/executionMechanics'
+import type { DraftPayloadSettlorFacts } from '@/lib/draftPayload/settlorFacts'
 
 // ── Exported interface ────────────────────────────────────────────────────────
 
@@ -37,6 +44,7 @@ export interface DraftPayload {
     preferred_pronoun: string | null
     citizenship?: string | null
     domicile?: string | null
+    marital_status?: string | null
     dob: string | null
     address: string | null
     city: string | null
@@ -61,6 +69,10 @@ export interface DraftPayload {
   marriage?: {
     date: string | null
   }
+  /** Second address line, genders, place of marriage, survivor designation and
+   *  the two yes/no settlor facts. Optional so stored legacy payloads without
+   *  it stay type-valid. */
+  settlor_facts?: DraftPayloadSettlorFacts
   children: Array<{
     full_name: string
     dob: string | null
@@ -181,9 +193,21 @@ export interface DraftPayload {
     include_fiduciary_role_guide?: boolean
     include_flowchart?: boolean
     include_asset_spreadsheet?: boolean
+    /** Record-only inclusions: captured and printed on the interview worksheet,
+     *  with no template drafting them yet. */
+    include_dementia_directive?: boolean
+    include_visitation_authorization?: boolean
+    include_final_disposition?: boolean
+    include_comprehensive_transfer_document?: boolean
+    include_client_self_declaration_of_capacity?: boolean
     /** How the will is titled, and how the plan will be executed. */
     will_title?: 'last_will' | 'pour_over_will'
     signing_type?: 'undecided' | 'attorney_supervised' | 'independent_client'
+    /** How the other documents are titled, and which power-of-attorney form is used. */
+    healthcare_directive_title?: EstatePlanHealthcareDirectiveTitle
+    poa_form?: EstatePlanPoaForm
+    poa_title?: EstatePlanPoaTitle
+    comprehensive_transfer_title?: EstatePlanComprehensiveTransferTitle | null
     spouse_docs: boolean
     /** Individual-trust structure; `disclaimer` selects the married-individual disclaimer trust. */
     trust_planning_type: TrustPlanningType

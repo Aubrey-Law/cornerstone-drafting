@@ -59,7 +59,14 @@ export const DESIGN_MEETING_SECTIONS: DesignMeetingSection[] = [
       'spouse_dob',
       'spouse_aka',
       'marriage_date',
+      // Two of Phase 5's settlor facts belong on paper because they are things
+      // you confirm at the table. The rest — gender, survivor designation,
+      // disabled-veteran status, whether the settlors live together — are left
+      // to autofill and the design sheet, per this file's opening note about
+      // not growing the form past what a meeting can work through.
+      'settlor_facts.place_of_marriage',
       'street',
+      'settlor_facts.street_address_2',
       'city',
       'state',
       'zip',

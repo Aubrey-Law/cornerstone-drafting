@@ -17,6 +17,12 @@ import {
 } from './shared'
 import { DesignField } from '@/components/sharedFields/DesignField'
 import { CHILD_RELATIONSHIP_OPTIONS, childParentageOptions, normalizeCitizenship } from '@/lib/sharedFields'
+import {
+  getSettlorFacts,
+  setSettlorFacts,
+  type SettlorGender,
+  type SurvivorDesignation,
+} from '@/lib/designSheet/settlorFacts'
 import type { DesignSheetChild } from '@/types/database'
 
 const DECEASED_OPTIONS = [
@@ -30,6 +36,38 @@ const GENDER_OPTIONS = [
   { value: 'other', label: 'Other' },
 ]
 
+/** The settlors' own list; the child list above has no nonbinary option. */
+const SETTLOR_GENDER_OPTIONS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'nonbinary', label: 'Nonbinary' },
+  { value: 'other', label: 'Other' },
+]
+
+const SURVIVOR_DESIGNATION_OPTIONS = [
+  { value: 'settlor_1', label: 'Settlor 1' },
+  { value: 'settlor_2', label: 'Settlor 2' },
+  { value: 'both', label: 'Both' },
+]
+
+/**
+ * Blank is a real answer here — "not asked yet" — so these are three-state
+ * selects rather than checkboxes. An unanswered question must not print a
+ * ticked "No" on the interview worksheet.
+ */
+const UNASKED_YES_NO_OPTIONS = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'no', label: 'No' },
+]
+
+function yesNoValue(value: boolean | null): string {
+  return value === null ? '' : value ? 'yes' : 'no'
+}
+
+function yesNoPatch(value: string): boolean | null {
+  return value === '' ? null : value === 'yes'
+}
+
 function newChild(): DesignSheetChild {
   return {
     name: '',
@@ -42,6 +80,10 @@ function newChild(): DesignSheetChild {
 }
 
 export function ClientInformationSection({ sheet, onChange }: SectionProps) {
+  const facts = getSettlorFacts(sheet)
+  const updateFacts = (patch: Parameters<typeof setSettlorFacts>[1]) => {
+    onChange('decisions', previous => setSettlorFacts(previous, patch))
+  }
   const marital = (sheet.marital_status ?? '').toLowerCase()
   const isMarried = sheet.matter_type === 'couple'
   const isDivorced = marital.includes('divorced')
@@ -128,6 +170,14 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
             onChange={onChange}
             originalValue={original('marital_status')}
           />
+          <AttorneySelect
+            fieldName="settlor_facts.client_gender"
+            label="Gender"
+            value={facts.client_gender ?? ''}
+            placeholder="Select..."
+            options={SETTLOR_GENDER_OPTIONS}
+            onChange={value => updateFacts({ client_gender: (value || null) as SettlorGender | null })}
+          />
         </div>
         <div className={`mt-4 ${sectionFieldGrid3}`}>
           <DesignField
@@ -172,12 +222,27 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
 
         <div className={`mt-4 ${sectionFieldGrid3}`}>
           <DesignField fieldId="street" sheet={sheet} onChange={onChange} originalValue={original('street')} />
+          <AttorneyInput
+            fieldName="settlor_facts.street_address_2"
+            label="Street Address Line 2"
+            value={facts.street_address_2 ?? ''}
+            placeholder="Apartment, unit, or suite"
+            onChange={v => updateFacts({ street_address_2: v || null })}
+          />
           <DesignField fieldId="city" sheet={sheet} onChange={onChange} originalValue={original('city')} />
           <DesignField fieldId="state" sheet={sheet} onChange={onChange} originalValue={original('state')} />
           <DesignField fieldId="zip" sheet={sheet} onChange={onChange} originalValue={original('zip')} />
         </div>
         <div className={`mt-4 ${sectionFieldGrid3}`}>
           <DesignField fieldId="county" sheet={sheet} onChange={onChange} originalValue={original('county')} />
+          <AttorneySelect
+            fieldName="settlor_facts.disabled_veteran"
+            label="Disabled Veteran"
+            value={yesNoValue(facts.disabled_veteran)}
+            placeholder="Not asked"
+            options={UNASKED_YES_NO_OPTIONS}
+            onChange={value => updateFacts({ disabled_veteran: yesNoPatch(value) })}
+          />
         </div>
       </SectionBlock>
 
@@ -232,6 +297,14 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
               originalValue={original('spouse_citizenship')}
               valueOverride={spouseCitizenshipDisplay}
             />
+            <AttorneySelect
+              fieldName="settlor_facts.spouse_gender"
+              label="Gender"
+              value={facts.spouse_gender ?? ''}
+              placeholder="Select..."
+              options={SETTLOR_GENDER_OPTIONS}
+              onChange={value => updateFacts({ spouse_gender: (value || null) as SettlorGender | null })}
+            />
           </div>
           <div className={`mt-4 ${sectionFieldGrid3}`}>
             <DesignField
@@ -239,6 +312,31 @@ export function ClientInformationSection({ sheet, onChange }: SectionProps) {
               sheet={sheet}
               onChange={onChange}
               originalValue={original('marriage_date')}
+            />
+            <AttorneyInput
+              fieldName="settlor_facts.place_of_marriage"
+              label="Place of Marriage or Registration"
+              value={facts.place_of_marriage ?? ''}
+              placeholder="City and state"
+              onChange={v => updateFacts({ place_of_marriage: v || null })}
+            />
+            <AttorneySelect
+              fieldName="settlor_facts.survivor_designation"
+              label="Survivor Designation"
+              value={facts.survivor_designation ?? ''}
+              placeholder="Select..."
+              options={SURVIVOR_DESIGNATION_OPTIONS}
+              onChange={value => updateFacts({
+                survivor_designation: (value || null) as SurvivorDesignation | null,
+              })}
+            />
+            <AttorneySelect
+              fieldName="settlor_facts.settlors_live_together"
+              label="Settlors Live Together"
+              value={yesNoValue(facts.settlors_live_together)}
+              placeholder="Not asked"
+              options={UNASKED_YES_NO_OPTIONS}
+              onChange={value => updateFacts({ settlors_live_together: yesNoPatch(value) })}
             />
           </div>
         </SectionBlock>

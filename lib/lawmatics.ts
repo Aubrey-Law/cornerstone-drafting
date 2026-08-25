@@ -187,7 +187,7 @@ export interface LawmaticsAddress {
 const LEGAL_PLAN_NAMES = ['arag', 'metlife', 'legalease', 'legal ease']
 // Mirrors MARITAL_STATUS_OPTIONS (packages/estate-fields) — the vocabulary
 // every intake/design surface reads.
-const VALID_CLIENT_INTAKE_MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed', 'separated', 'domestic partner'] as const
+const VALID_CLIENT_INTAKE_MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed', 'separated', 'domestic partner', 'civil union', 'unmarried partnership'] as const
 
 export function normalizeLawmaticsMaritalStatus(value: unknown): string | null {
   if (typeof value !== 'string') return null

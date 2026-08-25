@@ -26,10 +26,13 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `client.city` | City | Client Information | `city` |
 | `client.county` | County | Client Information | `county` |
 | `client.date_of_birth` | Date of birth | Client Information | `client_dob` |
+| `client.disabled_veteran` | Disabled Veteran | Client Information | (section) |
 | `client.domicile` | Domicile | Client Information | (section) |
 | `client.email` | Email | Client Information | (section) |
 | `client.first_name` | First Name | Client Information | (section) |
 | `client.full_name` | Client legal name | Client Information | `client_name` |
+| `client.gender` | Gender | Client Information | (section) |
+| `client.marital_status` | Marital Status | Client Information | (section) |
 | `client.phone` | Phone | Client Information | (section) |
 | `client.pronoun_object` | Pronoun Object | Client Information | (section) |
 | `client.pronoun_possessive` | Pronouns | Client Information | `client_pronouns` |
@@ -37,6 +40,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `client.signing_county` | Signing County | Client Information | (section) |
 | `client.state` | State | Client Information | `state` |
 | `client.street_address` | Street address | Client Information | `street` |
+| `client.street_address_2` | Street Address 2 | Client Information | (section) |
 | `client.zip` | Zip | Client Information | (section) |
 | `college.artificial_nutrition` | Artificial Nutrition | College Preparation Plan | (section) |
 | `college.comfort_always` | Comfort Always | College Preparation Plan | (section) |
@@ -356,18 +360,27 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `homestead.trust_deed_page` | Trust Deed Page | Transfers & Assignments | (section) |
 | `homestead.trustee_pronoun_possessive` | Trustee Pronoun Possessive | Transfers & Assignments | (section) |
 | `marriage.date` | Date | Estate Plan Design | (section) |
+| `marriage.place` | Place | Estate Plan Design | (section) |
+| `marriage.settlors_live_together` | Settlors Live Together | Estate Plan Design | (section) |
+| `marriage.survivor_designation` | Survivor Designation | Estate Plan Design | (section) |
 | `minor_children` | Minor Children | Estate Plan Design | (section) |
 | `outright_will.residuary.alternate.full_name` | Alternate residuary beneficiary | Will Details | `outright_residuary_alternate` |
 | `outright_will.residuary.disposition` | Disposition | Will Details | (section) |
 | `outright_will.residuary.named.full_name` | Named residuary beneficiary | Will Details | `outright_residuary_named` |
+| `planning.comprehensive_transfer_title` | Comprehensive Transfer Title | Estate Plan Design | (section) |
+| `planning.healthcare_directive_title` | Healthcare Directive Title | Estate Plan Design | (section) |
 | `planning.include_ahd` | Include Ahd | Estate Plan Design | (section) |
 | `planning.include_asset_spreadsheet` | Include Asset Spreadsheet | Estate Plan Design | (section) |
 | `planning.include_assignment_of_personal_property` | Include Assignment Of Personal Property | Estate Plan Design | (section) |
 | `planning.include_certificate_of_trust` | Include Certificate Of Trust | Estate Plan Design | (section) |
+| `planning.include_client_self_declaration_of_capacity` | Include Client Self Declaration Of Capacity | Estate Plan Design | (section) |
+| `planning.include_comprehensive_transfer_document` | Include Comprehensive Transfer Document | Estate Plan Design | (section) |
+| `planning.include_dementia_directive` | Include Dementia Directive | Estate Plan Design | (section) |
 | `planning.include_dpoa` | Include Dpoa | Estate Plan Design | (section) |
 | `planning.include_estate_plan_signing_guide` | Include Estate Plan Signing Guide | Estate Plan Design | (section) |
 | `planning.include_estate_plan_summary` | Include Estate Plan Summary | Estate Plan Design | (section) |
 | `planning.include_fiduciary_role_guide` | Include Fiduciary Role Guide | Estate Plan Design | (section) |
+| `planning.include_final_disposition` | Include Final Disposition | Estate Plan Design | (section) |
 | `planning.include_flowchart` | Include Flowchart | Estate Plan Design | (section) |
 | `planning.include_funding_instructions` | Include Funding Instructions | Estate Plan Design | (section) |
 | `planning.include_hcp` | Include Hcp | Estate Plan Design | (section) |
@@ -381,6 +394,9 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `planning.include_testamentary_trust_will` | Include Testamentary Trust Will | Estate Plan Design | (section) |
 | `planning.include_trust` | Include Trust | Estate Plan Design | (section) |
 | `planning.include_trust_summary` | Include Trust Summary | Estate Plan Design | (section) |
+| `planning.include_visitation_authorization` | Include Visitation Authorization | Estate Plan Design | (section) |
+| `planning.poa_form` | Poa Form | Estate Plan Design | (section) |
+| `planning.poa_title` | Poa Title | Estate Plan Design | (section) |
 | `planning.spouse_docs` | Spouse Docs | Estate Plan Design | (section) |
 | `pour_over.alternate_disposition_text` | Alternate Disposition Text | Will Details | (section) |
 | `specific_gifts` | Specific Gifts | Estate Plan Design | (section) |
@@ -392,6 +408,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `spouse.exists` | Exists | Client Information | (section) |
 | `spouse.first_name` | First Name | Client Information | (section) |
 | `spouse.full_name` | Spouse legal name | Client Information | `spouse_name` |
+| `spouse.gender` | Gender | Client Information | (section) |
 | `spouse.phone` | Phone | Client Information | (section) |
 | `spouse.pronoun_object` | Pronoun Object | Client Information | (section) |
 | `spouse.pronoun_possessive` | Pronoun Possessive | Client Information | (section) |

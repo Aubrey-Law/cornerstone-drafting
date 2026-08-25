@@ -188,6 +188,60 @@ describe('design-summary-separate package', () => {
     expect(text).toContain('Second Witness Address: 44 Beacon Street, Boston, MA 02108')
   })
 
+  it('records the settlor facts and document choices Phase 5 added', async () => {
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+
+    // Settlor facts.
+    expect(text).toContain('Street Address Line 2: Unit 4B')
+    expect(text).toMatch(/Marital Status[\s\S]{0,20}☒ Married/)
+    expect(text).toMatch(/Gender:[\s\S]{0,60}☒ Nonbinary/)
+    expect(text).toContain('Place of Marriage or Registration: Boston, Massachusetts')
+    expect(text).toMatch(/Survivor Designation:[\s\S]{0,40}☒ Settlor 2/)
+    expect(text).toMatch(/Do Settlor 1 and Settlor 2 live together\?:[\s\S]{0,20}☒ Yes/)
+
+    // Document inclusions and titles, including the record-only ones.
+    expect(text).toMatch(/Dementia Directive:[\s\S]{0,20}☒ Yes/)
+    expect(text).toMatch(/Visitation Authorization:[\s\S]{0,20}☐ Yes {3}☒ No/)
+    expect(text).toMatch(/Form of Power of Attorney[\s\S]{0,80}☒ Long-Form/)
+    expect(text).toMatch(/Healthcare Directive Title[\s\S]{0,60}☒ State Default/)
+    expect(text).toContain('☒ General Assignment')
+  })
+
+  it('does not tick a document title for a document the plan does not include', async () => {
+    // The title fields default to what the firm drafts rather than to null, so
+    // without a gate a plan with no power of attorney would still print a
+    // ticked "Long-Form Power of Attorney".
+    const data = loadExample() as unknown as Record<string, any>
+    data.planning.include_dpoa = false
+    data.planning.include_hcp = false
+    data.planning.include_ahd = false
+    const text = visibleText((await render(data as never)).files[1].buffer)
+
+    expect(text).toMatch(/Form of Power of Attorney[\s\S]{0,80}☐ Long-Form/)
+    expect(text).not.toContain('☒ Long-Form Power of Attorney')
+    expect(text).not.toContain('☒ Durable Power of Attorney')
+    expect(text).not.toContain('☒ State Default (Health Care Proxy)')
+  })
+
+  it('leaves a settlor fact nobody has answered as two blank boxes', async () => {
+    // The distinction Phase 5 is built around: `false` is a recorded "no" and
+    // ticks the No box; absent is "not asked" and must tick neither. A plain
+    // truthiness test would print an unasked question as a decided No.
+    const answered = loadExample() as unknown as Record<string, any>
+    expect(visibleText((await render(answered as never)).files[1].buffer))
+      .toMatch(/Disabled Veteran\?:[\s\S]{0,20}☐ Yes {3}☒ No/)
+
+    const unasked = loadExample() as unknown as Record<string, any>
+    delete unasked.client.disabled_veteran
+    delete unasked.marriage.settlors_live_together
+    const text = visibleText((await render(unasked as never)).files[1].buffer)
+
+    expect(text).toMatch(/Disabled Veteran\?:[\s\S]{0,20}☐ Yes {3}☐ No/)
+    expect(text).toMatch(/Do Settlor 1 and Settlor 2 live together\?:[\s\S]{0,20}☐ Yes {3}☐ No/)
+    expect(text).not.toMatch(/\{\{|\{%|\[\[ MISSING/)
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

@@ -46,6 +46,7 @@ import {
 } from '@/lib/draftPayload/fiduciaryDetails'
 import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
 import { draftPayloadExecutionMechanics } from '@/lib/draftPayload/executionMechanics'
+import { draftPayloadSettlorFacts } from '@/lib/draftPayload/settlorFacts'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { resolveDraftComposition } from '@/lib/matter/matterType'
 import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
@@ -488,6 +489,7 @@ export async function buildDraftPayload(
       preferred_pronoun: designSheet.client_pronouns ?? null,
       citizenship: designSheet.client_citizenship ?? null,
       domicile: designSheet.client_domicile ?? null,
+      marital_status: designSheet.marital_status ?? null,
       dob: designSheet.client_dob ?? null,
       address: clientAddress,
       city: clientCity,
@@ -506,6 +508,7 @@ export async function buildDraftPayload(
     marriage: {
       date: designSheet.marriage_date ?? null,
     },
+    settlor_facts: draftPayloadSettlorFacts(designSheet),
     children: designChildren,
     family_provisions: draftPayloadFamilyProvisions(designSheet),
     trust,

@@ -558,6 +558,7 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
   // The health care wishes and post-death choices live on the wider
   // provisions record; `hcp_provisions` only ever carried the legacy subset.
   const executionMechanics = payload.execution_mechanics
+  const settlorFacts = payload.settlor_facts
   const healthcareProvisions = payload.healthcare_provisions
   const hipaaProvisions = payload.hipaa_provisions
   const ferpa = payload.ferpa_release ?? null
@@ -593,6 +594,13 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
         phone: formatPhoneDisplay(payload.client.phone),
         citizenship: payload.client.citizenship,
         domicile: payload.client.domicile,
+        marital_status: payload.client.marital_status,
+        street_address_2: settlorFacts?.street_address_2 ?? null,
+        gender: settlorFacts?.client_gender ?? null,
+        // `compactObject` drops null but keeps false, so an unanswered question
+        // reaches the template as absent and a "no" reaches it as false. That is
+        // what lets the worksheet leave both boxes blank rather than tick "No".
+        disabled_veteran: settlorFacts?.disabled_veteran ?? null,
         pronoun_subject: clientPronouns.subject,
         pronoun_object: clientPronouns.object,
         pronoun_possessive: clientPronouns.possessive,
@@ -609,15 +617,19 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
           email: payload.spouse.email,
           phone: formatPhoneDisplay(payload.spouse.phone),
           citizenship: payload.spouse.citizenship,
+          gender: settlorFacts?.spouse_gender ?? null,
           date_of_birth: formatLongDate(payload.spouse.dob) ?? payload.spouse.dob,
           pronoun_subject: spousePronouns.subject,
           pronoun_object: spousePronouns.object,
           pronoun_possessive: spousePronouns.possessive,
         })
       : { exists: false },
-    marriage: {
+    marriage: compactObject({
       date: formatLongDate(payload.marriage?.date) ?? payload.marriage?.date ?? '',
-    },
+      place: settlorFacts?.place_of_marriage ?? null,
+      survivor_designation: settlorFacts?.survivor_designation ?? null,
+      settlors_live_together: settlorFacts?.settlors_live_together ?? null,
+    }),
     children,
     summary: {
       show_spouse: Boolean(payload.spouse),
@@ -663,6 +675,16 @@ export function toEstateGeneratorData(payload: DraftPayload): EstateGeneratorDat
       include_fiduciary_role_guide: docs.include_fiduciary_role_guide ?? false,
       include_flowchart: docs.include_flowchart ?? false,
       include_asset_spreadsheet: docs.include_asset_spreadsheet ?? false,
+      // Record-only inclusions and the document titles that go with them.
+      include_dementia_directive: docs.include_dementia_directive ?? false,
+      include_visitation_authorization: docs.include_visitation_authorization ?? false,
+      include_final_disposition: docs.include_final_disposition ?? false,
+      include_comprehensive_transfer_document: docs.include_comprehensive_transfer_document ?? false,
+      include_client_self_declaration_of_capacity: docs.include_client_self_declaration_of_capacity ?? false,
+      healthcare_directive_title: docs.healthcare_directive_title ?? 'state_default',
+      poa_form: docs.poa_form ?? 'long',
+      poa_title: docs.poa_title ?? 'durable_power_of_attorney',
+      comprehensive_transfer_title: docs.comprehensive_transfer_title ?? null,
       spouse_docs: docs.spouse_docs,
       client_goals: payload.goals_notes ?? null,
       client_concerns: payload.concerns ?? null,
