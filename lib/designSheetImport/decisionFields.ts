@@ -250,6 +250,7 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'trust_details.hold_distributions_for_young_beneficiaries': trustField('hold_distributions_for_young_beneficiaries', 'Hold distributions for young beneficiaries', 'boolean'),
   'trust_details.include_substance_abuse': trustField('include_substance_abuse', 'Substance abuse provisions', 'boolean'),
   'trust_details.include_creditor_divorce_provisions': trustField('include_creditor_divorce_provisions', 'Creditor and divorce provisions', 'boolean'),
+  'trust_details.include_marital_deduction_savings_language': trustField('include_marital_deduction_savings_language', 'Marital deduction savings language', 'boolean'),
   'trust_details.include_contingent_snt': trustField('include_contingent_snt', 'Contingent special needs trust', 'boolean'),
   'trust_details.allow_distributions_to_dependents_if_incapacitated': trustField('allow_distributions_to_dependents_if_incapacitated', 'Distributions to dependents if incapacitated', 'boolean'),
   'trust_details.include_no_contest_clause': trustField('include_no_contest_clause', 'Trust no-contest clause', 'boolean'),

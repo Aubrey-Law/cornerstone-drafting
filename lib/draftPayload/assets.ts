@@ -8,6 +8,12 @@ export interface DraftPayloadAsset {
   estimated_value: number | null
   notes: string | null
   from_intake: boolean
+  /** Ownership as it stands today, e.g. "Joint", "Client individually".
+   *  Optional so stored payloads written before this field stay type-valid. */
+  current_owner?: string | null
+  /** Ownership the plan moves the asset to, e.g. the trust name. */
+  target_owner?: string | null
+  beneficiary_designation?: string | null
 }
 
 export function draftPayloadAssets(
@@ -25,6 +31,9 @@ export function draftPayloadAssets(
         : null,
       notes: asset.notes?.trim() || null,
       from_intake: asset.from_intake === true,
+      current_owner: asset.current_owner?.trim() || null,
+      target_owner: asset.target_owner?.trim() || null,
+      beneficiary_designation: asset.beneficiary_designation?.trim() || null,
     }))
     .filter(asset => asset.description.length > 0)
 }

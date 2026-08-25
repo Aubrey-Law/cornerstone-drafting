@@ -179,3 +179,31 @@ describe('residual beneficiary method has a single writer', () => {
     expect(source).toContain('fieldName="residual_beneficiary_method"')
   })
 })
+
+describe('trust details — Phase 0 defects', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/TrustDetailsSection.tsx'),
+    'utf8',
+  )
+
+  it('wires the marital deduction checkbox to a stored field instead of a dead handler', () => {
+    // It used to render `checked={false} onChange={() => {}}` — clickable, inert.
+    expect(source).not.toContain('onChange={() => {}}')
+    expect(source).toContain('checked={trustDetails.include_marital_deduction_savings_language}')
+    expect(source).toContain('include_marital_deduction_savings_language: checked')
+  })
+
+  it('gives the stored initial-trustee nomination an input', () => {
+    expect(source).toContain('fieldName="initial_trustee_nomination"')
+    expect(source).toContain('fieldName="spouse_initial_trustee_nomination"')
+  })
+
+  it('reads the new marital deduction field back, defaulting to undecided-as-off', () => {
+    expect(getTrustDetails({ decisions: null }).include_marital_deduction_savings_language).toBe(false)
+    expect(
+      getTrustDetails({
+        decisions: { trust_details: { include_marital_deduction_savings_language: true } },
+      }).include_marital_deduction_savings_language,
+    ).toBe(true)
+  })
+})

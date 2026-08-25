@@ -21,6 +21,7 @@ import {
   setTrustDetails,
   setTrustNameFormat,
   STAGGERED_DISTRIBUTION_PRESETS,
+  type InitialTrusteeNomination,
   type RepresentationType,
   type ResidualBeneficiaryMethod,
   type ResiduaryAfterDeath,
@@ -357,6 +358,36 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       </SectionBlock>
 
       <SectionBlock title="Trustee Provisions">
+        <div className="mt-6">
+          <DecisionRow
+            question="Who serves as initial trustee?"
+            fieldName="initial_trustee_nomination"
+            value={trustDetails.initial_trustee_nomination ?? 'grantor'}
+            options={[
+              { value: 'grantor', label: 'The grantor', description: 'The settlor serves as their own initial trustee.' },
+              { value: 'grantor_and_spouse', label: 'The grantor and spouse', description: 'Both spouses serve as initial co-trustees.' },
+              { value: 'single_initial_trustee', label: 'A single named trustee', description: 'One person named on Fiduciary Role Assignment serves alone.' },
+            ]}
+            onChange={value => updateTrustDetails({ initial_trustee_nomination: value as InitialTrusteeNomination })}
+          />
+        </div>
+
+        {separate ? (
+          <div className="mt-6">
+            <DecisionRow
+              question="Who serves as initial trustee of the spouse's trust?"
+              fieldName="spouse_initial_trustee_nomination"
+              value={trustDetails.spouse_initial_trustee_nomination ?? 'spouse'}
+              options={[
+                { value: 'spouse', label: 'The spouse', description: 'The spouse serves as their own initial trustee.' },
+                { value: 'client_and_spouse', label: 'Both spouses', description: 'Both spouses serve as initial co-trustees of this trust.' },
+                { value: 'single_initial_trustee', label: 'A single named trustee', description: 'One person named on Fiduciary Role Assignment serves alone.' },
+              ]}
+              onChange={value => updateTrustDetails({ spouse_initial_trustee_nomination: value as InitialTrusteeNomination })}
+            />
+          </div>
+        ) : null}
+
         <div className="mt-6">
           <DecisionRow
             question="If the trust ever has co-trustees, how should they make decisions?"
@@ -774,9 +805,9 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
           ) : (
             <DesignSheetCheckboxOption
               label="Include marital deduction savings language in spendthrift clause"
-              description="Adds marital deduction savings language to the spendthrift clause when selected for this trust structure."
-              checked={false}
-              onChange={() => {}}
+              description="Adds marital deduction savings language to the spendthrift clause. Disclaimer and Clayton-election structures include it automatically."
+              checked={trustDetails.include_marital_deduction_savings_language}
+              onChange={checked => updateTrustDetails({ include_marital_deduction_savings_language: checked })}
             />
           )}
           <DesignSheetCheckboxOption

@@ -611,6 +611,16 @@ export function deriveDocuments(
     include_funding_recommendation: isEP && includeTrust && setup.ancillary_documents.funding_recommendation,
     include_homestead_trustee:      isEP && includeTrust && setup.ancillary_documents.homestead_trustee,
     include_estate_plan_summary:    isEP && setup.ancillary_documents.estate_plan_summary,
+    // Client-facing extras. The design sheet has always collected these; they
+    // stopped here instead of reaching the templates that print them.
+    include_trust_summary:          isEP && includeTrust && setup.ancillary_documents.trust_summary,
+    include_estate_plan_signing_guide: isEP && setup.ancillary_documents.estate_plan_signing_guide,
+    include_successor_trustee_checklist: isEP && includeTrust && setup.ancillary_documents.successor_trustee_checklist,
+    include_fiduciary_role_guide:   isEP && setup.ancillary_documents.fiduciary_role_guide,
+    include_flowchart:              isEP && setup.ancillary_documents.flowchart,
+    include_asset_spreadsheet:      isEP && setup.ancillary_documents.include_asset_spreadsheet,
+    will_title:                     setup.will_title,
+    signing_type:                   setup.signing_type,
     spouse_docs:                    isMarried && inclusions.spouse_docs,
     trust_planning_type:            trustPlanningType,
   }

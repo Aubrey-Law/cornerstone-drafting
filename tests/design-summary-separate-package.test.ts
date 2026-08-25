@@ -90,6 +90,30 @@ describe('design-summary-separate package', () => {
     expect(text).toMatch(/Require mandatory arbitration for trust disputes:[\s\S]{0,40}☐ Yes {3}☒ No/)
   })
 
+  it('ticks the answers the design sheet already collected but never sent to templates', async () => {
+    const [, worksheet] = (await render(loadExample())).files
+    const text = visibleText(worksheet.buffer)
+
+    // Citizenship, domicile and the client-facing extras all live on the design
+    // sheet; before Phase 0 they stopped at the payload and printed blank.
+    expect(text).toMatch(/Citizenship:[\s\S]{0,40}☒ U.S. Citizen/)
+    expect(text).toContain('MA')
+    expect(text).toMatch(/Estate Plan Signing Guide:[\s\S]{0,40}☒ Yes/)
+    expect(text).toMatch(/Successor Trustee Checklist:[\s\S]{0,40}☒ Yes/)
+    expect(text).toMatch(/Fiduciary Role Guide:[\s\S]{0,40}☒ Yes/)
+    expect(text).toMatch(/Asset Spreadsheet:[\s\S]{0,40}☒ Yes/)
+    // Flowchart is off in the example — a stored "no" ticks No, not blank.
+    expect(text).toMatch(/Flowchart:[\s\S]{0,40}☐ Yes {3}☒ No/)
+    // Will title and signing type now come from their own stored answers.
+    expect(text).toMatch(/☒ Pour-Over Will of/)
+    expect(text).toMatch(/☒ Attorney supervised/)
+    // Asset ownership replaced a hardcoded null.
+    expect(text).toContain('Joint (tenants by the entirety)')
+    expect(text).toContain('The Jordan Coupleton Revocable Trust')
+    // Beneficiaries beyond the family reach a template for the first time.
+    expect(text).toContain('Needham Historical Society')
+  })
+
   it('omits every Settlor 2 block for an unmarried client', async () => {
     const data = loadExample() as unknown as Record<string, unknown>
     delete data.spouse

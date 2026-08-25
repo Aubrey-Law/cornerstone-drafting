@@ -1,4 +1,4 @@
-import type { DesignSheetChild, RemoteCharity, StaggeredTier } from '@/types/database'
+import type { AdditionalBeneficiary, DesignSheetChild, RemoteCharity, StaggeredTier } from '@/types/database'
 import type { TrustPlanningType } from '@/lib/designSheetDocumentInclusions'
 import type { FiduciaryDocumentInclusions } from '@/lib/designSheet/fiduciaryDocumentInclusions'
 import type { DraftPayloadAsset } from '@/lib/draftPayload/assets'
@@ -35,6 +35,7 @@ export interface DraftPayload {
     aka: string | null
     preferred_pronoun: string | null
     citizenship?: string | null
+    domicile?: string | null
     dob: string | null
     address: string | null
     city: string | null
@@ -172,6 +173,16 @@ export interface DraftPayload {
     include_funding_recommendation?: boolean
     include_homestead_trustee?: boolean
     include_estate_plan_summary?: boolean
+    /** Client-facing extras from the design sheet's ancillary document list. */
+    include_trust_summary?: boolean
+    include_estate_plan_signing_guide?: boolean
+    include_successor_trustee_checklist?: boolean
+    include_fiduciary_role_guide?: boolean
+    include_flowchart?: boolean
+    include_asset_spreadsheet?: boolean
+    /** How the will is titled, and how the plan will be executed. */
+    will_title?: 'last_will' | 'pour_over_will'
+    signing_type?: 'undecided' | 'attorney_supervised' | 'independent_client'
     spouse_docs: boolean
     /** Individual-trust structure; `disclaimer` selects the married-individual disclaimer trust. */
     trust_planning_type: TrustPlanningType
@@ -360,6 +371,7 @@ export interface DesignSheetRow {
   client_email?: string | null
   client_pronouns?: string | null
   client_citizenship?: string | null
+  client_domicile?: string | null
   street?: string | null
   city?: string | null
   state?: string | null
@@ -421,6 +433,7 @@ export interface DesignSheetRow {
   disinherit_issue?: string | null
   additional_disinheritance_language?: string | null
   disinheritances?: { name: string; relationship: string; reason: string }[] | null
+  additional_beneficiaries?: AdditionalBeneficiary[] | null
   // Will-common selections
   pr_structure?: string | null
   bond?: string | null

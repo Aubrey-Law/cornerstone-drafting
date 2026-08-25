@@ -9,7 +9,9 @@
     "state": "MA",
     "zip": "02118",
     "phone": "(617) 555-0143",
-    "email": "jordan@example.com"
+    "email": "jordan@example.com",
+    "citizenship": "US Citizen",
+    "domicile": "MA"
   },
   "spouse": {
     "exists": true,
@@ -17,12 +19,25 @@
     "aka": "Riley Former",
     "date_of_birth": "February 2, 1972",
     "phone": "(617) 555-0144",
-    "email": "riley@example.com"
+    "email": "riley@example.com",
+    "citizenship": "Permanent Resident"
   },
-  "marriage": { "date": "June 15, 2001" },
+  "marriage": {
+    "date": "June 15, 2001"
+  },
   "children": [
-    { "full_name": "Sam Coupleton", "relationship": "Child", "date_of_birth": "March 3, 2010", "minor": true },
-    { "full_name": "Casey Coupleton", "relationship": "Child", "date_of_birth": "April 4, 2002", "minor": false }
+    {
+      "full_name": "Sam Coupleton",
+      "relationship": "Child",
+      "date_of_birth": "March 3, 2010",
+      "minor": true
+    },
+    {
+      "full_name": "Casey Coupleton",
+      "relationship": "Child",
+      "date_of_birth": "April 4, 2002",
+      "minor": false
+    }
   ],
   "family": {
     "include_afterborn_children": true,
@@ -32,7 +47,22 @@
     "disinherit_issue": false,
     "additional_disinheritance_language": "No provision is made for my brother Morgan Coupleton.",
     "disinherited": [
-      { "full_name": "Morgan Coupleton", "relationship": "Brother" }
+      {
+        "full_name": "Morgan Coupleton",
+        "relationship": "Brother"
+      }
+    ],
+    "additional_beneficiaries": [
+      {
+        "full_name": "Needham Historical Society",
+        "kind": "charity",
+        "relationship": "Community organization"
+      },
+      {
+        "full_name": "Robin Friend",
+        "kind": "individual",
+        "relationship": "Godchild"
+      }
     ]
   },
   "planning": {
@@ -48,7 +78,13 @@
     "include_funding_instructions": true,
     "include_estate_plan_summary": true,
     "include_parental_appointment": true,
-    "spouse_docs": true
+    "spouse_docs": true,
+    "include_trust_summary": true,
+    "include_estate_plan_signing_guide": true,
+    "include_successor_trustee_checklist": true,
+    "include_fiduciary_role_guide": true,
+    "include_flowchart": false,
+    "include_asset_spreadsheet": true
   },
   "trust": {
     "name": "The Jordan Coupleton Revocable Trust",
@@ -62,7 +98,9 @@
     "special_distributions_age": 25,
     "include_common_trust_for_children": true,
     "trust_protector_requested": true,
-    "trust_protector": { "full_name": "Quinn Advisor" },
+    "trust_protector": {
+      "full_name": "Quinn Advisor"
+    },
     "provisions": {
       "protect_us_trust_status": true,
       "allow_special_trustee": true,
@@ -74,17 +112,33 @@
       "include_no_contest_clause": true,
       "include_education_expenses_definition": true,
       "include_discretionary_distribution_definition": true,
-      "prorate_estate_taxes": true
+      "prorate_estate_taxes": true,
+      "include_marital_deduction_savings_language": true
     },
     "residual_beneficiary": "Descendants, per stirpes",
     "residuary_after_death": "descendants_shares_all_trusts",
-    "descendants_distribution": { "method": "staged", "stage_1_age": 25, "stage_2_age": 30, "stage_3_age": 35 },
-    "contingent_beneficiary": { "full_name": "Pat Coupleton" },
-    "tangible_personal_property": { "distribution_method": "children_then_descendants" },
+    "descendants_distribution": {
+      "method": "staged",
+      "stage_1_age": 25,
+      "stage_2_age": 30,
+      "stage_3_age": 35
+    },
+    "contingent_beneficiary": {
+      "full_name": "Pat Coupleton"
+    },
+    "tangible_personal_property": {
+      "distribution_method": "children_then_descendants"
+    },
     "remote_beneficiaries": {
       "method": "named",
-      "individuals": [{ "full_name": "Alex Friend" }],
-      "charity": { "name": "Local Animal Shelter" }
+      "individuals": [
+        {
+          "full_name": "Alex Friend"
+        }
+      ],
+      "charity": {
+        "name": "Local Animal Shelter"
+      }
     }
   },
   "will": {
@@ -96,7 +150,8 @@
       "allow_pay_taxes_debts_expenses": true,
       "allow_manage_digital_assets": true,
       "include_distribution_cash_or_kind": true
-    }
+    },
+    "title": "pour_over_will"
   },
   "dpoa": {
     "agent_compensation": "reasonable",
@@ -123,33 +178,66 @@
   },
   "fiduciaries": {
     "trustee": {
-      "primary": { "full_name": "Jordan Coupleton" },
-      "co_primary": { "full_name": "Riley Coupleton" },
+      "primary": {
+        "full_name": "Jordan Coupleton"
+      },
+      "co_primary": {
+        "full_name": "Riley Coupleton"
+      },
       "co_trustees_action": "joint",
-      "successor": { "full_name": "Alex Friend" },
-      "second_successor": { "full_name": "Jamie Friend" }
+      "successor": {
+        "full_name": "Alex Friend"
+      },
+      "second_successor": {
+        "full_name": "Jamie Friend"
+      }
     },
     "spouse_trustee": {
-      "primary": { "full_name": "Riley Coupleton" },
-      "co_primary": { "full_name": "Jordan Coupleton" },
-      "successor": { "full_name": "Alex Friend" }
+      "primary": {
+        "full_name": "Riley Coupleton"
+      },
+      "co_primary": {
+        "full_name": "Jordan Coupleton"
+      },
+      "successor": {
+        "full_name": "Alex Friend"
+      }
     },
     "executor": {
-      "primary": { "full_name": "Riley Coupleton" },
-      "successor": { "full_name": "Alex Friend" },
-      "second_successor": { "full_name": "Jamie Friend" }
+      "primary": {
+        "full_name": "Riley Coupleton"
+      },
+      "successor": {
+        "full_name": "Alex Friend"
+      },
+      "second_successor": {
+        "full_name": "Jamie Friend"
+      }
     },
     "spouse_executor": {
-      "primary": { "full_name": "Jordan Coupleton" },
-      "successor": { "full_name": "Jamie Friend" }
+      "primary": {
+        "full_name": "Jordan Coupleton"
+      },
+      "successor": {
+        "full_name": "Jamie Friend"
+      }
     },
     "agent": {
-      "primary": { "full_name": "Riley Coupleton", "phone": "(617) 555-0144" },
-      "successor": { "full_name": "Alex Friend" }
+      "primary": {
+        "full_name": "Riley Coupleton",
+        "phone": "(617) 555-0144"
+      },
+      "successor": {
+        "full_name": "Alex Friend"
+      }
     },
     "spouse_agent": {
-      "primary": { "full_name": "Jordan Coupleton" },
-      "successor": { "full_name": "Jamie Friend" }
+      "primary": {
+        "full_name": "Jordan Coupleton"
+      },
+      "successor": {
+        "full_name": "Jamie Friend"
+      }
     }
   },
   "fiduciary_display": {
@@ -161,12 +249,22 @@
   },
   "healthcare": {
     "agent": {
-      "primary": { "full_name": "Riley Coupleton", "relationship": "Spouse" },
-      "alternate": { "full_name": "Alex Friend" }
+      "primary": {
+        "full_name": "Riley Coupleton",
+        "relationship": "Spouse"
+      },
+      "alternate": {
+        "full_name": "Alex Friend"
+      }
     },
     "spouse_agent": {
-      "primary": { "full_name": "Jordan Coupleton", "relationship": "Spouse" },
-      "alternate": { "full_name": "Jamie Friend" }
+      "primary": {
+        "full_name": "Jordan Coupleton",
+        "relationship": "Spouse"
+      },
+      "alternate": {
+        "full_name": "Jamie Friend"
+      }
     },
     "client_anatomical_gift": "yes",
     "spouse_anatomical_gift": "defer",
@@ -180,32 +278,74 @@
     "include_poa": true,
     "include_trustees": true,
     "list_fiduciaries_by_name": "by_name",
-    "client_additional_agents": [{ "full_name": "Nina Neighbor", "relationship": "Neighbor" }],
-    "spouse_additional_agents": [{ "full_name": "Owen Neighbor", "relationship": "Neighbor" }]
+    "client_additional_agents": [
+      {
+        "full_name": "Nina Neighbor",
+        "relationship": "Neighbor"
+      }
+    ],
+    "spouse_additional_agents": [
+      {
+        "full_name": "Owen Neighbor",
+        "relationship": "Neighbor"
+      }
+    ]
   },
   "guardians": {
-    "primary": { "full_name": "Alex Friend" },
-    "successor": { "full_name": "Jamie Friend" },
-    "second_successor": { "full_name": "Pat Coupleton" },
-    "temporary": { "full_name": "Nina Neighbor" },
-    "temporary_successor": { "full_name": "Owen Neighbor" }
+    "primary": {
+      "full_name": "Alex Friend"
+    },
+    "successor": {
+      "full_name": "Jamie Friend"
+    },
+    "second_successor": {
+      "full_name": "Pat Coupleton"
+    },
+    "temporary": {
+      "full_name": "Nina Neighbor"
+    },
+    "temporary_successor": {
+      "full_name": "Owen Neighbor"
+    }
   },
   "specific_gifts": [
-    { "beneficiary_name": "Local Animal Shelter", "description": "$5,000", "trigger": "upon my death", "notes": "in memory of our family dog" }
+    {
+      "beneficiary_name": "Local Animal Shelter",
+      "description": "$5,000",
+      "trigger": "upon my death",
+      "notes": "in memory of our family dog"
+    }
   ],
   "owns_real_property": true,
   "assets": {
     "real_property": true,
     "total_gross_value": "$1,000,000",
     "items": [
-      { "description": "Primary residence", "institution": "—", "category_label": "Real Estate", "estimated_value": "$750,000" },
-      { "description": "Joint checking", "institution": "Needham Bank", "category_label": "Bank Accounts", "estimated_value": "$250,000" }
+      {
+        "description": "Primary residence",
+        "institution": "—",
+        "category_label": "Real Estate",
+        "estimated_value": "$750,000",
+        "owner": "Joint (tenants by the entirety)",
+        "target_owner": "The Jordan Coupleton Revocable Trust",
+        "beneficiary_designation": "Surviving spouse, then the trust"
+      },
+      {
+        "description": "Joint checking",
+        "institution": "Needham Bank",
+        "category_label": "Bank Accounts",
+        "estimated_value": "$250,000",
+        "owner": "Joint",
+        "target_owner": "The Riley Coupleton Revocable Trust",
+        "beneficiary_designation": "Surviving spouse, then the trust"
+      }
     ]
   },
   "execution": {
     "signing_scheduled": true,
     "signing_county": "Norfolk",
     "display_doc_date": "June 1, 2026",
-    "display_signing_county": "Norfolk"
+    "display_signing_county": "Norfolk",
+    "signing_type": "attorney_supervised"
   }
 }

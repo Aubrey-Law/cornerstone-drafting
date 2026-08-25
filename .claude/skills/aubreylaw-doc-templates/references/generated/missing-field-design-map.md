@@ -8,6 +8,9 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 |---|---|---|---|
 | `assets` | Assets | Estate Plan Design | (section) |
 | `assets.items` | Asset schedule | Asset Schedules | (section) |
+| `assets.items[].beneficiary_designation` | Beneficiary Designation | Asset Schedules | (section) |
+| `assets.items[].owner` | Owner | Asset Schedules | (section) |
+| `assets.items[].target_owner` | Target Owner | Asset Schedules | (section) |
 | `assets.total_gross_value` | Total Gross Value | Asset Schedules | (section) |
 | `assets.total_net_value` | Total Net Value | Asset Schedules | (section) |
 | `charitable_gifts` | Charitable Gifts | Estate Plan Design | (section) |
@@ -19,9 +22,11 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `children[].minor` | Minor | Client Information | (section) |
 | `children[].relationship` | Relationship | Client Information | (section) |
 | `client.aka` | Aka | Client Information | (section) |
+| `client.citizenship` | Citizenship | Client Information | (section) |
 | `client.city` | City | Client Information | `city` |
 | `client.county` | County | Client Information | `county` |
 | `client.date_of_birth` | Date of birth | Client Information | `client_dob` |
+| `client.domicile` | Domicile | Client Information | (section) |
 | `client.email` | Email | Client Information | (section) |
 | `client.first_name` | First Name | Client Information | (section) |
 | `client.full_name` | Client legal name | Client Information | `client_name` |
@@ -111,6 +116,8 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `execution.ordinal_doc_date` | Ordinal Doc Date | Estate Plan Design | (section) |
 | `execution.signing_county` | Signing county | Estate Plan Design | `signing_county` |
 | `execution.signing_scheduled` | Signing Scheduled | Estate Plan Design | (section) |
+| `execution.signing_type` | Signing Type | Estate Plan Design | (section) |
+| `family.additional_beneficiaries` | Additional Beneficiaries | Estate Plan Design | (section) |
 | `family.additional_disinheritance_language` | Additional Disinheritance Language | Estate Plan Design | (section) |
 | `family.disinherit_issue` | Disinherit Issue | Estate Plan Design | (section) |
 | `family.disinherited` | Disinherited | Estate Plan Design | (section) |
@@ -297,10 +304,14 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `outright_will.residuary.disposition` | Disposition | Will Details | (section) |
 | `outright_will.residuary.named.full_name` | Named residuary beneficiary | Will Details | `outright_residuary_named` |
 | `planning.include_ahd` | Include Ahd | Estate Plan Design | (section) |
+| `planning.include_asset_spreadsheet` | Include Asset Spreadsheet | Estate Plan Design | (section) |
 | `planning.include_assignment_of_personal_property` | Include Assignment Of Personal Property | Estate Plan Design | (section) |
 | `planning.include_certificate_of_trust` | Include Certificate Of Trust | Estate Plan Design | (section) |
 | `planning.include_dpoa` | Include Dpoa | Estate Plan Design | (section) |
+| `planning.include_estate_plan_signing_guide` | Include Estate Plan Signing Guide | Estate Plan Design | (section) |
 | `planning.include_estate_plan_summary` | Include Estate Plan Summary | Estate Plan Design | (section) |
+| `planning.include_fiduciary_role_guide` | Include Fiduciary Role Guide | Estate Plan Design | (section) |
+| `planning.include_flowchart` | Include Flowchart | Estate Plan Design | (section) |
 | `planning.include_funding_instructions` | Include Funding Instructions | Estate Plan Design | (section) |
 | `planning.include_hcp` | Include Hcp | Estate Plan Design | (section) |
 | `planning.include_hipaa` | Include Hipaa | Estate Plan Design | (section) |
@@ -309,13 +320,16 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `planning.include_pour_over_will` | Include Pour Over Will | Estate Plan Design | (section) |
 | `planning.include_ppm` | Include Ppm | Estate Plan Design | (section) |
 | `planning.include_simple_will` | Include Simple Will | Estate Plan Design | (section) |
+| `planning.include_successor_trustee_checklist` | Include Successor Trustee Checklist | Estate Plan Design | (section) |
 | `planning.include_testamentary_trust_will` | Include Testamentary Trust Will | Estate Plan Design | (section) |
 | `planning.include_trust` | Include Trust | Estate Plan Design | (section) |
+| `planning.include_trust_summary` | Include Trust Summary | Estate Plan Design | (section) |
 | `planning.spouse_docs` | Spouse Docs | Estate Plan Design | (section) |
 | `pour_over.alternate_disposition_text` | Alternate Disposition Text | Will Details | (section) |
 | `specific_gifts` | Specific Gifts | Estate Plan Design | (section) |
 | `specific_gifts[]` | Specific Gifts | Estate Plan Design | (section) |
 | `spouse.aka` | Aka | Client Information | (section) |
+| `spouse.citizenship` | Citizenship | Client Information | (section) |
 | `spouse.date_of_birth` | Date Of Birth | Client Information | (section) |
 | `spouse.email` | Email | Client Information | (section) |
 | `spouse.exists` | Exists | Client Information | (section) |
@@ -371,6 +385,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.provisions.include_discretionary_distribution_definition` | Include Discretionary Distribution Definition | Trust Details | (section) |
 | `trust.provisions.include_education_expenses_definition` | Include Education Expenses Definition | Trust Details | (section) |
 | `trust.provisions.include_homeschooling` | Include Homeschooling | Trust Details | (section) |
+| `trust.provisions.include_marital_deduction_savings_language` | Include Marital Deduction Savings Language | Trust Details | (section) |
 | `trust.provisions.include_no_contest_clause` | Include No Contest Clause | Trust Details | (section) |
 | `trust.provisions.include_substance_abuse` | Include Substance Abuse | Trust Details | (section) |
 | `trust.provisions.include_vocational_training` | Include Vocational Training | Trust Details | (section) |
@@ -426,6 +441,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `will.supervision` | Supervision | Will Details | (section) |
 | `will.tangible_personal_property.distribution_method` | Distribution Method | Will Details | (section) |
 | `will.tangible_personal_property.named_individual.full_name` | Tangible Personal Property Named Individual | Will Details | (section) |
+| `will.title` | Title | Will Details | (section) |
 | `will.utma_age` | Utma Age | Will Details | (section) |
 | `young_adult.parent1.full_name` | Young-adult plan parent | Estate Plan Design | (section) |
 | `young_adult.parent2.full_name` | Young Adult Parent2 | Estate Plan Design | (section) |

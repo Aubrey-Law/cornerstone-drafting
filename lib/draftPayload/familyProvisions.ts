@@ -1,4 +1,4 @@
-import type { DesignSheetChild } from '@/types/database'
+import type { AdditionalBeneficiary, DesignSheetChild } from '@/types/database'
 
 export type FamilyProvisionsInput = {
   disinherited_children?: string[] | null
@@ -10,6 +10,8 @@ export type FamilyProvisionsInput = {
   include_general_disinheritance?: string | null
   disinherit_issue?: string | null
   additional_disinheritance_language?: string | null
+  include_additional_beneficiaries?: string | null
+  additional_beneficiaries?: AdditionalBeneficiary[] | null
   children?: DesignSheetChild[] | null
 } | null | undefined
 
@@ -22,6 +24,9 @@ export interface DraftPayloadFamilyProvisions {
   disinherit_issue: boolean
   additional_disinheritance_language: string | null
   disinherited: Array<{ full_name: string; relationship: string | null }>
+  /** People and organizations named beyond the family — charities, groups, friends.
+   *  Optional so stored payloads written before this field stay type-valid. */
+  additional_beneficiaries?: Array<{ full_name: string; kind: string; relationship: string | null }>
 }
 
 export function sheetYesNo(value: string | null | undefined, defaultYes = false): boolean {
@@ -71,6 +76,15 @@ export function draftPayloadFamilyProvisions(sheet: FamilyProvisionsInput): Draf
     disinherit_issue: sheetYesNo(sheet?.disinherit_issue),
     additional_disinheritance_language: sheet?.additional_disinheritance_language?.trim() || null,
     disinherited,
+    additional_beneficiaries: sheetYesNo(sheet?.include_additional_beneficiaries)
+      ? (Array.isArray(sheet?.additional_beneficiaries) ? sheet!.additional_beneficiaries! : [])
+          .map(entry => ({
+            full_name: entry?.name?.trim() ?? '',
+            kind: entry?.kind ?? 'individual',
+            relationship: entry?.relationship?.trim() || null,
+          }))
+          .filter(entry => entry.full_name.length > 0)
+      : [],
   }
 }
 
