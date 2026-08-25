@@ -21,7 +21,7 @@ Schema:
   "date_of_birth": string, "citizenship_status": "unknown" | "us_citizen" | "permanent_resident" | "nonresident_alien" | "non_us_unspecified" | "other", "preferred_pronoun": "" | "he/him" | "she/her" | "they/them" | "ze/zir" | "other",
   "phone": string, "email": string,
   "address_line1": string, "address_line2": string, "city": string, "state": string, "zip": string, "county": string,
-  "marital_status": "" | "single" | "married" | "divorced" | "widowed" | "separated" | "domestic_partner",
+  "marital_status": "" | "single" | "married" | "divorced" | "widowed" | "separated" | "domestic_partner" | "civil_union" | "unmarried_partnership",
   "has_children": boolean, "has_minor_children": boolean,
   "children": [ { "first_name": string, "last_name": string, "date_of_birth": string, "preferred_pronoun": string } ],
   "family_notes": string,

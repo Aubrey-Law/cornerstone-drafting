@@ -312,7 +312,7 @@
   "guardians.temporary.full_name": {
     "type": "string",
     "required": "conditional",
-    "description": "Temporary agent for parental delegation under MGL c.190B §5-103."
+    "description": "Temporary agent for parental delegation under MGL c.190B \u00a75-103."
   },
   "guardians.temporary.address": {
     "type": "string",
@@ -733,7 +733,7 @@
     "type": "string",
     "required": false,
     "populated": false,
-    "description": "Co-trustee subject pronoun for notary blocks. NOT POPULATED — the pipeline carries no pronouns for fiduciaries, so certificate-of-trust.docx falls back with `| default(client.pronoun_subject)`."
+    "description": "Co-trustee subject pronoun for notary blocks. NOT POPULATED \u2014 the pipeline carries no pronouns for fiduciaries, so certificate-of-trust.docx falls back with `| default(client.pronoun_subject)`."
   },
   "fiduciaries.trustee.co_successor.full_name": {
     "type": "string",
@@ -953,7 +953,7 @@
   "will_cp.parent1.full_name": {
     "type": "string",
     "required": "conditional",
-    "description": "College Preparation Plan will: first parent taking the residue of the student's estate. One parent is enough — the template drops to a single-parent residue clause."
+    "description": "College Preparation Plan will: first parent taking the residue of the student's estate. One parent is enough \u2014 the template drops to a single-parent residue clause."
   },
   "will_cp.parent2.full_name": {
     "type": "string",
@@ -1078,7 +1078,7 @@
   "funding_plan.narrative": {
     "type": "string",
     "required": false,
-    "description": "Trust funding plan prose, section by section. Contains markup — render it with the `| safe` filter."
+    "description": "Trust funding plan prose, section by section. Contains markup \u2014 render it with the `| safe` filter."
   },
   "funding_plan.checklist_items": {
     "type": "array",
@@ -1368,7 +1368,7 @@
   "fiduciaries.spouse_trustee.primary.full_name": {
     "type": "string",
     "required": "conditional",
-    "description": "Initial trustee of the spouse's own trust. Separate-trusts matters only — on a joint trust both spouses share fiduciaries.trustee."
+    "description": "Initial trustee of the spouse's own trust. Separate-trusts matters only \u2014 on a joint trust both spouses share fiduciaries.trustee."
   },
   "fiduciaries.spouse_trustee.co_primary.full_name": {
     "type": "string",
@@ -1508,7 +1508,7 @@
   "dpoa.special_powers.power_529_plans": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the agent may manage §529 educational savings plans."
+    "description": "Whether the agent may manage \u00a7529 educational savings plans."
   },
   "dpoa.special_powers.power_digital_assets": {
     "type": "boolean",
@@ -1538,7 +1538,7 @@
   "dpoa.trust_powers.agent_may_create_trusts_for_dependents": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the agent may create trusts for the principal’s dependents."
+    "description": "Whether the agent may create trusts for the principal\u2019s dependents."
   },
   "dpoa.trust_powers.agent_may_modify_joint_trusts": {
     "type": "boolean",
@@ -1548,7 +1548,7 @@
   "dpoa.trust_powers.agent_may_modify_sole_settlor_trusts": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the agent may modify the principal’s sole-settlor trusts."
+    "description": "Whether the agent may modify the principal\u2019s sole-settlor trusts."
   },
   "dpoa.trust_powers.allow_agent_as_trustee": {
     "type": "boolean",
@@ -1958,7 +1958,7 @@
   "trust.provisions.hold_distributions_for_young_beneficiaries": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the trustee may hold a young beneficiary’s distribution in trust."
+    "description": "Whether the trustee may hold a young beneficiary\u2019s distribution in trust."
   },
   "trust.provisions.include_arts_education": {
     "type": "boolean",
@@ -2018,7 +2018,7 @@
   "trust.provisions.power_529_plans": {
     "type": "boolean",
     "required": false,
-    "description": "Whether the trustee may manage §529 educational savings plans."
+    "description": "Whether the trustee may manage \u00a7529 educational savings plans."
   },
   "trust.provisions.power_closely_held_businesses": {
     "type": "boolean",
@@ -2178,7 +2178,7 @@
   "assets.items[].target_owner": {
     "type": "string",
     "required": false,
-    "description": "Who should own the asset once the plan is funded — usually a trust name."
+    "description": "Who should own the asset once the plan is funded \u2014 usually a trust name."
   },
   "assets.items[].beneficiary_designation": {
     "type": "string",
@@ -2194,5 +2194,485 @@
     "type": "boolean",
     "required": false,
     "description": "Whether the spendthrift clause carries marital deduction savings language. Disclaimer and Clayton-election structures include it automatically."
+  },
+  "trust.provisions.require_trustee_bond": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee must post bond."
+  },
+  "trust.provisions.limit_duty_to_account": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee's duty to account is limited to current income beneficiaries."
+  },
+  "trust.provisions.include_reverse_mortgage_clause": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may obtain, maintain, or pay off a reverse mortgage on trust real estate."
+  },
+  "trust.provisions.include_firearms_provisions": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust carries firearms handling and transfer provisions."
+  },
+  "trust.provisions.allow_sole_trustee_to_appoint_cotrustees": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a trustee serving alone may appoint a co-trustee."
+  },
+  "trust.provisions.allow_trustee_to_designate_alternates": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether an acting trustee may designate further successor trustees."
+  },
+  "trust.provisions.include_retirement_account_provisions": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust carries conduit and accumulation provisions for retirement accounts."
+  },
+  "trust.provisions.allow_protector_convert_conduit_trusts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust protector may convert a conduit retirement trust to an accumulation trust."
+  },
+  "trust.provisions.allow_direct_distributions_to_young_or_incapacitated": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may pay a young or incapacitated beneficiary through a parent, guardian, or custodian."
+  },
+  "trust.provisions.include_slayer_provision": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust disqualifies a beneficiary who feloniously and intentionally causes a settlor's death."
+  },
+  "trust.provisions.allow_charitable_giving_during_incapacity": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trustee may continue a settlor's customary charitable giving during incapacity."
+  },
+  "trust.provisions.forgive_all_debts": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether debts a beneficiary owes the settlor are forgiven rather than charged against their share."
+  },
+  "trust.provisions.include_incapacity_definition": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the trust defines incapacity rather than relying on the probate code default."
+  },
+  "trust.provisions.allow_psychologist_substitute": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a licensed clinical psychologist may make a determination otherwise assigned to a physician."
+  },
+  "trust.provisions.allow_pa_np_substitute": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a physician assistant or nurse practitioner may make a determination otherwise assigned to a physician."
+  },
+  "trust.provisions.asset_schedule_signature_block": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether each settlor's Schedule A carries a dated signature block."
+  },
+  "trust.provisions.asset_schedule_catchall": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether each settlor's Schedule A carries general catchall language."
+  },
+  "trust.provisions.asset_schedule_non_trust": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the package includes a schedule of assets deliberately left outside the trust."
+  },
+  "trust.provisions.settlor_incapacity_determined_by": {
+    "type": "string",
+    "required": false,
+    "description": "Who determines that a settlor is incapacitated \u2014 e.g. attending_and_second_physician, single_physician, trust_protector, court, custom. Absent until the attorney chooses."
+  },
+  "trust.provisions.trustee_incapacity_determined_by": {
+    "type": "string",
+    "required": false,
+    "description": "Who determines that a currently-acting trustee is incapacitated. Same vocabulary as settlor_incapacity_determined_by minus the options that require a settlor or successor."
+  },
+  "trust.provisions.asset_schedule_format": {
+    "type": "string",
+    "required": false,
+    "description": "How each settlor's Schedule A lists assets: table or paragraph."
+  },
+  "trust.spousal_funding": {
+    "type": "string",
+    "required": false,
+    "description": "How the trust funds the surviving spouse: outright_to_spouse, disclaimer, or clayton_election. Answers the worksheet\u2019s \"Distribution to Spouse/Partner\" question."
+  },
+  "healthcare.include_hcp_notice_page": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether each health care proxy carries the statutory notice page."
+  },
+  "healthcare.client_leave_instructions_blank": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the proxy is signed without treatment instructions, leaving the agent to decide."
+  },
+  "healthcare.client_receive_comfort_care": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, comfort and hygiene care continue regardless of any instruction to withhold treatment."
+  },
+  "healthcare.client_wish_to_die_at_home": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, a preference to be cared for at home rather than in a facility is recorded."
+  },
+  "healthcare.client_decline_autopsy": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, an objection to autopsy is recorded, except where the law requires one."
+  },
+  "healthcare.client_agent_effective_immediately": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the health care agent's authority is effective immediately rather than springing on incapacity."
+  },
+  "healthcare.client_include_post_death_authority": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the health care agent may act after death for disposition purposes."
+  },
+  "healthcare.client_preference_for_donations": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, mourners are asked to give to a named cause rather than send flowers."
+  },
+  "healthcare.client_prohibit_ai_replicas": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, consent is withheld for synthetic recreations of voice or likeness after death."
+  },
+  "healthcare.client_disposition_agents_same_as_healthcare": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, the disposition agents are the health care agents."
+  },
+  "healthcare.client_include_disposition_agent_acceptance": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the client, each disposition agent signs an acceptance of appointment."
+  },
+  "healthcare.client_other_healthcare_wishes": {
+    "type": "string",
+    "required": false,
+    "description": "Religious, cultural, or personal health care instructions (the client)."
+  },
+  "healthcare.client_agent_limits_while_living": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority while the principal is living (the client)."
+  },
+  "healthcare.client_agent_limits_after_death": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority after the principal's death (the client)."
+  },
+  "healthcare.client_funeral_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Funeral instructions (the client)."
+  },
+  "healthcare.client_preneed_arrangements": {
+    "type": "string",
+    "required": false,
+    "description": "Pre-need or post-death arrangements already made (the client)."
+  },
+  "healthcare.client_other_disposition_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Any further instructions for the disposition of remains (the client)."
+  },
+  "healthcare.client_coagent_disagreement_resolution": {
+    "type": "string",
+    "required": false,
+    "description": "How the client\u2019s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
+  },
+  "healthcare.client_disposition_of_remains": {
+    "type": "string",
+    "required": false,
+    "description": "What should happen to the client\u2019s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
+  },
+  "healthcare.spouse_leave_instructions_blank": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the proxy is signed without treatment instructions, leaving the agent to decide."
+  },
+  "healthcare.spouse_receive_comfort_care": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, comfort and hygiene care continue regardless of any instruction to withhold treatment."
+  },
+  "healthcare.spouse_wish_to_die_at_home": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, a preference to be cared for at home rather than in a facility is recorded."
+  },
+  "healthcare.spouse_decline_autopsy": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, an objection to autopsy is recorded, except where the law requires one."
+  },
+  "healthcare.spouse_agent_effective_immediately": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the health care agent's authority is effective immediately rather than springing on incapacity."
+  },
+  "healthcare.spouse_include_post_death_authority": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the health care agent may act after death for disposition purposes."
+  },
+  "healthcare.spouse_preference_for_donations": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, mourners are asked to give to a named cause rather than send flowers."
+  },
+  "healthcare.spouse_prohibit_ai_replicas": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, consent is withheld for synthetic recreations of voice or likeness after death."
+  },
+  "healthcare.spouse_disposition_agents_same_as_healthcare": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, the disposition agents are the health care agents."
+  },
+  "healthcare.spouse_include_disposition_agent_acceptance": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether, for the spouse, each disposition agent signs an acceptance of appointment."
+  },
+  "healthcare.spouse_other_healthcare_wishes": {
+    "type": "string",
+    "required": false,
+    "description": "Religious, cultural, or personal health care instructions (the spouse)."
+  },
+  "healthcare.spouse_agent_limits_while_living": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority while the principal is living (the spouse)."
+  },
+  "healthcare.spouse_agent_limits_after_death": {
+    "type": "string",
+    "required": false,
+    "description": "Limits on the health care agent's authority after the principal's death (the spouse)."
+  },
+  "healthcare.spouse_funeral_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Funeral instructions (the spouse)."
+  },
+  "healthcare.spouse_preneed_arrangements": {
+    "type": "string",
+    "required": false,
+    "description": "Pre-need or post-death arrangements already made (the spouse)."
+  },
+  "healthcare.spouse_other_disposition_instructions": {
+    "type": "string",
+    "required": false,
+    "description": "Any further instructions for the disposition of remains (the spouse)."
+  },
+  "healthcare.spouse_coagent_disagreement_resolution": {
+    "type": "string",
+    "required": false,
+    "description": "How the spouse\u2019s co-agents settle a disagreement: omit, majority, unanimous, or first_named."
+  },
+  "healthcare.spouse_disposition_of_remains": {
+    "type": "string",
+    "required": false,
+    "description": "What should happen to the spouse\u2019s remains: cremation, chemical_cremation, burial, no_specific_wishes, leave_blank, or other."
+  },
+  "dpoa.include_notice_page": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the power of attorney carries the statutory notice to the principal and agent."
+  },
+  "dpoa.preserve_existing_bank_powers": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether institution-specific powers of attorney already on file stay in force rather than being revoked."
+  },
+  "dpoa.effective": {
+    "type": "string",
+    "required": false,
+    "description": "When the power of attorney takes effect: springing (on a determination of incapacity) or immediate."
+  },
+  "dpoa.authority_after_capacity_regained": {
+    "type": "string",
+    "required": false,
+    "description": "What becomes of the agent's authority once the principal regains capacity: continue or suspend."
+  },
+  "dpoa.incapacity_determination": {
+    "type": "string",
+    "required": false,
+    "description": "Whether incapacity is determined by the document's default provision or a custom one: default or custom."
+  },
+  "dpoa.acceptance_of_appointment": {
+    "type": "string",
+    "required": false,
+    "description": "Whether each agent signs an acceptance of appointment: include or omit."
+  },
+  "execution.signing_city": {
+    "type": "string",
+    "required": false,
+    "description": "City or town where the plan is signed."
+  },
+  "execution.notary_name": {
+    "type": "string",
+    "required": false,
+    "description": "Name of the notary who will take the acknowledgments."
+  },
+  "execution.trust_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the living trust is executed: notary, witnesses, or both."
+  },
+  "execution.poa_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the power of attorney is executed: notary or witnesses."
+  },
+  "execution.ahd_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the advance health care directive is executed: notary or witnesses."
+  },
+  "execution.healthcare_authorization_acknowledgment": {
+    "type": "string",
+    "required": false,
+    "description": "How the health care authorization is executed: notary or witnesses."
+  },
+  "execution.final_disposition_execution": {
+    "type": "string",
+    "required": false,
+    "description": "How the final disposition instructions are executed: witnesses or witnesses_and_notary."
+  },
+  "execution.combine_settlor_trustee_signatures": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether one signature block covers a person signing as both settlor and trustee."
+  },
+  "execution.healthcare_signed_in_nursing_home": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the health care documents are signed in a nursing home, which adds the facility-witness language."
+  },
+  "execution.include_witness_phones": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether witness phone numbers print on the signature pages."
+  },
+  "execution.witness_1_address": {
+    "type": "string",
+    "required": false,
+    "description": "Address of the first witness, when the signing is pre-arranged."
+  },
+  "execution.witness_1_phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number of the first witness."
+  },
+  "execution.witness_2_address": {
+    "type": "string",
+    "required": false,
+    "description": "Address of the second witness, when the signing is pre-arranged."
+  },
+  "execution.witness_2_phone": {
+    "type": "string",
+    "required": false,
+    "description": "Phone number of the second witness."
+  },
+  "client.marital_status": {
+    "type": "string",
+    "required": false,
+    "description": "Client's marital status: single, married, divorced, widowed, separated, domestic_partner, civil_union or unmarried_partnership."
+  },
+  "client.street_address_2": {
+    "type": "string",
+    "required": false,
+    "description": "Second line of the client's street address \u2014 apartment, unit or suite."
+  },
+  "client.gender": {
+    "type": "string",
+    "required": false,
+    "description": "Client's gender: male, female, nonbinary or other."
+  },
+  "client.disabled_veteran": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the client is a disabled veteran. Absent when the question has not been asked; false is a recorded \"no\"."
+  },
+  "spouse.gender": {
+    "type": "string",
+    "required": false,
+    "description": "Spouse's gender: male, female, nonbinary or other."
+  },
+  "marriage.place": {
+    "type": "string",
+    "required": false,
+    "description": "Where the marriage or partnership was celebrated or registered."
+  },
+  "marriage.survivor_designation": {
+    "type": "string",
+    "required": false,
+    "description": "Which settlor the plan designates as the survivor: settlor_1, settlor_2 or both."
+  },
+  "marriage.settlors_live_together": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether the two settlors live together. Absent when the question has not been asked."
+  },
+  "planning.include_dementia_directive": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a dementia directive is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.include_visitation_authorization": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a visitation authorization is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.include_final_disposition": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether final disposition instructions are part of the plan. Record-only \u2014 no template drafts them yet."
+  },
+  "planning.include_comprehensive_transfer_document": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a comprehensive transfer document is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.include_client_self_declaration_of_capacity": {
+    "type": "boolean",
+    "required": false,
+    "description": "Whether a client self-declaration of capacity is part of the plan. Record-only \u2014 no template drafts one yet."
+  },
+  "planning.healthcare_directive_title": {
+    "type": "string",
+    "required": false,
+    "description": "How the health care directive is titled: state_default, advance_directive, advance_health_care_directive, health_care_directive, health_care_power_of_attorney or other."
+  },
+  "planning.poa_form": {
+    "type": "string",
+    "required": false,
+    "description": "Which power-of-attorney form the plan uses: short, long or both."
+  },
+  "planning.poa_title": {
+    "type": "string",
+    "required": false,
+    "description": "How the long-form power of attorney is titled: power_of_attorney or durable_power_of_attorney."
+  },
+  "planning.comprehensive_transfer_title": {
+    "type": "string",
+    "required": false,
+    "description": "How the comprehensive transfer document is titled: declaration_of_trust, comprehensive_transfer_of_assets or general_assignment."
   }
 }

@@ -64,3 +64,23 @@ describe('single-page design decision primitives', () => {
     expect(dpoa).toContain('DPOA_BASIC_POWER_KEYS.map')
   })
 })
+
+describe('questions that were rendered but unreachable', () => {
+  it('asks about psychotherapy notes from the section that is actually rendered', () => {
+    const sections = readSections()
+    const will = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/WillProvisionsSection.tsx'),
+      'utf8',
+    )
+    const healthcare = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/HealthCareDesignSection.tsx'),
+      'utf8',
+    )
+
+    // It lived behind a `healthcare` scope in WillProvisionsSection, which is
+    // only ever rendered with scope="will" — so it could not be answered.
+    expect(sections).toContain('fieldName="hipaa_psychotherapy_notes"')
+    expect(will).not.toContain('hipaa_psychotherapy_notes')
+    expect(healthcare).toContain('fieldName="hipaa_psychotherapy_notes"')
+  })
+})

@@ -44,7 +44,8 @@ export interface DesignSheetCompletionResult {
   fiduciaries: ResolvedFiduciaryProposal[]
 }
 
-/** Cap per section so one runaway prompt cannot dominate the run. */
+/** Cap per prompt so one runaway prompt cannot dominate the run. A section
+ *  with more open fields than this is split across several prompts. */
 const MAX_FIELDS_PER_BATCH = 45
 
 export const COMPLETION_SYSTEM_PROMPT = `You complete a Massachusetts estate-planning design sheet for an attorney at a solo firm.
@@ -103,17 +104,23 @@ export function isFieldOpen(sheet: DesignSheet, field: string): boolean {
 /**
  * The fields worth asking about, grouped by the section they belong to.
  *
- * Blocking fields come first so a truncated run still spends its budget on what
- * gates Generate. Booleans are deliberately included even though they read as
- * `false` when unset — `isFieldOpen` uses the raw value, so an undecided toggle
- * is undefined rather than false, and asking about it is the whole point.
+ * Blocking fields come first so the first prompt of a section spends its budget
+ * on what gates Generate. Booleans are deliberately included even though they
+ * read as `false` when unset — `isFieldOpen` uses the raw value, so an undecided
+ * toggle is undefined rather than false, and asking about it is the whole point.
+ *
+ * A section with more than `MAX_FIELDS_PER_BATCH` open fields is split into
+ * several keyed batches rather than truncated. Trust Details alone carries more
+ * than the cap, and dropping its tail meant those fields were silently never
+ * offered to autofill — indistinguishable, to the attorney, from a model that
+ * had nothing to say about them.
  */
 export function openFieldsBySection(context: DesignSheetCompletionContext): Map<string, string[]> {
   const blockingFields = new Set(
     context.blocking.map(item => item.targetField).filter((field): field is string => Boolean(field)),
   )
 
-  const bySection = new Map<string, string[]>()
+  const collected = new Map<string, string[]>()
   const ordered = listDesignSheetImportFieldNames()
     .filter(field => isFieldOpen(context.sheet, field))
     .sort((a, b) => Number(blockingFields.has(b)) - Number(blockingFields.has(a)))
@@ -125,10 +132,23 @@ export function openFieldsBySection(context: DesignSheetCompletionContext): Map<
     // model asked to fill them competes with a better source.
     if (!meta || meta.kind === 'children' || meta.kind === 'assets') continue
 
-    const list = bySection.get(meta.section) ?? []
-    if (list.length >= MAX_FIELDS_PER_BATCH) continue
+    const list = collected.get(meta.section) ?? []
     list.push(field)
-    bySection.set(meta.section, list)
+    collected.set(meta.section, list)
+  }
+
+  const bySection = new Map<string, string[]>()
+  for (const [section, fields] of collected) {
+    if (fields.length <= MAX_FIELDS_PER_BATCH) {
+      bySection.set(section, fields)
+      continue
+    }
+    // The key doubles as the section label in the prompt, so number the parts.
+    const parts = Math.ceil(fields.length / MAX_FIELDS_PER_BATCH)
+    for (let index = 0; index < parts; index += 1) {
+      const start = index * MAX_FIELDS_PER_BATCH
+      bySection.set(`${section} (part ${index + 1} of ${parts})`, fields.slice(start, start + MAX_FIELDS_PER_BATCH))
+    }
   }
 
   return bySection

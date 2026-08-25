@@ -22,7 +22,11 @@
  * healthcare keeps the legacy shared HIPAA agent list in sync with the client one).
  */
 import {
+  DPOA_ACCEPTANCE_OPTIONS,
+  DPOA_AUTHORITY_AFTER_CAPACITY_OPTIONS,
   DPOA_BASIC_POWER_KEYS,
+  DPOA_EFFECTIVE_OPTIONS,
+  DPOA_INCAPACITY_DETERMINATIONS,
   DPOA_BASIC_POWER_LABELS,
   DPOA_TRUST_POWER_KEYS,
   setDesignSheetDpoaProvisions,
@@ -32,6 +36,8 @@ import {
   type DpoaCoagentServing,
 } from '@/lib/designSheetDpoaProvisions'
 import {
+  COAGENT_DISAGREEMENT_RESOLUTIONS,
+  DISPOSITIONS_OF_REMAINS,
   setDesignSheetHealthcareProvisions,
   type AdvanceDirectiveChoice,
   type AnatomicalGiftPreference,
@@ -39,7 +45,10 @@ import {
   type HipaaFiduciaryListing,
 } from '@/lib/designSheetHealthcareProvisions'
 import {
+  ASSET_SCHEDULE_FORMATS,
   RESIDUAL_BENEFICIARY_METHODS,
+  SETTLOR_INCAPACITY_DETERMINERS,
+  TRUSTEE_INCAPACITY_DETERMINERS,
   setTrustDetails,
   type InitialTrusteeNomination,
   type RepresentationType,
@@ -53,6 +62,19 @@ import {
   setWillPersonalRepresentativePowers,
   type WillPersonalRepresentativePowers,
 } from '@/lib/designSheetWillPowers'
+import {
+  setExecutionMechanics,
+  DOCUMENT_ACKNOWLEDGMENTS,
+  FINAL_DISPOSITION_EXECUTIONS,
+  TRUST_ACKNOWLEDGMENTS,
+  type ExecutionMechanics,
+} from '@/lib/designSheet/executionMechanics'
+import {
+  setSettlorFacts,
+  SETTLOR_GENDERS,
+  SURVIVOR_DESIGNATIONS,
+  type SettlorFacts,
+} from '@/lib/designSheet/settlorFacts'
 import { mergeDecisionUpdates } from '@/lib/designSheetDocumentInclusions'
 import type { DesignSheet } from '@/types/database'
 
@@ -61,6 +83,8 @@ export type DecisionNamespace =
   | 'dpoa_provisions'
   | 'healthcare_provisions'
   | 'will_pr_powers'
+  | 'execution_mechanics'
+  | 'settlor_facts'
 
 export type DecisionFieldKind = 'string' | 'boolean' | 'number'
 
@@ -69,6 +93,8 @@ export const DECISION_NAMESPACES = [
   'dpoa_provisions',
   'healthcare_provisions',
   'will_pr_powers',
+  'execution_mechanics',
+  'settlor_facts',
 ] as const satisfies readonly DecisionNamespace[]
 
 export interface DecisionFieldMeta {
@@ -157,6 +183,8 @@ const TRUST = 'Trust'
 const WILL = 'Will'
 const DPOA = 'Durable Power of Attorney'
 const HEALTHCARE = 'Health Care Documents'
+const EXECUTION = 'Signing and Execution'
+const SETTLORS = 'Client Information'
 
 function trustField(
   key: keyof TrustDetailsProvisions,
@@ -183,6 +211,24 @@ function healthcareField(
   options?: readonly string[],
 ): DecisionFieldMeta {
   return { namespace: 'healthcare_provisions', key, section: HEALTHCARE, label, kind, options }
+}
+
+function executionField(
+  key: keyof ExecutionMechanics,
+  label: string,
+  kind: DecisionFieldKind,
+  options?: readonly string[],
+): DecisionFieldMeta {
+  return { namespace: 'execution_mechanics', key, section: EXECUTION, label, kind, options }
+}
+
+function settlorField(
+  key: keyof SettlorFacts,
+  label: string,
+  kind: DecisionFieldKind,
+  options?: readonly string[],
+): DecisionFieldMeta {
+  return { namespace: 'settlor_facts', key, section: SETTLORS, label, kind, options }
 }
 
 function willPowerField(
@@ -250,6 +296,27 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'trust_details.hold_distributions_for_young_beneficiaries': trustField('hold_distributions_for_young_beneficiaries', 'Hold distributions for young beneficiaries', 'boolean'),
   'trust_details.include_substance_abuse': trustField('include_substance_abuse', 'Substance abuse provisions', 'boolean'),
   'trust_details.include_creditor_divorce_provisions': trustField('include_creditor_divorce_provisions', 'Creditor and divorce provisions', 'boolean'),
+  'trust_details.require_trustee_bond': trustField('require_trustee_bond', 'Require trustee bond', 'boolean'),
+  'trust_details.limit_duty_to_account': trustField('limit_duty_to_account', 'Limit trustee\'s duty to account', 'boolean'),
+  'trust_details.include_reverse_mortgage_clause': trustField('include_reverse_mortgage_clause', 'Reverse mortgage clause', 'boolean'),
+  'trust_details.include_firearms_provisions': trustField('include_firearms_provisions', 'Firearms administration provisions', 'boolean'),
+  'trust_details.allow_sole_trustee_to_appoint_cotrustees': trustField('allow_sole_trustee_to_appoint_cotrustees', 'Sole trustee may appoint co-trustees', 'boolean'),
+  'trust_details.allow_trustee_to_designate_alternates': trustField('allow_trustee_to_designate_alternates', 'Trustee may designate alternate successors', 'boolean'),
+  'trust_details.include_retirement_account_provisions': trustField('include_retirement_account_provisions', 'Retirement account distribution provisions', 'boolean'),
+  'trust_details.allow_protector_convert_conduit_trusts': trustField('allow_protector_convert_conduit_trusts', 'Trust protector may convert conduit retirement trusts', 'boolean'),
+  'trust_details.allow_direct_distributions_to_young_or_incapacitated': trustField('allow_direct_distributions_to_young_or_incapacitated', 'Direct distributions to young or incapacitated beneficiaries', 'boolean'),
+  'trust_details.include_slayer_provision': trustField('include_slayer_provision', 'Slayer provision', 'boolean'),
+  'trust_details.allow_charitable_giving_during_incapacity': trustField('allow_charitable_giving_during_incapacity', 'Continue customary charitable giving during incapacity', 'boolean'),
+  'trust_details.forgive_all_debts': trustField('forgive_all_debts', 'Forgive all debts owed by beneficiaries', 'boolean'),
+  'trust_details.include_incapacity_definition': trustField('include_incapacity_definition', 'Definition of incapacity', 'boolean'),
+  'trust_details.allow_psychologist_substitute': trustField('allow_psychologist_substitute', 'Clinical psychologist may substitute for physician', 'boolean'),
+  'trust_details.allow_pa_np_substitute': trustField('allow_pa_np_substitute', 'Physician assistant or nurse practitioner may substitute', 'boolean'),
+  'trust_details.asset_schedule_signature_block': trustField('asset_schedule_signature_block', 'Signature block on each Schedule A', 'boolean'),
+  'trust_details.asset_schedule_catchall': trustField('asset_schedule_catchall', 'General catchall language on each Schedule A', 'boolean'),
+  'trust_details.asset_schedule_non_trust': trustField('asset_schedule_non_trust', 'Schedule of non-trust assets', 'boolean'),
+  'trust_details.settlor_incapacity_determined_by': trustField('settlor_incapacity_determined_by', 'Settlor incapacity determined by', 'string', SETTLOR_INCAPACITY_DETERMINERS),
+  'trust_details.trustee_incapacity_determined_by': trustField('trustee_incapacity_determined_by', 'Trustee incapacity determined by', 'string', TRUSTEE_INCAPACITY_DETERMINERS),
+  'trust_details.asset_schedule_format': trustField('asset_schedule_format', 'Asset schedule format', 'string', ASSET_SCHEDULE_FORMATS),
   'trust_details.include_marital_deduction_savings_language': trustField('include_marital_deduction_savings_language', 'Marital deduction savings language', 'boolean'),
   'trust_details.include_contingent_snt': trustField('include_contingent_snt', 'Contingent special needs trust', 'boolean'),
   'trust_details.allow_distributions_to_dependents_if_incapacitated': trustField('allow_distributions_to_dependents_if_incapacitated', 'Distributions to dependents if incapacitated', 'boolean'),
@@ -265,6 +332,12 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'trust_details.include_disappearance_definition': trustField('include_disappearance_definition', 'Disappearance definition', 'boolean'),
 
   // --- decisions.dpoa_provisions ---------------------------------------------
+  'dpoa_provisions.include_notice_page': dpoaField('include_notice_page', 'Power of attorney notice page', 'boolean'),
+  'dpoa_provisions.preserve_existing_bank_powers': dpoaField('preserve_existing_bank_powers', 'Preserve existing bank powers of attorney', 'boolean'),
+  'dpoa_provisions.incapacity_determination': dpoaField('incapacity_determination', 'Incapacity determination provision', 'string', DPOA_INCAPACITY_DETERMINATIONS),
+  'dpoa_provisions.acceptance_of_appointment': dpoaField('acceptance_of_appointment', 'Acceptance of appointment page', 'string', DPOA_ACCEPTANCE_OPTIONS),
+  'dpoa_provisions.effective': dpoaField('effective', 'When the power of attorney takes effect', 'string', DPOA_EFFECTIVE_OPTIONS),
+  'dpoa_provisions.authority_after_capacity_regained': dpoaField('authority_after_capacity_regained', 'Agent authority after capacity returns', 'string', DPOA_AUTHORITY_AFTER_CAPACITY_OPTIONS),
   'dpoa_provisions.agent_compensation': dpoaField('agent_compensation', 'Agent compensation', 'string', DPOA_AGENT_COMPENSATIONS),
   'dpoa_provisions.coagent_serving': dpoaField('coagent_serving', 'Co-agent serving manner', 'string', DPOA_COAGENT_SERVING),
   'dpoa_provisions.include_entity_powers': dpoaField('include_entity_powers', 'Entity powers', 'boolean'),
@@ -286,6 +359,43 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   ...BASIC_POWER_FIELDS,
 
   // --- decisions.healthcare_provisions ---------------------------------------
+  'healthcare_provisions.include_hcp_notice_page': healthcareField('include_hcp_notice_page', 'Health care proxy notice page', 'boolean'),
+  'healthcare_provisions.client_leave_instructions_blank': healthcareField('client_leave_instructions_blank', 'Client — Leave health care instructions blank', 'boolean'),
+  'healthcare_provisions.client_receive_comfort_care': healthcareField('client_receive_comfort_care', 'Client — Receive hygiene and comfort care', 'boolean'),
+  'healthcare_provisions.client_wish_to_die_at_home': healthcareField('client_wish_to_die_at_home', 'Client — Wish to die at home', 'boolean'),
+  'healthcare_provisions.client_decline_autopsy': healthcareField('client_decline_autopsy', 'Client — Decline autopsy', 'boolean'),
+  'healthcare_provisions.client_agent_effective_immediately': healthcareField('client_agent_effective_immediately', 'Client — Agent\'s authority effective immediately', 'boolean'),
+  'healthcare_provisions.client_include_post_death_authority': healthcareField('client_include_post_death_authority', 'Client — Post-death authority and final disposition instructions', 'boolean'),
+  'healthcare_provisions.client_preference_for_donations': healthcareField('client_preference_for_donations', 'Client — Preference for donations', 'boolean'),
+  'healthcare_provisions.client_prohibit_ai_replicas': healthcareField('client_prohibit_ai_replicas', 'Client — Prohibit AI replicas or digital recreations', 'boolean'),
+  'healthcare_provisions.client_disposition_agents_same_as_healthcare': healthcareField('client_disposition_agents_same_as_healthcare', 'Client — Disposition agents same as health care agents', 'boolean'),
+  'healthcare_provisions.client_include_disposition_agent_acceptance': healthcareField('client_include_disposition_agent_acceptance', 'Client — Include disposition agent acceptance', 'boolean'),
+  'healthcare_provisions.client_other_healthcare_wishes': healthcareField('client_other_healthcare_wishes', 'Client — Other health care wishes', 'string'),
+  'healthcare_provisions.client_agent_limits_while_living': healthcareField('client_agent_limits_while_living', 'Client — Limits on agent\'s authority while living', 'string'),
+  'healthcare_provisions.client_agent_limits_after_death': healthcareField('client_agent_limits_after_death', 'Client — Limits on agent\'s authority after death', 'string'),
+  'healthcare_provisions.client_funeral_instructions': healthcareField('client_funeral_instructions', 'Client — Funeral instructions', 'string'),
+  'healthcare_provisions.client_preneed_arrangements': healthcareField('client_preneed_arrangements', 'Client — Pre-need or post-death arrangements', 'string'),
+  'healthcare_provisions.client_other_disposition_instructions': healthcareField('client_other_disposition_instructions', 'Client — Other disposition instructions', 'string'),
+  'healthcare_provisions.client_coagent_disagreement_resolution': healthcareField('client_coagent_disagreement_resolution', 'Client — Co-agent disagreement resolution', 'string', COAGENT_DISAGREEMENT_RESOLUTIONS),
+  'healthcare_provisions.client_disposition_of_remains': healthcareField('client_disposition_of_remains', 'Client — Disposition of remains', 'string', DISPOSITIONS_OF_REMAINS),
+  'healthcare_provisions.spouse_leave_instructions_blank': healthcareField('spouse_leave_instructions_blank', 'Spouse — Leave health care instructions blank', 'boolean'),
+  'healthcare_provisions.spouse_receive_comfort_care': healthcareField('spouse_receive_comfort_care', 'Spouse — Receive hygiene and comfort care', 'boolean'),
+  'healthcare_provisions.spouse_wish_to_die_at_home': healthcareField('spouse_wish_to_die_at_home', 'Spouse — Wish to die at home', 'boolean'),
+  'healthcare_provisions.spouse_decline_autopsy': healthcareField('spouse_decline_autopsy', 'Spouse — Decline autopsy', 'boolean'),
+  'healthcare_provisions.spouse_agent_effective_immediately': healthcareField('spouse_agent_effective_immediately', 'Spouse — Agent\'s authority effective immediately', 'boolean'),
+  'healthcare_provisions.spouse_include_post_death_authority': healthcareField('spouse_include_post_death_authority', 'Spouse — Post-death authority and final disposition instructions', 'boolean'),
+  'healthcare_provisions.spouse_preference_for_donations': healthcareField('spouse_preference_for_donations', 'Spouse — Preference for donations', 'boolean'),
+  'healthcare_provisions.spouse_prohibit_ai_replicas': healthcareField('spouse_prohibit_ai_replicas', 'Spouse — Prohibit AI replicas or digital recreations', 'boolean'),
+  'healthcare_provisions.spouse_disposition_agents_same_as_healthcare': healthcareField('spouse_disposition_agents_same_as_healthcare', 'Spouse — Disposition agents same as health care agents', 'boolean'),
+  'healthcare_provisions.spouse_include_disposition_agent_acceptance': healthcareField('spouse_include_disposition_agent_acceptance', 'Spouse — Include disposition agent acceptance', 'boolean'),
+  'healthcare_provisions.spouse_other_healthcare_wishes': healthcareField('spouse_other_healthcare_wishes', 'Spouse — Other health care wishes', 'string'),
+  'healthcare_provisions.spouse_agent_limits_while_living': healthcareField('spouse_agent_limits_while_living', 'Spouse — Limits on agent\'s authority while living', 'string'),
+  'healthcare_provisions.spouse_agent_limits_after_death': healthcareField('spouse_agent_limits_after_death', 'Spouse — Limits on agent\'s authority after death', 'string'),
+  'healthcare_provisions.spouse_funeral_instructions': healthcareField('spouse_funeral_instructions', 'Spouse — Funeral instructions', 'string'),
+  'healthcare_provisions.spouse_preneed_arrangements': healthcareField('spouse_preneed_arrangements', 'Spouse — Pre-need or post-death arrangements', 'string'),
+  'healthcare_provisions.spouse_other_disposition_instructions': healthcareField('spouse_other_disposition_instructions', 'Spouse — Other disposition instructions', 'string'),
+  'healthcare_provisions.spouse_coagent_disagreement_resolution': healthcareField('spouse_coagent_disagreement_resolution', 'Spouse — Co-agent disagreement resolution', 'string', COAGENT_DISAGREEMENT_RESOLUTIONS),
+  'healthcare_provisions.spouse_disposition_of_remains': healthcareField('spouse_disposition_of_remains', 'Spouse — Disposition of remains', 'string', DISPOSITIONS_OF_REMAINS),
   'healthcare_provisions.client_anatomical_gift': healthcareField('client_anatomical_gift', 'Client anatomical gift', 'string', ANATOMICAL_GIFTS),
   'healthcare_provisions.spouse_anatomical_gift': healthcareField('spouse_anatomical_gift', 'Spouse anatomical gift', 'string', ANATOMICAL_GIFTS),
   'healthcare_provisions.spouse_anatomical_restrictions': healthcareField('spouse_anatomical_restrictions', 'Spouse anatomical gift restrictions', 'string'),
@@ -299,6 +409,31 @@ export const DESIGN_SHEET_DECISION_FIELDS = {
   'will_pr_powers.allow_pay_taxes_debts_expenses': willPowerField('allow_pay_taxes_debts_expenses', 'PR may pay taxes, debts and expenses'),
   'will_pr_powers.allow_manage_digital_assets': willPowerField('allow_manage_digital_assets', 'PR may manage digital assets'),
   'will_pr_powers.include_distribution_cash_or_kind': willPowerField('include_distribution_cash_or_kind', 'PR may distribute in cash or in kind'),
+
+  // --- decisions.execution_mechanics ------------------------------------------
+  'execution_mechanics.trust_acknowledgment': executionField('trust_acknowledgment', 'Trust acknowledgment', 'string', TRUST_ACKNOWLEDGMENTS),
+  'execution_mechanics.poa_acknowledgment': executionField('poa_acknowledgment', 'Power of attorney acknowledgment', 'string', DOCUMENT_ACKNOWLEDGMENTS),
+  'execution_mechanics.ahd_acknowledgment': executionField('ahd_acknowledgment', 'Advance health care directive acknowledgment', 'string', DOCUMENT_ACKNOWLEDGMENTS),
+  'execution_mechanics.healthcare_authorization_acknowledgment': executionField('healthcare_authorization_acknowledgment', 'Health care authorization acknowledgment', 'string', DOCUMENT_ACKNOWLEDGMENTS),
+  'execution_mechanics.final_disposition_execution': executionField('final_disposition_execution', 'Final disposition execution', 'string', FINAL_DISPOSITION_EXECUTIONS),
+  'execution_mechanics.combine_settlor_trustee_signatures': executionField('combine_settlor_trustee_signatures', 'Combine settlor and trustee signature lines', 'boolean'),
+  'execution_mechanics.healthcare_signed_in_nursing_home': executionField('healthcare_signed_in_nursing_home', 'Health care documents signed in a nursing home', 'boolean'),
+  'execution_mechanics.signing_city': executionField('signing_city', 'Signing city', 'string'),
+  'execution_mechanics.notary_name': executionField('notary_name', 'Notary name', 'string'),
+  'execution_mechanics.include_witness_phones': executionField('include_witness_phones', 'Include witness phone numbers', 'boolean'),
+  'execution_mechanics.witness_1_address': executionField('witness_1_address', 'Witness 1 address', 'string'),
+  'execution_mechanics.witness_1_phone': executionField('witness_1_phone', 'Witness 1 phone', 'string'),
+  'execution_mechanics.witness_2_address': executionField('witness_2_address', 'Witness 2 address', 'string'),
+  'execution_mechanics.witness_2_phone': executionField('witness_2_phone', 'Witness 2 phone', 'string'),
+
+  // --- decisions.settlor_facts -------------------------------------------------
+  'settlor_facts.street_address_2': settlorField('street_address_2', 'Street address line 2', 'string'),
+  'settlor_facts.client_gender': settlorField('client_gender', 'Client gender', 'string', SETTLOR_GENDERS),
+  'settlor_facts.spouse_gender': settlorField('spouse_gender', 'Spouse gender', 'string', SETTLOR_GENDERS),
+  'settlor_facts.place_of_marriage': settlorField('place_of_marriage', 'Place of marriage or registration', 'string'),
+  'settlor_facts.survivor_designation': settlorField('survivor_designation', 'Survivor designation', 'string', SURVIVOR_DESIGNATIONS),
+  'settlor_facts.settlors_live_together': settlorField('settlors_live_together', 'Settlors live together', 'boolean'),
+  'settlor_facts.disabled_veteran': settlorField('disabled_veteran', 'Disabled veteran', 'boolean'),
 } satisfies Record<string, DecisionFieldMeta>
 
 export type DesignSheetDecisionField = keyof typeof DESIGN_SHEET_DECISION_FIELDS
@@ -385,6 +520,8 @@ export function applyDecisionFieldValues(
   const basicPowersPatch: Partial<Record<DpoaBasicPowerKey, boolean>> = {}
   const healthcarePatch: Record<string, unknown> = {}
   const willPowersPatch: Record<string, unknown> = {}
+  const executionPatch: Record<string, unknown> = {}
+  const settlorPatch: Record<string, unknown> = {}
 
   for (const [field, value] of Object.entries(values)) {
     const meta = decisionFieldMeta(field)
@@ -400,6 +537,14 @@ export function applyDecisionFieldValues(
     }
     if (meta.namespace === 'will_pr_powers') {
       willPowersPatch[meta.key] = value
+      continue
+    }
+    if (meta.namespace === 'execution_mechanics') {
+      executionPatch[meta.key] = value
+      continue
+    }
+    if (meta.namespace === 'settlor_facts') {
+      settlorPatch[meta.key] = value
       continue
     }
     // dpoa_provisions — the only namespace with a nested key.
@@ -447,6 +592,17 @@ export function applyDecisionFieldValues(
       current,
       willPowersPatch as Partial<WillPersonalRepresentativePowers>,
     ))
+  }
+
+  if (Object.keys(executionPatch).length > 0) {
+    updates.push(current => setExecutionMechanics(
+      current,
+      executionPatch as Partial<ExecutionMechanics>,
+    ))
+  }
+
+  if (Object.keys(settlorPatch).length > 0) {
+    updates.push(current => setSettlorFacts(current, settlorPatch as Partial<SettlorFacts>))
   }
 
   if (updates.length === 0) return isRecord(sheet.decisions) ? { ...sheet.decisions } : {}

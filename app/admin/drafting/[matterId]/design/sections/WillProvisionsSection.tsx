@@ -117,26 +117,6 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
       </SectionBlock>
       )}
 
-      {/* ── HIPAA ───────────────────────────────────────────────────────────── */}
-      {(scope === 'all' || scope === 'healthcare') && (
-      <SectionBlock
-        title="HIPAA Authorization — Psychotherapy Notes"
-        subtitle="Client must initial — no default"
-      >
-        <ClientDecisionCallout>Psychotherapy notes disclosure. Client must initial — never default.</ClientDecisionCallout>
-        <DecisionRow
-          fieldName="hipaa_psychotherapy_notes"
-          question="Psychotherapy notes"
-          value={sheet.hipaa_psychotherapy_notes}
-          options={[
-            { value: 'authorize', label: 'Authorize disclosure' },
-            { value: 'do_not_authorize', label: 'Do NOT authorize disclosure' },
-          ]}
-          onChange={v => onChange('hipaa_psychotherapy_notes', v)}
-        />
-      </SectionBlock>
-      )}
-
       {/* ── Will — Common Options ───────────────────────────────────────────── */}
       {(scope === 'all' || scope === 'will') && (
       <SectionBlock title="Will — Common Provisions">

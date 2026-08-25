@@ -26,10 +26,13 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `client.city` | City | Client Information | `city` |
 | `client.county` | County | Client Information | `county` |
 | `client.date_of_birth` | Date of birth | Client Information | `client_dob` |
+| `client.disabled_veteran` | Disabled Veteran | Client Information | (section) |
 | `client.domicile` | Domicile | Client Information | (section) |
 | `client.email` | Email | Client Information | (section) |
 | `client.first_name` | First Name | Client Information | (section) |
 | `client.full_name` | Client legal name | Client Information | `client_name` |
+| `client.gender` | Gender | Client Information | (section) |
+| `client.marital_status` | Marital Status | Client Information | (section) |
 | `client.phone` | Phone | Client Information | (section) |
 | `client.pronoun_object` | Pronoun Object | Client Information | (section) |
 | `client.pronoun_possessive` | Pronouns | Client Information | `client_pronouns` |
@@ -37,6 +40,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `client.signing_county` | Signing County | Client Information | (section) |
 | `client.state` | State | Client Information | `state` |
 | `client.street_address` | Street address | Client Information | `street` |
+| `client.street_address_2` | Street Address 2 | Client Information | (section) |
 | `client.zip` | Zip | Client Information | (section) |
 | `college.artificial_nutrition` | Artificial Nutrition | College Preparation Plan | (section) |
 | `college.comfort_always` | Comfort Always | College Preparation Plan | (section) |
@@ -68,11 +72,13 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `college.organ_donation` | Organ Donation | College Preparation Plan | (section) |
 | `college.organ_donation_notes` | Organ Donation Notes | College Preparation Plan | (section) |
 | `college.ventilation` | Ventilation | College Preparation Plan | (section) |
+| `dpoa.acceptance_of_appointment` | Acceptance Of Appointment | Estate Plan Design | (section) |
 | `dpoa.additional_limitations` | Additional Limitations | Estate Plan Design | (section) |
 | `dpoa.additional_powers` | Additional Powers | Estate Plan Design | (section) |
 | `dpoa.agent_compensation` | Agent Compensation | Estate Plan Design | (section) |
 | `dpoa.all_basic_powers` | All Basic Powers | Estate Plan Design | (section) |
 | `dpoa.allow_gifts` | Allow Gifts | Estate Plan Design | (section) |
+| `dpoa.authority_after_capacity_regained` | Authority After Capacity Regained | Estate Plan Design | (section) |
 | `dpoa.basic_powers.banking` | Banking | Estate Plan Design | (section) |
 | `dpoa.basic_powers.business_operating` | Business Operating | Estate Plan Design | (section) |
 | `dpoa.basic_powers.claims_litigation` | Claims Litigation | Estate Plan Design | (section) |
@@ -87,10 +93,14 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `dpoa.basic_powers.tangible_personal_property` | Tangible Personal Property | Estate Plan Design | (section) |
 | `dpoa.basic_powers.tax_matters` | Tax Matters | Estate Plan Design | (section) |
 | `dpoa.coagent_serving` | Coagent Serving | Estate Plan Design | (section) |
+| `dpoa.effective` | Effective | Estate Plan Design | (section) |
+| `dpoa.incapacity_determination` | Incapacity Determination | Estate Plan Design | (section) |
 | `dpoa.include_advanced_trust_gifting` | Include Advanced Trust Gifting | Estate Plan Design | (section) |
 | `dpoa.include_entity_powers` | Include Entity Powers | Estate Plan Design | (section) |
 | `dpoa.include_extended_personal_care` | Include Extended Personal Care | Estate Plan Design | (section) |
+| `dpoa.include_notice_page` | Include Notice Page | Estate Plan Design | (section) |
 | `dpoa.include_section_l` | Include Section L | Estate Plan Design | (section) |
+| `dpoa.preserve_existing_bank_powers` | Preserve Existing Bank Powers | Estate Plan Design | (section) |
 | `dpoa.self_dealing_reviewer_alt.full_name` | Dpoa Self Dealing Reviewer Alt | Estate Plan Design | (section) |
 | `dpoa.self_dealing_reviewer.full_name` | Dpoa Self Dealing Reviewer | Estate Plan Design | (section) |
 | `dpoa.special_powers.allow_delegation` | Allow Delegation | Estate Plan Design | (section) |
@@ -106,17 +116,31 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `dpoa.trust_powers.agent_may_modify_joint_trusts` | Agent May Modify Joint Trusts | Estate Plan Design | (section) |
 | `dpoa.trust_powers.agent_may_modify_sole_settlor_trusts` | Agent May Modify Sole Settlor Trusts | Estate Plan Design | (section) |
 | `dpoa.trust_powers.allow_agent_as_trustee` | Allow Agent As Trustee | Estate Plan Design | (section) |
+| `execution.ahd_acknowledgment` | Ahd Acknowledgment | Estate Plan Design | (section) |
+| `execution.combine_settlor_trustee_signatures` | Combine Settlor Trustee Signatures | Estate Plan Design | (section) |
 | `execution.display_doc_date` | Display Doc Date | Estate Plan Design | (section) |
 | `execution.display_notary_commission` | Display Notary Commission | Estate Plan Design | (section) |
 | `execution.display_ordinal_doc_date` | Display Ordinal Doc Date | Estate Plan Design | (section) |
 | `execution.display_signing_county` | Display Signing County | Estate Plan Design | (section) |
 | `execution.doc_date` | Doc Date | Estate Plan Design | (section) |
+| `execution.final_disposition_execution` | Final Disposition Execution | Estate Plan Design | (section) |
+| `execution.healthcare_authorization_acknowledgment` | Healthcare Authorization Acknowledgment | Estate Plan Design | (section) |
+| `execution.healthcare_signed_in_nursing_home` | Healthcare Signed In Nursing Home | Estate Plan Design | (section) |
 | `execution.id_type` | Client ID type | Client Information | (section) |
+| `execution.include_witness_phones` | Include Witness Phones | Estate Plan Design | (section) |
 | `execution.notary_commission` | Notary commission expiration | Estate Plan Design | `notary_commission_expiration` |
+| `execution.notary_name` | Notary Name | Estate Plan Design | (section) |
 | `execution.ordinal_doc_date` | Ordinal Doc Date | Estate Plan Design | (section) |
+| `execution.poa_acknowledgment` | Poa Acknowledgment | Estate Plan Design | (section) |
+| `execution.signing_city` | Signing City | Estate Plan Design | (section) |
 | `execution.signing_county` | Signing county | Estate Plan Design | `signing_county` |
 | `execution.signing_scheduled` | Signing Scheduled | Estate Plan Design | (section) |
 | `execution.signing_type` | Signing Type | Estate Plan Design | (section) |
+| `execution.trust_acknowledgment` | Trust Acknowledgment | Estate Plan Design | (section) |
+| `execution.witness_1_address` | Witness 1 Address | Estate Plan Design | (section) |
+| `execution.witness_1_phone` | Witness 1 Phone | Estate Plan Design | (section) |
+| `execution.witness_2_address` | Witness 2 Address | Estate Plan Design | (section) |
+| `execution.witness_2_phone` | Witness 2 Phone | Estate Plan Design | (section) |
 | `family.additional_beneficiaries` | Additional Beneficiaries | Estate Plan Design | (section) |
 | `family.additional_disinheritance_language` | Additional Disinheritance Language | Estate Plan Design | (section) |
 | `family.disinherit_issue` | Disinherit Issue | Estate Plan Design | (section) |
@@ -265,7 +289,29 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.agent.second_alternate.relationship` | Relationship | Fiduciary Role Assignment | (section) |
 | `healthcare.anatomical_gift` | Anatomical Gift | Health Care & Directives | (section) |
 | `healthcare.anatomical_specified` | Anatomical Specified | Health Care & Directives | (section) |
+| `healthcare.client_agent_effective_immediately` | Client Agent Effective Immediately | Health Care & Directives | (section) |
+| `healthcare.client_agent_limits_after_death` | Client Agent Limits After Death | Health Care & Directives | (section) |
+| `healthcare.client_agent_limits_while_living` | Client Agent Limits While Living | Health Care & Directives | (section) |
 | `healthcare.client_anatomical_gift` | Client Anatomical Gift | Health Care & Directives | (section) |
+| `healthcare.client_coagent_disagreement_resolution` | Client Coagent Disagreement Resolution | Health Care & Directives | (section) |
+| `healthcare.client_decline_autopsy` | Client Decline Autopsy | Health Care & Directives | (section) |
+| `healthcare.client_disposition_agents_same_as_healthcare` | Client Disposition Agents Same As Healthcare | Health Care & Directives | (section) |
+| `healthcare.client_disposition_of_remains` | Client Disposition Of Remains | Health Care & Directives | (section) |
+| `healthcare.client_funeral_instructions` | Client Funeral Instructions | Health Care & Directives | (section) |
+| `healthcare.client_include_disposition_agent_acceptance` | Client Include Disposition Agent Acceptance | Health Care & Directives | (section) |
+| `healthcare.client_include_post_death_authority` | Client Include Post Death Authority | Health Care & Directives | (section) |
+| `healthcare.client_leave_instructions_blank` | Client Leave Instructions Blank | Health Care & Directives | (section) |
+| `healthcare.client_other_disposition_instructions` | Client Other Disposition Instructions | Health Care & Directives | (section) |
+| `healthcare.client_other_healthcare_wishes` | Client Other Healthcare Wishes | Health Care & Directives | (section) |
+| `healthcare.client_preference_for_donations` | Client Preference For Donations | Health Care & Directives | (section) |
+| `healthcare.client_preneed_arrangements` | Client Preneed Arrangements | Health Care & Directives | (section) |
+| `healthcare.client_prohibit_ai_replicas` | Client Prohibit Ai Replicas | Health Care & Directives | (section) |
+| `healthcare.client_receive_comfort_care` | Client Receive Comfort Care | Health Care & Directives | (section) |
+| `healthcare.client_wish_to_die_at_home` | Client Wish To Die At Home | Health Care & Directives | (section) |
+| `healthcare.include_hcp_notice_page` | Include Hcp Notice Page | Health Care & Directives | (section) |
+| `healthcare.spouse_agent_effective_immediately` | Spouse Agent Effective Immediately | Health Care & Directives | (section) |
+| `healthcare.spouse_agent_limits_after_death` | Spouse Agent Limits After Death | Health Care & Directives | (section) |
+| `healthcare.spouse_agent_limits_while_living` | Spouse Agent Limits While Living | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.alternate.address` | Address | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.alternate.email` | Email | Health Care & Directives | (section) |
 | `healthcare.spouse_agent.alternate.full_name` | Spouse Agent Alternate | Health Care & Directives | (section) |
@@ -280,6 +326,21 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `healthcare.spouse_agent.primary.relationship` | Relationship | Health Care & Directives | (section) |
 | `healthcare.spouse_anatomical_gift` | Spouse Anatomical Gift | Health Care & Directives | (section) |
 | `healthcare.spouse_anatomical_restrictions` | Spouse Anatomical Restrictions | Health Care & Directives | (section) |
+| `healthcare.spouse_coagent_disagreement_resolution` | Spouse Coagent Disagreement Resolution | Health Care & Directives | (section) |
+| `healthcare.spouse_decline_autopsy` | Spouse Decline Autopsy | Health Care & Directives | (section) |
+| `healthcare.spouse_disposition_agents_same_as_healthcare` | Spouse Disposition Agents Same As Healthcare | Health Care & Directives | (section) |
+| `healthcare.spouse_disposition_of_remains` | Spouse Disposition Of Remains | Health Care & Directives | (section) |
+| `healthcare.spouse_funeral_instructions` | Spouse Funeral Instructions | Health Care & Directives | (section) |
+| `healthcare.spouse_include_disposition_agent_acceptance` | Spouse Include Disposition Agent Acceptance | Health Care & Directives | (section) |
+| `healthcare.spouse_include_post_death_authority` | Spouse Include Post Death Authority | Health Care & Directives | (section) |
+| `healthcare.spouse_leave_instructions_blank` | Spouse Leave Instructions Blank | Health Care & Directives | (section) |
+| `healthcare.spouse_other_disposition_instructions` | Spouse Other Disposition Instructions | Health Care & Directives | (section) |
+| `healthcare.spouse_other_healthcare_wishes` | Spouse Other Healthcare Wishes | Health Care & Directives | (section) |
+| `healthcare.spouse_preference_for_donations` | Spouse Preference For Donations | Health Care & Directives | (section) |
+| `healthcare.spouse_preneed_arrangements` | Spouse Preneed Arrangements | Health Care & Directives | (section) |
+| `healthcare.spouse_prohibit_ai_replicas` | Spouse Prohibit Ai Replicas | Health Care & Directives | (section) |
+| `healthcare.spouse_receive_comfort_care` | Spouse Receive Comfort Care | Health Care & Directives | (section) |
+| `healthcare.spouse_wish_to_die_at_home` | Spouse Wish To Die At Home | Health Care & Directives | (section) |
 | `hipaa.client_additional_agents` | Client Additional Agents | Estate Plan Design | (section) |
 | `hipaa.include_poa` | Include Poa | Estate Plan Design | (section) |
 | `hipaa.include_trustees` | Include Trustees | Estate Plan Design | (section) |
@@ -299,18 +360,27 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `homestead.trust_deed_page` | Trust Deed Page | Transfers & Assignments | (section) |
 | `homestead.trustee_pronoun_possessive` | Trustee Pronoun Possessive | Transfers & Assignments | (section) |
 | `marriage.date` | Date | Estate Plan Design | (section) |
+| `marriage.place` | Place | Estate Plan Design | (section) |
+| `marriage.settlors_live_together` | Settlors Live Together | Estate Plan Design | (section) |
+| `marriage.survivor_designation` | Survivor Designation | Estate Plan Design | (section) |
 | `minor_children` | Minor Children | Estate Plan Design | (section) |
 | `outright_will.residuary.alternate.full_name` | Alternate residuary beneficiary | Will Details | `outright_residuary_alternate` |
 | `outright_will.residuary.disposition` | Disposition | Will Details | (section) |
 | `outright_will.residuary.named.full_name` | Named residuary beneficiary | Will Details | `outright_residuary_named` |
+| `planning.comprehensive_transfer_title` | Comprehensive Transfer Title | Estate Plan Design | (section) |
+| `planning.healthcare_directive_title` | Healthcare Directive Title | Estate Plan Design | (section) |
 | `planning.include_ahd` | Include Ahd | Estate Plan Design | (section) |
 | `planning.include_asset_spreadsheet` | Include Asset Spreadsheet | Estate Plan Design | (section) |
 | `planning.include_assignment_of_personal_property` | Include Assignment Of Personal Property | Estate Plan Design | (section) |
 | `planning.include_certificate_of_trust` | Include Certificate Of Trust | Estate Plan Design | (section) |
+| `planning.include_client_self_declaration_of_capacity` | Include Client Self Declaration Of Capacity | Estate Plan Design | (section) |
+| `planning.include_comprehensive_transfer_document` | Include Comprehensive Transfer Document | Estate Plan Design | (section) |
+| `planning.include_dementia_directive` | Include Dementia Directive | Estate Plan Design | (section) |
 | `planning.include_dpoa` | Include Dpoa | Estate Plan Design | (section) |
 | `planning.include_estate_plan_signing_guide` | Include Estate Plan Signing Guide | Estate Plan Design | (section) |
 | `planning.include_estate_plan_summary` | Include Estate Plan Summary | Estate Plan Design | (section) |
 | `planning.include_fiduciary_role_guide` | Include Fiduciary Role Guide | Estate Plan Design | (section) |
+| `planning.include_final_disposition` | Include Final Disposition | Estate Plan Design | (section) |
 | `planning.include_flowchart` | Include Flowchart | Estate Plan Design | (section) |
 | `planning.include_funding_instructions` | Include Funding Instructions | Estate Plan Design | (section) |
 | `planning.include_hcp` | Include Hcp | Estate Plan Design | (section) |
@@ -324,6 +394,9 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `planning.include_testamentary_trust_will` | Include Testamentary Trust Will | Estate Plan Design | (section) |
 | `planning.include_trust` | Include Trust | Estate Plan Design | (section) |
 | `planning.include_trust_summary` | Include Trust Summary | Estate Plan Design | (section) |
+| `planning.include_visitation_authorization` | Include Visitation Authorization | Estate Plan Design | (section) |
+| `planning.poa_form` | Poa Form | Estate Plan Design | (section) |
+| `planning.poa_title` | Poa Title | Estate Plan Design | (section) |
 | `planning.spouse_docs` | Spouse Docs | Estate Plan Design | (section) |
 | `pour_over.alternate_disposition_text` | Alternate Disposition Text | Will Details | (section) |
 | `specific_gifts` | Specific Gifts | Estate Plan Design | (section) |
@@ -335,6 +408,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `spouse.exists` | Exists | Client Information | (section) |
 | `spouse.first_name` | First Name | Client Information | (section) |
 | `spouse.full_name` | Spouse legal name | Client Information | `spouse_name` |
+| `spouse.gender` | Gender | Client Information | (section) |
 | `spouse.phone` | Phone | Client Information | (section) |
 | `spouse.pronoun_object` | Pronoun Object | Client Information | (section) |
 | `spouse.pronoun_possessive` | Pronoun Possessive | Client Information | (section) |
@@ -374,9 +448,21 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.display_name` | Trust name | Trust Details | `trust_name` |
 | `trust.include_common_trust_for_children` | Include Common Trust For Children | Trust Details | (section) |
 | `trust.name` | Trust name | Trust Details | `trust_name` |
+| `trust.provisions.allow_charitable_giving_during_incapacity` | Allow Charitable Giving During Incapacity | Trust Details | (section) |
+| `trust.provisions.allow_direct_distributions_to_young_or_incapacitated` | Allow Direct Distributions To Young Or Incapacitated | Trust Details | (section) |
 | `trust.provisions.allow_distributions_to_dependents_if_incapacitated` | Allow Distributions To Dependents If Incapacitated | Trust Details | (section) |
+| `trust.provisions.allow_pa_np_substitute` | Allow Pa Np Substitute | Trust Details | (section) |
+| `trust.provisions.allow_protector_convert_conduit_trusts` | Allow Protector Convert Conduit Trusts | Trust Details | (section) |
+| `trust.provisions.allow_psychologist_substitute` | Allow Psychologist Substitute | Trust Details | (section) |
+| `trust.provisions.allow_sole_trustee_to_appoint_cotrustees` | Allow Sole Trustee To Appoint Cotrustees | Trust Details | (section) |
 | `trust.provisions.allow_special_trustee` | Allow Special Trustee | Trust Details | (section) |
 | `trust.provisions.allow_trustee_change_situs` | Allow Trustee Change Situs | Trust Details | (section) |
+| `trust.provisions.allow_trustee_to_designate_alternates` | Allow Trustee To Designate Alternates | Trust Details | (section) |
+| `trust.provisions.asset_schedule_catchall` | Asset Schedule Catchall | Trust Details | (section) |
+| `trust.provisions.asset_schedule_format` | Asset Schedule Format | Trust Details | (section) |
+| `trust.provisions.asset_schedule_non_trust` | Asset Schedule Non Trust | Trust Details | (section) |
+| `trust.provisions.asset_schedule_signature_block` | Asset Schedule Signature Block | Trust Details | (section) |
+| `trust.provisions.forgive_all_debts` | Forgive All Debts | Trust Details | (section) |
 | `trust.provisions.hold_distributions_for_young_beneficiaries` | Hold Distributions For Young Beneficiaries | Trust Details | (section) |
 | `trust.provisions.include_arts_education` | Include Arts Education | Trust Details | (section) |
 | `trust.provisions.include_contingent_snt` | Include Contingent Snt | Trust Details | (section) |
@@ -384,11 +470,17 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.provisions.include_disappearance_definition` | Include Disappearance Definition | Trust Details | (section) |
 | `trust.provisions.include_discretionary_distribution_definition` | Include Discretionary Distribution Definition | Trust Details | (section) |
 | `trust.provisions.include_education_expenses_definition` | Include Education Expenses Definition | Trust Details | (section) |
+| `trust.provisions.include_firearms_provisions` | Include Firearms Provisions | Trust Details | (section) |
 | `trust.provisions.include_homeschooling` | Include Homeschooling | Trust Details | (section) |
+| `trust.provisions.include_incapacity_definition` | Include Incapacity Definition | Trust Details | (section) |
 | `trust.provisions.include_marital_deduction_savings_language` | Include Marital Deduction Savings Language | Trust Details | (section) |
 | `trust.provisions.include_no_contest_clause` | Include No Contest Clause | Trust Details | (section) |
+| `trust.provisions.include_retirement_account_provisions` | Include Retirement Account Provisions | Trust Details | (section) |
+| `trust.provisions.include_reverse_mortgage_clause` | Include Reverse Mortgage Clause | Trust Details | (section) |
+| `trust.provisions.include_slayer_provision` | Include Slayer Provision | Trust Details | (section) |
 | `trust.provisions.include_substance_abuse` | Include Substance Abuse | Trust Details | (section) |
 | `trust.provisions.include_vocational_training` | Include Vocational Training | Trust Details | (section) |
+| `trust.provisions.limit_duty_to_account` | Limit Duty To Account | Trust Details | (section) |
 | `trust.provisions.name_people_in_no_contest_clause` | Name People In No Contest Clause | Trust Details | (section) |
 | `trust.provisions.power_529_plans` | Power 529 Plans | Trust Details | (section) |
 | `trust.provisions.power_closely_held_businesses` | Power Closely Held Businesses | Trust Details | (section) |
@@ -397,8 +489,11 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.provisions.prorate_estate_taxes` | Prorate Estate Taxes | Trust Details | (section) |
 | `trust.provisions.protect_us_trust_status` | Protect Us Trust Status | Trust Details | (section) |
 | `trust.provisions.require_mandatory_arbitration` | Require Mandatory Arbitration | Trust Details | (section) |
+| `trust.provisions.require_trustee_bond` | Require Trustee Bond | Trust Details | (section) |
+| `trust.provisions.settlor_incapacity_determined_by` | Settlor Incapacity Determined By | Trust Details | (section) |
 | `trust.provisions.special_trustee_instructions` | Special Trustee Instructions | Trust Details | (section) |
 | `trust.provisions.subchapter_s_provisions` | Subchapter S Provisions | Trust Details | (section) |
+| `trust.provisions.trustee_incapacity_determined_by` | Trustee Incapacity Determined By | Trust Details | (section) |
 | `trust.remote_beneficiaries.charity.name` | Name | Trust Details | (section) |
 | `trust.remote_beneficiaries.individuals` | Remote beneficiaries | Last Will and Testament | `remote_beneficiary` |
 | `trust.remote_beneficiaries.individuals[]` | Individuals | Trust Details | (section) |
@@ -408,6 +503,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `trust.residuary_after_death` | Residuary After Death | Trust Details | (section) |
 | `trust.restatement` | Restatement | Trust Details | (section) |
 | `trust.special_distributions_age` | Special Distributions Age | Trust Details | (section) |
+| `trust.spousal_funding` | Spousal Funding | Trust Details | (section) |
 | `trust.spouse_name` | Spouse Name | Trust Details | (section) |
 | `trust.successor_trustee_vacancy` | Successor Trustee Vacancy | Trust Details | (section) |
 | `trust.survivorship_requirement_days` | Survivorship Requirement Days | Trust Details | (section) |

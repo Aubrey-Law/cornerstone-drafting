@@ -11,7 +11,11 @@
     "phone": "(617) 555-0143",
     "email": "jordan@example.com",
     "citizenship": "US Citizen",
-    "domicile": "MA"
+    "domicile": "MA",
+    "marital_status": "married",
+    "street_address_2": "Unit 4B",
+    "gender": "nonbinary",
+    "disabled_veteran": false
   },
   "spouse": {
     "exists": true,
@@ -20,10 +24,14 @@
     "date_of_birth": "February 2, 1972",
     "phone": "(617) 555-0144",
     "email": "riley@example.com",
-    "citizenship": "Permanent Resident"
+    "citizenship": "Permanent Resident",
+    "gender": "female"
   },
   "marriage": {
-    "date": "June 15, 2001"
+    "date": "June 15, 2001",
+    "place": "Boston, Massachusetts",
+    "survivor_designation": "settlor_2",
+    "settlors_live_together": true
   },
   "children": [
     {
@@ -84,7 +92,16 @@
     "include_successor_trustee_checklist": true,
     "include_fiduciary_role_guide": true,
     "include_flowchart": false,
-    "include_asset_spreadsheet": true
+    "include_asset_spreadsheet": true,
+    "include_dementia_directive": true,
+    "include_visitation_authorization": false,
+    "include_final_disposition": true,
+    "include_comprehensive_transfer_document": true,
+    "include_client_self_declaration_of_capacity": false,
+    "healthcare_directive_title": "state_default",
+    "poa_form": "long",
+    "poa_title": "durable_power_of_attorney",
+    "comprehensive_transfer_title": "general_assignment"
   },
   "trust": {
     "name": "The Jordan Coupleton Revocable Trust",
@@ -113,7 +130,28 @@
       "include_education_expenses_definition": true,
       "include_discretionary_distribution_definition": true,
       "prorate_estate_taxes": true,
-      "include_marital_deduction_savings_language": true
+      "include_marital_deduction_savings_language": true,
+      "require_trustee_bond": false,
+      "limit_duty_to_account": true,
+      "include_reverse_mortgage_clause": false,
+      "include_firearms_provisions": false,
+      "allow_sole_trustee_to_appoint_cotrustees": true,
+      "allow_trustee_to_designate_alternates": true,
+      "include_retirement_account_provisions": true,
+      "allow_protector_convert_conduit_trusts": true,
+      "allow_direct_distributions_to_young_or_incapacitated": true,
+      "include_slayer_provision": true,
+      "allow_charitable_giving_during_incapacity": true,
+      "forgive_all_debts": false,
+      "include_incapacity_definition": true,
+      "allow_psychologist_substitute": true,
+      "allow_pa_np_substitute": false,
+      "settlor_incapacity_determined_by": "two_physicians",
+      "trustee_incapacity_determined_by": "single_physician",
+      "asset_schedule_signature_block": true,
+      "asset_schedule_catchall": true,
+      "asset_schedule_non_trust": false,
+      "asset_schedule_format": "table"
     },
     "residual_beneficiary": "Descendants, per stirpes",
     "residuary_after_death": "descendants_shares_all_trusts",
@@ -139,7 +177,8 @@
       "charity": {
         "name": "Local Animal Shelter"
       }
-    }
+    },
+    "spousal_funding": "disclaimer"
   },
   "will": {
     "pr_structure": "spouse_first",
@@ -174,7 +213,13 @@
       "power_529_plans": true,
       "allow_medical_information_access": true,
       "power_digital_assets": true
-    }
+    },
+    "include_notice_page": true,
+    "preserve_existing_bank_powers": true,
+    "effective": "immediate",
+    "authority_after_capacity_regained": "continue",
+    "incapacity_determination": "default",
+    "acceptance_of_appointment": "include"
   },
   "fiduciaries": {
     "trustee": {
@@ -271,7 +316,44 @@
     "anatomical_specified": "Corneas and skin only.",
     "spouse_anatomical_restrictions": "No restrictions.",
     "client_advance_directive": "do_not_prolong_life",
-    "spouse_advance_directive": "prolong_life"
+    "spouse_advance_directive": "prolong_life",
+    "include_hcp_notice_page": true,
+    "client_leave_instructions_blank": false,
+    "client_receive_comfort_care": true,
+    "client_wish_to_die_at_home": true,
+    "client_decline_autopsy": true,
+    "client_other_healthcare_wishes": "Please play music I know.",
+    "client_agent_effective_immediately": true,
+    "client_include_post_death_authority": true,
+    "client_agent_limits_while_living": "No experimental treatment without family agreement.",
+    "client_agent_limits_after_death": "None.",
+    "client_coagent_disagreement_resolution": "first_named",
+    "client_disposition_of_remains": "cremation",
+    "client_funeral_instructions": "A short graveside service.",
+    "client_preneed_arrangements": "Plot purchased at Needham Cemetery.",
+    "client_other_disposition_instructions": "Ashes scattered at Crane Beach.",
+    "client_preference_for_donations": true,
+    "client_prohibit_ai_replicas": true,
+    "client_disposition_agents_same_as_healthcare": true,
+    "client_include_disposition_agent_acceptance": false,
+    "spouse_leave_instructions_blank": false,
+    "spouse_receive_comfort_care": true,
+    "spouse_wish_to_die_at_home": false,
+    "spouse_decline_autopsy": false,
+    "spouse_other_healthcare_wishes": "Defer to my spouse.",
+    "spouse_agent_effective_immediately": false,
+    "spouse_include_post_death_authority": true,
+    "spouse_agent_limits_while_living": "None.",
+    "spouse_agent_limits_after_death": "None.",
+    "spouse_coagent_disagreement_resolution": "majority",
+    "spouse_disposition_of_remains": "burial",
+    "spouse_funeral_instructions": "A church service.",
+    "spouse_preneed_arrangements": "None yet.",
+    "spouse_other_disposition_instructions": "Buried beside my parents.",
+    "spouse_preference_for_donations": false,
+    "spouse_prohibit_ai_replicas": true,
+    "spouse_disposition_agents_same_as_healthcare": true,
+    "spouse_include_disposition_agent_acceptance": true
   },
   "hipaa": {
     "psychotherapy_notes": "authorize",
@@ -323,7 +405,7 @@
     "items": [
       {
         "description": "Primary residence",
-        "institution": "—",
+        "institution": "\u2014",
         "category_label": "Real Estate",
         "estimated_value": "$750,000",
         "owner": "Joint (tenants by the entirety)",
@@ -346,6 +428,20 @@
     "signing_county": "Norfolk",
     "display_doc_date": "June 1, 2026",
     "display_signing_county": "Norfolk",
-    "signing_type": "attorney_supervised"
+    "signing_type": "attorney_supervised",
+    "signing_city": "Newton",
+    "notary_name": "Alexandra P. Reyes",
+    "trust_acknowledgment": "both",
+    "poa_acknowledgment": "notary",
+    "ahd_acknowledgment": "witnesses",
+    "healthcare_authorization_acknowledgment": "witnesses",
+    "final_disposition_execution": "witnesses_and_notary",
+    "combine_settlor_trustee_signatures": true,
+    "healthcare_signed_in_nursing_home": false,
+    "include_witness_phones": true,
+    "witness_1_address": "18 Chestnut Street, Newton, MA 02458",
+    "witness_1_phone": "(617) 555-0142",
+    "witness_2_address": "44 Beacon Street, Boston, MA 02108",
+    "witness_2_phone": "(617) 555-0177"
   }
 }

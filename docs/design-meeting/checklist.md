@@ -23,12 +23,14 @@ Confirm what intake already captured. Correct anything that has changed.
 - [ ] Client name
 - [ ] Client date of birth
 - [ ] Client AKA
-- [ ] Marital status — single / married / divorced / widowed / separated / domestic_partner
+- [ ] Marital status — single / married / divorced / widowed / separated / domestic_partner / civil_union / unmarried_partnership
 - [ ] Spouse name
 - [ ] Spouse date of birth
 - [ ] Spouse AKA
 - [ ] Marriage date
+- [ ] Place of marriage or registration
 - [ ] Street
+- [ ] Street address line 2
 - [ ] City
 - [ ] State
 - [ ] ZIP

@@ -45,6 +45,8 @@ import {
   getDraftPayloadFiduciaryDisplay,
 } from '@/lib/draftPayload/fiduciaryDetails'
 import { draftPayloadHealthcare } from '@/lib/draftPayload/healthcare'
+import { draftPayloadExecutionMechanics } from '@/lib/draftPayload/executionMechanics'
+import { draftPayloadSettlorFacts } from '@/lib/draftPayload/settlorFacts'
 import { resolveMatterId } from '@/lib/draftPayload/resolveMatterId'
 import { resolveDraftComposition } from '@/lib/matter/matterType'
 import { isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
@@ -414,6 +416,12 @@ export async function buildDraftPayload(
     include_entity_powers: sheetDpoaProvisions.include_entity_powers,
     include_advanced_trust_gifting: sheetDpoaProvisions.include_advanced_trust_gifting,
     include_extended_personal_care: sheetDpoaProvisions.include_extended_personal_care,
+    include_notice_page: sheetDpoaProvisions.include_notice_page,
+    preserve_existing_bank_powers: sheetDpoaProvisions.preserve_existing_bank_powers,
+    incapacity_determination: sheetDpoaProvisions.incapacity_determination,
+    acceptance_of_appointment: sheetDpoaProvisions.acceptance_of_appointment,
+    effective: sheetDpoaProvisions.effective,
+    authority_after_capacity_regained: sheetDpoaProvisions.authority_after_capacity_regained,
     agent_compensation: sheetDpoaProvisions.agent_compensation,
     coagent_serving: sheetDpoaProvisions.coagent_serving,
     allow_gifts: sheetDpoaProvisions.allow_gifts,
@@ -447,6 +455,7 @@ export async function buildDraftPayload(
     signing_county: designSheet.signing_county ?? null,
     notary_commission_expiration: designSheet.notary_commission_expiration ?? null,
   }
+  const executionMechanics = draftPayloadExecutionMechanics(designSheet)
 
   // Attorney-defined template variables: `decisions.extras` flows straight
   // through to the Nunjucks context as `extras.*`, so a template can reference
@@ -480,6 +489,7 @@ export async function buildDraftPayload(
       preferred_pronoun: designSheet.client_pronouns ?? null,
       citizenship: designSheet.client_citizenship ?? null,
       domicile: designSheet.client_domicile ?? null,
+      marital_status: designSheet.marital_status ?? null,
       dob: designSheet.client_dob ?? null,
       address: clientAddress,
       city: clientCity,
@@ -498,6 +508,7 @@ export async function buildDraftPayload(
     marriage: {
       date: designSheet.marriage_date ?? null,
     },
+    settlor_facts: draftPayloadSettlorFacts(designSheet),
     children: designChildren,
     family_provisions: draftPayloadFamilyProvisions(designSheet),
     trust,
@@ -521,6 +532,7 @@ export async function buildDraftPayload(
     goals_notes: designSheet.goals_notes ?? null,
     concerns: designSheet.concerns ?? null,
     execution,
+    execution_mechanics: executionMechanics,
     extras,
     design_sheet_id: designSheet.id || null,
     special_provisions: details?.ep_special_provisions ?? null,

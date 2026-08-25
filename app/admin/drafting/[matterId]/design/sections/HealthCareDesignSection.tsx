@@ -16,8 +16,10 @@ import type { MatterContact, PipelineMatter } from '@/types/database'
 import { isMarriedSheet } from './fiduciary-blocks'
 import type { SectionProps } from './shared'
 import {
+  ClientDecisionCallout,
   DecisionRow,
   DesignSheetCheckboxOption,
+  FieldLabel,
   SectionBlock,
 } from './shared'
 
@@ -141,6 +143,180 @@ function AdvanceDirectiveBlock({
         onChange={onChange}
       />
     </SectionBlock>
+  )
+}
+
+
+/** The wishes and post-death choices the interview form asks of each settlor. */
+function HealthCareWishesBlock({ title, party, provisions, update }: {
+  title: string
+  party: 'client' | 'spouse'
+  provisions: ReturnType<typeof getDesignSheetHealthcareProvisions>
+  update: (patch: Parameters<typeof setDesignSheetHealthcareProvisions>[1]) => void
+}) {
+  const p = <K extends string>(key: K) => `${party}_${key}` as keyof typeof provisions
+  const bool = (key: string) => provisions[p(key)] as boolean
+  const text = (key: string) => (provisions[p(key)] as string | null) ?? ''
+  const set = (key: string, value: unknown) => update({ [`${party}_${key}`]: value } as never)
+
+  return (
+    <>
+      <SectionBlock title={`${title} — Wishes`}>
+        <div className="mt-6 space-y-3">
+          <DesignSheetCheckboxOption
+            label="Leave health care instructions blank"
+            description="The proxy is signed without treatment instructions; the agent decides in the moment."
+            checked={bool('leave_instructions_blank')}
+            onChange={checked => set('leave_instructions_blank', checked)}
+          />
+          <DesignSheetCheckboxOption
+            label="Receive hygiene and comfort care"
+            description="Comfort and hygiene care continue regardless of any instruction to withhold treatment."
+            checked={bool('receive_comfort_care')}
+            onChange={checked => set('receive_comfort_care', checked)}
+          />
+          <DesignSheetCheckboxOption
+            label="Wish to die at home"
+            description="Records a preference to be cared for at home rather than in a facility where practicable."
+            checked={bool('wish_to_die_at_home')}
+            onChange={checked => set('wish_to_die_at_home', checked)}
+          />
+          <DesignSheetCheckboxOption
+            label="Decline autopsy"
+            description="Records an objection to autopsy except where the law requires one."
+            checked={bool('decline_autopsy')}
+            onChange={checked => set('decline_autopsy', checked)}
+          />
+        </div>
+        <div className="mt-4">
+          <FieldLabel>Other health care wishes</FieldLabel>
+          <Textarea
+            value={text('other_healthcare_wishes')}
+            onChange={event => set('other_healthcare_wishes', event.target.value || null)}
+            placeholder="Religious, cultural, or personal instructions"
+            rows={3}
+          />
+        </div>
+      </SectionBlock>
+
+      <SectionBlock title={`${title} — Agent Authority`}>
+        <div className="mt-6 space-y-3">
+          <DesignSheetCheckboxOption
+            label="Agent's authority is effective immediately"
+            description="Otherwise the authority springs on a determination of incapacity."
+            checked={bool('agent_effective_immediately')}
+            onChange={checked => set('agent_effective_immediately', checked)}
+          />
+          <DesignSheetCheckboxOption
+            label="Include post-death authority and instructions for final disposition"
+            description="Lets the health care agent act after death for disposition purposes."
+            checked={bool('include_post_death_authority')}
+            onChange={checked => set('include_post_death_authority', checked)}
+          />
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <FieldLabel>Limits while living</FieldLabel>
+            <Textarea
+              value={text('agent_limits_while_living')}
+              onChange={event => set('agent_limits_while_living', event.target.value || null)}
+              rows={2}
+            />
+          </div>
+          <div>
+            <FieldLabel>Limits after death</FieldLabel>
+            <Textarea
+              value={text('agent_limits_after_death')}
+              onChange={event => set('agent_limits_after_death', event.target.value || null)}
+              rows={2}
+            />
+          </div>
+        </div>
+        <div className="mt-6">
+          <DecisionRow
+            question="How should co-agents resolve disagreements?"
+            value={(provisions[p('coagent_disagreement_resolution')] as string | null) ?? ''}
+            options={[
+              { value: 'omit', label: 'Do not include' },
+              { value: 'majority', label: 'Majority rules' },
+              { value: 'unanimous', label: 'Unanimous agreement required' },
+              { value: 'first_named', label: 'First-named agent has final authority' },
+            ]}
+            onChange={value => set('coagent_disagreement_resolution', value || null)}
+          />
+        </div>
+      </SectionBlock>
+
+      <SectionBlock title={`${title} — Post-Death Choices`}>
+        <div className="mt-6">
+          <DecisionRow
+            question="How should the remains be handled?"
+            value={(provisions[p('disposition_of_remains')] as string | null) ?? ''}
+            options={[
+              { value: 'cremation', label: 'Cremation' },
+              { value: 'chemical_cremation', label: 'Chemical cremation (alkaline hydrolysis)' },
+              { value: 'burial', label: 'Burial' },
+              { value: 'no_specific_wishes', label: 'No specific wishes' },
+              { value: 'leave_blank', label: 'Leave blank in document' },
+              { value: 'other', label: 'Other' },
+            ]}
+            onChange={value => set('disposition_of_remains', value || null)}
+          />
+        </div>
+        <div className="mt-4 space-y-4">
+          <div>
+            <FieldLabel>Funeral instructions</FieldLabel>
+            <Textarea
+              value={text('funeral_instructions')}
+              onChange={event => set('funeral_instructions', event.target.value || null)}
+              rows={2}
+            />
+          </div>
+          <div>
+            <FieldLabel>Pre-need or post-death arrangements</FieldLabel>
+            <Textarea
+              value={text('preneed_arrangements')}
+              onChange={event => set('preneed_arrangements', event.target.value || null)}
+              rows={2}
+            />
+          </div>
+          <div>
+            <FieldLabel>Other disposition instructions</FieldLabel>
+            <Textarea
+              value={text('other_disposition_instructions')}
+              onChange={event => set('other_disposition_instructions', event.target.value || null)}
+              rows={2}
+            />
+          </div>
+        </div>
+        <div className="mt-6 space-y-3">
+          <DesignSheetCheckboxOption
+            label="Preference for donations"
+            description="Asks that mourners give to a named cause rather than send flowers."
+            checked={bool('preference_for_donations')}
+            onChange={checked => set('preference_for_donations', checked)}
+          />
+          <DesignSheetCheckboxOption
+            label="Prohibit AI replicas or digital recreations"
+            description="Withholds consent to synthetic recreations of voice or likeness after death."
+            checked={bool('prohibit_ai_replicas')}
+            onChange={checked => set('prohibit_ai_replicas', checked)}
+          />
+          <DesignSheetCheckboxOption
+            label="Make disposition agents the same as health care agents"
+            description="Otherwise the disposition agents are named separately."
+            checked={bool('disposition_agents_same_as_healthcare')}
+            onChange={checked => set('disposition_agents_same_as_healthcare', checked)}
+          />
+          <DesignSheetCheckboxOption
+            label="Include disposition agent acceptance"
+            description="Adds a signature block for each disposition agent to accept the appointment."
+            checked={bool('include_disposition_agent_acceptance')}
+            onChange={checked => set('include_disposition_agent_acceptance', checked)}
+          />
+        </div>
+      </SectionBlock>
+    </>
   )
 }
 
@@ -298,6 +474,49 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
           title={`${spouseFirst || 'Spouse'}'s Advance Health Directive`}
           value={provisions.spouse_advance_directive}
           onChange={value => updateProvisions({ spouse_advance_directive: value })}
+        />
+      )}
+
+      {/* Lived in WillProvisionsSection behind a `healthcare` scope that section
+          is never rendered with, so the question could not be answered at all. */}
+      <SectionBlock title="HIPAA Authorization — Psychotherapy Notes" subtitle="Client must initial — no default">
+        <ClientDecisionCallout>Psychotherapy notes disclosure. Client must initial — never default.</ClientDecisionCallout>
+        <DecisionRow
+          fieldName="hipaa_psychotherapy_notes"
+          question="Psychotherapy notes"
+          value={sheet.hipaa_psychotherapy_notes}
+          options={[
+            { value: 'authorize', label: 'Authorize disclosure' },
+            { value: 'do_not_authorize', label: 'Do NOT authorize disclosure' },
+          ]}
+          onChange={value => onChange('hipaa_psychotherapy_notes', value)}
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Health Care Proxy Options">
+        <div className="mt-6">
+          <DesignSheetCheckboxOption
+            label="Include Notice Page"
+            description="Prepends the statutory notice page to each health care proxy."
+            checked={provisions.include_hcp_notice_page}
+            onChange={checked => updateProvisions({ include_hcp_notice_page: checked })}
+          />
+        </div>
+      </SectionBlock>
+
+      <HealthCareWishesBlock
+        title={clientFirst || 'Client'}
+        party="client"
+        provisions={provisions}
+        update={updateProvisions}
+      />
+
+      {spouseDocs && (
+        <HealthCareWishesBlock
+          title={spouseFirst || 'Spouse'}
+          party="spouse"
+          provisions={provisions}
+          update={updateProvisions}
         />
       )}
     </div>

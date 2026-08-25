@@ -196,3 +196,18 @@ describe('proposal routes do not write', () => {
       .toContain('(existingSheet.decisions ?? {}) as Record<string, unknown>')
   })
 })
+
+describe('oversized sections are split, not truncated', () => {
+  it('keeps every open field when a section carries more than one batch', () => {
+    const batches = openFieldsBySection(context())
+    const batched = [...batches.values()].flat()
+
+    // Trust Details alone now carries more open fields than MAX_FIELDS_PER_BATCH.
+    // Before splitting, the tail was dropped and never offered to autofill.
+    expect(batched.length).toBe(new Set(batched).size)
+    expect([...batches.keys()].some(key => key.includes('(part 1 of'))).toBe(true)
+
+    const trustFields = batched.filter(field => field.startsWith('trust_details.'))
+    expect(trustFields.length).toBeGreaterThan(45)
+  })
+})

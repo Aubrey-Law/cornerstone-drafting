@@ -9,6 +9,10 @@ import {
   getEstatePlanDesignSetup,
   setEstatePlanDesignSetup,
   type EstatePlanAncillaryDocumentKey,
+  type EstatePlanComprehensiveTransferTitle,
+  type EstatePlanHealthcareDirectiveTitle,
+  type EstatePlanPoaForm,
+  type EstatePlanPoaTitle,
   mergeDecisionUpdates,
   setDocumentInclusion,
 } from '@/lib/designSheetDocumentInclusions'
@@ -31,11 +35,13 @@ import {
 } from '@/lib/designPlanType'
 import {
   AttorneyNoteBanner,
+  AttorneySelect,
   ClientDecisionCallout,
   DecisionRow,
   DesignSectionContent,
   SectionBlock,
   sectionFieldGrid2,
+  sectionFieldGrid3,
   type SectionProps,
 } from './shared'
 import { PlanStructureFactsSection } from './PlanStructureFactsSection'
@@ -61,6 +67,48 @@ const FUNDING_DOCUMENT_LABELS: Record<
   homestead_trustee: 'Declaration of Homestead (Trustee)',
 }
 
+/**
+ * Captured but never drafted. The design sheet records the decision and the
+ * interview worksheet prints it; no template produces these documents yet, so
+ * the UI says so rather than letting a ticked box imply a deliverable.
+ */
+const RECORD_ONLY_DOCUMENT_LABELS: Record<
+  'dementia_directive' | 'visitation_authorization' | 'final_disposition' | 'comprehensive_transfer_document' | 'client_self_declaration_of_capacity',
+  string
+> = {
+  dementia_directive: 'Dementia Directive',
+  visitation_authorization: 'Visitation Authorization',
+  final_disposition: 'Final Disposition Instructions',
+  comprehensive_transfer_document: 'Comprehensive Transfer Document',
+  client_self_declaration_of_capacity: 'Client Self-Declaration of Capacity',
+}
+
+const HEALTHCARE_DIRECTIVE_TITLE_OPTIONS = [
+  { value: 'state_default', label: 'State Default (Health Care Proxy)' },
+  { value: 'advance_directive', label: 'Advance Directive' },
+  { value: 'advance_health_care_directive', label: 'Advance Health Care Directive' },
+  { value: 'health_care_directive', label: 'Health Care Directive' },
+  { value: 'health_care_power_of_attorney', label: 'Health Care Power of Attorney' },
+  { value: 'other', label: 'Other' },
+]
+
+const POA_FORM_OPTIONS = [
+  { value: 'short', label: 'Short form' },
+  { value: 'long', label: 'Long form' },
+  { value: 'both', label: 'Both forms' },
+]
+
+const POA_TITLE_OPTIONS = [
+  { value: 'power_of_attorney', label: 'Power of Attorney' },
+  { value: 'durable_power_of_attorney', label: 'Durable Power of Attorney' },
+]
+
+const COMPREHENSIVE_TRANSFER_TITLE_OPTIONS = [
+  { value: 'declaration_of_trust', label: 'Declaration of Trust' },
+  { value: 'comprehensive_transfer_of_assets', label: 'Comprehensive Transfer of Assets' },
+  { value: 'general_assignment', label: 'General Assignment' },
+]
+
 const ANCILLARY_DOCUMENT_LABELS: Record<
   'trust_summary' | 'estate_plan_summary' | 'estate_plan_signing_guide' | 'successor_trustee_checklist' | 'fiduciary_role_guide' | 'flowchart' | 'include_asset_spreadsheet',
   string
@@ -74,6 +122,7 @@ const ANCILLARY_DOCUMENT_LABELS: Record<
   include_asset_spreadsheet: 'Include Asset Spreadsheet',
 }
 
+type RecordOnlyDocumentKey = keyof typeof RECORD_ONLY_DOCUMENT_LABELS
 type FundingDocumentKey = keyof typeof FUNDING_DOCUMENT_LABELS
 type StandaloneAncillaryDocumentKey = keyof typeof ANCILLARY_DOCUMENT_LABELS
 
@@ -111,6 +160,13 @@ export function PlanDesignSection({
     'funding_instructions',
     'funding_recommendation',
     'homestead_trustee',
+  ]
+  const recordOnlyKeys: RecordOnlyDocumentKey[] = [
+    'dementia_directive',
+    'visitation_authorization',
+    'final_disposition',
+    'comprehensive_transfer_document',
+    'client_self_declaration_of_capacity',
   ]
   const standaloneAncillaryKeys: StandaloneAncillaryDocumentKey[] = [
     'trust_summary',
@@ -362,6 +418,73 @@ export function PlanDesignSection({
                   )
                 })}
               </div>
+
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-4">
+                <p className="mb-1 text-sm font-semibold text-foreground">Captured, Not Drafted</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Recorded on the design sheet and printed on the interview worksheet. No
+                  template produces these documents yet, so ticking one does not add a draft.
+                </p>
+                <div className={sectionFieldGrid2}>
+                  {recordOnlyKeys.map(key => (
+                    <label key={key} className="flex items-start gap-3">
+                      <Checkbox
+                        checked={estatePlanSetup.ancillary_documents[key]}
+                        onCheckedChange={value => updateAncillaryDocument(key, value === true)}
+                      />
+                      <span className="text-sm text-foreground">{RECORD_ONLY_DOCUMENT_LABELS[key]}</span>
+                    </label>
+                  ))}
+                </div>
+                {estatePlanSetup.ancillary_documents.comprehensive_transfer_document && (
+                  <div className={`mt-4 ${sectionFieldGrid2}`}>
+                    <AttorneySelect
+                      fieldName="estate_plan_design.comprehensive_transfer_title"
+                      label="Comprehensive Transfer Document Title"
+                      value={estatePlanSetup.comprehensive_transfer_title ?? ''}
+                      placeholder="Select..."
+                      options={COMPREHENSIVE_TRANSFER_TITLE_OPTIONS}
+                      onChange={value => updateEstatePlanSetup({
+                        comprehensive_transfer_title:
+                          (value || null) as EstatePlanComprehensiveTransferTitle | null,
+                      })}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Document Titles</p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              How the documents are named on their own cover and signature pages. The
+              defaults are what the firm drafts in Massachusetts.
+            </p>
+            <div className={sectionFieldGrid3}>
+              <AttorneySelect
+                fieldName="estate_plan_design.healthcare_directive_title"
+                label="Healthcare Directive Title"
+                value={estatePlanSetup.healthcare_directive_title}
+                options={HEALTHCARE_DIRECTIVE_TITLE_OPTIONS}
+                onChange={value => updateEstatePlanSetup({
+                  healthcare_directive_title: value as EstatePlanHealthcareDirectiveTitle,
+                })}
+              />
+              <AttorneySelect
+                fieldName="estate_plan_design.poa_form"
+                label="Form of Power of Attorney"
+                value={estatePlanSetup.poa_form}
+                options={POA_FORM_OPTIONS}
+                onChange={value => updateEstatePlanSetup({ poa_form: value as EstatePlanPoaForm })}
+              />
+              <AttorneySelect
+                fieldName="estate_plan_design.poa_title"
+                label="Long-Form Power of Attorney Title"
+                value={estatePlanSetup.poa_title}
+                options={POA_TITLE_OPTIONS}
+                onChange={value => updateEstatePlanSetup({ poa_title: value as EstatePlanPoaTitle })}
+              />
             </div>
           </div>
 

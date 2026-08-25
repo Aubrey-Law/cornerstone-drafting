@@ -12,6 +12,28 @@ export type DesignDocumentInclusions = Record<DesignDocumentKey, boolean> & {
 export type EstatePlanWillTitle = 'last_will' | 'pour_over_will'
 export type EstatePlanSigningType = 'undecided' | 'attorney_supervised' | 'independent_client'
 
+/**
+ * How the health care directive is titled. Massachusetts drafts a Health Care
+ * Proxy, so `state_default` is the answer for almost every matter; the rest
+ * exist because the interview form asks and some clients arrive with a
+ * preference from another state.
+ */
+export type EstatePlanHealthcareDirectiveTitle =
+  | 'state_default'
+  | 'advance_directive'
+  | 'advance_health_care_directive'
+  | 'health_care_directive'
+  | 'health_care_power_of_attorney'
+  | 'other'
+
+export type EstatePlanPoaForm = 'short' | 'long' | 'both'
+export type EstatePlanPoaTitle = 'power_of_attorney' | 'durable_power_of_attorney'
+
+export type EstatePlanComprehensiveTransferTitle =
+  | 'declaration_of_trust'
+  | 'comprehensive_transfer_of_assets'
+  | 'general_assignment'
+
 export type EstatePlanAncillaryDocumentKey =
   | 'certificate_of_trust'
   | 'assignment_of_personal_property'
@@ -25,6 +47,14 @@ export type EstatePlanAncillaryDocumentKey =
   | 'fiduciary_role_guide'
   | 'flowchart'
   | 'include_asset_spreadsheet'
+  // Record-only: the design sheet captures the decision and the interview
+  // worksheet prints it, but no template drafts these yet. Labelled as such in
+  // the UI so a ticked box is not read as a promised document.
+  | 'dementia_directive'
+  | 'visitation_authorization'
+  | 'final_disposition'
+  | 'comprehensive_transfer_document'
+  | 'client_self_declaration_of_capacity'
 
 export interface EstatePlanDesignSetup {
   trust: boolean
@@ -35,6 +65,10 @@ export interface EstatePlanDesignSetup {
   living_will: boolean
   will_title: EstatePlanWillTitle
   signing_type: EstatePlanSigningType
+  healthcare_directive_title: EstatePlanHealthcareDirectiveTitle
+  poa_form: EstatePlanPoaForm
+  poa_title: EstatePlanPoaTitle
+  comprehensive_transfer_title: EstatePlanComprehensiveTransferTitle | null
   ancillary_documents: Record<EstatePlanAncillaryDocumentKey, boolean>
 }
 
@@ -62,6 +96,11 @@ export const ESTATE_PLAN_ANCILLARY_LABELS: Record<EstatePlanAncillaryDocumentKey
   fiduciary_role_guide: 'Fiduciary Role Guide',
   flowchart: 'Flowchart',
   include_asset_spreadsheet: 'Include Asset Spreadsheet',
+  dementia_directive: 'Dementia Directive',
+  visitation_authorization: 'Visitation Authorization',
+  final_disposition: 'Final Disposition Instructions',
+  comprehensive_transfer_document: 'Comprehensive Transfer Document',
+  client_self_declaration_of_capacity: 'Client Self-Declaration of Capacity',
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -226,7 +265,28 @@ function normalizeAncillaryDocuments(
     fiduciary_role_guide: typeof raw.fiduciary_role_guide === 'boolean' ? raw.fiduciary_role_guide : planWideExtras,
     flowchart: typeof raw.flowchart === 'boolean' ? raw.flowchart : false,
     include_asset_spreadsheet: typeof raw.include_asset_spreadsheet === 'boolean' ? raw.include_asset_spreadsheet : false,
+    dementia_directive: typeof raw.dementia_directive === 'boolean' ? raw.dementia_directive : false,
+    visitation_authorization: typeof raw.visitation_authorization === 'boolean' ? raw.visitation_authorization : false,
+    final_disposition: typeof raw.final_disposition === 'boolean' ? raw.final_disposition : false,
+    comprehensive_transfer_document: typeof raw.comprehensive_transfer_document === 'boolean' ? raw.comprehensive_transfer_document : false,
+    client_self_declaration_of_capacity: typeof raw.client_self_declaration_of_capacity === 'boolean' ? raw.client_self_declaration_of_capacity : false,
   }
+}
+
+const HEALTHCARE_DIRECTIVE_TITLES: readonly EstatePlanHealthcareDirectiveTitle[] = [
+  'state_default', 'advance_directive', 'advance_health_care_directive',
+  'health_care_directive', 'health_care_power_of_attorney', 'other',
+]
+const POA_FORMS: readonly EstatePlanPoaForm[] = ['short', 'long', 'both']
+const POA_TITLES: readonly EstatePlanPoaTitle[] = ['power_of_attorney', 'durable_power_of_attorney']
+const COMPREHENSIVE_TRANSFER_TITLES: readonly EstatePlanComprehensiveTransferTitle[] = [
+  'declaration_of_trust', 'comprehensive_transfer_of_assets', 'general_assignment',
+]
+
+function readTitle<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : fallback
 }
 
 export function getEstatePlanDesignSetup(
@@ -259,6 +319,18 @@ export function getEstatePlanDesignSetup(
     signing_type: raw.signing_type === 'attorney_supervised' || raw.signing_type === 'independent_client'
       ? raw.signing_type
       : 'undecided',
+    // The firm drafts a Massachusetts Health Care Proxy and a long-form durable
+    // power of attorney, so these default to the answer the firm gives rather
+    // than to null: an unanswered question here has a right answer.
+    healthcare_directive_title: readTitle(raw.healthcare_directive_title, HEALTHCARE_DIRECTIVE_TITLES, 'state_default'),
+    poa_form: readTitle(raw.poa_form, POA_FORMS, 'long'),
+    poa_title: readTitle(raw.poa_title, POA_TITLES, 'durable_power_of_attorney'),
+    // No default: the comprehensive transfer document is record-only and off by
+    // default, so a title before the document is chosen would be a fiction.
+    comprehensive_transfer_title: typeof raw.comprehensive_transfer_title === 'string'
+      && (COMPREHENSIVE_TRANSFER_TITLES as readonly string[]).includes(raw.comprehensive_transfer_title)
+      ? raw.comprehensive_transfer_title as EstatePlanComprehensiveTransferTitle
+      : null,
     ancillary_documents: normalizeAncillaryDocuments(
       isRecord(raw.ancillary_documents) ? raw.ancillary_documents : {},
       inclusions.trust,
