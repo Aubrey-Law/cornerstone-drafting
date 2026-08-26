@@ -44,7 +44,7 @@ the two halves of the rendered interview worksheet separately to catch it.
 | `{party}_anatomical_gift` | `yes`, `defer`, `no` |
 | `spouse_anatomical_restrictions` | free text (client uses the legacy column) |
 | `{party}_advance_directive` | `prolong_life`, `do_not_resuscitate`, `do_not_prolong_life`, `other` |
-| `{party}_advance_directive_other` | free text — the instructions for `other`, meaningless otherwise |
+| `{party}_advance_directive_other` | free text — the instructions for `other`, meaningless otherwise. **Required whenever the direction is `other`**; see the readiness note below |
 | `{party}_leave_instructions_blank` | boolean |
 | `{party}_receive_comfort_care` | boolean |
 | `{party}_wish_to_die_at_home` | boolean |
@@ -145,6 +145,20 @@ Document flags from estate plan design: `planning.include_hcp`, `include_hipaa`,
 directive's *title* is a separate answer, `planning.healthcare_directive_title`
 (6 options, default `state_default`) — see the Estate Plan Design guide.
 
+## Readiness
+
+`healthcare_provisions.{party}_advance_directive` is a drafting blocker, resolved by
+a truthiness check. `other` is truthy, so it clears that blocker on its own — and on
+its own it says nothing: the three `hcp_{party}_advance_*` flags are all false for it,
+and the custom text renders through `| optional`, so an empty one drafts no life-support
+language and leaves no `[[ MISSING ]]` marker to catch it.
+
+That makes it the one shape on the sheet where answering a question leaves the document
+*less* complete than leaving it blank. `advanceDirectiveMissingCustomText()` in
+`lib/designSheetReadiness.ts` therefore blocks on the **text** — not the direction,
+which is answered — whenever the direction is `other`. Pinned by
+`tests/design-sheet-readiness.test.ts`.
+
 ## Package
 
 `incapacity-documents` — `tools/aubreylaw-docgeneration/docs/incapacity-placeholder-map.md`
@@ -157,5 +171,5 @@ Clauses: `healthcare.agent_appointment.json`, `hipaa.authorization.json`
 | --- | --- |
 | **Template consumption** | The whole per-settlor set reaches templates; most of it has no clause branch yet. The interview worksheet prints all of it, the drafted documents consume a subset. |
 | **Post-death choices** | Captured in full (disposition of remains, funeral, pre-need, donations preference, AI replicas, disposition-agent acceptance). No template drafts a final-disposition document — `planning.include_final_disposition` is record-only. |
-| **`other` directive has no template** | The value and its text reach `healthcare.*`, and `hcp_{party}_advance_other` is available, but no clause branches on it yet — a directive set to `other` currently drafts none of the three standard directions and no substitute |
+| **`other` directive has no template** | The value and its text reach `healthcare.*`, and `hcp_{party}_advance_other` is available, but no clause branches on it yet — a directive set to `other` drafts none of the three standard directions and no substitute. Readiness now holds drafting until the text is filled in (below), so the answer is at least never silently empty. |
 | **Client anatomical restrictions** | Only the spouse has a `spouse_anatomical_restrictions` key; the client's restrictions still come from the `hcp_anatomical_specified` column. |
