@@ -30,7 +30,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { formatDateTime, cn } from '@/lib/utils'
 
 
@@ -387,8 +387,9 @@ export function CrmCampaignsClient({ initialCampaigns }: { initialCampaigns: Crm
 
           <label className="space-y-1">
             <Label htmlFor="campaign-body">Email body</Label>
-            <Textarea
+            <ResizableTextarea
               id="campaign-body"
+              handleLabel="Resize the email body"
               value={body}
               onChange={event => setBody(event.target.value)}
               rows={7}

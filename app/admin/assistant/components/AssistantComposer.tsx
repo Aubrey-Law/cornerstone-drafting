@@ -4,7 +4,7 @@ import { useState, type KeyboardEvent } from 'react'
 import { Send, Square, Workflow, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { WorkflowPickerContent } from '@/components/works/WorkflowPickerContent'
 import type { WorkflowRef } from './useAssistantStream'
@@ -47,7 +47,9 @@ export function AssistantComposer({
           <span className="text-[11px] text-muted-foreground">will guide this message</span>
         </div>
       )}
-      <Textarea
+      <ResizableTextarea
+        handleLabel="Resize the message box"
+        handleEdge="top"
         value={value}
         onChange={event => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
@@ -55,6 +57,7 @@ export function AssistantComposer({
         autoFocus={autoFocus}
         rows={3}
         className="min-h-16 resize-none border-0 shadow-none focus-visible:ring-0"
+        handleClassName="rounded-none border-0 bg-transparent"
       />
       <div className="flex items-center justify-between px-1 pt-1">
         <Button type="button" variant="ghost" size="sm" onClick={() => setPickerOpen(true)}>

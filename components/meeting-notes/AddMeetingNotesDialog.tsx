@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { cn, formatDate } from '@/lib/utils'
 
 interface GranolaNoteSummary {
@@ -276,8 +276,9 @@ export function AddMeetingNotesDialog({
                 Markdown supported
               </span>
             </Label>
-            <Textarea
+            <ResizableTextarea
               id="mn-content"
+              handleLabel="Resize the notes box"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Pick a meeting above to auto-fill, or paste notes here…"

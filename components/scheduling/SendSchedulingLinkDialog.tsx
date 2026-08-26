@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 
 export interface SchedulingLinkTarget {
   kind: 'lead' | 'matter'
@@ -237,10 +237,11 @@ export function SendSchedulingLinkDialog({
               <Label htmlFor="scheduling-link-message">Message</Label>
               {/* break-words: the prefilled Calendly URL is one long unbroken
                   token and would otherwise scroll sideways inside the field. */}
-              <Textarea
+              <ResizableTextarea
                 id="scheduling-link-message"
+                handleLabel="Resize message"
                 rows={10}
-                className="w-full resize-y [overflow-wrap:anywhere]"
+                className="w-full [overflow-wrap:anywhere]"
                 value={message}
                 onChange={e => { setMessage(e.target.value); setDirty(true) }}
               />

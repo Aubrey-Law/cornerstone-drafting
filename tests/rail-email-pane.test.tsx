@@ -848,6 +848,30 @@ describe('a composer opened with a seeded context', () => {
     )
   })
 
+  it('lets the operator drag the whole embedded composer taller', async () => {
+    mockFetch()
+    render(
+      <ManualEmailComposer embedded recordOverride={{ type: 'matter', id: 'm1' }} initialContext={SEED} />,
+    )
+
+    const handle = await screen.findByRole('separator', { name: 'Resize the email composer' })
+    const pane = handle.parentElement as HTMLElement
+    handle.setPointerCapture = vi.fn()
+    handle.hasPointerCapture = vi.fn(() => true)
+    handle.releasePointerCapture = vi.fn()
+    pane.getBoundingClientRect = () => ({ height: 480 }) as DOMRect
+
+    // Until it is dragged the pane keeps its cap, and a long email scrolls.
+    expect(pane.className).toContain('max-h-[75dvh]')
+
+    fireEvent.pointerDown(handle, { clientY: 500, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientY: 700, pointerId: 1 })
+    fireEvent.pointerUp(handle, { clientY: 700, pointerId: 1 })
+
+    expect(pane.style.height).toBe('680px')
+    expect(pane.className).not.toContain('max-h-[75dvh]')
+  })
+
   it('does not fetch a context for a bare contact', async () => {
     const fetchMock = mockFetch()
     render(

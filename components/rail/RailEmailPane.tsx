@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import { DragResizeHandle, useDragResize } from '@/components/ui/drag-resize'
 
 /**
  * Compose pane for the admin rail: a one-off email or one started from a
@@ -302,6 +303,11 @@ export function ManualEmailComposer({
     () => (seedJson ? (JSON.parse(seedJson) as ComposeContext) : null),
     [seedJson],
   )
+
+  // The composer's own height, once the operator has dragged for one. A floor
+  // that still shows the recipient, subject and send row keeps a drag honest.
+  const paneRef = useRef<HTMLDivElement | null>(null)
+  const paneResize = useDragResize(paneRef, { minHeight: 260 })
 
   const [context, setContext] = useState<ComposeContext | null>(null)
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
@@ -850,7 +856,18 @@ export function ManualEmailComposer({
   }
 
   return (
-    <div className={cn('flex min-h-0 flex-col', embedded ? 'max-h-[75dvh]' : 'h-full')}>
+    <div
+      ref={paneRef}
+      className={cn(
+        'flex min-h-0 flex-col',
+        // Embedded, the composer is as tall as it needs up to a cap — and once
+        // the operator drags the bottom edge, exactly as tall as they said.
+        // Dragged or not, the composer stays inside the viewport: past that the
+        // send row would sit below the fold with nothing to scroll it into view.
+        embedded ? (paneResize.height === null ? 'max-h-[75dvh]' : 'max-h-[92dvh]') : 'h-full',
+      )}
+      style={embedded && paneResize.height !== null ? { height: paneResize.height } : undefined}
+    >
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
@@ -1264,6 +1281,12 @@ export function ManualEmailComposer({
           {sending ? 'Sending…' : embedded ? 'Send email' : 'Send'}
         </button>
       </div>
+      {/* Embedded, the composer sits inside someone else's dialog or card, so a
+          long email would otherwise be stuck behind this pane's scrollbar. The
+          grabber lets the operator pull the whole composer taller. */}
+      {embedded && (
+        <DragResizeHandle controls={paneResize} label="Resize the email composer" className="rounded-b-lg" />
+      )}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>

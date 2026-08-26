@@ -25,6 +25,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
+import { DragResizeHandle, useDragResize } from '@/components/ui/drag-resize'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -228,6 +229,7 @@ export function ChatPanel({
   const [designSheetProposal, setDesignSheetProposal] = useState<DesignSheetChatProposal | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const composerResize = useDragResize(textareaRef, { minHeight: 40, edge: 'top' })
   const wasOpenRef = useRef(false)
   const activityDraftPromptRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -325,11 +327,13 @@ export function ChatPanel({
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, loading])
 
+  // The box grows with what is typed, up to a few lines — unless the operator
+  // has dragged a height of their own, which outranks the auto-sizing.
   useEffect(() => {
-    if (!textareaRef.current) return
+    if (!textareaRef.current || composerResize.height !== null) return
     textareaRef.current.style.height = 'auto'
     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 112)}px`
-  }, [input])
+  }, [input, composerResize.height])
 
   async function sendMessage(content: string) {
     let trimmed = content.trim()
@@ -914,21 +918,30 @@ export function ChatPanel({
         onSubmit={handleSubmit}
         className="flex shrink-0 items-end gap-2 border-t border-border bg-card p-3"
       >
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={event => setInput(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            chatContext.type === 'matter'
-              ? 'Ask about this matter...'
-              : chatContext.type === 'lead'
-                ? 'Ask about this lead...'
-                : 'Ask anything...'
-          }
-          rows={1}
-          className="h-10 max-h-28 min-h-10 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <DragResizeHandle
+            controls={composerResize}
+            label="Resize the message box"
+            edge="top"
+            className="rounded-t-md border-x border-t border-input bg-muted/20"
+          />
+          <textarea
+            ref={textareaRef}
+            style={composerResize.height === null ? undefined : { height: composerResize.height, maxHeight: 'none' }}
+            value={input}
+            onChange={event => setInput(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              chatContext.type === 'matter'
+                ? 'Ask about this matter...'
+                : chatContext.type === 'lead'
+                  ? 'Ask about this lead...'
+                  : 'Ask anything...'
+            }
+            rows={1}
+            className="h-10 max-h-28 min-h-10 w-full resize-none overflow-y-auto rounded-md rounded-t-none border border-input bg-background px-3 py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          />
+        </div>
         {loading ? (
           <button
             type="button"

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { formatDateTime } from '@/lib/utils'
@@ -402,7 +402,7 @@ export function CrmCampaignDetailClient({ initialCampaign }: CrmCampaignDetailCl
             {campaign.status === 'draft' && <div className="space-y-2 rounded border border-dashed p-3">
               <Label>Add step</Label>
               <Input value={stepSubject} onChange={event => setStepSubject(event.target.value)} placeholder="Step subject" />
-              <Textarea value={stepBody} onChange={event => setStepBody(event.target.value)} placeholder="Step email body" rows={4} />
+              <ResizableTextarea handleLabel="Resize the step email body" value={stepBody} onChange={event => setStepBody(event.target.value)} placeholder="Step email body" rows={4} />
               <div className="flex flex-wrap items-center gap-2"><Input className="w-32" type="number" min={0} value={stepDelay} onChange={event => setStepDelay(Math.max(0, Number(event.target.value) || 0))} /><span className="text-sm text-muted-foreground">days after enrollment</span><Button type="button" size="sm" onClick={() => void addStep()}>Add step</Button></div>
             </div>}
           </CardContent>

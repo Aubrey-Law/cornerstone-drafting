@@ -8,6 +8,7 @@ import {
 import { Bold, Italic, List, ListOrdered, Underline } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { DragResizeHandle, useDragResize } from '@/components/ui/drag-resize'
 import { cn } from '@/lib/utils'
 
 type Format = 'bold' | 'italic' | 'underline' | 'bullets' | 'numbering'
@@ -47,6 +48,9 @@ export function FormattedNoteEditor({
 }: FormattedNoteEditorProps) {
   const localRef = useRef<HTMLTextAreaElement>(null)
   const activeRef = textareaRef ?? localRef
+  // Until the operator drags the bottom edge, the note sizes itself to what
+  // they have typed.
+  const resize = useDragResize(activeRef)
 
   function applyFormat(format: Format) {
     const textarea = activeRef.current
@@ -109,9 +113,15 @@ export function FormattedNoteEditor({
         onChange={event => onChange(event.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className={cn('resize-none rounded-none border-0 text-sm shadow-none focus-visible:ring-0', className)}
+        style={resize.height === null ? undefined : { height: resize.height, minHeight: 0 }}
+        className={cn(
+          'resize-none rounded-none border-0 text-sm shadow-none focus-visible:ring-0',
+          resize.height !== null && 'field-sizing-fixed overflow-y-auto',
+          className,
+        )}
         onKeyDown={onKeyDown}
       />
+      <DragResizeHandle controls={resize} label={`Resize ${ariaLabel.toLowerCase()}`} />
     </div>
   )
 }
