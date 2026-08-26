@@ -209,9 +209,71 @@ Ordered for production readiness of a typical MA pour-over + incapacity + transf
 
 ---
 
+## 6. Measured coverage — which answers reach a signed document
+
+Section 1's first row ("design sheet fields wired; templates not updated") is the
+largest gap in this document, and it was qualitative until now. `npm run design:coverage`
+measures it:
+
+```
+Documented data-dictionary paths: 544
+  read by a drafted document:     225
+  printed on a worksheet only:    282
+  referenced by no template:       37
+```
+
+The worksheet renders the answer back to the attorney for review; a *drafted* document
+is one a client signs. So 319 of 544 documented paths are captured, reviewable, and act
+on nothing. The worst roots:
+
+| Root | Drafted / total | Note |
+| --- | ---: | --- |
+| `trust.provisions.*` | **0 / 47** | Exact — see below |
+| `dpoa.*` | 6 / 44 | Upper bound |
+| `healthcare.*` | 18 / 76 | Upper bound |
+| `planning.*` | 9 / 31 | Upper bound |
+| `execution.*` | 9 / 25 | Upper bound |
+| `fiduciary_display.*` | 0 / 5 | Section 1 row 9 |
+
+**Why most rows are an upper bound.** The generator also derives boolean context flags
+from answers — `hcp_anatomical_all`, `college_life_support_comfort_only`,
+`uses_revocable_trust`. A template branching on one of those consumes the answer behind
+it without ever naming its path, so the static scan counts it as a gap when it is not.
+
+**`trust.provisions.*` is exact.** The string `provisions` appears nowhere in
+`lib/estateGenerator/node/context.ts`, no clause in `tools/aubreylaw-docgeneration/clauses/`
+carries a `condition` naming it, and no template reads it. All 47 provisions — the
+slayer clause, Subchapter S stock provisions, conduit and accumulation retirement
+provisions, marital deduction savings language, mandatory arbitration, firearms
+handling — are recorded and inert.
+
+### What closing it takes, and why it is not a code change
+
+Each provision needs operative Massachusetts clause language plus a
+`tools/aubreylaw-docgeneration/clauses/*.json` entry with a `condition` naming its path.
+The text is the work, and the clause library is deliberately built so no single author
+lands it: `estate_clause_revisions` is immutable, `request_estate_clause_changes` raises
+*"A different attorney or administrator must review this revision"*, and
+`publish_estate_clause_revision` raises the same for publication and additionally
+requires immutable successful preview evidence. Clause text reaching a signed instrument
+is a two-person act by design.
+
+So this section is a standing measurement, not a to-do that engineering can burn down.
+
+### The ratchet
+
+`tests/template-variable-catalog.test.ts` holds `UNDRAFTED_TRUST_PROVISIONS`
+(`lib/estateGenerator/templateVariables.ts`) to a list that only shrinks. It fails both
+ways: when a newly captured provision is drafted by nothing, and when a listed provision
+starts reaching a document and the list goes stale. Adding a design-sheet answer that
+nothing drafts is now a deliberate act with a test to update, not a silent one.
+
+---
+
 ## Related docs
 
 - Section guides: [README.md](./README.md)
 - Per-document maps: `tools/aubreylaw-docgeneration/docs/*-placeholder-map.md`
 - Template authoring: `tools/aubreylaw-docgeneration/docs/document-template-guide.md`
 - Gap wiring tests: `tests/draft-payload-generator-gaps.test.ts`
+- Coverage measurement: `npm run design:coverage` (`scripts/report-design-answer-coverage.ts`)

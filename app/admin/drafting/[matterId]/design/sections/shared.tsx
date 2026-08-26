@@ -684,6 +684,15 @@ export function SectionBlock({ title, subtitle, children }: {
   )
 }
 
+/** Blue explanatory note at the top of a section. */
+export function SectionHelp({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2">
+      <p className="text-[11px] text-blue">{children}</p>
+    </div>
+  )
+}
+
 export function AttorneyNoteBanner({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">

@@ -19,6 +19,7 @@
     "estate:render": "tsx scripts/render-estate-package.ts",
     "skill:refs": "tsx scripts/generate-doc-template-skill-references.ts",
     "design:forms": "tsx scripts/generate-design-meeting-forms.ts",
+    "design:coverage": "tsx scripts/report-design-answer-coverage.ts",
     "clauses:import": "tsx scripts/import-estate-clauses.ts",
     "seed:browser-fixture": "tsx scripts/seedBrowserFixture.ts",
     "prebuild:next": "npm run theme:generate",

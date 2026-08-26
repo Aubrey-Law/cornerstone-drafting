@@ -237,7 +237,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         showInapplicable={Boolean(showInapplicable)}
       />
     ),
-    [DESIGN_SECTION_IDS.trustDetails]: () => <TrustDetailsSection {...docCommon} scope="client" />,
+    [DESIGN_SECTION_IDS.trustDetails]: () => <TrustDetailsSection {...docCommon} />,
     [DESIGN_SECTION_IDS.willDetails]: () => (
       <>
         <WillDocumentSection {...docCommon} />

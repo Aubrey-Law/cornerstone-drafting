@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpen, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,6 +45,7 @@ import {
   DesignSectionContent,
   PrefilledInput,
   SectionBlock,
+  SectionHelp,
   toYesNo,
   yesNoField,
 } from './shared'
@@ -102,14 +103,6 @@ const SPOUSAL_TRUST_FUNDING_OPTIONS: { value: TrustPlanningType; label: string; 
     description: 'The residuary skips the surviving spouse and passes under the descendants distribution.',
   },
 ]
-
-function SectionHelp({ children }: { children: ReactNode }) {
-  return (
-    <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2">
-      <p className="text-[11px] text-blue">{children}</p>
-    </div>
-  )
-}
 
 function TrustNameFormatFields({
   sheet,
@@ -205,8 +198,8 @@ const TRUSTEE_INCAPACITY_DETERMINER_OPTIONS = [
   { value: 'custom', label: 'Custom' },
 ]
 
-export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'client' | 'spouse' }) {
-  const { sheet, onChange, contacts, matter, scope = 'client' } = props
+export function TrustDetailsSection(props: DocumentSectionProps) {
+  const { sheet, onChange, contacts, matter } = props
   const { onAddContact, onUpdateContact } = props
   const original = (field: string) => sheet.overrides?.[field]?.original
   const derivedTrustName = deriveTrustName(sheet, matter)
@@ -233,33 +226,6 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trustDetails.protect_us_trust_status])
-
-  if (scope === 'spouse') {
-    return (
-      <DesignSectionContent>
-        <SectionHelp>Configure the spouse&apos;s separate trust name.</SectionHelp>
-        <SectionBlock title="Trust Name">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <div>
-              <PrefilledInput
-                fieldName="spouse_trust_name"
-                label={`${spouseFirst || 'Spouse'}'s Trust Name`}
-                value={sheet.spouse_trust_name || derivedSpouseTrustName}
-                originalValue={original('spouse_trust_name')}
-                onChange={v => onChange('spouse_trust_name', v || null)}
-              />
-              <TrustNameQuickFill
-                suggestions={buildSpouseTrustNameSuggestions(sheet, matter)}
-                onSelect={v => onChange('spouse_trust_name', v)}
-              />
-            </div>
-            <TrustNameFormatFields sheet={sheet} onChange={onChange} scope="spouse" />
-          </div>
-        </SectionBlock>
-
-      </DesignSectionContent>
-    )
-  }
 
   const pickerContacts = contacts as unknown as PickerContact[]
   const adaptAdd = (data: Omit<PickerContact, 'id'>) =>
@@ -1107,12 +1073,4 @@ export function TrustDetailsSection(props: DocumentSectionProps & { scope?: 'cli
       </SectionBlock>
     </DesignSectionContent>
   )
-}
-
-export function TrustDocumentSection(props: DocumentSectionProps) {
-  return <TrustDetailsSection {...props} scope="client" />
-}
-
-export function TrustDetailsSpouseSection(props: DocumentSectionProps) {
-  return <TrustDetailsSection {...props} scope="spouse" />
 }

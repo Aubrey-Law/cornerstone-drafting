@@ -2,6 +2,7 @@
 
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { getDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
+import { getTrustDetails, setTrustDetails } from '@/lib/designSheetTrustDetails'
 import {
   getDesignSheetWillProvisions,
   setDesignSheetWillProvisions,
@@ -33,6 +34,12 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
   const includeSelfDealing = sheet.dpoa_include_self_dealing ?? Boolean(sheet.dpoa_self_dealing_reviewer)
   const spouseDocs = isMarried && getDocumentInclusions(sheet).spouse_docs
   const willProvisions = getDesignSheetWillProvisions(sheet)
+  // The no-contest decision is stored twice: `no_contest_clause` (the column the
+  // will template reads) and `trust_details.include_no_contest_clause` (which
+  // toGeneratorData ORs over the column). Read the OR and write both, exactly as
+  // the trust section's checkbox does — reading only the column showed "Omit"
+  // on a will that drafted the clause anyway.
+  const noContest = getTrustDetails(sheet).include_no_contest_clause || sheet.no_contest_clause === 'include'
   const updateWillProvisions = (
     patch: Parameters<typeof setDesignSheetWillProvisions>[1],
   ) => {
@@ -149,10 +156,13 @@ export function WillProvisionsSection({ sheet, onChange, scope = 'all' }: Sectio
           { value: '18', label: '18' },
           { value: '21', label: '21 (default)' },
         ]} onChange={v => onChange('utma_age', parseInt(v) as 18 | 21)} />
-        <DecisionRow question="No-contest clause" value={sheet.no_contest_clause ?? 'omit'} options={[
+        <DecisionRow question="No-contest clause" help="Shared with the trust: this clause goes in both documents." value={noContest ? 'include' : 'omit'} options={[
           { value: 'omit', label: 'Omit (default)' },
           { value: 'include', label: 'Include' },
-        ]} onChange={v => onChange('no_contest_clause', v)} />
+        ]} onChange={v => {
+          onChange('decisions', previous => setTrustDetails(previous, { include_no_contest_clause: v === 'include' }))
+          onChange('no_contest_clause', v)
+        }} />
         <DecisionRow question="Disclaimer article" value={sheet.include_disclaimer_article === false ? 'no' : 'yes'} options={[
           { value: 'yes', label: 'Include (default)' },
           { value: 'no', label: 'Omit' },
