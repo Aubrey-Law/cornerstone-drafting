@@ -216,3 +216,144 @@ export function buildTemplateVariableCatalog(root = resolveNodeEstateGeneratorRo
   }
   return entries
 }
+
+// ── Reverse coverage: which captured answers actually reach a document ────────
+// The catalog above asks "does anything populate what this template reads?".
+// This asks the opposite, and much more expensive, question: the design sheet
+// captures a decision, the worksheet prints it back to the attorney — but does
+// any document a client signs act on it?
+
+/**
+ * Templates that print the design sheet back to the attorney rather than
+ * drafting an instrument. A path these are the only readers of is captured,
+ * reviewable, and inert.
+ */
+export const WORKSHEET_TEMPLATES = new Set([
+  'design-summary-detailed.docx',
+  'design-summary-worksheet.docx',
+  'design-summary-worksheet-separate.docx',
+])
+
+/** `children[0].name` and `children[].name` both describe `children.name`. */
+function normalizeIndexes(dataPath: string): string {
+  return dataPath.replace(/\[\d*\]/g, '')
+}
+
+/**
+ * A template reading `ferpa.records` renders every `ferpa.records[].key` inside
+ * the loop, and one reading `trust.provisions.include_slayer_provision` reads
+ * `trust.provisions`. Both directions count as consumption; only a bare root
+ * would over-count, and no drafted template reads `trust`, `dpoa`, or
+ * `healthcare` bare.
+ */
+function pathIsRead(dataPath: string, read: Set<string>): boolean {
+  const normalized = normalizeIndexes(dataPath)
+  for (const candidate of read) {
+    if (candidate === normalized) return true
+    if (candidate.startsWith(`${normalized}.`)) return true
+    if (normalized.startsWith(`${candidate}.`)) return true
+  }
+  return false
+}
+
+export interface DesignAnswerCoverage {
+  /** Documented paths a drafted template reads. */
+  drafted: string[]
+  /** Documented paths only a worksheet prints — captured, never acted on. */
+  worksheetOnly: string[]
+  /** Documented paths no template references at all. */
+  unreferenced: string[]
+}
+
+/**
+ * Classify every data-dictionary path by whether a drafted document consumes it.
+ *
+ * Caveat worth knowing before reading the numbers: the generator also derives
+ * boolean context flags from answers (`hcp_anatomical_all`,
+ * `college_life_support_comfort_only`, `uses_revocable_trust`), and a template
+ * reading one of those consumes the answer behind it without naming its path.
+ * So `worksheetOnly` is an upper bound on the gap for any root that has such
+ * flags. It is exact for `trust.provisions.*`, which `buildNodeEstateContext`
+ * never touches.
+ */
+export function buildDesignAnswerCoverage(root = resolveNodeEstateGeneratorRoot()): DesignAnswerCoverage {
+  const dictionary = JSON.parse(
+    fs.readFileSync(path.join(root, 'schemas', 'data-dictionary.json'), 'utf8'),
+  ) as Record<string, unknown>
+
+  const draftedReads = new Set<string>()
+  const worksheetReads = new Set<string>()
+  for (const entry of buildTemplateVariableCatalog(root)) {
+    const target = WORKSHEET_TEMPLATES.has(entry.template) ? worksheetReads : draftedReads
+    for (const variable of entry.variables) target.add(normalizeIndexes(variable))
+    for (const clauseId of entry.clauses) target.add(clauseId)
+  }
+
+  const coverage: DesignAnswerCoverage = { drafted: [], worksheetOnly: [], unreferenced: [] }
+  for (const dataPath of Object.keys(dictionary).sort()) {
+    if (pathIsRead(dataPath, draftedReads)) coverage.drafted.push(dataPath)
+    else if (pathIsRead(dataPath, worksheetReads)) coverage.worksheetOnly.push(dataPath)
+    else coverage.unreferenced.push(dataPath)
+  }
+  return coverage
+}
+
+/**
+ * The trust provisions the design sheet captures and the worksheet prints, and
+ * that no drafted document acts on. Every one needs operative clause language
+ * before it can change an instrument; authoring that text is attorney work
+ * under the two-person review in `estate_clause_revisions`.
+ *
+ * Shrink this list — never grow it. A provision leaves the list the moment a
+ * clause or template reads it, and the test below fails if a new provision
+ * joins the gap or a listed one quietly becomes drafted.
+ */
+export const UNDRAFTED_TRUST_PROVISIONS: string[] = [
+  'trust.provisions.allow_charitable_giving_during_incapacity',
+  'trust.provisions.allow_direct_distributions_to_young_or_incapacitated',
+  'trust.provisions.allow_distributions_to_dependents_if_incapacitated',
+  'trust.provisions.allow_pa_np_substitute',
+  'trust.provisions.allow_protector_convert_conduit_trusts',
+  'trust.provisions.allow_psychologist_substitute',
+  'trust.provisions.allow_sole_trustee_to_appoint_cotrustees',
+  'trust.provisions.allow_special_trustee',
+  'trust.provisions.allow_trustee_change_situs',
+  'trust.provisions.allow_trustee_to_designate_alternates',
+  'trust.provisions.asset_schedule_catchall',
+  'trust.provisions.asset_schedule_format',
+  'trust.provisions.asset_schedule_non_trust',
+  'trust.provisions.asset_schedule_signature_block',
+  'trust.provisions.forgive_all_debts',
+  'trust.provisions.hold_distributions_for_young_beneficiaries',
+  'trust.provisions.include_arts_education',
+  'trust.provisions.include_contingent_snt',
+  'trust.provisions.include_creditor_divorce_provisions',
+  'trust.provisions.include_disappearance_definition',
+  'trust.provisions.include_discretionary_distribution_definition',
+  'trust.provisions.include_education_expenses_definition',
+  'trust.provisions.include_firearms_provisions',
+  'trust.provisions.include_homeschooling',
+  'trust.provisions.include_incapacity_definition',
+  'trust.provisions.include_marital_deduction_savings_language',
+  'trust.provisions.include_no_contest_clause',
+  'trust.provisions.include_retirement_account_provisions',
+  'trust.provisions.include_reverse_mortgage_clause',
+  'trust.provisions.include_slayer_provision',
+  'trust.provisions.include_substance_abuse',
+  'trust.provisions.include_vocational_training',
+  'trust.provisions.limit_duty_to_account',
+  'trust.provisions.name_people_in_no_contest_clause',
+  'trust.provisions.parent_child_relationship_definition',
+  'trust.provisions.power_529_plans',
+  'trust.provisions.power_closely_held_businesses',
+  'trust.provisions.power_farms_ranches',
+  'trust.provisions.power_professional_corporations',
+  'trust.provisions.prorate_estate_taxes',
+  'trust.provisions.protect_us_trust_status',
+  'trust.provisions.require_mandatory_arbitration',
+  'trust.provisions.require_trustee_bond',
+  'trust.provisions.settlor_incapacity_determined_by',
+  'trust.provisions.special_trustee_instructions',
+  'trust.provisions.subchapter_s_provisions',
+  'trust.provisions.trustee_incapacity_determined_by',
+]

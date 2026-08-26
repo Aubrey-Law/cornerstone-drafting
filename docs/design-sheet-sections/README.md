@@ -145,4 +145,7 @@ value is ever `switch`ed on exhaustively — only compared with `===`:
 | `AdvanceDirectiveChoice: 'other'` | Custom life-support instructions, with the text in `{party}_advance_directive_other` | The three `hcp_*_advance_*` context flags all go false, which is correct — a template branching on them must fall through to the text. |
 
 Templates still need `{% if %}` branches and clause updates to consume most of the
-newer fields — see each section guide.
+newer fields. `npm run design:coverage` measures exactly how many: **225 of 544
+documented paths reach a document a client signs**, and all 47 `trust.provisions.*`
+reach none. See [template-gaps-summary.md § 6](./template-gaps-summary.md) for the
+breakdown and why closing it is attorney work rather than a code change.

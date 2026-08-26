@@ -1,6 +1,5 @@
 'use client'
 
-import type { ReactNode } from 'react'
 import { Input } from '@/components/ui/input'
 import type { MatterContact, PipelineMatter } from '@/types/database'
 import type { SectionProps } from './shared'
@@ -11,17 +10,14 @@ import {
   DesignSectionContent,
   FieldLabel,
   SectionBlock,
+  SectionHelp,
 } from './shared'
 import { DpoaProvisionsSection } from './DpoaProvisionsSection'
 import { HealthCareDesignSection } from './HealthCareDesignSection'
 import { WillPersonalRepresentativePowersSection } from './WillPersonalRepresentativePowersSection'
 import { WillProvisionsSection } from './WillProvisionsSection'
-import {
-  TrustDetailsSection,
-  TrustDetailsSpouseSection,
-  TrustDocumentSection,
-} from './TrustDetailsSection'
-export { TrustDetailsSection, TrustDetailsSpouseSection, TrustDocumentSection }
+import { TrustDetailsSection } from './TrustDetailsSection'
+export { TrustDetailsSection }
 
 interface DocumentSectionProps extends SectionProps {
   contacts: MatterContact[]
@@ -34,14 +30,6 @@ const YES_NO = [
   { value: 'yes', label: 'Yes' },
   { value: 'no', label: 'No' },
 ]
-
-function SectionHelp({ children }: { children: ReactNode }) {
-  return (
-    <div className="mb-4 rounded-md border border-blue-strong-border bg-blue-bg px-3 py-2">
-      <p className="text-[11px] text-blue">{children}</p>
-    </div>
-  )
-}
 
 export function WillDocumentSection(props: DocumentSectionProps) {
   const { sheet, onChange } = props

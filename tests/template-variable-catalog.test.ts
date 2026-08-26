@@ -3,6 +3,8 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   BASELINE_UNKNOWN_ROOTS,
+  UNDRAFTED_TRUST_PROVISIONS,
+  buildDesignAnswerCoverage,
   buildTemplateVariableCatalog,
   extractTemplateVariables,
 } from '@/lib/estateGenerator/templateVariables'
@@ -76,5 +78,42 @@ describe('template variable catalog', () => {
         `${entry.template} is stale — run: npx tsx scripts/extract-template-variables.ts`,
       ).toEqual(entry.variables)
     }
+  })
+})
+
+describe('design answer coverage', () => {
+  const coverage = buildDesignAnswerCoverage()
+
+  it('classifies every documented path exactly once', () => {
+    const total = coverage.drafted.length + coverage.worksheetOnly.length + coverage.unreferenced.length
+    const dictionary = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), 'tools/aubreylaw-docgeneration/schemas/data-dictionary.json'),
+        'utf8',
+      ),
+    ) as Record<string, unknown>
+
+    expect(total).toBe(Object.keys(dictionary).length)
+    expect(coverage.drafted.length).toBeGreaterThan(0)
+  })
+
+  it('holds the undrafted trust provisions to a list that only shrinks', () => {
+    // trust.provisions.* is the one root where this measurement is exact:
+    // buildNodeEstateContext derives no flag from it, and no clause condition
+    // names it, so a provision missing here really is read by nothing.
+    const undrafted = coverage.worksheetOnly
+      .concat(coverage.unreferenced)
+      .filter(dataPath => dataPath.startsWith('trust.provisions.'))
+      .sort()
+
+    expect(
+      undrafted.filter(dataPath => !UNDRAFTED_TRUST_PROVISIONS.includes(dataPath)),
+      'a new trust provision is captured but drafted by nothing — add the clause, or add it to UNDRAFTED_TRUST_PROVISIONS with a reason',
+    ).toEqual([])
+
+    expect(
+      UNDRAFTED_TRUST_PROVISIONS.filter(dataPath => !undrafted.includes(dataPath)),
+      'a listed provision now reaches a drafted document — remove it from UNDRAFTED_TRUST_PROVISIONS',
+    ).toEqual([])
   })
 })
