@@ -577,12 +577,12 @@ export function useDesignSheetState({
     router.refresh()
   }, [commitSheet, router])
 
-  const exportDesignSheet = useCallback(async (format?: 'json') => {
+  const exportDesignSheet = useCallback(async (format?: 'json' | 'json-docx') => {
     setExporting(true)
     try {
       const saved = await persistSheet()
       if (!saved) return
-      const query = format === 'json' ? '?format=json' : ''
+      const query = format ? `?format=${format}` : ''
       const response = await fetch(`/api/admin/matters/${matterId}/design-sheet/export${query}`)
       if (!response.ok) {
         const result = await response.json().catch(() => ({})) as ApiErrorResponse
@@ -592,6 +592,7 @@ export function useDesignSheetState({
       const disposition = response.headers.get('Content-Disposition') ?? ''
       const filenameMatch = disposition.match(/filename="([^"]+)"/)
       const filename = filenameMatch?.[1] ?? (format === 'json' ? 'generator-data.json' : 'design-sheet.docx')
+      // json-docx also falls back to .docx above, which matches its payload.
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
@@ -600,7 +601,7 @@ export function useDesignSheetState({
       anchor.click()
       anchor.remove()
       URL.revokeObjectURL(url)
-      toast.success(format === 'json' ? 'Generator data exported' : 'Design sheet exported')
+      toast.success(format ? 'Generator data exported' : 'Design sheet exported')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to export design sheet'
       toast.error(message)
@@ -611,6 +612,9 @@ export function useDesignSheetState({
 
   const handleExportDesignSheet = useCallback(() => exportDesignSheet(), [exportDesignSheet])
   const handleExportGeneratorData = useCallback(() => exportDesignSheet('json'), [exportDesignSheet])
+  // The Word-wrapped variant exists because Mike's uploads only accept office
+  // file types; the body is the same JSON, ready to attach to a Mike chat.
+  const handleExportGeneratorDataDocx = useCallback(() => exportDesignSheet('json-docx'), [exportDesignSheet])
 
   return {
     isLP,
@@ -641,6 +645,7 @@ export function useDesignSheetState({
     handleImportedDesignSheetFields,
     handleExportDesignSheet,
     handleExportGeneratorData,
+    handleExportGeneratorDataDocx,
     applyPlanStructurePatch,
     // readiness
     readiness,

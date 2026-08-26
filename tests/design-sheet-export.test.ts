@@ -49,13 +49,30 @@ describe('design sheet Word export', () => {
     const toolbar = fs.readFileSync(path.join(process.cwd(), 'components/guided/DesignToolbarActions.tsx'), 'utf8')
 
     // The route returns the raw toEstateGeneratorData() object when asked for json.
-    expect(route).toContain("req.nextUrl.searchParams.get('format') === 'json'")
+    expect(route).toContain("req.nextUrl.searchParams.get('format')")
+    expect(route).toContain("format === 'json'")
     expect(route).toContain('Generator-Data-')
     // The hook exposes a JSON variant that reuses the same save-then-download flow.
     expect(state).toContain("const handleExportGeneratorData = useCallback(() => exportDesignSheet('json')")
-    expect(state).toContain("format === 'json' ? '?format=json' : ''")
+    expect(state).toContain("const query = format ? `?format=${format}` : ''")
     // The screen wires it into the toolbar's export menu.
     expect(shell).toContain('onExportJson={handleExportGeneratorData}')
     expect(toolbar).toContain('Export generator data (JSON)')
+  })
+
+  it('offers a docx-wrapped generator-data export that Mike uploads accept', () => {
+    const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/design-sheet/export/route.ts'), 'utf8')
+    const shell = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'), 'utf8')
+    const state = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/useDesignSheetState.ts'), 'utf8')
+    const toolbar = fs.readFileSync(path.join(process.cwd(), 'components/guided/DesignToolbarActions.tsx'), 'utf8')
+
+    // The route wraps the same generator JSON in a minimal Word document,
+    // because Mike's uploads only accept office file types.
+    expect(route).toContain("format === 'json-docx'")
+    expect(route).toContain('JSON.stringify(data, null, 2)')
+    expect(route).toContain('Packer.toBuffer')
+    expect(state).toContain("exportDesignSheet('json-docx')")
+    expect(shell).toContain('onExportJsonDocx={handleExportGeneratorDataDocx}')
+    expect(toolbar).toContain('Export generator data for Mike (.docx)')
   })
 })

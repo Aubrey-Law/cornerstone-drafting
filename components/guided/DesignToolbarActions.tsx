@@ -17,6 +17,8 @@ interface DesignToolbarActionsProps {
   onExport: () => void
   /** Downloads the raw generator-data JSON consumed by external drafting tooling. */
   onExportJson?: () => void
+  /** Downloads the generator data wrapped in a .docx, the envelope Mike's uploads accept. */
+  onExportJsonDocx?: () => void
   saveLabel: string
   saving: boolean
   exporting: boolean
@@ -37,6 +39,7 @@ export function DesignToolbarActions({
   onSave,
   onExport,
   onExportJson,
+  onExportJsonDocx,
   saveLabel,
   saving,
   exporting,
@@ -85,6 +88,12 @@ export function DesignToolbarActions({
             <DropdownMenuItem onSelect={onExportJson} disabled={exporting} className="text-xs">
               <Braces size={14} />
               Export generator data (JSON)
+            </DropdownMenuItem>
+          )}
+          {onExportJsonDocx && (
+            <DropdownMenuItem onSelect={onExportJsonDocx} disabled={exporting} className="text-xs">
+              <Braces size={14} />
+              Export generator data for Mike (.docx)
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

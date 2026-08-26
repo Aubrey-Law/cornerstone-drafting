@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Document, Packer, Paragraph, TextRun } from 'docx'
 import PizZip from 'pizzip'
 import { requireAdmin } from '@/lib/apiAuth'
 import { buildDraftPayload, resolveMatterId } from '@/lib/buildDraftPayload'
@@ -63,13 +64,42 @@ export async function GET(req: NextRequest, { params }: Params) {
     // templates consume — as a download. This is the crossing artifact for
     // external drafting tooling (the aubreylaw-drafting assembler): the design
     // sheet's decisions, fully assembled, without rendering any documents.
-    if (req.nextUrl.searchParams.get('format') === 'json') {
+    const format = req.nextUrl.searchParams.get('format')
+    if (format === 'json') {
       const filename = safeHeaderFilename(
         `Generator-Data-${clientSlug(payload.client.full_name)}-${new Date().toISOString().slice(0, 10)}.json`,
       )
       return NextResponse.json(data, {
         status: 200,
         headers: {
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    // ?format=json-docx wraps the same JSON in a minimal Word document. Mike
+    // only accepts office file types for uploads (pdf/docx/doc/xlsx/pptx/…),
+    // so this is the upload-ready envelope: the body is the pretty-printed
+    // JSON verbatim, one paragraph per line, monospace.
+    if (format === 'json-docx') {
+      const jsonText = JSON.stringify(data, null, 2)
+      const doc = new Document({
+        sections: [{
+          children: jsonText.split('\n').map(line => new Paragraph({
+            children: [new TextRun({ text: line, font: 'Courier New', size: 18 })],
+            spacing: { after: 0 },
+          })),
+        }],
+      })
+      const buffer = await Packer.toBuffer(doc)
+      const filename = safeHeaderFilename(
+        `Generator-Data-${clientSlug(payload.client.full_name)}-${new Date().toISOString().slice(0, 10)}.docx`,
+      )
+      return new NextResponse(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          'Content-Type': DOCX_CONTENT_TYPE,
           'Content-Disposition': `attachment; filename="${filename}"`,
           'Cache-Control': 'no-store',
         },
