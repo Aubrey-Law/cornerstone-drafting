@@ -8,6 +8,7 @@ import {
   type TrustDetailsProvisions,
   type TrustNameFormat,
 } from '@/lib/designSheetTrustDetails'
+import { readDualWriteProvision } from '@/lib/designSheet/dualWriteProvisions'
 import type { StaggeredTier } from '@/types/database'
 import type { DesignSheetRow } from '@/lib/draftPayload/types'
 
@@ -137,9 +138,12 @@ export function defaultDraftPayloadTrustProvisions(
 
 export function draftPayloadTrustProvisions(sheet: TrustProvisionsInput): DraftPayloadTrustProvisions {
   const details = getTrustDetails(sheet)
-  const substanceAbuse = details.include_substance_abuse || (sheet.provision_substance_abuse ?? '').toLowerCase() === 'yes'
-  const creditorDivorce = details.include_creditor_divorce_provisions || (sheet.provision_married_beneficiary ?? '').toLowerCase() === 'yes'
-  const noContest = details.include_no_contest_clause || sheet.no_contest_clause === 'include'
+  // Three answers are stored in both the namespace and a legacy column. The
+  // merge lives in lib/designSheet/dualWriteProvisions.ts so the design sheet
+  // and the generator cannot disagree about what it means — see #344.
+  const substanceAbuse = readDualWriteProvision(sheet, 'substance_abuse')
+  const creditorDivorce = readDualWriteProvision(sheet, 'creditor_divorce')
+  const noContest = readDualWriteProvision(sheet, 'no_contest')
 
   return {
     ...details,
