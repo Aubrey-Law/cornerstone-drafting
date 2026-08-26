@@ -59,6 +59,23 @@ export async function GET(req: NextRequest, { params }: Params) {
     const data = toEstateGeneratorData(payload) as unknown as NodeEstateData
     const state = payload.client.state ?? 'MA'
 
+    // ?format=json returns the raw generator data — the same object the
+    // templates consume — as a download. This is the crossing artifact for
+    // external drafting tooling (the aubreylaw-drafting assembler): the design
+    // sheet's decisions, fully assembled, without rendering any documents.
+    if (req.nextUrl.searchParams.get('format') === 'json') {
+      const filename = safeHeaderFilename(
+        `Generator-Data-${clientSlug(payload.client.full_name)}-${new Date().toISOString().slice(0, 10)}.json`,
+      )
+      return NextResponse.json(data, {
+        status: 200,
+        headers: {
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
     const result = await generateNodeEstatePackage({
       data,
       packageName: payload.trust?.separate_trusts
