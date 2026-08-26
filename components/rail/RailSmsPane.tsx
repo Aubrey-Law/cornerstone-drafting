@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { ArrowRight, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { contactPickerKeyAction } from '@/lib/contactPickerKeyboard'
 import { usePhoneDirectory, type DirectoryEntry } from '@/components/softphone/usePhoneDirectory'
@@ -240,7 +240,8 @@ export function RailSmsPane({ smsConfigured }: RailSmsPaneProps) {
         {/* ── composer ──────────────────────────────────────────────── */}
         {smsConfigured ? (
           <div className="space-y-1.5">
-            <Textarea
+            <ResizableTextarea
+              handleLabel="Resize text message"
               className="min-h-32 text-sm"
               maxLength={maxChars}
               disabled={!recipient}

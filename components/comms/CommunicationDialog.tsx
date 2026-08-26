@@ -6,7 +6,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { DraftWithAiButton } from '@/components/matter/DraftWithAiButton'
 import { ManualEmailComposer } from '@/components/rail/RailEmailPane'
 import { MAX_LEAD_SMS_BODY_LENGTH, MAX_SMS_BODY_LENGTH } from '@/lib/sms/constants'
@@ -166,8 +166,9 @@ export function CommunicationDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="communication-dialog-body">Text message</Label>
-            <Textarea
+            <ResizableTextarea
               id="communication-dialog-body"
+              handleLabel="Resize text message"
               className="min-h-40"
               maxLength={maxChars}
               placeholder={`Write to ${firstName}, or let AI draft it…`}

@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import {
   Select,
   SelectContent,
@@ -97,7 +97,13 @@ export function EmailMessagesSection({
               <Input id="email-subject" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
             </div>
           </div>
-          <Textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} placeholder="Plain-text email body…" rows={5} />
+          <ResizableTextarea
+            handleLabel="Resize email body"
+            value={emailBody}
+            onChange={e => setEmailBody(e.target.value)}
+            placeholder="Plain-text email body…"
+            rows={5}
+          />
           <div className="flex flex-wrap gap-2">
             {matterId && (
               <DraftWithAiButton matterId={matterId} channel="email" notes={emailBody} onDraft={applyEmailDraft} />

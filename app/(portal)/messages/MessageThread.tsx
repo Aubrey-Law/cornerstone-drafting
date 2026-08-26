@@ -3,7 +3,7 @@
 import { useCallback, useRef, useEffect, useMemo, useState, useTransition } from 'react'
 import { sendMessage, type Message } from './actions'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { ResizableTextarea } from '@/components/ui/drag-resize'
 import { cn } from '@/lib/utils'
 import { getFirmConfig } from '@/lib/firmConfig'
 import { useMessagesRealtime, type RealtimeMessageRow } from '@/lib/messages/useMessagesRealtime'
@@ -204,13 +204,16 @@ export default function MessageThread({ matterId, messages: initial, clientUserI
 
       <div className="sticky bottom-0 border-t border-border bg-background px-4 py-3">
         <div className="flex items-end gap-2">
-          <Textarea
+          <ResizableTextarea
+            handleLabel="Resize the message box"
+            handleEdge="top"
+            containerClassName="flex-1"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Write a message…"
             rows={2}
-            className="flex-1 resize-none text-base md:text-sm"
+            className="resize-none text-base md:text-sm"
             disabled={isPending}
           />
           <Button
