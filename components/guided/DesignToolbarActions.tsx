@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, Copy, Download, Loader2, Upload } from 'lucide-react'
+import { Braces, ChevronDown, Copy, Download, Loader2, Upload } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,8 @@ interface DesignToolbarActionsProps {
   onImport: () => void
   onSave: () => void
   onExport: () => void
+  /** Downloads the raw generator-data JSON consumed by external drafting tooling. */
+  onExportJson?: () => void
   saveLabel: string
   saving: boolean
   exporting: boolean
@@ -34,6 +36,7 @@ export function DesignToolbarActions({
   onImport,
   onSave,
   onExport,
+  onExportJson,
   saveLabel,
   saving,
   exporting,
@@ -78,6 +81,12 @@ export function DesignToolbarActions({
             <Download size={14} />
             Export design sheet
           </DropdownMenuItem>
+          {onExportJson && (
+            <DropdownMenuItem onSelect={onExportJson} disabled={exporting} className="text-xs">
+              <Braces size={14} />
+              Export generator data (JSON)
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     )
@@ -105,6 +114,12 @@ export function DesignToolbarActions({
         {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
         Export
       </button>
+      {onExportJson && (
+        <button type="button" onClick={onExportJson} disabled={pending || exporting} style={btnStyle()}>
+          <Braces size={14} />
+          JSON
+        </button>
+      )}
     </>
   )
 }

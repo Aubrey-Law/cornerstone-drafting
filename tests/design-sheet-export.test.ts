@@ -37,8 +37,25 @@ describe('design sheet Word export', () => {
 
     expect(shell).toContain('onExport={handleExportDesignSheet}')
     expect(shell).toContain('DesignToolbarActions')
-    expect(state).toContain('const handleExportDesignSheet = useCallback(async () =>')
+    expect(state).toContain('const exportDesignSheet = useCallback(async (format?:')
     expect(state).toContain('const saved = await persistSheet()')
     expect(state).toContain('/api/admin/matters/${matterId}/design-sheet/export')
+  })
+
+  it('offers a generator-data JSON export alongside the Word export', () => {
+    const route = fs.readFileSync(path.join(process.cwd(), 'app/api/admin/matters/[id]/design-sheet/export/route.ts'), 'utf8')
+    const shell = fs.readFileSync(path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/DesignSheetPage.tsx'), 'utf8')
+    const state = fs.readFileSync(path.join(process.cwd(), 'lib/designSheet/useDesignSheetState.ts'), 'utf8')
+    const toolbar = fs.readFileSync(path.join(process.cwd(), 'components/guided/DesignToolbarActions.tsx'), 'utf8')
+
+    // The route returns the raw toEstateGeneratorData() object when asked for json.
+    expect(route).toContain("req.nextUrl.searchParams.get('format') === 'json'")
+    expect(route).toContain('Generator-Data-')
+    // The hook exposes a JSON variant that reuses the same save-then-download flow.
+    expect(state).toContain("const handleExportGeneratorData = useCallback(() => exportDesignSheet('json')")
+    expect(state).toContain("format === 'json' ? '?format=json' : ''")
+    // The screen wires it into the toolbar's export menu.
+    expect(shell).toContain('onExportJson={handleExportGeneratorData}')
+    expect(toolbar).toContain('Export generator data (JSON)')
   })
 })

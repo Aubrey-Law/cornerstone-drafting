@@ -577,12 +577,13 @@ export function useDesignSheetState({
     router.refresh()
   }, [commitSheet, router])
 
-  const handleExportDesignSheet = useCallback(async () => {
+  const exportDesignSheet = useCallback(async (format?: 'json') => {
     setExporting(true)
     try {
       const saved = await persistSheet()
       if (!saved) return
-      const response = await fetch(`/api/admin/matters/${matterId}/design-sheet/export`)
+      const query = format === 'json' ? '?format=json' : ''
+      const response = await fetch(`/api/admin/matters/${matterId}/design-sheet/export${query}`)
       if (!response.ok) {
         const result = await response.json().catch(() => ({})) as ApiErrorResponse
         throw new Error(result.error ?? 'Unable to export design sheet')
@@ -590,7 +591,7 @@ export function useDesignSheetState({
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition') ?? ''
       const filenameMatch = disposition.match(/filename="([^"]+)"/)
-      const filename = filenameMatch?.[1] ?? 'design-sheet.docx'
+      const filename = filenameMatch?.[1] ?? (format === 'json' ? 'generator-data.json' : 'design-sheet.docx')
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
@@ -599,7 +600,7 @@ export function useDesignSheetState({
       anchor.click()
       anchor.remove()
       URL.revokeObjectURL(url)
-      toast.success('Design sheet exported')
+      toast.success(format === 'json' ? 'Generator data exported' : 'Design sheet exported')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to export design sheet'
       toast.error(message)
@@ -607,6 +608,9 @@ export function useDesignSheetState({
       setExporting(false)
     }
   }, [matterId, persistSheet])
+
+  const handleExportDesignSheet = useCallback(() => exportDesignSheet(), [exportDesignSheet])
+  const handleExportGeneratorData = useCallback(() => exportDesignSheet('json'), [exportDesignSheet])
 
   return {
     isLP,
@@ -636,6 +640,7 @@ export function useDesignSheetState({
     // import/export
     handleImportedDesignSheetFields,
     handleExportDesignSheet,
+    handleExportGeneratorData,
     applyPlanStructurePatch,
     // readiness
     readiness,
