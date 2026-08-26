@@ -79,6 +79,13 @@ that a fresh VM needs and must be done manually (kept out of the update script o
   (or safe portal redirect: `/intake`, `/documents`, `/messages`).
 - Run `supabase db reset` locally after pulling migrations. Never use `--linked` against the
   shared firm database.
+- **"N unpushed commit(s)" after a PR merges is usually a stale ref, not lost work.** GitHub
+  deletes the head branch on merge, but the local remote-tracking ref still points at the
+  pre-merge SHA, so a stop hook comparing the two reports commits that are already on `main`.
+  Check before acting: `git log origin/main..HEAD` — empty means there is nothing unmerged.
+  Then `git remote prune origin`. Do **not** push to clear the warning: it recreates a branch
+  containing only merged history, and the standing "open a PR for any pushed branch" rule
+  turns that into a redundant PR. Push only when `git log origin/main..HEAD` is non-empty.
 
 ### Verification baselines
 
