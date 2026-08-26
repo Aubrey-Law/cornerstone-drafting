@@ -243,6 +243,66 @@ describe('computeDesignSheetReadiness', () => {
     expect(readiness.blockers.every(item => item.targetId.length > 0)).toBe(true)
   })
 
+  it('holds drafting when an "other" advance directive has no instructions behind it', () => {
+    // `other` is truthy, so it satisfies the directive blocker on its own — but
+    // the three hcp_*_advance_* flags are all false for it and the text renders
+    // through `| optional`, so an empty one drafts no life-support language and
+    // leaves no [[ MISSING ]] marker. The only shape where answering a question
+    // makes the document less complete than leaving it blank.
+    const withoutText = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        decisions: {
+          document_inclusions: { healthcare: true },
+          healthcare_provisions: { client_advance_directive: 'other' },
+        },
+      }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    const missing = withoutText.blockers.find(
+      item => item.targetField === 'healthcare_provisions.client_advance_directive_other',
+    )
+    expect(missing).toBeDefined()
+    expect(missing!.blocking).toBe(true)
+    // It points at the text, not the direction: the direction is answered.
+    expect(withoutText.blockers.map(item => item.targetField))
+      .not.toContain('healthcare_provisions.client_advance_directive')
+
+    const withText = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        decisions: {
+          document_inclusions: { healthcare: true },
+          healthcare_provisions: {
+            client_advance_directive: 'other',
+            client_advance_directive_other: 'Continue while recovery remains possible.',
+          },
+        },
+      }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+    expect(withText.blockers.map(item => item.targetField))
+      .not.toContain('healthcare_provisions.client_advance_directive_other')
+
+    // A standard direction never needs the text.
+    const standard = computeDesignSheetReadiness({
+      sheet: makeSheet({
+        decisions: {
+          document_inclusions: { healthcare: true },
+          healthcare_provisions: { client_advance_directive: 'do_not_prolong_life' },
+        },
+      }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+    expect(standard.blockers.map(item => item.targetField))
+      .not.toContain('healthcare_provisions.client_advance_directive_other')
+  })
+
   it('reports a guardian blocker when minor children lack a guardian nomination', () => {
     const readiness = computeDesignSheetReadiness({
       sheet: makeSheet({

@@ -1,6 +1,9 @@
 import { getDocumentInclusions, getEstatePlanDesignSetup, type DesignDocumentInclusions } from '@/lib/designSheetDocumentInclusions'
 import { dpoaCoagentServingDecided, dpoaCompensationDecided, getDesignSheetDpoaProvisions } from '@/lib/designSheetDpoaProvisions'
-import { getDesignSheetHealthcareProvisions } from '@/lib/designSheetHealthcareProvisions'
+import {
+  getDesignSheetHealthcareProvisions,
+  type AdvanceDirectiveChoice,
+} from '@/lib/designSheetHealthcareProvisions'
 import { namedPrincipalSlots } from '@/lib/designSheet/fiduciarySlotOrdering'
 import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
@@ -133,6 +136,25 @@ function alternateContactId(slots: FiduciarySlotSeries | null | undefined) {
 
 function isMarried(sheet: DesignSheet) {
   return sheet.matter_type === 'couple'
+}
+
+/**
+ * `other` is a real answer to the life-support question, so it satisfies the
+ * directive blocker — but on its own it says nothing. The three
+ * `hcp_{party}_advance_*` context flags are all false for `other`, so a
+ * directive left without custom text drafts none of the standard directions
+ * and no substitute. The text renders through `| optional`, so it leaves no
+ * `[[ MISSING ]]` marker either: the omission is silent.
+ *
+ * This is the one shape where picking a value makes the document *less*
+ * complete than leaving it unanswered, so the text is required whenever the
+ * direction is `other`.
+ */
+function advanceDirectiveMissingCustomText(
+  directive: AdvanceDirectiveChoice | null,
+  customText: string | null,
+): boolean {
+  return directive === 'other' && !customText
 }
 
 function blocker(
@@ -343,6 +365,16 @@ export function computeDesignSheetReadiness({
       blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'advance health directive', 'healthcare_provisions.client_advance_directive', 'client-decision'),
     documentInclusions.healthcare && spouseFiduciariesNeeded && !healthcareProvisions.spouse_advance_directive &&
       blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse advance health directive', 'healthcare_provisions.spouse_advance_directive', 'client-decision'),
+    // Points at the text rather than the direction: the direction is answered,
+    // it is the instructions behind it that are missing.
+    documentInclusions.healthcare && advanceDirectiveMissingCustomText(
+      healthcareProvisions.client_advance_directive,
+      healthcareProvisions.client_advance_directive_other,
+    ) && blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'custom advance directive instructions', 'healthcare_provisions.client_advance_directive_other', 'client-decision'),
+    documentInclusions.healthcare && spouseFiduciariesNeeded && advanceDirectiveMissingCustomText(
+      healthcareProvisions.spouse_advance_directive,
+      healthcareProvisions.spouse_advance_directive_other,
+    ) && blocker(DESIGN_SECTION_IDS.healthcareDirectives, 'spouse custom advance directive instructions', 'healthcare_provisions.spouse_advance_directive_other', 'client-decision'),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const collegePrepBlockers = collegePrep
