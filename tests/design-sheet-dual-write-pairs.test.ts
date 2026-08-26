@@ -2,34 +2,29 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import {
+  DUAL_WRITE_PROVISIONS,
+  dualWriteProvisionWriter,
+  readDualWriteProvision,
+  type DualWriteProvision,
+} from '@/lib/designSheet/dualWriteProvisions'
 import { draftPayloadTrustProvisions } from '@/lib/draftPayload/trustProvisions'
-import { setTrustDetails } from '@/lib/designSheetTrustDetails'
+import { getTrustDetails, setTrustDetails } from '@/lib/designSheetTrustDetails'
 
 /**
- * Three trust answers are stored twice — once in `decisions.trust_details`, once
- * in a legacy design-sheet column — and `draftPayloadTrustProvisions` OR-merges
- * the pair. An OR cannot tell "nobody answered" from "answered no", so whenever
- * the two halves disagree the `include` side wins silently.
+ * Three trust answers live in both `decisions.trust_details` and a legacy
+ * design-sheet column, merged with an OR. An OR cannot tell "nobody answered"
+ * from "answered no", so a control that touches one half alone leaves the two
+ * disagreeing — and the `include` side wins silently, with both stores holding
+ * real values so nothing raises a `[[ MISSING ]]` marker or a readiness
+ * blocker. #344 was that reaching a signed will.
  *
- * That is only safe while every control reads and writes BOTH halves. #344 was
- * what happens when one does not: the will section's no-contest row read and
- * wrote the column alone, so ticking the trust checkbox and then setting the
- * will to Omit left the sheet showing "Omit" on a will that drafted the clause
- * — no `[[ MISSING ]]` marker and no readiness blocker, because both stores
- * held a real value and merely disagreed.
- *
- * These tests pin the invariant rather than the two instances of it.
+ * `lib/designSheet/dualWriteProvisions.ts` now owns both halves. These tests
+ * keep it that way: nothing else may read or write a half, and the reader the
+ * UI shows must be the same one the generator drafts from.
  */
-const DUAL_WRITE_PAIRS = [
-  { namespaceKey: 'include_substance_abuse', column: 'provision_substance_abuse' },
-  { namespaceKey: 'include_creditor_divorce_provisions', column: 'provision_married_beneficiary' },
-  { namespaceKey: 'include_no_contest_clause', column: 'no_contest_clause' },
-] as const
-
 const SECTIONS_DIR = path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections')
-
-/** The two control components an attorney answers one of these questions with. */
-const CONTROL_TAG = /<(?:DecisionRow|DesignSheetCheckboxOption)\b/g
+const PROVISIONS = Object.keys(DUAL_WRITE_PROVISIONS) as DualWriteProvision[]
 
 function mentions(source: string, identifier: string): boolean {
   // `\b` keeps `no_contest_clause` from matching inside
@@ -37,59 +32,85 @@ function mentions(source: string, identifier: string): boolean {
   return new RegExp(`\\b${identifier}\\b`).test(source)
 }
 
-/** Split a section file into one chunk per control, so pairing is checked per question. */
-function controlChunks(source: string): string[] {
-  const starts = Array.from(source.matchAll(CONTROL_TAG), match => match.index)
-  return starts.map((start, index) => source.slice(start, starts[index + 1] ?? source.length))
-}
-
 describe('trust provision dual-write pairs', () => {
-  it('knows about every OR-merged pair in draftPayloadTrustProvisions', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/trustProvisions.ts'), 'utf8')
-    const body = source.slice(source.indexOf('export function draftPayloadTrustProvisions'))
-    const merged = Array.from(body.matchAll(/details\.(\w+)\s*\|\|/g), match => match[1]).sort()
-
-    expect(
-      merged,
-      'a namespace flag is OR-merged with a legacy column that DUAL_WRITE_PAIRS does not list — add it here so its controls get checked too',
-    ).toEqual(DUAL_WRITE_PAIRS.map(pair => pair.namespaceKey).sort())
-  })
-
-  it('reads and writes both halves in every control that touches one', () => {
-    const unpaired: string[] = []
+  it('is the only thing that touches either half from a design-sheet section', () => {
+    const offenders: string[] = []
 
     for (const fileName of fs.readdirSync(SECTIONS_DIR).filter(name => name.endsWith('.tsx')).sort()) {
       const source = fs.readFileSync(path.join(SECTIONS_DIR, fileName), 'utf8')
-      for (const chunk of controlChunks(source)) {
-        for (const { namespaceKey, column } of DUAL_WRITE_PAIRS) {
-          const hasKey = mentions(chunk, namespaceKey)
-          const hasColumn = mentions(chunk, column)
-          if (hasKey === hasColumn) continue
-          unpaired.push(
-            `${fileName}: a control touches ${hasKey ? namespaceKey : column} but not ${hasKey ? column : namespaceKey} — ${chunk.trim().split('\n')[0].slice(0, 100)}`,
-          )
+      for (const provision of PROVISIONS) {
+        const { namespaceKey, column } = DUAL_WRITE_PROVISIONS[provision]
+        for (const half of [namespaceKey, column]) {
+          if (mentions(source, half)) offenders.push(`${fileName} references ${half}`)
         }
       }
     }
 
     expect(
-      unpaired,
-      'a control reads or writes one half of a dual-write pair — the design sheet will show one answer while the document drafts the other',
+      offenders,
+      'a section reads or writes one half of a dual-write pair directly — use readDualWriteProvision / dualWriteProvisionWriter so both halves move together',
     ).toEqual([])
   })
 
-  it('resolves a disagreeing pair to include, which is why pairing matters', () => {
-    // Not a bug to fix — the documented consequence the pairing above prevents.
-    const ticked = { decisions: setTrustDetails({ decisions: {} }, { include_no_contest_clause: true }) }
-    const disagreeing = { ...ticked, no_contest_clause: 'omit' as const }
+  it('leaves no second copy of the merge in draftPayloadTrustProvisions', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'lib/draftPayload/trustProvisions.ts'), 'utf8')
+    const body = source.slice(source.indexOf('export function draftPayloadTrustProvisions'))
+    const inlineMerges = Array.from(body.matchAll(/details\.(\w+)\s*\|\|/g), match => match[1])
 
-    expect(draftPayloadTrustProvisions(disagreeing).include_no_contest_clause).toBe(true)
-    expect(draftPayloadTrustProvisions({ ...ticked, no_contest_clause: 'include' as const }).include_no_contest_clause).toBe(true)
-
-    const agreed = {
-      decisions: setTrustDetails({ decisions: {} }, { include_no_contest_clause: false }),
-      no_contest_clause: 'omit' as const,
+    expect(
+      inlineMerges,
+      'a namespace flag is OR-merged with a legacy column inline — move the pair into DUAL_WRITE_PROVISIONS so the UI reads the same merge',
+    ).toEqual([])
+    for (const provision of PROVISIONS) {
+      expect(body).toContain(`readDualWriteProvision(sheet, '${provision}')`)
     }
-    expect(draftPayloadTrustProvisions(agreed).include_no_contest_clause).toBe(false)
+  })
+
+  it('writes both halves from a single call', () => {
+    for (const provision of PROVISIONS) {
+      const { column, encode } = DUAL_WRITE_PROVISIONS[provision]
+      for (const enabled of [true, false]) {
+        const calls: Array<[string, unknown]> = []
+        dualWriteProvisionWriter(((key: string, value: unknown) => {
+          calls.push([key, value])
+        }) as never)(provision, enabled)
+
+        expect(calls.map(([key]) => key), `${provision} must write both halves`).toEqual(['decisions', column])
+        expect(calls[1][1]).toBe(encode(enabled))
+
+        // The `decisions` half is an updater; run it and confirm the namespace moved too.
+        const updater = calls[0][1] as (previous: { decisions: unknown }) => unknown
+        const decisions = updater({ decisions: {} })
+        expect(readDualWriteProvision({ decisions, [column]: encode(enabled) } as never, provision)).toBe(enabled)
+      }
+    }
+  })
+
+  it('shows the attorney exactly what the generator drafts', () => {
+    // Every combination the two halves can be in, including the disagreements
+    // that only arise from legacy data now that a single writer owns both.
+    for (const namespace of [true, false]) {
+      for (const columnValue of ['include', 'omit', null]) {
+        const sheet = {
+          decisions: setTrustDetails({ decisions: {} }, { include_no_contest_clause: namespace }),
+          no_contest_clause: columnValue,
+        }
+
+        expect(
+          readDualWriteProvision(sheet as never, 'no_contest'),
+          `namespace=${namespace} column=${columnValue}: the sheet and the generator must agree`,
+        ).toBe(draftPayloadTrustProvisions(sheet as never).include_no_contest_clause)
+      }
+    }
+  })
+
+  it('keeps a pre-namespace matter answered', () => {
+    // The legacy column is the only half an old matter carries; dropping it
+    // would silently turn every one of these answers off.
+    const legacyOnly = { decisions: {}, provision_substance_abuse: 'yes' }
+
+    expect(getTrustDetails(legacyOnly).include_substance_abuse).toBe(false)
+    expect(readDualWriteProvision(legacyOnly as never, 'substance_abuse')).toBe(true)
+    expect(draftPayloadTrustProvisions(legacyOnly as never).include_substance_abuse).toBe(true)
   })
 })

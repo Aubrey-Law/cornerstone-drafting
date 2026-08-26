@@ -37,21 +37,11 @@ describe('estate plan design trust selection', () => {
     expect(source).toContain('Not available with Will — Testamentary Trust')
   })
 
-  it('keeps the will no-contest control on the same pair of stores as the trust checkbox', () => {
-    const source = fs.readFileSync(
-      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/WillProvisionsSection.tsx'),
-      'utf8',
-    )
-
-    // The decision is stored twice and toGeneratorData ORs the namespace flag
-    // over the column, so a control that reads or writes only the column shows
-    // "Omit" on a will that drafts the clause anyway.
-    expect(source).toContain(
-      "getTrustDetails(sheet).include_no_contest_clause || sheet.no_contest_clause === 'include'",
-    )
-    expect(source).toContain("setTrustDetails(previous, { include_no_contest_clause: v === 'include' })")
-    expect(source).not.toContain("value={sheet.no_contest_clause ?? 'omit'}")
-  })
+  // The #344 no-contest regression test lived here and pinned the shape this
+  // section used to have. Both halves of that pair now live behind
+  // lib/designSheet/dualWriteProvisions.ts, and every assertion it made is
+  // covered more strongly by tests/design-sheet-dual-write-pairs.test.ts —
+  // which forbids this section from naming either half at all.
 })
 
 describe('will personal representative powers', () => {

@@ -46,9 +46,11 @@ import {
   PrefilledInput,
   SectionBlock,
   SectionHelp,
-  toYesNo,
-  yesNoField,
 } from './shared'
+import {
+  dualWriteProvisionWriter,
+  readDualWriteProvision,
+} from '@/lib/designSheet/dualWriteProvisions'
 import { isMarriedSheet as isMarried } from './fiduciary-blocks'
 import { TrustBeneficiariesSection } from './TrustBeneficiariesSection'
 
@@ -219,6 +221,9 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
 
   const updateTrustDetails = (patch: Parameters<typeof setTrustDetails>[1]) =>
     onChange('decisions', prevSheet => setTrustDetails(prevSheet, patch))
+  // Writes both halves of a legacy dual-write pair in one call, so neither can
+  // be updated without the other.
+  const writeProvision = dualWriteProvisionWriter(onChange)
 
   useEffect(() => {
     if (trustDetails.protect_us_trust_status && !trustDetails.allow_special_trustee) {
@@ -827,20 +832,14 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           <DesignSheetCheckboxOption
             label="Include substance abuse provisions"
             description="Adds provisions allowing the trustee to request examination, suspend distributions, and pay for treatment if a beneficiary is routinely using illegal substances or is clinically dependent on alcohol or legal substances."
-            checked={trustDetails.include_substance_abuse || yesNoField(sheet.provision_substance_abuse)}
-            onChange={checked => {
-              updateTrustDetails({ include_substance_abuse: checked })
-              onChange('provision_substance_abuse', toYesNo(checked))
-            }}
+            checked={readDualWriteProvision(sheet, 'substance_abuse')}
+            onChange={checked => writeProvision('substance_abuse', checked)}
           />
           <DesignSheetCheckboxOption
             label="Include creditor claims and divorce provisions"
             description="Add additional provisions to protect trust assets from beneficiaries' creditors and in the event of a beneficiary's divorce. This allows the trustee to suspend distributions until the judgment or claims are resolved."
-            checked={trustDetails.include_creditor_divorce_provisions || yesNoField(sheet.provision_married_beneficiary)}
-            onChange={checked => {
-              updateTrustDetails({ include_creditor_divorce_provisions: checked })
-              onChange('provision_married_beneficiary', toYesNo(checked))
-            }}
+            checked={readDualWriteProvision(sheet, 'creditor_divorce')}
+            onChange={checked => writeProvision('creditor_divorce', checked)}
           />
           {autoMaritalDeductionSavings ? (
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-foreground">
@@ -884,11 +883,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           <DesignSheetCheckboxOption
             label="Include a no-contest clause in the trust and pour-over will"
             description="Include a 'No Contest' clause in the trust (and pour-over will). This clause discourages beneficiaries from challenging the trust or will, but may not be enforceable."
-            checked={trustDetails.include_no_contest_clause || sheet.no_contest_clause === 'include'}
-            onChange={checked => {
-              updateTrustDetails({ include_no_contest_clause: checked })
-              onChange('no_contest_clause', checked ? 'include' : 'omit')
-            }}
+            checked={readDualWriteProvision(sheet, 'no_contest')}
+            onChange={checked => writeProvision('no_contest', checked)}
           />
           <DesignSheetCheckboxOption
             label="Name specific people in the no-contest clause"
