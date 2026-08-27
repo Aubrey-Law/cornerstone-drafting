@@ -19,7 +19,7 @@ const PRIORITY_TONE: Record<string, string> = {
   low: 'border-border bg-muted text-muted-foreground',
 }
 
-export function CrmTasksCard({ tasks }: { tasks: TaskRow[] }) {
+export function OpenTasksCard({ tasks }: { tasks: TaskRow[] }) {
   return (
     <Card className="min-w-0 gap-0 py-0">
       <CardHeader className="flex-row items-start justify-between border-b border-border py-3">

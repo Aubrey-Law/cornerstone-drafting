@@ -54,7 +54,8 @@ export interface SidebarMattersState {
 export function useSidebarMatters(): SidebarMattersState {
   const { savePreferences, loadPreferences } = useUserPreferences()
   const pathname = usePathname()
-  const activeMatterId = pathname.match(/^\/admin\/matters\/([^/]+)$/)?.[1] ?? null
+  // `new` and `list` are sibling routes under /admin/matters, not matter ids.
+  const activeMatterId = pathname.match(/^\/admin\/matters\/(?!new$|list$)([^/]+)$/)?.[1] ?? null
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [rows, setRows] = useState<{ pinned: MatterNavRow[]; recent: MatterNavRow[] }>({
     pinned: [],

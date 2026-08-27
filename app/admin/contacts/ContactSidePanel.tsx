@@ -9,9 +9,8 @@ import { RecordCommunicationsCard } from '@/components/comms/RecordCommunication
 import { CommunicationDialog, type CommunicationTarget } from '@/components/comms/CommunicationDialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { openStaffSoftphone } from '@/app/admin/components/softphoneEvents'
-import { phoneTelHref } from '@/lib/phone'
-import { practiceAreaLabel } from '@/lib/practiceArea'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
+import { ContactCard } from '@/components/contacts/ContactCard'
 import {
   CONTACT_KIND_LABELS,
   contactRowId,
@@ -22,15 +21,6 @@ interface ContactSidePanelProps {
   contact: ContactDirectoryRow
   smsEnabled: boolean
   onClose: () => void
-}
-
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
-      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-right">{children}</span>
-    </div>
-  )
 }
 
 export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePanelProps) {
@@ -85,8 +75,6 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const location = [contact.city, contact.state].filter(Boolean).join(', ')
-  const tel = phoneTelHref(contact.phone)
   const contactId = contactRowId(contact.id)
   const intakeId = contact.id.startsWith('intake:') ? contact.id.slice('intake:'.length) : null
 
@@ -193,24 +181,7 @@ export function ContactSidePanel({ contact, smsEnabled, onClose }: ContactSidePa
           <p role="alert" className="text-sm text-destructive">{openMatterError}</p>
         )}
 
-        <section className="rounded-md border border-border px-3 py-1.5">
-          <InfoRow label="Email">
-            {contact.email
-              ? <a href={`mailto:${contact.email}`} className="hover:underline">{contact.email}</a>
-              : <span className="text-muted-foreground">—</span>}
-          </InfoRow>
-          <InfoRow label="Phone">
-            {contact.phone
-              ? tel
-                ? <a href={tel} className="hover:underline">{contact.phone}</a>
-                : contact.phone
-              : <span className="text-muted-foreground">—</span>}
-          </InfoRow>
-          {location && <InfoRow label="Location">{location}</InfoRow>}
-          {contact.practice_area && <InfoRow label="Practice">{practiceAreaLabel(contact.practice_area)}</InfoRow>}
-          {contact.matter_number && <InfoRow label="Matter">{contact.matter_number}</InfoRow>}
-          {contact.relationship && <InfoRow label="Relationship">{contact.relationship}</InfoRow>}
-        </section>
+        <ContactCard contact={contact} />
 
         {intakeId && <MarketingProfileCard intakeId={intakeId} />}
 

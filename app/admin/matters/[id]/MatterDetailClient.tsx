@@ -70,6 +70,7 @@ import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
 import { MatterOverviewHero } from './MatterOverviewHero'
+import { MatterOverviewStats } from './MatterOverviewStats'
 import { MatterDetailsCard } from './MatterDetailsCard'
 import { MatterProbateEssentialsCard } from './MatterProbateEssentialsCard'
 import { useMatterDetailsSave } from './useMatterDetailsSave'
@@ -962,6 +963,16 @@ function MatterDetailClientInner({
                 {/* The facts rail moved to the persistent left column, so Overview
                     is a single stack rather than a two-column grid. */}
                 <div className="space-y-4">
+                {/* Where the matter stands, before anything that explains why. */}
+                <MatterOverviewStats
+                  taskCounts={taskCounts}
+                  uploads={unreviewedUploadCounts}
+                  aging={agingSummary ?? null}
+                  signingDate={matter.signing_date ?? null}
+                  nextAppointment={matter.next_appointment ?? null}
+                  onOpenTasks={() => setActiveTab('tasks')}
+                  onOpenDocuments={() => setActiveTab('documents')}
+                />
                 <MatterProgressTimeline
                   matter={matter}
                   details={matterDetails}

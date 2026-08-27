@@ -4,7 +4,7 @@ import { fetchCrmDashboard } from '@/lib/queries/crmDashboard'
 import { PageHeader } from '@/components/PageHeader'
 import { CrmPipelineCard } from './CrmPipelineCard'
 import { CrmStatCards } from './CrmStatCards'
-import { CrmTasksCard } from './CrmTasksCard'
+import { OpenTasksCard } from '@/components/tasks/OpenTasksCard'
 import { LeadSourcesCard } from './LeadSourcesCard'
 import { RecentPeopleTable } from './RecentPeopleTable'
 
@@ -42,7 +42,7 @@ export default async function AdminCrmPage() {
 
       <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-3">
         <LeadSourcesCard sources={snapshot.leadSources} />
-        <CrmTasksCard tasks={tasks} />
+        <OpenTasksCard tasks={tasks} />
         <CrmPipelineCard stages={snapshot.pipeline} />
       </div>
 

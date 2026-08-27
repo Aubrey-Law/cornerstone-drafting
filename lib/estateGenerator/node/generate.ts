@@ -35,6 +35,9 @@ import type {
 } from '@/lib/estateGenerator/node/types'
 import { isNodeEstatePackageSupported } from '@/lib/estateGenerator/node/support'
 import { missingRequiredFields } from '@/lib/estateGenerator/node/validation'
+import { resolveStyleSet } from '@/lib/styleSets/data'
+import { DEFAULT_STYLE_SET } from '@/lib/styleSets/defaults'
+import type { StyleSetSettings } from '@/lib/styleSets/schema'
 
 export interface GenerateNodeEstatePackageArgs {
   data: NodeEstateData
@@ -45,6 +48,12 @@ export interface GenerateNodeEstatePackageArgs {
   clauseSnapshot?: EstateClauseSnapshot
   // Return null to force the bundled template (the same behavior tests get).
   templateResolver?: (bundledPath: string) => Promise<ResolvedDocumentTemplate | null>
+  /**
+   * Formatting for every document in the package. Omitted, the firm's default
+   * style set is read once per package; in tests that read is skipped and the
+   * built-in Garamond sweep applies, matching how templates resolve here.
+   */
+  styleSet?: StyleSetSettings
 }
 
 export interface GenerateEstatePlanDocumentsNodeOptions {
@@ -132,7 +141,15 @@ export async function generateNodeEstatePackage({
   allowDraft = false,
   clauseSnapshot,
   templateResolver,
+  styleSet,
 }: GenerateNodeEstatePackageArgs): Promise<NodeEstateGeneratorResult> {
+  // Once per package, not once per document: every document in a package shares
+  // the firm's formatting, and re-reading it per file would multiply the query
+  // by the eight or so documents a trust package renders.
+  const formatting =
+    styleSet ??
+    (process.env.NODE_ENV === 'test' ? DEFAULT_STYLE_SET : await resolveStyleSet())
+
   const config = loadNodeEstatePackage(packageName, root)
   const packageData = dataForNodeEstatePackage(data, packageName)
   const context = buildNodeEstateContext({ data: packageData, state, root })
@@ -174,6 +191,7 @@ export async function generateNodeEstatePackage({
         templateBuffer: resolved?.buffer,
         context,
         clauses,
+        styleSet: formatting,
       })
 
       for (const marker of rendered.unresolvedMarkers) unresolvedMarkers.add(marker)
