@@ -49,12 +49,30 @@ function proxyToCornerstone(): ProxyOptions {
 
 export default defineConfig(async ({ command }): Promise<UserConfig> => ({
   plugins: [react(), tailwindcss()],
+  /**
+   * Stamped at server start / build time. The pane prints it, so a stale
+   * bundle announces itself instead of being mistaken for broken code.
+   */
+  define: {
+    __BUILD_STAMP__: JSON.stringify(new Date().toISOString().slice(0, 19).replace('T', ' ')),
+  },
   resolve: {
     alias: { '@': resolve(import.meta.dirname, 'src') },
   },
   server: {
     port: PANE_PORT,
     strictPort: true,
+    /**
+     * Word's WebView caches add-in content aggressively, and a cached bundle is
+     * indistinguishable from a bug: the pane keeps running code you have
+     * already changed, and no amount of reloading the dev server dislodges it.
+     * Refusing to let anything be cached is the only reliable answer during
+     * development.
+     */
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      Pragma: 'no-cache',
+    },
     // Minting certs is a dev-server concern: doing it unconditionally makes a
     // production build install a CA into the OS keychain as a side effect.
     https: command === 'serve' ? await httpsOptions() : undefined,

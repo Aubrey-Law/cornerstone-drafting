@@ -105,6 +105,20 @@ Drag `manifest.xml` across and rename it `<GUID>.manifest.xml` — the GUID is t
 `<Id>` in the manifest. A plain `cp` from the terminal is **not** a workaround;
 it hits the identical wall.
 
+**The pane is running code you already changed.** Word caches add-in content
+aggressively, and a cached bundle looks exactly like a bug that will not die.
+The pane prints a `build <timestamp>` line while it starts: if that does not
+move after you restart the dev server, you are looking at a cached copy. Quit
+Word (⌘Q) and clear its cache:
+
+```bash
+rm -rf ~/Library/Containers/com.microsoft.Word/Data/Library/Caches/*
+```
+
+The dev server sends `Cache-Control: no-store` and the page carries the matching
+meta tags, which prevents most of this — but a bundle cached before those landed
+still has to be cleared once by hand.
+
 **Word never shows the add-in.** Confirm the manifest landed:
 `ls ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/`. Then quit Word
 fully; ⌘W is not enough.

@@ -170,6 +170,13 @@ function Waiting({ onSignIn, onRetry }: { onSignIn: () => void; onRetry: () => v
     <Centered>
       <div className="space-y-3 text-center">
         <p>Checking your session…</p>
+        {/*
+          Always visible, not gated behind `stalled`. The one question that
+          cannot be answered by looking at a stuck pane is "is this even the
+          code I just changed?" — Word caches add-in bundles hard enough that
+          it usually is not.
+        */}
+        <p className="text-[11px] text-[color:var(--color-ink-muted)]">build {__BUILD_STAMP__}</p>
         {stalled && (
           <>
             <p className="text-[color:var(--color-ink-muted)]">

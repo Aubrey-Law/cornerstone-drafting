@@ -3,6 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Word's WebView will happily serve a stale pane otherwise. -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
     <title>Cornerstone Drafting</title>
     <!--
       Office.js must load before the bundle: main.tsx calls Office.onReady at
