@@ -46,6 +46,7 @@ type Tab =
  */
 const SETTINGS_SUBROUTES = [
   { href: '/admin/settings/campaigns', label: 'Campaigns' },
+  { href: '/admin/settings/style-sets', label: 'Style sets' },
   { href: '/admin/settings/sync', label: 'Sync' },
 ] as const
 
