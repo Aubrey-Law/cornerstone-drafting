@@ -30,7 +30,7 @@ export interface PersonAddRequest {
   nonce: number
 }
 
-export function MatterPeopleTab({
+export function MatterPeopleTabContent({
   matterId,
   matter,
   initialContacts,
@@ -43,7 +43,7 @@ export function MatterPeopleTab({
   }
 
   return (
-    <TabsContent value="people" className="space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">People</h3>
@@ -82,6 +82,15 @@ export function MatterPeopleTab({
         addRequest={addRequest}
         embedded
       />
+    </div>
+  )
+}
+
+/** The same content as its own tab, for the matter workspace. */
+export function MatterPeopleTab(props: MatterPeopleTabProps) {
+  return (
+    <TabsContent value="people">
+      <MatterPeopleTabContent {...props} />
     </TabsContent>
   )
 }

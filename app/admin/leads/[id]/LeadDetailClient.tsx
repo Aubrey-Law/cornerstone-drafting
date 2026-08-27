@@ -38,13 +38,13 @@ import { MobileRecordSectionSelect } from '@/components/admin/MobileRecordSectio
 import { RecordTasksTab } from '@/components/tasks/RecordTasksTab'
 import { useRecordTaskCounts } from '@/components/tasks/useRecordTaskCounts'
 import type { RecordTaskCounts } from '@/lib/tasks/types'
+import { LeadFieldsRail, LEAD_DETAIL_RAIL_WIDTH } from '@/components/leads/LeadFieldsRail'
 import {
-  LeadFieldsRail,
-  LEAD_DETAIL_RAIL_WIDTH,
+  LeadChannelsCard,
   type LeadChannelField,
   type LeadChannelTarget,
-  type LeadKeyDates,
-} from '@/components/leads/LeadFieldsRail'
+} from '@/components/leads/LeadChannelsCard'
+import { LeadKeyDatesCard, type LeadKeyDates } from '@/components/leads/LeadKeyDatesCard'
 import type { ContactChannel } from '@/lib/contacts/additionalChannels'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
@@ -73,7 +73,7 @@ import type {
   MutableLeadStatus,
 } from '@/lib/leads/viewTypes'
 import type { MatterContact, PipelineMatter } from '@/types/database'
-import { MatterPeopleTab } from '@/app/admin/matters/[id]/MatterPeopleTab'
+import { MatterPeopleTabContent } from '@/app/admin/matters/[id]/MatterPeopleTab'
 
 const AdminIntakeSheet = dynamic(() => import('@/components/AdminIntakeSheet'), { ssr: false })
 const ImportIntakeDialog = dynamic(() => import('@/app/admin/matters/[id]/ImportIntakeDialog'), { ssr: false })
@@ -87,13 +87,10 @@ type LeadSpouse = LeadSpouseRecord
 type LeadActivityRow = LeadActivityViewRow
 
 const LEAD_SECTION_OPTIONS: readonly { value: LeadTab; label: string }[] = [
-  { value: 'plan', label: 'Plan' },
-  { value: 'tasks', label: 'Tasks' },
-  { value: 'timeline', label: 'Timeline' },
-  { value: 'communications', label: 'Communications' },
   { value: 'intake', label: 'Intake' },
-  { value: 'people', label: 'People' },
   { value: 'assets', label: 'Assets' },
+  { value: 'tasks', label: 'Tasks' },
+  { value: 'communications', label: 'Communications' },
   { value: 'documents', label: 'Documents' },
   { value: 'notes', label: 'Notes' },
 ]
@@ -248,7 +245,7 @@ export function LeadDetailClient({
   function changeTab(tab: LeadTab) {
     setActiveTab(tab)
     const params = new URLSearchParams(searchParams?.toString() ?? '')
-    if (tab === 'plan') params.delete('tab')
+    if (tab === 'intake') params.delete('tab')
     else params.set('tab', tab)
     if (tab !== 'tasks') params.delete('view')
     const qs = params.toString()
@@ -667,7 +664,6 @@ export function LeadDetailClient({
     ...initialMeetingNotes.map(note => note.createdAt),
   ])
   const lastTouchDays = calendarDaysAgo(effectiveLastTouchAt, firmTimezone)
-  const lastMeetingAt = newestTimestamp(initialMeetingNotes.map(note => note.date || note.createdAt))
   // The record page knows more than the list does — readiness and the meeting
   // anchors — so its score is computed from the fuller input.
   const leadScore = computeLeadScore(leadScoreInputFromRow(lead, {
@@ -703,9 +699,6 @@ export function LeadDetailClient({
     ? availableAction
     : null
 
-  const timelineCount = activity.length
-    + initialNotes.length
-    + initialMeetingNotes.length
   const documentsCount = documents.length + (activeAgreement ? 1 : 0)
 
   const timeline = (
@@ -796,10 +789,8 @@ export function LeadDetailClient({
           <LeadFieldsRail
             lead={lead}
             spouse={spouse}
-            onSaveChannels={saveChannels}
-            keyDates={keyDates}
-            onSaveKeyDate={saveKeyDate}
-            keyDatesSaving={keyDatesSaving}
+            onStageChange={handleTopStatusChange}
+            stageBusy={interactionBusy}
             activeField={activeField}
             onActiveFieldChange={changeActiveField}
             onSaveField={saveField}
@@ -826,7 +817,8 @@ export function LeadDetailClient({
               onValueChange={changeTab}
             />
             <TabsList className="hidden w-full justify-start overflow-x-auto bg-background md:flex">
-              <TabsTrigger value="plan">Plan</TabsTrigger>
+              <TabsTrigger value="intake">Intake</TabsTrigger>
+              <TabsTrigger value="assets">Assets</TabsTrigger>
               <TabsTrigger value="tasks" className="gap-1.5">
                 Tasks
                 {taskCounts.overdue > 0 && (
@@ -835,16 +827,36 @@ export function LeadDetailClient({
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="timeline">Timeline ({timelineCount})</TabsTrigger>
               <TabsTrigger value="communications">Communications</TabsTrigger>
-              <TabsTrigger value="intake">Intake</TabsTrigger>
-              <TabsTrigger value="people">People</TabsTrigger>
-              <TabsTrigger value="assets">Assets</TabsTrigger>
               <TabsTrigger value="documents">Documents ({documentsCount})</TabsTrigger>
               <TabsTrigger value="notes">Notes ({initialNotes.length})</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="plan" className="mt-4 space-y-4">
+            <TabsContent value="intake" className="mt-4 space-y-4">
+              <div>
+                <LeadIntakeCard
+                  intake={lead}
+                  intakeUrl={intakeUrl}
+                  linkRevoked={intakeLinkRevoked}
+                  onOpen={() => setIntakeSheetOpen(true)}
+                  onCopy={() => void copyIntakeUrl()}
+                  onEmail={() => void sendIntake()}
+                  onText={() => {
+                    setCommunicationInitialMessage(`Please complete your secure intake: ${intakeUrl}`)
+                    setCommunicationChannel('sms')
+                  }}
+                  onRotate={() => void rotateIntakeUrl()}
+                  onRevoke={() => void revokeIntakeUrl()}
+                  onTrackChange={(track) => void changeIntakeTrack(track)}
+                  busy={sendingIntake || intakeLinkBusy}
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setImportIntakeOpen(true)}>
+                    Import intake — paste text or upload Word
+                  </Button>
+                </div>
+              </div>
+
               <LeadScoreCard
                 leadId={lead.id}
                 score={leadScore}
@@ -858,12 +870,10 @@ export function LeadDetailClient({
                  */
                 coveredByNextAction={visibleAction && availableAction.key === 'quote_fee' ? 'fee' : null}
               />
+
               <LeadPlanTab
                 lead={lead}
                 spouse={spouse}
-                nextAppointmentAt={nextAppointmentAt}
-                lastMeetingAt={lastMeetingAt}
-                hasActiveAgreement={Boolean(activeAgreement)}
                 agreementId={activeAgreement?.id ?? null}
                 busy={interactionBusy}
                 onDraft={handleTopDraft}
@@ -874,8 +884,33 @@ export function LeadDetailClient({
                   if (!railOpen) setRailOpen(true)
                   changeActiveField(field)
                 }}
-                onOpenIntake={() => setIntakeSheetOpen(true)}
               />
+
+              {keyDates && (
+                <LeadKeyDatesCard
+                  keyDates={keyDates}
+                  onSaveKeyDate={saveKeyDate}
+                  saving={keyDatesSaving}
+                />
+              )}
+
+              <div className="space-y-4">
+                {peopleMatter && lead.matter_id ? (
+                  <MatterPeopleTabContent
+                    matterId={lead.matter_id}
+                    matter={peopleMatter}
+                    initialContacts={initialPeopleContacts}
+                    recordLabel="lead"
+                  />
+                ) : (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    People are unavailable because this lead is not linked to an opportunity record.
+                  </p>
+                )}
+                <LeadChannelsCard lead={lead} spouse={spouse} onSaveChannels={saveChannels} />
+              </div>
+
+              {timeline}
             </TabsContent>
 
             <TabsContent value="tasks" className="mt-4">
@@ -893,10 +928,6 @@ export function LeadDetailClient({
               />
             </TabsContent>
 
-            <TabsContent value="timeline" className="mt-4">
-              {timeline}
-            </TabsContent>
-
             <TabsContent value="communications" className="mt-4 space-y-4">
               <MarketingProfileCard intakeId={lead.id} />
               <RecordCommunicationsCard
@@ -907,45 +938,6 @@ export function LeadDetailClient({
                 smsEnabled={smsEnabled}
               />
             </TabsContent>
-
-            <TabsContent value="intake" className="mt-4">
-              <LeadIntakeCard
-                intake={lead}
-                intakeUrl={intakeUrl}
-                linkRevoked={intakeLinkRevoked}
-                onOpen={() => setIntakeSheetOpen(true)}
-                onCopy={() => void copyIntakeUrl()}
-                onEmail={() => void sendIntake()}
-                onText={() => {
-                  setCommunicationInitialMessage(`Please complete your secure intake: ${intakeUrl}`)
-                  setCommunicationChannel('sms')
-                }}
-                onRotate={() => void rotateIntakeUrl()}
-                onRevoke={() => void revokeIntakeUrl()}
-                onTrackChange={(track) => void changeIntakeTrack(track)}
-                busy={sendingIntake || intakeLinkBusy}
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => setImportIntakeOpen(true)}>
-                  Import intake — paste text or upload Word
-                </Button>
-              </div>
-            </TabsContent>
-
-            {peopleMatter && lead.matter_id ? (
-              <MatterPeopleTab
-                matterId={lead.matter_id}
-                matter={peopleMatter}
-                initialContacts={initialPeopleContacts}
-                recordLabel="lead"
-              />
-            ) : (
-              <TabsContent value="people" className="mt-4">
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  People are unavailable because this lead is not linked to an opportunity record.
-                </p>
-              </TabsContent>
-            )}
 
             <TabsContent value="assets" className="mt-4">
               <MatterAssetsTab
@@ -978,9 +970,9 @@ export function LeadDetailClient({
                 leadPhone={lead.phone}
                 initialNotes={initialNotes}
                 initialMeetingNotes={initialMeetingNotes}
-                          initialActivity={activity}
+                initialActivity={activity}
                 actorNames={actorNames}
-                          actorError={actorError}
+                actorError={actorError}
                 dataRefreshWarning={dataRefreshWarning}
                 activityRefreshWarning={activityRefreshWarning}
                 currentUser={currentUser}

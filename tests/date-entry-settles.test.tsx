@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isSettledDateEntry } from '@/lib/firmDate'
 import { InlineDate } from '@/app/admin/matters/[id]/facts-panel/InlineField'
 import { LeadFieldsRail } from '@/components/leads/LeadFieldsRail'
+import { LeadKeyDatesCard } from '@/components/leads/LeadKeyDatesCard'
 
 /**
  * `<input type="date">` reports "" until all three segments hold something, and
@@ -54,20 +55,13 @@ const lead = {
   additional_channels: null, notes: null, spouse_intake_id: null,
 } as never
 
-describe('the opportunity rail date field', () => {
+describe('the opportunity key date field', () => {
   it('stays open through the year, then saves once', async () => {
     const onSaveKeyDate = vi.fn().mockResolvedValue(undefined)
-    const onActiveFieldChange = vi.fn()
     render(
-      <LeadFieldsRail
-        lead={lead}
-        spouse={null}
+      <LeadKeyDatesCard
         keyDates={{ discoveryCallAt: null, pmpsAt: null }}
         onSaveKeyDate={onSaveKeyDate}
-        activeField={null}
-        onActiveFieldChange={onActiveFieldChange}
-        onSaveField={vi.fn()}
-        onRemoveSpouse={vi.fn()}
       />,
     )
 
@@ -77,7 +71,6 @@ describe('the opportunity rail date field', () => {
     }
     // Nothing saved, and the row was never closed out from under the typing.
     expect(onSaveKeyDate).not.toHaveBeenCalled()
-    expect(onActiveFieldChange).not.toHaveBeenCalledWith(null)
 
     fireEvent.change(input, { target: { value: '2026-09-02' } })
     await waitFor(() => expect(onSaveKeyDate).toHaveBeenCalledWith('discoveryCallAt', '2026-09-02'))
