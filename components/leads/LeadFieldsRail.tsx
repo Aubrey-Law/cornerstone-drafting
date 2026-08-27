@@ -8,8 +8,6 @@ import { isSettledDateEntry } from '@/lib/firmDate'
 import { formatPhoneInput } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import { LeadReadinessDial } from '@/components/leads/LeadReadinessDial'
-import { ChannelListField } from '@/components/contacts/ChannelListField'
-import { parseContactChannels, type ContactChannel } from '@/lib/contacts/additionalChannels'
 import type { LeadEditableField } from '@/lib/leads/details'
 import {
   isNameField,
@@ -26,7 +24,12 @@ import {
   type LeadSpouseDraft,
 } from '@/lib/leads/fieldDefinitions'
 import { cn } from '@/lib/utils'
-import type { LeadDetailRecord, LeadSpouseRecord } from '@/lib/leads/viewTypes'
+import {
+  MUTABLE_LEAD_STATUS_LABEL,
+  type LeadDetailRecord,
+  type LeadSpouseRecord,
+  type MutableLeadStatus,
+} from '@/lib/leads/viewTypes'
 
 export type LeadRecord = LeadDetailRecord
 export type LeadSpouse = LeadSpouseRecord
@@ -38,43 +41,12 @@ type FieldErrorState = {
 
 export const LEAD_DETAIL_RAIL_WIDTH = 'w-[340px]'
 
-/**
- * The pre-engagement clock's anchors, as `YYYY-MM-DD` or null. They live on the
- * opportunity's matter row, not on the intake, so they save through the
- * sla-anchors route rather than `onSaveField` — setting one also re-dates every
- * task waiting on it.
- */
-export type LeadKeyDates = {
-  discoveryCallAt: string | null
-  pmpsAt: string | null
-}
-
-export const LEAD_KEY_DATE_FIELDS: {
-  key: keyof LeadKeyDates
-  label: string
-  hint: string
-}[] = [
-  { key: 'discoveryCallAt', label: 'Discovery date', hint: 'Starts the pre-engagement clock' },
-  { key: 'pmpsAt', label: 'PMPS date', hint: 'Dates the organizer and prep tasks' },
-]
-
-/** Which person's secondary addresses an edit is for. */
-export type LeadChannelTarget = 'client' | 'spouse'
-export type LeadChannelField = 'additional_emails' | 'additional_phones'
-
 export type LeadFieldsRailProps = {
   lead: LeadRecord
   spouse: LeadSpouse | null
-  /** Absent on surfaces that do not edit the extra emails and phones. */
-  onSaveChannels?: (
-    target: LeadChannelTarget,
-    field: LeadChannelField,
-    channels: ContactChannel[],
-  ) => Promise<void>
-  /** Absent when the opportunity has no matter record to hang the clock on. */
-  keyDates?: LeadKeyDates | null
-  onSaveKeyDate?: (field: keyof LeadKeyDates, value: string | null) => Promise<void>
-  keyDatesSaving?: boolean
+  /** Absent on surfaces that do not move the opportunity through the pipeline. */
+  onStageChange?: (status: MutableLeadStatus) => void
+  stageBusy?: boolean
   activeField: LeadEditableField | null
   onActiveFieldChange: (field: LeadEditableField | null) => void
   onSaveField: (field: LeadEditableField, value: unknown) => Promise<void>
@@ -108,10 +80,8 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export function LeadFieldsRail({
   lead,
   spouse,
-  onSaveChannels,
-  keyDates = null,
-  onSaveKeyDate,
-  keyDatesSaving = false,
+  onStageChange,
+  stageBusy = false,
   activeField,
   onActiveFieldChange,
   onSaveField,
@@ -119,6 +89,11 @@ export function LeadFieldsRail({
   spouseRemovalError = null,
   className,
 }: LeadFieldsRailProps) {
+  // 'hired' is not in the mutable set — hiring runs through the convert
+  // endpoint, which assigns the matter number and seeds the checklist.
+  const stageIsMutable = lead.lead_status in MUTABLE_LEAD_STATUS_LABEL
+  const stageLabel = lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)
+
   const [draft, setDraft] = useState<unknown>(null)
   const [savingField, setSavingField] = useState<LeadEditableField | null>(null)
   const [savedField, setSavedField] = useState<LeadEditableField | null>(null)
@@ -522,91 +497,35 @@ export function LeadFieldsRail({
         }
       }}
     >
+      {onStageChange && (
+        <section className="mb-4">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Stage
+          </h3>
+          {stageIsMutable ? (
+            <select
+              aria-label="Stage"
+              className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
+              disabled={stageBusy}
+              value={lead.lead_status}
+              onChange={event => onStageChange(event.target.value as MutableLeadStatus)}
+            >
+              {Object.entries(MUTABLE_LEAD_STATUS_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <p className="mt-1 text-sm font-medium">{stageLabel}</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Hiring runs through convert, so this stage is not set by hand.
+              </p>
+            </>
+          )}
+        </section>
+      )}
+
       <LeadReadinessDial lead={lead} spouse={spouse} />
-
-      {onSaveChannels && (
-        <section className="mt-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Other ways to reach them
-          </h3>
-          <div className="mt-1 space-y-1">
-            <ChannelListField
-              label="Client emails"
-              kind="email"
-              channels={parseContactChannels(lead.additional_emails)}
-              onSave={channels => onSaveChannels('client', 'additional_emails', channels)}
-            />
-            <ChannelListField
-              label="Client phones"
-              kind="phone"
-              channels={parseContactChannels(lead.additional_phones)}
-              onSave={channels => onSaveChannels('client', 'additional_phones', channels)}
-            />
-            {spouse && (
-              <>
-                <ChannelListField
-                  label="Spouse emails"
-                  kind="email"
-                  channels={parseContactChannels(spouse.additional_emails)}
-                  onSave={channels => onSaveChannels('spouse', 'additional_emails', channels)}
-                />
-                <ChannelListField
-                  label="Spouse phones"
-                  kind="phone"
-                  channels={parseContactChannels(spouse.additional_phones)}
-                  onSave={channels => onSaveChannels('spouse', 'additional_phones', channels)}
-                />
-              </>
-            )}
-          </div>
-        </section>
-      )}
-
-      {keyDates && onSaveKeyDate && (
-        <section className="mt-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Key dates
-          </h3>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Setting a date schedules the SLA tasks waiting on it.
-          </p>
-          <div className="mt-1 space-y-2">
-            {LEAD_KEY_DATE_FIELDS.map(field => (
-              <label className="block space-y-1" key={field.key}>
-                <FieldLabel>{field.label}</FieldLabel>
-                <Input
-                  aria-label={field.label}
-                  className="h-8"
-                  disabled={keyDatesSaving}
-                  type="date"
-                  // Uncontrolled and keyed on the saved value: a date input
-                  // reads back as "" until every segment is filled, so echoing
-                  // that back mid-entry would wipe what was typed. Only a
-                  // complete date — or an explicit clear on blur — saves.
-                  defaultValue={keyDates[field.key] ?? ''}
-                  key={`${field.key}-${keyDates[field.key] ?? ''}`}
-                  onChange={event => {
-                    // Not merely non-empty: the browser reports a complete date
-                    // while the year is still arriving (0002, 0020, 0202 on the
-                    // way to 2026). Saving the first of those is how this field
-                    // wrote a 1969 discovery call, and why the date had to be
-                    // entered one segment per attempt. Blur below still clears.
-                    const next = event.target.value
-                    if (isSettledDateEntry(next) && next !== keyDates[field.key]) {
-                      void onSaveKeyDate(field.key, next)
-                    }
-                  }}
-                  onBlur={event => {
-                    const next = event.target.value
-                    if (!next && keyDates[field.key]) void onSaveKeyDate(field.key, null)
-                  }}
-                />
-                <span className="block text-[10px] text-muted-foreground">{field.hint}</span>
-              </label>
-            ))}
-          </div>
-        </section>
-      )}
 
       <div className="mt-4 space-y-4">
         {LEAD_FIELD_GROUPS.map(group => {

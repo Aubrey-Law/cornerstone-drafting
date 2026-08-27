@@ -44,7 +44,7 @@ const spouse = { first_name:'John', middle_name:null, last_name:'Doe', preferred
 afterEach(() => { cleanup(); vi.restoreAllMocks(); router.push.mockReset(); router.refresh.mockReset(); router.replace.mockReset(); toastError.mockReset(); toastSuccess.mockReset(); searchParams.current = new URLSearchParams() })
 
 /** The workspace is tabbed; most assertions need their tab on screen first. */
-function showTab(name: 'Plan' | 'Tasks' | 'Timeline' | 'Intake' | 'Documents' | 'Notes') {
+function showTab(name: 'Intake' | 'Assets' | 'Tasks' | 'Communications' | 'Documents' | 'Notes') {
   // Radix tabs activate on mouse down, not click.
   act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) })) })
 }
@@ -98,11 +98,10 @@ describe('lead detail page', () => {
     expect(screen.getByRole('complementary', { name: 'Lead details' })).toBeTruthy()
     expect(main?.previousElementSibling).toBe(screen.getByRole('complementary', { name: 'Lead details' }))
     expect(main?.querySelector('.xl\\:grid-cols-\\[1\\.6fr_1fr\\]')).toBeNull()
-    expect(screen.getByRole('tab', { name: 'Plan' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Plan' }).getAttribute('data-state')).toBe('active')
-    expect(screen.queryByRole('region', { name: 'Lead intake' })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Intake' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Intake' }).getAttribute('data-state')).toBe('active')
 
-    showTab('Intake')
+    // Intake is the landing tab now, so its card is on screen from the start.
     expect(screen.getByRole('region', { name: 'Lead intake' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open intake' })).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
@@ -199,7 +198,7 @@ describe('lead detail page', () => {
     showTab('Intake')
     expect((await screen.findByRole('button', { name: 'Copy link' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
-    showTab('Timeline')
+    showTab('Intake')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
@@ -253,7 +252,7 @@ describe('lead detail page', () => {
       created_at: `2026-07-${String(13 - index).padStart(2, '0')}T12:00:00Z`,
     }))
     render(<LeadDetailClient lead={lead} spouse={spouse} initialActivity={rows} />)
-    showTab('Timeline')
+    showTab('Intake')
     expect(screen.getByText('Event 9')).toBeTruthy()
   })
 
@@ -273,7 +272,7 @@ describe('lead detail page', () => {
       />,
     )
 
-    showTab('Timeline')
+    showTab('Intake')
     expect(screen.getByText('Actor names unavailable: actor lookup failed')).toBeTruthy()
     expect(screen.getByText('Phone updated')).toBeTruthy()
     expect(screen.getByText(/System ·/)).toBeTruthy()
@@ -507,7 +506,7 @@ describe('lead detail page', () => {
       body: JSON.stringify({ nextActionSnoozedUntil: null }),
     }))
     expect(await screen.findByText('Send intake to get the facts')).toBeTruthy()
-    showTab('Timeline')
+    showTab('Intake')
     expect(screen.getByText('Next action snooze cleared')).toBeTruthy()
   })
 
@@ -664,7 +663,7 @@ describe('lead detail page', () => {
 
     expect(await screen.findByText('Lost · day 4')).toBeTruthy()
     expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('activity refresh failed')
-    showTab('Timeline')
+    showTab('Intake')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
   })
 
@@ -727,7 +726,7 @@ describe('lead detail page', () => {
       body: JSON.stringify({ nextActionSnoozedUntil: until }),
     }))
     expect(screen.queryByText('Send intake to get the facts')).toBeNull()
-    showTab('Timeline')
+    showTab('Intake')
     expect(await screen.findByText('Next action snoozed')).toBeTruthy()
   })
 
@@ -831,9 +830,7 @@ describe('lead detail page', () => {
     // rather than reading as two unfinished fields on every lead.
     expect(within(rail).getAllByRole('button', { name: /^Add / })
       .map(button => button.getAttribute('aria-label'))).toEqual([
-      // Secondary addresses sit above the field groups, empty until asked for.
-      'Add Client emails',
-      'Add Client phones',
+      // The secondary addresses read with the people now, not in the rail.
       'Add Phone',
       'Add Date of birth',
       'Add Spouse',
@@ -1052,7 +1049,7 @@ describe('lead detail page', () => {
     expect(screen.getByRole('button', { name: 'Edit Phone' }).textContent).toContain('617-555-0111')
     expect(screen.getByText('Last touch 0d ago')).toBeTruthy()
     expect(screen.queryByText('Follow up with this lead')).toBeNull()
-    showTab('Timeline')
+    showTab('Intake')
     expect(screen.getByText('Timeline refresh unavailable: activity refresh failed')).toBeTruthy()
     expect(toastError).not.toHaveBeenCalled()
   })
@@ -1083,7 +1080,7 @@ describe('lead detail page', () => {
     await user.type(phone, '617-555-0111{Enter}')
 
     await waitFor(() => expect(screen.getByRole('status', { name: 'Phone save status' }).textContent).toBe('Saved'))
-    showTab('Timeline')
+    showTab('Intake')
     expect(await screen.findByText(
       'Lead data refresh unavailable: Saved, but refreshed spouse data is unavailable.',
     )).toBeTruthy()
@@ -1262,7 +1259,7 @@ describe('lead detail page', () => {
     await waitFor(() => expect(
       (within(header()).getByRole('button', { name: 'More actions' }) as HTMLButtonElement).disabled,
     ).toBe(false))
-    showTab('Timeline')
+    showTab('Intake')
     expect(await screen.findByText('Next action snoozed')).toBeTruthy()
   })
 
