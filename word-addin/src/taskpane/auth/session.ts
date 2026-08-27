@@ -49,13 +49,6 @@ export function clearSession(): void {
 }
 
 /**
- * Open the Office dialog and resolve once it hands back a session.
- *
- * `displayInIframe: false` is required: the dialog navigates to the Cornerstone
- * login page, which sets cookies and may redirect, and an iframed dialog is
- * both origin-restricted and blocked from doing that.
- */
-/**
  * How long to wait for the dialog to say anything at all.
  *
  * `displayDialogAsync` succeeding only means the dialog opened. If it is then
@@ -65,15 +58,28 @@ export function clearSession(): void {
  */
 const DIALOG_TIMEOUT_MS = 180_000
 
+/**
+ * Open the Office dialog and resolve once it hands back a session.
+ *
+ * `displayInIframe: false` is kept deliberately. The dialog needs its own
+ * browsing context to call `messageParent`, and an iframed dialog is
+ * origin-restricted in ways that have cost this feature several rounds already.
+ */
 export function signIn(): Promise<StoredSession> {
   return new Promise((resolve, reject) => {
-    // Same origin as the pane — the dev server proxies /auth through to
-    // Cornerstone, and in production the pane ships from the Next app.
-    const url = `${window.location.origin}/auth/addin`
+    // Served by the add-in itself, alongside taskpane.html — not by Next.
+    //
+    // It was `/auth/addin`, a Next page proxied into this origin, and it never
+    // completed a sign-in: its client bundle did not execute in Word's WebView,
+    // so the page froze on its server-rendered first paint. `dialog.html` is a
+    // plain Vite entry with no SSR, no hydration and no /_next dependency.
+    const url = `${window.location.origin}/dialog.html`
 
     Office.context.ui.displayDialogAsync(
       url,
-      { height: 60, width: 40, displayInIframe: false },
+      // Wider than a password form needs: this window also has to show
+      // Microsoft's sign-in page, which is cramped below about half the screen.
+      { height: 65, width: 50, displayInIframe: false },
       (result) => {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
           reject(new Error(result.error?.message ?? 'Could not open the sign-in window.'))

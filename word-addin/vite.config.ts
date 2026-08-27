@@ -56,6 +56,19 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => ({
   define: {
     __BUILD_STAMP__: JSON.stringify(new Date().toISOString().slice(0, 19).replace('T', ' ')),
   },
+  /**
+   * Read the repository root's .env, not one of our own.
+   *
+   * The sign-in dialog needs the Supabase project URL and anon key. Those
+   * already live at the root as NEXT_PUBLIC_SUPABASE_URL and
+   * NEXT_PUBLIC_SUPABASE_ANON_KEY, and both are public by construction — the
+   * Next app ships them to every browser that loads Cornerstone. Pointing Vite
+   * at the same file, and widening the prefix to accept those names, means the
+   * add-in needs no env setup of its own and cannot drift out of step with the
+   * app it signs into.
+   */
+  envDir: resolve(import.meta.dirname, '..'),
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   resolve: {
     alias: { '@': resolve(import.meta.dirname, 'src') },
   },
@@ -79,24 +92,19 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => ({
     /**
      * Everything the pane talks to is same-origin, by way of this proxy.
      *
-     * Two separate constraints force it. Word's WebView blocks mixed content,
-     * so an HTTPS pane cannot fetch http://localhost:3002 at all; and Office
-     * dialogs refuse a plain-HTTP URL, so the sign-in dialog cannot navigate
-     * to the Cornerstone login page directly either. Proxying both `/api` and
-     * `/auth` through the pane's own HTTPS origin solves both, and means no
-     * CORS headers are needed on the Cornerstone side.
+     * Word's WebView blocks mixed content, so an HTTPS pane cannot fetch
+     * http://localhost:3002 at all. Proxying `/api` through the pane's own
+     * HTTPS origin solves that and means no CORS headers are needed on the
+     * Cornerstone side.
      *
-     * `/_next` comes along because the proxied `/auth/*` pages are server-
-     * rendered by Next and load their JS and CSS from there.
-     *
-     * Caveat: staff OAuth redirects back to Supabase's configured site URL
-     * (port 3002), which lands outside the dialog. Use email + password in
-     * dev. In production the pane is served by the Next app itself, so pane
-     * and login genuinely share an origin and OAuth returns correctly.
+     * `/auth` and `/_next` used to be proxied too, so the sign-in dialog could
+     * navigate to the Next login page. It no longer does: the dialog is served
+     * from this dev server as `dialog.html` and talks to Supabase directly, so
+     * none of Next's server-rendered pages are in the add-in's path. That also
+     * retires the old caveat that staff OAuth redirected to Supabase's
+     * configured site URL on port 3002 and landed outside the dialog.
      */
-    proxy: Object.fromEntries(
-      ['/api', '/auth', '/_next'].map((path) => [path, proxyToCornerstone()]),
-    ),
+    proxy: { '/api': proxyToCornerstone() },
   },
   build: {
     outDir: 'dist',
@@ -104,6 +112,7 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => ({
       input: {
         taskpane: resolve(import.meta.dirname, 'taskpane.html'),
         commands: resolve(import.meta.dirname, 'commands.html'),
+        dialog: resolve(import.meta.dirname, 'dialog.html'),
       },
     },
   },

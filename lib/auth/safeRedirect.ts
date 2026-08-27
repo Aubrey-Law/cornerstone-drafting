@@ -5,11 +5,14 @@ const ADMIN_REDIRECT_PREFIXES = ['/admin']
 
 /**
  * Exact same-origin paths a signed-in staff user may be returned to that are
- * not under /admin. `/auth/addin` is the Word add-in's sign-in dialog: it has
- * to send the attorney through the normal login page and get them back, and
- * that round trip is the only reason it exists.
+ * not under /admin.
+ *
+ * Empty today. It held `/auth/addin`, the Word add-in's old sign-in dialog,
+ * which sent the attorney through this login page and back. That dialog is now
+ * served by the add-in itself and authenticates against Supabase directly, so
+ * nothing outside /admin needs the round trip any more.
  */
-const ADMIN_REDIRECT_EXACT = ['/auth/addin']
+const ADMIN_REDIRECT_EXACT: string[] = []
 
 const CLIENT_REDIRECT_ALLOWLIST = [
   '/dashboard',

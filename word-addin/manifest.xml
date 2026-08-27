@@ -17,11 +17,22 @@
   <SupportUrl DefaultValue="https://localhost:3100/taskpane.html" />
 
   <!--
-    The pane, the sign-in dialog, and every API call share this one origin:
-    the dev server proxies /api, /auth, and /_next through to Cornerstone.
+    The pane, the sign-in dialog, and every API call share the first origin:
+    the dev server serves taskpane.html and dialog.html and proxies /api
+    through to Cornerstone.
+
+    The rest are the stops on the OAuth round trip. The sign-in dialog leaves
+    this origin for the identity provider and comes back with a code, and an
+    Office dialog may only navigate to domains listed here. Supabase is in the
+    middle of that trip: the provider returns to its /auth/v1/callback before it
+    redirects back to us.
   -->
   <AppDomains>
     <AppDomain>https://localhost:3100</AppDomain>
+    <AppDomain>https://qifunlovuwaryzsyfbnh.supabase.co</AppDomain>
+    <AppDomain>https://login.microsoftonline.com</AppDomain>
+    <AppDomain>https://login.live.com</AppDomain>
+    <AppDomain>https://accounts.google.com</AppDomain>
   </AppDomains>
 
   <Hosts>

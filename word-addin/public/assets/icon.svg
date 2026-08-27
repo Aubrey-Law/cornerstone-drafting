@@ -1,0 +1,18 @@
+<!--
+  Source of truth for the ribbon icons. icon-16/32/80.png are rendered from
+  this; see word-addin/README.md for the one-liner that regenerates them.
+
+  A laid cornerstone: the teal stone seated on two navy blocks. Deliberately
+  not a letterform — Word's ribbon is already full of "A" icons for font size,
+  colour and style, and a monogram there reads as a text control. Deliberately
+  not the firm wordmark either: "AUBREY | LAW" plus a tagline is 480x56, and at
+  16px it is an unreadable smear.
+
+  Brand colours, taken from public/aubrey-law-logo.svg: navy #1F2D5A, teal
+  #1A6B72.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <rect x="8" y="16" width="64" height="26" rx="3" fill="#1A6B72"/>
+  <rect x="8" y="46" width="30" height="22" rx="3" fill="#1F2D5A"/>
+  <rect x="42" y="46" width="30" height="22" rx="3" fill="#1F2D5A"/>
+</svg>
