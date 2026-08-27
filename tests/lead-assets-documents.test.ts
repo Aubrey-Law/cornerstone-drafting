@@ -62,7 +62,7 @@ describe('the opportunity workspace after the intake consolidation', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order)
   })
 
-  it('reads intake, score, plan, key dates, people, and timeline in that order', () => {
+  it('reads intake, score, key dates, people, and timeline in that order', () => {
     const leadDetail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
     const intakeTab = leadDetail.slice(
       leadDetail.indexOf('<TabsContent value="intake"'),
@@ -72,7 +72,6 @@ describe('the opportunity workspace after the intake consolidation', () => {
     const order = [
       '<LeadIntakeCard',
       '<LeadScoreCard',
-      '<LeadPlanTab',
       '<LeadKeyDatesCard',
       '<MatterPeopleTabContent',
       '<LeadChannelsCard',
@@ -86,6 +85,8 @@ describe('the opportunity workspace after the intake consolidation', () => {
     const rail = read('components/leads/LeadFieldsRail.tsx')
     const leadDetail = read('app/admin/leads/[id]/LeadDetailClient.tsx')
 
+    // The estate read moved in with the field it is computed from.
+    expect(rail).toContain('<LeadEstateTaxCard')
     expect(rail).toContain('MUTABLE_LEAD_STATUS_LABEL')
     expect(rail).toContain("aria-label=\"Stage\"")
     // The quoted fee was already a rail field and stays one.

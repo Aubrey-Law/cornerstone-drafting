@@ -48,7 +48,6 @@ import { LeadKeyDatesCard, type LeadKeyDates } from '@/components/leads/LeadKeyD
 import type { ContactChannel } from '@/lib/contacts/additionalChannels'
 import { LeadNextAction } from '@/components/leads/LeadNextAction'
 import { MarketingProfileCard } from '@/components/crm/MarketingProfileCard'
-import { LeadPlanTab } from '@/components/leads/LeadPlanTab'
 import { LeadScoreCard } from '@/components/leads/LeadScoreCard'
 import { computeLeadScore, leadScoreInputFromRow } from '@/lib/leads/score'
 import { computeLeadReadiness } from '@/lib/leads/readiness'
@@ -869,21 +868,6 @@ export function LeadDetailClient({
                  * the same thing one panel lower.
                  */
                 coveredByNextAction={visibleAction && availableAction.key === 'quote_fee' ? 'fee' : null}
-              />
-
-              <LeadPlanTab
-                lead={lead}
-                spouse={spouse}
-                agreementId={activeAgreement?.id ?? null}
-                busy={interactionBusy}
-                onDraft={handleTopDraft}
-                onPreviewAgreement={() => {
-                  if (activeAgreement) router.push(`/admin/engagements/${activeAgreement.id}?step=design`)
-                }}
-                onOpenField={field => {
-                  if (!railOpen) setRailOpen(true)
-                  changeActiveField(field)
-                }}
               />
 
               {keyDates && (

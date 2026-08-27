@@ -828,7 +828,9 @@ describe('lead detail page', () => {
     const rail = screen.getByRole('complementary', { name: 'Lead details' })
     // Middle and preferred name are optional, so their pills wait behind "+ More"
     // rather than reading as two unfinished fields on every lead.
-    expect(within(rail).getAllByRole('button', { name: /^Add / })
+    // By aria-label, so this reads the field pills rather than every button in
+    // the rail whose text happens to start with "Add".
+    expect(within(rail).getAllByLabelText(/^Add /)
       .map(button => button.getAttribute('aria-label'))).toEqual([
       // The secondary addresses read with the people now, not in the rail.
       'Add Phone',
