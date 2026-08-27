@@ -5,25 +5,12 @@ import type { NodeEstateContext } from '@/lib/estateGenerator/node/types'
 import { MISSING_MARKER_RE, renderNodeEstateText } from '@/lib/estateGenerator/node/renderText'
 import { LITERAL_BRACKET_TOKENS, UNRESOLVED_RE } from '@/lib/drafting/docxMarkerPatterns'
 import { getPath } from '@/lib/estateGenerator/node/validation'
+import { applyStyleSetToPart } from '@/lib/styleSets/applyStyleSet'
+import { DEFAULT_STYLE_SET } from '@/lib/styleSets/defaults'
+import type { StyleSetSettings } from '@/lib/styleSets/schema'
 
 // Re-export for callers that imported from this module historically.
 export { UNRESOLVED_RE } from '@/lib/drafting/docxMarkerPatterns'
-
-// Force every run/style font to Garamond, mirroring the Python al-generator's
-// post-processing. The Word templates inherit a theme default (Aptos) and use
-// "Times New Roman Bold" heading styles, so without this the Node generator
-// leaves some sections in the wrong font. Applied to the body, headers/footers,
-// and styles so both explicit run fonts and inherited defaults become Garamond.
-const BODY_FONT_NAME = 'Garamond'
-const RFONTS_RE = /<w:rFonts\b[^>]*\/>/g
-const FONTS_NORMALIZED_PARTS = /^word\/(document\.xml|styles\.xml|(header|footer)\d*\.xml)$/
-
-function normalizeFontsToGaramond(xml: string): string {
-  return xml.replace(
-    RFONTS_RE,
-    `<w:rFonts w:ascii="${BODY_FONT_NAME}" w:hAnsi="${BODY_FONT_NAME}" w:cs="${BODY_FONT_NAME}"/>`,
-  )
-}
 
 function escapeXml(value: string): string {
   return value
@@ -380,6 +367,12 @@ export interface RenderNodeEstateDocxTemplateArgs {
   templateBuffer?: Buffer
   context: NodeEstateContext
   clauses: NodeClauseStore
+  /**
+   * Formatting to apply once the template has rendered. Defaults to the
+   * Garamond sweep this function has always done, so callers that predate style
+   * sets keep producing byte-identical documents.
+   */
+  styleSet?: StyleSetSettings
 }
 
 export interface RenderNodeEstateDocxTemplateResult {
@@ -393,6 +386,7 @@ export function renderNodeEstateDocxTemplate({
   templateBuffer,
   context,
   clauses,
+  styleSet = DEFAULT_STYLE_SET,
 }: RenderNodeEstateDocxTemplateArgs): RenderNodeEstateDocxTemplateResult {
   if (!templateBuffer && (!templatePath || !fs.existsSync(templatePath))) {
     throw new Error(`Template not found: ${templatePath ?? '(no path provided)'}`)
@@ -439,10 +433,7 @@ export function renderNodeEstateDocxTemplate({
       if (!LITERAL_BRACKET_TOKENS.has(match[0])) unresolved.add(match[0])
     }
 
-    const finalXml = FONTS_NORMALIZED_PARTS.test(fileName)
-      ? normalizeFontsToGaramond(rendered)
-      : rendered
-    zip.file(fileName, finalXml)
+    zip.file(fileName, applyStyleSetToPart(fileName, rendered, styleSet))
   }
 
   return {
