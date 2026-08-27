@@ -1,4 +1,14 @@
-import { ExternalLink, Link2, Pencil, Pin, PinOff, Trash2, type LucideIcon } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ExternalLink,
+  Link2,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { copyToClipboard } from '@/lib/clipboard'
 
@@ -27,6 +37,13 @@ export interface MatterActionTarget {
  */
 export interface MatterActionHandlers {
   onTogglePin: (matterId: string) => void
+  /**
+   * Reordering lives in the menu rather than as buttons on the row. A pinned row
+   * shows its action cluster without hovering, so inline arrows would sit over
+   * the title permanently — and two more always-visible controls is a lot of
+   * furniture for something used rarely.
+   */
+  onMovePin?: (matterId: string, direction: -1 | 1) => void
   onRename?: (matterId: string) => void
   onDelete?: (matterId: string) => void
 }
@@ -90,6 +107,25 @@ export function buildMatterActions(
     icon: target.isPinned ? PinOff : Pin,
     onSelect: () => handlers.onTogglePin(target.matterId),
   })
+
+  // Only a pinned matter has an order to change.
+  if (target.isPinned && handlers.onMovePin) {
+    const onMovePin = handlers.onMovePin
+    items.push(
+      {
+        key: 'move-up',
+        label: 'Move up',
+        icon: ArrowUp,
+        onSelect: () => onMovePin(target.matterId, -1),
+      },
+      {
+        key: 'move-down',
+        label: 'Move down',
+        icon: ArrowDown,
+        onSelect: () => onMovePin(target.matterId, 1),
+      },
+    )
+  }
 
   if (handlers.onDelete) {
     const onDelete = handlers.onDelete

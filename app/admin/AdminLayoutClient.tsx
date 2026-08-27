@@ -33,11 +33,12 @@ import { SoftphoneProvider } from '@/components/softphone/SoftphoneProvider'
 import { useMatterDisplayName } from './components/useMatterDisplayName'
 import {
   EMPTY_SIDEBAR_COUNTS,
-  getNavBadge,
   mergeSidebarCounts,
   type SidebarCounts,
 } from '@/lib/sidebarBadges'
 import { SIDEBAR_COUNTS_INVALIDATE_EVENT } from '@/lib/sidebarCountsClient'
+import { AdminSidebar } from './components/AdminSidebar'
+import { useSidebarMatters } from '@/lib/matters/useSidebarMatters'
 
 const GlobalSearch = dynamic(
   () => import('@/components/GlobalSearch').then(m => ({ default: m.GlobalSearch })),
@@ -113,6 +114,9 @@ export default function AdminLayoutClient({
   const [badgeCounts, setBadgeCounts] = useState<SidebarCounts>(EMPTY_SIDEBAR_COUNTS)
   const rail = useAdminRail({ voiceEnabled })
   const matterDisplayName = useMatterDisplayName()
+  // Called once and passed to both sidebar instances (desktop column and mobile
+  // sheet) so they share one fetch and one view of what is pinned.
+  const sidebarMatters = useSidebarMatters()
 
   useEffect(() => {
     let cancelled = false
@@ -178,72 +182,6 @@ export default function AdminLayoutClient({
     router.refresh()
   }
 
-  const nav = (compact: boolean) => (
-    <nav className="flex flex-col p-2">
-      {ADMIN_NAV_GROUPS.map(group => (
-        <div key={group} className={cn('flex flex-col gap-1', compact ? 'py-1' : 'pb-2')}>
-          {!compact ? (
-            <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-              {group}
-            </p>
-          ) : null}
-          {adminNavItems.filter(item => item.group === group).map(item => {
-        const active = pathname === item.href || (!item.exact && pathname.startsWith(`${item.href}/`))
-        const Icon = item.icon
-        const badge = getNavBadge(item.href, badgeCounts)
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setMobileOpen(false)}
-            title={compact ? item.label : undefined}
-            className={cn(
-              'flex items-center rounded-md text-sm font-medium transition-colors',
-              compact ? 'justify-center px-2 py-2.5' : 'gap-2 px-3 py-2',
-              active
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <span className="relative shrink-0">
-              <Icon className="h-4 w-4 shrink-0" />
-              {compact && badge && (
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'absolute -right-1 -top-1 h-2 w-2 rounded-full',
-                    badge.tone === 'destructive' ? 'bg-destructive' : 'bg-primary',
-                  )}
-                />
-              )}
-            </span>
-            {!compact ? (
-              <>
-                <span className="flex-1">{item.label}</span>
-                {badge && (
-                  <span
-                    className={cn(
-                      'ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
-                      badge.tone === 'destructive'
-                        ? 'bg-destructive/15 text-destructive'
-                        : 'bg-primary/15 text-primary',
-                    )}
-                  >
-                    {badge.value}
-                  </span>
-                )}
-              </>
-            ) : (
-              <span className="sr-only">{item.label}</span>
-            )}
-          </Link>
-        )
-          })}
-        </div>
-      ))}
-    </nav>
-  )
-
   return (
     // h-screen + overflow-hidden so <main> owns the scroll and the docked rail
     // can be a full-height column beside it instead of floating over content.
@@ -285,7 +223,15 @@ export default function AdminLayoutClient({
             </Button>
           )}
         </div>
-        {nav(compact)}
+        <AdminSidebar
+          pathname={pathname}
+          compact={compact}
+          badgeCounts={badgeCounts}
+          matters={sidebarMatters}
+          navItems={adminNavItems}
+          navGroups={ADMIN_NAV_GROUPS}
+          onNavigate={() => setMobileOpen(false)}
+        />
         <div className={cn('mt-auto border-t border-border p-2', compact && 'flex justify-center')}>
           <ThemeToggle collapsed={compact} variant="sidebar" />
         </div>
@@ -335,7 +281,15 @@ export default function AdminLayoutClient({
           <div className="flex h-14 items-center border-b border-border px-4">
             <span className="text-sm font-semibold">Cornerstone</span>
           </div>
-          {nav(false)}
+          <AdminSidebar
+            pathname={pathname}
+            compact={false}
+            badgeCounts={badgeCounts}
+            matters={sidebarMatters}
+            navItems={adminNavItems}
+            navGroups={ADMIN_NAV_GROUPS}
+            onNavigate={() => setMobileOpen(false)}
+          />
           <div className="mt-auto border-t border-border p-2">
             <ThemeToggle variant="sidebar" />
           </div>

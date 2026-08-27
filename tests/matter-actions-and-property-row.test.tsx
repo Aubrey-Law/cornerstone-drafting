@@ -42,6 +42,25 @@ describe('matter actions', () => {
     expect(unpin?.label).toBe('Unpin')
   })
 
+  it('offers reordering only for a matter that is pinned', () => {
+    const handlers = { onTogglePin: vi.fn(), onMovePin: vi.fn() }
+    expect(buildMatterActions(target, handlers).map(i => i.key)).not.toContain('move-up')
+
+    const pinned = buildMatterActions({ ...target, isPinned: true }, handlers)
+    expect(pinned.map(i => i.key)).toContain('move-up')
+    expect(pinned.map(i => i.key)).toContain('move-down')
+  })
+
+  it('reorders through the menu rather than through row buttons', () => {
+    // A pinned row shows its cluster without hovering, so inline arrows would
+    // sit over the title permanently.
+    const onMovePin = vi.fn()
+    buildMatterActions({ ...target, isPinned: true }, { onTogglePin: vi.fn(), onMovePin })
+      .find(i => i.key === 'move-up')
+      ?.onSelect()
+    expect(onMovePin).toHaveBeenCalledWith('m-1', -1)
+  })
+
   it('passes the matter id to the pin handler', () => {
     const onTogglePin = vi.fn()
     buildMatterActions(target, { onTogglePin }).find(i => i.key === 'toggle-pin')?.onSelect()
