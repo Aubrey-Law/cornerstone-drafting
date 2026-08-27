@@ -3,6 +3,14 @@ export const DEFAULT_ADMIN_HOME = '/admin'
 
 const ADMIN_REDIRECT_PREFIXES = ['/admin']
 
+/**
+ * Exact same-origin paths a signed-in staff user may be returned to that are
+ * not under /admin. `/auth/addin` is the Word add-in's sign-in dialog: it has
+ * to send the attorney through the normal login page and get them back, and
+ * that round trip is the only reason it exists.
+ */
+const ADMIN_REDIRECT_EXACT = ['/auth/addin']
+
 const CLIENT_REDIRECT_ALLOWLIST = [
   '/dashboard',
   '/documents',
@@ -28,9 +36,11 @@ export function safeAdminRedirectPath(value: string | null | undefined): string 
   if (!path) return null
 
   const pathname = path.split(/[?#]/, 1)[0]
-  const allowed = ADMIN_REDIRECT_PREFIXES.some(
-    prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  )
+  const allowed =
+    ADMIN_REDIRECT_EXACT.includes(pathname) ||
+    ADMIN_REDIRECT_PREFIXES.some(
+      prefix => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
   return allowed ? path : null
 }
 

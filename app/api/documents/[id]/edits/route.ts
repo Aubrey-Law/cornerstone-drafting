@@ -20,6 +20,10 @@ import { MATTER_DOCUMENT_COLUMNS } from '@/lib/queryColumns'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { completeLlmText, resolveLlmConfig } from '@/lib/llm'
 import { scanDocxBufferForMarkers } from '@/lib/drafting/markerScan'
+import {
+  MAX_CONTEXT_ANCHORED_DOCUMENT_CHARS,
+  buildContextAnchoredEditPrompt,
+} from '@/lib/drafting/editProtocol'
 
 interface RedlineBody {
   /** Direct edits (skip LLM). */
@@ -196,31 +200,16 @@ async function proposeEditsWithAi(args: {
   }
 
   const bodyText = await extractDocxBodyText(args.docBytes)
-  const truncated = bodyText.slice(0, 80_000)
 
   const response = await completeLlmText(llmResolved.config, {
     maxTokens: 4096,
     messages: [
       {
         role: 'user',
-        content: `You are editing an estate-planning Word document using find/replace with short context anchors.
-
-Document text (accepted view, paragraphs separated by newlines):
----
-${truncated}
----
-
-Attorney instruction:
-${args.instruction}
-
-Return ONLY a JSON array of edit objects (no markdown), each:
-{"find":"...","replace":"...","context_before":"...","context_after":"...","reason":"..."}
-
-Rules:
-- find should be the minimal unique phrase to change (or "" for pure insert with context).
-- context_before and context_after should be ~20-40 characters of surrounding text for disambiguation.
-- Prefer 1-8 precise edits over broad rewrites.
-- Do not invent parties or fiduciary names not supported by the document or instruction.`,
+        content: buildContextAnchoredEditPrompt({
+          documentText: bodyText.slice(0, MAX_CONTEXT_ANCHORED_DOCUMENT_CHARS),
+          instruction: args.instruction,
+        }),
       },
     ],
   })

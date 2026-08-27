@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "supabase/functions", ".next"]
+  "exclude": ["node_modules", "supabase/functions", "word-addin", ".next"]
 }

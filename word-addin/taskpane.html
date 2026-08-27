@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cornerstone Drafting</title>
+    <!--
+      Office.js must load before the bundle: main.tsx calls Office.onReady at
+      module scope. The CDN copy is the only supported source; there is no
+      npm package that ships the runtime.
+    -->
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/taskpane/main.tsx"></script>
+  </body>
+</html>
