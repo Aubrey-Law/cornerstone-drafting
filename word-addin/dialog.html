@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Word's WebView will happily serve a stale dialog otherwise. -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <title>Sign in to Cornerstone</title>
+    <!--
+      A blocking <script> in <head>, exactly as taskpane.html loads it.
+
+      This is the difference that matters. The previous dialog was a Next page
+      that loaded office.js through `next/script` with `afterInteractive`, so
+      the tag was injected by the client runtime *after* hydration — and when
+      hydration never happened in Word's WebView, office.js never loaded and the
+      page sat on its server-rendered first paint forever. Nothing here depends
+      on a framework having booted.
+    -->
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/dialog/main.tsx"></script>
+  </body>
+</html>

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiGet, ApiError, NotSignedInError } from './api/client'
-import { clearSession, loadSession, signIn, type StoredSession } from './auth/session'
+import {
+  clearSession,
+  loadSession,
+  signIn,
+  storeSession,
+  type StoredSession,
+} from './auth/session'
 import ChatPanel from './components/ChatPanel'
 import FormatPanel from './components/FormatPanel'
 
@@ -78,6 +84,7 @@ export default function App() {
           >
             Sign in
           </button>
+          <TokenPaste onAccept={setSession} />
         </div>
       </Centered>
     )
@@ -149,6 +156,60 @@ function TabButton({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="grid h-full place-items-center p-4 text-sm">{children}</div>
+}
+
+/**
+ * The receiving end of the dialog's escape hatch.
+ *
+ * When the dialog signs in but cannot reach Word — `messageParent` never turns
+ * up — it shows the access token and asks the attorney to paste it here. That
+ * offer was previously made with nowhere to paste it, which made the whole
+ * fallback theatre. Collapsed by default: it is a recovery path, not a
+ * second way to sign in.
+ */
+function TokenPaste({ onAccept }: { onAccept: (session: StoredSession) => void }) {
+  const [token, setToken] = useState('')
+
+  const accept = () => {
+    const accessToken = token.trim()
+    if (!accessToken) return
+    // Everything but the token is unknown here. `expiresAt: null` is honest
+    // rather than optimistic: the pane treats a rejected token as signed out,
+    // so a stale paste surfaces as a normal 401 instead of a wrong expiry.
+    const session: StoredSession = {
+      accessToken,
+      refreshToken: null,
+      expiresAt: null,
+      email: null,
+    }
+    storeSession(session)
+    onAccept(session)
+  }
+
+  return (
+    <details className="text-left">
+      <summary className="cursor-pointer text-[11px] text-[color:var(--color-ink-muted)]">
+        Paste a token instead
+      </summary>
+      <div className="mt-2 space-y-2">
+        <textarea
+          value={token}
+          onChange={e => setToken(e.target.value)}
+          aria-label="Access token"
+          placeholder="Paste the token from the sign-in window"
+          className="h-20 w-full rounded border border-[color:var(--color-line)] p-2 font-mono text-[11px]"
+        />
+        <button
+          type="button"
+          onClick={accept}
+          disabled={!token.trim()}
+          className="rounded border border-[color:var(--color-line)] px-3 py-1 disabled:opacity-50"
+        >
+          Use token
+        </button>
+      </div>
+    </details>
+  )
 }
 
 /**

@@ -161,8 +161,10 @@ and **no CORS handling exists anywhere in the app**.
 That is load-bearing, not incidental. Office refuses to load a task pane over
 plain HTTP, and Word's WebView then blocks the resulting HTTPS page from
 fetching `http://localhost:3002`. The proxy solves the mixed-content problem and
-removes the need for CORS in one move. It also puts the sign-in dialog on the
-pane's own origin, which is required for `messageParent` to work at all.
+removes the need for CORS in one move.
+
+Only `/api` is proxied. `/auth` and `/_next` used to be, so the sign-in dialog
+could navigate to Next's login page; it no longer does — see below.
 
 In production the pane should be served by the Next app itself, keeping the same
 property without a proxy.
@@ -172,15 +174,37 @@ property without a proxy.
 The pane holds a Supabase access token, not a cookie — Word blocks third-party
 cookies, and the Cornerstone session cookie belongs to a different origin.
 
-`Sign in` opens an Office dialog at `/auth/addin`, which redirects to the normal
-staff login and then hands the token back via `messageParent`. The token lives in
-`localStorage`, deliberately not in `Office.context.document.settings`: document
-settings are embedded in the `.docx`, so a token stored there would travel with
-the file to whoever received it.
+`Sign in` opens an Office dialog at `/dialog.html` — a Vite entry of this
+add-in, alongside `taskpane.html`. It takes an email and password, exchanges
+them with Supabase directly, confirms firm access through
+`GET /api/addin/session`, and hands the token back via `messageParent`. The
+token lives in `localStorage`, deliberately not in
+`Office.context.document.settings`: document settings are embedded in the
+`.docx`, so a token stored there would travel with the file to whoever received
+it.
 
-**Dev caveat:** staff OAuth redirects to Supabase's configured site URL (port
-3002), which lands outside the dialog. Use email and password in dev. In
-production, pane and login share an origin and OAuth returns correctly.
+The dialog reads `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+from the **repository root** `.env` — `vite.config.ts` sets `envDir` and widens
+`envPrefix` to pick them up, so there is nothing to configure here. Both are
+public values the Next app already ships to every browser.
+
+### Why it is not a Next page
+
+It was, at `/auth/addin`, and it never once completed a sign-in. The DOM of a
+stuck dialog showed office.js present only as `<link rel="preload">` — the tag
+`next/script` injects *after* hydration was missing, so React had never
+hydrated, no effect had ever run, and the page sat on its server-rendered first
+paint forever. Four fixes were shipped against the task pane before anyone
+noticed the frozen window was the dialog.
+
+`dialog.html` has no SSR, no hydration step, no RSC and no `/_next` dependency;
+office.js loads from a blocking `<script>` in `<head>`, exactly as the pane
+loads it. Every step it takes has a deadline, and it shows which step it is on,
+so a failure names itself instead of presenting as a hang.
+
+If the handoff to Word fails but the sign-in succeeded, the dialog shows the
+access token and the pane's signed-out view accepts it under **Paste a token
+instead**.
 
 ## Server routes
 
