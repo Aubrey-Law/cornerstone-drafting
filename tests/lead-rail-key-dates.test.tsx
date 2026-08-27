@@ -20,6 +20,7 @@ vi.mock('@/components/crm/MarketingProfileCard', () => ({ MarketingProfileCard: 
 
 import { LeadDetailClient } from '@/app/admin/leads/[id]/LeadDetailClient'
 import { LeadFieldsRail } from '@/components/leads/LeadFieldsRail'
+import { LeadKeyDatesCard } from '@/components/leads/LeadKeyDatesCard'
 
 const lead = {
   id: 'l1', first_name: 'Jane', middle_name: null, last_name: 'Doe', preferred_name: null,
@@ -84,15 +85,9 @@ describe('opportunity rail key dates', () => {
   it('offers both anchors, and only saves a date that is complete', async () => {
     const onSaveKeyDate = vi.fn().mockResolvedValue(undefined)
     render(
-      <LeadFieldsRail
-        lead={lead as never}
-        spouse={null}
+      <LeadKeyDatesCard
         keyDates={{ discoveryCallAt: null, pmpsAt: '2026-09-01' }}
         onSaveKeyDate={onSaveKeyDate}
-        activeField={null}
-        onActiveFieldChange={vi.fn()}
-        onSaveField={vi.fn()}
-        onRemoveSpouse={vi.fn()}
       />,
     )
 
@@ -110,15 +105,9 @@ describe('opportunity rail key dates', () => {
   it('clears a set anchor when the field is emptied and left', () => {
     const onSaveKeyDate = vi.fn().mockResolvedValue(undefined)
     render(
-      <LeadFieldsRail
-        lead={lead as never}
-        spouse={null}
+      <LeadKeyDatesCard
         keyDates={{ discoveryCallAt: null, pmpsAt: '2026-09-01' }}
         onSaveKeyDate={onSaveKeyDate}
-        activeField={null}
-        onActiveFieldChange={vi.fn()}
-        onSaveField={vi.fn()}
-        onRemoveSpouse={vi.fn()}
       />,
     )
 
@@ -220,5 +209,43 @@ describe('opportunity rail extra addresses', () => {
       />,
     )
     expect(screen.getByRole('button', { name: 'Add Spouse emails' })).toBeTruthy()
+  })
+})
+
+describe('the opportunity rail stage control', () => {
+  it('moves the lead through the mutable stages from the rail', async () => {
+    const user = userEvent.setup()
+    const onStageChange = vi.fn()
+    render(
+      <LeadFieldsRail
+        lead={lead as never}
+        spouse={null}
+        onStageChange={onStageChange}
+        activeField={null}
+        onActiveFieldChange={vi.fn()}
+        onSaveField={vi.fn()}
+        onRemoveSpouse={vi.fn()}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Stage'), 'lost')
+    expect(onStageChange).toHaveBeenCalledWith('lost')
+  })
+
+  it('shows a hired opportunity read-only, since hiring runs through convert', () => {
+    render(
+      <LeadFieldsRail
+        lead={{ ...lead, lead_status: 'hired' } as never}
+        spouse={null}
+        onStageChange={vi.fn()}
+        activeField={null}
+        onActiveFieldChange={vi.fn()}
+        onSaveField={vi.fn()}
+        onRemoveSpouse={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByLabelText('Stage')).toBeNull()
+    expect(screen.getByText('Hired')).toBeTruthy()
   })
 })
