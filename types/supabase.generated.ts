@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -7282,6 +7282,59 @@ export type Database = {
           },
         ]
       }
+      style_sets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          settings: Json
+          source_file_name: string | null
+          source_r2_key: string | null
+          source_size_bytes: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          settings?: Json
+          source_file_name?: string | null
+          source_r2_key?: string | null
+          source_size_bytes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          settings?: Json
+          source_file_name?: string | null
+          source_r2_key?: string | null
+          source_size_bytes?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "style_sets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tabular_cells: {
         Row: {
           citations: Json
@@ -7426,6 +7479,7 @@ export type Database = {
           document_id: string | null
           due_at: string | null
           due_offset_days: number | null
+          effective_due_at: string | null
           escalation_at: string | null
           escalation_offset_days: number | null
           escalation_sent_at: string | null
@@ -7485,6 +7539,7 @@ export type Database = {
           document_id?: string | null
           due_at?: string | null
           due_offset_days?: number | null
+          effective_due_at?: string | null
           escalation_at?: string | null
           escalation_offset_days?: number | null
           escalation_sent_at?: string | null
@@ -7544,6 +7599,7 @@ export type Database = {
           document_id?: string | null
           due_at?: string | null
           due_offset_days?: number | null
+          effective_due_at?: string | null
           escalation_at?: string | null
           escalation_offset_days?: number | null
           escalation_sent_at?: string | null
@@ -8525,6 +8581,7 @@ export type Database = {
           id: string | null
           is_cumulative_overdue: boolean | null
           is_overdue: boolean | null
+          is_scheduled: boolean | null
           is_snoozed: boolean | null
           needs_outreach: boolean | null
           owner: string | null
@@ -8533,6 +8590,7 @@ export type Database = {
           snooze_id: number | null
           snooze_reason: string | null
           snoozed_until: string | null
+          stage_clock_suspect: boolean | null
           stage_entered_at: string | null
           stage_order: number | null
           stage_visits: number | null
@@ -8684,6 +8742,7 @@ export type Database = {
           id: string | null
           is_cumulative_overdue: boolean | null
           is_overdue: boolean | null
+          is_scheduled: boolean | null
           is_snoozed: boolean | null
           needs_outreach: boolean | null
           owner: string | null
@@ -8692,6 +8751,7 @@ export type Database = {
           snooze_id: number | null
           snooze_reason: string | null
           snoozed_until: string | null
+          stage_clock_suspect: boolean | null
           stage_entered_at: string | null
           stage_order: number | null
           stage_visits: number | null
