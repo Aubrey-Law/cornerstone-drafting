@@ -107,17 +107,36 @@ it hits the identical wall.
 
 **The pane is running code you already changed.** Word caches add-in content
 aggressively, and a cached bundle looks exactly like a bug that will not die.
-The pane prints a `build <timestamp>` line while it starts: if that does not
-move after you restart the dev server, you are looking at a cached copy. Quit
-Word (⌘Q) and clear its cache:
+
+The pane prints a `build <timestamp>` line while it starts. If that time does not
+match when you started the dev server — or the line is missing entirely — you are
+looking at a cached copy, and nothing you change will take effect.
+
+Quit Word completely (⌘Q, not just closing the window), then:
 
 ```bash
-rm -rf ~/Library/Containers/com.microsoft.Word/Data/Library/Caches/*
+npm run clear-cache
 ```
 
-The dev server sends `Cache-Control: no-store` and the page carries the matching
-meta tags, which prevents most of this — but a bundle cached before those landed
-still has to be cleared once by hand.
+**The location is the part people get wrong.** Add-in web content lives in
+Office's own web host container, `com.Microsoft.OsfWebHost` — capital M — not in
+Word's container. Clearing
+`~/Library/Containers/com.microsoft.Word/Data/Library/Caches` alone looks like it
+worked and changes nothing. The script clears both.
+
+Two things to confirm before blaming the cache, since each is upstream of it:
+
+```bash
+git log --oneline -1                                    # are you on the code you think?
+curl -sk https://localhost:3100/taskpane.html | grep -c "Cache-Control"   # expect 1
+```
+
+A `0` from that curl means the dev server itself is serving stale HTML — restart
+`npm run dev`; Word is blameless.
+
+The dev server sends `Cache-Control: no-store` and the page carries matching meta
+tags, which prevents this going forward — but a bundle cached before those landed
+has to be cleared once by hand.
 
 **Word never shows the add-in.** Confirm the manifest landed:
 `ls ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/`. Then quit Word

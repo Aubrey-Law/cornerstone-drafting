@@ -91,6 +91,17 @@ describe('word-addin sideload scripts', () => {
     expect(read('word-addin/scripts/sideload.mjs')).toContain('statSync(destination)')
   })
 
+  it('clear the cache Office actually uses, not just Word\'s', () => {
+    const script = read('word-addin/scripts/clear-cache.mjs')
+    // Add-in web content lives in Office's web host container, capital M and
+    // all. Clearing only Word's own Caches directory looks like it worked and
+    // changes nothing — which is exactly how this was got wrong once.
+    expect(script).toContain('com.Microsoft.OsfWebHost')
+    expect(JSON.parse(read('word-addin/package.json')).scripts['clear-cache']).toBe(
+      'node scripts/clear-cache.mjs',
+    )
+  })
+
   it('no longer depend on office-addin-debugging', () => {
     const pkg = JSON.parse(read('word-addin/package.json'))
     const deps = { ...pkg.dependencies, ...pkg.devDependencies }
